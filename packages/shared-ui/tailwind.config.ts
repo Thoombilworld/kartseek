@@ -1,11 +1,17 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  // This config now lives in packages/shared-ui alongside globals.css and the
+  // design tokens, because it *is* the design system — the shell and every
+  // module zone consume the same one. Globs are therefore relative to this
+  // package and reach back into each consuming app: a class used only in a zone
+  // route is otherwise never seen by Tailwind and its utilities get purged, so
+  // the page mounts unstyled.
   content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/lib/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/**/*.{js,ts,jsx,tsx,mdx}',
+    '../shared-core/src/**/*.{js,ts,jsx,tsx,mdx}',
+    '../../apps/web/src/**/*.{js,ts,jsx,tsx,mdx}',
+    '../../modules/*/frontend/src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
 
   // ── Dark Mode ─────────────────────────────────────────────────────────────

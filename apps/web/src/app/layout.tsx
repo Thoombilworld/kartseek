@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
 import { Outfit, Inter } from 'next/font/google';
-import '../styles/globals.css';
+import '@/styles/globals.css';
 import { AuthProvider }   from '@/lib/contexts/auth-context';
 import { AuditProvider }  from '@/lib/contexts/audit-context';
 import { PincodeSearchLogProvider } from '@/lib/contexts/pincode-search-log';

@@ -3,7 +3,11 @@ import { fileURLToPath } from 'url';
 import createNextIntlPlugin from 'next-intl/plugin';
 import { buildContentSecurityPolicy } from './config/csp.cjs';
 
-const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+// The i18n request config moved into packages/shared-core so both the shell and
+// the module zones load the same locale resolution and message catalogues. This
+// path is resolved by the plugin at config load, not through tsconfig aliases,
+// so it has to be the real relative path rather than `@/i18n/request`.
+const withNextIntl = createNextIntlPlugin('../../packages/shared-core/src/i18n/request.ts');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
