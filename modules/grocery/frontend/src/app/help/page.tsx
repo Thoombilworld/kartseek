@@ -105,7 +105,7 @@ export default function HelpPage() {
     <div className="min-h-screen bg-slate-50">
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
         <div className="max-w-3xl mx-auto px-4 py-6">
-          <Link href="/grocery" className="inline-flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium mb-3 transition-colors">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium mb-3 transition-colors">
             <ArrowLeft className="w-4 h-4" />{tr('Back to Grocery')}</Link>
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center"><HelpCircle className="w-6 h-6" /></div>

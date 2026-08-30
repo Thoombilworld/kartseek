@@ -17,7 +17,7 @@ interface StoreProps {
 
 export default function StoreCard({ id, name, rating, deliveryTime, distance, imageUrl, tags, isPromoted }: StoreProps) {
   return (
-    <Link href={`/grocery/store/${id}`} className="group flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+    <Link href={`/store/${id}`} className="group flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
       {/* Image Container */}
       <div className="relative w-full h-40 bg-gray-100 overflow-hidden">
         {/* Fallback pattern if no Image component configured properly yet */}

@@ -31,7 +31,7 @@ export default function PharmacyReturnPage() {
       <header className="bg-white border-b border-slate-200 px-3 xs:px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <Link
-            href={`/pharmacy/orders/${encodeURIComponent(id)}`}
+            href={`/orders/${encodeURIComponent(id)}`}
             aria-label="Back to the order"
             className="w-11 h-11 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors shrink-0"
           >
@@ -53,13 +53,13 @@ export default function PharmacyReturnPage() {
           </p>
           <div className="flex flex-col xs:flex-row gap-2.5 justify-center mt-6">
             <Link
-              href="/pharmacy/support"
+              href="/support"
               className="inline-flex items-center justify-center gap-2 px-5 min-h-[44px] bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition-colors text-sm"
             >
               <LifeBuoy className="w-4 h-4" aria-hidden="true" /> Contact support
             </Link>
             <Link
-              href={`/pharmacy/orders/${encodeURIComponent(id)}`}
+              href={`/orders/${encodeURIComponent(id)}`}
               className="inline-flex items-center justify-center gap-2 px-5 min-h-[44px] bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-colors text-sm"
             >
               Back to order

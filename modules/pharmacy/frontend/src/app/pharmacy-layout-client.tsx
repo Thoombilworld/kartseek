@@ -4,6 +4,7 @@ import {
   Wallet, FileText,
 } from 'lucide-react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { AccountMenu } from '@/components/shared/account-menu';
 
 export default function PharmacyLayout({ children }: { children: React.ReactNode }) {
@@ -16,14 +17,14 @@ export default function PharmacyLayout({ children }: { children: React.ReactNode
               functional half, always fit. At 320px the untruncated lockup plus
               the actions measured wider than the viewport, and the header
               pushed the whole page into horizontal scroll. */}
-          <Link href="/pharmacy" className="flex items-center gap-2 xs:gap-2.5 min-w-0">
+          <ZoneLink href="/" className="flex items-center gap-2 xs:gap-2.5 min-w-0">
             <div className="module-icon-badge shrink-0">
               <Pill className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-base xs:text-lg sm:text-xl font-bold tracking-tight text-white truncate">
               KARTSEEK<span className="font-light opacity-80 hidden xs:inline"> Pharmacy</span>
             </h1>
-          </Link>
+          </ZoneLink>
 
           <div className="flex-1 max-w-2xl px-8 hidden md:block">
             <div className="relative">
@@ -37,22 +38,22 @@ export default function PharmacyLayout({ children }: { children: React.ReactNode
           </div>
 
           <div className="flex items-center gap-0.5 xs:gap-1 shrink-0">
-            <Link href="/pharmacy/prescriptions" className="module-nav-btn hidden lg:flex" title="Prescriptions">
+            <Link href="/prescriptions" className="module-nav-btn hidden lg:flex" title="Prescriptions">
               <FileText className="w-4 h-4" />
               <span className="hidden xl:inline">Prescriptions</span>
             </Link>
-            <Link href="/pharmacy/orders" className="module-nav-btn hidden md:flex" title="Orders">
+            <Link href="/orders" className="module-nav-btn hidden md:flex" title="Orders">
               <Clock className="w-4 h-4" />
               <span className="hidden lg:inline">Orders</span>
             </Link>
-            <Link href="/pharmacy/notifications" className="module-nav-btn hidden lg:flex relative" title="Notifications">
+            <Link href="/notifications" className="module-nav-btn hidden lg:flex relative" title="Notifications">
               <Bell className="w-4 h-4" />
               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
             </Link>
-            <Link href="/pharmacy/wallet" className="module-nav-btn hidden lg:flex" title="Wallet">
+            <Link href="/wallet" className="module-nav-btn hidden lg:flex" title="Wallet">
               <Wallet className="w-4 h-4" />
             </Link>
-            <Link href="/pharmacy/cart" className="module-nav-btn relative" title="Cart">
+            <Link href="/cart" className="module-nav-btn relative" title="Cart">
               <ShoppingCart className="w-5 h-5" />
             </Link>
 
@@ -65,14 +66,14 @@ export default function PharmacyLayout({ children }: { children: React.ReactNode
         <div className="border-t border-white/10 hidden md:block">
           <div className="max-w-7xl 3xl:max-w-app-wide mx-auto px-4 flex gap-1 overflow-x-auto py-0.5 scrollbar-thin">
             {[
-              { href: '/pharmacy/categories', label: 'Categories' },
-              { href: '/pharmacy/brands', label: 'Brands' },
-              { href: '/pharmacy/offers', label: 'Offers' },
-              { href: '/pharmacy/near-me', label: 'Near Me' },
-              { href: '/pharmacy/stores', label: 'Stores' },
-              { href: '/pharmacy/generic-alternatives', label: 'Generics' },
-              { href: '/pharmacy/prescription/upload', label: 'Upload Rx' },
-              { href: '/pharmacy/compliance', label: 'Compliance' },
+              { href: '/categories', label: 'Categories' },
+              { href: '/brands', label: 'Brands' },
+              { href: '/offers', label: 'Offers' },
+              { href: '/near-me', label: 'Near Me' },
+              { href: '/stores', label: 'Stores' },
+              { href: '/generic-alternatives', label: 'Generics' },
+              { href: '/prescription/upload', label: 'Upload Rx' },
+              { href: '/compliance', label: 'Compliance' },
             ].map(link => (
               <Link key={link.href} href={link.href}
                 className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white/70 hover:text-white hover:bg-white/10 whitespace-nowrap transition-colors shrink-0">
@@ -93,19 +94,19 @@ export default function PharmacyLayout({ children }: { children: React.ReactNode
           <Home className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] font-medium">Home</span>
         </Link>
-        <Link href="/pharmacy" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-teal-600">
+        <Link href="/" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-teal-600">
           <Pill className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] font-bold">Pharmacy</span>
         </Link>
-        <Link href="/pharmacy/cart" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-teal-600 transition-colors">
+        <Link href="/cart" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-teal-600 transition-colors">
           <ShoppingCart className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] font-medium">Cart</span>
         </Link>
-        <Link href="/pharmacy/orders" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-teal-600 transition-colors">
+        <Link href="/orders" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-teal-600 transition-colors">
           <Clock className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] font-medium">Orders</span>
         </Link>
-        <Link href="/pharmacy/profile" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-teal-600 transition-colors">
+        <Link href="/profile" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-teal-600 transition-colors">
           <User className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] font-medium">Account</span>
         </Link>

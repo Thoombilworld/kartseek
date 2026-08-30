@@ -33,7 +33,7 @@ export default function CategoryNav() {
           return (
             <Link 
               key={category.id} 
-              href={`/grocery/category/${category.id}`}
+              href={`/category/${category.id}`}
               className="flex flex-col items-center min-w-[80px] md:min-w-0 snap-start group"
             >
               <div className={cn(

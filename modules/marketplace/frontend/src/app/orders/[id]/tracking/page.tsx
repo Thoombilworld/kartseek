@@ -120,9 +120,9 @@ export default function OrderTrackingPage() {
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-3xl mx-auto px-3 xs:px-4 py-6">
         <nav className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600 inline-flex items-center min-h-[44px]">Home</Link>
+          <Link href="/" className="hover:text-blue-600 inline-flex items-center min-h-[44px]">Home</Link>
           <ChevronRight className="w-3 h-3" />
-          <Link href="/marketplace/orders" className="hover:text-blue-600 inline-flex items-center min-h-[44px]">Orders</Link>
+          <Link href="/orders" className="hover:text-blue-600 inline-flex items-center min-h-[44px]">Orders</Link>
           <ChevronRight className="w-3 h-3" />
           <span className="text-slate-900 font-medium">Tracking</span>
         </nav>
@@ -149,7 +149,7 @@ export default function OrderTrackingPage() {
           <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
             <Package className="w-12 h-12 text-slate-200 mx-auto mb-3" />
             <p className="text-slate-600">{error}</p>
-            <Link href="/marketplace/orders" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
+            <Link href="/orders" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
               Back to Orders
             </Link>
           </div>
@@ -158,7 +158,7 @@ export default function OrderTrackingPage() {
             <XCircle className="w-12 h-12 text-red-300 mx-auto mb-3" />
             <h2 className="font-bold text-slate-800 mb-1">This order was cancelled</h2>
             <p className="text-sm text-slate-500">There is no shipment to track.</p>
-            <Link href={`/marketplace/orders/${orderId}`} className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
+            <Link href={`/orders/${orderId}`} className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
               View order details
             </Link>
           </div>

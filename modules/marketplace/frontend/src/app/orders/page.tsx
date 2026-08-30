@@ -147,7 +147,7 @@ export default function MyOrdersPage() {
           </p>
         </div>
         <Link
-          href="/marketplace"
+          href="/"
           className="text-sm text-blue-600 hover:underline font-semibold flex items-center gap-1 shrink-0 min-h-[44px] px-2 -mr-2"
         >
           <ShoppingBag className="w-4 h-4" /> Continue Shopping
@@ -222,7 +222,7 @@ export default function MyOrdersPage() {
           </p>
           {orders.length === 0 && (
             <Link
-              href="/marketplace"
+              href="/"
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700"
             >
               <ShoppingBag className="w-4 h-4" /> Start shopping
@@ -251,7 +251,7 @@ export default function MyOrdersPage() {
                 </div>
 
                 {/* Order Items */}
-                <Link href={`/marketplace/orders/${order.id}`} className="block px-5 py-3 space-y-2">
+                <Link href={`/orders/${order.id}`} className="block px-5 py-3 space-y-2">
                   {order.items.map((item, idx) => (
                     <div key={item.productId ?? idx} className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -280,14 +280,14 @@ export default function MyOrdersPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-slate-50/30">
                   <div className="flex items-center gap-3 text-xs">
                     <Link
-                      href={`/marketplace/orders/${order.id}`}
+                      href={`/orders/${order.id}`}
                       className="font-bold text-blue-600 hover:underline flex items-center gap-1 min-h-[44px] px-1"
                     >
                       View details <ChevronRight className="w-3 h-3" />
                     </Link>
                     {!ui.terminal && (
                       <Link
-                        href={`/marketplace/orders/${order.id}/tracking`}
+                        href={`/orders/${order.id}/tracking`}
                         className="font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 min-h-[44px] px-1"
                       >
                         <MapPin className="w-3 h-3" /> Track
@@ -295,19 +295,19 @@ export default function MyOrdersPage() {
                     )}
                     {order.status === 'delivered' && (
                       <Link
-                        href={`/marketplace/orders/${order.id}/invoice`}
+                        href={`/orders/${order.id}/invoice`}
                         className="font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 min-h-[44px] px-1"
                       >
                         <FileText className="w-3 h-3" /> Invoice
                       </Link>
                     )}
                     {isReturnable(order.status) && (
-                      <Link href="/marketplace/returns/new" className="font-bold text-violet-600 hover:underline inline-flex items-center min-h-[44px] px-1">
+                      <Link href="/returns/new" className="font-bold text-violet-600 hover:underline inline-flex items-center min-h-[44px] px-1">
                         Return
                       </Link>
                     )}
                     {isCancellable(order.status) && (
-                      <Link href={`/marketplace/orders/${order.id}`} className="font-bold text-red-600 hover:underline inline-flex items-center min-h-[44px] px-1">
+                      <Link href={`/orders/${order.id}`} className="font-bold text-red-600 hover:underline inline-flex items-center min-h-[44px] px-1">
                         Cancel
                       </Link>
                     )}

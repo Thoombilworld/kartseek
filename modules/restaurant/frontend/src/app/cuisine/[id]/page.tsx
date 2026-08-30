@@ -35,7 +35,7 @@ export default function CuisineCategoryPage({ params }: { params: Promise<{ id: 
       {/* Hero */}
       <div className={`bg-gradient-to-r ${meta.color} text-white`}>
         <div className="max-w-7xl 3xl:max-w-app-wide 4xl:max-w-app-full mx-auto px-3 xs:px-4 py-8 md:py-12">
-          <Link href="/restaurant/list" className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium mb-4 transition-colors">
+          <Link href="/list" className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium mb-4 transition-colors">
             <ArrowLeft className="w-4 h-4" /> All Cuisines
           </Link>
           <div className="flex items-center gap-4">
@@ -74,7 +74,7 @@ export default function CuisineCategoryPage({ params }: { params: Promise<{ id: 
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {restaurants.map(r => (
-            <Link key={r.id} href={`/restaurant/${r.id}`}
+            <Link key={r.id} href={`/${r.id}`}
               className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-md transition-all group">
               <div className="aspect-video bg-slate-100 overflow-hidden relative">
                 <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80"

@@ -16,7 +16,7 @@ export default function DoctorShell({ children }: { children: React.ReactNode })
       <header className="module-header-doctor sticky top-0 z-50">
         <div className="max-w-7xl 3xl:max-w-app-wide 4xl:max-w-app-full mx-auto px-3 xs:px-4 h-16 flex items-center justify-between">
           {/* Brand */}
-          <Link href="/doctor" className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2.5">
             <div className="module-icon-badge">
               <HeartPulse className="w-5 h-5 text-white" />
             </div>
@@ -49,7 +49,7 @@ export default function DoctorShell({ children }: { children: React.ReactNode })
           {/* Right Actions */}
           <div className="flex items-center gap-1">
             <Link
-              href="/doctor/appointments"
+              href="/my-appointments"
               className="module-nav-btn hidden md:flex"
             >
               <Calendar className="w-4.5 h-4.5" />
@@ -67,19 +67,19 @@ export default function DoctorShell({ children }: { children: React.ReactNode })
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden module-bottom-nav" style={{ '--module-active-color': 'var(--doctor-primary)' } as React.CSSProperties}>
-        <Link href="/doctor" className="active flex flex-col items-center">
+        <Link href="/" className="active flex flex-col items-center">
           <HeartPulse className="w-5 h-5 mb-0.5" />
           <span>Health</span>
         </Link>
-        <Link href="/doctor#specialties-section" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-indigo-600 transition-colors">
+        <Link href="/#specialties-section" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-indigo-600 transition-colors">
           <Search className="w-5 h-5 mb-0.5" />
           <span>Search</span>
         </Link>
-        <Link href="/doctor/appointments" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-indigo-600 transition-colors">
+        <Link href="/my-appointments" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-indigo-600 transition-colors">
           <Calendar className="w-5 h-5 mb-0.5" />
           <span>Bookings</span>
         </Link>
-        <Link href="/doctor/my-profile" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-indigo-600 transition-colors">
+        <Link href="/my-profile" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-indigo-600 transition-colors">
           <User className="w-5 h-5 mb-0.5" />
           <span>Profile</span>
         </Link>

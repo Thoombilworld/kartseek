@@ -242,7 +242,7 @@ export default function ReturnsPage() {
     <div className="max-w-[1200px] mx-auto px-3 xs:px-4 py-6 space-y-6 pb-mobile-nav">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
-        <Link href="/marketplace/orders" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
+        <Link href="/orders" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
         <div>
           <h1 className="text-2xl font-black text-slate-900">Returns & Refunds</h1>
           <p className="text-sm text-slate-500">Track return requests and refund status</p>
@@ -405,7 +405,7 @@ export default function ReturnsPage() {
                 {/* Was a dead button. Support lives on the help page, which has
                     the real contact routes. */}
                 <Link
-                  href="/marketplace/help"
+                  href="/help"
                   className="w-full bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors"
                 >
                   <MessageSquare className="w-4 h-4" />Contact Support

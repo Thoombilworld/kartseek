@@ -24,7 +24,7 @@ import { useSavedAddresses, type SavedAddress } from '@/lib/hooks/use-saved-addr
  *   • displayed a fixed subtotal of 487 with a hardcoded 5 platform fee and 24 tax;
  *   • chose from two addresses written into the file;
  *   • and — worst — caught every failure with
- *     `router.push('/grocery/checkout/success')`, so a customer whose order had
+ *     `router.push('/checkout/success')`, so a customer whose order had
  *     just been rejected was shown an order confirmation. `placing` was never
  *     reset either, so the button stayed disabled behind the lie.
  *
@@ -170,7 +170,7 @@ function GroceryCheckoutPageContent() {
       // Only empty the basket once the order actually exists — clearing before the
       // response would lose the items if the request failed.
       clear();
-      router.push(orderId ? `/grocery/checkout/success?orderId=${encodeURIComponent(orderId)}` : '/grocery/checkout/success');
+      router.push(orderId ? `/checkout/success?orderId=${encodeURIComponent(orderId)}` : '/checkout/success');
     } catch (e) {
       // Failures stay on this page with the basket intact, so the customer can fix
       // the problem (out of stock, below minimum, store closed) and retry.
@@ -193,7 +193,7 @@ function GroceryCheckoutPageContent() {
         <span className="text-6xl mb-4 block" aria-hidden="true">🛒</span>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">{tr('Nothing to check out')}</h1>
         <p className="text-slate-500 mb-6">{tr('Your basket is empty — add a few items first.')}</p>
-        <Link href="/grocery/stores" className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-colors">{tr('Browse Stores')}</Link>
+        <Link href="/stores" className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-colors">{tr('Browse Stores')}</Link>
       </div>
     );
   }
@@ -202,7 +202,7 @@ function GroceryCheckoutPageContent() {
     <div className="max-w-7xl 3xl:max-w-app-wide mx-auto px-2 2xs:px-3 xs:px-4 md:px-6 xl:px-8 py-4 xs:py-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/grocery/cart" className="text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back to cart')}>
+        <Link href="/cart" className="text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back to cart')}>
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <h1 className="text-xl font-bold text-slate-900">{tr('Checkout')}</h1>
@@ -223,7 +223,7 @@ function GroceryCheckoutPageContent() {
             ) : addresses.length === 0 ? (
               <div className="text-center py-6">
                 <p className="text-sm text-slate-500 mb-3">{tr('You have no saved delivery addresses yet.')}</p>
-                <Link href="/grocery/addresses" className="inline-flex items-center gap-1.5 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors">
+                <Link href="/addresses" className="inline-flex items-center gap-1.5 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors">
                   <Plus className="w-4 h-4" />{tr('Add an address')}</Link>
               </div>
             ) : (
@@ -245,7 +245,7 @@ function GroceryCheckoutPageContent() {
                     </div>
                   </label>
                 ))}
-                <Link href="/grocery/addresses" className="inline-block text-green-600 text-sm font-semibold hover:underline mt-1">
+                <Link href="/addresses" className="inline-block text-green-600 text-sm font-semibold hover:underline mt-1">
                   + Add New Address
                 </Link>
               </div>

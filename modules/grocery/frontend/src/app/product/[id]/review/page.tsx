@@ -91,8 +91,8 @@ function SubmitReviewContent() {
           <h2 className="text-2xl font-black text-slate-900 mb-2">{tr('Thank you!')}</h2>
           <p className="text-sm text-slate-500 mb-6">Your review has been submitted and will appear after moderation.</p>
           <div className="flex gap-3 justify-center">
-            <Link href={`/grocery/product/${productId}`} className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-colors">{tr('View Product')}</Link>
-            <Link href="/grocery" className="bg-slate-100 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">{tr('Continue Shopping')}</Link>
+            <Link href={`/product/${productId}`} className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-colors">{tr('View Product')}</Link>
+            <Link href="/" className="bg-slate-100 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">{tr('Continue Shopping')}</Link>
           </div>
         </div>
       </div>
@@ -103,7 +103,7 @@ function SubmitReviewContent() {
     <div className="min-h-screen bg-slate-50">
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link href={`/grocery/product/${productId}`} className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm font-medium mb-2 transition-colors">
+          <Link href={`/product/${productId}`} className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm font-medium mb-2 transition-colors">
             <ArrowLeft className="w-4 h-4" />{tr('Back to Product')}</Link>
           <h1 className="text-xl font-black text-slate-900 tracking-tight">{tr('Write a Review')}</h1>
         </div>

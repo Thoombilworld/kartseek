@@ -287,10 +287,10 @@ function CheckoutPageContent() {
           <p className="text-slate-500 mb-2">Your order {orderNumber && <span className="font-bold text-slate-800">#{orderNumber}</span>} has been confirmed.</p>
           <p className="text-slate-500 text-sm mb-8">We&apos;ve emailed your confirmation and will notify you as it ships.</p>
           <div className="space-y-3">
-            <Link href="/marketplace" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
+            <Link href="/" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
               Continue Shopping
             </Link>
-            <Link href="/marketplace/orders" className="w-full border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl hover:bg-slate-50 transition-colors text-sm flex items-center justify-center">
+            <Link href="/orders" className="w-full border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl hover:bg-slate-50 transition-colors text-sm flex items-center justify-center">
               Track Your Order
             </Link>
           </div>
@@ -304,9 +304,9 @@ function CheckoutPageContent() {
       <div className="max-w-6xl mx-auto px-3 xs:px-4 pt-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <span>/</span>
-          <Link href="/marketplace/cart" className="hover:text-blue-600">Cart</Link>
+          <Link href="/cart" className="hover:text-blue-600">Cart</Link>
           <span>/</span>
           <span className="text-slate-900 font-medium">Checkout</span>
         </div>

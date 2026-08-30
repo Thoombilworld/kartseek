@@ -157,7 +157,7 @@ export default function ReviewsPage() {
   return (
     <div className="max-w-[1000px] mx-auto px-3 xs:px-4 py-6 space-y-6 pb-mobile-nav">
       <div className="flex items-center gap-3">
-        <Link href="/marketplace/orders" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
+        <Link href="/orders" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
         <div><h1 className="text-2xl font-black text-slate-900">My Reviews & Ratings</h1><p className="text-sm text-slate-500">Rate products you've purchased</p></div>
       </div>
 

@@ -53,7 +53,7 @@ export default function PharmacyNearMePage() {
       {/* Pharmacy list */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map(ph => (
-          <Link key={ph.id} href={`/pharmacy/stores/${ph.id}`}
+          <Link key={ph.id} href={`/stores/${ph.id}`}
             className="group bg-white border border-slate-200 rounded-2xl p-5 hover:border-teal-300 hover:shadow-lg transition-all duration-200">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">

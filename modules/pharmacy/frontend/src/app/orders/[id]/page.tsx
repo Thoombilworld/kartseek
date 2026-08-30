@@ -95,8 +95,8 @@ export default function PharmacyOrderDetailPage() {
     <OrderDetail
       module="pharmacy"
       orderId={id}
-      backHref="/pharmacy/orders"
-      trackHref={`/pharmacy/orders/${encodeURIComponent(id)}/track`}
+      backHref="/orders"
+      trackHref={`/orders/${encodeURIComponent(id)}/track`}
       load={async (orderId) => toDetail(await pharmacyApi.getOrder(orderId))}
     />
   );

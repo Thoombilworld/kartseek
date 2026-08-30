@@ -83,7 +83,7 @@ export default function ComparePage() {
         <p className="text-slate-500 mb-6 max-w-sm">
           Open any product and tap <span className="font-semibold text-slate-700">Add to Compare</span> to line it up here — up to four at a time.
         </p>
-        <Link href="/marketplace" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">
+        <Link href="/" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">
           Browse Products
         </Link>
       </div>
@@ -93,7 +93,7 @@ export default function ComparePage() {
   return (
     <div className="max-w-[1200px] mx-auto px-3 xs:px-4 py-6 space-y-5 pb-mobile-nav">
       <div className="flex items-center gap-3">
-        <Link href="/marketplace" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
+        <Link href="/" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
         <div className="flex-1"><h1 className="text-2xl font-black text-slate-900">Compare Products</h1><p className="text-sm text-slate-500">Side-by-side comparison of up to 4 products</p></div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={showDiffOnly} onChange={e => setShowDiffOnly(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />

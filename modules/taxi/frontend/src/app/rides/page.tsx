@@ -54,8 +54,8 @@ function normalise(ride: any): HistoryRow {
     currency: ride.currency ?? null,
     icon: VEHICLE_ICON[vehicle] ?? '🚕',
     kind: isOpen(ride.status) ? 'active' : 'past',
-    detailHref: `/taxi/trip/${encodeURIComponent(String(ride.id ?? ''))}`,
-    trackHref: `/taxi/trip/${encodeURIComponent(String(ride.id ?? ''))}/tracking`,
+    detailHref: `/trip/${encodeURIComponent(String(ride.id ?? ''))}`,
+    trackHref: `/trip/${encodeURIComponent(String(ride.id ?? ''))}/tracking`,
     rating: typeof ride.customerRating === 'number' ? ride.customerRating : null,
     searchText: [ride.pickupAddress, ride.dropAddress, ride.promoCode].filter(Boolean).join(' '),
   };
@@ -66,7 +66,7 @@ export default function TaxiRidesPage() {
     <OrderHistory
       module="taxi"
       heading="My rides"
-      backHref="/taxi"
+      backHref="/"
       searchPlaceholder="Search by pickup, destination or ride id…"
       filters={[
         { key: 'active', label: 'Active', match: (r) => r.kind === 'active' },

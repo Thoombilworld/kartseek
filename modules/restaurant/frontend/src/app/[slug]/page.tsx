@@ -133,9 +133,9 @@ function RestaurantDetailContent({ slug }: { slug: string }) {
     }
 
     if (orderType === 'table-booking') {
-      router.push(`/restaurant/table-booking/${slug}`);
+      router.push(`/table-booking/${slug}`);
     } else {
-      router.push(`/restaurant/checkout?type=${orderType}`);
+      router.push(`/checkout?type=${orderType}`);
     }
   };
 
@@ -457,7 +457,7 @@ function RestaurantDetailContent({ slug }: { slug: string }) {
                    <p className="font-bold text-slate-900">Reserve your table now</p>
                  </div>
               </div>
-              <Link href={`/restaurant/table-booking/${slug}`} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-sm text-sm md:text-base flex items-center gap-2">
+              <Link href={`/table-booking/${slug}`} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-sm text-sm md:text-base flex items-center gap-2">
                 Book a Table <ChevronRight className="w-4 h-4" />
               </Link>
             </>

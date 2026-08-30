@@ -15,7 +15,7 @@ export default function RestaurantSearchInput() {
   const handleSearch = useCallback(() => {
     const trimmed = query.trim();
     if (trimmed) {
-      router.push(`/restaurant/search?q=${encodeURIComponent(trimmed)}`);
+      router.push(`/search?q=${encodeURIComponent(trimmed)}`);
     }
   }, [query, router]);
 

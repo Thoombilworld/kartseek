@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { Search, Utensils } from 'lucide-react';
 
 export default function RestaurantNotFound() {
@@ -12,12 +13,12 @@ export default function RestaurantNotFound() {
         We couldn&apos;t find the restaurant you&apos;re looking for. It may have been removed or the link might be incorrect.
       </p>
       <div className="flex flex-col sm:flex-row gap-3">
-        <Link
-          href="/restaurant"
+        <ZoneLink
+          href="/"
           className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-colors shadow-md"
         >
           <Search className="w-4 h-4" /> Browse Restaurants
-        </Link>
+        </ZoneLink>
         <Link
           href="/"
           className="inline-flex items-center gap-2 px-6 py-3 bg-white text-slate-700 rounded-xl font-bold border border-slate-200 hover:bg-slate-50 transition-colors"

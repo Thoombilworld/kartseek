@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   },
   alternates: {
     languages: {
-      'en': '/grocery',
+      'en': '/',
       'ar': '/ar/grocery',
       'hi': '/hi/grocery',
     },

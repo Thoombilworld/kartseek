@@ -145,7 +145,7 @@ export default function DoctorProfilePage({ params }: { params: Promise<{ slug: 
                 <p className="text-sm text-slate-500 mb-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{doc.hospital}</p>
                 <p className="text-sm font-semibold text-emerald-600 mb-5 flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Next slot: Today, 4:30 PM</p>
                 <Link
-                  href={`/doctor/book/${slug}?type=clinic`}
+                  href={`/book/${slug}?type=clinic`}
                   className="block w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-center font-bold py-3 rounded-xl transition-all shadow-sm shadow-blue-200/50"
                 >
                   Book Clinic Visit
@@ -167,7 +167,7 @@ export default function DoctorProfilePage({ params }: { params: Promise<{ slug: 
                 <p className="text-sm text-slate-500 mb-1 flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />Secure encrypted call</p>
                 <p className="text-sm font-semibold text-emerald-600 mb-5 flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Available in 15 mins</p>
                 <Link
-                  href={`/doctor/book/${slug}?type=video`}
+                  href={`/book/${slug}?type=video`}
                   className="block w-full bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white text-center font-bold py-3 rounded-xl transition-all shadow-sm shadow-teal-200/50"
                 >
                   Book Video Consult

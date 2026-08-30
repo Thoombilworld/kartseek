@@ -69,7 +69,7 @@ export default function MyAppointmentsPage() {
     <OrderHistory
       module="doctor"
       heading="My appointments"
-      backHref="/doctor"
+      backHref="/"
       searchPlaceholder="Search by doctor, specialty or patient…"
       filters={[
         { key: 'upcoming', label: 'Upcoming', match: (r) => r.kind === 'upcoming' },

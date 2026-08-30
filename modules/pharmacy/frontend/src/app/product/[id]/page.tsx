@@ -168,7 +168,7 @@ export default function ProductDetailPage() {
         <div className="text-6xl mb-4">💊</div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Product Not Found</h1>
         <p className="text-slate-500 mb-6">The product you&apos;re looking for doesn&apos;t exist or has been removed.</p>
-        <Link href="/pharmacy" className="text-teal-600 font-bold hover:underline">← Back to Pharmacy</Link>
+        <Link href="/" className="text-teal-600 font-bold hover:underline">← Back to Pharmacy</Link>
       </div>
     );
   }
@@ -179,7 +179,7 @@ export default function ProductDetailPage() {
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Link href="/pharmacy" className="hover:text-teal-600 transition-colors">Pharmacy</Link>
+        <Link href="/" className="hover:text-teal-600 transition-colors">Pharmacy</Link>
         <ChevronRight className="w-3 h-3" />
         <span className="text-slate-400">{product.cat}</span>
         <ChevronRight className="w-3 h-3" />

@@ -98,8 +98,8 @@ export default function RestaurantOrderDetailPage() {
     <OrderDetail
       module="restaurant"
       orderId={id}
-      backHref="/restaurant/orders"
-      trackHref={`/restaurant/orders/${encodeURIComponent(id)}/track`}
+      backHref="/orders"
+      trackHref={`/orders/${encodeURIComponent(id)}/track`}
       load={async (orderId) => toDetail(await restaurantApi.getOrderDetail(orderId))}
     />
   );

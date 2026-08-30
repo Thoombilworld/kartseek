@@ -103,7 +103,7 @@ export default function CompliancePage() {
       <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
         <h3 className="font-bold text-slate-900 mb-3">Related Pages</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {[{ name:'How It Works', href:'/pharmacy/how-it-works' },{ name:'Pharmacy Homepage', href:'/pharmacy' },{ name:'Sell on KARTSEEK', href:'/pharmacy/sell-on-kartseek' }].map(l => (
+          {[{ name:'How It Works', href:'/how-it-works' },{ name:'Pharmacy Homepage', href:'/' },{ name:'Sell on KARTSEEK', href:'/sell-on-kartseek' }].map(l => (
             <Link key={l.href} href={l.href} className="text-sm text-teal-600 hover:text-teal-700 font-medium hover:underline">{l.name} →</Link>
           ))}
         </div>

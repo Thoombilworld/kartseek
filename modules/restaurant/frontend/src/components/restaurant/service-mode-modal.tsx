@@ -36,7 +36,7 @@ const SERVICE_CONFIG: Record<ServiceMode, {
     accentBg: 'bg-orange-50',
     accentBorder: 'border-orange-200',
     ctaLabel: 'Order Delivery',
-    ctaRoute: (id) => `/restaurant/${id}?mode=delivery`,
+    ctaRoute: (id) => `/${id}?mode=delivery`,
     badgeText: '🚴 Fast Delivery',
   },
   takeaway: {
@@ -48,7 +48,7 @@ const SERVICE_CONFIG: Record<ServiceMode, {
     accentBg: 'bg-purple-50',
     accentBorder: 'border-purple-200',
     ctaLabel: 'Order Takeaway',
-    ctaRoute: (id) => `/restaurant/${id}?mode=takeaway`,
+    ctaRoute: (id) => `/${id}?mode=takeaway`,
     badgeText: '🛍️ No Delivery Fee',
   },
   'dine-in': {
@@ -60,7 +60,7 @@ const SERVICE_CONFIG: Record<ServiceMode, {
     accentBg: 'bg-emerald-50',
     accentBorder: 'border-emerald-200',
     ctaLabel: 'Dine-in Menu',
-    ctaRoute: (id) => `/restaurant/${id}?mode=dine-in`,
+    ctaRoute: (id) => `/${id}?mode=dine-in`,
     badgeText: '🍽️ Dine-in Available',
   },
   'table-booking': {
@@ -72,7 +72,7 @@ const SERVICE_CONFIG: Record<ServiceMode, {
     accentBg: 'bg-blue-50',
     accentBorder: 'border-blue-200',
     ctaLabel: 'Book Table',
-    ctaRoute: (id) => `/restaurant/table-booking/${id}`,
+    ctaRoute: (id) => `/table-booking/${id}`,
     badgeText: '📅 Table Booking',
   },
 };

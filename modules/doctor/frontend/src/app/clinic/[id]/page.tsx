@@ -189,7 +189,7 @@ export default function ClinicProfilePage() {
         <span className="text-5xl mb-4 block">🏥</span>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Clinic Not Found</h1>
         <p className="text-slate-500 mb-6">The clinic you&apos;re looking for doesn&apos;t exist.</p>
-        <Link href="/doctor" className="px-5 py-2.5 bg-teal-600 text-white font-bold rounded-xl text-sm hover:bg-teal-700 transition-colors">
+        <Link href="/" className="px-5 py-2.5 bg-teal-600 text-white font-bold rounded-xl text-sm hover:bg-teal-700 transition-colors">
           Back to Health Home
         </Link>
       </div>
@@ -205,7 +205,7 @@ export default function ClinicProfilePage() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
         <div className="absolute top-4 left-4">
-          <Link href="/doctor" className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-xl text-sm font-semibold text-slate-700 hover:bg-white transition-all shadow-sm">
+          <Link href="/" className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-xl text-sm font-semibold text-slate-700 hover:bg-white transition-all shadow-sm">
             <ChevronLeft className="w-4 h-4" /> Back
           </Link>
         </div>

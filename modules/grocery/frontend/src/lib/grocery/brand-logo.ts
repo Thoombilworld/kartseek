@@ -51,7 +51,7 @@ export function brandLogoUrl(brand: BrandLogoInput | string): string {
   const slug = brandSlug(name);
   // A brand with no asset gets the neutral mark rather than a 404 — a broken
   // image in a brand row is worse than a plain one.
-  return `/grocery/brands/${GENERATED_MARKS.has(slug) ? slug : 'store-brand'}.svg`;
+  return `/brands/${GENERATED_MARKS.has(slug) ? slug : 'store-brand'}.svg`;
 }
 
 /** True when the resolved logo is a real asset rather than the neutral fallback. */

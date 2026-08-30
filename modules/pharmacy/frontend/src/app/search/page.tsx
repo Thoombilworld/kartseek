@@ -71,7 +71,7 @@ export default function PharmacySearchPage() {
       {/* Results grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {results.map(p => (
-          <Link key={p.id} href={`/pharmacy/product/${p.id}`}
+          <Link key={p.id} href={`/product/${p.id}`}
             className="group bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-teal-300 hover:shadow-lg transition-all duration-200">
             <div className="relative p-4 bg-slate-50 flex items-center justify-center h-32">
               <span className="text-5xl group-hover:scale-110 transition-transform duration-200">{p.img}</span>

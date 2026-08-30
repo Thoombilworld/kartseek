@@ -42,13 +42,13 @@ export default function TaxiLoginPage() {
 
     login(mockUser, `taxi_${tab}_jwt_${Date.now()}`);
     setLoading(false);
-    router.push(tab === 'driver' ? '/taxi/drive/dashboard' : '/taxi');
+    router.push(tab === 'driver' ? '/drive/dashboard' : '/');
   };
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-slate-900 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        <Link href="/taxi" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
+        <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
         </Link>
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
@@ -84,7 +84,7 @@ export default function TaxiLoginPage() {
             <div>
               <div className="flex justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">Password</label>
-                <Link href="/taxi/forgot-password" className="text-xs text-yellow-600 font-medium">Forgot?</Link>
+                <Link href="/forgot-password" className="text-xs text-yellow-600 font-medium">Forgot?</Link>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -106,7 +106,7 @@ export default function TaxiLoginPage() {
               <span>📱</span> Continue with OTP
             </button>
             <p className="text-sm text-slate-500 text-center">
-              {tab === 'rider' ? <>No account? <Link href="/taxi/register" className="text-yellow-600 font-bold">Sign up</Link></> : <>Want to drive? <Link href="/taxi/drive" className="text-yellow-600 font-bold">Apply here</Link></>}
+              {tab === 'rider' ? <>No account? <Link href="/register" className="text-yellow-600 font-bold">Sign up</Link></> : <>Want to drive? <Link href="/drive" className="text-yellow-600 font-bold">Apply here</Link></>}
             </p>
           </form>
         </div>

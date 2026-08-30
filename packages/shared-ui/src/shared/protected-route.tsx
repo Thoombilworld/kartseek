@@ -15,9 +15,17 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (isHydrated && !isAuthenticated) {
-      router.replace('/auth/login?redirect=' + encodeURIComponent(window.location.pathname));
+      // The sign-in page belongs to the shell, and this component renders inside
+      // all eight zones. router.replace would prepend the zone's basePath and
+      // send a signed-out pharmacy visitor to /pharmacy/auth/login, which does
+      // not exist. window.location is not rewritten, and crossing into another
+      // application is a document request in any case.
+      //
+      // window.location.pathname already carries the basePath, so the redirect
+      // target is the full public path the shell can route back to.
+      window.location.assign('/auth/login?redirect=' + encodeURIComponent(window.location.pathname));
     }
-  }, [isHydrated, isAuthenticated, router]);
+  }, [isHydrated, isAuthenticated]);
 
   if (!isHydrated) {
     return <FullPageLoader message="Checking authentication..." />;

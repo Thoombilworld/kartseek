@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { generateMetadata as genMeta } from '@/lib/seo/metadata';
 
 export const metadata: Metadata = genMeta({
@@ -32,7 +33,7 @@ export default function SellOnKartseekPage() {
       <div className="text-center">
         <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Sell Pharmacy Products on KARTSEEK</h1>
         <p className="text-lg text-slate-600 max-w-2xl mx-auto">Register your pharmacy, list products, manage orders, and reach thousands of customers. KARTSEEK handles delivery, payments, and compliance.</p>
-        <Link href="/seller/pharmacy/register" className="mt-6 inline-block bg-teal-600 hover:bg-teal-700 text-white font-bold px-8 py-3 rounded-xl transition-colors">Register as Seller</Link>
+        <ZoneLink href="/seller/pharmacy/register" className="mt-6 inline-block bg-teal-600 hover:bg-teal-700 text-white font-bold px-8 py-3 rounded-xl transition-colors">Register as Seller</ZoneLink>
       </div>
 
       {/* Steps */}
@@ -75,7 +76,7 @@ export default function SellOnKartseekPage() {
       <div className="bg-linear-to-r from-teal-600 to-cyan-500 rounded-2xl p-8 text-center text-white">
         <h2 className="text-2xl font-bold mb-3">Start Selling Today</h2>
         <p className="text-white/70 mb-5">Join hundreds of pharmacies already serving customers on KARTSEEK.</p>
-        <Link href="/seller/pharmacy/register" className="bg-white text-teal-700 font-bold px-8 py-3 rounded-xl hover:bg-teal-50 transition-colors inline-block">Register Now</Link>
+        <ZoneLink href="/seller/pharmacy/register" className="bg-white text-teal-700 font-bold px-8 py-3 rounded-xl hover:bg-teal-50 transition-colors inline-block">Register Now</ZoneLink>
       </div>
 
       {/* FAQ Schema */}

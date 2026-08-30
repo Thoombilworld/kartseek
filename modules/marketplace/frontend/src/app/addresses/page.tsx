@@ -205,7 +205,7 @@ export default function AddressBookPage() {
   return (
     <div className="max-w-[800px] mx-auto px-3 xs:px-4 py-6 space-y-5 pb-mobile-nav">
       <div className="flex items-center gap-3">
-        <Link href="/marketplace" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
+        <Link href="/" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
         <div className="flex-1"><h1 className="text-2xl font-black text-slate-900">My Addresses</h1><p className="text-sm text-slate-500">Manage your delivery addresses</p></div>
         <button onClick={openNew} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-lg text-sm flex items-center gap-2"><Plus className="w-4 h-4" />Add New</button>
       </div>

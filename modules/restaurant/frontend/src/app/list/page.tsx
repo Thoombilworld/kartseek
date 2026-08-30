@@ -51,7 +51,7 @@ export default function RestaurantListPage() {
               <h1 className="text-3xl md:text-4xl font-black leading-tight">All Restaurants</h1>
               <p className="text-orange-100 mt-1">Explore {MOCK_RESTAURANTS.length * 40}+ restaurants near you</p>
             </div>
-            <Link href="/restaurant/search" className="inline-flex items-center gap-2 bg-white text-orange-600 font-bold px-5 py-2.5 rounded-xl hover:bg-orange-50 transition-colors shadow-md">
+            <Link href="/search" className="inline-flex items-center gap-2 bg-white text-orange-600 font-bold px-5 py-2.5 rounded-xl hover:bg-orange-50 transition-colors shadow-md">
               <span>Search Restaurants</span> <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
@@ -63,7 +63,7 @@ export default function RestaurantListPage() {
         <h2 className="text-xl font-bold text-slate-900 mb-4">Browse by Cuisine</h2>
         <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 gap-3">
           {CUISINE_CATEGORIES.map(c => (
-            <Link key={c.id} href={`/restaurant/cuisine/${c.id}`}
+            <Link key={c.id} href={`/cuisine/${c.id}`}
               className={`flex flex-col items-center gap-2 p-3 rounded-2xl bg-linear-to-br ${c.color} text-white shadow-sm hover:shadow-md transition-all hover:scale-105 cursor-pointer`}>
               <span className="text-2xl">{c.emoji}</span>
               <span className="text-[10px] font-bold text-center leading-tight">{c.name}</span>
@@ -108,7 +108,7 @@ export default function RestaurantListPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filtered.map(r => (
-              <Link key={r.id} href={`/restaurant/${r.id}`}
+              <Link key={r.id} href={`/${r.id}`}
                 className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="aspect-video bg-slate-100 overflow-hidden relative">
                   <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80"
@@ -149,11 +149,11 @@ export default function RestaurantListPage() {
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <Utensils className="w-5 h-5 text-emerald-500" /> Best for Dine-in
             </h2>
-            <Link href="/restaurant/search" className="text-orange-600 text-sm font-bold hover:text-orange-700">See All</Link>
+            <Link href="/search" className="text-orange-600 text-sm font-bold hover:text-orange-700">See All</Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.slice(0, 3).map(r => (
-              <Link key={r.id + '-dine'} href={`/restaurant/${r.id}`}
+              <Link key={r.id + '-dine'} href={`/${r.id}`}
                 className="flex gap-3 bg-white rounded-xl p-3 border border-slate-100 shadow-sm hover:shadow-md transition-all">
                 <div className="w-20 h-20 shrink-0 rounded-xl bg-slate-100 overflow-hidden">
                   <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&q=80" alt={r.name} className="w-full h-full object-cover" />

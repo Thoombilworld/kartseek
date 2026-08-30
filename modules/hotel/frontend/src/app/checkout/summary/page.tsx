@@ -28,7 +28,7 @@ export default function CheckoutSummaryPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3 mb-3">
-            <Link href={`/hotel-booking/hotel/${booking.hotel.id}`} className="w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
+            <Link href={`/hotel/${booking.hotel.id}`} className="w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <h1 className="text-lg font-bold text-slate-900">Checkout</h1>
@@ -108,7 +108,7 @@ export default function CheckoutSummaryPage() {
                   <p className="text-sm font-bold text-slate-900">{booking.room.name}</p>
                   <p className="text-xs text-slate-500">{booking.room.bedType} · {booking.room.area} · {booking.room.view}</p>
                 </div>
-                <Link href={`/hotel-booking/hotel/${booking.hotel.id}`} className="text-xs text-rose-600 font-medium hover:underline">Change</Link>
+                <Link href={`/hotel/${booking.hotel.id}`} className="text-xs text-rose-600 font-medium hover:underline">Change</Link>
               </div>
               <div className="mt-3 p-3 bg-blue-50 rounded-xl">
                 <div className="flex items-center justify-between">
@@ -154,7 +154,7 @@ export default function CheckoutSummaryPage() {
               </div>
 
               <Link
-                href="/hotel-booking/checkout/guests"
+                href="/checkout/guests"
                 className="block w-full bg-rose-600 text-white text-center font-bold py-4 rounded-xl mt-4 hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200"
               >
                 Continue to Guest Details

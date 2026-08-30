@@ -86,7 +86,7 @@ export default function WellnessRewardsPage() {
         <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-16 translate-x-16 blur-3xl" />
         <div className="absolute bottom-0 left-10 w-32 h-32 bg-white/5 rounded-full translate-y-10 blur-2xl" />
         <div className="max-w-4xl mx-auto relative z-10">
-          <Link href="/doctor/my-profile" className="inline-flex items-center gap-1 text-indigo-200 hover:text-white text-sm font-medium mb-4 transition-colors">
+          <Link href="/my-profile" className="inline-flex items-center gap-1 text-indigo-200 hover:text-white text-sm font-medium mb-4 transition-colors">
             <ArrowLeft className="w-4 h-4" /> Profile
           </Link>
           <h1 className="text-2xl font-black mb-1 flex items-center gap-2">

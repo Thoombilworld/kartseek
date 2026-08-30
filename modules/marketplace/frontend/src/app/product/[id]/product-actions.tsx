@@ -53,7 +53,7 @@ export function ProductActions({ product, qty = 1 }: { product: any, qty?: numbe
     handleAddToCart();
     // Marketplace has its own checkout (coupons, wallet, stepped flow) — the
     // cart page already routes here, so Buy Now must not diverge to /checkout.
-    router.push('/marketplace/checkout');
+    router.push('/checkout');
   };
 
   return (

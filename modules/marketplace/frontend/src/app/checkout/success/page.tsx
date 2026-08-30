@@ -68,10 +68,10 @@ function CheckoutSuccessInner() {
               : 'This page confirms an order once one has been placed.'}
           </p>
           <div className="space-y-3">
-            <Link href="/marketplace/orders" className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors">
+            <Link href="/orders" className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors">
               View your orders
             </Link>
-            <Link href="/marketplace" className="block w-full border border-slate-200 text-slate-700 font-semibold py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm">
+            <Link href="/" className="block w-full border border-slate-200 text-slate-700 font-semibold py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm">
               Continue shopping
             </Link>
           </div>
@@ -168,18 +168,18 @@ function CheckoutSuccessInner() {
 
         {/* Actions */}
         <div className="flex flex-col gap-3">
-          <Link href="/marketplace/orders"
+          <Link href="/orders"
             className="px-6 py-3.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md">
             <Package className="w-5 h-5" /> Track Your Order
           </Link>
-          <Link href="/marketplace"
+          <Link href="/"
             className="px-6 py-3.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
             <Home className="w-5 h-5" /> Continue Shopping
           </Link>
           {/* Was a handler-less <button>. The invoice route already exists and
               is keyed by order id, which this page now actually has. */}
           <Link
-            href={`/marketplace/orders/${order.id}/invoice`}
+            href={`/orders/${order.id}/invoice`}
             className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center gap-1"
           >
             <Download className="w-4 h-4" /> Download Invoice

@@ -101,7 +101,7 @@ export default function BuyAgainPage() {
         </div>
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Nothing to buy again yet</h2>
         <p className="text-slate-500 mb-6 max-w-sm">Items from your past orders show up here so you can reorder them in one tap.</p>
-        <Link href="/marketplace" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center gap-2">
+        <Link href="/" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center gap-2">
           <Package className="w-5 h-5" /> Browse Products
         </Link>
       </div>
@@ -111,7 +111,7 @@ export default function BuyAgainPage() {
   return (
     <div className="max-w-[1200px] mx-auto px-3 xs:px-4 py-6 space-y-5 pb-mobile-nav">
       <div className="flex items-center gap-3">
-        <Link href="/marketplace/orders" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
+        <Link href="/orders" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
         <div className="flex-1"><h1 className="text-2xl font-black text-slate-900 flex items-center gap-2"><RefreshCw className="w-6 h-6 text-blue-600" />Buy Again</h1><p className="text-sm text-slate-500">Quickly reorder items you've purchased before</p></div>
       </div>
 

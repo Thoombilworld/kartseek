@@ -23,7 +23,7 @@ export default function GrocerySubscriptionsPage() {
       description={
         'Recurring grocery deliveries are not something the platform can schedule today. You can reorder any past order in two taps from your order history, which repeats the same basket at current prices.'
       }
-      alternative={{ href: '/grocery/orders', label: 'View past orders' }}
+      alternative={{ href: '/orders', label: 'View past orders' }}
     />
   );
 }

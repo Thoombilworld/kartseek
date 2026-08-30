@@ -44,22 +44,22 @@ const STORE_CATEGORIES = [
 ];
 
 const PRODUCTS = [
-  { id:'p1',name:'Paracetamol 500mg',brand:'Dolo',price:25,mrp:32,pack:'Strip of 15',rx:false,inStock:true,cat:'medicines',img:'/pharmacy/products/paracetamol.webp',fallbackImg:'💊',dosage:'500mg',form:'Tablet',deliveryEst:'20 min',popular:true,manufacturer:'Micro Labs' },
-  { id:'p2',name:'Cetirizine 10mg',brand:'Zyrtec',price:45,mrp:55,pack:'Strip of 10',rx:false,inStock:true,cat:'otc',img:'/pharmacy/products/cetirizine.webp',fallbackImg:'💊',dosage:'10mg',form:'Tablet',deliveryEst:'20 min',popular:true,manufacturer:'UCB India' },
-  { id:'p3',name:'Vitamin C 1000mg',brand:'Celin',price:65,mrp:80,pack:'Tube of 10',rx:false,inStock:true,cat:'vitamins',img:'/pharmacy/products/vitaminc.webp',fallbackImg:'🧪',dosage:'1000mg',form:'Effervescent Tab',deliveryEst:'25 min',popular:true,manufacturer:'GSK' },
-  { id:'p4',name:'Amoxicillin 250mg',brand:'Amoxil',price:85,mrp:110,pack:'Strip of 10',rx:true,inStock:true,cat:'rx',img:'/pharmacy/products/amoxicillin.webp',fallbackImg:'💊',dosage:'250mg',form:'Capsule',deliveryEst:'30 min',popular:false,manufacturer:'GSK' },
-  { id:'p5',name:'Metformin 500mg',brand:'Glycomet',price:32,mrp:45,pack:'Strip of 20',rx:true,inStock:false,cat:'rx',img:'/pharmacy/products/metformin.webp',fallbackImg:'💊',dosage:'500mg',form:'Tablet',deliveryEst:'—',popular:false,manufacturer:'USV Ltd' },
-  { id:'p6',name:'Dettol Hand Sanitizer',brand:'Dettol',price:149,mrp:199,pack:'500ml',rx:false,inStock:true,cat:'personal',img:'/pharmacy/products/dettol.webp',fallbackImg:'🧴',dosage:'',form:'Liquid',deliveryEst:'20 min',popular:true,manufacturer:'Reckitt' },
-  { id:'p7',name:'Baby Diaper Pants (L)',brand:'Pampers',price:450,mrp:550,pack:'56 Count',rx:false,inStock:true,cat:'baby',img:'/pharmacy/products/pampers.webp',fallbackImg:'🍼',dosage:'',form:'Pack',deliveryEst:'25 min',popular:false,manufacturer:'P&G' },
-  { id:'p8',name:'Band-Aid Flexible Fabric',brand:'J&J',price:75,mrp:95,pack:'Box of 30',rx:false,inStock:true,cat:'firstaid',img:'/pharmacy/products/bandaid.webp',fallbackImg:'🩹',dosage:'',form:'Box',deliveryEst:'20 min',popular:false,manufacturer:'Johnson & Johnson' },
-  { id:'p9',name:'Multivitamin Daily',brand:'Centrum',price:320,mrp:400,pack:'Bottle of 60',rx:false,inStock:true,cat:'vitamins',img:'/pharmacy/products/centrum.webp',fallbackImg:'🧪',dosage:'',form:'Tablet',deliveryEst:'25 min',popular:true,manufacturer:'Haleon' },
-  { id:'p10',name:'CeraVe Moisturizing Cream',brand:'CeraVe',price:299,mrp:399,pack:'200ml',rx:false,inStock:true,cat:'skincare',img:'/pharmacy/products/cerave.webp',fallbackImg:'🧖',dosage:'',form:'Cream',deliveryEst:'25 min',popular:true,manufacturer:"L'Oréal" },
-  { id:'p11',name:'Omega-3 Fish Oil 1000mg',brand:'HealthVit',price:280,mrp:350,pack:'60 Softgels',rx:false,inStock:true,cat:'vitamins',img:'/pharmacy/products/omega3.webp',fallbackImg:'🐟',dosage:'1000mg',form:'Softgel',deliveryEst:'25 min',popular:false,manufacturer:'HealthVit' },
-  { id:'p12',name:'Digital BP Monitor',brand:'Omron',price:1800,mrp:2200,pack:'1 Unit',rx:false,inStock:true,cat:'devices',img:'/pharmacy/products/bpmonitor.webp',fallbackImg:'🩺',dosage:'',form:'Device',deliveryEst:'35 min',popular:true,manufacturer:'Omron' },
-  { id:'p13',name:'Augmentin 625 Duo',brand:'GSK',price:220,mrp:280,pack:'Strip of 10',rx:true,inStock:true,cat:'rx',img:'/pharmacy/products/augmentin.webp',fallbackImg:'💊',dosage:'625mg',form:'Tablet',deliveryEst:'30 min',popular:false,manufacturer:'GSK' },
-  { id:'p14',name:'Insulin Pen Needle',brand:'BD',price:350,mrp:420,pack:'Box of 50',rx:true,inStock:true,cat:'diabetic',img:'/pharmacy/products/insulin.webp',fallbackImg:'🩸',dosage:'',form:'Needles',deliveryEst:'30 min',popular:false,manufacturer:'Becton Dickinson' },
-  { id:'p15',name:'Prenatal Multivitamins',brand:'Elevit',price:450,mrp:520,pack:'Bottle of 30',rx:false,inStock:true,cat:'women',img:'/pharmacy/products/prenatal.webp',fallbackImg:'♀️',dosage:'',form:'Tablet',deliveryEst:'25 min',popular:false,manufacturer:'Bayer' },
-  { id:'p16',name:'Knee Support Wrap',brand:'Tynor',price:420,mrp:520,pack:'1 Pair',rx:false,inStock:true,cat:'ortho',img:'/pharmacy/products/kneesupport.webp',fallbackImg:'🦴',dosage:'',form:'Support',deliveryEst:'30 min',popular:false,manufacturer:'Tynor' },
+  { id:'p1',name:'Paracetamol 500mg',brand:'Dolo',price:25,mrp:32,pack:'Strip of 15',rx:false,inStock:true,cat:'medicines',img:'/products/paracetamol.webp',fallbackImg:'💊',dosage:'500mg',form:'Tablet',deliveryEst:'20 min',popular:true,manufacturer:'Micro Labs' },
+  { id:'p2',name:'Cetirizine 10mg',brand:'Zyrtec',price:45,mrp:55,pack:'Strip of 10',rx:false,inStock:true,cat:'otc',img:'/products/cetirizine.webp',fallbackImg:'💊',dosage:'10mg',form:'Tablet',deliveryEst:'20 min',popular:true,manufacturer:'UCB India' },
+  { id:'p3',name:'Vitamin C 1000mg',brand:'Celin',price:65,mrp:80,pack:'Tube of 10',rx:false,inStock:true,cat:'vitamins',img:'/products/vitaminc.webp',fallbackImg:'🧪',dosage:'1000mg',form:'Effervescent Tab',deliveryEst:'25 min',popular:true,manufacturer:'GSK' },
+  { id:'p4',name:'Amoxicillin 250mg',brand:'Amoxil',price:85,mrp:110,pack:'Strip of 10',rx:true,inStock:true,cat:'rx',img:'/products/amoxicillin.webp',fallbackImg:'💊',dosage:'250mg',form:'Capsule',deliveryEst:'30 min',popular:false,manufacturer:'GSK' },
+  { id:'p5',name:'Metformin 500mg',brand:'Glycomet',price:32,mrp:45,pack:'Strip of 20',rx:true,inStock:false,cat:'rx',img:'/products/metformin.webp',fallbackImg:'💊',dosage:'500mg',form:'Tablet',deliveryEst:'—',popular:false,manufacturer:'USV Ltd' },
+  { id:'p6',name:'Dettol Hand Sanitizer',brand:'Dettol',price:149,mrp:199,pack:'500ml',rx:false,inStock:true,cat:'personal',img:'/products/dettol.webp',fallbackImg:'🧴',dosage:'',form:'Liquid',deliveryEst:'20 min',popular:true,manufacturer:'Reckitt' },
+  { id:'p7',name:'Baby Diaper Pants (L)',brand:'Pampers',price:450,mrp:550,pack:'56 Count',rx:false,inStock:true,cat:'baby',img:'/products/pampers.webp',fallbackImg:'🍼',dosage:'',form:'Pack',deliveryEst:'25 min',popular:false,manufacturer:'P&G' },
+  { id:'p8',name:'Band-Aid Flexible Fabric',brand:'J&J',price:75,mrp:95,pack:'Box of 30',rx:false,inStock:true,cat:'firstaid',img:'/products/bandaid.webp',fallbackImg:'🩹',dosage:'',form:'Box',deliveryEst:'20 min',popular:false,manufacturer:'Johnson & Johnson' },
+  { id:'p9',name:'Multivitamin Daily',brand:'Centrum',price:320,mrp:400,pack:'Bottle of 60',rx:false,inStock:true,cat:'vitamins',img:'/products/centrum.webp',fallbackImg:'🧪',dosage:'',form:'Tablet',deliveryEst:'25 min',popular:true,manufacturer:'Haleon' },
+  { id:'p10',name:'CeraVe Moisturizing Cream',brand:'CeraVe',price:299,mrp:399,pack:'200ml',rx:false,inStock:true,cat:'skincare',img:'/products/cerave.webp',fallbackImg:'🧖',dosage:'',form:'Cream',deliveryEst:'25 min',popular:true,manufacturer:"L'Oréal" },
+  { id:'p11',name:'Omega-3 Fish Oil 1000mg',brand:'HealthVit',price:280,mrp:350,pack:'60 Softgels',rx:false,inStock:true,cat:'vitamins',img:'/products/omega3.webp',fallbackImg:'🐟',dosage:'1000mg',form:'Softgel',deliveryEst:'25 min',popular:false,manufacturer:'HealthVit' },
+  { id:'p12',name:'Digital BP Monitor',brand:'Omron',price:1800,mrp:2200,pack:'1 Unit',rx:false,inStock:true,cat:'devices',img:'/products/bpmonitor.webp',fallbackImg:'🩺',dosage:'',form:'Device',deliveryEst:'35 min',popular:true,manufacturer:'Omron' },
+  { id:'p13',name:'Augmentin 625 Duo',brand:'GSK',price:220,mrp:280,pack:'Strip of 10',rx:true,inStock:true,cat:'rx',img:'/products/augmentin.webp',fallbackImg:'💊',dosage:'625mg',form:'Tablet',deliveryEst:'30 min',popular:false,manufacturer:'GSK' },
+  { id:'p14',name:'Insulin Pen Needle',brand:'BD',price:350,mrp:420,pack:'Box of 50',rx:true,inStock:true,cat:'diabetic',img:'/products/insulin.webp',fallbackImg:'🩸',dosage:'',form:'Needles',deliveryEst:'30 min',popular:false,manufacturer:'Becton Dickinson' },
+  { id:'p15',name:'Prenatal Multivitamins',brand:'Elevit',price:450,mrp:520,pack:'Bottle of 30',rx:false,inStock:true,cat:'women',img:'/products/prenatal.webp',fallbackImg:'♀️',dosage:'',form:'Tablet',deliveryEst:'25 min',popular:false,manufacturer:'Bayer' },
+  { id:'p16',name:'Knee Support Wrap',brand:'Tynor',price:420,mrp:520,pack:'1 Pair',rx:false,inStock:true,cat:'ortho',img:'/products/kneesupport.webp',fallbackImg:'🦴',dosage:'',form:'Support',deliveryEst:'30 min',popular:false,manufacturer:'Tynor' },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -255,7 +255,7 @@ function ProductCard({ p, qty, onAdd, onRemove, onRxUpload }: {
               <ShoppingCart className="w-3 h-3" /> Add to Cart
             </button>
           )}
-          <Link href={`/pharmacy/product/${p.id}`} className="p-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors" title="View Details">
+          <Link href={`/product/${p.id}`} className="p-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors" title="View Details">
             <Eye className="w-4 h-4 text-slate-500" />
           </Link>
         </div>
@@ -371,9 +371,9 @@ export default function PharmacyStoreDetailPage({ params }: { params: Promise<{ 
       {/* Breadcrumbs */}
       <Breadcrumbs items={[
         { name:'Home', href:'/' },
-        { name:'Pharmacy', href:'/pharmacy' },
-        { name:'Stores', href:'/pharmacy/stores' },
-        { name:store.name, href:`/pharmacy/stores/${id}` },
+        { name:'Pharmacy', href:'/' },
+        { name:'Stores', href:'/stores' },
+        { name:store.name, href:`/stores/${id}` },
       ]} />
 
       {/* ── Store Header ── */}

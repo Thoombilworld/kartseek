@@ -48,7 +48,7 @@ export default function PharmacyBrandsPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {filtered.map(brand => (
-          <Link key={brand.id} href={`/pharmacy?brand=${brand.id}`}
+          <Link key={brand.id} href={`/?brand=${brand.id}`}
             className="group relative bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-teal-300 hover:shadow-xl hover:shadow-teal-50/50 transition-all duration-300">
             <div className={`bg-linear-to-br ${brand.color} p-6 flex items-center justify-between`}>
               <div>

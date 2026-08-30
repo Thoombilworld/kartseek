@@ -245,7 +245,7 @@ export default function CartPage() {
       <div className="max-w-7xl mx-auto px-3 xs:px-4 pt-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <span>/</span>
           <span className="text-slate-900 font-medium">Your Cart</span>
         </div>
@@ -261,7 +261,7 @@ export default function CartPage() {
             <ShoppingBag className="w-16 h-16 text-slate-200 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-slate-700 mb-2">Your cart is empty</h2>
             <p className="text-slate-500 mb-6">Looks like you haven&apos;t added anything yet.</p>
-            <Link href="/marketplace" className="bg-blue-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-blue-700 transition-colors inline-block">
+            <Link href="/" className="bg-blue-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-blue-700 transition-colors inline-block">
               Start Shopping
             </Link>
           </div>
@@ -445,7 +445,7 @@ export default function CartPage() {
                       </button>
                     </div>
                     {giftCardError && <p className="text-sm text-red-500 font-medium mt-2">{giftCardError}</p>}
-                    <Link href="/marketplace/gift-cards" className="text-xs text-purple-600 font-bold mt-2 inline-block hover:text-purple-700">Buy a Gift Card →</Link>
+                    <Link href="/gift-cards" className="text-xs text-purple-600 font-bold mt-2 inline-block hover:text-purple-700">Buy a Gift Card →</Link>
                   </>
                 )}
               </div>
@@ -532,15 +532,15 @@ export default function CartPage() {
                   // Checkout re-checks the balance and the server decides the
                   // amount, so nothing here is trusted as a discount.
                   href={giftCardApplied
-                    ? `/marketplace/checkout?gift=${encodeURIComponent(giftCard.trim())}`
-                    : '/marketplace/checkout'}
+                    ? `/checkout?gift=${encodeURIComponent(giftCard.trim())}`
+                    : '/checkout'}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95 text-base"
                 >
                   Proceed to Checkout <ChevronRight className="w-5 h-5" />
                 </Link>
 
                 <Link
-                  href="/marketplace"
+                  href="/"
                   className="w-full mt-3 border border-slate-200 text-slate-700 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors text-sm"
                 >
                   Continue Shopping

@@ -46,7 +46,7 @@ export default function HotelTermsPage() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <Link href="/hotel-booking" className="w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
+          <Link href="/" className="w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <h1 className="text-lg font-bold text-slate-900">Hotel Booking Terms & Conditions</h1>

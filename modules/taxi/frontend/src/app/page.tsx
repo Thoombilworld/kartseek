@@ -128,7 +128,7 @@ export default function TaxiHome() {
       vehicle: selectedVehicle,
       ...(scheduleMode && scheduleTime ? { schedule: scheduleTime } : {}),
     });
-    router.push(`/taxi/search?${params.toString()}`);
+    router.push(`/search?${params.toString()}`);
     setSearching(false);
   };
 

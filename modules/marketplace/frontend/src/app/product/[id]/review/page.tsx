@@ -131,7 +131,7 @@ export default function WriteReviewPage() {
           </div>
           <h2 className="text-2xl font-extrabold text-slate-800 mb-2">Thank You!</h2>
           <p className="text-slate-500 mb-6">Your review has been submitted and is pending moderation.</p>
-          <Link href={`/marketplace/product/${segment}`}
+          <Link href={`/product/${segment}`}
             className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" /> Back to Product
           </Link>
@@ -154,9 +154,9 @@ export default function WriteReviewPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-6">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
-          <Link href={`/marketplace/product/${segment}`} className="hover:text-blue-600">Product</Link>
+          <Link href={`/product/${segment}`} className="hover:text-blue-600">Product</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Write Review</span>
         </nav>

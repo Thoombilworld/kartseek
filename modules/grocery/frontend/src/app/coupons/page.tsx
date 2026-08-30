@@ -38,7 +38,7 @@ export default function GroceryCouponsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/grocery" className="touch-target -ml-2 text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
+        <Link href="/" className="touch-target -ml-2 text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
@@ -99,7 +99,7 @@ export default function GroceryCouponsPage() {
         <Ticket className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
         <p className="text-xs text-slate-500">
           One coupon per order. Enter the code in the basket to apply it —{' '}
-          <Link href="/grocery/cart" className="text-green-600 font-semibold hover:underline inline-flex items-center gap-0.5">
+          <Link href="/cart" className="text-green-600 font-semibold hover:underline inline-flex items-center gap-0.5">
             go to your basket <ArrowRight className="w-3 h-3" />
           </Link>
         </p>

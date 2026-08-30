@@ -4,6 +4,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '../../../shared-ui/src/zone-link';
 import { X, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth, toAuthUser } from '@/lib/contexts/auth-context';
 import { useRegion } from '@/lib/contexts/region-context';
@@ -194,12 +195,12 @@ export function LoginPromptProvider({ children }: { children: ReactNode }) {
               </button>
 
               <div className="flex items-center justify-between text-sm pt-1">
-                <Link href="/auth/signup" onClick={close} className="font-semibold text-blue-600 hover:underline">
+                <ZoneLink href="/auth/signup" onClick={close} className="font-semibold text-blue-600 hover:underline">
                   Create an account
-                </Link>
-                <Link href="/auth/forgot-password" onClick={close} className="text-slate-500 hover:underline">
+                </ZoneLink>
+                <ZoneLink href="/auth/forgot-password" onClick={close} className="text-slate-500 hover:underline">
                   Forgot password?
-                </Link>
+                </ZoneLink>
               </div>
             </form>
           </div>

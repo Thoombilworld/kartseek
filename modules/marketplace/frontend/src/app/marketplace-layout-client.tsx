@@ -29,6 +29,7 @@ const SOCIAL_HOVER = {
   youtube:   'hover:bg-red-600',
 } as const;
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { useRouter, usePathname } from 'next/navigation';
 
 import { useCartContext } from '@/lib/contexts/cart-context';
@@ -61,17 +62,17 @@ import { AccountMenu } from '@/components/shared/account-menu';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
 const NAV_LINKS = [
-  { label: 'Electronics', href: '/marketplace/category/electronics' },
-  { label: 'Mobiles', href: '/marketplace/category/mobiles-tablets' },
-  { label: 'Fashion', href: '/marketplace/category/fashion' },
-  { label: 'Home & Kitchen', href: '/marketplace/category/home-kitchen' },
-  { label: 'Beauty', href: '/marketplace/category/beauty' },
-  { label: 'Appliances', href: '/marketplace/category/appliances' },
-  { label: 'Sports', href: '/marketplace/category/sports' },
-  { label: 'Toys & Baby', href: '/marketplace/category/toys-baby' },
-  { label: 'Books', href: '/marketplace/category/books' },
-  { label: 'Watches', href: '/marketplace/category/watches' },
-  { label: 'All →', href: '/marketplace/category-list' },
+  { label: 'Electronics', href: '/category/electronics' },
+  { label: 'Mobiles', href: '/category/mobiles-tablets' },
+  { label: 'Fashion', href: '/category/fashion' },
+  { label: 'Home & Kitchen', href: '/category/home-kitchen' },
+  { label: 'Beauty', href: '/category/beauty' },
+  { label: 'Appliances', href: '/category/appliances' },
+  { label: 'Sports', href: '/category/sports' },
+  { label: 'Toys & Baby', href: '/category/toys-baby' },
+  { label: 'Books', href: '/category/books' },
+  { label: 'Watches', href: '/category/watches' },
+  { label: 'All →', href: '/category-list' },
 ];
 
 // The language picker, the payment row and the compliance row are all derived
@@ -84,11 +85,11 @@ const NAV_LINKS = [
 
 // ── Mobile bottom-nav items (active state derived from the current route) ────
 const BOTTOM_NAV = [
-  { href: '/marketplace',               label: 'Shop',       Icon: ShoppingBag,  exact: true  },
-  { href: '/marketplace/category-list', label: 'Categories', Icon: Menu,         exact: false },
-  { href: '/marketplace/cart',          label: 'Cart',       Icon: ShoppingCart, exact: false },
-  { href: '/marketplace/wishlist',      label: 'Wishlist',   Icon: Heart,        exact: false },
-  { href: '/marketplace/profile', label: 'Account',   Icon: User,         exact: false },
+  { href: '/',               label: 'Shop',       Icon: ShoppingBag,  exact: true  },
+  { href: '/category-list', label: 'Categories', Icon: Menu,         exact: false },
+  { href: '/cart',          label: 'Cart',       Icon: ShoppingCart, exact: false },
+  { href: '/wishlist',      label: 'Wishlist',   Icon: Heart,        exact: false },
+  { href: '/profile', label: 'Account',   Icon: User,         exact: false },
 ];
 
 /**
@@ -406,8 +407,8 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (query.trim()) router.push(`/marketplace/search?q=${encodeURIComponent(query.trim())}`);
-    else router.push('/marketplace/search');
+    if (query.trim()) router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+    else router.push('/search');
     setMobileSearchOpen(false);
   }
 
@@ -427,7 +428,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
               identically on every breakpoint. Anything that needs to give way
               (location text, search field) shrinks instead. */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Link href="/marketplace" className="flex items-center gap-1.5 shrink-0 min-h-[44px]" aria-label="KARTSEEK Marketplace home">
+            <Link href="/" className="flex items-center gap-1.5 shrink-0 min-h-[44px]" aria-label="KARTSEEK Marketplace home">
               <ShoppingBag className="w-6 h-6 text-white shrink-0" />
               {/* Wordmark matches the rest of the site — never hidden or clipped */}
               <h1 className="text-sm xs:text-base sm:text-lg font-bold text-white tracking-tight whitespace-nowrap">
@@ -512,15 +513,15 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
 
             {/* Carries the only storefront sign-out control — see AccountMenu. */}
             <AccountMenu className="hover:text-amber-300 hidden md:flex" />
-            <Link href="/marketplace/orders" className="hover:text-amber-300 transition-colors hidden md:flex flex-col items-center p-1.5" title="Orders">
+            <Link href="/orders" className="hover:text-amber-300 transition-colors hidden md:flex flex-col items-center p-1.5" title="Orders">
               <ShoppingBag className="w-5 h-5" />
               <span className="text-[9px] mt-0.5 font-medium">Orders</span>
             </Link>
-            <Link href="/marketplace/wishlist" className="hover:text-red-300 transition-colors flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center" title="Wishlist">
+            <Link href="/wishlist" className="hover:text-red-300 transition-colors flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center" title="Wishlist">
               <Heart className="w-5 h-5" />
               <span className="text-[9px] mt-0.5 font-medium hidden md:block">Wishlist</span>
             </Link>
-            <Link href="/marketplace/cart" className="hover:text-amber-300 transition-colors relative flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center" title="Cart">
+            <Link href="/cart" className="hover:text-amber-300 transition-colors relative flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center" title="Cart">
               <ShoppingCart className="w-5 h-5" />
               {mounted && cart.count > 0 && (
                 <span className="absolute -top-0.5 right-0 bg-amber-400 text-slate-900 text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{cart.count}</span>
@@ -593,11 +594,11 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
                 </Link>
               ))}
               <div className="w-px h-4 bg-white/20 mx-1" />
-              <Link href="/marketplace/offers" className="text-[13px] font-bold text-amber-300 hover:text-amber-200 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1">
+              <Link href="/offers" className="text-[13px] font-bold text-amber-300 hover:text-amber-200 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1">
                 <Tag className="w-3 h-3" /> Offers
               </Link>
-              <Link href="/marketplace/coupons" className="text-[13px] font-medium text-amber-200 hover:text-amber-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md">Coupons</Link>
-              <Link href="/marketplace/gift-cards" className="text-[13px] font-medium text-violet-200 hover:text-violet-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1">
+              <Link href="/coupons" className="text-[13px] font-medium text-amber-200 hover:text-amber-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md">Coupons</Link>
+              <Link href="/gift-cards" className="text-[13px] font-medium text-violet-200 hover:text-violet-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1">
                 <Gift className="w-3 h-3" /> Gift Cards
               </Link>
             </div>
@@ -646,48 +647,48 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
           {/* Column 1 — About */}
           <FooterColumn title="About KARTSEEK">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
-              <li><Link href="/careers" className="hover:text-white transition-colors">Careers</Link></li>
-              <li><Link href="/press" className="hover:text-white transition-colors">Press & Media</Link></li>
-              <li><Link href="/marketplace/sellers" className="hover:text-white transition-colors">Sell on KARTSEEK</Link></li>
-              <li><Link href="/investors" className="hover:text-white transition-colors">Investor Relations</Link></li>
+              <li><ZoneLink href="/about" className="hover:text-white transition-colors">About Us</ZoneLink></li>
+              <li><ZoneLink href="/careers" className="hover:text-white transition-colors">Careers</ZoneLink></li>
+              <li><ZoneLink href="/press" className="hover:text-white transition-colors">Press & Media</ZoneLink></li>
+              <li><Link href="/sellers" className="hover:text-white transition-colors">Sell on KARTSEEK</Link></li>
+              <li><ZoneLink href="/investors" className="hover:text-white transition-colors">Investor Relations</ZoneLink></li>
             </ul>
           </FooterColumn>
 
           {/* Column 2 — Customer Service */}
           <FooterColumn title="Customer Service">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><Link href="/marketplace/help" className="hover:text-white transition-colors">Help Center</Link></li>
-              <li><Link href="/marketplace/returns" className="hover:text-white transition-colors">Returns & Refunds</Link></li>
-              <li><Link href="/marketplace/orders" className="hover:text-white transition-colors">Track Order</Link></li>
-              <li><Link href="/marketplace/payments" className="hover:text-white transition-colors">Payment Methods</Link></li>
-              <li><Link href="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
+              <li><Link href="/help" className="hover:text-white transition-colors">Help Center</Link></li>
+              <li><Link href="/returns" className="hover:text-white transition-colors">Returns & Refunds</Link></li>
+              <li><Link href="/orders" className="hover:text-white transition-colors">Track Order</Link></li>
+              <li><Link href="/payments" className="hover:text-white transition-colors">Payment Methods</Link></li>
+              <li><ZoneLink href="/contact" className="hover:text-white transition-colors">Contact Us</ZoneLink></li>
             </ul>
           </FooterColumn>
 
           {/* Column 3 — Explore */}
           <FooterColumn title="Explore">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><Link href="/marketplace/offers" className="hover:text-white transition-colors">Offers & Deals</Link></li>
-              <li><Link href="/marketplace/best-sellers" className="hover:text-white transition-colors">Best Sellers</Link></li>
-              <li><Link href="/marketplace/new-arrivals" className="hover:text-white transition-colors">New Arrivals</Link></li>
-              <li><Link href="/marketplace/gift-cards" className="hover:text-white transition-colors">Gift Cards</Link></li>
-              <li><Link href="/marketplace/coupons" className="hover:text-white transition-colors">Coupons</Link></li>
-              {/* `/marketplace/exchange` had no inbound link anywhere in the app —
+              <li><Link href="/offers" className="hover:text-white transition-colors">Offers & Deals</Link></li>
+              <li><Link href="/best-sellers" className="hover:text-white transition-colors">Best Sellers</Link></li>
+              <li><Link href="/new-arrivals" className="hover:text-white transition-colors">New Arrivals</Link></li>
+              <li><Link href="/gift-cards" className="hover:text-white transition-colors">Gift Cards</Link></li>
+              <li><Link href="/coupons" className="hover:text-white transition-colors">Coupons</Link></li>
+              {/* `/exchange` had no inbound link anywhere in the app —
                   reachable only by typing the URL — despite being backed by a
                   live, unguarded offers endpoint. */}
-              <li><Link href="/marketplace/exchange" className="hover:text-white transition-colors">Exchange &amp; Trade-In</Link></li>
+              <li><Link href="/exchange" className="hover:text-white transition-colors">Exchange &amp; Trade-In</Link></li>
             </ul>
           </FooterColumn>
 
           {/* Column 4 — Legal */}
           <FooterColumn title="Legal">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
-              <li><Link href="/cookies" className="hover:text-white transition-colors">Cookie Policy</Link></li>
-              <li><Link href="/security" className="hover:text-white transition-colors">Security</Link></li>
-              <li><Link href="/grievance" className="hover:text-white transition-colors">Grievance Officer</Link></li>
+              <li><ZoneLink href="/privacy" className="hover:text-white transition-colors">Privacy Policy</ZoneLink></li>
+              <li><ZoneLink href="/terms" className="hover:text-white transition-colors">Terms of Service</ZoneLink></li>
+              <li><ZoneLink href="/cookies" className="hover:text-white transition-colors">Cookie Policy</ZoneLink></li>
+              <li><ZoneLink href="/security" className="hover:text-white transition-colors">Security</ZoneLink></li>
+              <li><ZoneLink href="/grievance" className="hover:text-white transition-colors">Grievance Officer</ZoneLink></li>
             </ul>
           </FooterColumn>
 
@@ -775,7 +776,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
       >
         {BOTTOM_NAV.map(({ href, label, Icon, exact }) => {
           const active = isNavActive(href, exact);
-          const isCart = href === '/marketplace/cart';
+          const isCart = href === '/cart';
           return (
             <Link
               key={href}
@@ -785,7 +786,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
                 active ? 'text-blue-600' : 'text-slate-500 hover:text-blue-600'
               }`}
             >
-              <Icon className={`w-5 h-5 mb-0.5 ${active && href === '/marketplace/wishlist' ? 'fill-red-500 text-red-500' : ''}`} />
+              <Icon className={`w-5 h-5 mb-0.5 ${active && href === '/wishlist' ? 'fill-red-500 text-red-500' : ''}`} />
               {isCart && mounted && cart.count > 0 && (
                 <span className="absolute top-0 right-2 bg-blue-600 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">{cart.count}</span>
               )}

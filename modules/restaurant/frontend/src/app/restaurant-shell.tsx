@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { MapPin, Search, ShoppingBag, User, Home } from 'lucide-react';
 import RestaurantLocationSelector from '@/components/restaurant/location-selector';
 import RestaurantSearchInput from '@/components/restaurant/search-input';
@@ -25,14 +26,14 @@ export default function RestaurantShell({ children }: { children: React.ReactNod
               pushed the whole page into horizontal scroll. */}
           <div className="flex items-center gap-2 xs:gap-3 min-w-0">
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2 xs:gap-2.5 min-w-0" id="header-logo-link">
+            <ZoneLink href="/" className="flex items-center gap-2 xs:gap-2.5 min-w-0" id="header-logo-link">
               <div className="module-icon-badge shrink-0">
                 <ShoppingBag className="w-4.5 h-4.5 text-white" />
               </div>
               <span className="text-base xs:text-lg sm:text-xl font-black tracking-tight text-white truncate">
                 KARTSEEK<span className="font-light opacity-80 ml-1 hidden xs:inline">Food</span>
               </span>
-            </Link>
+            </ZoneLink>
             {/* Location Selector */}
             <RestaurantLocationSelector />
           </div>
@@ -42,7 +43,7 @@ export default function RestaurantShell({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-0.5 xs:gap-1 shrink-0">
-            <Link href="/restaurant/checkout" className="module-nav-btn" id="header-cart-btn" title="Cart">
+            <Link href="/checkout" className="module-nav-btn" id="header-cart-btn" title="Cart">
               <ShoppingBag className="w-5 h-5" />
               <span className="hidden lg:inline">Cart</span>
             </Link>
@@ -59,19 +60,19 @@ export default function RestaurantShell({ children }: { children: React.ReactNod
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden module-bottom-nav" style={{ '--module-active-color': 'var(--restaurant-primary)' } as React.CSSProperties}>
-        <Link href="/" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-orange-600 transition-colors">
+        <ZoneLink href="/" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-orange-600 transition-colors">
           <Home className="w-5 h-5 mb-0.5" />
           <span>Home</span>
-        </Link>
-        <Link href="/restaurant" className="active flex flex-col items-center">
+        </ZoneLink>
+        <Link href="/" className="active flex flex-col items-center">
           <ShoppingBag className="w-5 h-5 mb-0.5" />
           <span>Orders</span>
         </Link>
-        <Link href="/restaurant/search" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-orange-600 transition-colors">
+        <Link href="/search" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-orange-600 transition-colors">
           <Search className="w-5 h-5 mb-0.5" />
           <span>Search</span>
         </Link>
-        <Link href="/restaurant/profile" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-orange-600 transition-colors">
+        <Link href="/profile" className="flex flex-col items-center justify-center flex-1 min-w-[44px] min-h-[44px] text-slate-400 hover:text-orange-600 transition-colors">
           <User className="w-5 h-5 mb-0.5" />
           <span>Profile</span>
         </Link>

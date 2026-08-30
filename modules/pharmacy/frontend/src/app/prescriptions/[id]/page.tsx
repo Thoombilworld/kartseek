@@ -39,7 +39,7 @@ export default function PrescriptionDetailPage({ params }: { params: { id: strin
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <Link href="/pharmacy/prescriptions" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+          <Link href="/prescriptions" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </Link>
           <div className="flex-1">
@@ -130,7 +130,7 @@ export default function PrescriptionDetailPage({ params }: { params: { id: strin
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3">
           {p.status === 'verified' && (
-            <Link href="/pharmacy/cart" className="flex-1 bg-teal-600 text-white text-center font-bold py-3.5 rounded-xl hover:bg-teal-700 transition-colors">
+            <Link href="/cart" className="flex-1 bg-teal-600 text-white text-center font-bold py-3.5 rounded-xl hover:bg-teal-700 transition-colors">
               Order These Medicines
             </Link>
           )}

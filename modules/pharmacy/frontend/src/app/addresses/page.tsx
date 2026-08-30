@@ -21,7 +21,7 @@ export default function AddressesPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <Link href="/pharmacy" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeft className="w-5 h-5 text-gray-600" /></Link>
+          <Link href="/" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeft className="w-5 h-5 text-gray-600" /></Link>
           <h1 className="text-lg font-bold flex-1">Saved Addresses</h1>
           <button className="bg-teal-600 text-white font-bold text-sm px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Add New</button>
         </div>

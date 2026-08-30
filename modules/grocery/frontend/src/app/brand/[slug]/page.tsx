@@ -39,7 +39,7 @@ export default function GroceryBrandDetailPage() {
   return (
     <div className="max-w-7xl mx-auto px-3 xs:px-4 md:px-8 py-5">
       <div className="flex items-center gap-3 mb-5">
-        <Link href="/grocery" className="text-slate-500 hover:text-green-600" aria-label={tr('Back')}>
+        <Link href="/" className="text-slate-500 hover:text-green-600" aria-label={tr('Back')}>
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <span className="w-12 h-12 rounded-full overflow-hidden bg-white border border-slate-200 shrink-0">
@@ -70,7 +70,7 @@ export default function GroceryBrandDetailPage() {
           <PackageSearch className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <h2 className="text-lg font-bold text-slate-700 mb-1">{tr('Nothing from this brand right now')}</h2>
           <p className="text-sm text-slate-500 mb-4">{tr('No store in your area is stocking it today.')}</p>
-          <Link href="/grocery" className="text-green-600 font-semibold text-sm hover:underline">{tr('Browse groceries')}</Link>
+          <Link href="/" className="text-green-600 font-semibold text-sm hover:underline">{tr('Browse groceries')}</Link>
         </div>
       ) : (
         <div className="grid grid-cols-2 ph:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">

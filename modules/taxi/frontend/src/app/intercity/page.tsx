@@ -126,8 +126,8 @@ export default function IntercityPage() {
             <div className="border-t pt-2"><div className="flex justify-between"><span className="text-slate-500">Total</span><span className="font-black text-lg text-emerald-600">{formatCurrencyValue(totalFare)}</span></div></div>
           </div>
           <div className="space-y-2">
-            <button onClick={() => router.push('/taxi/rides')} className="w-full bg-black text-white font-bold py-3 rounded-xl hover:bg-slate-800">View My Trips</button>
-            <button onClick={() => router.push('/taxi')} className="w-full text-slate-500 font-semibold py-2 text-sm">Back to Home</button>
+            <button onClick={() => router.push('/rides')} className="w-full bg-black text-white font-bold py-3 rounded-xl hover:bg-slate-800">View My Trips</button>
+            <button onClick={() => router.push('/')} className="w-full text-slate-500 font-semibold py-2 text-sm">Back to Home</button>
           </div>
         </div>
       </div>

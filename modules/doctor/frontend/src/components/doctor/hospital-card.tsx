@@ -24,7 +24,7 @@ interface HospitalCardProps {
 export default function HospitalCard({ hospital }: HospitalCardProps) {
   return (
     <Link
-      href={`/doctor/hospital/${hospital.id}`}
+      href={`/hospital/${hospital.id}`}
       id={`hospital-card-${hospital.id}`}
       className="group bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-slate-200/40 transition-all duration-300 hover:-translate-y-1 block"
     >

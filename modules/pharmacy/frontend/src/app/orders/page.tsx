@@ -43,8 +43,8 @@ function normalise(order: any): HistoryRow {
     currency: null,
     icon: order.requiresPrescription ? '📋' : '💊',
     kind: order.requiresPrescription ? 'rx' : 'otc',
-    detailHref: `/pharmacy/orders/${encodeURIComponent(String(order.id ?? reference))}`,
-    trackHref: `/pharmacy/orders/${encodeURIComponent(String(order.id ?? reference))}/track`,
+    detailHref: `/orders/${encodeURIComponent(String(order.id ?? reference))}`,
+    trackHref: `/orders/${encodeURIComponent(String(order.id ?? reference))}/track`,
     searchText: itemNames.join(' '),
   };
 }
@@ -54,7 +54,7 @@ export default function PharmacyOrdersPage() {
     <OrderHistory
       module="pharmacy"
       heading="My pharmacy orders"
-      backHref="/pharmacy"
+      backHref="/"
       searchPlaceholder="Search by pharmacy, medicine or order number…"
       filters={[
         { key: 'active', label: 'Active', match: (r) => isOpen(r.status) },

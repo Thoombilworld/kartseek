@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import {
   HelpCircle, ChevronRight, ChevronDown, Search, Package, RotateCcw, CreditCard,
   User, Store, Shield, MessageCircle, Mail, Phone, ExternalLink,
@@ -63,7 +64,7 @@ export default function HelpPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Breadcrumb */}
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Help Center</span>
         </nav>
@@ -127,9 +128,9 @@ export default function HelpPage() {
               was the one place on the page where nothing could be clicked. Each
               is now the link it was drawn to look like. */}
           <div className="flex justify-center gap-3 flex-wrap">
-            <Link href="/support" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md">
+            <ZoneLink href="/support" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md">
               <MessageCircle className="w-5 h-5" /> Live Chat
-            </Link>
+            </ZoneLink>
             <a href="mailto:support@kartseek.com" className="px-6 py-3 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2">
               <Mail className="w-5 h-5" /> Email Support
             </a>

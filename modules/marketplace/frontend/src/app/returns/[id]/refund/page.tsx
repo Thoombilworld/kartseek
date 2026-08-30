@@ -85,9 +85,9 @@ export default function RefundPage({ params }: { params: Promise<{ id: string }>
 
       <div className="max-w-3xl mx-auto px-4 py-6">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
-          <Link href="/marketplace/returns" className="hover:text-blue-600">Returns</Link>
+          <Link href="/returns" className="hover:text-blue-600">Returns</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Refund</span>
         </nav>
@@ -101,7 +101,7 @@ export default function RefundPage({ params }: { params: Promise<{ id: string }>
           <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
             <Banknote className="w-12 h-12 text-slate-200 mx-auto mb-3" />
             <p className="text-slate-600">{error || 'Refund not found'}</p>
-            <Link href="/marketplace/returns" className="inline-flex items-center gap-2 mt-4 text-sm font-bold text-blue-600 hover:underline">
+            <Link href="/returns" className="inline-flex items-center gap-2 mt-4 text-sm font-bold text-blue-600 hover:underline">
               <ArrowLeft className="w-4 h-4" /> Back to Returns
             </Link>
           </div>
@@ -156,7 +156,7 @@ export default function RefundPage({ params }: { params: Promise<{ id: string }>
               <p className="text-sm text-green-700">Your refund is secured by KartSeek&apos;s buyer protection policy.</p>
             </div>
 
-            <Link href="/marketplace/returns" className="inline-flex items-center gap-2 mt-6 text-sm font-bold text-blue-600 hover:underline">
+            <Link href="/returns" className="inline-flex items-center gap-2 mt-6 text-sm font-bold text-blue-600 hover:underline">
               <ArrowLeft className="w-4 h-4" /> Back to Returns
             </Link>
           </>

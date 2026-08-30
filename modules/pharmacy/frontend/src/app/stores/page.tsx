@@ -131,7 +131,7 @@ export default function PharmacyStoresListPage() {
 
   return (
     <div className="max-w-7xl 3xl:max-w-app-wide 4xl:max-w-app-full mx-auto px-3 xs:px-4 3xl:px-8 py-6 space-y-6">
-      <Link href="/pharmacy" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-teal-600 transition-colors font-medium">
+      <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-teal-600 transition-colors font-medium">
         <ChevronLeft className="w-4 h-4" /> Pharmacy Home
       </Link>
 
@@ -219,7 +219,7 @@ export default function PharmacyStoresListPage() {
             return (
               <Link
                 key={store.id}
-                href={`/pharmacy/stores/${store.slug ?? store.id}`}
+                href={`/stores/${store.slug ?? store.id}`}
                 className="bg-white rounded-2xl border border-slate-200 hover:border-teal-300 hover:shadow-xl transition-all group overflow-hidden"
               >
                 <div className="h-32 bg-linear-to-br from-teal-50 via-cyan-50 to-blue-50 relative flex items-center justify-center overflow-hidden">

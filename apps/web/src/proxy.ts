@@ -111,6 +111,11 @@ const PORTAL_PUBLIC_ROUTES = [
   '/seller/taxi/approval-status',
   '/seller/taxi/landing',
   '/franchise/opportunity',
+  // The franchise console has its own sign-in page. Without this the proxy
+  // treated it as a protected /franchise route and bounced it to
+  // /seller/login, so the page could never be reached by the only people
+  // who need it — anyone not yet signed in.
+  '/franchise/login',
 ];
 
 // Routes that should redirect TO login if already authenticated
@@ -205,11 +210,13 @@ export function proxy(request: NextRequest) {
     const isAdmin    = pathname.startsWith('/admin');
     const isVendor   = pathname.startsWith('/vendor');
     const isHotel    = pathname.startsWith('/hotel-owner');
+    const isFranchise = pathname.startsWith('/franchise');
     const isCustomer = CUSTOMER_PROTECTED_PREFIXES.some(p => pathname.startsWith(p));
     const loginPath  = isAdmin    ? '/admin/login'
-      : isVendor   ? '/seller/taxi/login'
-      : isHotel    ? '/hotel-owner/login'
-      : isCustomer ? '/auth/login'
+      : isVendor    ? '/seller/taxi/login'
+      : isHotel     ? '/hotel-owner/login'
+      : isFranchise ? '/franchise/login'
+      : isCustomer  ? '/auth/login'
       : '/seller/login';
     const loginUrl = new URL(loginPath, request.url);
     loginUrl.searchParams.set('redirect', pathname);

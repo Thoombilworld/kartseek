@@ -9,7 +9,7 @@ import { CountryFlag } from '@/components/shared/country-flag';
 
 export default function HotelBookingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isHome = pathname === '/hotel-booking';
+  const isHome = pathname === '/';
   const { selectedRegion, setSelectedRegion, currentRegionConfig, allRegions } = useRegion();
   const [locationOpen, setLocationOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -42,11 +42,11 @@ export default function HotelBookingLayout({ children }: { children: React.React
               pushed the whole page into horizontal scroll. */}
           <div className="flex items-center gap-2 xs:gap-3 min-w-0">
             {!isHome && (
-              <Link href="/hotel-booking" className="p-2 rounded-xl hover:bg-slate-100 transition-colors" aria-label="Back to hotel booking home">
+              <Link href="/" className="p-2 rounded-xl hover:bg-slate-100 transition-colors" aria-label="Back to hotel booking home">
                 <ArrowLeft className="w-5 h-5 text-slate-600" />
               </Link>
             )}
-            <Link href="/hotel-booking" className="flex items-center gap-2 xs:gap-2.5 min-w-0" aria-label="KARTSEEK Hotels home">
+            <Link href="/" className="flex items-center gap-2 xs:gap-2.5 min-w-0" aria-label="KARTSEEK Hotels home">
               <div className="module-icon-badge shrink-0">
                 <Hotel className="w-5 h-5 text-white" />
               </div>
@@ -103,7 +103,7 @@ export default function HotelBookingLayout({ children }: { children: React.React
             {/* Secondary action: dropped below `xs` so the primary ones fit.
                 Deals are reachable from the hotel home page. */}
             <Link
-              href="/hotel-booking/deals"
+              href="/deals"
               className="module-nav-btn hidden xs:flex"
               title="Deals & Offers"
               aria-label="Deals & Offers"
@@ -123,7 +123,7 @@ export default function HotelBookingLayout({ children }: { children: React.React
 
             {/* Notifications */}
             <Link
-              href="/hotel-booking/notifications"
+              href="/notifications"
               className="module-nav-btn relative hidden xs:flex"
               title="Notifications"
               aria-label="Notifications (3 unread)"
@@ -134,7 +134,7 @@ export default function HotelBookingLayout({ children }: { children: React.React
 
             {/* Profile */}
             <Link
-              href="/hotel-booking/profile"
+              href="/profile"
               className="module-nav-btn"
               title="Hotels profile"
               aria-label="Hotels profile"

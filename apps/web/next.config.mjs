@@ -129,6 +129,7 @@ const nextConfig = {
     const doctorZone = (process.env.DOCTOR_ZONE_ORIGIN ?? 'http://localhost:3006').replace(/\/$/, '');
     const hotelZone = (process.env.HOTEL_ZONE_ORIGIN ?? 'http://localhost:3007').replace(/\/$/, '');
     const taxiZone = (process.env.TAXI_ZONE_ORIGIN ?? 'http://localhost:3008').replace(/\/$/, '');
+    const franchiseZone = (process.env.FRANCHISE_ZONE_ORIGIN ?? 'http://localhost:3009').replace(/\/$/, '');
 
     return [
       {
@@ -227,6 +228,20 @@ const nextConfig = {
       {
         source: '/taxi/_next/:path*',
         destination: `${taxiZone}/taxi/_next/:path*`,
+      },
+      // The franchise partner console. /admin/franchise is the platform admin's
+      // view of the same partners and stays in this app with the rest of /admin.
+      {
+        source: '/franchise',
+        destination: `${franchiseZone}/franchise`,
+      },
+      {
+        source: '/franchise/:path*',
+        destination: `${franchiseZone}/franchise/:path*`,
+      },
+      {
+        source: '/franchise/_next/:path*',
+        destination: `${franchiseZone}/franchise/_next/:path*`,
       },
     ];
   },

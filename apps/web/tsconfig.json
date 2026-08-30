@@ -108,6 +108,9 @@
       "@/lib/contexts/*": [
         "../../packages/shared-core/src/contexts/*"
       ],
+      "@/lib/data/*": [
+        "../../packages/shared-core/src/data/*"
+      ],
       "@/lib/demo-data": [
         "../../packages/shared-core/src/demo-data"
       ],

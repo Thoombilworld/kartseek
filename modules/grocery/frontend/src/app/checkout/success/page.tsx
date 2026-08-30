@@ -128,11 +128,11 @@ function SuccessContent() {
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         {/* Deep-links to this order when we have it, rather than the whole list. */}
         <Link
-          href={orderId ? `/grocery/orders/${orderId}/track` : '/grocery/orders'}
+          href={orderId ? `/orders/${orderId}/track` : '/orders'}
           className="inline-flex items-center justify-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-green-700 transition-colors text-sm"
         >
           <Truck className="w-4 h-4" />{tr('Track order')}</Link>
-        <Link href="/grocery" className="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-xl font-bold hover:bg-slate-50 transition-colors text-sm">
+        <Link href="/" className="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-xl font-bold hover:bg-slate-50 transition-colors text-sm">
           <Home className="w-4 h-4" />{tr('Continue shopping')}</Link>
       </div>
     </div>

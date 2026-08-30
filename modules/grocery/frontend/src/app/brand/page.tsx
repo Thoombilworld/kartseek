@@ -49,7 +49,7 @@ export default function GroceryBrandsPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/grocery" className="touch-target -ml-2 text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
+        <Link href="/" className="touch-target -ml-2 text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
@@ -98,7 +98,7 @@ export default function GroceryBrandsPage() {
             // products, rather than a slug that matches nothing.
             <Link
               key={brand.name}
-              href={`/grocery/search?q=${encodeURIComponent(brand.name)}`}
+              href={`/search?q=${encodeURIComponent(brand.name)}`}
               className="bg-white border border-slate-200/80 rounded-xl p-4 text-center hover:shadow-md hover:border-green-300 transition-all group"
             >
               <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center mx-auto mb-2 group-hover:bg-green-50 transition-colors">

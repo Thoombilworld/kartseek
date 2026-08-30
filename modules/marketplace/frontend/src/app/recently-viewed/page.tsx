@@ -61,7 +61,7 @@ export default function RecentlyViewedPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Recently Viewed</span>
         </nav>
@@ -71,7 +71,7 @@ export default function RecentlyViewedPage() {
             <Clock className="w-16 h-16 mx-auto text-slate-200 mb-4" />
             <h2 className="text-xl font-bold text-slate-800 mb-2">No recently viewed products</h2>
             <p className="text-slate-500 mb-6">Products you browse will appear here for quick access.</p>
-            <Link href="/marketplace" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors">
+            <Link href="/" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors">
               Start Shopping
             </Link>
           </div>

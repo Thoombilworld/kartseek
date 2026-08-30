@@ -214,7 +214,7 @@ export default function GroceryProductDetailPage() {
         <p className="text-sm text-slate-500 mb-6">
           {error ? tr('We could not load this product. Please try again.') : tr('This product is no longer available in your area.')}
         </p>
-        <Link href="/grocery/category/all-groceries" className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors">
+        <Link href="/category/all-groceries" className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors">
           {tr('Browse groceries')}<ChevronRight className="w-4 h-4" />
         </Link>
       </div>
@@ -254,9 +254,9 @@ export default function GroceryProductDetailPage() {
     <div className="max-w-5xl mx-auto px-4 py-6">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-sm text-slate-500 mb-4">
-        <Link href="/grocery" className="hover:text-green-600 transition-colors">{tr('Grocery')}</Link>
+        <Link href="/" className="hover:text-green-600 transition-colors">{tr('Grocery')}</Link>
         <ChevronRight className="w-3 h-3" />
-        <Link href={`/grocery/category/${product.category}`} className="hover:text-green-600 transition-colors capitalize">{product.category.replace(/-/g, ' ')}</Link>
+        <Link href={`/category/${product.category}`} className="hover:text-green-600 transition-colors capitalize">{product.category.replace(/-/g, ' ')}</Link>
         <ChevronRight className="w-3 h-3" />
         <span className="text-slate-800 font-medium truncate max-w-[200px]">{product.name}</span>
       </div>
@@ -313,7 +313,7 @@ export default function GroceryProductDetailPage() {
             <p className="text-sm text-slate-500 font-medium">{product.weight}</p>
             {product.storeName && (
               <Link
-                href={`/grocery/store/${product.storeId || product.storeName?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
+                href={`/store/${product.storeId || product.storeName?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
                 className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 min-h-[44px] bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition-colors"
               >
                 <span className="text-sm">🏪</span> Sold by: {product.storeName}
@@ -418,7 +418,7 @@ export default function GroceryProductDetailPage() {
           {/* Shown once this product is actually in the basket, with the real
               basket total rather than this page's local quantity. */}
           {inCart > 0 && (
-            <Link href="/grocery/cart" className="flex items-center justify-between bg-green-600 hover:bg-green-700 text-white rounded-xl px-5 py-3.5 shadow-lg transition-colors">
+            <Link href="/cart" className="flex items-center justify-between bg-green-600 hover:bg-green-700 text-white rounded-xl px-5 py-3.5 shadow-lg transition-colors">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" />
                 <span className="font-bold text-sm">{inCart} in your cart</span>

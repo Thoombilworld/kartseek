@@ -242,7 +242,7 @@ export default function HotelDetailPage() {
                               <span className="text-xs font-medium text-slate-400"> total + taxes</span>
                             </span>
                           </div>
-                          <Link href={`/hotel-booking/checkout/${hotelId}?room=${selectedRoom}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`}
+                          <Link href={`/checkout/${hotelId}?room=${selectedRoom}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`}
                             className="bg-rose-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-rose-700 transition-colors flex items-center gap-2 shadow-lg shrink-0">
                             Book Now <ArrowRight className="w-4 h-4" />
                           </Link>

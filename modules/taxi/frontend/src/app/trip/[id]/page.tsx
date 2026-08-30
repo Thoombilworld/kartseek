@@ -221,7 +221,7 @@ export default function ActiveTripPage({ params }: { params: Promise<{ id: strin
 
       {/* Header Over Map */}
       <header className="relative z-10 p-4 flex justify-between items-center bg-linear-to-b from-black/50 to-transparent">
-        <Link href="/taxi" className="w-10 h-10 bg-white/90 backdrop-blur rounded-full flex items-center justify-center shadow-md text-slate-700 hover:bg-white transition-colors">
+        <Link href="/" className="w-10 h-10 bg-white/90 backdrop-blur rounded-full flex items-center justify-center shadow-md text-slate-700 hover:bg-white transition-colors">
           ←
         </Link>
         {/* WS Status */}

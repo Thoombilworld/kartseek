@@ -24,7 +24,7 @@ export default function PharmacyPrescriptionsPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">My Prescriptions</h1>
           <p className="text-sm text-slate-500">{PRESCRIPTIONS.length} prescriptions uploaded</p>
         </div>
-        <Link href="/pharmacy/prescription/upload"
+        <Link href="/prescription/upload"
           className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm flex items-center gap-2 transition-colors shadow-sm">
           <Upload className="w-4 h-4" /> Upload New
         </Link>
@@ -76,12 +76,12 @@ export default function PharmacyPrescriptionsPage() {
                   <Download className="w-3 h-3" /> Download
                 </button>
                 {rx.status === 'APPROVED' && (
-                  <Link href="/pharmacy/cart" className="ml-auto px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-bold rounded-lg hover:bg-teal-100 flex items-center gap-1">
+                  <Link href="/cart" className="ml-auto px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-bold rounded-lg hover:bg-teal-100 flex items-center gap-1">
                     Order Medicines <ChevronRight className="w-3 h-3" />
                   </Link>
                 )}
                 {rx.status === 'REJECTED' && (
-                  <Link href="/pharmacy/prescription/upload" className="ml-auto px-3 py-1.5 bg-red-50 text-red-700 text-xs font-bold rounded-lg hover:bg-red-100 flex items-center gap-1">
+                  <Link href="/prescription/upload" className="ml-auto px-3 py-1.5 bg-red-50 text-red-700 text-xs font-bold rounded-lg hover:bg-red-100 flex items-center gap-1">
                     <Upload className="w-3 h-3" /> Re-upload
                   </Link>
                 )}

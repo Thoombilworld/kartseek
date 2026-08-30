@@ -146,7 +146,7 @@ function PharmacyCheckoutPageContent() {
               <p className="text-sm font-bold text-amber-800">Prescription Required</p>
               <p className="text-xs text-amber-700">Upload will be requested after placing order.</p>
             </div>
-            <Link href="/pharmacy/prescription/upload" className="px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg hover:bg-amber-200 flex items-center gap-1">
+            <Link href="/prescription/upload" className="px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg hover:bg-amber-200 flex items-center gap-1">
               <Upload className="w-3 h-3" /> Upload Now
             </Link>
           </div>

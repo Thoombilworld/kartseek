@@ -668,7 +668,7 @@ export default function GroceryStorePage() {
         <span className="text-5xl" aria-hidden="true">🏪</span>
         <h1 className="text-xl font-bold text-slate-800 mt-4 mb-1">{tr('Store not found')}</h1>
         <p className="text-sm text-slate-500 mb-6">{tr('This store is not delivering in your area right now.')}</p>
-        <Link href="/grocery/stores" className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors">
+        <Link href="/stores" className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors">
           {tr('Browse stores')}<ChevronRight className="w-4 h-4" />
         </Link>
       </div>
@@ -725,7 +725,7 @@ export default function GroceryStorePage() {
               </p>
             </div>
           </div>
-          <Link href="/grocery" className="absolute top-4 left-4 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-colors" aria-label={tr('Back to grocery')}>
+          <Link href="/" className="absolute top-4 left-4 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-colors" aria-label={tr('Back to grocery')}>
             <ArrowLeft className="w-4 h-4" />
           </Link>
         </div>
@@ -1006,7 +1006,7 @@ export default function GroceryStorePage() {
               <p className="font-bold text-slate-900">{cartCount} item{cartCount !== 1 ? 's' : ''} • {formatPrice(cartTotal)}</p>
             </div>
           </div>
-          <Link href="/grocery/cart" className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-bold transition-colors shadow-sm text-sm flex items-center gap-2">{tr('View Cart')}<ChevronRight className="w-4 h-4" />
+          <Link href="/cart" className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-bold transition-colors shadow-sm text-sm flex items-center gap-2">{tr('View Cart')}<ChevronRight className="w-4 h-4" />
           </Link>
         </div>
       </div>

@@ -63,7 +63,7 @@ export default function HowItWorksPage() {
       <div className="bg-linear-to-r from-teal-600 to-cyan-500 rounded-2xl p-8 text-center text-white">
         <h2 className="text-2xl font-bold mb-3">Ready to Order Medicines?</h2>
         <p className="text-white/70 mb-5">Browse verified pharmacies near you and get medicines delivered fast.</p>
-        <Link href="/pharmacy" className="bg-white text-teal-700 font-bold px-8 py-3 rounded-xl hover:bg-teal-50 transition-colors inline-block">Browse Pharmacies</Link>
+        <Link href="/" className="bg-white text-teal-700 font-bold px-8 py-3 rounded-xl hover:bg-teal-50 transition-colors inline-block">Browse Pharmacies</Link>
       </div>
 
       {/* FAQ */}
@@ -93,12 +93,12 @@ export default function HowItWorksPage() {
         <h3 className="font-bold text-slate-900 mb-3">Explore More</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {[
-            { name:'Pharmacy Homepage', href:'/pharmacy' },
-            { name:'Prescription Upload', href:'/pharmacy/prescription-upload' },
-            { name:'Nearby Pharmacies', href:'/pharmacy/stores' },
-            { name:'Sell on KARTSEEK', href:'/pharmacy/sell-on-kartseek' },
-            { name:'Pharmacy Compliance', href:'/pharmacy/compliance' },
-            { name:'India Pharmacy', href:'/pharmacy/country/india' },
+            { name:'Pharmacy Homepage', href:'/' },
+            { name:'Prescription Upload', href:'/prescription-upload' },
+            { name:'Nearby Pharmacies', href:'/stores' },
+            { name:'Sell on KARTSEEK', href:'/sell-on-kartseek' },
+            { name:'Pharmacy Compliance', href:'/compliance' },
+            { name:'India Pharmacy', href:'/country/india' },
           ].map(link => (
             <Link key={link.href} href={link.href} className="text-sm text-teal-600 hover:text-teal-700 font-medium hover:underline">{link.name} →</Link>
           ))}

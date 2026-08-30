@@ -86,7 +86,7 @@ export default function BookingDetailPage() {
       {/* Header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/restaurant/table-booking" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <Link href="/table-booking" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Link>
           <div className="flex-1">
@@ -141,7 +141,7 @@ export default function BookingDetailPage() {
                 <Navigation className="w-4 h-4" /> Directions
               </a>
               <Link
-                href={`/restaurant/${booking.restaurantId}`}
+                href={`/${booking.restaurantId}`}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-50 rounded-xl text-sm font-bold text-orange-600 hover:bg-orange-100 transition-colors"
               >
                 <ExternalLink className="w-4 h-4" /> View Menu
@@ -231,7 +231,7 @@ export default function BookingDetailPage() {
               Cancel Booking
             </button>
             <Link
-              href={`/restaurant/table-booking/${booking.restaurantId}`}
+              href={`/table-booking/${booking.restaurantId}`}
               className="flex-1 py-3.5 text-center font-bold text-white bg-orange-600 rounded-2xl hover:bg-orange-700 transition-colors shadow-md"
             >
               Modify Booking
@@ -241,7 +241,7 @@ export default function BookingDetailPage() {
 
         {booking.status === 'CANCELLED' && (
           <Link
-            href={`/restaurant/table-booking/${booking.restaurantId}`}
+            href={`/table-booking/${booking.restaurantId}`}
             className="block w-full py-3.5 text-center font-bold text-white bg-orange-600 rounded-2xl hover:bg-orange-700 transition-colors shadow-md"
           >
             Rebook at {booking.restaurantName}

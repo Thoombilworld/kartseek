@@ -20,7 +20,7 @@ export function GroceryFeatureUnavailable({
   title,
   emoji,
   description,
-  backHref = '/grocery',
+  backHref = '/',
   backLabel = 'Back to grocery',
   alternative,
 }: {
@@ -52,7 +52,7 @@ export function GroceryFeatureUnavailable({
             </Link>
           )}
           <Link
-            href="/grocery/stores"
+            href="/stores"
             className="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-50 transition-colors"
           >
             Browse stores

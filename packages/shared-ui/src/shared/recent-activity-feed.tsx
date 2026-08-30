@@ -18,6 +18,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '../zone-link';
 import { ArrowRight, AlertCircle } from 'lucide-react';
 
 import { useAuth } from '@/lib/contexts/auth-context';
@@ -96,10 +97,10 @@ export function RecentActivityFeed({ limit = 4 }: { limit?: number }) {
     return (
       <section>
         <h2 className="section-title mb-3">Recent orders</h2>
-        <Link href="/auth/login" className="card card-hover flex items-center justify-between px-4 py-4">
+        <ZoneLink href="/auth/login" className="card card-hover flex items-center justify-between px-4 py-4">
           <p className="text-sm font-semibold text-slate-700">Sign in to see your orders and bookings</p>
           <ArrowRight className="w-4 h-4 text-slate-300" aria-hidden="true" />
-        </Link>
+        </ZoneLink>
       </section>
     );
   }
@@ -112,13 +113,13 @@ export function RecentActivityFeed({ limit = 4 }: { limit?: number }) {
     <section>
       <div className="flex items-center justify-between mb-3">
         <h2 className="section-title">Recent orders</h2>
-        <Link
+        <ZoneLink
           href="/profile"
           id="view-all-orders"
           className="text-xs font-semibold text-brand-600 inline-flex items-center gap-1 hover:gap-2 transition-all min-h-[44px] px-1 -mr-1"
         >
           View all <ArrowRight className="w-3 h-3" aria-hidden="true" />
-        </Link>
+        </ZoneLink>
       </div>
 
       {loading ? (
@@ -141,10 +142,10 @@ export function RecentActivityFeed({ limit = 4 }: { limit?: number }) {
           </p>
         </div>
       ) : visible.length === 0 ? (
-        <Link href="/marketplace" className="card card-hover flex items-center justify-between px-4 py-4">
+        <ZoneLink href="/marketplace" className="card card-hover flex items-center justify-between px-4 py-4">
           <p className="text-sm font-semibold text-slate-700">No orders yet — start with the marketplace</p>
           <ArrowRight className="w-4 h-4 text-slate-300" aria-hidden="true" />
-        </Link>
+        </ZoneLink>
       ) : (
         <div className="space-y-2.5">
           {visible.map((row) => {

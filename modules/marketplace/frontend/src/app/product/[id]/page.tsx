@@ -141,7 +141,7 @@ function ProductUnavailable() {
           product is still there. Please try again in a moment.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/marketplace" className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-8 rounded-xl transition-colors flex items-center justify-center gap-2">
+          <Link href="/" className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-8 rounded-xl transition-colors flex items-center justify-center gap-2">
             <RefreshCw className="w-5 h-5" /> Back to Marketplace
           </Link>
         </div>
@@ -299,7 +299,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
         {/* Breadcrumbs.
             The category link addressed the route by **UUID** — `category?.id` —
-            but `/marketplace/category/[id]` forwards its segment straight to
+            but `/category/[id]` forwards its segment straight to
             `getProducts({ category })`, and the catalogue filters on
             `category.slug`. A uuid matches no slug, so the query returned zero
             rows and the page rendered "No products found" for a category that
@@ -313,17 +313,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             detail response carries it, so there was no way back to
             "Smartphones" from a phone. */}
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600 transition-colors whitespace-nowrap">Home</Link>
+          <Link href="/" className="hover:text-blue-600 transition-colors whitespace-nowrap">Home</Link>
           {categorySlug && (
             <>
               <span>/</span>
-              <Link href={`/marketplace/category/${categorySlug}`} className="hover:text-blue-600 transition-colors hidden sm:inline">{product.category?.name || 'Category'}</Link>
+              <Link href={`/category/${categorySlug}`} className="hover:text-blue-600 transition-colors hidden sm:inline">{product.category?.name || 'Category'}</Link>
             </>
           )}
           {subcategorySlug && (
             <>
               <span className="hidden sm:inline">/</span>
-              <Link href={`/marketplace/subcategory/${subcategorySlug}`} className="hover:text-blue-600 transition-colors hidden md:inline">{product.subcategory?.name}</Link>
+              <Link href={`/subcategory/${subcategorySlug}`} className="hover:text-blue-600 transition-colors hidden md:inline">{product.subcategory?.name}</Link>
             </>
           )}
           <span className="hidden sm:inline">/</span>
@@ -359,7 +359,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <div className="flex flex-col">
               <div className="mb-6 border-b border-slate-100 pb-6">
                 <div className="flex items-center gap-3 mb-2">
-                  <Link href={`/marketplace/brand/${product.brand?.id || 'unknown'}`} className="text-blue-600 font-semibold text-sm hover:underline">
+                  <Link href={`/brand/${product.brand?.id || 'unknown'}`} className="text-blue-600 font-semibold text-sm hover:underline">
                     {product.brand?.name || 'Unknown Brand'}
                   </Link>
                   <BrandFollowButton
@@ -530,7 +530,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   {product.listing?.seller?.businessName?.[0] || 'S'}
                 </div>
                 <div>
-                  <Link href={`/marketplace/seller/${product.listing?.seller?.id || 'unknown'}`} className="font-bold text-blue-600 hover:underline">
+                  <Link href={`/seller/${product.listing?.seller?.id || 'unknown'}`} className="font-bold text-blue-600 hover:underline">
                     {product.listing?.seller?.businessName || 'Verified Seller'}
                   </Link>
                   <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
@@ -542,7 +542,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               {/* Was a <button> with no handler, sitting directly under a working
                   link to the same store. A link is what it always wanted to be. */}
               <Link
-                href={`/marketplace/seller/${product.listing?.seller?.id || 'unknown'}`}
+                href={`/seller/${product.listing?.seller?.id || 'unknown'}`}
                 className="block w-full text-center bg-white hover:bg-slate-50 text-blue-600 font-bold py-2 rounded-sm transition-colors text-sm border border-slate-200 shadow-sm mt-2"
               >
                 Visit Store

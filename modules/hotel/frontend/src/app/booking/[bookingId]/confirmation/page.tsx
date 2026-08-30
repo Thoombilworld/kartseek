@@ -97,9 +97,9 @@ export default function BookingConfirmationPage() {
         {/* Quick Actions */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { icon: <Download className="w-5 h-5" />, label: 'Download\nVoucher', href: `/hotel-booking/booking/${bookingId}/voucher` },
-            { icon: <CalendarDays className="w-5 h-5" />, label: 'Add to\nCalendar', href: '#' },
-            { icon: <Share2 className="w-5 h-5" />, label: 'Share\nBooking', href: '#' },
+            { icon: <Download className="w-5 h-5" />, label: 'Download\nVoucher', href: `/booking/${bookingId}/voucher` },
+            { icon: <CalendarDays className="w-5 h-5" />, label: 'Add to\nCalendar', href: '/#' },
+            { icon: <Share2 className="w-5 h-5" />, label: 'Share\nBooking', href: '/#' },
           ].map(action => (
             <Link
               key={action.label}
@@ -212,10 +212,10 @@ export default function BookingConfirmationPage() {
 
         {/* Bottom Actions */}
         <div className="space-y-3 pb-6">
-          <Link href="/hotel-booking/my-bookings" className="block w-full bg-rose-600 text-white text-center font-bold py-4 rounded-2xl hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200">
+          <Link href="/my-bookings" className="block w-full bg-rose-600 text-white text-center font-bold py-4 rounded-2xl hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200">
             View My Bookings
           </Link>
-          <Link href="/hotel-booking" className="block w-full bg-white border border-slate-200 text-slate-700 text-center font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors">
+          <Link href="/" className="block w-full bg-white border border-slate-200 text-slate-700 text-center font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors">
             Book Another Hotel
           </Link>
         </div>

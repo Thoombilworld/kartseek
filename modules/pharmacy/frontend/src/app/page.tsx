@@ -2,6 +2,7 @@
 import { useModuleTitle } from '@/hooks/useModuleTitle';
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import {
   Search, Star, MapPin, Clock, Shield, TrendingUp, Award, ChevronRight,
   Truck, Zap, Tag, ShoppingCart, Mic, Heart, Sparkles, RefreshCw,
@@ -106,7 +107,7 @@ const PROMOS = [
 function StoreCard({ store, compact = false, section = 'main' }: { store: typeof STORES[0]; compact?: boolean; section?: string }) {
   return (
     <Link
-      href={`/pharmacy/stores/${store.id}`}
+      href={`/stores/${store.id}`}
       data-testid={`store-card-${section}-${store.id}`}
       className={`snap-card${compact ? '-sm' : ''} bg-white rounded-2xl border border-slate-200 hover:border-teal-300 hover:shadow-xl transition-all duration-300 group overflow-hidden`}
     >
@@ -356,7 +357,7 @@ export default function PharmacyHome() {
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">Fastest delivery · closest to you</p>
             </div>
-            <Link href="/pharmacy/stores?sort=nearby" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
+            <Link href="/stores?sort=nearby" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
               View All <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
@@ -442,7 +443,7 @@ export default function PharmacyHome() {
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">Get medicines in under 25 minutes</p>
             </div>
-            <Link href="/pharmacy/stores?sort=fast" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
+            <Link href="/stores?sort=fast" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
               View All <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
@@ -465,7 +466,7 @@ export default function PharmacyHome() {
           </div>
           <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
             {BRANDS.map(brand => (
-              <Link key={brand.id} href={`/pharmacy/brands?brand=${brand.id}`} data-testid={`brand-${brand.id}`}
+              <Link key={brand.id} href={`/brands?brand=${brand.id}`} data-testid={`brand-${brand.id}`}
                 className={`snap-start shrink-0 w-[180px] bg-linear-to-br ${brand.color} rounded-2xl p-4 text-white hover:shadow-xl hover:scale-[1.03] transition-all duration-300 relative overflow-hidden group`}>
                 <div className="absolute -right-3 -bottom-3 w-20 h-20 bg-white/10 rounded-full" />
                 <span className="text-3xl mb-2 block group-hover:scale-110 transition-transform">{brand.emoji}</span>
@@ -491,9 +492,9 @@ export default function PharmacyHome() {
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">Hand-picked essentials for your health</p>
             </div>
-            <Link href="/pharmacy/featured" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
+            <ZoneLink href="/featured" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
               See All <ChevronRight className="w-4 h-4" />
-            </Link>
+            </ZoneLink>
           </div>
           <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
             {FEATURED_PRODUCTS.map(p => (
@@ -543,7 +544,7 @@ export default function PharmacyHome() {
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">Highest customer satisfaction scores</p>
             </div>
-            <Link href="/pharmacy/stores?sort=top-rated" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
+            <Link href="/stores?sort=top-rated" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
               View All <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
@@ -599,7 +600,7 @@ export default function PharmacyHome() {
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">Most ordered stores this week</p>
             </div>
-            <Link href="/pharmacy/stores?sort=trending" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
+            <Link href="/stores?sort=trending" className="text-sm font-semibold text-teal-600 hover:underline flex items-center gap-1">
               View All <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
@@ -664,14 +665,14 @@ export default function PharmacyHome() {
           <h3 className="font-bold text-slate-900 mb-3">Explore KARTSEEK Pharmacy</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {[
-              { name:'How It Works',        href:'/pharmacy/how-it-works' },
-              { name:'Upload Prescription', href:'/pharmacy/prescription-upload' },
-              { name:'Nearby Pharmacies',   href:'/pharmacy/stores' },
-              { name:'Sell on KARTSEEK',    href:'/pharmacy/sell-on-kartseek' },
-              { name:'Compliance Info',     href:'/pharmacy/compliance' },
-              { name:'India Pharmacy',      href:'/pharmacy/country/india' },
-              { name:'UAE Pharmacy',        href:'/pharmacy/country/uae' },
-              { name:'UK Pharmacy',         href:'/pharmacy/country/uk' },
+              { name:'How It Works',        href:'/how-it-works' },
+              { name:'Upload Prescription', href:'/prescription-upload' },
+              { name:'Nearby Pharmacies',   href:'/stores' },
+              { name:'Sell on KARTSEEK',    href:'/sell-on-kartseek' },
+              { name:'Compliance Info',     href:'/compliance' },
+              { name:'India Pharmacy',      href:'/country/india' },
+              { name:'UAE Pharmacy',        href:'/country/uae' },
+              { name:'UK Pharmacy',         href:'/country/uk' },
             ].map(link => (
               <Link key={link.href} href={link.href} className="text-sm text-teal-600 hover:text-teal-700 font-medium hover:underline">{link.name} →</Link>
             ))}

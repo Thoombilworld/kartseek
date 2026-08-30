@@ -45,15 +45,15 @@ export default function CheckoutFailedPage() {
 
         {/* Actions */}
         <div className="flex flex-col gap-3">
-          <Link href="/marketplace/checkout"
+          <Link href="/checkout"
             className="px-6 py-3.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md">
             <RefreshCw className="w-5 h-5" /> Retry Payment
           </Link>
-          <Link href="/marketplace/cart"
+          <Link href="/cart"
             className="px-6 py-3.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
             <CreditCard className="w-5 h-5" /> Try a Different Payment Method
           </Link>
-          <Link href="/marketplace"
+          <Link href="/"
             className="px-6 py-3.5 text-slate-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 text-sm">
             <Home className="w-4 h-4" /> Continue Shopping
           </Link>
@@ -64,7 +64,7 @@ export default function CheckoutFailedPage() {
           <p className="text-sm text-slate-500 mb-3">If this issue persists, contact our support team.</p>
           {/* No chat widget is mounted anywhere in the app, so this button
               could never open one. The help centre is the real support path. */}
-          <Link href="/marketplace/help" className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 mx-auto w-fit">
+          <Link href="/help" className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 mx-auto w-fit">
             <MessageCircle className="w-4 h-4" /> Contact Support
           </Link>
         </div>

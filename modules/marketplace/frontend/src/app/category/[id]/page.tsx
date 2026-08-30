@@ -241,15 +241,15 @@ export default async function CategoryPage({ params, searchParams }: {
         <div className="max-w-7xl mx-auto px-3 xs:px-4 py-4">
 
           <div className="flex items-center gap-2 text-sm text-slate-500 mb-2 flex-wrap">
-            <Link href="/marketplace" className="hover:text-blue-600 transition-colors">Home</Link>
+            <Link href="/" className="hover:text-blue-600 transition-colors">Home</Link>
             <span>/</span>
-            <Link href="/marketplace/category-list" className="hover:text-blue-600 transition-colors">Categories</Link>
+            <Link href="/category-list" className="hover:text-blue-600 transition-colors">Categories</Link>
             {/* A subcategory reached through this route sits one level deeper —
                 show the parent so the trail is walkable in both directions. */}
             {parentCategory?.slug && (
               <>
                 <span>/</span>
-                <Link href={`/marketplace/category/${parentCategory.slug}`} className="hover:text-blue-600 transition-colors">
+                <Link href={`/category/${parentCategory.slug}`} className="hover:text-blue-600 transition-colors">
                   {parentCategory.name ?? parentCategory.slug}
                 </Link>
               </>
@@ -278,7 +278,7 @@ export default async function CategoryPage({ params, searchParams }: {
             <div className="chip-row mt-4">
               {activeSub && (
                 <Link
-                  href={`/marketplace/category/${id}`}
+                  href={`/category/${id}`}
                   className="text-xs bg-slate-800 text-white px-3 py-2 rounded-full font-semibold whitespace-nowrap shrink-0 min-h-9 inline-flex items-center gap-1.5 hover:bg-slate-900 transition-colors"
                 >
                   Clear filter <span aria-hidden="true">×</span>
@@ -287,8 +287,8 @@ export default async function CategoryPage({ params, searchParams }: {
               {subcategories.map(({ label, slug }) => {
                 const isActive = !!slug && slug === activeSub;
                 const href = slug
-                  ? `/marketplace/category/${id}?subcategory=${encodeURIComponent(slug)}`
-                  : `/marketplace/search?q=${encodeURIComponent(label)}`;
+                  ? `/category/${id}?subcategory=${encodeURIComponent(slug)}`
+                  : `/search?q=${encodeURIComponent(label)}`;
                 return (
                   <Link
                     key={slug || label}
@@ -323,10 +323,10 @@ export default async function CategoryPage({ params, searchParams }: {
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
-              <Link href={`/marketplace/category/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
+              <Link href={`/category/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
                 Retry
               </Link>
-              <Link href={`/marketplace/search?q=${encodeURIComponent(categoryName)}`} className="border border-amber-300 text-amber-900 text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors">
+              <Link href={`/search?q=${encodeURIComponent(categoryName)}`} className="border border-amber-300 text-amber-900 text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors">
                 Search instead
               </Link>
             </div>
@@ -344,8 +344,8 @@ export default async function CategoryPage({ params, searchParams }: {
         // rather than a differently-filtered one.
         loadMorePath={
           isSubcategoryRoute
-            ? `/marketplace/products?subcategory=${encodeURIComponent(filterSlug)}`
-            : `/marketplace/products?category=${encodeURIComponent(filterSlug)}${activeSub ? `&subcategory=${encodeURIComponent(activeSub)}` : ''}`
+            ? `/products?subcategory=${encodeURIComponent(filterSlug)}`
+            : `/products?category=${encodeURIComponent(filterSlug)}${activeSub ? `&subcategory=${encodeURIComponent(activeSub)}` : ''}`
         }
       />
     </div>

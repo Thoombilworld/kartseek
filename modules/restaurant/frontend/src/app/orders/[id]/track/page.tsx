@@ -25,7 +25,7 @@ export default function RestaurantOrderTrackPage() {
     <OrderTracking
       module="restaurant"
       orderId={id}
-      backHref={`/restaurant/orders/${encodeURIComponent(id)}`}
+      backHref={`/orders/${encodeURIComponent(id)}`}
       load={async (orderId) => {
         const res: any = await restaurantApi.getOrderTracking(orderId);
         const facts: Array<{ label: string; value: string }> = [];

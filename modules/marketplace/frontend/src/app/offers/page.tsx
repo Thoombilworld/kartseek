@@ -96,7 +96,7 @@ export default function OffersPage() {
         })
         .catch(() => null);
 
-    Promise.all([get('/marketplace/flash-deals'), get('/marketplace/deals-of-the-day')])
+    Promise.all([get('/flash-deals'), get('/deals-of-the-day')])
       .then(([f, d]) => {
         if (cancelled) return;
         // The bundled `FLASH_DEALS` / `DEALS_OF_DAY` fallback that stood here
@@ -139,10 +139,10 @@ export default function OffersPage() {
             They are links now, and the copy describes the destination instead
             of quoting a discount the page cannot substantiate. */}
         {[
-          { label: 'Flash Deals', desc: 'Time-limited campaigns', icon: Zap, color: 'from-red-500 to-rose-600', href: '/marketplace/flash-deals' },
-          { label: 'Deals of the Day', desc: 'Refreshed every midnight', icon: BadgePercent, color: 'from-blue-500 to-indigo-600', href: '/marketplace/deals' },
-          { label: 'Top Brands', desc: 'Shop by brand', icon: Crown, color: 'from-amber-500 to-orange-600', href: '/marketplace/brands/feed' },
-          { label: 'New Arrivals', desc: 'Just landed', icon: Gift, color: 'from-emerald-500 to-teal-600', href: '/marketplace/new-arrivals' },
+          { label: 'Flash Deals', desc: 'Time-limited campaigns', icon: Zap, color: 'from-red-500 to-rose-600', href: '/flash-deals' },
+          { label: 'Deals of the Day', desc: 'Refreshed every midnight', icon: BadgePercent, color: 'from-blue-500 to-indigo-600', href: '/deals' },
+          { label: 'Top Brands', desc: 'Shop by brand', icon: Crown, color: 'from-amber-500 to-orange-600', href: '/brands/feed' },
+          { label: 'New Arrivals', desc: 'Just landed', icon: Gift, color: 'from-emerald-500 to-teal-600', href: '/new-arrivals' },
         ].map((b) => (
           <Link
             key={b.label}
@@ -175,7 +175,7 @@ export default function OffersPage() {
               every render and every day, next to deals whose real windows come
               from the campaign. A link to the flash-deals page, which owns the
               live countdown, is honest; a frozen clock is not. */}
-          <Link href="/marketplace/flash-deals" className="flex items-center gap-1.5 text-xs bg-red-50 text-red-700 px-3 py-1.5 rounded-sm font-semibold border border-red-100 hover:bg-red-100 transition-colors">
+          <Link href="/flash-deals" className="flex items-center gap-1.5 text-xs bg-red-50 text-red-700 px-3 py-1.5 rounded-sm font-semibold border border-red-100 hover:bg-red-100 transition-colors">
             <Timer className="w-4 h-4" />View live countdown
           </Link>
         </div>

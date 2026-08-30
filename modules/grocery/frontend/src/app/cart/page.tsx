@@ -85,7 +85,7 @@ export default function GroceryCartPage() {
         <span className="text-6xl mb-4 block" aria-hidden="true">🛒</span>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">{tr('Your cart is empty')}</h1>
         <p className="text-slate-500 mb-6">Add items from your favourite grocery stores to get started.</p>
-        <Link href="/grocery/stores" className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-colors">
+        <Link href="/stores" className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-colors">
           {tr('Browse Stores')} <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
@@ -96,7 +96,7 @@ export default function GroceryCartPage() {
     <div className="max-w-7xl 3xl:max-w-app-wide mx-auto px-2 2xs:px-3 xs:px-4 md:px-6 xl:px-8 py-4 xs:py-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/grocery" className="touch-target -ml-2 text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
+        <Link href="/" className="touch-target -ml-2 text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
@@ -271,7 +271,7 @@ export default function GroceryCartPage() {
               <p>{tr('All items are from')}<strong>{storeName}</strong>. Each order is fulfilled by a single store.</p>
             </div>
 
-            <Link href="/grocery/checkout" className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold transition-colors shadow-sm text-center text-sm flex items-center justify-center gap-2">{tr('Proceed to Checkout')}<ArrowRight className="w-4 h-4" />
+            <Link href="/checkout" className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold transition-colors shadow-sm text-center text-sm flex items-center justify-center gap-2">{tr('Proceed to Checkout')}<ArrowRight className="w-4 h-4" />
             </Link>
 
             <p className="flex items-center gap-2 text-[10px] text-slate-400 justify-center">

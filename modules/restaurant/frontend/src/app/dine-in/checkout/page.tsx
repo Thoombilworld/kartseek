@@ -38,7 +38,7 @@ function DineInCheckoutPageContent() {
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/restaurant" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <Link href="/" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Link>
           <div className="flex-1">

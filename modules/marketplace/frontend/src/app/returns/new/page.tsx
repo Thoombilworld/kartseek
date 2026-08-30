@@ -127,7 +127,7 @@ export default function ReturnRequestPage() {
         customerId: user.id,
       });
       toast.success('Return request submitted');
-      router.push('/marketplace/returns');
+      router.push('/returns');
     } catch (err: any) {
       setError(err?.message || 'Could not submit your return. Please try again.');
     } finally {
@@ -149,9 +149,9 @@ export default function ReturnRequestPage() {
 
       <div className="max-w-3xl mx-auto px-4 py-6">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
-          <Link href="/marketplace/returns" className="hover:text-blue-600">Returns</Link>
+          <Link href="/returns" className="hover:text-blue-600">Returns</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">New Return</span>
         </nav>
@@ -195,7 +195,7 @@ export default function ReturnRequestPage() {
                   <Package className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                   <p className="text-slate-600 font-medium">Nothing available to return</p>
                   <p className="text-sm text-slate-400 mt-1">Only delivered orders can be returned.</p>
-                  <Link href="/marketplace/orders" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
+                  <Link href="/orders" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
                     View your orders
                   </Link>
                 </div>

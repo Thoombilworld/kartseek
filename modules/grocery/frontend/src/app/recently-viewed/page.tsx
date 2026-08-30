@@ -113,7 +113,7 @@ export default function RecentlyViewedPage() {
       {/* Header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-5">
-          <Link href="/grocery" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm font-medium mb-3 transition-colors">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm font-medium mb-3 transition-colors">
             <ArrowLeft className="w-4 h-4" />{tr('Back to Grocery')}</Link>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -146,7 +146,7 @@ export default function RecentlyViewedPage() {
             <span className="text-6xl mb-4 block">👀</span>
             <h3 className="text-xl font-bold text-slate-700 mb-2">{tr('Nothing viewed yet')}</h3>
             <p className="text-sm text-slate-500 mb-4">Start browsing and your recently viewed items will appear here</p>
-            <Link href="/grocery" className="inline-flex items-center gap-1 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-colors">{tr('Browse Grocery')}</Link>
+            <Link href="/" className="inline-flex items-center gap-1 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-colors">{tr('Browse Grocery')}</Link>
           </div>
         )}
       </div>

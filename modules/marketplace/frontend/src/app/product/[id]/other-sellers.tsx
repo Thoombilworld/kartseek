@@ -86,7 +86,7 @@ export function OtherSellers({ offers }: { offers: SellerOffer[] }) {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {offer.seller?.id ? (
                       <Link
-                        href={`/marketplace/seller/${offer.seller.id}`}
+                        href={`/seller/${offer.seller.id}`}
                         className="font-bold text-sm text-blue-600 hover:underline truncate"
                       >
                         {offer.seller.businessName || 'Seller'}

@@ -136,7 +136,7 @@ function MyDoctorsContent() {
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-12 translate-x-12 blur-2xl" aria-hidden="true" />
         <div className="max-w-4xl mx-auto relative z-10">
           <Link
-            href="/doctor/my-profile"
+            href="/my-profile"
             className="inline-flex items-center gap-1 min-h-[44px] -ml-2 px-2 text-indigo-200 hover:text-white text-sm font-medium transition-colors"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Profile
@@ -218,7 +218,7 @@ function MyDoctorsContent() {
               </p>
               {!search.trim() && (
                 <Link
-                  href="/doctor/search"
+                  href="/search"
                   className="inline-flex items-center gap-2 mt-5 px-5 min-h-[44px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors text-sm"
                 >
                   Find a doctor
@@ -261,13 +261,13 @@ function MyDoctorsContent() {
 
                   <div className="flex gap-2 mt-3.5 pt-3.5 border-t border-slate-100">
                     <Link
-                      href={`/doctor/book/${encodeURIComponent(doctor.id)}`}
+                      href={`/book/${encodeURIComponent(doctor.id)}`}
                       className="flex-1 inline-flex items-center justify-center gap-1.5 bg-indigo-600 text-white px-4 min-h-[44px] rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors"
                     >
                       <Calendar className="w-3.5 h-3.5" aria-hidden="true" /> Book again
                     </Link>
                     <Link
-                      href="/doctor/my-appointments"
+                      href="/my-appointments"
                       className="flex-1 inline-flex items-center justify-center gap-1.5 bg-white border border-slate-200 text-slate-700 px-4 min-h-[44px] rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors"
                     >
                       Appointments <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />

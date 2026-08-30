@@ -112,13 +112,13 @@ export default function DoctorCard({ doctor }: DoctorCardProps) {
         {/* CTA Buttons */}
         <div className="flex gap-3">
           <Link
-            href={`/doctor/profile/${doctor.id}`}
+            href={`/profile/${doctor.id}`}
             className="flex-1 flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold py-3 rounded-xl text-sm transition-all duration-200 border border-slate-200"
           >
             View Profile
           </Link>
           <Link
-            href={`/doctor/book/${doctor.id}`}
+            href={`/book/${doctor.id}`}
             className="flex-1 flex items-center justify-center gap-1.5 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 rounded-xl text-sm transition-all duration-200 shadow-sm shadow-blue-200/50 hover:shadow-md hover:shadow-blue-300/40"
           >
             <Calendar className="w-4 h-4" />

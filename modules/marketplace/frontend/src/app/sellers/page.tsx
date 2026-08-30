@@ -63,7 +63,7 @@ export default function SellersPage() {
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Sellers</span>
         </nav>
@@ -88,7 +88,7 @@ export default function SellersPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filtered.map(seller => (
-              <Link key={seller.id} href={`/marketplace/seller/${seller.id}`}
+              <Link key={seller.id} href={`/seller/${seller.id}`}
                 className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-lg hover:border-blue-300 transition-all group">
                 <div className="flex items-start gap-4">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-2xl font-black text-blue-600 shrink-0">

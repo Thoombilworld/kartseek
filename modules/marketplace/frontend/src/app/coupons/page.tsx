@@ -107,7 +107,7 @@ export default function CouponsPage() {
   return (
     <div className="max-w-6xl mx-auto px-3 xs:px-4 py-6">
       <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-        <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+        <Link href="/" className="hover:text-blue-600">Home</Link>
         <span>/</span>
         <span className="text-slate-900 font-medium">Coupons & Offers</span>
       </div>
@@ -142,7 +142,7 @@ export default function CouponsPage() {
           <Tag className="w-12 h-12 text-slate-200 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-slate-700 mb-1">No coupons available right now</h3>
           <p className="text-sm text-slate-500">Check back soon — new offers are added regularly.</p>
-          <Link href="/marketplace/deals" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
+          <Link href="/deals" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
             Browse today&apos;s deals
           </Link>
         </div>

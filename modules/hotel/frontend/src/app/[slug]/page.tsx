@@ -115,7 +115,7 @@ export default function HotelCollectionPage({ params }: { params: Promise<{ slug
       <header className={`bg-gradient-to-br ${config.gradient} text-white`}>
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-8">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/hotel-booking/destinations" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
+            <Link href="/destinations" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <span className="text-sm font-medium text-white/70">Collections</span>
@@ -163,7 +163,7 @@ export default function HotelCollectionPage({ params }: { params: Promise<{ slug
           {config.hotels.map(hotel => (
             <Link
               key={hotel.id}
-              href={`/hotel-booking/hotel/${hotel.id}`}
+              href={`/hotel/${hotel.id}`}
               className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
             >
               <div className="relative h-40 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">

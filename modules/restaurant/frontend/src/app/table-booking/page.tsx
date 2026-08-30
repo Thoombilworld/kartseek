@@ -97,7 +97,7 @@ export default function MyReservationsPage() {
       {/* Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/restaurant" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <Link href="/" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Link>
           <div className="flex-1">
@@ -105,7 +105,7 @@ export default function MyReservationsPage() {
             <p className="text-sm text-slate-500">{reservations.length} bookings</p>
           </div>
           <Link
-            href="/restaurant"
+            href="/"
             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-bold hover:bg-orange-700 transition-colors"
           >
             <Plus className="w-4 h-4" /> Book Table
@@ -165,7 +165,7 @@ export default function MyReservationsPage() {
                 : 'Try a different filter to see your bookings.'}
             </p>
             <Link
-              href="/restaurant"
+              href="/"
               className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-colors"
             >
               Browse Restaurants
@@ -182,7 +182,7 @@ export default function MyReservationsPage() {
           return (
             <Link
               key={reservation.id}
-              href={`/restaurant/table-booking/${reservation.id}`}
+              href={`/table-booking/${reservation.id}`}
               className="block bg-white rounded-2xl border border-slate-200 hover:border-orange-300 hover:shadow-lg transition-all group"
             >
               <div className="p-5">
@@ -241,7 +241,7 @@ export default function MyReservationsPage() {
                       Cancel Booking
                     </button>
                     <Link
-                      href={`/restaurant/table-booking/${reservation.restaurantId}`}
+                      href={`/table-booking/${reservation.restaurantId}`}
                       onClick={(e: MouseEvent) => e.stopPropagation()}
                       className="flex-1 px-4 py-2 text-sm font-bold text-orange-600 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors text-center"
                     >
@@ -254,7 +254,7 @@ export default function MyReservationsPage() {
                 {!upcoming && reservation.status !== 'CANCELLED' && (
                   <div className="mt-4 pt-3 border-t border-slate-100">
                     <Link
-                      href={`/restaurant/table-booking/${reservation.restaurantId}`}
+                      href={`/table-booking/${reservation.restaurantId}`}
                       onClick={(e: MouseEvent) => e.stopPropagation()}
                       className="flex items-center justify-center gap-2 w-full px-4 py-2 text-sm font-bold text-orange-600 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors"
                     >

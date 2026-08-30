@@ -129,7 +129,7 @@ export default function InvoicePage() {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6 print:hidden">
           <Link
-            href="/marketplace/orders"
+            href="/orders"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
           >
             <ArrowLeft className="w-4 h-4" /> Back to Orders

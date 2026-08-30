@@ -83,7 +83,7 @@ function RestaurantCheckoutContent() {
 
       sessionStorage.removeItem('restaurant_cart');
       const orderId = (response as any)?.orderId || fallbackOrderId;
-      router.push(`/orders/restaurant/${orderId}?type=${fulfillmentType}`);
+      window.location.assign(`/orders/restaurant/${orderId}?type=${fulfillmentType}`);
     } catch (error) {
       console.error('Failed to place order (using fallback flow):', error);
       // Always navigate to order confirmation — do not leave user stuck

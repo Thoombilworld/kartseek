@@ -1,6 +1,7 @@
 'use client';
 import React, { Suspense } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { CheckCircle, MapPin, Clock, Receipt, Home, RotateCcw, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
@@ -89,18 +90,18 @@ function TakeawaySuccessContent() {
 
         {/* Actions */}
         <div className="space-y-3">
-          <Link href={`/restaurant/takeaway/track/${orderId}`}
+          <Link href={`/takeaway/track/${orderId}`}
             className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl py-3.5 font-bold flex items-center justify-center gap-2 transition-colors text-sm">
             📍 Track My Order
           </Link>
-          <Link href="/restaurant"
+          <Link href="/"
             className="w-full bg-white border border-slate-200 text-slate-700 rounded-xl py-3.5 font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors text-sm">
             <Home className="w-4 h-4" /> Back to Restaurants
           </Link>
-          <Link href="/profile/restaurant-orders"
+          <ZoneLink href="/profile/restaurant-orders"
             className="w-full text-center text-sm text-slate-500 hover:text-purple-600 font-medium py-1 flex items-center justify-center gap-2">
             <RotateCcw className="w-3.5 h-3.5" /> View All Orders
-          </Link>
+          </ZoneLink>
         </div>
       </div>
     </div>

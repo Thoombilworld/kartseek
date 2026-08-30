@@ -102,7 +102,7 @@ export default function SellerProfilePage({ params }: { params: Promise<{ id: st
           <Store className="w-14 h-14 text-slate-200 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-slate-800 mb-1">Seller not found</h1>
           <p className="text-sm text-slate-500 mb-5">This store may have closed or the link is incorrect.</p>
-          <Link href="/marketplace/sellers" className="text-sm font-bold text-blue-600 hover:underline">
+          <Link href="/sellers" className="text-sm font-bold text-blue-600 hover:underline">
             Browse all sellers
           </Link>
         </div>
@@ -156,9 +156,9 @@ export default function SellerProfilePage({ params }: { params: Promise<{ id: st
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
-          <Link href="/marketplace/sellers" className="hover:text-blue-600">Sellers</Link>
+          <Link href="/sellers" className="hover:text-blue-600">Sellers</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">{seller.businessName}</span>
         </nav>

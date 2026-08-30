@@ -58,7 +58,7 @@ export default function MyHotelBookingsPage() {
     <OrderHistory
       module="hotel"
       heading="My bookings"
-      backHref="/hotel-booking"
+      backHref="/"
       searchPlaceholder="Search by hotel, city or booking reference…"
       filters={[
         { key: 'upcoming', label: 'Upcoming', match: (r) => r.kind === 'upcoming' },

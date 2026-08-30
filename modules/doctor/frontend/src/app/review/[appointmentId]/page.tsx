@@ -90,7 +90,7 @@ export default function ReviewPage({ params }: { params: Promise<{ appointmentId
         <div className="text-center">
           <span className="text-5xl mb-4 block">📋</span>
           <h1 className="text-xl font-bold text-slate-900 mb-2">Appointment Not Found</h1>
-          <Link href="/doctor/my-appointments" className="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 transition-colors">
+          <Link href="/my-appointments" className="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 transition-colors">
             My Appointments
           </Link>
         </div>
@@ -127,10 +127,10 @@ export default function ReviewPage({ params }: { params: Promise<{ appointmentId
           </div>
 
           <div className="space-y-3">
-            <Link href="/doctor/my-appointments" className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm transition-colors">
+            <Link href="/my-appointments" className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm transition-colors">
               <Stethoscope className="w-4 h-4" /> View My Appointments
             </Link>
-            <Link href="/doctor" className="flex items-center justify-center w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors">
+            <Link href="/" className="flex items-center justify-center w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors">
               ← Back to Doctor Home
             </Link>
           </div>
@@ -146,7 +146,7 @@ export default function ReviewPage({ params }: { params: Promise<{ appointmentId
 
         {/* Header */}
         <div className="mb-6">
-          <Link href="/doctor/my-appointments" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors mb-3">
+          <Link href="/my-appointments" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors mb-3">
             <ArrowLeft className="w-4 h-4" /> My Appointments
           </Link>
           <h1 className="text-2xl font-black text-slate-900 mb-1">Write a Review</h1>

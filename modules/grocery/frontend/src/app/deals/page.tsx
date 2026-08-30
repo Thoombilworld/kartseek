@@ -140,7 +140,7 @@ export default function FlashDealsPage() {
       {/* Header */}
       <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <Link href="/grocery" className="inline-flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium mb-4 transition-colors">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium mb-4 transition-colors">
             <ArrowLeft className="w-4 h-4" />{tr('Back to Grocery')}</Link>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
@@ -226,7 +226,7 @@ export default function FlashDealsPage() {
             <span className="text-6xl mb-4 block" aria-hidden="true">⚡</span>
             <h3 className="text-xl font-bold text-slate-700 mb-2">{tr('No active deals right now')}</h3>
             <p className="text-sm text-slate-500">{tr('Check back soon — new flash deals drop every day!')}</p>
-            <Link href="/grocery" className="mt-4 inline-flex items-center gap-1 text-green-600 font-bold text-sm hover:text-green-700">{tr('Continue Shopping')}<ChevronRight className="w-4 h-4" />
+            <Link href="/" className="mt-4 inline-flex items-center gap-1 text-green-600 font-bold text-sm hover:text-green-700">{tr('Continue Shopping')}<ChevronRight className="w-4 h-4" />
             </Link>
           </div>
         )}

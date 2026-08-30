@@ -74,7 +74,7 @@ export default function RestaurantReviewPage() {
             </div>
           )}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/restaurant" className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl transition-colors text-sm">
+            <Link href="/" className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl transition-colors text-sm">
               Browse Restaurants
             </Link>
             <Link href="/orders" className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold px-6 py-3 rounded-xl transition-colors text-sm">

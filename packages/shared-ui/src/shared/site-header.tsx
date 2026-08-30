@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '../zone-link';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { useRegion } from '@/lib/contexts/region-context';
 import { LocaleSwitcher } from '@/components/shared/locale-switcher';
@@ -41,14 +42,14 @@ export function SiteHeader() {
     <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0">
+        <ZoneLink href="/" className="flex items-center gap-2 shrink-0">
           <div className="w-8 h-8 rounded-lg bg-linear-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
             <span className="text-white font-black text-sm">K</span>
           </div>
           <h1 className="text-xl font-black tracking-tight text-blue-700 hidden sm:block">
             KART<span className="text-slate-900">SEEK</span>
           </h1>
-        </Link>
+        </ZoneLink>
 
         {/* Search Bar (desktop) */}
         <div className="hidden md:flex flex-1 max-w-lg">
@@ -70,17 +71,17 @@ export function SiteHeader() {
             <Search className="w-5 h-5" />
           </button>
 
-          <Link href="/cart" className="touch-target text-slate-600 hover:text-blue-600 transition-colors relative" title="Cart">
+          <ZoneLink href="/cart" className="touch-target text-slate-600 hover:text-blue-600 transition-colors relative" title="Cart">
             <ShoppingCart className="w-5 h-5" />
             <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
               2
             </span>
-          </Link>
+          </ZoneLink>
 
-          <Link href="/notifications" className="touch-target text-slate-600 hover:text-blue-600 transition-colors relative hidden sm:flex" title="Notifications">
+          <ZoneLink href="/notifications" className="touch-target text-slate-600 hover:text-blue-600 transition-colors relative hidden sm:flex" title="Notifications">
             <Bell className="w-5 h-5" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-          </Link>
+          </ZoneLink>
 
           {/* Language / region. The options come from the active region, so in
               Qatar this offers Arabic and English only. */}
@@ -161,18 +162,18 @@ export function SiteHeader() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <Link
+                <ZoneLink
                   href="/auth/login"
                   className="text-sm font-semibold text-slate-700 hover:text-blue-600 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors hidden sm:block"
                 >
                   Login
-                </Link>
-                <Link
+                </ZoneLink>
+                <ZoneLink
                   href="/auth/signup"
                   className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl transition-colors shadow-sm"
                 >
                   Sign Up
-                </Link>
+                </ZoneLink>
               </div>
             )}
           </div>

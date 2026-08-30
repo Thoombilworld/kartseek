@@ -29,7 +29,7 @@ export default function MapSearchPage() {
     <div className="h-screen flex flex-col bg-slate-50">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-4 py-3 z-20 flex items-center gap-3">
-        <Link href="/hotel-booking" className="w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors shrink-0">
+        <Link href="/" className="w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors shrink-0">
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div className="flex-1 relative">
@@ -98,7 +98,7 @@ export default function MapSearchPage() {
         {selected && (
           <div className="absolute bottom-4 left-4 right-4 z-20 md:left-auto md:right-4 md:w-80">
             <Link
-              href={`/hotel-booking/hotel/${selected.id}`}
+              href={`/hotel/${selected.id}`}
               className="bg-white rounded-2xl shadow-xl border border-slate-100 p-4 flex items-start gap-4 hover:shadow-2xl transition-all group"
             >
               <div className="w-16 h-16 bg-rose-50 rounded-xl flex items-center justify-center text-3xl shrink-0">
@@ -133,7 +133,7 @@ export default function MapSearchPage() {
               {HOTELS_ON_MAP.map(hotel => (
                 <Link
                   key={hotel.id}
-                  href={`/hotel-booking/hotel/${hotel.id}`}
+                  href={`/hotel/${hotel.id}`}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
                 >
                   <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-xl shrink-0">

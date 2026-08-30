@@ -54,7 +54,7 @@ export default function PharmacyCategoriesPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map(cat => (
-          <Link key={cat.id} href={`/pharmacy?category=${cat.id}`}
+          <Link key={cat.id} href={`/?category=${cat.id}`}
             className="group bg-white border border-slate-200 rounded-2xl p-5 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-50 transition-all duration-200">
             <div className="flex items-start justify-between mb-3">
               <span className="text-3xl">{cat.emoji}</span>

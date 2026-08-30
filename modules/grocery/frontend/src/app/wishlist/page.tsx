@@ -66,7 +66,7 @@ function GroceryWishlistContent() {
     <div className="max-w-4xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/grocery" className="p-2 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors" aria-label={tr('Back to grocery')}>
+        <Link href="/" className="p-2 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors" aria-label={tr('Back to grocery')}>
           <ArrowLeft className="w-5 h-5 text-slate-700" />
         </Link>
         <div>
@@ -102,7 +102,7 @@ function GroceryWishlistContent() {
           </div>
           <h2 className="text-xl font-bold text-slate-800 mb-2">{tr('Your wishlist is empty')}</h2>
           <p className="text-slate-500 mb-6">{tr('Save products you love by tapping the heart icon')}</p>
-          <Link href="/grocery/stores" className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors">
+          <Link href="/stores" className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors">
             <ShoppingCart className="w-4 h-4" />{tr('Browse Groceries')}</Link>
         </div>
       ) : (

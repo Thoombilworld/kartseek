@@ -6,6 +6,7 @@ import {
   MapPin, Star, CheckCircle, Upload, ArrowLeft, Lock, LogIn, UserPlus,
 } from 'lucide-react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { getDoctor, getProviderLabel, getProviderColor } from '@/lib/modules/doctor-registry';
@@ -72,7 +73,7 @@ export default function AppointmentBookingPage({ params }: { params: Promise<{ d
       bookedAt: new Date().toISOString(),
     };
     sessionStorage.setItem('kartseek_last_booking', JSON.stringify(bookingData));
-    router.push(`/doctor/book/${doctorId}/confirmation`);
+    router.push(`/book/${doctorId}/confirmation`);
   };
 
   function SlotGroup({ label, emoji, slots }: { label: string; emoji: string; slots: string[] }) {
@@ -127,18 +128,18 @@ export default function AppointmentBookingPage({ params }: { params: Promise<{ d
             </p>
 
             <div className="space-y-3 mb-6">
-              <Link
+              <ZoneLink
                 href={`/auth/login?redirect=${encodeURIComponent(`/doctor/book/${doctorId}`)}`}
                 className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm"
               >
                 <LogIn className="w-4 h-4" /> Sign In to Continue
-              </Link>
-              <Link
+              </ZoneLink>
+              <ZoneLink
                 href={`/auth/register?redirect=${encodeURIComponent(`/doctor/book/${doctorId}`)}`}
                 className="flex items-center justify-center gap-2 w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-xl transition-colors"
               >
                 <UserPlus className="w-4 h-4" /> Create New Account
-              </Link>
+              </ZoneLink>
             </div>
 
             <div className="flex items-center gap-2 justify-center text-xs text-slate-400">
@@ -146,7 +147,7 @@ export default function AppointmentBookingPage({ params }: { params: Promise<{ d
               <span>Your data is secure and encrypted</span>
             </div>
 
-            <Link href="/doctor" className="block mt-4 text-xs text-slate-400 hover:text-slate-600 transition-colors">
+            <Link href="/" className="block mt-4 text-xs text-slate-400 hover:text-slate-600 transition-colors">
               ← Back to Doctor Home
             </Link>
           </div>
@@ -157,7 +158,7 @@ export default function AppointmentBookingPage({ params }: { params: Promise<{ d
 
         {/* ── Header ─────────────────────────────────────────────────── */}
         <div className="mb-6">
-          <Link href={`/doctor/profile/${doctorId}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors mb-3">
+          <Link href={`/profile/${doctorId}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors mb-3">
             <ArrowLeft className="w-4 h-4" /> Back to Doctor Profile
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Book Appointment</h1>

@@ -291,7 +291,7 @@ function StoreSection({ title, titleAr, subtitle, stores, emoji, href, rail, var
    */
   return (
     <section className="mb-8">
-      <SectionHeader title={title} titleAr={titleAr} subtitle={subtitle} emoji={emoji} badge={badge} href={href || (rail ? railHref(rail) : '/grocery/stores')} />
+      <SectionHeader title={title} titleAr={titleAr} subtitle={subtitle} emoji={emoji} badge={badge} href={href || (rail ? railHref(rail) : '/stores')} />
       {/* Auto-advancing, so the cards past the fold announce themselves. Pauses
           on hover, focus and touch, and stays still for reduced-motion users. */}
       <AutoScrollRow className="pb-2 -mx-2 px-2 2xs:-mx-3 2xs:px-3 xs:-mx-4 xs:px-4 md:mx-0 md:px-0">
@@ -317,7 +317,7 @@ function BrandCard({ brand }: { brand: CountryBrand | GroceryBrand }) {
    */
   const brandLogo = brandLogoUrl(brand as { name: string; logoUrl?: string });
   return (
-    <Link href={`/grocery/brand/${brand.id}`} className="flex flex-col items-center gap-1.5 w-[80px] shrink-0 group">
+    <Link href={`/brand/${brand.id}`} className="flex flex-col items-center gap-1.5 w-[80px] shrink-0 group">
       {/* Round: the mark sits in a disc, which is what a brand orbit reads as.
           `object-contain` on a white ground because a real logo is rarely square
           and cropping one cuts the name off. */}
@@ -854,7 +854,7 @@ export default function GroceryHomePage() {
             <span className="text-sm bg-white/20 px-2 py-0.5 rounded font-bold tracking-wider">{heroText(hero, 'tag')}</span>
             <h2 className="text-base 2xs:text-lg sm:text-xl md:text-3xl font-black mt-2 leading-tight whitespace-pre-line">{heroText(hero, 'headline')}</h2>
             <p className="text-xs 2xs:text-sm sm:text-base opacity-90 mt-1 xs:mt-2">{heroText(hero, 'subheadline')}</p>
-            <Link href={hero.ctaHref || '/grocery/category/all'} className="inline-flex items-center justify-center gap-1 bg-white text-green-700 font-bold text-xs 2xs:text-sm sm:text-base px-3 2xs:px-4 sm:px-5 py-1.5 xs:py-2 min-h-[44px] rounded-lg mt-2 xs:mt-3 hover:bg-green-50 transition-colors">
+            <Link href={hero.ctaHref || '/category/all'} className="inline-flex items-center justify-center gap-1 bg-white text-green-700 font-bold text-xs 2xs:text-sm sm:text-base px-3 2xs:px-4 sm:px-5 py-1.5 xs:py-2 min-h-[44px] rounded-lg mt-2 xs:mt-3 hover:bg-green-50 transition-colors">
               {heroText(hero, 'cta')} <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -885,10 +885,10 @@ export default function GroceryHomePage() {
 
       {/* ═══ SHOP BY CATEGORY ═══ */}
       <section className="mb-8">
-        <SectionHeader title={tr('Shop by Category')} titleAr="تسوق حسب القسم" subtitle="Browse items by type" emoji="🛒" href="/grocery/category/all-groceries" />
+        <SectionHeader title={tr('Shop by Category')} titleAr="تسوق حسب القسم" subtitle="Browse items by type" emoji="🛒" href="/category/all-groceries" />
         <div className="cat-grid">
           {allCategories.map(cat => (
-            <Link key={cat.id} href={`/grocery/category/${cat.id}`} className="flex flex-col items-center gap-1 bg-white border border-slate-100 rounded-xl p-2 xs:p-2.5 shadow-sm hover:shadow-md hover:border-green-200 transition-all group">
+            <Link key={cat.id} href={`/category/${cat.id}`} className="flex flex-col items-center gap-1 bg-white border border-slate-100 rounded-xl p-2 xs:p-2.5 shadow-sm hover:shadow-md hover:border-green-200 transition-all group">
               {cat.imageUrl ? (
                 // Fixed square well so every tile is the same size whether the
                 // category has artwork or only an emoji.
@@ -926,12 +926,12 @@ export default function GroceryHomePage() {
         subtitle="Stores within your delivery radius"
         stores={nearbyStores}
         emoji="📍"
-        href="/grocery/stores"
+        href="/stores"
       />
 
       {/* ═══ GROCERY BRANDS ═══ */}
       <section className="mb-8">
-        <SectionHeader title={tr('Shop by Brand')} titleAr="تسوق حسب العلامة التجارية" subtitle="Your favorite grocery brands" emoji="🏷️" href="/grocery/brand" />
+        <SectionHeader title={tr('Shop by Brand')} titleAr="تسوق حسب العلامة التجارية" subtitle="Your favorite grocery brands" emoji="🏷️" href="/brand" />
         <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar -mx-2 px-2 2xs:-mx-3 2xs:px-3 xs:-mx-4 xs:px-4 md:mx-0 md:px-0">
           {brandData.map((b: any) => <BrandCard key={b.id} brand={b} />)}
         </div>
@@ -1027,7 +1027,7 @@ export default function GroceryHomePage() {
               <span className="text-sm bg-white/20 px-2 py-0.5 rounded font-bold">🎉 {showArabic ? 'عرض موسمي' : 'SEASONAL'}</span>
               <h3 className="text-lg font-bold mt-2">{showArabic ? 'عرض الصيف الكبير' : 'Summer Fresh Fest'}</h3>
               <p className="text-sm opacity-80 mt-1">{showArabic ? 'خصم حتى ٤٠٪ على الفواكه والخضروات' : 'Up to 40% off on fruits, vegetables & beverages'}</p>
-              <Link href="/grocery/category/fruits-vegetables" className="inline-flex items-center gap-1 bg-white text-green-700 font-bold text-sm px-4 py-2 min-h-[44px] rounded-lg mt-3 hover:bg-green-50">
+              <Link href="/category/fruits-vegetables" className="inline-flex items-center gap-1 bg-white text-green-700 font-bold text-sm px-4 py-2 min-h-[44px] rounded-lg mt-3 hover:bg-green-50">
                 {showArabic ? 'تسوق الآن' : 'Shop Now'} <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -1110,7 +1110,7 @@ export default function GroceryHomePage() {
       {/* ═══ SECOND BRAND ROW ═══ */}
       {moreBrands.length > 0 && (
         <section className="mb-8">
-          <SectionHeader title={tr('More Brands You Love')} titleAr="المزيد من العلامات المفضلة" subtitle="Discover more grocery brands" emoji="💝" href="/grocery/brand" />
+          <SectionHeader title={tr('More Brands You Love')} titleAr="المزيد من العلامات المفضلة" subtitle="Discover more grocery brands" emoji="💝" href="/brand" />
           <AutoScrollRow className="pb-2 -mx-2 px-2 2xs:-mx-3 2xs:px-3 xs:-mx-4 xs:px-4 md:mx-0 md:px-0" speed={16}>
             {moreBrands.map((b) => <BrandCard key={b.id} brand={b} />)}
           </AutoScrollRow>
@@ -1122,7 +1122,7 @@ export default function GroceryHomePage() {
         <SectionHeader title={tr('Explore All Categories')} titleAr="استكشف جميع الأقسام" emoji="📂" />
         <div className="card-grid-2-4">
           {allCategories.map(cat => (
-            <Link key={cat.id} href={`/grocery/category/${cat.id}`} className="flex items-center gap-2.5 bg-white border border-slate-100 rounded-lg p-3 hover:border-green-200 hover:bg-green-50/30 transition-all group">
+            <Link key={cat.id} href={`/category/${cat.id}`} className="flex items-center gap-2.5 bg-white border border-slate-100 rounded-lg p-3 hover:border-green-200 hover:bg-green-50/30 transition-all group">
               <span className="text-xl group-hover:scale-110 transition-transform">{cat.emoji}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-base font-bold text-slate-900 truncate">{showArabic ? tr(cat.name) : cat.name}</p>

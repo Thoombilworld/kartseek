@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '../zone-link';
 import { useRouter } from 'next/navigation';
 import { User, LogOut, Package, Settings, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/auth-context';
@@ -42,21 +43,21 @@ export function AccountMenu({ className = '' }: { className?: string }) {
   const handleLogout = () => {
     setOpen(false);
     logout();
-    router.push('/');
+    window.location.assign('/');
   };
 
   // Until auth has hydrated from localStorage, render the signed-out control:
   // it matches what the server rendered, so there is no hydration mismatch.
   if (!isHydrated || !isAuthenticated) {
     return (
-      <Link
+      <ZoneLink
         href="/auth/login"
         className={`flex flex-col items-center p-1.5 transition-colors hover:opacity-80 ${className}`}
         title="Sign in"
       >
         <User className="w-5 h-5" />
         <span className="text-[9px] mt-0.5 font-medium">Sign in</span>
-      </Link>
+      </ZoneLink>
     );
   }
 
@@ -89,18 +90,18 @@ export function AccountMenu({ className = '' }: { className?: string }) {
             <p className="text-xs text-slate-500 truncate">{user?.email}</p>
           </div>
 
-          <Link href="/profile" role="menuitem" onClick={() => setOpen(false)}
+          <ZoneLink href="/profile" role="menuitem" onClick={() => setOpen(false)}
             className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors">
             <User className="w-4 h-4 text-slate-500" /> My Account
-          </Link>
-          <Link href="/profile/orders" role="menuitem" onClick={() => setOpen(false)}
+          </ZoneLink>
+          <ZoneLink href="/profile/orders" role="menuitem" onClick={() => setOpen(false)}
             className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors">
             <Package className="w-4 h-4 text-slate-500" /> Orders &amp; Bookings
-          </Link>
-          <Link href="/profile/security" role="menuitem" onClick={() => setOpen(false)}
+          </ZoneLink>
+          <ZoneLink href="/profile/security" role="menuitem" onClick={() => setOpen(false)}
             className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors">
             <Settings className="w-4 h-4 text-slate-500" /> Security Settings
-          </Link>
+          </ZoneLink>
 
           <div className="border-t border-slate-100 mt-1 pt-1">
             <button

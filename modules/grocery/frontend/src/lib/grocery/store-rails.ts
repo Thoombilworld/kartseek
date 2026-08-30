@@ -89,5 +89,5 @@ export function isRailKey(v: string | null | undefined): boolean {
 
 /** Where a rail's "View All" goes. */
 export function railHref(key: string): string {
-  return `/grocery/stores?type=${encodeURIComponent(key)}`;
+  return `/stores?type=${encodeURIComponent(key)}`;
 }

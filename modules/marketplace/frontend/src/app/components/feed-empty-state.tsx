@@ -52,7 +52,7 @@ export function FeedEmptyState({
           </button>
         )}
         <Link
-          href="/marketplace/category-list"
+          href="/category-list"
           className="text-sm font-bold text-blue-600 hover:underline"
         >
           Browse all categories

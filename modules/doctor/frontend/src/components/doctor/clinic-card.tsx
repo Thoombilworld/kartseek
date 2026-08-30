@@ -23,7 +23,7 @@ interface ClinicCardProps {
 export default function ClinicCard({ clinic }: ClinicCardProps) {
   return (
     <Link
-      href={`/doctor/clinic/${clinic.id}`}
+      href={`/clinic/${clinic.id}`}
       id={`clinic-card-${clinic.id}`}
       className="group bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-slate-200/40 transition-all duration-300 hover:-translate-y-1 block"
     >

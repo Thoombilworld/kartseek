@@ -185,7 +185,7 @@ export function CatalogFeedPage({
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <nav className="text-sm text-slate-500">
-            <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+            <Link href="/" className="hover:text-blue-600">Home</Link>
             <ChevronRight className="w-3 h-3 inline mx-1" />
             <span className="text-slate-800 font-medium">{title}</span>
           </nav>
@@ -222,7 +222,7 @@ export function CatalogFeedPage({
             <p className="text-sm text-slate-500">
               {failed ? 'Please refresh the page to try again.' : emptyMessage}
             </p>
-            <Link href="/marketplace/category-list" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
+            <Link href="/category-list" className="inline-block mt-4 text-sm font-bold text-blue-600 hover:underline">
               Browse all categories
             </Link>
           </div>

@@ -9,7 +9,7 @@ export default function FoodItemCustomizationPage({ params }: { params: Promise<
       {/* Hero Image */}
       <div className="w-full h-64 md:h-80 bg-slate-200 relative">
         <img src="https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80" alt="Food" className="w-full h-full object-cover" />
-        <Link href={`/restaurant/rest-2`} className="absolute top-4 left-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-slate-900 shadow-sm">
+        <Link href={`/rest-2`} className="absolute top-4 left-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-slate-900 shadow-sm">
           <ArrowLeft className="w-5 h-5" />
         </Link>
       </div>

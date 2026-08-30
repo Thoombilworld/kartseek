@@ -246,7 +246,7 @@ export default function CategoryPage() {
       <div className={`bg-gradient-to-r ${categoryGradient} relative overflow-hidden`}>
         <div className="max-w-7xl 3xl:max-w-app-wide mx-auto px-3 xs:px-4 md:px-8 py-5 xs:py-8 md:py-12 relative z-10">
           <div className="flex items-center gap-2 text-white/70 text-sm mb-2 xs:mb-4">
-            <Link href="/grocery" className="hover:text-white transition-colors inline-flex items-center min-h-[44px]">{tr('Grocery')}</Link>
+            <Link href="/" className="hover:text-white transition-colors inline-flex items-center min-h-[44px]">{tr('Grocery')}</Link>
             <span>/</span>
             <span className="text-white font-medium">{categoryName}</span>
           </div>
@@ -278,7 +278,7 @@ export default function CategoryPage() {
               {isAll ? tr('Stores near you') : `${tr('Stores with')} ${categoryName}`}
             </h2>
             {categoryStores.length > 0 && (
-              <Link href="/grocery/stores" className="text-sm font-semibold text-green-600 hover:text-green-700">
+              <Link href="/stores" className="text-sm font-semibold text-green-600 hover:text-green-700">
                 {tr('View all')}
               </Link>
             )}
@@ -296,7 +296,7 @@ export default function CategoryPage() {
                 {tr('No store near you is stocking this category right now.')}
               </p>
               <Link
-                href="/grocery/stores"
+                href="/stores"
                 className="inline-block mt-3 bg-green-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-green-700 transition-colors"
               >
                 {tr('Browse stores')}
@@ -335,7 +335,7 @@ export default function CategoryPage() {
         {/* Filter & Sort Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-2">
-            <Link href="/grocery" className="flex items-center gap-1 text-sm text-slate-600 hover:text-green-600 transition-colors">
+            <Link href="/" className="flex items-center gap-1 text-sm text-slate-600 hover:text-green-600 transition-colors">
               <ArrowLeft className="w-4 h-4" />{tr('Back')}</Link>
             <span className="text-slate-300">|</span>
             <span className="text-sm text-slate-500 font-medium">{products.length} products</span>
@@ -353,7 +353,7 @@ export default function CategoryPage() {
         {/* Related Categories */}
         <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-4 snap-x -mx-2 px-2 2xs:-mx-3 2xs:px-3 xs:-mx-4 xs:px-4">
           {relatedCategories.map(cat => (
-            <Link key={cat.id} href={`/grocery/category/${cat.id}`} className={`snap-start shrink-0 px-3.5 min-h-[44px] rounded-full text-sm font-semibold transition-colors flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-green-50 hover:text-green-600 hover:border-green-200`}>
+            <Link key={cat.id} href={`/category/${cat.id}`} className={`snap-start shrink-0 px-3.5 min-h-[44px] rounded-full text-sm font-semibold transition-colors flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-green-50 hover:text-green-600 hover:border-green-200`}>
               <span>{cat.emoji}</span> {cat.name}
             </Link>
           ))}
@@ -380,7 +380,7 @@ export default function CategoryPage() {
             <span className="text-4xl mb-3 block" aria-hidden="true">{categoryEmoji}</span>
             <h2 className="text-lg font-bold text-slate-700 mb-1">Nothing in {categoryName} yet</h2>
             <p className="text-sm text-slate-500 mb-4">{tr('No store near you is stocking this category right now.')}</p>
-            <Link href="/grocery/stores" className="text-green-600 font-semibold text-sm hover:underline">{tr('Browse stores')}</Link>
+            <Link href="/stores" className="text-green-600 font-semibold text-sm hover:underline">{tr('Browse stores')}</Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 xs:gap-3 md:gap-4">

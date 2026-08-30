@@ -224,7 +224,7 @@ export default function RestaurantHomePage() {
       <section>
         <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-1 snap-x snap-mandatory">
           {PROMO_BANNERS.map(p => (
-            <Link key={p.id} href="/restaurant/list?filter=offers" id={`promo-${p.id}`}
+            <Link key={p.id} href="/list?filter=offers" id={`promo-${p.id}`}
               className={`snap-start shrink-0 w-[280px] md:w-[320px] bg-linear-to-br ${p.colors} rounded-2xl p-5 text-white relative overflow-hidden hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer block`}>
               <div className="absolute -right-4 -bottom-4 w-28 h-28 bg-white/10 rounded-full" />
               <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-white/5 rounded-full" />
@@ -290,7 +290,7 @@ export default function RestaurantHomePage() {
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">Closest to you in {defaultCity} · fastest delivery</p>
           </div>
-          <Link href="/restaurant/list?sort=nearby" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
+          <Link href="/list?sort=nearby" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             View All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -330,7 +330,7 @@ export default function RestaurantHomePage() {
         </div>
         <div className="relative z-10 flex gap-3 overflow-x-auto hide-scrollbar pb-1 snap-x snap-mandatory">
           {FLASH_DEALS.map(deal => (
-            <Link key={deal.id} href={`/restaurant/item/${deal.id}`} id={`flash-${deal.id}`}
+            <Link key={deal.id} href={`/item/${deal.id}`} id={`flash-${deal.id}`}
               className="snap-start shrink-0 w-[165px] bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer block">
               <div className="h-24 bg-linear-to-br from-orange-50 to-amber-50 flex items-center justify-center relative">
                 <span className="text-4xl group-hover:scale-110 transition-transform duration-300">{deal.img}</span>
@@ -362,7 +362,7 @@ export default function RestaurantHomePage() {
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">Highest customer ratings in {defaultCity}</p>
           </div>
-          <Link href="/restaurant/list?sort=top-rated" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
+          <Link href="/list?sort=top-rated" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             View All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -391,13 +391,13 @@ export default function RestaurantHomePage() {
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">Hand-picked favourites from top kitchens</p>
           </div>
-          <Link href="/restaurant/list?sort=featured" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
+          <Link href="/list?sort=featured" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             See All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
         <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
           {FEATURED_DISHES.map(dish => (
-            <Link key={dish.id} href={`/restaurant/item/${dish.id}`} id={`dish-${dish.id}`}
+            <Link key={dish.id} href={`/item/${dish.id}`} id={`dish-${dish.id}`}
               className="snap-start shrink-0 w-[180px] bg-white rounded-2xl border border-slate-100 overflow-hidden hover:border-orange-300 hover:shadow-xl transition-all duration-300 group cursor-pointer block">
               <div className="h-28 bg-linear-to-br from-orange-50 to-amber-50 flex items-center justify-center relative">
                 <span className="text-4xl group-hover:scale-110 transition-transform duration-300">{dish.img}</span>
@@ -431,7 +431,7 @@ export default function RestaurantHomePage() {
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">Food at your door in under 25 minutes</p>
           </div>
-          <Link href="/restaurant/list?filter=fast" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
+          <Link href="/list?filter=fast" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             View All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -480,7 +480,7 @@ export default function RestaurantHomePage() {
         </div>
         <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2 snap-x snap-mandatory">
           {SPONSORED_RESTAURANTS.map(sp => (
-            <Link key={sp.id} href={`/restaurant/${sp.id}`} id={`sponsored-${sp.id}`}
+            <Link key={sp.id} href={`/${sp.id}`} id={`sponsored-${sp.id}`}
               className={`snap-start shrink-0 w-[270px] bg-linear-to-br ${sp.color} rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group`}>
               <div className="p-5 relative">
                 <div className="absolute top-3 right-3 bg-white/20 border border-white/30 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md">SPONSORED</div>
@@ -516,7 +516,7 @@ export default function RestaurantHomePage() {
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">Save more with exclusive deals</p>
           </div>
-          <Link href="/restaurant/list?filter=offers" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
+          <Link href="/list?filter=offers" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             View All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -545,7 +545,7 @@ export default function RestaurantHomePage() {
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">Eat in · table reservations available</p>
           </div>
-          <Link href="/restaurant/list?filter=dine-in" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
+          <Link href="/list?filter=dine-in" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             View All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -574,7 +574,7 @@ export default function RestaurantHomePage() {
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">Great vegetarian & health-conscious options</p>
           </div>
-          <Link href="/restaurant/list?filter=veg" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
+          <Link href="/list?filter=veg" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             View All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>

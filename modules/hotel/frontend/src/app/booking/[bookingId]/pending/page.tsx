@@ -86,10 +86,10 @@ export default function BookingPendingPage() {
 
           {/* Actions */}
           <div className="space-y-3">
-            <Link href="/hotel-booking/my-bookings" className="block w-full bg-rose-600 text-white font-bold py-4 rounded-2xl hover:bg-rose-700 transition-colors">
+            <Link href="/my-bookings" className="block w-full bg-rose-600 text-white font-bold py-4 rounded-2xl hover:bg-rose-700 transition-colors">
               Go to My Bookings
             </Link>
-            <Link href="/hotel-booking" className="block w-full bg-white border border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors">
+            <Link href="/" className="block w-full bg-white border border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors">
               Browse More Hotels
             </Link>
           </div>

@@ -150,7 +150,7 @@ function TrackingContent() {
         <AlertTriangle className="w-10 h-10 text-red-300 mx-auto mb-3" />
         <h1 className="text-xl font-bold text-slate-800 mb-1">{tr('Tracking unavailable')}</h1>
         <p className="text-sm text-slate-500 mb-6">{error}</p>
-        <Link href="/grocery/orders" className="inline-flex items-center gap-1.5 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700">{tr('Back to orders')}</Link>
+        <Link href="/orders" className="inline-flex items-center gap-1.5 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700">{tr('Back to orders')}</Link>
       </div>
     );
   }
@@ -159,7 +159,7 @@ function TrackingContent() {
     <div className="min-h-screen bg-slate-50">
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link href={`/grocery/orders/${orderId}`} className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm font-medium mb-2 transition-colors">
+          <Link href={`/orders/${orderId}`} className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm font-medium mb-2 transition-colors">
             <ArrowLeft className="w-4 h-4" />{tr('Back to order')}</Link>
           <h1 className="text-xl font-black text-slate-900">{tr('Track order')}</h1>
           <p className="text-sm text-slate-500">

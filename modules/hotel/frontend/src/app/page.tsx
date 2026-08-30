@@ -63,9 +63,9 @@ const DEALS = [
 ];
 
 const QUICK_LINKS = [
-  { href: '/hotel-booking/faq',                 label: 'FAQ',                icon: <HelpCircle className="w-4 h-4" />, color: 'text-blue-600 bg-blue-50' },
-  { href: '/hotel-booking/terms',               label: 'Terms & Conditions', icon: <FileText className="w-4 h-4" />,   color: 'text-slate-600 bg-slate-50' },
-  { href: '/hotel-booking/cancellation-policy',  label: 'Cancellation Policy', icon: <Shield className="w-4 h-4" />,   color: 'text-amber-600 bg-amber-50' },
+  { href: '/faq',                 label: 'FAQ',                icon: <HelpCircle className="w-4 h-4" />, color: 'text-blue-600 bg-blue-50' },
+  { href: '/terms',               label: 'Terms & Conditions', icon: <FileText className="w-4 h-4" />,   color: 'text-slate-600 bg-slate-50' },
+  { href: '/cancellation-policy',  label: 'Cancellation Policy', icon: <Shield className="w-4 h-4" />,   color: 'text-amber-600 bg-amber-50' },
   { href: '/support/hotel-booking',              label: 'Customer Support',   icon: <Headphones className="w-4 h-4" />, color: 'text-emerald-600 bg-emerald-50' },
   { href: '/hotel-owner',                        label: 'List Your Property', icon: <Building2 className="w-4 h-4" />,  color: 'text-rose-600 bg-rose-50' },
 ];
@@ -149,13 +149,13 @@ export default function HotelBookingPage() {
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-rose-500" /> {section.title || 'Popular Destinations'}
               </h2>
-              <Link href="/hotel-booking/destinations" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
+              <Link href="/destinations" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
                 Explore all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {sortedCities.map(c => (
-                <Link key={c.name} href={`/hotel-booking/search?city=${encodeURIComponent(c.name)}`}
+                <Link key={c.name} href={`/search?city=${encodeURIComponent(c.name)}`}
                   className="group relative overflow-hidden rounded-2xl h-32 md:h-36 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
                   <div className={`absolute inset-0 bg-linear-to-br ${c.gradient}`} />
                   <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-all" />
@@ -176,13 +176,13 @@ export default function HotelBookingPage() {
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-rose-500" /> {section.title || 'Featured Hotels'}
               </h2>
-              <Link href="/hotel-booking/search" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
+              <Link href="/search" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
             <div className="scroll-x md:grid md:grid-cols-2 lg:grid-cols-3 gap-5">
               {POPULAR_HOTELS.map(h => (
-                <Link key={h.id} href={`/hotel-booking/hotel/${h.id}`}
+                <Link key={h.id} href={`/hotel/${h.id}`}
                   className="snap-card md:snap-card-none bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                   <div className={`relative h-44 bg-linear-to-br ${h.gradient} flex items-center justify-center overflow-hidden`}>
                     <span className="text-6xl opacity-60 group-hover:scale-110 transition-transform duration-500">{h.imageEmoji}</span>
@@ -229,13 +229,13 @@ export default function HotelBookingPage() {
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-rose-500" /> {section.title || 'Trending Properties'}
               </h2>
-              <Link href="/hotel-booking/search?sort=trending" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
+              <Link href="/search?sort=trending" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
             <div className="scroll-x md:grid md:grid-cols-2 lg:grid-cols-3 gap-5">
               {TRENDING_HOTELS.map(h => (
-                <Link key={h.id} href={`/hotel-booking/hotel/${h.id}`}
+                <Link key={h.id} href={`/hotel/${h.id}`}
                   className="snap-card md:snap-card-none bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                   <div className={`relative h-44 bg-linear-to-br ${h.gradient} flex items-center justify-center overflow-hidden`}>
                     <span className="text-6xl opacity-60 group-hover:scale-110 transition-transform duration-500">{h.imageEmoji}</span>
@@ -282,13 +282,13 @@ export default function HotelBookingPage() {
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-rose-500" /> {section.title || 'Nearby Stays'}
               </h2>
-              <Link href="/hotel-booking/search?nearby=true" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
+              <Link href="/search?nearby=true" className="text-xs font-semibold text-rose-600 flex items-center gap-1 hover:gap-2 transition-all">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
             <div className="scroll-x md:grid md:grid-cols-2 lg:grid-cols-3 gap-5">
               {NEARBY_HOTELS.map(h => (
-                <Link key={h.id} href={`/hotel-booking/hotel/${h.id}`}
+                <Link key={h.id} href={`/hotel/${h.id}`}
                   className="snap-card md:snap-card-none bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                   <div className={`relative h-44 bg-linear-to-br ${h.gradient} flex items-center justify-center overflow-hidden`}>
                     <span className="text-6xl opacity-60 group-hover:scale-110 transition-transform duration-500">{h.imageEmoji}</span>
@@ -338,7 +338,7 @@ export default function HotelBookingPage() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {COLLECTIONS.map(col => (
-                <Link key={col.slug} href={`/hotel-booking/${col.slug}`}
+                <Link key={col.slug} href={`/${col.slug}`}
                   className="group relative overflow-hidden rounded-2xl h-28 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
                   <div className={`absolute inset-0 bg-linear-to-br ${col.gradient} opacity-90 group-hover:opacity-100 transition-opacity`} />
                   <div className="relative z-10 p-4 flex flex-col justify-between h-full text-white">
@@ -394,7 +394,7 @@ export default function HotelBookingPage() {
                   <input type="date" value={checkout} onChange={e => setCheckout(e.target.value)} aria-label="Check-out date" className="w-full pl-10 pr-3 py-3 rounded-xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-rose-500 transition-all" />
                 </div>
                 <Link
-                  href={`/hotel-booking/search?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&guests=${guests}&rooms=${rooms}`}
+                  href={`/search?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&guests=${guests}&rooms=${rooms}`}
                   className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg"
                 >
                   <Search className="w-4 h-4" /> Search
@@ -439,9 +439,9 @@ export default function HotelBookingPage() {
         <section>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { href: '/hotel-booking/destinations', icon: <Compass className="w-5 h-5" />, label: 'Explore Destinations', color: 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100' },
-              { href: '/hotel-booking/map',          icon: <Map className="w-5 h-5" />,     label: 'Map Search',           color: 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100' },
-              { href: '/hotel-booking/deals',        icon: <Tag className="w-5 h-5" />,     label: 'Deals & Offers',       color: 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100' },
+              { href: '/destinations', icon: <Compass className="w-5 h-5" />, label: 'Explore Destinations', color: 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100' },
+              { href: '/map',          icon: <Map className="w-5 h-5" />,     label: 'Map Search',           color: 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100' },
+              { href: '/deals',        icon: <Tag className="w-5 h-5" />,     label: 'Deals & Offers',       color: 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100' },
             ].map(action => (
               <Link key={action.href} href={action.href}
                 className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all hover:-translate-y-0.5 hover:shadow-md ${action.color}`}

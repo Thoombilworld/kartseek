@@ -149,7 +149,7 @@ function SearchPageContent() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    router.push(`/marketplace/search?q=${encodeURIComponent(query)}`);
+    router.push(`/search?q=${encodeURIComponent(query)}`);
   }
 
   function toggleBrand(b: string) {

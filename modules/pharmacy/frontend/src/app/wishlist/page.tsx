@@ -21,7 +21,7 @@ export default function WishlistPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <Link href="/pharmacy" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeft className="w-5 h-5 text-gray-600" /></Link>
+          <Link href="/" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeft className="w-5 h-5 text-gray-600" /></Link>
           <h1 className="text-lg font-bold flex-1">My Wishlist</h1>
           <span className="text-sm text-gray-500">{items.length} items</span>
         </div>
@@ -32,7 +32,7 @@ export default function WishlistPage() {
           <div className="text-center py-20">
             <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 font-medium">Your wishlist is empty</p>
-            <Link href="/pharmacy/search" className="inline-block mt-4 text-teal-600 font-bold hover:underline">Browse medicines</Link>
+            <Link href="/search" className="inline-block mt-4 text-teal-600 font-bold hover:underline">Browse medicines</Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

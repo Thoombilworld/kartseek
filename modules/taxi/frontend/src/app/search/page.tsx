@@ -244,7 +244,7 @@ function SearchResults() {
             )}
             <div className="flex justify-between text-sm"><span className="text-slate-500">Pickup</span><span className="font-bold truncate max-w-[180px]">{pickup}</span></div>
           </div>
-          <Link href="/taxi" className="block w-full bg-black text-white font-bold py-3 rounded-xl">Back to Home</Link>
+          <Link href="/" className="block w-full bg-black text-white font-bold py-3 rounded-xl">Back to Home</Link>
         </div>
       </div>
     );

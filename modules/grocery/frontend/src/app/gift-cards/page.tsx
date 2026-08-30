@@ -22,7 +22,7 @@ export default function GroceryGiftCardsPage() {
       description={
         'Buying and redeeming grocery gift cards is not supported yet — there is no balance to hold them against. Coupon codes are the discount mechanism currently available at checkout.'
       }
-      alternative={{ href: '/grocery/coupons', label: 'See available coupons' }}
+      alternative={{ href: '/coupons', label: 'See available coupons' }}
     />
   );
 }

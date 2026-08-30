@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { doctorApi } from '@/lib/api/doctor';
 
 export default function PrescriptionDetailPage() {
@@ -35,7 +36,7 @@ export default function PrescriptionDetailPage() {
       <div className="min-h-screen bg-linear-to-br from-slate-50 to-violet-50/30 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-slate-700">Prescription not found</h2>
-          <Link href="/doctor/prescriptions" className="text-violet-600 font-bold mt-4 inline-block hover:underline">← Back to Prescriptions</Link>
+          <Link href="/prescriptions" className="text-violet-600 font-bold mt-4 inline-block hover:underline">← Back to Prescriptions</Link>
         </div>
       </div>
     );
@@ -46,7 +47,7 @@ export default function PrescriptionDetailPage() {
       <div className="max-w-3xl mx-auto px-6 py-10">
         {/* Header */}
         <div className="mb-8">
-          <Link href="/doctor/prescriptions" className="text-sm font-bold text-violet-600 hover:underline mb-2 inline-block">← My Prescriptions</Link>
+          <Link href="/prescriptions" className="text-sm font-bold text-violet-600 hover:underline mb-2 inline-block">← My Prescriptions</Link>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Prescription Details</h1>
           <p className="text-slate-500 mt-1">Issued on {rx.issuedAt ? new Date(rx.issuedAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '—'}</p>
         </div>
@@ -113,10 +114,10 @@ export default function PrescriptionDetailPage() {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             Download PDF
           </button>
-          <Link href="/pharmacy" className="flex-1 min-w-[180px] py-4 bg-linear-to-r from-emerald-500 to-teal-600 text-white font-extrabold rounded-xl hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-200 transition flex items-center justify-center gap-2">
+          <ZoneLink href="/pharmacy" className="flex-1 min-w-[180px] py-4 bg-linear-to-r from-emerald-500 to-teal-600 text-white font-extrabold rounded-xl hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-200 transition flex items-center justify-center gap-2">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
             Order Medicines from Kartseek Pharmacy
-          </Link>
+          </ZoneLink>
         </div>
       </div>
     </div>

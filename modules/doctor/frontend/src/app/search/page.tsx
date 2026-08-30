@@ -249,7 +249,7 @@ export default function DoctorSearchPage() {
             {filtered.map((doc) => (
               <Link
                 key={doc.id}
-                href={`/doctor/profile/${doc.id}`}
+                href={`/profile/${doc.id}`}
                 className="block bg-white border border-slate-200 rounded-2xl hover:border-rose-300 hover:shadow-lg transition-all duration-200 group"
               >
                 <div className="p-5">

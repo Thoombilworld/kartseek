@@ -62,6 +62,9 @@
       "@/components/ui/*": [
         "../../../packages/shared-ui/src/ui-widgets/*"
       ],
+      "@/components/zone-link": [
+        "../../../packages/shared-ui/src/zone-link"
+      ],
       "@/hooks/*": [
         "../../../packages/shared-core/src/hooks/*"
       ],

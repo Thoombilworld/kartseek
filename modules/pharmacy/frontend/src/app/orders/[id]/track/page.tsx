@@ -27,7 +27,7 @@ export default function PharmacyOrderTrackPage() {
     <OrderTracking
       module="pharmacy"
       orderId={id}
-      backHref={`/pharmacy/orders/${encodeURIComponent(id)}`}
+      backHref={`/orders/${encodeURIComponent(id)}`}
       load={async (orderId) => {
         const order: any = await pharmacyApi.getOrder(orderId);
 

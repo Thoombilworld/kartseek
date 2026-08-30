@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { useParams, useRouter } from 'next/navigation';
 import { getOrderById, cancelOrder, getSellerById } from '@/lib/api/marketplace';
 import { useToast } from '@/lib/contexts/toast-context';
@@ -212,7 +213,7 @@ export default function OrderDetailPage() {
         <Package className="w-14 h-14 text-slate-200 mx-auto mb-4" />
         <h1 className="text-xl font-black text-slate-900 mb-2">Order not found</h1>
         <p className="text-slate-500 text-sm mb-6">We couldn&apos;t find order {oid}. It may have been removed, or you may need to sign in.</p>
-        <Link href="/marketplace/orders" className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700">View My Orders</Link>
+        <Link href="/orders" className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700">View My Orders</Link>
       </div>
     );
   }
@@ -342,14 +343,14 @@ export default function OrderDetailPage() {
                 merchant who actually sold the goods, and labels their tax
                 registration by their own jurisdiction. */}
             <Link
-              href={`/marketplace/orders/${encodeURIComponent(oid)}/invoice`}
+              href={`/orders/${encodeURIComponent(oid)}/invoice`}
               className="w-full py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4" />View Invoice
             </Link>
             {isReturnable(o.status) && <button onClick={() => { setShowReturnModal(true); setReturnStep(0); setReturnSubmitted(false); }} className="w-full py-2.5 border border-violet-200 rounded-lg text-sm font-bold text-violet-600 hover:bg-violet-50 flex items-center justify-center gap-2"><RotateCcw className="w-4 h-4" />Return / Replace</button>}
-            <Link href={`/support?orderId=${o.id}`} className="w-full py-2.5 border border-amber-200 rounded-lg text-sm font-bold text-amber-700 hover:bg-amber-50 flex items-center justify-center gap-2"><AlertTriangle className="w-4 h-4" />File Dispute</Link>
-            <Link href="/support" className="w-full py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2"><HelpCircle className="w-4 h-4" />Need Help?</Link>
+            <ZoneLink href={`/support?orderId=${o.id}`} className="w-full py-2.5 border border-amber-200 rounded-lg text-sm font-bold text-amber-700 hover:bg-amber-50 flex items-center justify-center gap-2"><AlertTriangle className="w-4 h-4" />File Dispute</ZoneLink>
+            <ZoneLink href="/support" className="w-full py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2"><HelpCircle className="w-4 h-4" />Need Help?</ZoneLink>
           </div>
         </div>
       </div>

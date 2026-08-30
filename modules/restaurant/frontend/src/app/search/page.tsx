@@ -124,7 +124,7 @@ export default function RestaurantSearchPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filtered.map(r => (
-              <Link key={r.id} href={`/restaurant/${r.id}`} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+              <Link key={r.id} href={`/${r.id}`} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                 <div className="aspect-video bg-slate-100 overflow-hidden relative">
                   <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80" alt={r.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   {r.offer && (

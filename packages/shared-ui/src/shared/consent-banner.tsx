@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '../zone-link';
 import { Cookie, Shield, ChevronDown, Check } from 'lucide-react';
 import { useRegion } from '@/lib/contexts/region-context';
 import {
@@ -153,9 +154,9 @@ export function ConsentBanner() {
                 We use cookies to keep you signed in and secure your checkout. With your consent we
                 also measure how the site is used and personalise what you see.
                 {' '}Your data is handled under <strong>{compliance.law}</strong> in {country.name}.{' '}
-                <Link href="/privacy" className="text-blue-600 hover:underline font-semibold">
+                <ZoneLink href="/privacy" className="text-blue-600 hover:underline font-semibold">
                   Read the policy
-                </Link>
+                </ZoneLink>
               </p>
             </div>
           </div>

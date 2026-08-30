@@ -34,12 +34,12 @@ const RECENT_SEARCHES = [
 ];
 
 const COLLECTIONS = [
-  { name: 'Luxury Hotels', emoji: '👑', desc: 'Five-star luxury', count: 245, href: '/hotel-booking/luxury-hotels', gradient: 'from-amber-500 to-orange-600' },
-  { name: 'Budget Stays', emoji: '💰', desc: 'Best value picks', count: 890, href: '/hotel-booking/budget-hotels', gradient: 'from-emerald-500 to-teal-600' },
-  { name: 'Business Hotels', emoji: '💼', desc: 'Work-ready rooms', count: 320, href: '/hotel-booking/business-hotels', gradient: 'from-blue-500 to-indigo-600' },
-  { name: 'Family Resorts', emoji: '👨‍👩‍👧‍👦', desc: 'Kid-friendly stays', count: 180, href: '/hotel-booking/family-hotels', gradient: 'from-pink-500 to-rose-600' },
-  { name: 'Resorts & Villas', emoji: '🏖️', desc: 'Escape & unwind', count: 150, href: '/hotel-booking/resorts', gradient: 'from-cyan-500 to-blue-600' },
-  { name: 'Serviced Apartments', emoji: '🏠', desc: 'Home away from home', count: 210, href: '/hotel-booking/serviced-apartments', gradient: 'from-violet-500 to-purple-600' },
+  { name: 'Luxury Hotels', emoji: '👑', desc: 'Five-star luxury', count: 245, href: '/luxury-hotels', gradient: 'from-amber-500 to-orange-600' },
+  { name: 'Budget Stays', emoji: '💰', desc: 'Best value picks', count: 890, href: '/budget-hotels', gradient: 'from-emerald-500 to-teal-600' },
+  { name: 'Business Hotels', emoji: '💼', desc: 'Work-ready rooms', count: 320, href: '/business-hotels', gradient: 'from-blue-500 to-indigo-600' },
+  { name: 'Family Resorts', emoji: '👨‍👩‍👧‍👦', desc: 'Kid-friendly stays', count: 180, href: '/family-hotels', gradient: 'from-pink-500 to-rose-600' },
+  { name: 'Resorts & Villas', emoji: '🏖️', desc: 'Escape & unwind', count: 150, href: '/resorts', gradient: 'from-cyan-500 to-blue-600' },
+  { name: 'Serviced Apartments', emoji: '🏠', desc: 'Home away from home', count: 210, href: '/serviced-apartments', gradient: 'from-violet-500 to-purple-600' },
 ];
 
 export default function DestinationsPage() {
@@ -55,7 +55,7 @@ export default function DestinationsPage() {
       <header className="bg-linear-to-br from-rose-600 via-rose-700 to-pink-700 text-white">
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-8">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/hotel-booking" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
+            <Link href="/" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <h1 className="text-xl font-bold">Explore Destinations</h1>
@@ -84,7 +84,7 @@ export default function DestinationsPage() {
               {RECENT_SEARCHES.map(s => (
                 <Link
                   key={s.query}
-                  href={`/hotel-booking/search?q=${encodeURIComponent(s.query)}`}
+                  href={`/search?q=${encodeURIComponent(s.query)}`}
                   className="shrink-0 bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 hover:border-rose-300 hover:shadow-md transition-all"
                 >
                   <MapPin className="w-4 h-4 text-rose-500" />
@@ -107,7 +107,7 @@ export default function DestinationsPage() {
             {filteredCities.map(city => (
               <Link
                 key={city.city}
-                href={`/hotel-booking/search?city=${encodeURIComponent(city.city)}`}
+                href={`/search?city=${encodeURIComponent(city.city)}`}
                 className="group bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
               >
                 <div className="relative h-36 overflow-hidden">
@@ -145,7 +145,7 @@ export default function DestinationsPage() {
             {POPULAR_AREAS.map(area => (
               <Link
                 key={area.name}
-                href={`/hotel-booking/search?area=${encodeURIComponent(area.name)}`}
+                href={`/search?area=${encodeURIComponent(area.name)}`}
                 className="bg-white rounded-xl border border-slate-100 p-4 hover:border-rose-200 hover:shadow-md transition-all group"
               >
                 <span className="text-2xl mb-2 block">{area.emoji}</span>

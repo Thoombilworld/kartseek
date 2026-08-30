@@ -87,7 +87,7 @@ export default function GenericAlternativesPage() {
                   </span>
                 )}
               </div>
-              <Link href={`/pharmacy/search?q=${encodeURIComponent(m.generic)}`}
+              <Link href={`/search?q=${encodeURIComponent(m.generic)}`}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1">
                 <Pill className="w-3 h-3" /> Buy Generic
               </Link>

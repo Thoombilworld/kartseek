@@ -89,7 +89,7 @@ export default function BookingConfirmationPage() {
         <button className="w-full bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold text-sm hover:bg-slate-50 transition-colors flex items-center justify-center gap-2" aria-label="Download invoice PDF">
           <Download className="w-4 h-4" /> Download Invoice
         </button>
-        <Link href={`/hotel-booking/review/${bookingId || 'HBK-001'}`}
+        <Link href={`/review/${bookingId || 'HBK-001'}`}
           className="w-full bg-amber-50 border border-amber-200 text-amber-700 px-6 py-3 rounded-xl font-bold text-sm hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
         >
           <Star className="w-4 h-4" /> Rate Your Stay & Earn Points
@@ -102,12 +102,12 @@ export default function BookingConfirmationPage() {
             <Mail className="w-4 h-4" /> Email
           </a>
         </div>
-        <Link href="/hotel-booking/my-bookings"
+        <Link href="/my-bookings"
           className="w-full bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
         >
           View My Bookings <ChevronRight className="w-4 h-4" />
         </Link>
-        <Link href="/hotel-booking"
+        <Link href="/"
           className="w-full bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition-colors text-center flex items-center justify-center gap-2"
         >
           Browse More Hotels <ArrowRight className="w-4 h-4" />

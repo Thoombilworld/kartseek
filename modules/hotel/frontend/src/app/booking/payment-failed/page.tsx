@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { XCircle, RefreshCw, CreditCard, Phone, MessageSquare, Shield, AlertTriangle } from 'lucide-react';
 
 export default function PaymentFailedPage() {
@@ -76,12 +77,12 @@ export default function PaymentFailedPage() {
 
           {/* Actions */}
           <div className="space-y-3">
-            <Link href="/hotel-booking" className="w-full bg-rose-600 text-white font-bold py-4 rounded-2xl hover:bg-rose-700 transition-colors flex items-center justify-center gap-2">
+            <Link href="/" className="w-full bg-rose-600 text-white font-bold py-4 rounded-2xl hover:bg-rose-700 transition-colors flex items-center justify-center gap-2">
               <RefreshCw className="w-4 h-4" /> Try Again
             </Link>
-            <Link href="/support/hotel-booking" className="w-full bg-white border border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
+            <ZoneLink href="/support/hotel-booking" className="w-full bg-white border border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
               <MessageSquare className="w-4 h-4" /> Contact Support
-            </Link>
+            </ZoneLink>
           </div>
         </div>
       </div>

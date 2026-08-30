@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import {
   ArrowLeft, ChevronDown, ChevronUp, Search,
   HelpCircle, CalendarDays, CreditCard, Shield, Clock,
@@ -97,7 +98,7 @@ export default function FAQPage() {
       <header className="bg-linear-to-br from-rose-600 to-rose-800 text-white">
         <div className="max-w-4xl mx-auto px-4 pt-4 pb-8">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/hotel-booking" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
+            <Link href="/" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <h1 className="text-xl font-bold">Frequently Asked Questions</h1>
@@ -160,9 +161,9 @@ export default function FAQPage() {
         <div className="bg-linear-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-center text-white">
           <h3 className="font-bold text-lg mb-2">Still have questions?</h3>
           <p className="text-slate-300 text-sm mb-4">Our support team is available 24/7</p>
-          <Link href="/support/hotel-booking" className="inline-flex items-center gap-2 bg-white text-slate-900 font-bold px-6 py-3 rounded-xl hover:bg-slate-100 transition-colors">
+          <ZoneLink href="/support/hotel-booking" className="inline-flex items-center gap-2 bg-white text-slate-900 font-bold px-6 py-3 rounded-xl hover:bg-slate-100 transition-colors">
             Contact Support
-          </Link>
+          </ZoneLink>
         </div>
       </div>
     </div>

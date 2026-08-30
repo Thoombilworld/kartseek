@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import {
   MapPin, Clock, Navigation, CreditCard, Star, Download,
   Share2, ChevronLeft, Shield, Car, DollarSign, Route,
@@ -62,7 +63,7 @@ export default function RideReceiptPage() {
       {/* ── Header ────────────────────────────────────────────────── */}
       <div className="bg-black py-6 px-4">
         <div className="max-w-2xl mx-auto">
-          <Link href="/taxi/rides" className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white text-sm font-medium mb-4 transition-colors">
+          <Link href="/rides" className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white text-sm font-medium mb-4 transition-colors">
             <ChevronLeft className="w-4 h-4" /> Back to Rides
           </Link>
           <div className="flex items-center justify-between">
@@ -247,9 +248,9 @@ export default function RideReceiptPage() {
 
         {/* ── Help Link ───────────────────────────────────────────── */}
         <div className="text-center pb-6">
-          <Link href="/support" className="text-sm text-slate-500 hover:text-yellow-400 transition-colors">
+          <ZoneLink href="/support" className="text-sm text-slate-500 hover:text-yellow-400 transition-colors">
             Need help with this ride? <span className="font-semibold underline">Contact Support</span>
-          </Link>
+          </ZoneLink>
         </div>
       </div>
     </div>

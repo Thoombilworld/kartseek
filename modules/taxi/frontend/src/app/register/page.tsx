@@ -62,7 +62,7 @@ export default function TaxiRegisterPage() {
           </div>
           <h2 className="text-2xl font-black mb-2">Account Created!</h2>
           <p className="text-slate-500 text-sm mb-6">Welcome to KARTSEEK Rides, {form.name}. Your account is verified and ready.</p>
-          <button onClick={() => router.push('/taxi')} className="w-full bg-black text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-colors">
+          <button onClick={() => router.push('/')} className="w-full bg-black text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-colors">
             Start Booking Rides
           </button>
         </div>
@@ -73,7 +73,7 @@ export default function TaxiRegisterPage() {
   return (
     <div className="min-h-[calc(100vh-64px)] bg-slate-900 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        <Link href="/taxi/login" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
+        <Link href="/login" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Login
         </Link>
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
@@ -157,7 +157,7 @@ export default function TaxiRegisterPage() {
               </button>
 
               <p className="text-sm text-slate-500 text-center">
-                Already have an account? <Link href="/taxi/login" className="text-yellow-600 font-bold">Sign in</Link>
+                Already have an account? <Link href="/login" className="text-yellow-600 font-bold">Sign in</Link>
               </p>
             </form>
           ) : (

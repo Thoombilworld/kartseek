@@ -282,15 +282,6 @@
         "tsConfigPath": "apps/admin-service/tsconfig.app.json"
       }
     },
-    "franchise-service": {
-      "type": "application",
-      "root": "apps/franchise-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/franchise-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/franchise-service/tsconfig.app.json"
-      }
-    },
     "audit-log-service": {
       "type": "application",
       "root": "apps/audit-log-service",

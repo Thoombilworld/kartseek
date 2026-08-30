@@ -2,13 +2,14 @@
 import React, { useState } from 'react';
 import { AccountMenu } from '@/components/shared/account-menu';
 import Link from 'next/link';
+import { ZoneLink } from '@/components/zone-link';
 import { Car, MapPin, Navigation, Clock, Menu, X, ChevronDown, User } from 'lucide-react';
 
 const tabs = [
-  { label: 'Ride', href: '/taxi' },
-  { label: 'Drive', href: '/taxi/drive' },
-  { label: 'Rentals', href: '/taxi/rentals' },
-  { label: 'Intercity', href: '/taxi/intercity' },
+  { label: 'Ride', href: '/' },
+  { label: 'Drive', href: '/drive' },
+  { label: 'Rentals', href: '/rentals' },
+  { label: 'Intercity', href: '/intercity' },
 ];
 
 export default function TaxiLayout({ children }: { children: React.ReactNode }) {
@@ -19,7 +20,7 @@ export default function TaxiLayout({ children }: { children: React.ReactNode }) 
       <header className="bg-black text-white sticky top-0 z-50 shadow-lg">
         <div className="max-w-7xl 3xl:max-w-app-wide 4xl:max-w-app-full mx-auto px-3 xs:px-4 3xl:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/taxi" className="flex items-center gap-2 shrink-0 min-h-[44px]">
+          <Link href="/" className="flex items-center gap-2 shrink-0 min-h-[44px]">
             <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center">
               <Car className="w-5 h-5 text-black" />
             </div>
@@ -51,19 +52,19 @@ export default function TaxiLayout({ children }: { children: React.ReactNode }) 
             {/* Carries this module's sign-out control — see AccountMenu. */}
             <AccountMenu className="text-sm font-semibold text-white hover:text-yellow-400" />
             <Link
-              href="/taxi/rides"
+              href="/rides"
               className="text-sm font-semibold text-white hover:text-yellow-400 transition-colors flex items-center gap-1.5"
             >
               <Clock className="w-4 h-4" /> My Rides
             </Link>
             <Link
-              href="/taxi/drive/login"
+              href="/drive/login"
               className="text-sm font-semibold text-white hover:text-yellow-400 transition-colors"
             >
               Driver Login
             </Link>
             <Link
-              href="/taxi/login"
+              href="/login"
               className="bg-white text-black px-5 py-2 rounded-full text-sm font-bold hover:bg-yellow-400 transition-colors"
             >
               Log in
@@ -95,28 +96,28 @@ export default function TaxiLayout({ children }: { children: React.ReactNode }) 
             ))}
             <div className="pt-3 border-t border-white/10 space-y-2">
               <Link
-                href="/taxi/profile"
+                href="/profile"
                 onClick={() => setMenuOpen(false)}
                 className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-yellow-400 flex items-center gap-2"
               >
                 <User className="w-4 h-4" /> Profile
               </Link>
               <Link
-                href="/taxi/rides"
+                href="/rides"
                 onClick={() => setMenuOpen(false)}
                 className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-yellow-400 flex items-center gap-2"
               >
                 <Clock className="w-4 h-4" /> My Rides
               </Link>
               <Link
-                href="/taxi/drive/login"
+                href="/drive/login"
                 onClick={() => setMenuOpen(false)}
                 className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-yellow-400"
               >
                 Driver Login
               </Link>
               <Link
-                href="/taxi/login"
+                href="/login"
                 onClick={() => setMenuOpen(false)}
                 className="block w-full bg-yellow-400 text-black px-4 py-3 rounded-xl text-sm font-bold text-center"
               >
@@ -141,11 +142,11 @@ export default function TaxiLayout({ children }: { children: React.ReactNode }) 
               gap as often as the link. `gap` shrinks as the padding grows so the
               row keeps its width. */}
           <nav className="flex flex-wrap justify-center gap-x-2 gap-y-1" aria-label="Rides">
-            <Link href="/taxi" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Ride</Link>
-            <Link href="/taxi/drive" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Drive</Link>
-            <Link href="/taxi/rentals" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Rentals</Link>
-            <Link href="/taxi/intercity" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Intercity</Link>
-            <Link href="/support" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Support</Link>
+            <Link href="/" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Ride</Link>
+            <Link href="/drive" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Drive</Link>
+            <Link href="/rentals" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Rentals</Link>
+            <Link href="/intercity" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Intercity</Link>
+            <ZoneLink href="/support" className="inline-flex items-center px-2 min-h-[44px] hover:text-yellow-400 transition-colors">Support</ZoneLink>
           </nav>
         </div>
       </footer>

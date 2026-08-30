@@ -57,8 +57,8 @@ function normalise(order: any): HistoryRow {
     currency: null,
     icon: TYPE_ICON[type] ?? '🍔',
     kind: type,
-    detailHref: `/restaurant/orders/${encodeURIComponent(String(reference ?? order.id))}`,
-    trackHref: `/restaurant/orders/${encodeURIComponent(String(reference ?? order.id))}/track`,
+    detailHref: `/orders/${encodeURIComponent(String(reference ?? order.id))}`,
+    trackHref: `/orders/${encodeURIComponent(String(reference ?? order.id))}/track`,
     searchText: itemNames.join(' '),
   };
 }
@@ -68,7 +68,7 @@ export default function RestaurantOrdersPage() {
     <OrderHistory
       module="restaurant"
       heading="My food orders"
-      backHref="/restaurant"
+      backHref="/"
       searchPlaceholder="Search by restaurant, dish or order number…"
       filters={[
         { key: 'delivery', label: 'Delivery', match: (r) => r.kind === 'DELIVERY' },

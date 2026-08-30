@@ -49,7 +49,7 @@ export default function DrivePage() {
             <a href="#apply" className="bg-yellow-400 hover:bg-yellow-300 text-black font-black px-8 py-4 rounded-2xl text-lg transition-all">
               Apply to Drive
             </a>
-            <Link href="/taxi/drive/login" className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all">
+            <Link href="/drive/login" className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all">
               Driver Login
             </Link>
           </div>
@@ -106,7 +106,7 @@ export default function DrivePage() {
                 <div className="text-5xl mb-4">🎉</div>
                 <h3 className="text-xl font-black mb-2">Application Received!</h3>
                 <p className="text-slate-500 text-sm mb-4">Our team will contact you within 24 hours.</p>
-                <Link href="/taxi" className="text-yellow-600 font-bold hover:underline">Back to home</Link>
+                <Link href="/" className="text-yellow-600 font-bold hover:underline">Back to home</Link>
               </div>
             ) : (
               <>

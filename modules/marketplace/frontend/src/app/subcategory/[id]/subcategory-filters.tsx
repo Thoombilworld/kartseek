@@ -168,7 +168,7 @@ export default function SubcategoryFilters({
                 <p className="text-slate-500 text-sm mb-4">This subcategory has no products listed at the moment.</p>
               </>
             )}
-            <Link href="/marketplace/category-list" className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">
+            <Link href="/category-list" className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">
               Browse Categories
             </Link>
           </div>

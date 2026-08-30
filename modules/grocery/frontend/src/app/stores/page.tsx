@@ -172,7 +172,7 @@ export default function GroceryStoresPage() {
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/grocery" className="w-11 h-11 shrink-0 bg-white border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm" aria-label={tr('Back')}>
+        <Link href="/" className="w-11 h-11 shrink-0 bg-white border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm" aria-label={tr('Back')}>
           <ArrowLeft className="w-4 h-4 text-slate-600" />
         </Link>
         <div className="flex-1">

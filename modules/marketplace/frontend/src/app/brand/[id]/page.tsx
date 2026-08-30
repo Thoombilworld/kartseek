@@ -158,13 +158,13 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(59,130,246,0.15),transparent_60%)]"></div>
         <div className="max-w-7xl mx-auto px-4 py-12 md:py-16 relative z-10">
           <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
-            <Link href="/marketplace" className="hover:text-white transition-colors">Home</Link>
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
             <span>/</span>
             {/* Labelled for where it actually goes. There is no brands index
                 route — only /brands/feed and /brands/following — and this has
                 always pointed at the category list, so "Brands" promised a page
                 that does not exist. */}
-            <Link href="/marketplace/category-list" className="hover:text-white transition-colors">Categories</Link>
+            <Link href="/category-list" className="hover:text-white transition-colors">Categories</Link>
             <span>/</span>
             <span className="text-white font-medium">{brandName}</span>
           </div>
@@ -220,7 +220,7 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
             <Megaphone className="w-5 h-5 text-blue-600" />
             Brand Updates
           </h2>
-          <Link href="/marketplace/brands/feed" className="text-sm text-blue-600 hover:underline font-semibold flex items-center gap-1">
+          <Link href="/brands/feed" className="text-sm text-blue-600 hover:underline font-semibold flex items-center gap-1">
             View all updates <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
@@ -269,7 +269,7 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
             <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <h3 className="font-bold text-slate-800 mb-1">No products from {brandName} yet</h3>
             <p className="text-sm text-slate-500 mb-6">Follow this brand to hear when they list something.</p>
-            <Link href="/marketplace" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-colors">
+            <Link href="/" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-colors">
               Browse the marketplace
             </Link>
           </div>

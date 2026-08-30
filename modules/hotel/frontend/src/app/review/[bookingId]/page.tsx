@@ -47,10 +47,10 @@ export default function HotelReviewPage() {
           <Sparkles className="w-4 h-4" /> +{pointsEarned} Stay Points earned!
         </div>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
-          <Link href="/hotel-booking/my-bookings" className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-sm text-center transition-colors">
+          <Link href="/my-bookings" className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-sm text-center transition-colors">
             View My Bookings
           </Link>
-          <Link href="/hotel-booking" className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl text-sm text-center transition-colors">
+          <Link href="/" className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl text-sm text-center transition-colors">
             Browse More Hotels
           </Link>
         </div>

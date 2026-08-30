@@ -123,7 +123,7 @@ export default function WishlistPage() {
         </div>
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Your Wishlist is Empty</h2>
         <p className="text-slate-500 mb-6 max-w-sm">Save items you love by clicking the heart icon on any product.</p>
-        <Link href="/marketplace" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center gap-2">
+        <Link href="/" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center gap-2">
           <Package className="w-5 h-5" /> Browse Products
         </Link>
       </div>
@@ -240,7 +240,7 @@ export default function WishlistPage() {
 
       {/* Continue Shopping */}
       <div className="mt-8 text-center">
-        <Link href="/marketplace" className="inline-flex items-center gap-2 text-blue-600 font-bold hover:underline">
+        <Link href="/" className="inline-flex items-center gap-2 text-blue-600 font-bold hover:underline">
           Continue Shopping <ArrowRight className="w-4 h-4" />
         </Link>
       </div>

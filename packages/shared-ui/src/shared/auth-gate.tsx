@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
+import { ZoneLink } from '../zone-link';
 import { Lock } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { useLoginPrompt } from '@/lib/contexts/login-prompt';
@@ -59,9 +60,9 @@ export function AuthGate({
         </button>
         <p className="text-sm text-slate-500 mt-4">
           New to KARTSEEK?{' '}
-          <Link href="/auth/signup" className="font-semibold text-blue-600 hover:underline">
+          <ZoneLink href="/auth/signup" className="font-semibold text-blue-600 hover:underline">
             Create an account
-          </Link>
+          </ZoneLink>
         </p>
       </div>
     </div>

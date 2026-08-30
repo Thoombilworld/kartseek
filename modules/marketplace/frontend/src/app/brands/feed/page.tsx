@@ -75,7 +75,7 @@ export default function BrandFeedPage() {
       <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_60%_30%,rgba(139,92,246,0.2),transparent_60%)]" />
         <div className="max-w-4xl mx-auto px-4 py-10 md:py-14 relative z-10">
-          <Link href="/marketplace" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors mb-4">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors mb-4">
             <ArrowLeft className="w-4 h-4" />
             Back to Marketplace
           </Link>
@@ -124,7 +124,7 @@ export default function BrandFeedPage() {
             </div>
             <h3 className="text-lg font-bold text-slate-700 mb-1">No updates yet</h3>
             <p className="text-slate-400 text-sm mb-4">Follow brands to see their latest updates here</p>
-            <Link href="/marketplace" className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors">
+            <Link href="/" className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors">
               Explore Brands
             </Link>
           </div>
@@ -137,12 +137,12 @@ export default function BrandFeedPage() {
                 <div key={update.id} className="bg-white border border-slate-100 rounded-2xl p-5 hover:shadow-lg hover:border-slate-200 transition-all duration-300 group">
                   {/* Brand Header */}
                   <div className="flex items-center gap-3 mb-3">
-                    <Link href={`/marketplace/brand/${update.brand.slug || update.brand.id}`} className="w-10 h-10 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl flex items-center justify-center text-blue-700 font-black text-lg shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                    <Link href={`/brand/${update.brand.slug || update.brand.id}`} className="w-10 h-10 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl flex items-center justify-center text-blue-700 font-black text-lg shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                       {update.brand.name[0]}
                     </Link>
                     <div className="flex-1">
                       <div className="flex items-center gap-1.5">
-                        <Link href={`/marketplace/brand/${update.brand.slug || update.brand.id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors">
+                        <Link href={`/brand/${update.brand.slug || update.brand.id}`} className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors">
                           {update.brand.name}
                         </Link>
                         {update.brand.isVerified && (

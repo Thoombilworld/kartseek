@@ -44,7 +44,7 @@ export default function PaymentsPage() {
 
       <div className="max-w-3xl mx-auto px-4 py-8">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Payments</span>
         </nav>
@@ -104,7 +104,7 @@ export default function PaymentsPage() {
         </div>
 
         <Link
-          href="/marketplace/cart"
+          href="/cart"
           className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700"
         >
           Go to cart <ChevronRight className="w-4 h-4" />

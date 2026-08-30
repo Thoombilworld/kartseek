@@ -146,7 +146,7 @@ export default function ExchangeOfferPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-8">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Exchange</span>
         </nav>
@@ -173,7 +173,7 @@ export default function ExchangeOfferPage() {
             <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
               Trade-in offers run for limited periods. Check back, or browse the marketplace in the meantime.
             </p>
-            <Link href="/marketplace" className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors">
+            <Link href="/" className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors">
               Browse products <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -283,7 +283,7 @@ export default function ExchangeOfferPage() {
                 </div>
 
                 <div className="flex gap-3 justify-center">
-                  <Link href="/marketplace" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+                  <Link href="/" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
                     Shop Now <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>

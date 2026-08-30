@@ -579,7 +579,7 @@ export function ProductReviewSection({ productId, linkSegment, aggregateRating =
       <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 md:p-6">
         <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
           <h2 className="text-lg font-bold text-slate-900">Ratings & Reviews</h2>
-          <Link href={`/marketplace/product/${linkSegment ?? productId}/review`} className="text-xs text-blue-600 font-bold">Write a Review →</Link>
+          <Link href={`/product/${linkSegment ?? productId}/review`} className="text-xs text-blue-600 font-bold">Write a Review →</Link>
         </div>
         <div className="text-center py-8">
           {aggregateCount > 0 ? (
@@ -609,7 +609,7 @@ export function ProductReviewSection({ productId, linkSegment, aggregateRating =
     <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 md:p-6">
       <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
         <h2 className="text-lg font-bold text-slate-900">Ratings & Reviews</h2>
-        <Link href={`/marketplace/product/${linkSegment ?? productId}/review`} className="text-xs text-blue-600 font-bold">Write a Review →</Link>
+        <Link href={`/product/${linkSegment ?? productId}/review`} className="text-xs text-blue-600 font-bold">Write a Review →</Link>
       </div>
       {/* Rating summary */}
       <div className="flex items-center gap-6 mb-5">

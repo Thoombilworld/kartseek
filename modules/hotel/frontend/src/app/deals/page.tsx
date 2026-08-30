@@ -20,10 +20,10 @@ const COUPON_DEALS = [
 ];
 
 const CATEGORY_DEALS = [
-  { title: 'Luxury at Less', emoji: '👑', desc: '5-star hotels at 3-star prices', count: 28, gradient: 'from-amber-500 to-yellow-600', href: '/hotel-booking/luxury-hotels?deals=true' },
-  { title: 'Last Minute', emoji: '⏰', desc: 'Book tonight, save up to 50%', count: 15, gradient: 'from-red-500 to-rose-600', href: '/hotel-booking/search?lastMinute=true' },
-  { title: 'Long Stay Discounts', emoji: '📅', desc: '7+ nights = extra savings', count: 42, gradient: 'from-blue-500 to-indigo-600', href: '/hotel-booking/search?longStay=true' },
-  { title: 'Family Packages', emoji: '👨‍👩‍👧‍👦', desc: 'Kids eat & stay free deals', count: 19, gradient: 'from-pink-500 to-fuchsia-600', href: '/hotel-booking/family-hotels?deals=true' },
+  { title: 'Luxury at Less', emoji: '👑', desc: '5-star hotels at 3-star prices', count: 28, gradient: 'from-amber-500 to-yellow-600', href: '/luxury-hotels?deals=true' },
+  { title: 'Last Minute', emoji: '⏰', desc: 'Book tonight, save up to 50%', count: 15, gradient: 'from-red-500 to-rose-600', href: '/search?lastMinute=true' },
+  { title: 'Long Stay Discounts', emoji: '📅', desc: '7+ nights = extra savings', count: 42, gradient: 'from-blue-500 to-indigo-600', href: '/search?longStay=true' },
+  { title: 'Family Packages', emoji: '👨‍👩‍👧‍👦', desc: 'Kids eat & stay free deals', count: 19, gradient: 'from-pink-500 to-fuchsia-600', href: '/family-hotels?deals=true' },
 ];
 
 export default function DealsPage() {
@@ -41,7 +41,7 @@ export default function DealsPage() {
       <header className="bg-linear-to-br from-rose-600 via-pink-600 to-orange-500 text-white">
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-8">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/hotel-booking" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
+            <Link href="/" className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors">
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <h1 className="text-xl font-bold">Hotel Deals & Offers</h1>
@@ -61,7 +61,7 @@ export default function DealsPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {FLASH_DEALS.map(deal => (
-              <Link key={deal.id} href={`/hotel-booking/search?deal=${deal.id}`}
+              <Link key={deal.id} href={`/search?deal=${deal.id}`}
                 className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
               >
                 <div className="relative h-32 bg-linear-to-br from-rose-50 to-orange-50 flex items-center justify-center">

@@ -96,7 +96,7 @@ function GroceryOrdersContent() {
   return (
     <div className="max-w-4xl 3xl:max-w-5xl mx-auto px-2 2xs:px-3 xs:px-4 md:px-6 xl:px-8 py-4 xs:py-6">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/grocery" className="w-11 h-11 -ml-2 flex items-center justify-center text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
+        <Link href="/" className="w-11 h-11 -ml-2 flex items-center justify-center text-slate-500 hover:text-green-600 transition-colors" aria-label={tr('Back')}>
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
@@ -124,7 +124,7 @@ function GroceryOrdersContent() {
             <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-slate-600 mb-1">{tr('No orders yet')}</h3>
             <p className="text-sm text-slate-400 mb-4">{tr('Start shopping to see your orders here')}</p>
-            <Link href="/grocery" className="inline-block bg-green-600 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-green-700 transition-colors">{tr('Browse Grocery')}</Link>
+            <Link href="/" className="inline-block bg-green-600 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-green-700 transition-colors">{tr('Browse Grocery')}</Link>
           </div>
         ) : orders.map(order => {
           const config = statusConfig[order.status] || statusConfig.placed;

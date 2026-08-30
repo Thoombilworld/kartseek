@@ -68,11 +68,11 @@ export default function DineInSuccessPage() {
 
         {/* Actions */}
         <div className="space-y-3">
-          <Link href="/restaurant/dine-in/track/ORD-5023"
+          <Link href="/dine-in/track/ORD-5023"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-200">
             Track Order Status <ArrowRight className="w-4 h-4" />
           </Link>
-          <Link href="/restaurant"
+          <Link href="/"
             className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
             <Home className="w-4 h-4" /> Back to Restaurants
           </Link>

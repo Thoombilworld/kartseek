@@ -18,7 +18,7 @@ interface RestaurantProps {
 
 export default function RestaurantCard({ id, name, rating, deliveryTime, distance, cuisines, imageUrl, emojiImage, offer, isPromoted }: RestaurantProps) {
   return (
-    <Link href={`/restaurant/${id}`} className="group flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+    <Link href={`/${id}`} className="group flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
       {/* Image Container */}
       <div className="relative w-full h-56 bg-gray-100 overflow-hidden group-hover:shadow-inner">
         {imageUrl ? (

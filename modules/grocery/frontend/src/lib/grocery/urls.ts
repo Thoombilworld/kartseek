@@ -67,15 +67,15 @@ export interface ProductUrlInput {
 
 /** Canonical path for a store. */
 export function storePath(store: StoreUrlInput | string | null | undefined): string {
-  if (!store) return '/grocery/stores';
-  if (typeof store === 'string') return `/grocery/store/${store}`;
+  if (!store) return '/stores';
+  if (typeof store === 'string') return `/store/${store}`;
 
   const id = String(store.id ?? '').trim();
-  if (!id) return '/grocery/stores';
+  if (!id) return '/stores';
 
   const stored = typeof store.slug === 'string' ? store.slug.trim() : '';
   const slug = toSlug(stored || String(store.name ?? ''));
-  return slug ? `/grocery/store/${slug}-${id}` : `/grocery/store/${id}`;
+  return slug ? `/store/${slug}-${id}` : `/store/${id}`;
 }
 
 /**
@@ -91,13 +91,13 @@ export function productPath(product: ProductUrlInput | string | null | undefined
   if (typeof product === 'string') return `/grocery/product/${product}`;
 
   const id = String(product.id ?? '').trim();
-  if (!id) return '/grocery';
+  if (!id) return '/';
 
   const store = toSlug(String(product.storeSlug ?? product.storeName ?? ''));
   const name = toSlug(String(product.name ?? ''));
   const slug = [store, name].filter(Boolean).join('-');
 
-  return slug ? `/grocery/product/${slug}-${id}` : `/grocery/product/${id}`;
+  return slug ? `/product/${slug}-${id}` : `/product/${id}`;
 }
 
 /**
@@ -141,5 +141,5 @@ export function isCanonicalStoreParam(param: string, store: StoreUrlInput): bool
 }
 
 export function isCanonicalProductParam(param: string, product: ProductUrlInput): boolean {
-  return productPath(product) === `/grocery/product/${String(param ?? '').trim()}`;
+  return productPath(product) === `/product/${String(param ?? '').trim()}`;
 }

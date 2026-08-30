@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
           </div>
           <h2 className="text-2xl font-black mb-2">Password Reset!</h2>
           <p className="text-slate-500 text-sm mb-6">Your password has been successfully changed. You can now log in with your new password.</p>
-          <Link href="/taxi/login" className="block w-full bg-black text-white font-bold py-3 rounded-xl text-center hover:bg-slate-800 transition-colors">
+          <Link href="/login" className="block w-full bg-black text-white font-bold py-3 rounded-xl text-center hover:bg-slate-800 transition-colors">
             Back to Login
           </Link>
         </div>
@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-[calc(100vh-64px)] bg-slate-900 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        <Link href="/taxi/login" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
+        <Link href="/login" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Login
         </Link>
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">

@@ -62,7 +62,7 @@ function TakeawayCheckoutPageContent() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <Link href="/restaurant" className="text-slate-500 hover:text-slate-800">←</Link>
+          <Link href="/" className="text-slate-500 hover:text-slate-800">←</Link>
           <div>
             <h1 className="text-lg font-bold text-slate-900">Takeaway Checkout</h1>
             <p className="text-xs text-slate-500">The Grand Biryani House</p>

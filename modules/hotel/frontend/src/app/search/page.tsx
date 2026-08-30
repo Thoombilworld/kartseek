@@ -268,7 +268,7 @@ export default function HotelSearchPage() {
         )}
 
         {filtered.map(h => (
-          <Link key={h.id} href={`/hotel-booking/hotel/${h.id}`}
+          <Link key={h.id} href={`/hotel/${h.id}`}
             className="flex flex-col md:flex-row bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 group">
             {/* Image */}
             <div className={`relative w-full md:w-72 h-48 md:h-auto bg-linear-to-br ${h.gradient} flex items-center justify-center shrink-0 overflow-hidden`}>

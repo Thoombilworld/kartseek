@@ -53,30 +53,30 @@ describe('grocery URLs', () => {
   describe('building paths', () => {
     it('puts the store name in front of the id', () => {
       expect(storePath({ id: STORE_ID, slug: 'lulu-doha-corniche' }))
-        .toBe(`/grocery/store/lulu-doha-corniche-${STORE_ID}`);
+        .toBe(`/store/lulu-doha-corniche-${STORE_ID}`);
     });
 
     it('carries both the store and product names when the caller knows them', () => {
       expect(productPath({ id: PROD_ID, name: 'Atlantic Salmon Fillet', storeName: 'Lulu Hypermarket' }))
-        .toBe(`/grocery/product/lulu-hypermarket-atlantic-salmon-fillet-${PROD_ID}`);
+        .toBe(`/product/lulu-hypermarket-atlantic-salmon-fillet-${PROD_ID}`);
     });
 
     it('still builds a usable path when the shop is unknown', () => {
       // Search results and wishlist rows have the product but not its shop.
       expect(productPath({ id: PROD_ID, name: 'Atlantic Salmon Fillet' }))
-        .toBe(`/grocery/product/atlantic-salmon-fillet-${PROD_ID}`);
+        .toBe(`/product/atlantic-salmon-fillet-${PROD_ID}`);
     });
 
     it('falls back to the bare uuid rather than a dangling separator', () => {
       expect(productPath({ id: PROD_ID, name: 'سمك السلمون' }))
-        .toBe(`/grocery/product/${PROD_ID}`);
-      expect(storePath({ id: STORE_ID, name: '' })).toBe(`/grocery/store/${STORE_ID}`);
+        .toBe(`/product/${PROD_ID}`);
+      expect(storePath({ id: STORE_ID, name: '' })).toBe(`/store/${STORE_ID}`);
     });
 
     it('does not invent a path for a product with no id', () => {
-      expect(productPath({ id: '', name: 'Salmon' })).toBe('/grocery');
-      expect(productPath(null)).toBe('/grocery');
-      expect(storePath(undefined)).toBe('/grocery/stores');
+      expect(productPath({ id: '', name: 'Salmon' })).toBe('/');
+      expect(productPath(null)).toBe('/');
+      expect(storePath(undefined)).toBe('/stores');
     });
   });
 

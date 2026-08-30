@@ -19,7 +19,7 @@ export default function FavouritesPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <Link href="/pharmacy" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeft className="w-5 h-5 text-gray-600" /></Link>
+          <Link href="/" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeft className="w-5 h-5 text-gray-600" /></Link>
           <h1 className="text-lg font-bold flex-1">Favourite Pharmacies</h1>
           <span className="text-sm text-gray-500">{items.length} saved</span>
         </div>
@@ -30,7 +30,7 @@ export default function FavouritesPage() {
           <div className="text-center py-20">
             <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 font-medium">No favourite pharmacies yet</p>
-            <Link href="/pharmacy/stores" className="inline-block mt-4 text-teal-600 font-bold hover:underline">Browse pharmacies</Link>
+            <Link href="/stores" className="inline-block mt-4 text-teal-600 font-bold hover:underline">Browse pharmacies</Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -55,7 +55,7 @@ export default function FavouritesPage() {
                 </div>
                 <div className="px-5 py-3 bg-gray-50 border-t flex items-center justify-between">
                   <span className="text-xs text-gray-500">{p.distance} away</span>
-                  <Link href={`/pharmacy/stores/${p.id}`} className="text-sm font-bold text-teal-600 hover:text-teal-800 flex items-center gap-1">Visit <ExternalLink className="w-3.5 h-3.5" /></Link>
+                  <Link href={`/stores/${p.id}`} className="text-sm font-bold text-teal-600 hover:text-teal-800 flex items-center gap-1">Visit <ExternalLink className="w-3.5 h-3.5" /></Link>
                 </div>
               </div>
             ))}

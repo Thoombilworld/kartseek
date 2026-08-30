@@ -41,13 +41,13 @@ export default function DriverLoginPage() {
 
     login(driverUser, 'driver_jwt_token_' + Date.now());
     setLoading(false);
-    router.push('/taxi/drive/dashboard');
+    router.push('/drive/dashboard');
   };
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-slate-900 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        <Link href="/taxi/drive" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
+        <Link href="/drive" className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Driver Hub
         </Link>
 
@@ -75,7 +75,7 @@ export default function DriverLoginPage() {
             <div>
               <div className="flex justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">Password</label>
-                <Link href="/taxi/forgot-password" className="text-xs text-yellow-600 font-medium">Forgot?</Link>
+                <Link href="/forgot-password" className="text-xs text-yellow-600 font-medium">Forgot?</Link>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -107,11 +107,11 @@ export default function DriverLoginPage() {
           <div className="px-6 pb-6 text-center space-y-2">
             <p className="text-sm text-slate-500">
               Not a driver yet?{' '}
-              <Link href="/taxi/drive" className="text-yellow-600 font-bold hover:text-yellow-700">Apply to drive →</Link>
+              <Link href="/drive" className="text-yellow-600 font-bold hover:text-yellow-700">Apply to drive →</Link>
             </p>
             <p className="text-sm text-slate-500">
               Riding with us?{' '}
-              <Link href="/taxi/login" className="text-slate-600 font-medium hover:underline">Rider login</Link>
+              <Link href="/login" className="text-slate-600 font-medium hover:underline">Rider login</Link>
             </p>
           </div>
         </div>

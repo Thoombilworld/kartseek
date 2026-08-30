@@ -453,7 +453,7 @@ const DEFAULT_HERO = [
     tag: 'KARTSEEK MARKETPLACE',
     headline: 'Everything you need\nfrom verified sellers',
     cta: 'Browse categories',
-    ctaHref: '/marketplace/category-list',
+    ctaHref: '/category-list',
     gradient: 'from-blue-700 via-blue-800 to-slate-900',
   },
   {
@@ -461,7 +461,7 @@ const DEFAULT_HERO = [
     tag: 'VERIFIED SELLERS',
     headline: 'Every seller checked\nbefore they can list',
     cta: 'Meet the sellers',
-    ctaHref: '/marketplace/sellers',
+    ctaHref: '/sellers',
     gradient: 'from-slate-800 via-slate-900 to-blue-900',
   },
 ];
@@ -525,7 +525,7 @@ function HeroBannerCarousel({ formatCurrencyValue, banners }: { formatCurrencyVa
             <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1.5 mb-4 inline-block uppercase tracking-widest rounded-full">{banner.tag}</span>
             <h2 className="text-white text-2xl md:text-4xl font-bold mb-4 leading-tight whitespace-pre-line">{headline}</h2>
             <Link
-              href={banner.ctaHref || '/marketplace/category-list'}
+              href={banner.ctaHref || '/category-list'}
               className="inline-flex items-center gap-2 bg-white text-slate-900 font-bold px-6 py-2.5 text-sm rounded-lg hover:bg-slate-50 hover:shadow-lg transition-all"
             >
               {banner.cta} <ArrowRight className="w-4 h-4" />
@@ -562,13 +562,13 @@ function HeroBannerCarousel({ formatCurrencyValue, banners }: { formatCurrencyVa
 
         {/* Side banners */}
         <div className="hidden md:flex flex-col gap-3">
-          <Link href="/marketplace/category/mobiles-tablets" className="flex-1 bg-linear-to-br from-indigo-600 to-purple-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all">
+          <Link href="/category/mobiles-tablets" className="flex-1 bg-linear-to-br from-indigo-600 to-purple-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all">
             <span className="text-yellow-300 font-bold text-[10px] uppercase tracking-widest mb-1">New Arrival</span>
             <h3 className="text-white font-bold text-lg leading-tight">iPhone 15 Pro</h3>
             <p className="text-indigo-200 text-xs mt-1">Titanium. So strong. So light.</p>
             <Smartphone className="absolute -right-2 -bottom-2 w-24 h-24 text-white/10 group-hover:text-white/15 transition-colors" />
           </Link>
-          <Link href="/marketplace/category/appliances" className="flex-1 bg-linear-to-br from-emerald-600 to-teal-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all">
+          <Link href="/category/appliances" className="flex-1 bg-linear-to-br from-emerald-600 to-teal-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all">
             <span className="text-yellow-300 font-bold text-[10px] uppercase tracking-widest mb-1">Super Saver</span>
             <h3 className="text-white font-bold text-lg leading-tight">Smart TVs</h3>
             <p className="text-emerald-200 text-xs mt-1">Up to 60% Off</p>
@@ -675,9 +675,9 @@ function ProductGridSection({ title, subtitle, products, viewAllHref, icon, bgCl
   // loaded (`isReady` false) every card is kept with its original id, so a slow
   // brands request cannot blank out the row.
   const resolvedBrandPromos = (brandPromos ?? []).flatMap((brand) => {
-    if (!brandLookup?.isReady) return [{ brand, href: `/marketplace/brand/${brand.id}` }];
+    if (!brandLookup?.isReady) return [{ brand, href: `/brand/${brand.id}` }];
     const slug = brandLookup.resolve(brand);
-    return slug ? [{ brand, href: `/marketplace/brand/${slug}` }] : [];
+    return slug ? [{ brand, href: `/brand/${slug}` }] : [];
   });
 
   const hasSellerItems = sellerProducts && sellerProducts.length > 0;
@@ -792,7 +792,7 @@ function CampaignBannerCard({ banner, formatCurrencyValue }: { banner: CampaignB
   const gradient: string = banner.gradient || 'from-slate-800 to-slate-900';
   return (
     <section>
-      <Link href={banner.ctaHref || '/marketplace'} className={`block bg-linear-to-r ${gradient} rounded-xl p-6 md:p-8 text-white relative overflow-hidden group hover:shadow-xl transition-all`}>
+      <Link href={banner.ctaHref || '/'} className={`block bg-linear-to-r ${gradient} rounded-xl p-6 md:p-8 text-white relative overflow-hidden group hover:shadow-xl transition-all`}>
         {artwork && <BannerArtwork src={artwork} alt={banner.headline || 'Campaign'} />}
         <div className="relative z-10 flex items-center gap-6">
           <div className="flex-1">
@@ -1017,7 +1017,7 @@ export default function MarketplaceHome() {
       case 'category_grid':
         return (
           <section key={section.id} className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-            <SectionHeader title={section.title || "Shop by Category"} subtitle={section.subtitle || "Explore 20+ categories"} viewAllHref={section.viewAllHref || "/marketplace/category-list"} />
+            <SectionHeader title={section.title || "Shop by Category"} subtitle={section.subtitle || "Explore 20+ categories"} viewAllHref={section.viewAllHref || "/category-list"} />
             {/* `.cat-grid` ladders 3→4→5→6→8→10 columns. The flat
                 `grid-cols-4 … gap-3` this replaces put four 56px tiles plus
                 three 12px gaps into a 256px content box on a 320px phone, so
@@ -1027,7 +1027,7 @@ export default function MarketplaceHome() {
                 const Icon = getCatIcon(cat.iconName);
                 const catImg = cat.imageUrl;
                 return (
-                  <Link key={cat.id} href={`/marketplace/category/${cat.id}`} className="flex flex-col items-center justify-center gap-2 group">
+                  <Link key={cat.id} href={`/category/${cat.id}`} className="flex flex-col items-center justify-center gap-2 group">
                     <div className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${!catImg ? cat.color : ''} group-hover:shadow-md group-hover:scale-105 transition-all duration-200 relative`}>
                       {catImg ? (
                         <img src={catImg} alt={cat.label} className="w-full h-full object-cover" loading="lazy" />
@@ -1060,7 +1060,7 @@ export default function MarketplaceHome() {
                   </div>
                 )}
               </div>
-              <Link href={section.viewAllHref || "/marketplace/offers"} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1">
+              <Link href={section.viewAllHref || "/offers"} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1">
                 View All <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -1078,7 +1078,7 @@ export default function MarketplaceHome() {
             title={section.title || "Best of Electronics"}
             subtitle={section.subtitle || "Top-rated products"}
             products={pickProducts(null, ELECTRONICS_PRODUCTS, isLive)}
-            viewAllHref={section.viewAllHref || "/marketplace/category/electronics"}
+            viewAllHref={section.viewAllHref || "/category/electronics"}
             icon={Laptop}
             sellerProducts={sellerGroups['electronics']}
             formatCurrencyValue={formatCurrencyValue}
@@ -1094,9 +1094,9 @@ export default function MarketplaceHome() {
               {BRAND_PROMOS.electronics.flatMap((brand) => {
                 // Same resolution as the in-grid promo row: a card that maps to
                 // no catalogue brand is dropped rather than linked into a 404.
-                if (!brandLookup.isReady) return [{ brand, href: `/marketplace/brand/${brand.id}` }];
+                if (!brandLookup.isReady) return [{ brand, href: `/brand/${brand.id}` }];
                 const slug = brandLookup.resolve(brand);
-                return slug ? [{ brand, href: `/marketplace/brand/${slug}` }] : [];
+                return slug ? [{ brand, href: `/brand/${slug}` }] : [];
               }).map(({ brand, href }) => (
                 <BrandPromoCard key={brand.id} brand={brand} href={href} formatCurrencyValue={formatCurrencyValue} />
               ))}
@@ -1133,13 +1133,13 @@ export default function MarketplaceHome() {
             {categories.slice(0, 12).map((cat) => (
               <Link
                 key={cat.id}
-                href={`/marketplace/category/${cat.id}`}
+                href={`/category/${cat.id}`}
                 className="hover:text-blue-600 cursor-pointer transition-colors whitespace-nowrap"
               >
                 {cat.label}
               </Link>
             ))}
-            <Link href="/marketplace/category-list" className="text-blue-600 hover:underline cursor-pointer whitespace-nowrap font-bold">
+            <Link href="/category-list" className="text-blue-600 hover:underline cursor-pointer whitespace-nowrap font-bold">
               All Categories →
             </Link>
           </div>
@@ -1155,13 +1155,13 @@ export default function MarketplaceHome() {
 
             {/* 3. Shop by Category */}
             <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-              <SectionHeader title="Shop by Category" subtitle="Explore 20+ categories" viewAllHref="/marketplace/category-list" />
+              <SectionHeader title="Shop by Category" subtitle="Explore 20+ categories" viewAllHref="/category-list" />
               <div className="cat-grid pt-1">
                 {categories.map((cat) => {
                   const Icon = getCatIcon(cat.iconName);
                   const catImg = cat.imageUrl;
                   return (
-                    <Link key={cat.id} href={`/marketplace/category/${cat.id}`} className="flex flex-col items-center justify-center gap-2 group">
+                    <Link key={cat.id} href={`/category/${cat.id}`} className="flex flex-col items-center justify-center gap-2 group">
                       <div className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${!catImg ? cat.color : ''} group-hover:shadow-md group-hover:scale-105 transition-all duration-200 relative`}>
                         {catImg ? (
                           <img src={catImg} alt={cat.label} className="w-full h-full object-cover" loading="lazy" />
@@ -1193,7 +1193,7 @@ export default function MarketplaceHome() {
                     </div>
                   )}
                 </div>
-                <Link href="/marketplace/offers" className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1">
+                <Link href="/offers" className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1">
                   View All <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
@@ -1209,7 +1209,7 @@ export default function MarketplaceHome() {
               title="Best of Electronics"
               subtitle="Top-rated tech products"
               products={pickProducts(null, ELECTRONICS_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/category/electronics"
+              viewAllHref="/category/electronics"
               icon={Laptop}
               sellerProducts={sellerGroups['electronics']}
               formatCurrencyValue={formatCurrencyValue}
@@ -1240,7 +1240,7 @@ export default function MarketplaceHome() {
                     </div>
                   </div>
                   <div className="flex flex-col items-center gap-2 shrink-0">
-                    <Link href="/marketplace/offers" className="inline-flex items-center gap-2 bg-white text-violet-700 font-black px-6 py-2.5 text-sm rounded-lg hover:bg-violet-50 transition-all mt-1">
+                    <Link href="/offers" className="inline-flex items-center gap-2 bg-white text-violet-700 font-black px-6 py-2.5 text-sm rounded-lg hover:bg-violet-50 transition-all mt-1">
                       Claim {formatCurrencyValue(cashbackOffer.reward, { decimals: 0 })} off <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>
@@ -1255,7 +1255,7 @@ export default function MarketplaceHome() {
               title="Fashion Store"
               subtitle="Latest trends & styles"
               products={pickProducts(null, FASHION_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/category/fashion"
+              viewAllHref="/category/fashion"
               icon={Shirt}
               sellerProducts={sellerGroups['fashion']}
               formatCurrencyValue={formatCurrencyValue}
@@ -1268,7 +1268,7 @@ export default function MarketplaceHome() {
               title="Home & Kitchen"
               subtitle="Everything for your home"
               products={pickProducts(null, HOME_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/category/home-kitchen"
+              viewAllHref="/category/home-kitchen"
               icon={Sofa}
               sellerProducts={sellerGroups['home-kitchen']}
               formatCurrencyValue={formatCurrencyValue}
@@ -1286,7 +1286,7 @@ export default function MarketplaceHome() {
               title="Beauty & Personal Care"
               subtitle="Skincare, makeup & grooming"
               products={pickProducts(null, BEAUTY_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/category/beauty"
+              viewAllHref="/category/beauty"
               icon={Sparkles}
               sellerProducts={sellerGroups['beauty']}
               formatCurrencyValue={formatCurrencyValue}
@@ -1299,7 +1299,7 @@ export default function MarketplaceHome() {
               title="Sports & Fitness"
               subtitle="Gear up for performance"
               products={pickProducts(null, SPORTS_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/category/sports"
+              viewAllHref="/category/sports"
               icon={Dumbbell}
               sellerProducts={sellerGroups['sports']}
               formatCurrencyValue={formatCurrencyValue}
@@ -1312,7 +1312,7 @@ export default function MarketplaceHome() {
               title="Toys & Baby Products"
               subtitle="Fun for all ages"
               products={pickProducts(null, TOYS_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/category/toys-baby"
+              viewAllHref="/category/toys-baby"
               icon={Baby}
               sellerProducts={sellerGroups['toys-baby']}
               formatCurrencyValue={formatCurrencyValue}
@@ -1325,7 +1325,7 @@ export default function MarketplaceHome() {
               title="Appliances"
               subtitle="Smart home essentials"
               products={pickProducts(null, APPLIANCES_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/category/appliances"
+              viewAllHref="/category/appliances"
               icon={Tv}
               sellerProducts={sellerGroups['appliances']}
               formatCurrencyValue={formatCurrencyValue}
@@ -1355,7 +1355,7 @@ export default function MarketplaceHome() {
               title="Trending Now"
               subtitle="What everyone is buying"
               products={pickProducts(feed?.trending, TRENDING_PRODUCTS, isLive)}
-              viewAllHref="/marketplace/trending"
+              viewAllHref="/trending"
               icon={TrendingUp}
               formatCurrencyValue={formatCurrencyValue}
               borderAccent="bg-linear-to-r from-violet-500 via-purple-500 to-fuchsia-500"
@@ -1383,7 +1383,7 @@ export default function MarketplaceHome() {
               title="New Arrivals"
               subtitle="Just landed on KARTSEEK"
               products={pickProducts(feed?.newArrivals, NEW_ARRIVALS, isLive)}
-              viewAllHref="/marketplace/new-arrivals"
+              viewAllHref="/new-arrivals"
               icon={Sparkles}
               formatCurrencyValue={formatCurrencyValue}
               borderAccent="bg-linear-to-r from-blue-500 via-cyan-500 to-teal-500"
@@ -1394,7 +1394,7 @@ export default function MarketplaceHome() {
               title="Best Sellers"
               subtitle="Top-rated by customers"
               products={pickProducts(feed?.bestSellers, BEST_SELLERS, isLive)}
-              viewAllHref="/marketplace/best-sellers"
+              viewAllHref="/best-sellers"
               icon={Award}
               formatCurrencyValue={formatCurrencyValue}
               borderAccent="bg-linear-to-r from-amber-500 via-yellow-500 to-orange-500"
@@ -1405,7 +1405,7 @@ export default function MarketplaceHome() {
               title="Deals of the Day"
               subtitle="Massive savings, limited time"
               products={pickProducts(feed?.dealsOfDay, DEALS_OF_DAY, isLive)}
-              viewAllHref="/marketplace/deals"
+              viewAllHref="/deals"
               icon={Flame}
               formatCurrencyValue={formatCurrencyValue}
               borderAccent="bg-linear-to-r from-red-500 via-rose-500 to-pink-500"
@@ -1416,7 +1416,7 @@ export default function MarketplaceHome() {
               title="Recommended For You"
               subtitle="Personalized picks"
               products={pickProducts(feed?.recommended, RECOMMENDED, isLive)}
-              viewAllHref="/marketplace/recommended"
+              viewAllHref="/recommended"
               icon={Heart}
               formatCurrencyValue={formatCurrencyValue}
             />
@@ -1432,7 +1432,7 @@ export default function MarketplaceHome() {
           </>
 
         {/* A "Shop by City" section stood here. Every card linked to
-             `/marketplace?city=<slug>` — a parameter this page never reads and
+             `/?city=<slug>` — a parameter this page never reads and
              the products API has no filter for — so all five led back to the
              same unfiltered homepage. Each also carried a delivery guarantee
              ("Same-day delivery across West Bay, Al Sadd and Msheireb") that
@@ -1449,19 +1449,19 @@ export default function MarketplaceHome() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {CATEGORIES.slice(0, 12).map((cat) => (
               <div key={cat.id}>
-                <Link href={`/marketplace/category/${cat.id}`} className="text-sm font-bold text-slate-800 hover:text-blue-600 hover:underline mb-2 block">{cat.label}</Link>
+                <Link href={`/category/${cat.id}`} className="text-sm font-bold text-slate-800 hover:text-blue-600 hover:underline mb-2 block">{cat.label}</Link>
                 <div className="flex flex-col gap-0.5">
                   {cat.subcategories.slice(0, 5).map((sub) => (
                     <Link
                       key={sub}
-                      href={`/marketplace/category/${cat.id}`}
+                      href={`/category/${cat.id}`}
                       className="text-xs text-slate-500 hover:text-blue-600 hover:underline"
                     >
                       {sub}
                     </Link>
                   ))}
                   {cat.subcategories.length > 5 && (
-                    <Link href={`/marketplace/category/${cat.id}`} className="text-xs text-blue-600 hover:underline mt-0.5">See more…</Link>
+                    <Link href={`/category/${cat.id}`} className="text-xs text-blue-600 hover:underline mt-0.5">See more…</Link>
                   )}
                 </div>
               </div>

@@ -33,7 +33,7 @@ export default function PharmacyCartPage() {
         <div className="text-center py-20">
           <ShoppingBag className="w-16 h-16 text-slate-200 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-700 mb-2">Your cart is empty</h2>
-          <Link href="/pharmacy" className="text-teal-600 font-semibold hover:underline">Browse pharmacy →</Link>
+          <Link href="/" className="text-teal-600 font-semibold hover:underline">Browse pharmacy →</Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -107,7 +107,7 @@ export default function PharmacyCartPage() {
               </div>
             </div>
 
-            <Link href="/pharmacy/checkout"
+            <Link href="/checkout"
               className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-center rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2">
               Proceed to Checkout <ArrowRight className="w-4 h-4" />
             </Link>

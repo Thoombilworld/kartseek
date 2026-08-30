@@ -61,7 +61,7 @@ export default function FollowingBrandsPage() {
       <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_50%,rgba(59,130,246,0.15),transparent_60%)]" />
         <div className="max-w-5xl mx-auto px-4 py-10 md:py-14 relative z-10">
-          <Link href="/marketplace" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors mb-4">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors mb-4">
             <ArrowLeft className="w-4 h-4" />
             Back to Marketplace
           </Link>
@@ -75,7 +75,7 @@ export default function FollowingBrandsPage() {
             </div>
           </div>
           <div className="flex gap-3 mt-6">
-            <Link href="/marketplace/brands/feed" className="bg-white/10 hover:bg-white/20 text-white font-semibold py-2.5 px-5 rounded-xl text-sm border border-white/20 backdrop-blur-sm transition-colors flex items-center gap-2">
+            <Link href="/brands/feed" className="bg-white/10 hover:bg-white/20 text-white font-semibold py-2.5 px-5 rounded-xl text-sm border border-white/20 backdrop-blur-sm transition-colors flex items-center gap-2">
               View Brand Feed <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -97,7 +97,7 @@ export default function FollowingBrandsPage() {
             <p className="text-slate-400 text-sm mb-4 text-center max-w-sm">
               Follow your favorite brands to get exclusive updates, new product launches, and special offers.
             </p>
-            <Link href="/marketplace" className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors">
+            <Link href="/" className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors">
               Explore Brands
             </Link>
           </div>
@@ -107,12 +107,12 @@ export default function FollowingBrandsPage() {
               <div key={item.followId} className="bg-white border border-slate-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col">
                 {/* Brand Card Header */}
                 <div className="flex items-start gap-3 mb-4">
-                  <Link href={`/marketplace/brand/${item.brand.slug || item.brand.id}`} className="w-14 h-14 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl flex items-center justify-center text-blue-700 font-black text-2xl shadow-sm border border-slate-100 shrink-0 hover:shadow-md transition-shadow">
+                  <Link href={`/brand/${item.brand.slug || item.brand.id}`} className="w-14 h-14 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl flex items-center justify-center text-blue-700 font-black text-2xl shadow-sm border border-slate-100 shrink-0 hover:shadow-md transition-shadow">
                     {item.brand.name[0]}
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <Link href={`/marketplace/brand/${item.brand.slug || item.brand.id}`} className="font-bold text-slate-900 text-base hover:text-blue-600 transition-colors truncate">
+                      <Link href={`/brand/${item.brand.slug || item.brand.id}`} className="font-bold text-slate-900 text-base hover:text-blue-600 transition-colors truncate">
                         {item.brand.name}
                       </Link>
                       {item.brand.isVerified && (
@@ -133,7 +133,7 @@ export default function FollowingBrandsPage() {
 
                 {/* Actions */}
                 <div className="mt-auto flex items-center justify-between pt-3 border-t border-slate-100">
-                  <Link href={`/marketplace/brand/${item.brand.slug || item.brand.id}`} className="text-sm text-blue-600 font-semibold hover:text-blue-800 transition-colors flex items-center gap-1">
+                  <Link href={`/brand/${item.brand.slug || item.brand.id}`} className="text-sm text-blue-600 font-semibold hover:text-blue-800 transition-colors flex items-center gap-1">
                     View Store <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                   <BrandFollowButton

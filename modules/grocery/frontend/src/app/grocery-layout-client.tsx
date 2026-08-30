@@ -55,7 +55,7 @@ function GroceryLayoutInner({ children }: { children: React.ReactNode }) {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      router.push(`/grocery/search?q=${encodeURIComponent(query.trim())}`);
+      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
       openPanel(null);
     }
   };
@@ -142,7 +142,7 @@ function GroceryLayoutInner({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 module-header-grocery" role="banner" aria-label={tr('Grocery navigation header')}>
         <div className="max-w-7xl 3xl:max-w-app-wide 4xl:max-w-app-full mx-auto px-2 2xs:px-3 xs:px-4 sm:px-5 3xl:px-8 h-14 flex items-center justify-between gap-1.5 xs:gap-2 md:gap-3">
           {/* Logo */}
-          <Link href="/grocery" className="flex items-center gap-1.5 xs:gap-2 min-h-[44px] shrink-0">
+          <Link href="/" className="flex items-center gap-1.5 xs:gap-2 min-h-[44px] shrink-0">
             <div className="module-icon-badge">
               <span className="text-lg leading-none">🥬</span>
             </div>
@@ -270,10 +270,10 @@ function GroceryLayoutInner({ children }: { children: React.ReactNode }) {
             {/* Desktop-only nav actions — hidden on mobile via Tailwind, visible md+.
                 All action controls carry the 44x44 minimum touch area. */}
             <AccountMenu className="module-nav-btn hidden md:inline-flex min-h-[44px] min-w-[44px] items-center justify-center" />
-            <Link href="/grocery/orders" className="module-nav-btn hidden md:inline-flex min-h-[44px] min-w-[44px] items-center justify-center" title={tr('Orders')} aria-label={tr('Orders')}>
+            <Link href="/orders" className="module-nav-btn hidden md:inline-flex min-h-[44px] min-w-[44px] items-center justify-center" title={tr('Orders')} aria-label={tr('Orders')}>
               <Package className="w-5 h-5" />
             </Link>
-            <Link href="/grocery/wishlist" className="module-nav-btn hidden md:inline-flex min-h-[44px] min-w-[44px] items-center justify-center relative" title={tr('Wishlist')} aria-label={tr('Wishlist')}>
+            <Link href="/wishlist" className="module-nav-btn hidden md:inline-flex min-h-[44px] min-w-[44px] items-center justify-center relative" title={tr('Wishlist')} aria-label={tr('Wishlist')}>
               <Heart className="w-5 h-5" />
               {wishlistCount > 0 && (
                 <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold min-w-4 h-4 px-0.5 rounded-full flex items-center justify-center border-2 border-white">
@@ -281,7 +281,7 @@ function GroceryLayoutInner({ children }: { children: React.ReactNode }) {
                 </span>
               )}
             </Link>
-            <Link href="/grocery/cart" className="module-nav-btn inline-flex min-h-[44px] min-w-[44px] items-center justify-center relative" title={tr('Cart')} aria-label={cartCount > 0 ? `Shopping cart, ${cartCount} items` : 'Shopping cart, empty'}>
+            <Link href="/cart" className="module-nav-btn inline-flex min-h-[44px] min-w-[44px] items-center justify-center relative" title={tr('Cart')} aria-label={cartCount > 0 ? `Shopping cart, ${cartCount} items` : 'Shopping cart, empty'}>
               <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
                 <span className="absolute top-1 right-1 bg-amber-400 text-slate-900 text-[10px] font-bold min-w-4 h-4 px-0.5 rounded-full flex items-center justify-center border-2 border-white">
@@ -396,15 +396,15 @@ function GroceryLayoutInner({ children }: { children: React.ReactNode }) {
       {/* ── Mobile Bottom Nav ────────────────────────────────── */}
       <nav ref={bottomNav} className="md:hidden fixed bottom-0 left-0 right-0 bg-white/97 backdrop-blur-lg border-t border-slate-200 z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]" role="navigation" aria-label={tr('Grocery navigation')}>
         <div className="flex justify-around py-2 pb-safe">
-          <Link href="/grocery" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center ${isActive('/grocery') ? 'text-green-600' : 'text-slate-400'}`} aria-label={tr('Home')} aria-current={isActive('/grocery') ? 'page' : undefined}>
+          <Link href="/" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center ${isActive('/') ? 'text-green-600' : 'text-slate-400'}`} aria-label={tr('Home')} aria-current={isActive('/') ? 'page' : undefined}>
             <Home className="w-5 h-5" />
             <span className="text-[10px] font-medium">{tr('Home')}</span>
           </Link>
-          <Link href="/grocery/category/all-groceries" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center ${pathname.includes('/category') ? 'text-green-600' : 'text-slate-400'}`} aria-label={tr('Categories')} aria-current={pathname.includes('/category') ? 'page' : undefined}>
+          <Link href="/category/all-groceries" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center ${pathname.includes('/category') ? 'text-green-600' : 'text-slate-400'}`} aria-label={tr('Categories')} aria-current={pathname.includes('/category') ? 'page' : undefined}>
             <Grid3X3 className="w-5 h-5" />
             <span className="text-[10px] font-medium">{tr('Categories')}</span>
           </Link>
-          <Link href="/grocery/cart" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center relative ${isActive('/grocery/cart') ? 'text-green-600' : 'text-slate-400'}`} aria-label={cartCount > 0 ? `Cart, ${cartCount} items` : 'Cart, empty'} aria-current={isActive('/grocery/cart') ? 'page' : undefined}>
+          <Link href="/cart" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center relative ${isActive('/cart') ? 'text-green-600' : 'text-slate-400'}`} aria-label={cartCount > 0 ? `Cart, ${cartCount} items` : 'Cart, empty'} aria-current={isActive('/cart') ? 'page' : undefined}>
             <ShoppingCart className="w-5 h-5" />
             {cartCount > 0 && (
               <span className="absolute top-0 right-1/2 translate-x-4 bg-amber-400 text-slate-900 text-[9px] font-bold min-w-4 h-4 px-0.5 rounded-full flex items-center justify-center">
@@ -413,11 +413,11 @@ function GroceryLayoutInner({ children }: { children: React.ReactNode }) {
             )}
             <span className="text-[10px] font-medium">{tr('Cart')}</span>
           </Link>
-          <Link href="/grocery/orders" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center ${isActive('/grocery/orders') ? 'text-green-600' : 'text-slate-400'}`} aria-label={tr('Orders')} aria-current={isActive('/grocery/orders') ? 'page' : undefined}>
+          <Link href="/orders" className={`flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center ${isActive('/orders') ? 'text-green-600' : 'text-slate-400'}`} aria-label={tr('Orders')} aria-current={isActive('/orders') ? 'page' : undefined}>
             <Package className="w-5 h-5" />
             <span className="text-[10px] font-medium">{tr('Orders')}</span>
           </Link>
-          <Link href="/grocery/profile" className="flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center text-slate-400" aria-label={tr('Account')}>
+          <Link href="/profile" className="flex flex-col items-center gap-0.5 min-w-[56px] px-1 min-h-[44px] justify-center text-slate-400" aria-label={tr('Account')}>
             <User className="w-5 h-5" />
             <span className="text-[10px] font-medium">{tr('Account')}</span>
           </Link>

@@ -66,9 +66,9 @@ export default function GiftCardBalancePage() {
 
       <div className="max-w-xl mx-auto px-4 py-8">
         <nav className="text-sm text-slate-500 mb-6">
-          <Link href="/marketplace" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">Home</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
-          <Link href="/marketplace/gift-cards" className="hover:text-blue-600">Gift Cards</Link>
+          <Link href="/gift-cards" className="hover:text-blue-600">Gift Cards</Link>
           <ChevronRight className="w-3 h-3 inline mx-1" />
           <span className="text-slate-800 font-medium">Check Balance</span>
         </nav>
@@ -131,7 +131,7 @@ export default function GiftCardBalancePage() {
             </div>
 
             <div className="text-center mt-6">
-              <Link href="/marketplace" className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-1">
+              <Link href="/" className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-1">
                 Use this balance to shop <ArrowRight className="w-4 h-4" />
               </Link>
             </div>

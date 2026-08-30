@@ -97,7 +97,7 @@ export default async function CategoriesPage() {
               : 'The catalogue has no active categories to show.'}
           </p>
           <Link
-            href="/marketplace"
+            href="/"
             className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700"
           >
             Back to Marketplace
@@ -119,7 +119,7 @@ export default async function CategoriesPage() {
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 xs:px-4 py-6">
           <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-            <Link href="/marketplace" className="hover:text-blue-600 transition-colors">Home</Link>
+            <Link href="/" className="hover:text-blue-600 transition-colors">Home</Link>
             <span>/</span>
             <span className="text-slate-900 font-semibold">All Categories</span>
           </div>
@@ -141,7 +141,7 @@ export default async function CategoriesPage() {
               <div key={cat.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group">
                 {/* Category Header */}
                 <Link
-                  href={`/marketplace/category/${cat.slug}`}
+                  href={`/category/${cat.slug}`}
                   className="flex items-center gap-4 p-5 border-b border-slate-50 group-hover:bg-blue-50/30 transition-colors"
                 >
                   <div className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${!cat.imageUrl ? cat.color : ''} group-hover:scale-110 transition-transform duration-200 shrink-0`}>
@@ -172,7 +172,7 @@ export default async function CategoriesPage() {
                     {cat.subcategories.map(({ label, slug }) => (
                       <Link
                         key={slug}
-                        href={`/marketplace/category/${cat.slug}?subcategory=${encodeURIComponent(slug)}`}
+                        href={`/category/${cat.slug}?subcategory=${encodeURIComponent(slug)}`}
                         className="text-sm bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 px-3.5 py-1.5 rounded-full border border-slate-100 hover:border-blue-200 transition-all font-medium"
                       >
                         {label}

@@ -122,7 +122,7 @@ export default function MedicalRecordsPage() {
       <div className="bg-linear-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white px-4 pt-6 pb-16 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-12 translate-x-12 blur-2xl" />
         <div className="max-w-4xl mx-auto relative z-10">
-          <Link href="/doctor/my-profile" className="inline-flex items-center gap-1 text-indigo-200 hover:text-white text-sm font-medium mb-4 transition-colors">
+          <Link href="/my-profile" className="inline-flex items-center gap-1 text-indigo-200 hover:text-white text-sm font-medium mb-4 transition-colors">
             <ArrowLeft className="w-4 h-4" /> Profile
           </Link>
           <h1 className="text-2xl font-black mb-1">Medical Records</h1>
