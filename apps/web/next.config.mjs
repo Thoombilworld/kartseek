@@ -119,6 +119,7 @@ const nextConfig = {
     // requested from this origin, so without the second rule the page renders
     // and then fails to hydrate on a 404 for its own JavaScript.
     const marketplaceZone = (process.env.MARKETPLACE_ZONE_ORIGIN ?? 'http://localhost:3002').replace(/\/$/, '');
+    const groceryZone = (process.env.GROCERY_ZONE_ORIGIN ?? 'http://localhost:3003').replace(/\/$/, '');
 
     return [
       {
@@ -140,6 +141,18 @@ const nextConfig = {
       {
         source: '/marketplace/_next/:path*',
         destination: `${marketplaceZone}/marketplace/_next/:path*`,
+      },
+      {
+        source: '/grocery',
+        destination: `${groceryZone}/grocery`,
+      },
+      {
+        source: '/grocery/:path*',
+        destination: `${groceryZone}/grocery/:path*`,
+      },
+      {
+        source: '/grocery/_next/:path*',
+        destination: `${groceryZone}/grocery/_next/:path*`,
       },
     ];
   },
