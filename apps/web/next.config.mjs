@@ -112,6 +112,14 @@ const nextConfig = {
   // developer's machine — and did so silently.
   async rewrites() {
     const gateway = (process.env.API_GATEWAY_ORIGIN ?? 'http://localhost:3001').replace(/\/$/, '');
+
+    // Marketplace is served by its own Next application (the marketplace zone)
+    // rather than by routes in this app. Two rules are needed, not one:
+    // the pages themselves, and the zone's own /_next/* assets — those are
+    // requested from this origin, so without the second rule the page renders
+    // and then fails to hydrate on a 404 for its own JavaScript.
+    const marketplaceZone = (process.env.MARKETPLACE_ZONE_ORIGIN ?? 'http://localhost:3002').replace(/\/$/, '');
+
     return [
       {
         source: '/api/v1/:path*',
@@ -120,6 +128,18 @@ const nextConfig = {
       {
         source: '/api/:path*',
         destination: `${gateway}/api/:path*`,
+      },
+      {
+        source: '/marketplace',
+        destination: `${marketplaceZone}/marketplace`,
+      },
+      {
+        source: '/marketplace/:path*',
+        destination: `${marketplaceZone}/marketplace/:path*`,
+      },
+      {
+        source: '/marketplace/_next/:path*',
+        destination: `${marketplaceZone}/marketplace/_next/:path*`,
       },
     ];
   },
