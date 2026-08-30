@@ -147,7 +147,10 @@ export default function GroceryProductDetailPage() {
     const p = loaded as any;
     if (!p?.id) return;
     const canonical = { id: p.id, name: p.name, storeName: p.storeName };
-    if (!isCanonicalProductParam(routeParam, canonical)) router.replace(productPath(canonical));
+    // zoneHref: productPath() returns the full public path, and router.replace
+    // prepends basePath to it — without this the canonical redirect sent every
+    // product view to /grocery/grocery/product/...
+    if (!isCanonicalProductParam(routeParam, canonical)) router.replace(zoneHref(productPath(canonical)));
   }, [loaded, routeParam, router]);
 
   /**
