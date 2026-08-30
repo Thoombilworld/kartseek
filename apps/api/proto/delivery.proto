@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package delivery;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KARTSEEK Delivery Service — gRPC Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+service DeliveryService {
+  rpc AssignPartner         (AssignPartnerRequest)   returns (AssignmentResponse)   {}
+  rpc GetDeliveryStatus     (GetDeliveryRequest)     returns (AssignmentResponse)   {}
+  rpc UpdateDeliveryStatus  (UpdateDeliveryRequest)  returns (StatusResponse)       {}
+  rpc GetPartnerDeliveries  (GetPartnerRequest)      returns (DeliveryListResponse) {}
+  rpc EstimateDeliveryFee   (FeeEstimateRequest)     returns (FeeEstimateResponse)  {}
+  rpc GetActiveDelivery     (GetActiveRequest)       returns (AssignmentResponse)   {}
+}
+
+// ── Requests ──────────────────────────────────────────────────────────────────
+
+message AssignPartnerRequest {
+  string orderId      = 1;
+  string serviceType  = 2;  // grocery | restaurant | marketplace | pharmacy
+  double pickupLat    = 3;
+  double pickupLng    = 4;
+  double dropLat      = 5;
+  double dropLng      = 6;
+}
+
+message GetDeliveryRequest   { string orderId = 1; }
+message GetPartnerRequest    { string partnerId = 1; int32 page = 2; int32 limit = 3; }
+message GetActiveRequest     { string partnerId = 1; }
+
+message UpdateDeliveryRequest {
+  string orderId   = 1;
+  string status    = 2;  // ASSIGNED | PICKED_UP | ON_THE_WAY | DELIVERED | FAILED
+  string partnerId = 3;
+  double lat       = 4;
+  double lng       = 5;
+}
+
+message FeeEstimateRequest {
+  double distanceKm = 1;
+  double weightKg   = 2;
+  string serviceType = 3;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message AssignmentResponse {
+  string orderId     = 1;
+  string partnerId   = 2;
+  string serviceType = 3;
+  string status      = 4;
+  string assignedAt  = 5;
+  string updatedAt   = 6;
+}
+
+message FeeEstimateResponse {
+  double distanceKm = 1;
+  double fee        = 2;
+  double baseFee    = 3;
+  double distanceFee = 4;
+  double weightFee  = 5;
+}
+
+message DeliveryListResponse {
+  repeated AssignmentResponse data  = 1;
+  int32                       total = 2;
+  int32                       page  = 3;
+  int32                       limit = 4;
+}
+
+message StatusResponse {
+  bool   success = 1;
+  string message = 2;
+}

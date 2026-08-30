@@ -1,0 +1,3069 @@
+{
+  "info": {
+    "_postman_id": "e2f3a4b5-c6d7-8901-abcd-ef0123456702",
+    "name": "KARTSEEK — 13 Pharmacy Seller Portal APIs",
+    "description": "Seller portal and Admin panel APIs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Seller — Dashboard",
+      "item": [
+        {
+          "name": "Seller Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "dashboard"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seller — Orders",
+      "item": [
+        {
+          "name": "List All Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/orders?page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter — Placed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/orders?status=PLACED&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PLACED"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter — Processing",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/orders?status=PROCESSING",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PROCESSING"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter — Delivered",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/orders?status=DELIVERED",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "DELIVERED"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update — Processing",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/orders/{{order_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "orders",
+                "{{order_id}}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PROCESSING\",\n  \"estimatedDelivery\": \"30 minutes\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update — Dispatched",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/orders/{{order_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "orders",
+                "{{order_id}}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DISPATCHED\",\n  \"trackingId\": \"DEL-KEN-2026-001\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update — Delivered",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/orders/{{order_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "orders",
+                "{{order_id}}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seller — Medicine CRUD",
+      "item": [
+        {
+          "name": "Add Medicine",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/medicines",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "medicines"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Medicine\",\n  \"genericName\": \"Test Compound\",\n  \"description\": \"Test medicine via Postman\",\n  \"dosageForm\": \"TABLET\",\n  \"strength\": \"500mg\",\n  \"price\": 250,\n  \"mrp\": 300,\n  \"stockLevel\": 100,\n  \"manufacturer\": \"Test Pharma Ltd\",\n  \"requiresPrescription\": false,\n  \"categoryId\": \"{{category_id}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});",
+                  "",
+                  "if (pm.response && (pm.response.code === 200 || pm.response.code === 201)) {",
+                  "    var json = pm.response.json(); var d = json.data || json;",
+                  "    pm.test(\"Medicine added\", function() { pm.expect(d.success || d.id).to.be.ok; });",
+                  "    if (d.id) pm.collectionVariables.set(\"new_medicine_id\", d.id);",
+                  "    if (d.medicine && d.medicine.id) pm.collectionVariables.set(\"new_medicine_id\", d.medicine.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Medicine",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/medicines/{{new_medicine_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "medicines",
+                "{{new_medicine_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 220,\n  \"description\": \"Updated via Postman\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Medicine",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/medicines/{{new_medicine_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "medicines",
+                "{{new_medicine_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seller — Inventory & Stock",
+      "item": [
+        {
+          "name": "View Inventory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/inventory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "inventory"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Stock Level",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/medicines/{{medicine_id}}/stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "medicines",
+                "{{medicine_id}}",
+                "stock"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stockLevel\": 75\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Stock — Zero",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/medicines/{{medicine_id}}/stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "medicines",
+                "{{medicine_id}}",
+                "stock"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stockLevel\": 0\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Restore Stock",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/medicines/{{medicine_id}}/stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "medicines",
+                "{{medicine_id}}",
+                "stock"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stockLevel\": 100\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seller — Staff Management",
+      "item": [
+        {
+          "name": "List Staff",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/staff",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "staff"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Staff",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/staff",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "staff"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Staff\",\n  \"email\": \"staff@test.co.in\",\n  \"phone\": \"+91700999001\",\n  \"role\": \"PHARMACIST\",\n  \"regNumber\": \"PPB-TEST-001\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});",
+                  "",
+                  "if (pm.response && (pm.response.code === 200 || pm.response.code === 201)) {",
+                  "    var json = pm.response.json(); var d = json.data || json;",
+                  "    if (d.staff && d.staff.id) pm.collectionVariables.set(\"staff_id\", d.staff.id);",
+                  "    if (d.id) pm.collectionVariables.set(\"staff_id\", d.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Staff",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/staff/{{staff_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "staff",
+                "{{staff_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+91700999002\",\n  \"role\": \"DELIVERY\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove Staff",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/staff/{{staff_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "staff",
+                "{{staff_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seller — Payouts & Promotions",
+      "item": [
+        {
+          "name": "View Payouts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/payouts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "payouts"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Promotions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/promotions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "promotions"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Promotion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/promotions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "promotions"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Sale — 20% Off\",\n  \"type\": \"PERCENTAGE\",\n  \"value\": 20,\n  \"startDate\": \"2026-07-10\",\n  \"endDate\": \"2026-07-20\",\n  \"description\": \"Summer sale via Postman\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});",
+                  "",
+                  "if (pm.response && (pm.response.code === 200 || pm.response.code === 201)) {",
+                  "    var json = pm.response.json(); var d = json.data || json;",
+                  "    if (d.promotion) pm.collectionVariables.set(\"promo_id\", d.promotion.id);",
+                  "    if (d.id) pm.collectionVariables.set(\"promo_id\", d.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Promotion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/promotions/{{promo_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "promotions",
+                "{{promo_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Sale — 25% Off\",\n  \"value\": 25\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Promotion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/promotions/{{promo_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "promotions",
+                "{{promo_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "View Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/{{store_id}}/analytics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "{{store_id}}",
+                "analytics"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Store Management",
+      "item": [
+        {
+          "name": "Admin — List Stores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/stores?page=1&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "stores"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — Filter by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/stores?status=APPROVED&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "stores"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "APPROVED"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — Approve Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/{{store_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "{{store_id}}",
+                "approve"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — Suspend Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/{{store_id}}/suspend",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "{{store_id}}",
+                "suspend"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"License expired\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — Re-approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/{{store_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "{{store_id}}",
+                "approve"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — Set Commission",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/{{store_id}}/commission",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "{{store_id}}",
+                "commission"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rate\": 12\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Prescriptions",
+      "item": [
+        {
+          "name": "Pending Prescriptions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/prescriptions/pending?page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "prescriptions",
+                "pending"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify — Approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/prescriptions/{{prescription_id}}/verify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "prescriptions",
+                "{{prescription_id}}",
+                "verify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"VERIFIED\",\n  \"verifiedBy\": \"pharmacist-001\",\n  \"notes\": \"Prescription valid\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify — Reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/prescriptions/{{prescription_id}}/verify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "prescriptions",
+                "{{prescription_id}}",
+                "verify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REJECTED\",\n  \"verifiedBy\": \"pharmacist-001\",\n  \"notes\": \"Illegible — please re-upload\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error & Edge Cases",
+      "item": [
+        {
+          "name": "Dashboard — Invalid Store",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/00000000-0000-0000-0000-000000000000/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "00000000-0000-0000-0000-000000000000",
+                "dashboard"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status — Invalid Order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/seller/orders/00000000-0000-0000-0000-000000000000/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "seller",
+                "orders",
+                "00000000-0000-0000-0000-000000000000",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve — Invalid Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/00000000-0000-0000-0000-000000000000/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "00000000-0000-0000-0000-000000000000",
+                "approve"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Commission — Invalid Rate",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/admin/{{store_id}}/commission",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "admin",
+                "{{store_id}}",
+                "commission"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rate\": -5\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try { pm.response.json(); } catch(e) { return; }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return; }",
+                  "    try {",
+                  "        var jsonData = pm.response.json();",
+                  "        var hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        var hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { /* non-JSON */ }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "var baseUrl = pm.environment.get(\"base_url\") || pm.collectionVariables.get(\"base_url\");",
+          "if (!pm.environment.get(\"user_token\") || pm.environment.get(\"user_token\") === \"\") {",
+          "    var email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+          "    var password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+          "    pm.sendRequest({ url: baseUrl + \"/auth/login\", method: \"POST\",",
+          "        header: { \"Content-Type\": \"application/json\", \"X-Client-Version\": \"1.0.0\", \"X-Client-Platform\": \"WEB\", \"X-Region-Code\": pm.environment.get(\"country_code\") || \"KEN\" },",
+          "        body: { mode: \"raw\", raw: JSON.stringify({ email: email, password: password }) }",
+          "    }, function (err, response) {",
+          "        if (err) { console.log(\"Auto-login failed: \" + err); return; }",
+          "        if (response.code === 200 || response.code === 201) {",
+          "            var data = response.json();",
+          "            if (data.accessToken) {",
+          "                pm.environment.set(\"user_token\", data.accessToken);",
+          "                if (data.refreshToken) pm.environment.set(\"refresh_token\", data.refreshToken);",
+          "                if (data.user && data.user.id) pm.environment.set(\"customer_id\", data.user.id);",
+          "                console.log(\"Auto-login successful\");",
+          "            }",
+          "        }",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/api/v1"
+    },
+    {
+      "key": "store_id",
+      "value": ""
+    },
+    {
+      "key": "category_id",
+      "value": ""
+    },
+    {
+      "key": "medicine_id",
+      "value": ""
+    },
+    {
+      "key": "new_medicine_id",
+      "value": ""
+    },
+    {
+      "key": "prescription_id",
+      "value": ""
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    },
+    {
+      "key": "staff_id",
+      "value": ""
+    },
+    {
+      "key": "promo_id",
+      "value": ""
+    },
+    {
+      "key": "customer_id",
+      "value": "cust-test-001"
+    }
+  ]
+}

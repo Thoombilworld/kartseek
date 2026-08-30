@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Transport Security — production-hardened.
+
+	     NSAllowsArbitraryLoads was <true/>, which switches ATS off for every
+	     host in the app, not just the dev server: any plaintext HTTP response
+	     would have been accepted in a release build, and App Store review
+	     rejects the flag without a written justification. NSAllowsLocalNetworking
+	     already covers localhost and the emulator loopback for development, so
+	     the blanket exemption bought nothing it did not already have.
+
+	     Mirrors apps/customer/ios/Runner/Info.plist — keep the two in step. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>kartseek.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+		</dict>
+	</dict>
+
+	<!-- Bundle Configuration -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>KARTSEEK Partner</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>KARTSEEK Partner</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
+	<!-- Requires iPhone -->
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- Main Storyboard -->
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+
+	<!-- Supported Orientations -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Status Bar -->
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+
+	<!-- ── Location Services ────────────────────────────────────────── -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>KARTSEEK Partner needs your location to navigate to pickup and delivery points.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>KARTSEEK Partner needs background location for real-time ride and delivery tracking while the app is minimized.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>KARTSEEK Partner uses background location for active ride and delivery tracking.</string>
+	<!-- Temporary precise location access (iOS 14+) -->
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>ActiveTripNavigation</key>
+		<string>Precise location is needed for turn-by-turn navigation during an active ride.</string>
+		<key>ActiveDeliveryNavigation</key>
+		<string>Precise location is needed for accurate delivery navigation.</string>
+	</dict>
+
+	<!-- Camera & Photos (KYC, Profile, Delivery Proof) -->
+	<key>NSCameraUsageDescription</key>
+	<string>KARTSEEK Partner needs camera access for KYC verification, delivery proof photos, and profile pictures.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>KARTSEEK Partner needs photo library access to upload KYC documents and delivery proof.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>KARTSEEK Partner needs to save photos to your library.</string>
+
+	<!-- Microphone (Voice calls with customers) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>KARTSEEK Partner needs microphone for voice calls with customers during rides and deliveries.</string>
+
+	<!-- Face ID / Biometric -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>KARTSEEK Partner uses Face ID for secure login and payout authorization.</string>
+
+	<!-- Contacts (Ride sharing) -->
+	<key>NSContactsUsageDescription</key>
+	<string>KARTSEEK Partner can access your contacts to share ride details.</string>
+
+	<!-- Calendars (Scheduled deliveries) -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>KARTSEEK Partner can add scheduled deliveries to your calendar for reminders.</string>
+
+	<!-- ── App Tracking Transparency (iOS 14.5+) ────────────────────── -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>KARTSEEK Partner uses this to optimize ride assignments and delivery routing in your area.</string>
+
+	<!-- ── App Store Encryption Compliance ───────────────────────────── -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- Google Maps iOS SDK -->
+	<key>GMSApiKey</key>
+	<string>AIzaSyB29-Nj3zGBNiIHhejSxTCL0iYk4qO_pJA</string>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
+
+	<!-- ── Deep Links ───────────────────────────────────────────────── -->
+	<!-- Custom URL Scheme: kartseek-partner:// -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.kartseek.partner</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kartseek-partner</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Universal Links — Associated Domains configured in Xcode Capabilities -->
+
+	<!-- URL Launcher Schemes -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>comgooglemaps</string>
+		<string>waze</string>
+	</array>
+
+	<!-- Launch Storyboard -->
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+</dict>
+</plist>

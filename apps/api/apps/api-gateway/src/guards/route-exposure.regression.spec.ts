@@ -1,0 +1,163 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Route exposure regression.
+ *
+ * api-gateway registers no APP_GUARD (see `main.ts`), so JwtAuthGuard applies
+ * only where it is written. A new route therefore ships **open by default** —
+ * which is how `user.controller.ts` came to expose every profile and saved
+ * address on the platform to anonymous callers, and how the admin-only
+ * `/regions/stats` and `/doctor/admin/appointments` ended up public.
+ *
+ * This test walks the controllers the same way and fails on any route that is
+ * neither authenticated nor explicitly declared public. The allowlist below is
+ * the *intentionally* public surface: adding to it is a deliberate act that
+ * shows up in review, which is exactly the property that was missing.
+ *
+ * If this fails on a route you added:
+ *   • it should be authenticated → add `@UseGuards(JwtAuthGuard)`
+ *   • it is genuinely public     → add `@Public()` and, if it is a new prefix,
+ *                                   an entry here explaining why
+ */
+
+const CONTROLLERS = path.join(__dirname, '..', 'controllers');
+const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)?\s*\)/;
+
+/**
+ * Prefixes that may serve anonymous traffic, with the reason. Anything matching
+ * one of these is allowed to be unguarded; everything else must opt in.
+ */
+const PUBLIC_PREFIXES: Array<[RegExp, string]> = [
+  [/^\/$|^\/health/, 'liveness and readiness probes'],
+  [/^\/auth\//, 'the sign-in surface itself — cannot require a token to get one'],
+  [/^\/api\/partner\/auth\//, 'partner OTP sign-in'],
+  [/^\/localization\//, 'currency, language and tax config — same for every visitor'],
+  [/^\/regions(?!\/stats|\/india\/stats)/, 'region detection and PIN lookup; the stats routes are admin and excluded here'],
+  [/^\/geo\//, 'pre-login geo/VPN check'],
+  [/^\/marketplace\//, 'storefront catalogue browsing'],
+  [/^\/pharmacy\/(home|stores|search|scan|categories)/, 'pharmacy storefront browsing'],
+  [/^\/doctor\/(specialties|hospitals|clinics|doctors|reviews)/, 'doctor directory browsing'],
+  [/^\/grocery\//, 'grocery storefront browsing — this controller declares @Public() per route'],
+  [/^\/restaurant\//, 'restaurant storefront browsing'],
+  [/^\/hotel\//, 'hotel storefront browsing'],
+  [/^\/taxi\/(health|config|vehicle-categories|estimate)/, 'fare config and estimates, pre-booking'],
+  [/^\/franchise\/(health|register)/, 'franchise enquiry form'],
+  [/^\/sellers?\//, 'public seller storefronts'],
+  [/^\/static-pages/, 'CMS marketing pages'],
+  [/^\/users\/health/, 'liveness probe'],
+  [/^\/users\/partner\/register/, 'partner sign-up'],
+];
+
+interface Route { file: string; verb: string; path: string; guarded: boolean; declaredPublic: boolean }
+
+/**
+ * Source with comments removed.
+ *
+ * The assertions below search for the *old* insecure code, and the fixes
+ * deliberately quote that code in their explanatory comments — so a naive
+ * `toContain` matches the very prose describing the fix. Strip comments first so
+ * these test what executes, not what is documented.
+ */
+function codeOf(file: string): string {
+  return fs
+    .readFileSync(path.join(CONTROLLERS, file), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+}
+
+function collectRoutes(): Route[] {
+  const routes: Route[] = [];
+
+  for (const file of fs.readdirSync(CONTROLLERS)) {
+    if (!file.endsWith('.controller.ts') || file.endsWith('.spec.ts')) continue;
+    const src = fs.readFileSync(path.join(CONTROLLERS, file), 'utf8').split('\n');
+
+    const classLine = src.findIndex((l) => /^export class \w+/.test(l));
+    if (classLine === -1) continue;
+
+    const head = src.slice(0, classLine).join('\n');
+    const base = (head.match(/@Controller\(\s*['"`]([^'"`]*)['"`]/) || [])[1] ?? '';
+
+    // Only the contiguous decorator block directly above `export class`.
+    let top = classLine;
+    while (top > 0 && /^\s*(@|\)|\*|\/\*|\/\/|$)/.test(src[top - 1])) top--;
+    const classBlock = src.slice(top, classLine).join('\n');
+    const classGuarded = /@UseGuards\([^)]*JwtAuth/.test(classBlock);
+    const classPublic = /@Public\(\)/.test(classBlock);
+
+    for (let i = classLine; i < src.length; i++) {
+      const m = src[i].match(HTTP);
+      if (!m) continue;
+
+      let a = i;
+      while (a > classLine && /^\s*(@|\)|\*|\/\/)/.test(src[a - 1])) a--;
+      let b = i;
+      while (b < src.length - 1 && !/\(.*\)\s*[:{]/.test(src[b]) && b - i < 15) b++;
+      const block = src.slice(a, b + 1).join('\n');
+
+      const sub = m[2] ?? m[3] ?? m[4] ?? '';
+      routes.push({
+        file,
+        verb: m[1].toUpperCase(),
+        path: ('/' + base + (sub ? '/' + sub : '')).replace(/\/+/g, '/'),
+        guarded: classGuarded || /@UseGuards\([^)]*JwtAuth/.test(block),
+        declaredPublic: classPublic || /@Public\(\)/.test(block),
+      });
+    }
+  }
+  return routes;
+}
+
+describe('gateway route exposure', () => {
+  const routes = collectRoutes();
+
+  it('parses the controller tree', () => {
+    // Guards the parser itself: a refactor that breaks the regex would otherwise
+    // make every assertion below pass vacuously.
+    expect(routes.length).toBeGreaterThan(500);
+  });
+
+  it('exposes no route that is neither authenticated nor intentionally public', () => {
+    const exposed = routes
+      .filter((r) => !r.guarded && !r.declaredPublic)
+      .filter((r) => !PUBLIC_PREFIXES.some(([re]) => re.test(r.path)));
+
+    const report = exposed.map((r) => `  ${r.verb} ${r.path}   (${r.file})`).join('\n');
+    expect(report).toBe('');
+  });
+
+  it('keeps user profile and address routes owner-scoped', () => {
+    // The specific regression: these were readable and writable by anyone.
+    const src = codeOf('user.controller.ts');
+    expect(src).toMatch(/@UseGuards\(JwtAuthGuard, ResourceOwnershipGuard\)\s*\n@Controller\('users'\)/);
+    for (const route of [
+      "@Get(':userId/profile')",
+      "@Put(':userId/profile')",
+      "@Get(':userId/addresses')",
+      "@Post(':userId/addresses')",
+      "@Put(':userId/addresses/:addressId')",
+      "@Delete(':userId/addresses/:addressId')",
+    ]) {
+      const at = src.indexOf(route);
+      expect(at).toBeGreaterThan(-1);
+      // The ownership decorator must sit on the handler, not merely in the file.
+      expect(src.slice(at, at + 200)).toContain("@ResourceOwner({ paramKey: 'userId' })");
+    }
+  });
+
+  it('does not accept a hard-coded partner OTP outside an explicit dev opt-in', () => {
+    const src = codeOf('partner.controller.ts');
+    // The bypass may exist, but only behind the flag — never as a bare compare.
+    expect(src).not.toMatch(/if\s*\(\s*body\.otp\s*!==\s*'5566'\s*&&/);
+    expect(src).toContain("process.env.PARTNER_DEV_OTP === 'true'");
+    expect(src).toContain("process.env.NODE_ENV !== 'production'");
+  });
+
+  it('issues a signed partner token rather than a placeholder string', () => {
+    const src = codeOf('partner.controller.ts');
+    expect(src).not.toContain('mock-jwt-token-for-partner-auth');
+    expect(src).not.toContain('mock-refresh-token-placeholder');
+    expect(src).toMatch(/this\.jwtService\.sign\(/);
+  });
+});

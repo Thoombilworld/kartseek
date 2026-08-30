@@ -1,0 +1,4 @@
+# Minimal analysis options for the dummy_objective_c override package.
+analyzer:
+  errors:
+    unused_import: ignore

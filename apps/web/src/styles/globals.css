@@ -1,0 +1,1519 @@
+@import "tailwindcss";
+@import "./design-tokens.css";
+@config "../../tailwind.config.ts";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOUSE RULE — every custom class in this file belongs in @layer components.
+
+   `@import "tailwindcss"` declares `@layer theme, base, components, utilities`.
+   CSS that sits in NO layer beats CSS in EVERY layer, whatever the specificity
+   and whatever the source order. So a class declared out here wins against the
+   Tailwind utility written next to it on the same element — including every
+   responsive variant of that utility.
+
+   That is invisible in review and invisible in a screenshot at one width: the
+   element looks styled, it just stops responding to breakpoints. It cost this
+   app real layout, e.g. `<div class="scroll-x md:grid md:grid-cols-2
+   lg:grid-cols-3">` on the hotel-booking home page, where `.scroll-x`'s
+   `display: flex` beat `md:grid` and the desktop grid never rendered at any
+   width; and `<nav class="md:hidden module-bottom-nav">`, where the phone
+   bottom-nav's `display: flex` beat `md:hidden` and it stayed on screen on
+   desktop.
+
+   In @layer components the class still applies when nothing competes, and
+   loses to any utility that does. That is what you want in every case bar one:
+   a rule whose entire job is to override a utility (the iOS input-zoom guard
+   below). Those are unlayered on purpose and say so.
+
+   Two more things this file has been bitten by:
+     • ONE definition per class. A second copy later in the file overrides the
+       first copy's media queries — its base rule is further down at equal
+       specificity — so the earlier definition's breakpoints silently vanish.
+     • A custom class that needs to apply only in one band gets its own media
+       query. Never rely on `md:…` at the call site to switch it off.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── CSS Custom Properties ──────────────────────────────────────────────────
+ * The colour, elevation and easing tokens that used to be declared here now
+ * live in `design-tokens.css`, generated from `design-tokens.json` (imported
+ * above). That file is the single source of truth and carries three layers:
+ *
+ *   --primitive-color-blue-600      raw value, no meaning
+ *   --color-brand-primary           purpose  → var(--primitive-color-blue-600)
+ *   --module-marketplace-primary    component→ var(--primitive-color-blue-600)
+ *
+ * Do not add a raw hex to this file. Add it to design-tokens.json as a
+ * primitive, alias it in the semantic layer, and regenerate:
+ *
+ *   node ../../.claude/skills/design-system/scripts/generate-tokens.cjs \
+ *     --config src/styles/design-tokens.json -o src/styles/design-tokens.css
+ *
+ * The same values were also declared a second time in tailwind.config.ts, and
+ * the two copies had already drifted — `module.doctor` was violet there and
+ * indigo here, and `module.taxi` existed there with no matching identity here.
+ * Both now read from the generated variables.
+ * ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Live height of the marketplace header. The marketplace layout keeps this
+   * in sync via a ResizeObserver (the header grows when the mobile search
+   * panel opens and when the desktop category row is shown). Page-level
+   * sticky bars offset by it instead of hard-coding `top-16`, which left them
+   * hidden underneath the header. The value below is the SSR fallback:
+   * 4rem top bar + 2.5rem mobile utility row.
+   *
+   * Stays here rather than in the token file: it is runtime state written by
+   * JS, not a design decision. */
+  --mp-header-h: 6.5rem;
+
+  /* ── Legacy aliases ───────────────────────────────────────────────────────
+   * The old flat names, kept so the ~70 existing call sites keep working. New
+   * code should use the layered names on the right. Delete an alias once its
+   * usages are migrated; `--shadow-*` and `--ease-*` kept their names and are
+   * defined in the token file directly, so they need no alias.
+   * ────────────────────────────────────────────────────────────────────── */
+  --brand-primary:   var(--color-brand-primary);
+  --brand-secondary: var(--color-brand-secondary);
+  --brand-accent:    var(--color-brand-accent);
+  --surface-base:    var(--color-surface-base);
+  --surface-card:    var(--color-surface-card);
+  --text-primary:    var(--color-text-primary);
+  --text-secondary:  var(--color-text-secondary);
+  --text-muted:      var(--color-text-muted);
+  --border-subtle:   var(--color-border-subtle);
+
+  --marketplace-primary:     var(--module-marketplace-primary);
+  --marketplace-header-from: var(--module-marketplace-header-from);
+  --marketplace-header-to:   var(--module-marketplace-header-to);
+  --marketplace-surface:     var(--module-marketplace-surface);
+  --marketplace-card-border: var(--module-marketplace-card-border);
+  --marketplace-glow:        var(--module-marketplace-glow);
+
+  --grocery-primary:     var(--module-grocery-primary);
+  --grocery-header-from: var(--module-grocery-header-from);
+  --grocery-header-to:   var(--module-grocery-header-to);
+  --grocery-surface:     var(--module-grocery-surface);
+  --grocery-card-border: var(--module-grocery-card-border);
+  --grocery-glow:        var(--module-grocery-glow);
+
+  --restaurant-primary:     var(--module-restaurant-primary);
+  --restaurant-header-from: var(--module-restaurant-header-from);
+  --restaurant-header-to:   var(--module-restaurant-header-to);
+  --restaurant-surface:     var(--module-restaurant-surface);
+  --restaurant-card-border: var(--module-restaurant-card-border);
+  --restaurant-glow:        var(--module-restaurant-glow);
+
+  --pharmacy-primary:     var(--module-pharmacy-primary);
+  --pharmacy-header-from: var(--module-pharmacy-header-from);
+  --pharmacy-header-to:   var(--module-pharmacy-header-to);
+  --pharmacy-surface:     var(--module-pharmacy-surface);
+  --pharmacy-card-border: var(--module-pharmacy-card-border);
+  --pharmacy-glow:        var(--module-pharmacy-glow);
+
+  --doctor-primary:     var(--module-doctor-primary);
+  --doctor-header-from: var(--module-doctor-header-from);
+  --doctor-header-to:   var(--module-doctor-header-to);
+  --doctor-surface:     var(--module-doctor-surface);
+  --doctor-card-border: var(--module-doctor-card-border);
+  --doctor-glow:        var(--module-doctor-glow);
+
+  --hotel-primary:     var(--module-hotel-primary);
+  --hotel-header-from: var(--module-hotel-header-from);
+  --hotel-header-to:   var(--module-hotel-header-to);
+  --hotel-surface:     var(--module-hotel-surface);
+  --hotel-card-border: var(--module-hotel-card-border);
+  --hotel-glow:        var(--module-hotel-glow);
+
+  /* Taxi had a Tailwind accent but no identity block until now. */
+  --taxi-primary:     var(--module-taxi-primary);
+  --taxi-header-from: var(--module-taxi-header-from);
+  --taxi-header-to:   var(--module-taxi-header-to);
+  --taxi-surface:     var(--module-taxi-surface);
+  --taxi-card-border: var(--module-taxi-card-border);
+  --taxi-glow:        var(--module-taxi-glow);
+}
+
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  /*
+   * ── Fluid Root Font Scale ────────────────────────────────────────────────
+   * Setting font-size on <html> scales ALL rem units uniformly.
+   * Tailwind's text-sm / text-base / text-lg etc. all cascade from here.
+   * Scale steps: mobile → tablet → laptop → desktop → ultra-wide
+   */
+  html {
+    font-family: var(--font-outfit), var(--font-inter), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+    /* 2xs / xs  (≤ 639px)  — mobile baseline */
+    font-size: 16px;
+  }
+  /* sm  640px  — tablet: slight bump */
+  @media (min-width: 640px)  { html { font-size: 16.5px; } }
+  /* md  768px  — portable tablet */
+  @media (min-width: 768px)  { html { font-size: 17px; } }
+  /* lg  1024px — laptop */
+  @media (min-width: 1024px) { html { font-size: 17.5px; } }
+  /* xl  1280px — large laptop */
+  @media (min-width: 1280px) { html { font-size: 18px; } }
+  /* 3xl 1440px — desktop monitor */
+  @media (min-width: 1440px) { html { font-size: 18.5px; } }
+  /* 4xl 1920px — wide desktop */
+  @media (min-width: 1920px) { html { font-size: 19px; } }
+
+  body {
+    @apply bg-slate-50 text-slate-900 min-h-screen;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight leading-tight;
+    font-family: 'Outfit', sans-serif;
+  }
+
+  p { @apply text-slate-600 leading-relaxed; }
+
+  /**
+   * …except inside a surface that has deliberately set light text.
+   *
+   * The rule above sets `color` directly on every <p>, and a direct rule beats
+   * an inherited one — so `<div class="bg-linear-to-br from-blue-600 text-white">`
+   * had white on the div and slate-600 on every paragraph inside it. Dark grey
+   * on a blue-600→indigo-700 gradient: the seller dashboard's headline sales
+   * figures were close to illegible, and the same held for every coloured panel
+   * in the app (600+ files use `text-white`).
+   *
+   * Scoped to light-on-dark surfaces because that is where the failure is
+   * legible-vs-not; slate-600 paragraphs on a light card are fine and are left
+   * alone.
+   */
+  :is([class~="text-white"], [class~="text-slate-50"], [class~="text-slate-100"]) p {
+    color: inherit;
+  }
+
+  a { @apply no-underline; color: inherit; }
+
+  button { cursor: pointer; font-family: inherit; }
+
+  img { max-width: 100%; height: auto; }
+
+  input, textarea, select {
+    font-family: inherit;
+    @apply outline-none;
+  }
+
+  /* Focus ring — accessibility */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* Wrapped in @layer components so every Tailwind utility — including each
+ * responsive variant — overrides these classes. Unlayered CSS beats ALL
+ * layered CSS in the cascade, so out here `md:grid` next to `.scroll-x`,
+ * or `md:hidden` next to a custom class that sets `display`, never applied. */
+@layer components {
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* Hide scrollbar utility (used by horizontal carousels) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  /* Firefox has no `::-webkit-scrollbar`, so without this the bar stayed visible
+   * there while every other browser hid it, and the extra ~15px of gutter
+   * shifted each strip's contents against the rest of the layout. */
+  scrollbar-width: none;
+  /* Keep a swipe inside the strip. Every one of these is a horizontally
+   * scrollable row — the account module chips, the profile service switcher, the
+   * order-history filter tabs — and on iOS and Android a horizontal swipe that
+   * reaches the end of one chains to the page and fires the browser's
+   * back-navigation gesture. A customer flicking through their service tabs
+   * would leave the page. */
+  overscroll-behavior-x: contain;
+}
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Thin scrollbar utility (used by horizontal tab navigation) */
+
+/* Custom scrollbar — used in portal sidebars (e.g. taxi, seller) */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 999px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
+
+/* ─── Navigation Progress Bar ───────────────────────────────────────────── */
+/* Used by NavigationProgress component in layout.tsx */
+.nav-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: var(--np-width, 0%);
+  z-index: 9999;
+  background: linear-gradient(90deg, var(--color-brand-primary) 0%, var(--color-brand-secondary) 100%);
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.6);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  display: none;
+}
+.nav-progress-bar.nav-progress-active {
+  display: block;
+}
+.nav-progress-complete {
+  transition: width 0.2s ease, opacity 0.3s ease;
+}
+
+/* ─── Responsive Utilities — 8 Device Breakpoints ───────────────────────── */
+/*
+ * Breakpoint reference:
+ *   2xs  320px  Small mobile phones
+ *   xs   375px  Standard mobile phones
+ *   sm   640px  Tablets
+ *   md   768px  Portable tablets
+ *   lg  1024px  Laptops
+ *   xl  1280px  Large laptops
+ *  3xl  1440px  Desktop monitors
+ *  4xl  1920px  Wide-range desktops
+ */
+
+/* ── Responsive Container ── */
+/* Use .responsive-container on page wrappers for auto-centering + padding */
+.responsive-container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 375px)  { .responsive-container { padding-left: 1rem;   padding-right: 1rem;   } }
+@media (min-width: 640px)  { .responsive-container { padding-left: 1.25rem; padding-right: 1.25rem; max-width: 100%;    } }
+@media (min-width: 768px)  { .responsive-container { padding-left: 1.5rem; padding-right: 1.5rem; max-width: 100%;    } }
+@media (min-width: 1024px) { .responsive-container { padding-left: 2rem;   padding-right: 2rem;   max-width: 1280px;  } }
+@media (min-width: 1280px) { .responsive-container { padding-left: 2.5rem; padding-right: 2.5rem; max-width: 1400px;  } }
+@media (min-width: 1440px) { .responsive-container { padding-left: 3rem;   padding-right: 3rem;   max-width: 1600px;  } }
+@media (min-width: 1920px) { .responsive-container { padding-left: 4rem;   padding-right: 4rem;   max-width: 1800px;  } }
+
+/* ── Responsive Grid ── */
+/* Fluid auto-fill grid that adapts column count per breakpoint */
+.responsive-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(1, 1fr);
+}
+@media (min-width: 375px)  { .responsive-grid { grid-template-columns: repeat(1, 1fr); gap: 0.75rem; } }
+@media (min-width: 640px)  { .responsive-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem;    } }
+@media (min-width: 768px)  { .responsive-grid { grid-template-columns: repeat(2, 1fr); gap: 1.25rem; } }
+@media (min-width: 1024px) { .responsive-grid { grid-template-columns: repeat(3, 1fr); gap: 1.5rem;  } }
+@media (min-width: 1280px) { .responsive-grid { grid-template-columns: repeat(4, 1fr); gap: 1.5rem;  } }
+@media (min-width: 1440px) { .responsive-grid { grid-template-columns: repeat(4, 1fr); gap: 2rem;    } }
+@media (min-width: 1920px) { .responsive-grid { grid-template-columns: repeat(5, 1fr); gap: 2rem;    } }
+
+/* Variant — 2-col max (for cards) */
+.responsive-grid-2 {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(1, 1fr);
+}
+@media (min-width: 640px)  { .responsive-grid-2 { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1920px) { .responsive-grid-2 { gap: 2rem; } }
+
+/* Variant — 3-col max */
+.responsive-grid-3 {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(1, 1fr);
+}
+@media (min-width: 640px)  { .responsive-grid-3 { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .responsive-grid-3 { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1920px) { .responsive-grid-3 { gap: 2rem; } }
+
+/* ── Responsive Stack ── */
+/* flex-col on mobile, flex-row on sm+ */
+.responsive-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+@media (min-width: 640px) { .responsive-stack { flex-direction: row; align-items: center; } }
+
+/* ── Responsive Section Padding ── */
+.responsive-section {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+@media (min-width: 640px)  { .responsive-section { padding-top: 3rem;   padding-bottom: 3rem;   } }
+@media (min-width: 1024px) { .responsive-section { padding-top: 4rem;   padding-bottom: 4rem;   } }
+@media (min-width: 1440px) { .responsive-section { padding-top: 5rem;   padding-bottom: 5rem;   } }
+@media (min-width: 1920px) { .responsive-section { padding-top: 6rem;   padding-bottom: 6rem;   } }
+
+/* ── Responsive Typography ── */
+/*
+ * All sizes below are slightly increased over defaults for a premium look.
+ * The html font-size scale above amplifies these further on larger screens.
+ */
+.responsive-heading {
+  font-size: 1.625rem;   /* ~26px on mobile */
+  line-height: 1.2;
+  font-weight: 700;
+}
+@media (min-width: 640px)  { .responsive-heading { font-size: 2rem;    } }  /* 33px */
+@media (min-width: 1024px) { .responsive-heading { font-size: 2.5rem;  } }  /* 45px */
+@media (min-width: 1440px) { .responsive-heading { font-size: 3rem;    } }  /* 57px */
+@media (min-width: 1920px) { .responsive-heading { font-size: 3.5rem;  } }  /* ~68px */
+
+.responsive-subheading {
+  font-size: 1.0625rem;  /* ~17px on mobile */
+  line-height: 1.6;
+}
+@media (min-width: 640px)  { .responsive-subheading { font-size: 1.25rem;  } }
+@media (min-width: 1024px) { .responsive-subheading { font-size: 1.375rem; } }
+@media (min-width: 1440px) { .responsive-subheading { font-size: 1.5rem;   } }
+
+/* ── Responsive Show/Hide Utilities ── */
+/* Hide on small mobile, show from xs up */
+.show-xs  { display: none; }
+@media (min-width: 375px)  { .show-xs  { display: block; } }
+/* Hide on mobile, show from sm (tablet) up */
+.show-sm  { display: none; }
+@media (min-width: 640px)  { .show-sm  { display: block; } }
+/* Hide on mobile/tablet, show from md (portable tablet) up */
+.show-md  { display: none; }
+@media (min-width: 768px)  { .show-md  { display: block; } }
+/* Hide on everything below laptop */
+.show-lg  { display: none; }
+@media (min-width: 1024px) { .show-lg  { display: block; } }
+/* Hide on desktop only — show only on mobile */
+.hide-sm  { display: block; }
+@media (min-width: 640px)  { .hide-sm  { display: none; } }
+/* Hide from md up — show only on mobile/tablet */
+.hide-md  { display: block; }
+@media (min-width: 768px)  { .hide-md  { display: none; } }
+/* Hide from lg up — show only on mobile/tablet/portable tablet */
+.hide-lg  { display: block; }
+@media (min-width: 1024px) { .hide-lg  { display: none; } }
+
+/* ── Safe-area helpers for mobile notch/home-bar ── */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-left   { padding-left:   env(safe-area-inset-left,   0px); }
+.safe-right  { padding-right:  env(safe-area-inset-right,  0px); }
+
+/* ─── Component Layer ────────────────────────────────────────────────────── */
+} /* @layer components */
+@layer components {
+
+  /* ── Cards ── */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-100;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s var(--ease-smooth), transform 0.2s var(--ease-smooth);
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-float);
+    transform: translateY(-2px);
+  }
+  .card-flat { @apply bg-white rounded-2xl border border-slate-200; }
+  .card-ghost { @apply bg-slate-50 rounded-2xl border border-slate-200; }
+
+  /* ── Buttons ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-xl px-5 py-2.5 text-base transition-all duration-200;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-brand-primary) 0%, var(--primitive-color-blue-700) 100%);
+    @apply text-white shadow-md;
+  }
+  .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: var(--shadow-glow); }
+  .btn-primary:active { transform: translateY(0); filter: brightness(0.96); }
+  .btn-secondary { @apply bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-300; }
+  .btn-outline   { @apply border-2 border-slate-300 text-slate-700 hover:border-brand-500 hover:text-brand-700 hover:bg-brand-50; }
+  .btn-ghost     { @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900; }
+  .btn-danger    { @apply bg-red-500 text-white hover:bg-red-600 active:bg-red-700; }
+  .btn-success   { @apply bg-emerald-500 text-white hover:bg-emerald-600; }
+  .btn-warning   { @apply bg-amber-400 text-slate-900 hover:bg-amber-500; }
+  .btn-dark      { @apply bg-slate-900 text-white hover:bg-slate-800; }
+  .btn-sm        { @apply px-3 py-1.5 text-sm rounded-lg; }
+  .btn-lg        { @apply px-7 py-3.5 text-lg rounded-2xl; }
+  .btn-icon      { @apply p-2 rounded-xl; }
+  .btn-loading   { @apply opacity-70 cursor-not-allowed; }
+
+  /* ── Badges ── */
+  .badge         { @apply inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full; }
+  .badge-green   { @apply bg-emerald-100 text-emerald-700; }
+  .badge-blue    { @apply bg-blue-100 text-blue-700; }
+  .badge-amber   { @apply bg-amber-100 text-amber-700; }
+  .badge-red     { @apply bg-red-100 text-red-700; }
+  .badge-purple  { @apply bg-purple-100 text-purple-700; }
+  .badge-teal    { @apply bg-teal-100 text-teal-700; }
+  .badge-slate   { @apply bg-slate-100 text-slate-600; }
+  .badge-outline { @apply border border-current bg-transparent; }
+
+  /* ── Inputs ── */
+  .input {
+    @apply w-full bg-slate-100 rounded-xl px-4 py-3 text-sm text-slate-900 transition-all duration-200;
+    border: 1.5px solid transparent;
+  }
+  .input:focus {
+    @apply bg-white;
+    border-color: var(--brand-primary);
+    box-shadow: var(--shadow-glow);
+  }
+  .input::placeholder { color: var(--text-muted); }
+  .input-bordered { @apply bg-white border border-slate-200; }
+  .input-error    { border-color: var(--color-feedback-danger); @apply bg-red-50; }
+  .input-success  { border-color: var(--color-feedback-success); @apply bg-emerald-50; }
+
+  /* ── Labels ── */
+  .label    { @apply block text-base font-semibold text-slate-700 mb-1.5; }
+  .label-sm { @apply block text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider; }
+
+  /* ── Section Titles ── */
+  .section-title    { @apply text-2xl font-bold text-slate-900 tracking-tight; }
+  .section-subtitle { @apply text-base text-slate-500 font-medium; }
+  .page-title       { @apply text-3xl md:text-4xl font-black text-slate-900 tracking-tighter; }
+
+  /* ── Dividers ── */
+  .divider     { @apply border-t border-slate-200 my-4; }
+  .divider-sm  { @apply border-t border-slate-100 my-2; }
+
+  /* ── Avatar ── */
+  .avatar    { @apply rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 overflow-hidden shrink-0; }
+  .avatar-sm { @apply w-7 h-7 text-xs; }
+  .avatar-md { @apply w-9 h-9 text-sm; }
+  .avatar-lg { @apply w-12 h-12 text-base; }
+  .avatar-xl { @apply w-16 h-16 text-xl; }
+
+  /* ── Table ── */
+  .table-wrap { @apply w-full overflow-x-auto rounded-xl border border-slate-200; }
+  .table      { @apply w-full text-sm text-left; }
+  .table thead tr { @apply bg-slate-50 border-b border-slate-200; }
+  .table th   { @apply px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider; }
+  .table td   { @apply px-4 py-3 text-slate-700 border-b border-slate-100; }
+  .table tbody tr:last-child td { @apply border-0; }
+  .table tbody tr:hover td { @apply bg-slate-50; }
+
+  /* ── Stats Card ── */
+  .stat-card {
+    @apply bg-white rounded-2xl border border-slate-100 p-5 flex flex-col gap-1;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s var(--ease-smooth), transform 0.2s var(--ease-smooth);
+  }  .stat-value { @apply text-3xl font-black text-slate-900; }
+  .stat-label { @apply text-sm font-semibold text-slate-500 uppercase tracking-wider; }
+  .stat-delta-up   { @apply text-sm font-bold text-emerald-600; }
+  .stat-delta-down { @apply text-sm font-bold text-red-500; }
+
+  /* ── Alert / Toast ── */
+  .alert         { @apply flex items-start gap-3 p-4 rounded-xl text-sm font-medium; }
+  .alert-info    { @apply bg-blue-50 text-blue-800 border border-blue-200; }
+  .alert-success { @apply bg-emerald-50 text-emerald-800 border border-emerald-200; }
+  .alert-warning { @apply bg-amber-50 text-amber-800 border border-amber-200; }
+  .alert-error   { @apply bg-red-50 text-red-800 border border-red-200; }
+
+  /* ── Skeleton Loader ── */
+  .skeleton {
+    @apply bg-slate-200 rounded-lg;
+    background: var(--gradient-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .skeleton-text  {
+    @apply bg-slate-200 h-4 w-full rounded;
+    background: var(--gradient-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .skeleton-title {
+    @apply bg-slate-200 h-6 w-3/4 rounded;
+    background: var(--gradient-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .skeleton-img   {
+    @apply bg-slate-200 w-full rounded-xl;
+    background: var(--gradient-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* ── Skeleton Composites (CLS-safe placeholders) ── */
+  .skeleton-card {
+    @apply bg-white rounded-2xl border border-slate-100 overflow-hidden;
+    box-shadow: var(--shadow-card);
+  }
+  .skeleton-hero {
+    @apply bg-slate-200 rounded-3xl w-full;
+    background: var(--gradient-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    aspect-ratio: 16 / 7;
+    min-height: 176px;
+  }
+  @media (min-width: 768px) {
+    .skeleton-hero { min-height: 224px; }
+  }
+  .skeleton-carousel-item {
+    @apply bg-white rounded-2xl border border-slate-100 overflow-hidden shrink-0;
+    box-shadow: var(--shadow-card);
+    width: 240px;
+    min-height: 200px;
+  }
+  @media (min-width: 768px) {
+    .skeleton-carousel-item { width: 260px; }
+  }
+  .skeleton-stat {
+    @apply bg-white rounded-2xl border border-slate-100 overflow-hidden p-5 flex flex-col gap-2;
+    box-shadow: var(--shadow-card);
+    min-height: 120px;
+  }
+  .skeleton-service-icon {
+    @apply bg-slate-200 rounded-2xl;
+    background: var(--gradient-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    width: 64px;
+    height: 64px;
+  }
+  @media (min-width: 768px) {
+    .skeleton-service-icon { width: 80px; height: 80px; }
+  }
+  .skeleton-restaurant {
+    @apply bg-white rounded-2xl border border-slate-100 overflow-hidden shrink-0;
+    box-shadow: var(--shadow-card);
+    width: 260px;
+    min-height: 280px;
+  }
+  @media (min-width: 768px) {
+    .skeleton-restaurant { width: 280px; }
+  }
+  .skeleton-product {
+    @apply bg-white rounded-2xl border border-slate-100 overflow-hidden shrink-0;
+    box-shadow: var(--shadow-card);
+    width: 155px;
+    min-height: 210px;
+  }
+  @media (min-width: 768px) {
+    .skeleton-product { width: 180px; }
+  }
+
+  /* ── CLS Prevention ── */
+  .reserve-hero {
+    min-height: 176px;
+  }
+  @media (min-width: 768px) {
+    .reserve-hero { min-height: 224px; }
+  }
+  .reserve-carousel {
+    min-height: 200px;
+  }
+  .contain-layout {
+    contain: layout style;
+  }
+  .auth-area-reserve {
+    min-width: 80px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  /* ── Chip / Tag ──
+   * Single definition. There was a second `.chip` further down the file, outside
+   * any cascade layer, which won outright — so `.chip-active` (declared here with
+   * @apply, i.e. in this layer) never coloured anything and the selected filter
+   * pill looked identical to the unselected ones. Both the `.chip-active` and
+   * `.chip.active` spellings are honoured because both are in use.
+   */
+  .chip {
+    @apply inline-flex shrink-0 items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold
+           bg-white text-slate-600 border-[1.5px] border-slate-200 whitespace-nowrap cursor-pointer transition-colors;
+    min-height: 36px;
+  }
+  .chip:hover { @apply border-slate-400 text-slate-800; }
+  .chip.chip-active,
+  .chip.active { @apply bg-brand-600 border-brand-600 text-white; }
+
+  /* ── Mobile Nav ── */
+  .mobile-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200;
+    @apply flex items-center justify-around;
+    padding: 10px 0 max(env(safe-area-inset-bottom, 0px), 8px);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+    z-index: 100;
+  }
+  .mobile-nav-item {
+    @apply flex flex-col items-center gap-1 text-slate-400 text-[10px] font-semibold cursor-pointer transition-colors;
+    min-width: 52px;
+    min-height: 44px;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-nav-item.active { color: var(--brand-primary); }
+
+  /* ── Dropdown ── */
+  .dropdown-menu {
+    @apply absolute bg-white rounded-2xl shadow-float border border-slate-100 z-50 py-1.5 min-w-[160px];
+    animation: scaleIn 0.15s var(--ease-spring) both;
+  }
+  .dropdown-item {
+    @apply flex items-center gap-2.5 w-full px-3.5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors;
+  }
+  .dropdown-item.active { @apply bg-brand-50 text-brand-700; }
+  .dropdown-item-danger { @apply text-red-600 hover:bg-red-50; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-300;
+    animation: fadeIn 0.2s ease both;
+  }
+  .modal-content {
+    @apply bg-white rounded-3xl shadow-modal p-6;
+    animation: scaleIn 0.25s var(--ease-spring) both;
+  }
+
+  /* ── Progress Bar ── */
+  .progress { @apply w-full h-2 bg-slate-200 rounded-full overflow-hidden; }
+  .progress-bar { @apply h-full rounded-full transition-all duration-500; }
+  .progress-bar-brand { @apply bg-brand-600; }
+  .progress-bar-green { @apply bg-emerald-500; }
+
+  /* ── Glass ── */
+  .glass {
+    background: rgba(255,255,255,0.75);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.4);
+  }
+  .glass-dark {
+    background: rgba(15,23,42,0.75);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  /* ── Tap Target ──
+   * Guarantees the 44x44 minimum hit area recommended for touch, and centres
+   * the icon inside it.
+   *
+   * This lives in the COMPONENTS layer on purpose. It declares `display`, and
+   * the components layer is overridden by Tailwind's utilities layer — so
+   * `hidden`, `md:hidden`, `sm:flex` etc. on the same element still win. When
+   * this rule sat in the utilities layer it was emitted after Tailwind's own
+   * utilities at equal specificity, so `display: inline-flex` silently beat
+   * `md:hidden` and mobile-only buttons stayed visible on desktop.
+   */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── SVG Pattern Overlay ── */
+  .bg-cross-pattern {
+    /* cspell:disable-next-line */
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+}
+
+/* Wrapped in @layer components so every Tailwind utility — including each
+ * responsive variant — overrides these classes. Unlayered CSS beats ALL
+ * layered CSS in the cascade, so out here `md:grid` next to `.scroll-x`,
+ * or `md:hidden` next to a custom class that sets `display`, never applied. */
+@layer components {
+/* ─── Module Layout Utilities ─────────────────────────────────────────────── */
+/*
+ * Per-module page backgrounds: a subtle top-to-neutral gradient that gives
+ * each module a distinct tinted identity without being overwhelming.
+ */
+.module-surface-restaurant {
+  background: linear-gradient(180deg, var(--restaurant-surface) 0%, var(--color-surface-base) 35%, var(--color-surface-base) 100%);
+}
+.module-surface-pharmacy {
+  background: linear-gradient(180deg, var(--pharmacy-surface) 0%, var(--color-surface-base) 35%, var(--color-surface-base) 100%);
+}
+.module-surface-doctor {
+  background: linear-gradient(180deg, var(--doctor-surface) 0%, var(--color-surface-base) 35%, var(--color-surface-base) 100%);
+}
+.module-surface-hotel {
+  background: linear-gradient(180deg, var(--hotel-surface) 0%, var(--color-surface-base) 35%, var(--color-surface-base) 100%);
+}
+.module-surface-grocery {
+  background: linear-gradient(180deg, var(--grocery-surface) 0%, var(--color-surface-base) 35%, var(--color-surface-base) 100%);
+}
+.module-surface-marketplace {
+  background: linear-gradient(180deg, var(--marketplace-surface) 0%, var(--color-surface-base) 35%, var(--color-surface-base) 100%);
+}
+} /* @layer components */
+
+/* ── Stop iOS Safari zooming in on focused inputs ─────────────────────────
+ * Mobile Safari zooms the viewport whenever a focused form control renders
+ * below 16px, and never zooms back out — the page is left scrolled sideways
+ * mid-checkout. Most controls in this app are `text-sm` (14px), so pin them
+ * to 16px, but only on touch screens phone/tablet sized; a desktop pointer
+ * keeps the compact type, and so do the dense back-office tables at lg+.
+ *
+ * This was previously scoped to `.module-surface-grocery`, so the same trap
+ * was still live in marketplace, restaurant, pharmacy, doctor, hotel-booking
+ * and taxi — every module a customer actually signs in and checks out through.
+ *
+ * Deliberately unlayered so it overrides Tailwind's `text-sm`/`text-xs`
+ * utilities. It is narrow on purpose (coarse pointer + form controls only) —
+ * an unscoped rule out here would beat every responsive utility on the element.
+ */
+@media (pointer: coarse) and (max-width: 1023px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Wrapped in @layer components so every Tailwind utility — including each
+ * responsive variant — overrides these classes. Unlayered CSS beats ALL
+ * layered CSS in the cascade, so out here `md:grid` next to `.scroll-x`,
+ * or `md:hidden` next to a custom class that sets `display`, never applied. */
+@layer components {
+/*
+ * Per-module header gradient bars — consistent height, shadow, and font style
+ * regardless of which module the user is in.
+ */
+.module-header-restaurant {
+  background: linear-gradient(135deg, var(--restaurant-header-from) 0%, var(--restaurant-header-to) 100%);
+  box-shadow: 0 2px 20px var(--restaurant-glow), 0 1px 0 rgba(0,0,0,0.08);
+}
+.module-header-pharmacy {
+  background: linear-gradient(135deg, var(--pharmacy-header-from) 0%, var(--pharmacy-header-to) 100%);
+  box-shadow: 0 2px 20px var(--pharmacy-glow), 0 1px 0 rgba(0,0,0,0.08);
+}
+.module-header-doctor {
+  background: linear-gradient(135deg, var(--doctor-header-from) 0%, var(--doctor-header-to) 100%);
+  box-shadow: 0 2px 20px var(--doctor-glow), 0 1px 0 rgba(0,0,0,0.08);
+}
+.module-header-hotel {
+  background: linear-gradient(135deg, var(--hotel-header-from) 0%, var(--hotel-header-to) 100%);
+  box-shadow: 0 2px 20px var(--hotel-glow), 0 1px 0 rgba(0,0,0,0.08);
+}
+.module-header-grocery {
+  background: linear-gradient(135deg, var(--grocery-header-from) 0%, var(--grocery-header-to) 100%);
+  box-shadow: 0 2px 20px var(--grocery-glow), 0 1px 0 rgba(0,0,0,0.08);
+}
+.module-header-marketplace {
+  background: linear-gradient(135deg, var(--marketplace-header-from) 0%, var(--marketplace-header-to) 100%);
+  box-shadow: 0 2px 20px var(--marketplace-glow), 0 1px 0 rgba(0,0,0,0.08);
+}
+
+/* Common module header text / icon color */
+.module-header-restaurant *,
+.module-header-pharmacy *,
+.module-header-doctor *,
+.module-header-hotel *,
+.module-header-grocery *,
+.module-header-marketplace * {
+  --tw-text-opacity: 1;
+}
+
+/* Shared logo icon badge style inside colored headers */
+.module-icon-badge {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 0.625rem;      /* 10px */
+  width: 2.25rem; height: 2.25rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Shared search input style for colored headers */
+.module-search-input {
+  width: 100%;
+  padding: 0.625rem 1rem 0.625rem 2.75rem;
+  background: rgba(255,255,255,0.92);
+  border: 1.5px solid transparent;
+  border-radius: 0.875rem;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s var(--ease-smooth);
+  backdrop-filter: blur(4px);
+}
+.module-search-input::placeholder { color: var(--color-text-muted); }
+.module-search-input:focus {
+  background: var(--color-surface-card);
+  border-color: rgba(255,255,255,0.6);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
+}
+
+/* Shared nav action button in colored headers.
+ * NOTE: display is NOT set here — Tailwind utilities (hidden / flex / inline-flex)
+ * on each element control visibility per breakpoint.  Setting display here
+ * previously overrode Tailwind's `hidden` and leaked desktop buttons onto mobile. */
+.module-nav-btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  color: rgba(255,255,255,0.9);
+  font-size: 0.875rem;
+  font-weight: 600;
+  /* display controlled by Tailwind classes */
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  /* A 20px icon in 0.5rem of vertical padding measured 36px tall — under the
+   * 44px touch guidance, and these are the primary actions in every module
+   * header. The floor is set here rather than on each of the five headers so
+   * they cannot drift apart. */
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  transition: background 0.15s var(--ease-smooth), color 0.15s;
+}
+.module-nav-btn:hover {
+  background: rgba(255,255,255,0.18);
+  color: var(--color-text-inverse);
+}
+
+/* Mobile bottom nav with module accent */
+.module-bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(255,255,255,0.97);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.07);
+  display: flex;
+  justify-content: space-around;
+  padding: 0.5rem 0 max(env(safe-area-inset-bottom, 0px), 0.5rem);
+  z-index: 50;
+}
+.module-bottom-nav a {
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  transition: color 0.15s;
+  min-width: 52px;
+}
+.module-bottom-nav a.active { color: var(--module-active-color, var(--color-brand-primary)); }
+
+/* ─── Mobile-First UI Toolkit ─────────────────────────────────────────────── */
+/*
+ * These classes power the mobile-optimized interfaces across every module.
+ * Applied at the component level — no media query duplication needed.
+ */
+
+/* ── Horizontal Snap Scroll Container ───────────────────────────────────── */
+.scroll-x {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 0.5rem;
+  /* Full-bleed on mobile, contained on desktop */
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+.scroll-x::-webkit-scrollbar { display: none; }
+@media (min-width: 768px) {
+  .scroll-x {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* Items inside a scroll-x container */
+.scroll-x > * { scroll-snap-align: start; flex-shrink: 0; }
+
+/* ── Snap Cards — swipeable cards in a horizontal rail ───────────────────────
+ * These keep a fixed width at EVERY breakpoint and never shrink. They used to
+ * collapse to `width: auto; min-width: 0` from 640px up, on the assumption that
+ * the rail always became a grid at that point. Most rails don't: the pharmacy
+ * home page keeps five plain `flex … overflow-x-auto` rows at all widths, and
+ * from 640px its cards had auto width with flex-shrink 1, so they squeezed to a
+ * sliver and their contents — the rating pill, the "BOGO" flag, the price —
+ * spilled out past the right edge of the page at 768/1024/1280/1440.
+ *
+ * A card that IS going into a grid opts out explicitly with `md:snap-card-none`
+ * alongside `md:grid` (see the hotel-booking home page). Explicit beats implicit:
+ * the rail is the default, the grid is the opt-in.
+ */
+.snap-card {
+  flex: 0 0 auto;
+  width: clamp(240px, 85vw - 2rem, 320px);
+}
+/* Compact snap card (pharmacies, categories, brands) */
+.snap-card-sm {
+  flex: 0 0 auto;
+  width: clamp(180px, 65vw - 2rem, 240px);
+}
+/* Wide snap card (heroes, promo banners) */
+.snap-card-lg {
+  flex: 0 0 auto;
+  width: clamp(280px, 92vw - 2rem, 480px);
+}
+
+/* ── Mobile Hero Section ─────────────────────────────────────────────────── */
+.mobile-hero {
+  position: relative;
+  overflow: hidden;      /* decorative blur blobs must not widen the document */
+  min-height: 180px;
+  padding: 1.25rem 1rem;
+  border-radius: 1.25rem;
+}
+@media (min-width: 640px) {
+  .mobile-hero { min-height: 220px; padding: 2rem 2.5rem; border-radius: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .mobile-hero { min-height: 280px; padding: 3rem; border-radius: 2rem; }
+}
+
+/* NOTE: .cat-grid, .card-grid-2-3 and .card-grid-2-4 were also defined here.
+ * They were entirely overridden by the definitions further down this file
+ * (search "Category Grid (responsive icon grid)"), whose base rules redeclare
+ * every property at equal specificity but later in source order. Removed to
+ * keep one source of truth per grid utility. */
+
+/* ── Mobile Search Form ──────────────────────────────────────────────────── */
+/* Stacks vertically on mobile, row on desktop */
+.search-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.625rem;
+}
+@media (min-width: 640px) {
+  .search-form-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1024px) {
+  .search-form-grid { grid-template-columns: 2fr 1fr 1fr auto; gap: 0.75rem; }
+}
+
+/* NOTE: `.hotel-search-grid` and `.chip` were also defined here. Both were
+ * duplicated further down / in the components layer; the copies disagreed about
+ * their breakpoints, and whichever came last in the file silently won. Single
+ * definitions now live in the components layer (`.chip`) and in the toolkit
+ * section at the foot of this file (`.hotel-search-grid`). */
+
+/* ── Chip / Filter Row ───────────────────────────────────────────────────── */
+.chip-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+
+/* ── Section Wrapper (standard padding + max-width) ─────────────────────── */
+.section-wrap {
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  .section-wrap { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .section-wrap { padding-left: 2rem; padding-right: 2rem; }
+}
+
+/* ── Full-bleed on mobile (remove side padding) ──────────────────────────── */
+.mobile-full-bleed {
+  margin-left: -1rem;
+  margin-right: -1rem;
+}
+@media (min-width: 640px) {
+  .mobile-full-bleed { margin-left: 0; margin-right: 0; }
+}
+
+/* ── Touch-optimized list row ────────────────────────────────────────────── */
+.touch-row {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 0.75rem 1rem;
+  border-radius: 0.875rem;
+  background: white;
+  border: 1px solid var(--color-border-faint);
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.touch-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: var(--color-border-subtle); }
+.touch-row:active { transform: scale(0.98); }
+
+/* ── Stats Strip ─────────────────────────────────────────────────────────── */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+@media (min-width: 640px) { .stats-strip { gap: 0.75rem; } }
+
+/* ── Floating CTA (sticky bottom button on mobile) ───────────────────────── */
+.mobile-cta-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(255,255,255,0.97);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--color-border-faint);
+  padding: 0.75rem 1rem;
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
+  z-index: 49;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.08);
+}
+@media (min-width: 768px) { .mobile-cta-bar { display: none; } }
+
+/* ── Trust Badge Strip ───────────────────────────────────────────────────── */
+.trust-strip {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+@media (min-width: 640px) { .trust-strip { grid-template-columns: repeat(4, 1fr); } }
+
+/* ── Section Title Row ───────────────────────────────────────────────────── */
+.section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.section-row h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+@media (min-width: 640px) {
+  .section-row h2 { font-size: 1.125rem; }
+}
+.section-row a {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+/* ── Responsive Promo Banner ─────────────────────────────────────────────── */
+.promo-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  padding: 1.25rem 1.25rem;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+}
+@media (min-width: 640px) {
+  .promo-banner { padding: 2rem 2.5rem; min-height: 180px; border-radius: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .promo-banner { padding: 3rem; min-height: 220px; border-radius: 2rem; }
+}
+
+/* NOTE: `.hero-title` / `.hero-subtitle` were also defined here as a stepped
+ * scale. A second, fluid `clamp()` definition further down the file overrode
+ * every step of it. The clamp version is the survivor — see "Hero Typography"
+ * in the toolkit section at the foot of this file. */
+
+/* ── Two-column mobile card grid ─────────────────────────────────────────── */
+.grid-mobile-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem;
+}
+@media (min-width: 768px) {
+  .grid-mobile-2 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+}
+@media (min-width: 1024px) {
+  .grid-mobile-2 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ── Bottom padding for module pages (clears the fixed mobile bottom nav) ─── */
+.pb-mobile-nav { padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 768px) { .pb-mobile-nav { padding-bottom: 2rem; } }
+
+/* ── Inline search pill (used in taxi, doctor location row) ──────────────── */
+.search-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: var(--color-surface-base);
+  border: 1.5px solid var(--color-border-subtle);
+  border-radius: 9999px;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  transition: all 0.2s;
+  cursor: pointer;
+  min-height: 48px;
+}
+.search-pill:focus-within {
+  background: white;
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+}
+.search-pill input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: inherit;
+  color: inherit;
+}
+} /* @layer components */
+
+@layer utilities {
+  /* Gradient text shortcuts */
+  .text-gradient {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Shimmer animation for skeleton */
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Entry animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.93); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideLeft {
+    from { opacity: 0; transform: translateX(-16px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideRight {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+  @keyframes bounceGentle {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-4px); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /* Animation classes */
+  .animate-fade-in    { animation: fadeIn 0.4s cubic-bezier(0.4,0,0.2,1) both; }
+  .animate-scale-in   { animation: scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
+  .animate-slide-up   { animation: slideUp 0.35s cubic-bezier(0.4,0,0.2,1) both; }
+  .animate-slide-down { animation: slideDown 0.35s cubic-bezier(0.4,0,0.2,1) both; }
+  .animate-slide-left { animation: slideLeft 0.35s cubic-bezier(0.4,0,0.2,1) both; }
+  .animate-float      { animation: float 3s ease-in-out infinite; }
+  .animate-shimmer    {
+    background: var(--gradient-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Radix-compatible animate-in utilities */
+  .animate-in    { animation-fill-mode: both; }
+  .fade-in       { animation-name: fadeIn; }
+  .fade-out      { animation-name: fadeOut; }
+  .slide-in-from-top-2 { animation-name: slideDown; }
+  .duration-150  { animation-duration: 150ms; }
+  .duration-200  { animation-duration: 200ms; }
+  .duration-300  { animation-duration: 300ms; }
+
+  /* ── Mobile-First Responsive Helpers ── */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  }
+  /* Clearance for the fixed mobile bottom nav, which only exists below md.
+     Scoped to that range rather than declared unconditionally: this class sits
+     after Tailwind's own utilities in the cascade, so an `md:pb-*` override on
+     the element could never have beaten an unscoped declaration. */
+  @media (max-width: 767px) {
+    .pb-safe-nav {
+      padding-bottom: calc(5rem + max(env(safe-area-inset-bottom, 0px), 8px));
+    }
+  }
+
+  /* Clearance for the same nav, but for `position: fixed` panels, which ignore
+     the padding above. `--grocery-nav-height` is published by the grocery layout
+     from the nav's measured height (0 when the nav is not rendered), so a bar
+     using this sits flush on top of it on a phone and flush to the viewport
+     bottom on a tablet, with no magic number to drift out of step. */
+  .above-bottom-nav {
+    bottom: var(--grocery-nav-height, 0px);
+  }
+  /* NOTE: `.touch-target` deliberately lives in the components layer (see the
+     "Tap Target" block above), NOT here. It sets `display`, and anything in
+     this layer is emitted after Tailwind's own utilities — an unconditional
+     `display` here beat `hidden` / `md:hidden` on the same element, which is
+     what leaked the mobile-only country and search buttons onto desktop and
+     pushed the cart icon off the right edge of the header. */
+
+  /* Smooth panel reveal (used by mobile search/dropdown overlays) */
+  .panel-reveal {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s var(--ease-smooth), opacity 0.2s var(--ease-smooth);
+  }
+  .panel-reveal.open {
+    max-height: 500px;
+    opacity: 1;
+  }
+
+  /* Content visibility for below-fold performance */
+  .content-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 300px;
+  }
+
+  /* No horizontal overflow (prevents page-level scroll) */
+  .overflow-x-clip {
+    overflow-x: clip;
+  }
+}
+
+/* Wrapped in @layer components so every Tailwind utility — including each
+ * responsive variant — overrides these classes. Unlayered CSS beats ALL
+ * layered CSS in the cascade, so out here `md:grid` next to `.scroll-x`,
+ * or `md:hidden` next to a custom class that sets `display`, never applied. */
+@layer components {
+/* ─── Small Screen Adjustments (≤ 374px) ──────────────────────────────── */
+@media (max-width: 374px) {
+  .mobile-nav-item { min-width: 44px; }
+  .mobile-nav-item span { font-size: 9px; }
+}
+
+/* -- Taxi Page: Map Grid Background -------------------------------------- */
+/* Replaces the inline style prop on the taxi page background grid div.    */
+.taxi-map-grid {
+  background-image:
+    repeating-linear-gradient(0deg,  #fff 0px, transparent 1px, transparent 60px, #fff 61px),
+    repeating-linear-gradient(90deg, #fff 0px, transparent 1px, transparent 60px, #fff 61px);
+}
+
+/* -- Color Swatch: Dynamic hex via CSS custom property ------------------- */
+/* Usage: <span className="color-swatch" style={{'--swatch-color': hex} as CSSProperties} /> */
+/* Defining only a CSS custom property (--var) is not an inline style.     */
+.color-swatch {
+  background-color: var(--swatch-color, var(--color-border-strong));
+}
+
+/* -- Admin Dashboard: Dynamic bar chart height via CSS custom property -- */
+.admin-bar {
+  height: var(--bar-h, 4px);
+  min-height: 4px;
+}
+.admin-bar-peak {
+  background: linear-gradient(to top, var(--primitive-color-emerald-600), var(--color-feedback-success));
+}
+.admin-bar-default {
+  background: var(--color-border-subtle);
+}
+
+/* -- Admin: Revenue distribution segment width via custom property ------ */
+.admin-rev-segment {
+  width: var(--seg-w, 0%);
+}
+
+/* -- Admin: Progress/compliance bar width via CSS custom property ------- */
+.admin-progress-fill {
+  width: var(--fill-w, 0%);
+}
+
+/* -- Admin: Module toggle dimensions — replaces inline style ----------- */
+.admin-toggle {
+  width: 40px;
+  height: 22px;
+}
+
+/* -- Security: Chart bar heights via CSS custom property ---------------- */
+.security-bar {
+  height: var(--bar-h, 0px);
+}
+
+/* -- Security: Usage/threat bar width via CSS custom property ----------- */
+.security-usage-bar {
+  width: var(--usage-w, 0%);
+}
+.security-threat-bar {
+  width: var(--threat-w, 0%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE-FIRST UI TOOLKIT  — Applied across all module homepages
+
+   This block used to redeclare `.scroll-x`, `.snap-card`, `.snap-card-sm`,
+   `.mobile-hero`, `.chip-row`, `.stats-strip`, `.hotel-search-grid`,
+   `.hero-title`, `.hero-subtitle` and `.pb-mobile-nav`, all of which are also
+   defined earlier in this file. Because a *base* rule here comes later in
+   source order than a *media-query* rule up there, and a media query adds no
+   specificity, this block silently deleted the earlier definitions' responsive
+   steps. Each of those classes now has exactly one definition; only the ones
+   that live nowhere else remain below.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Hero Typography (fluid — no breakpoints needed) ──────────────────── */
+.hero-title {
+  font-size: clamp(1.75rem, 5vw, 3.5rem);
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.hero-subtitle {
+  font-size: clamp(0.95rem, 2.5vw, 1.2rem);
+  line-height: 1.55;
+  opacity: 0.85;
+}
+
+/* ── Marketplace Mobile Surface ───────────────────────────────────────── */
+/*
+ * Light, airy backdrop for the marketplace on phones and small tablets.
+ * A soft blue wash carries the header colour down into the page and fades to
+ * neutral, so white cards read as raised instead of floating on flat grey.
+ * Desktop keeps the plain slate canvas.
+ */
+.mp-surface {
+  background-color: var(--color-surface-base);
+}
+@media (max-width: 767px) {
+  .mp-surface {
+    background-color: var(--marketplace-surface, var(--primitive-color-blue-50));
+    background-image: linear-gradient(
+      180deg,
+      var(--marketplace-surface, var(--primitive-color-blue-50)) 0,
+      var(--primitive-color-blue-25) 180px,
+      var(--color-surface-base) 420px
+    );
+    background-repeat: no-repeat;
+  }
+}
+
+/* ── Category Grid (responsive icon grid) ─────────────────────────────── */
+/* 3 cols (2xs) → 4 cols (xs/375) → 5 cols (480) → 6 cols (sm) → 8 cols (md) → 10 cols (lg) */
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+@media (min-width: 375px) {
+  .cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.625rem; }
+}
+@media (min-width: 480px) {
+  .cat-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) {
+  .cat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (min-width: 768px) {
+  .cat-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0.75rem; }
+}
+@media (min-width: 1024px) {
+  .cat-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+}
+
+/* ── Responsive Card Grids ────────────────────────────────────────────── */
+/* 2 cols → 3 cols (default card sections) */
+.card-grid-2-3 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+@media (min-width: 768px) {
+  .card-grid-2-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+}
+@media (min-width: 1024px) {
+  .card-grid-2-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* 2 cols → 3 cols → 4 cols → 5 cols (product grids) */
+.card-grid-2-4 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+@media (min-width: 640px) {
+  .card-grid-2-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .card-grid-2-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+}
+@media (min-width: 1280px) {
+  .card-grid-2-4 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+/* ── Hotel Search Form Grid ───────────────────────────────────────────── */
+/* 1 col → 2 col (sm) → 4 col (md) */
+.hotel-search-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 480px) {
+  .hotel-search-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 768px) {
+  .hotel-search-grid { grid-template-columns: 2fr 1fr 1fr auto; }
+}
+
+/* ── Snap-card opt-out, for a rail that becomes a real grid at md+ ─────────
+ * Pair with `md:grid` on the parent. Without it a `.snap-card` keeps its rail
+ * width at every breakpoint, which is the right default (see the note beside
+ * `.snap-card`). No `!important` — this rule is later in the same layer at the
+ * same specificity, so it already wins, and leaving it non-important means a
+ * Tailwind width utility on the element can still override it. */
+@media (min-width: 768px) {
+  .md\:snap-card-none {
+    width: auto;
+    flex: 0 1 auto;
+    scroll-snap-align: none;
+  }
+}
+} /* @layer components */
+
+
+
+

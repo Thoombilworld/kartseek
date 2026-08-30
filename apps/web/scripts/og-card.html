@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* The card is a directory board, not a logo on a gradient. A super app's
+     one true characteristic is breadth — six services, one account — so the
+     services *are* the artwork, set as an index with hairline rules. */
+  html, body { width: 1200px; height: 630px; }
+
+  body {
+    font-family: 'Outfit', system-ui, sans-serif;
+    /* Grayscale AA. Chrome's default LCD subpixel rendering leaves coloured
+       fringes on light-on-dark type, which survive into the PNG and are very
+       visible once a scraper rescales the card. */
+    -webkit-font-smoothing: antialiased;
+    background: #080D18;
+    color: #F1F5F9;
+    padding: 62px 68px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* One hairline of brand colour down the left edge — the only ornament. */
+  body::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 10px;
+    background: #2563EB;
+  }
+
+  .top { display: flex; align-items: baseline; justify-content: space-between; }
+
+  .wordmark {
+    font-size: 40px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    color: #FFFFFF;
+  }
+
+  .kicker {
+    font-size: 19px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #64748B;
+  }
+
+  .board { border-top: 1px solid #1E293B; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid #1E293B;
+  }
+
+  .cell {
+    padding: 26px 0 24px;
+    font-size: 47px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: #E2E8F0;
+  }
+
+  /* Exactly one accent. Spend the boldness in a single place. */
+  .cell.accent { color: #60A5FA; }
+
+  .foot {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 40px;
+  }
+
+  .line {
+    font-size: 25px;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #94A3B8;
+    max-width: 720px;
+  }
+
+  .line strong { color: #F1F5F9; font-weight: 600; }
+
+  .markets {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    color: #475569;
+    text-align: right;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="wordmark">KARTSEEK</div>
+    <div class="kicker">One account. Six services.</div>
+  </div>
+
+  <div class="board">
+    <div class="row">
+      <div class="cell">Marketplace</div>
+      <div class="cell">Groceries</div>
+      <div class="cell">Food</div>
+    </div>
+    <div class="row">
+      <div class="cell">Pharmacy</div>
+      <div class="cell">Doctors</div>
+      <div class="cell accent">Rides</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="line">Shop, order, refill, book and ride — <strong>everything in one app</strong>.</div>
+    <div class="markets">QA · IN · AE · SA · BH<br>KW · OM · GB · US</div>
+  </div>
+</body>
+</html>

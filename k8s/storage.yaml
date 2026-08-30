@@ -1,0 +1,85 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# KARTSEEK Kubernetes Storage Classes
+# Deploy: kubectl apply -f k8s/storage.yaml
+# ══════════════════════════════════════════════════════════════════════════════
+
+---
+# ── StorageClass: Fast SSD (primary) ───────────────────────────────────────────
+# For: PostgreSQL, Redis, Kafka, logs
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: ebs.csi.aws.amazonaws.com  # Use appropriate provisioner for your cloud
+allowVolumeExpansion: true
+parameters:
+  type: gp3              # General Purpose SSD (AWS)
+  iops: "3000"
+  throughput: "125"
+  encrypted: "true"
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# ── StorageClass: Standard (for logs and non-critical data) ───────────────────
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard
+provisioner: ebs.csi.aws.amazonaws.com
+allowVolumeExpansion: true
+parameters:
+  type: gp2
+  encrypted: "true"
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# ── StorageClass: High Performance (for real-time analytics) ──────────────────
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: high-performance
+provisioner: ebs.csi.aws.amazonaws.com
+allowVolumeExpansion: true
+parameters:
+  type: io2
+  iops: "10000"
+  throughput: "250"
+  encrypted: "true"
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# ── StorageClass: Archive (for backups, infrequently accessed) ────────────────
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: archive
+provisioner: ebs.csi.aws.amazonaws.com
+allowVolumeExpansion: false
+parameters:
+  type: sc1             # Cold HDD storage
+  encrypted: "true"
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NO PersistentVolumes are defined here — see k8s/storage-local-dev.yaml.
+# ══════════════════════════════════════════════════════════════════════════════
+# This file used to end with two static `local:` PVs "for local development".
+# They could never have worked, for three independent reasons:
+#   • Capacity was SMALLER than the claim (50Gi vs postgres' 100Gi, 30Gi vs
+#     redis' 50Gi). A PV only binds when capacity >= request.
+#   • There was no volume for Kafka or for the marketplace database at all.
+#   • reclaimPolicy: Delete has no deleter for node-local storage — released
+#     volumes go to Failed and are never reusable.
+#
+# And once those were fixed the databases still crashed: fsGroup is NOT applied
+# to hostPath/local volumes, so the directory stays root-owned 0755 and every
+# non-root database dies on it —
+#   initdb: could not change permissions of directory ... Operation not permitted
+#   kafka: AccessDeniedException: /var/lib/kafka/data/bootstrap.checkpoint.tmp
+# A dynamic provisioner is what makes the volume writable, which is exactly what
+# storage-local-dev.yaml wires up. On real EBS none of this arises: the CSI
+# driver honours fsGroup.

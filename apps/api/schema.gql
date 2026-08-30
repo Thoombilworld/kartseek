@@ -1,0 +1,44 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type CategoryType {
+  id: String!
+  name: String!
+  slug: String
+  icon: String
+}
+
+type ProductType {
+  id: String!
+  title: String!
+  mrp: Float!
+  sellingPrice: Float!
+  shortDescription: String
+}
+
+type PendingApprovalsType {
+  products: Int!
+  sellers: Int!
+}
+
+type EscrowFundsType {
+  holdAmount: Float!
+  released: Float!
+}
+
+type AdminDashboardType {
+  pendingApprovals: PendingApprovalsType!
+  escrowFunds: EscrowFundsType!
+  activeSellers: Int!
+  todayOrders: Int!
+  todayRevenue: Float!
+}
+
+type Query {
+  categories: [CategoryType!]!
+  category(id: String!): CategoryType
+  product(id: String!): ProductType
+  searchMarketplace(input: String!): [ProductType!]!
+  adminDashboard: AdminDashboardType!
+}

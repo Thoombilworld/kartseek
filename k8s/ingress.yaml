@@ -1,0 +1,316 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# KARTSEEK Ingress & Network Configuration
+# Deploy: kubectl apply -f k8s/ingress.yaml
+# Requires: nginx-ingress-controller or another Ingress controller
+# ══════════════════════════════════════════════════════════════════════════════
+
+---
+# ── Ingress: API Gateway ───────────────────────────────────────────────────────
+# Routes all traffic to the API Gateway service
+# Handles TLS termination and virtual host routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kartseek-ingress
+  namespace: kartseek
+  labels:
+    app: ingress
+  annotations:
+    # ── TLS Settings ────────────────────────────────────────────────────────
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # ── Security Headers ────────────────────────────────────────────────────
+    # REQUIRES `allow-snippet-annotations: "true"` in the ingress-nginx
+    # controller ConfigMap. It defaults to FALSE since controller v1.9 (CVE-2021-25742
+    # hardening), and a controller with it off rejects this whole Ingress rather
+    # than ignoring the annotation. If you cannot enable it, move these to the
+    # controller's own `add-headers` ConfigMap instead.
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=(self)";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: ws:";
+
+    # ── Rate Limiting ────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/limit-rps: "1000"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+    nginx.ingress.kubernetes.io/limit-whitelist: "10.0.0.0/8,172.16.0.0/12"
+
+    # ── Proxy Settings ───────────────────────────────────────────────────────
+    # proxy-read-timeout / proxy-send-timeout were each declared TWICE in this
+    # map — 600 here and 3600 again under "WebSocket Support" below. YAML keeps
+    # the last one silently, so the 600s written here never applied; the values
+    # are merged into one definition (3600, long enough for a WebSocket) so the
+    # file says what it does.
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "4k"
+    nginx.ingress.kubernetes.io/proxy-buffers: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "8k"
+
+    # ── CORS Configuration ───────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://kartseek.com,https://*.kartseek.com"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, Authorization, X-Request-ID, X-Client-Version, X-Region-Code"
+
+    # ── Compression ──────────────────────────────────────────────────────────
+    # NOTE: gzip is NOT configurable per-Ingress in ingress-nginx. `enable-gzip`,
+    # `gzip-level` and `gzip-types` were annotations here but the controller has
+    # never read them — compression is global, set on the controller ConfigMap:
+    #   use-gzip: "true"
+    #   gzip-level: "6"
+    #   gzip-types: "application/json text/plain text/css text/javascript application/javascript"
+    # They are removed rather than left in place looking effective.
+    #
+    # ── WebSocket Support ────────────────────────────────────────────────────
+    # Likewise `websocket-services` is not an ingress-nginx annotation (it comes
+    # from the unrelated nginxinc controller). ingress-nginx upgrades WebSocket
+    # connections automatically; the long proxy timeouts above are what actually
+    # keeps them alive.
+
+spec:
+  ingressClassName: nginx
+  tls:
+    # `localhost` must NOT be listed here. cert-manager hands the whole SAN list
+    # to Let's Encrypt, which cannot issue for a non-public name and rejects the
+    # order — taking the certificate for the two real hosts down with it.
+    # For local work, either port-forward svc/api-gateway directly, or switch
+    # cert-manager.io/cluster-issuer to the `selfsigned` issuer defined below
+    # (force-ssl-redirect applies to every rule in this Ingress, localhost included).
+    - hosts:
+        - api.kartseek.com
+        - api-staging.kartseek.com
+      secretName: kartseek-tls
+  rules:
+    # ── Production API ──────────────────────────────────────────────────────
+    - host: api.kartseek.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 3001
+
+    # ── Staging API ─────────────────────────────────────────────────────────
+    - host: api-staging.kartseek.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 3001
+
+    # ── Local development ───────────────────────────────────────────────────
+    - host: localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 3001
+
+---
+# ── ClusterIssuer: Let's Encrypt (TLS Certificate Automation) ──────────────────
+# Requires cert-manager: https://cert-manager.io/
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@kartseek.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+      - dns01:
+          route53:
+            region: us-east-1
+            hostedZoneID: Z1234567890ABC
+
+---
+# ── ClusterIssuer: Self-Signed (for development) ────────────────────────────────
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned
+spec:
+  selfSigned: {}
+
+---
+# ── Ingress: Monitoring & Observability (Prometheus, Grafana) ───────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: kartseek
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # ── Basic Auth for monitoring dashboard ──────────────────────────────────
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: monitoring-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Monitoring Dashboard"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - monitoring.kartseek.com
+      secretName: monitoring-tls
+  rules:
+    - host: monitoring.kartseek.com
+      http:
+        paths:
+          - path: /prometheus
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+
+---
+# ── ServiceMonitor: Prometheus scrape configuration (for kube-prometheus-stack) ──
+# This tells Prometheus to scrape metrics from the API Gateway
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api-gateway-monitor
+  namespace: kartseek
+  labels:
+    app: api-gateway
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+
+---
+# ── ServiceMonitor: Microservices metrics ───────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: microservices-monitor
+  namespace: kartseek
+  labels:
+    app: microservices
+spec:
+  selector:
+    matchLabels:
+      tier: microservice
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+
+---
+# ── PrometheusRule: Alert rules ───────────────────────────────────────────────
+# Automatically fires alerts when thresholds are breached
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kartseek-alerts
+  namespace: kartseek
+spec:
+  groups:
+    - name: kartseek.rules
+      interval: 30s
+      rules:
+        # ── High error rate ────────────────────────────────────────────────
+        - alert: HighErrorRate
+          expr: |
+            (sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+             / sum(rate(http_requests_total[5m])) by (job)) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High error rate on {{ $labels.job }}"
+            description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.job }}"
+
+        # ── High latency ───────────────────────────────────────────────────
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High latency on {{ $labels.job }}"
+            description: "p99 latency is {{ $value }}s for {{ $labels.job }}"
+
+        # ── Pod restart loop ───────────────────────────────────────────────
+        - alert: PodRestartingTooOften
+          expr: |
+            rate(kube_pod_container_status_restarts_total[15m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} restarting too often"
+            description: "Pod has restarted {{ $value }} times in 15 minutes"
+
+        # ── Disk usage high ────────────────────────────────────────────────
+        - alert: DiskUsageHigh
+          expr: |
+            (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High disk usage on {{ $labels.persistentvolumeclaim }}"
+            description: "Disk is {{ $value | humanizePercentage }} full"
+
+        # ── Memory usage high ──────────────────────────────────────────────
+        - alert: MemoryUsageHigh
+          expr: |
+            (sum(container_memory_usage_bytes) by (pod) / sum(container_spec_memory_limit_bytes) by (pod)) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage in {{ $labels.pod }}"
+            description: "Memory usage is {{ $value | humanizePercentage }}"
+
+        # ── Database connection pool exhausted ─────────────────────────────
+        - alert: DBConnectionPoolExhausted
+          expr: |
+            db_connections_active / db_connections_max > 0.9
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Database connection pool exhausted"
+            description: "{{ $value | humanizePercentage }} of DB connections in use"

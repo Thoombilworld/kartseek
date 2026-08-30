@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "kartseek-api": {
+      "command": "npx",
+      "args": ["tsx", "apps/mcp-server/src/index.ts"],
+      "env": {
+        "KARTSEEK_API_URL": "http://localhost:3001/api/v1"
+      }
+    }
+  }
+}

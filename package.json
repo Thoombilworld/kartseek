@@ -1,0 +1,109 @@
+{
+  "name": "kartseek-super-app",
+  "version": "2.0.0",
+  "description": "KARTSEEK — Multi-vertical Super App monorepo (Web · API · Mobile)",
+  "private": true,
+  "packageManager": "npm@11.17.0",
+  "engines": {
+    "node": ">=25.0.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=kartseek-web",
+    "dev:api": "turbo run dev --filter=kartseek-api",
+    "build": "turbo run build",
+    "build:web": "turbo run build --filter=kartseek-web",
+    "build:api": "turbo run build --filter=kartseek-api",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "infra:up": "docker compose -f docker-compose.yml up -d",
+    "infra:down": "docker compose -f docker-compose.yml down",
+    "infra:logs": "docker compose -f docker-compose.yml logs -f",
+    "infra:restart": "docker compose -f docker-compose.yml restart",
+    "infra:status": "docker compose -f docker-compose.yml ps",
+    "infra:tools": "docker compose -f docker-compose.yml --profile tools up -d",
+    "nginx:up": "docker compose -f docker-compose.yml up -d nginx",
+    "nginx:down": "docker compose -f docker-compose.yml stop nginx",
+    "nginx:logs": "docker compose -f docker-compose.yml logs -f nginx",
+    "nginx:reload": "docker compose -f docker-compose.yml exec nginx nginx -s reload",
+    "nginx:test": "docker compose -f docker-compose.yml exec nginx nginx -t",
+    "nginx:certs": "mkdir -p nginx/ssl && docker run --rm -v ./nginx/ssl:/ssl alpine/openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /ssl/kartseek.key -out /ssl/kartseek.crt -subj /C=GB/ST=London/L=London/O=KARTSEEK/OU=Engineering/CN=localhost -addext subjectAltName=DNS:localhost,DNS:kartseek.local,IP:127.0.0.1",
+    "db:seed": "npm run db:seed:grocery && npm run db:seed:marketplace && npm run db:seed:restaurant && npm run db:seed:pharmacy",
+    "db:seed:grocery": "npx ts-node -r tsconfig-paths/register apps/api/scripts/seed-grocery.ts",
+    "db:seed:marketplace": "npx ts-node -r tsconfig-paths/register apps/api/scripts/seed-marketplace.ts",
+    "db:seed:restaurant": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed-restaurant.ts",
+    "db:seed:pharmacy": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed-pharmacy.ts",
+    "prepare": "node -e \"try { require('husky').install() } catch(e) {}\""
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
+    "@swc/cli": "^0.8.1",
+    "@swc/core": "^1.15.43",
+    "chokidar": "^5.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.8.4",
+    "turbo": "^2.9.18"
+  },
+  "overrides": {
+    "ws": "^8.21.3",
+    "postcss": "^8.5.23",
+    "socket.io-parser": "^4.2.7",
+    "ip-address": "^10.5.0",
+    "picomatch": "^4.0.4",
+    "qs": "^6.14.0",
+    "multer": "^2.2.0",
+    "tar": "^7.5.16",
+    "tmp": "^0.2.7",
+    "cross-spawn": "^7.0.6",
+    "nanoid": "^3.3.17",
+    "braces": "^3.0.3",
+    "micromatch": "^4.0.8",
+    "form-data": "^4.0.4",
+    "elliptic": "^6.6.1",
+    "axios": "^1.9.0",
+    "cookie": "^0.7.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "prettier --write",
+      "eslint --fix --max-warnings 0"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 100,
+    "tabWidth": 2,
+    "arrowParens": "always"
+  },
+  "dependencies": {
+    "@apollo/server": "^5.5.1",
+    "express": "^5.2.1",
+    "graphql": "^16.11.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-is": "^19.2.7"
+  }
+}

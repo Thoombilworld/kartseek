@@ -1,0 +1,1727 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# KARTSEEK — Microservice Deployments + Services (GENERATED — do not edit by hand)
+# Source: k8s/gen-microservices.sh   |   ports from each service's main.ts
+# Covers the 22 services missing from microservices.yaml (auth/order/payment).
+# Per-service differences belong in the case blocks of the generator.
+# ═══════════════════════════════════════════════════════════════════════════
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+  namespace: kartseek
+  labels: { app: admin-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: admin-service }
+  ports:
+    - { name: http, port: 3027, targetPort: 3027, protocol: TCP }
+    - { name: tcp, port: 4017, targetPort: 4017, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-service
+  namespace: kartseek
+  labels: { app: admin-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: admin-service } }
+  template:
+    metadata:
+      labels: { app: admin-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: admin-service
+          image: kartseek/admin-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3027, protocol: TCP }
+            - { name: tcp, containerPort: 4017, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3027 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3027 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [admin-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-log-service
+  namespace: kartseek
+  labels: { app: audit-log-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: audit-log-service }
+  ports:
+    - { name: http, port: 3028, targetPort: 3028, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-log-service
+  namespace: kartseek
+  labels: { app: audit-log-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: audit-log-service } }
+  template:
+    metadata:
+      labels: { app: audit-log-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: audit-log-service
+          image: kartseek/audit-log-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3028, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3028 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3028 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [audit-log-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cart-service
+  namespace: kartseek
+  labels: { app: cart-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: cart-service }
+  ports:
+    - { name: http, port: 3013, targetPort: 3013, protocol: TCP }
+    - { name: tcp, port: 4003, targetPort: 4003, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cart-service
+  namespace: kartseek
+  labels: { app: cart-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: cart-service } }
+  template:
+    metadata:
+      labels: { app: cart-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: cart-service
+          image: kartseek/cart-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3013, protocol: TCP }
+            - { name: tcp, containerPort: 4003, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3013 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3013 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [cart-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: commission-service
+  namespace: kartseek
+  labels: { app: commission-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: commission-service }
+  ports:
+    - { name: http, port: 3030, targetPort: 3030, protocol: TCP }
+    - { name: tcp, port: 4020, targetPort: 4020, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: commission-service
+  namespace: kartseek
+  labels: { app: commission-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: commission-service } }
+  template:
+    metadata:
+      labels: { app: commission-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: commission-service
+          image: kartseek/commission-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3030, protocol: TCP }
+            - { name: tcp, containerPort: 4020, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3030 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3030 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [commission-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: delivery-service
+  namespace: kartseek
+  labels: { app: delivery-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: delivery-service }
+  ports:
+    - { name: http, port: 3022, targetPort: 3022, protocol: TCP }
+    - { name: grpc, port: 5008, targetPort: 5008, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery-service
+  namespace: kartseek
+  labels: { app: delivery-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: delivery-service } }
+  template:
+    metadata:
+      labels: { app: delivery-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: delivery-service
+          image: kartseek/delivery-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3022, protocol: TCP }
+            - { name: grpc, containerPort: 5008, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3022 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3022 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [delivery-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: doctor-service
+  namespace: kartseek
+  labels: { app: doctor-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: doctor-service }
+  ports:
+    - { name: http, port: 3017, targetPort: 3017, protocol: TCP }
+    - { name: tcp, port: 4007, targetPort: 4007, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doctor-service
+  namespace: kartseek
+  labels: { app: doctor-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: doctor-service } }
+  template:
+    metadata:
+      labels: { app: doctor-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: doctor-service
+          image: kartseek/doctor-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3017, protocol: TCP }
+            - { name: tcp, containerPort: 4007, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3017 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3017 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [doctor-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: franchise-service
+  namespace: kartseek
+  labels: { app: franchise-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: franchise-service }
+  ports:
+    - { name: http, port: 3016, targetPort: 3016, protocol: TCP }
+    - { name: tcp, port: 4006, targetPort: 4006, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: franchise-service
+  namespace: kartseek
+  labels: { app: franchise-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: franchise-service } }
+  template:
+    metadata:
+      labels: { app: franchise-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: franchise-service
+          image: kartseek/franchise-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3016, protocol: TCP }
+            - { name: tcp, containerPort: 4006, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3016 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3016 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [franchise-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grocery-service
+  namespace: kartseek
+  labels: { app: grocery-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: grocery-service }
+  ports:
+    - { name: http, port: 3018, targetPort: 3018, protocol: TCP }
+    - { name: grpc, port: 5010, targetPort: 5010, protocol: TCP }
+    - { name: tcp, port: 4008, targetPort: 4008, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grocery-service
+  namespace: kartseek
+  labels: { app: grocery-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: grocery-service } }
+  template:
+    metadata:
+      labels: { app: grocery-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: grocery-service
+          image: kartseek/grocery-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3018, protocol: TCP }
+            - { name: grpc, containerPort: 5010, protocol: TCP }
+            - { name: tcp, containerPort: 4008, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3018 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3018 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [grocery-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hotel-service
+  namespace: kartseek
+  labels: { app: hotel-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: hotel-service }
+  ports:
+    - { name: http, port: 3035, targetPort: 3035, protocol: TCP }
+    - { name: tcp, port: 4025, targetPort: 4025, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hotel-service
+  namespace: kartseek
+  labels: { app: hotel-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: hotel-service } }
+  template:
+    metadata:
+      labels: { app: hotel-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: hotel-service
+          image: kartseek/hotel-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3035, protocol: TCP }
+            - { name: tcp, containerPort: 4025, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3035 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3035 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [hotel-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: location-service
+  namespace: kartseek
+  labels: { app: location-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: location-service }
+  ports:
+    - { name: http, port: 3023, targetPort: 3023, protocol: TCP }
+    - { name: tcp, port: 4013, targetPort: 4013, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: location-service
+  namespace: kartseek
+  labels: { app: location-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: location-service } }
+  template:
+    metadata:
+      labels: { app: location-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: location-service
+          image: kartseek/location-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3023, protocol: TCP }
+            - { name: tcp, containerPort: 4013, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3023 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3023 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [location-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loyalty-service
+  namespace: kartseek
+  labels: { app: loyalty-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: loyalty-service }
+  ports:
+    - { name: http, port: 3015, targetPort: 3015, protocol: TCP }
+    - { name: tcp, port: 4005, targetPort: 4005, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loyalty-service
+  namespace: kartseek
+  labels: { app: loyalty-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: loyalty-service } }
+  template:
+    metadata:
+      labels: { app: loyalty-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: loyalty-service
+          image: kartseek/loyalty-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3015, protocol: TCP }
+            - { name: tcp, containerPort: 4005, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3015 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3015 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [loyalty-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: marketplace-service
+  namespace: kartseek
+  labels: { app: marketplace-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: marketplace-service }
+  ports:
+    - { name: http, port: 3012, targetPort: 3012, protocol: TCP }
+    - { name: grpc, port: 5006, targetPort: 5006, protocol: TCP }
+    - { name: tcp, port: 4002, targetPort: 4002, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: marketplace-service
+  namespace: kartseek
+  labels: { app: marketplace-service, tier: microservice, version: "2.1.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: marketplace-service } }
+  template:
+    metadata:
+      labels: { app: marketplace-service, tier: microservice, version: "2.1.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-marketplace-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres-marketplace.kartseek.svc.cluster.local 5432; do echo waiting for marketplace db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: marketplace-service
+          image: kartseek/marketplace-service:2.1.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3012, protocol: TCP }
+            - { name: grpc, containerPort: 5006, protocol: TCP }
+            - { name: tcp, containerPort: 4002, protocol: TCP }
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "300m", memory: "384Mi" }
+            limits: { cpu: "1000m", memory: "1Gi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [marketplace-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: kartseek
+  labels: { app: notification-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: notification-service }
+  ports:
+    - { name: http, port: 3026, targetPort: 3026, protocol: TCP }
+    - { name: grpc, port: 5004, targetPort: 5004, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: kartseek
+  labels: { app: notification-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: notification-service } }
+  template:
+    metadata:
+      labels: { app: notification-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: notification-service
+          image: kartseek/notification-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3026, protocol: TCP }
+            - { name: grpc, containerPort: 5004, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3026 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3026 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [notification-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payout-service
+  namespace: kartseek
+  labels: { app: payout-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: payout-service }
+  ports:
+    - { name: http, port: 3031, targetPort: 3031, protocol: TCP }
+    - { name: tcp, port: 4021, targetPort: 4021, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payout-service
+  namespace: kartseek
+  labels: { app: payout-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: payout-service } }
+  template:
+    metadata:
+      labels: { app: payout-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: payout-service
+          image: kartseek/payout-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3031, protocol: TCP }
+            - { name: tcp, containerPort: 4021, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3031 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3031 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [payout-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharmacy-service
+  namespace: kartseek
+  labels: { app: pharmacy-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: pharmacy-service }
+  ports:
+    - { name: tcp, port: 4010, targetPort: 4010, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharmacy-service
+  namespace: kartseek
+  labels: { app: pharmacy-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: pharmacy-service } }
+  template:
+    metadata:
+      labels: { app: pharmacy-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: pharmacy-service
+          image: kartseek/pharmacy-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3020, protocol: TCP }
+            - { name: tcp, containerPort: 4010, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 4010 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 4010 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [pharmacy-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: refund-service
+  namespace: kartseek
+  labels: { app: refund-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: refund-service }
+  ports:
+    - { name: http, port: 3032, targetPort: 3032, protocol: TCP }
+    - { name: tcp, port: 4022, targetPort: 4022, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refund-service
+  namespace: kartseek
+  labels: { app: refund-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: refund-service } }
+  template:
+    metadata:
+      labels: { app: refund-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: refund-service
+          image: kartseek/refund-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3032, protocol: TCP }
+            - { name: tcp, containerPort: 4022, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3032 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3032 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [refund-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: report-service
+  namespace: kartseek
+  labels: { app: report-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: report-service }
+  ports:
+    - { name: http, port: 3034, targetPort: 3034, protocol: TCP }
+    - { name: tcp, port: 4024, targetPort: 4024, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-service
+  namespace: kartseek
+  labels: { app: report-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: report-service } }
+  template:
+    metadata:
+      labels: { app: report-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: report-service
+          image: kartseek/report-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3034, protocol: TCP }
+            - { name: tcp, containerPort: 4024, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3034 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3034 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [report-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: restaurant-service
+  namespace: kartseek
+  labels: { app: restaurant-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: restaurant-service }
+  ports:
+    - { name: http, port: 3019, targetPort: 3019, protocol: TCP }
+    - { name: grpc, port: 5005, targetPort: 5005, protocol: TCP }
+    - { name: tcp, port: 4018, targetPort: 4018, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restaurant-service
+  namespace: kartseek
+  labels: { app: restaurant-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: restaurant-service } }
+  template:
+    metadata:
+      labels: { app: restaurant-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: restaurant-service
+          image: kartseek/restaurant-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3019, protocol: TCP }
+            - { name: grpc, containerPort: 5005, protocol: TCP }
+            - { name: tcp, containerPort: 4018, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3019 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3019 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [restaurant-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-service
+  namespace: kartseek
+  labels: { app: search-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: search-service }
+  ports:
+    - { name: http, port: 3033, targetPort: 3033, protocol: TCP }
+    - { name: tcp, port: 4023, targetPort: 4023, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-service
+  namespace: kartseek
+  labels: { app: search-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: search-service } }
+  template:
+    metadata:
+      labels: { app: search-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: search-service
+          image: kartseek/search-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3033, protocol: TCP }
+            - { name: tcp, containerPort: 4023, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3033 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3033 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [search-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: taxi-service
+  namespace: kartseek
+  labels: { app: taxi-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: taxi-service }
+  ports:
+    - { name: http, port: 3021, targetPort: 3021, protocol: TCP }
+    - { name: grpc, port: 5007, targetPort: 5007, protocol: TCP }
+    - { name: tcp, port: 4027, targetPort: 4027, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxi-service
+  namespace: kartseek
+  labels: { app: taxi-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: taxi-service } }
+  template:
+    metadata:
+      labels: { app: taxi-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: taxi-service
+          image: kartseek/taxi-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3021, protocol: TCP }
+            - { name: grpc, containerPort: 5007, protocol: TCP }
+            - { name: tcp, containerPort: 4027, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3021 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3021 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [taxi-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: kartseek
+  labels: { app: user-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: user-service }
+  ports:
+    - { name: http, port: 3011, targetPort: 3011, protocol: TCP }
+    - { name: grpc, port: 5009, targetPort: 5009, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: kartseek
+  labels: { app: user-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: user-service } }
+  template:
+    metadata:
+      labels: { app: user-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: user-service
+          image: kartseek/user-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3011, protocol: TCP }
+            - { name: grpc, containerPort: 5009, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3011 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3011 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [user-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wallet-service
+  namespace: kartseek
+  labels: { app: wallet-service, tier: microservice }
+spec:
+  type: ClusterIP
+  selector: { app: wallet-service }
+  ports:
+    - { name: http, port: 3024, targetPort: 3024, protocol: TCP }
+    - { name: tcp, port: 4014, targetPort: 4014, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-service
+  namespace: kartseek
+  labels: { app: wallet-service, tier: microservice, version: "2.0.0" }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: wallet-service } }
+  template:
+    metadata:
+      labels: { app: wallet-service, tier: microservice, version: "2.0.0" }
+    spec:
+      serviceAccountName: microservice
+      imagePullSecrets: [{ name: regcred }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      initContainers:
+        # resources are mandatory — the namespace ResourceQuota's admission check
+        # walks init containers and rejects the pod when they are unset.
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh','-c','until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "64Mi" }
+      containers:
+        - name: wallet-service
+          image: kartseek/wallet-service:2.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: kartseek-config }
+            - secretRef: { name: kartseek-secrets }
+          ports:
+            - { name: http, containerPort: 3024, protocol: TCP }
+            - { name: tcp, containerPort: 4014, protocol: TCP }
+          livenessProbe:
+            tcpSocket: { port: 3024 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket: { port: 3024 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities: { drop: [ALL] }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector: { matchExpressions: [{ key: app, operator: In, values: [wallet-service] }] }
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30

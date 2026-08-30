@@ -1,0 +1,64 @@
+{
+  "categories": [
+    { "id": "starters", "name": "Starters" },
+    { "id": "soups", "name": "Soups" },
+    { "id": "salads", "name": "Salads" },
+    { "id": "main-course", "name": "Main Course" },
+    { "id": "biryani", "name": "Biryani" },
+    { "id": "rice-items", "name": "Rice Items" },
+    { "id": "noodles", "name": "Noodles" },
+    { "id": "indian-food", "name": "Indian Food" },
+    { "id": "arabic-food", "name": "Arabic Food" },
+    { "id": "chinese-food", "name": "Chinese Food" },
+    { "id": "grills", "name": "Grills" },
+    { "id": "burgers", "name": "Burgers" },
+    { "id": "sandwiches", "name": "Sandwiches" },
+    { "id": "pizza", "name": "Pizza" },
+    { "id": "pasta", "name": "Pasta" },
+    { "id": "juices", "name": "Juices" },
+    { "id": "tea-coffee", "name": "Tea and Coffee" },
+    { "id": "desserts", "name": "Desserts" },
+    { "id": "kids-meals", "name": "Kids Meals" },
+    { "id": "combos", "name": "Combos" }
+  ],
+  "items": [
+    {
+      "id": "item-001",
+      "categoryId": "starters",
+      "name": "Paneer Tikka",
+      "description": "Grilled cottage cheese cubes with aromatic spices",
+      "price": 5.99,
+      "offerPrice": 4.99,
+      "veg": true,
+      "spicy": false,
+      "prepTime": 10,
+      "imageUrl": "/assets/menu/paneer-tikka.jpg",
+      "available": true
+    },
+    {
+      "id": "item-002",
+      "categoryId": "biryani",
+      "name": "Chicken Biryani",
+      "description": "Basmatirice cooked with fragrant chicken and spices",
+      "price": 12.5,
+      "veg": false,
+      "spicy": true,
+      "prepTime": 25,
+      "imageUrl": "/assets/menu/chicken-biryani.jpg",
+      "available": true
+    },
+    {
+      "id": "item-003",
+      "categoryId": "pizza",
+      "name": "Margherita Pizza",
+      "description": "Classic pizza with tomato sauce, mozzarella, and basil",
+      "price": 9.99,
+      "veg": true,
+      "spicy": false,
+      "prepTime": 15,
+      "imageUrl": "/assets/menu/margherita-pizza.jpg",
+      "available": true
+    }
+    // Add more items as needed
+  ]
+}

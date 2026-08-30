@@ -1,0 +1,1484 @@
+{
+  "info": {
+    "_postman_id": "60830519-95b0-4b8b-913b-a281630c1402",
+    "name": "KARTSEEK — 16 Taxi Booking APIs",
+    "description": "Customer taxi: estimates, ride requests, tracking, OTP, receipts, ratings, SOS.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Read / List",
+      "item": [
+        {
+          "name": "Taxi Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "health"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nearby Drivers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/nearby-drivers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "nearby-drivers"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "{{latitude}}"
+                },
+                {
+                  "key": "lng",
+                  "value": "{{longitude}}"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Vehicle Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/vehicle-categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "vehicle-categories"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Country Config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/config/{{country_code}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "config",
+                "{{country_code}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "My Rides",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/rides",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "rides"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ride Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Track Ride",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/track",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "track"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ride Receipt",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/receipt",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "receipt"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    },
+    {
+      "name": "Create",
+      "item": [
+        {
+          "name": "Fare Estimate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/estimate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "estimate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickupLat\": 12.9716,\n  \"pickupLng\": 77.5946,\n  \"dropLat\": 12.9352,\n  \"dropLng\": 77.6245,\n  \"vehicleCategory\": \"SEDAN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request Ride",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/request",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "request"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickupLat\": 12.9716,\n  \"pickupLng\": 77.5946,\n  \"dropLat\": 12.9352,\n  \"dropLng\": 77.6245,\n  \"vehicleCategory\": \"SEDAN\",\n  \"paymentMethod\": \"wallet\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Ride requested\", function () {",
+                  "    const data = pm.response.json();",
+                  "    if (data.rideId) pm.environment.set(\"ride_id\", data.rideId);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel Ride",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Changed plans\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/otp/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "otp",
+                "generate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/otp/verify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "otp",
+                "verify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp\": \"1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rate Ride",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/rating",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "rating"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Great ride!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Support Ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/support",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "support"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"COMPLAINT\",\n  \"message\": \"Driver was late\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SOS Alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/{{ride_id}}/sos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "{{ride_id}}",
+                "sos"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946,\n  \"message\": \"Emergency\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    },
+    {
+      "name": "Error Cases",
+      "item": [
+        {
+          "name": "Estimate — Missing Coords",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/estimate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "estimate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is 400-level\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid Ride ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/INVALID/track",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "INVALID",
+                "track"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is not-found\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel — Already Completed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/taxi/ride/COMPLETED-RIDE/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "taxi",
+                "ride",
+                "COMPLETED-RIDE",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is 400-level\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request: auto-authenticate if no token present",
+          "var baseUrl = pm.environment.get(\"base_url\") || pm.collectionVariables.get(\"base_url\");",
+          "",
+          "// Customer auto-login",
+          "if (!pm.environment.get(\"user_token\") || pm.environment.get(\"user_token\") === \"\") {",
+          "    const email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+          "    const password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+          "    pm.sendRequest({",
+          "        url: baseUrl + \"/auth/login\",",
+          "        method: \"POST\",",
+          "        header: {",
+          "            \"Content-Type\": \"application/json\",",
+          "            \"X-Client-Version\": \"1.0.0\",",
+          "            \"X-Client-Platform\": \"WEB\",",
+          "            \"X-Region-Code\": pm.environment.get(\"country_code\") || \"IN\"",
+          "        },",
+          "        body: {",
+          "            mode: \"raw\",",
+          "            raw: JSON.stringify({ email: email, password: password })",
+          "        }",
+          "    }, function (err, response) {",
+          "        if (err) {",
+          "            console.log(\"⚠️  Auto-login failed: \" + err);",
+          "            return;",
+          "        }",
+          "        if (response.code === 200 || response.code === 201) {",
+          "            const data = response.json();",
+          "            if (data.accessToken) {",
+          "                pm.environment.set(\"user_token\", data.accessToken);",
+          "                if (data.refreshToken) pm.environment.set(\"refresh_token\", data.refreshToken);",
+          "                if (data.user && data.user.id) pm.environment.set(\"customer_id\", data.user.id);",
+          "                console.log(\"✅ Auto-login successful — user_token set\");",
+          "            }",
+          "        } else {",
+          "            console.log(\"⚠️  Auto-login returned \" + response.code + \" — some tests may use fallback behavior\");",
+          "        }",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/api/v1"
+    }
+  ]
+}

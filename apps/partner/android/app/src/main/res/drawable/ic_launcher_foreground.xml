@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- KARTSEEK "K" logo foreground -->
+    <!-- Background safe zone: 18dp on each side (icon content in 72x72 center) -->
+    <group
+        android:translateX="27"
+        android:translateY="27">
+        <!-- Rounded square background shape -->
+        <path
+            android:fillColor="#FF6B35"
+            android:pathData="M0,8 C0,3.58 3.58,0 8,0 L46,0 C50.42,0 54,3.58 54,8 L54,46 C54,50.42 50.42,54 46,54 L8,54 C3.58,54 0,50.42 0,46 Z" />
+        <!-- Letter "K" -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M16,12 L22,12 L22,24 L32,12 L40,12 L28,25.5 L41,42 L33,42 L22,28 L22,42 L16,42 Z" />
+    </group>
+</vector>

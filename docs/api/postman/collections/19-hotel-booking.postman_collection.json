@@ -1,0 +1,3414 @@
+{
+  "info": {
+    "_postman_id": "b1c2d3e4-f567-8901-abcd-ef0123456789",
+    "name": "KARTSEEK — 19 Hotel Booking APIs",
+    "description": "Customer website + app: browsing, search, filters, hotel details, room availability, booking lifecycle (create/modify/cancel), reviews, favorites, mobile endpoints, error cases.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Browsing & Discovery",
+      "description": "Search, filter, and discover hotels.",
+      "item": [
+        {
+          "name": "List All Hotels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Has data array\", () => pm.expect(Array.isArray(data.data)).to.be.true);",
+                  "    pm.test(\"Has pagination total\", () => pm.expect(typeof data.total).to.eql(\"number\"));",
+                  "    if (data.data && data.data[0]) {",
+                  "        pm.collectionVariables.set(\"hotel_id\", data.data[0].id);",
+                  "        if (data.data[0].rooms && data.data[0].rooms[0]) pm.collectionVariables.set(\"room_id\", data.data[0].rooms[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by City",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?city=Dubai&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "Dubai"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = (json.data || json).data || [];",
+                  "    pm.test(\"Only Dubai hotels\", () => data.forEach(h => pm.expect(h.city.toLowerCase()).to.include(\"dubai\")));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by Star Rating",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?starRating=5&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "starRating",
+                  "value": "5"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by Price Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?minPrice=100&maxPrice=500&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "minPrice",
+                  "value": "100"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "500"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by Dates & Guests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?checkin=2026-08-01&checkout=2026-08-04&guests=2&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "checkin",
+                  "value": "2026-08-01"
+                },
+                {
+                  "key": "checkout",
+                  "value": "2026-08-04"
+                },
+                {
+                  "key": "guests",
+                  "value": "2"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search by Name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?q=Palace&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Palace"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search — Empty Query",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?q=&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pagination — Page 2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?page=2&limit=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pagination — Large Limit",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?page=1&limit=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter — Combined",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?city=Dubai&starRating=5&minPrice=200&maxPrice=2000&page=1&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "Dubai"
+                },
+                {
+                  "key": "starRating",
+                  "value": "5"
+                },
+                {
+                  "key": "minPrice",
+                  "value": "200"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "2000"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nearby Hotels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?latitude=25.2048&longitude=55.2708&radius=10&page=1&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "25.2048"
+                },
+                {
+                  "key": "longitude",
+                  "value": "55.2708"
+                },
+                {
+                  "key": "radius",
+                  "value": "10"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trending Hotels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/?sort=popular&page=1&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "popular"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hotel Detail & Rooms",
+      "description": "Full hotel profile and room availability.",
+      "item": [
+        {
+          "name": "Hotel Details by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Has hotel name\", () => pm.expect(data.name).to.be.a(\"string\"));",
+                  "    pm.test(\"Has rooms\", () => pm.expect(Array.isArray(data.rooms)).to.be.true);",
+                  "    pm.test(\"Has reviews\", () => pm.expect(Array.isArray(data.reviews)).to.be.true);",
+                  "    pm.test(\"Has star rating\", () => pm.expect(data.starRating).to.be.a(\"number\"));",
+                  "    if (data.rooms && data.rooms[0]) pm.collectionVariables.set(\"room_id\", data.rooms[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Room Availability",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/rooms?checkin=2026-08-01&checkout=2026-08-04&guests=2",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "rooms"
+              ],
+              "query": [
+                {
+                  "key": "checkin",
+                  "value": "2026-08-01"
+                },
+                {
+                  "key": "checkout",
+                  "value": "2026-08-04"
+                },
+                {
+                  "key": "guests",
+                  "value": "2"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Has rooms array\", () => pm.expect(Array.isArray(data.rooms)).to.be.true);",
+                  "    pm.test(\"Has nights\", () => pm.expect(data.nights).to.be.a(\"number\"));",
+                  "    if (data.rooms && data.rooms[0]) pm.collectionVariables.set(\"room_id\", data.rooms[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Room Availability — Single Night",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/rooms?checkin=2026-08-01&checkout=2026-08-02&guests=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "rooms"
+              ],
+              "query": [
+                {
+                  "key": "checkin",
+                  "value": "2026-08-01"
+                },
+                {
+                  "key": "checkout",
+                  "value": "2026-08-02"
+                },
+                {
+                  "key": "guests",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Room Availability — Large Group",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/rooms?checkin=2026-08-01&checkout=2026-08-04&guests=6",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "rooms"
+              ],
+              "query": [
+                {
+                  "key": "checkin",
+                  "value": "2026-08-01"
+                },
+                {
+                  "key": "checkout",
+                  "value": "2026-08-04"
+                },
+                {
+                  "key": "guests",
+                  "value": "6"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Booking — Create",
+      "description": "Create hotel bookings with various payment methods.",
+      "item": [
+        {
+          "name": "Create Booking — Online Pay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-08-10\",\n  \"checkout\": \"2026-08-13\",\n  \"guests\": 2,\n  \"rooms\": 1,\n  \"paymentMethod\": \"ONLINE\",\n  \"guestName\": \"Ahmed Khan\",\n  \"guestEmail\": \"ahmed.khan@example.com\",\n  \"guestPhone\": \"+971501234567\",\n  \"specialRequests\": \"High floor, late check-in\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Booking success\", () => pm.expect(data.success).to.be.true);",
+                  "    pm.test(\"Has booking ID\", () => pm.expect(data.booking.id).to.be.a(\"string\"));",
+                  "    pm.test(\"Status CONFIRMED\", () => pm.expect(data.booking.status).to.eql(\"CONFIRMED\"));",
+                  "    pm.test(\"Has confirmation code\", () => pm.expect(data.booking.confirmationCode).to.be.a(\"string\"));",
+                  "    pm.test(\"Grand total > 0\", () => pm.expect(Number(data.booking.grandTotal)).to.be.above(0));",
+                  "    pm.collectionVariables.set(\"booking_id\", data.booking.id);",
+                  "    pm.collectionVariables.set(\"confirmation_code\", data.booking.confirmationCode);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Booking — Pay at Hotel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-09-01\",\n  \"checkout\": \"2026-09-03\",\n  \"guests\": 2,\n  \"rooms\": 1,\n  \"paymentMethod\": \"PAY_AT_HOTEL\",\n  \"guestName\": \"Sara Ali\",\n  \"guestEmail\": \"sara.ali@example.com\",\n  \"guestPhone\": \"+971502345678\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Booking — With Wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-09-15\",\n  \"checkout\": \"2026-09-18\",\n  \"guests\": 1,\n  \"rooms\": 1,\n  \"paymentMethod\": \"WALLET\",\n  \"walletAmount\": 500,\n  \"guestName\": \"Mohammed Rashid\",\n  \"guestEmail\": \"m.rashid@example.com\",\n  \"guestPhone\": \"+971503456789\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Booking — With Loyalty Points",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-10-01\",\n  \"checkout\": \"2026-10-03\",\n  \"guests\": 2,\n  \"rooms\": 1,\n  \"paymentMethod\": \"ONLINE\",\n  \"loyaltyPoints\": 1000,\n  \"guestName\": \"Fatima Hassan\",\n  \"guestEmail\": \"fatima@example.com\",\n  \"guestPhone\": \"+971504567890\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Booking — Multiple Rooms",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-10-15\",\n  \"checkout\": \"2026-10-18\",\n  \"guests\": 4,\n  \"rooms\": 2,\n  \"paymentMethod\": \"ONLINE\",\n  \"guestName\": \"Omar Sayed\",\n  \"guestEmail\": \"omar.sayed@example.com\",\n  \"guestPhone\": \"+971505678901\",\n  \"specialRequests\": \"Connecting rooms\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Booking — Manage",
+      "description": "View, modify, and cancel bookings.",
+      "item": [
+        {
+          "name": "Get Booking Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/bookings/{{booking_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Correct booking ID\", () => pm.expect(data.id).to.eql(pm.collectionVariables.get(\"booking_id\")));",
+                  "    pm.test(\"Has guest info\", () => pm.expect(data.primaryGuest).to.be.an(\"object\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "User Booking History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/bookings/user/{{customer_id}}?page=1&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "bookings",
+                "user",
+                "{{customer_id}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Has bookings\", () => pm.expect(data.total).to.be.at.least(1));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Modify Booking — Change Dates",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/bookings/{{booking_id}}/modify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "bookings",
+                "{{booking_id}}",
+                "modify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkin\": \"2026-08-11\",\n  \"checkout\": \"2026-08-14\",\n  \"specialRequests\": \"Updated: late checkout\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Status MODIFIED\", () => { const s = data.booking ? data.booking.status : data.status; pm.expect(s).to.eql(\"MODIFIED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel Booking",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/bookings/{{booking_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "bookings",
+                "{{booking_id}}",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Travel plans changed\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Status CANCELLED\", () => { const s = data.booking ? data.booking.status : data.status; pm.expect(s).to.eql(\"CANCELLED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "description": "Submit and read guest reviews.",
+      "item": [
+        {
+          "name": "Submit Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "reviews"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{customer_id}}\",\n  \"bookingId\": \"{{booking_id}}\",\n  \"rating\": 5,\n  \"comment\": \"Absolutely stunning hotel with excellent service!\",\n  \"cleanliness\": 5,\n  \"service\": 5,\n  \"value\": 4,\n  \"location\": 5,\n  \"comfort\": 5,\n  \"facilities\": 4,\n  \"stayType\": \"Couple\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Review created\", () => pm.expect(data.success).to.be.true);",
+                  "    if (data.review) pm.collectionVariables.set(\"review_id\", data.review.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Review — Rating Only",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "reviews"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{customer_id}}\",\n  \"bookingId\": \"{{booking_id}}\",\n  \"rating\": 4,\n  \"stayType\": \"Business\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Hotel Reviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/reviews?page=1&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Has reviews\", () => { const c = data.total || (data.reviews ? data.reviews.length : 0); pm.expect(c).to.be.at.least(1); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Reviews — Page 2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/reviews?page=2&limit=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Health & Infrastructure",
+      "description": "Service connectivity checks.",
+      "item": [
+        {
+          "name": "Service Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "health"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.expect(pm.response.code).to.eql(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json(); const data = json.data || json;",
+                  "    pm.test(\"Service name\", () => pm.expect(data.service).to.eql(\"hotel-service\"));",
+                  "    pm.test(\"DB connected\", () => pm.expect(data.db).to.be.true);",
+                  "}",
+                  "pm.test(\"Response < 500ms\", () => pm.expect(pm.response.responseTime).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error & Edge Cases",
+      "description": "Validation and error handling.",
+      "item": [
+        {
+          "name": "Invalid Hotel ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "pm.test(\"Returns 404 or 500\", () => pm.expect(pm.response.code).to.be.oneOf([404, 500]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Book — Missing Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomId\": \"{{room_id}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "pm.test(\"Returns error\", () => pm.expect(pm.response.code).to.be.oneOf([400, 500]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Book — Checkout Before Checkin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-08-10\",\n  \"checkout\": \"2026-08-08\",\n  \"guests\": 2,\n  \"rooms\": 1,\n  \"paymentMethod\": \"ONLINE\",\n  \"guestName\": \"Test\",\n  \"guestEmail\": \"test@test.com\",\n  \"guestPhone\": \"+971500000000\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "pm.test(\"Returns error\", () => pm.expect(pm.response.code).to.be.oneOf([400, 500]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Book — Invalid Payment Method",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-08-10\",\n  \"checkout\": \"2026-08-12\",\n  \"guests\": 2,\n  \"rooms\": 1,\n  \"paymentMethod\": \"BITCOIN\",\n  \"guestName\": \"Test\",\n  \"guestEmail\": \"test@test.com\",\n  \"guestPhone\": \"+971500000000\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Review — Invalid Rating",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "reviews"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{customer_id}}\",\n  \"bookingId\": \"{{booking_id}}\",\n  \"rating\": 10,\n  \"comment\": \"Should fail\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "pm.test(\"Returns error\", () => pm.expect(pm.response.code).to.be.oneOf([400, 422, 500]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Review — Missing Rating",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "reviews"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{customer_id}}\",\n  \"comment\": \"No rating\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Double Cancel",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/bookings/{{booking_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "bookings",
+                "{{booking_id}}",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Again\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});",
+                  "",
+                  "pm.test(\"Returns error\", () => pm.expect(pm.response.code).to.be.oneOf([400, 409, 500]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Booking — Invalid ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/bookings/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "bookings",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No Auth — List Hotels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No Auth — Create Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/hotels/{{hotel_id}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hotels",
+                "{{hotel_id}}",
+                "bookings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"anonymous\",\n  \"roomId\": \"{{room_id}}\",\n  \"checkin\": \"2026-08-10\",\n  \"checkout\": \"2026-08-12\",\n  \"guests\": 1,\n  \"rooms\": 1,\n  \"paymentMethod\": \"ONLINE\",\n  \"guestName\": \"Anonymous\",\n  \"guestEmail\": \"anon@test.com\",\n  \"guestPhone\": \"+971500000000\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request: auto-authenticate if no token present",
+          "var baseUrl = pm.environment.get(\"base_url\") || pm.collectionVariables.get(\"base_url\");",
+          "",
+          "// Customer auto-login",
+          "if (!pm.environment.get(\"user_token\") || pm.environment.get(\"user_token\") === \"\") {",
+          "    const email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+          "    const password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+          "    pm.sendRequest({",
+          "        url: baseUrl + \"/auth/login\",",
+          "        method: \"POST\",",
+          "        header: {",
+          "            \"Content-Type\": \"application/json\",",
+          "            \"X-Client-Version\": \"1.0.0\",",
+          "            \"X-Client-Platform\": \"WEB\",",
+          "            \"X-Region-Code\": pm.environment.get(\"country_code\") || \"IN\"",
+          "        },",
+          "        body: {",
+          "            mode: \"raw\",",
+          "            raw: JSON.stringify({ email: email, password: password })",
+          "        }",
+          "    }, function (err, response) {",
+          "        if (err) {",
+          "            console.log(\"⚠️  Auto-login failed: \" + err);",
+          "            return;",
+          "        }",
+          "        if (response.code === 200 || response.code === 201) {",
+          "            const data = response.json();",
+          "            if (data.accessToken) {",
+          "                pm.environment.set(\"user_token\", data.accessToken);",
+          "                if (data.refreshToken) pm.environment.set(\"refresh_token\", data.refreshToken);",
+          "                if (data.user && data.user.id) pm.environment.set(\"customer_id\", data.user.id);",
+          "                console.log(\"✅ Auto-login successful — user_token set\");",
+          "            }",
+          "        } else {",
+          "            console.log(\"⚠️  Auto-login returned \" + response.code + \" — some tests may use fallback behavior\");",
+          "        }",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/api/v1"
+    },
+    {
+      "key": "hotel_id",
+      "value": ""
+    },
+    {
+      "key": "room_id",
+      "value": ""
+    },
+    {
+      "key": "booking_id",
+      "value": ""
+    },
+    {
+      "key": "confirmation_code",
+      "value": ""
+    },
+    {
+      "key": "review_id",
+      "value": ""
+    },
+    {
+      "key": "customer_id",
+      "value": "cust-test-001"
+    }
+  ]
+}

@@ -1,0 +1,293 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# KARTSEEK Kubernetes Namespace & RBAC
+# Deploy: kubectl apply -f k8s/namespace.yaml
+# ══════════════════════════════════════════════════════════════════════════════
+
+---
+# ── Namespace ──────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kartseek
+  labels:
+    app.kubernetes.io/name: kartseek
+    app.kubernetes.io/version: "2.0.0"
+
+---
+# ── Service Account for API Gateway ────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-gateway
+  namespace: kartseek
+
+---
+# ── Service Account for Microservices ──────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: microservice
+  namespace: kartseek
+
+---
+# ── Role: Microservice Permissions ─────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: microservice-role
+  namespace: kartseek
+rules:
+  # Read ConfigMaps & Secrets (environment config)
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  # Read Pods (for service discovery)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ── RoleBinding: Attach role to service account ────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: microservice-rolebinding
+  namespace: kartseek
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: microservice-role
+subjects:
+  - kind: ServiceAccount
+    name: microservice
+    namespace: kartseek
+
+---
+# ── Network Policy: Deny all ingress by default ────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: kartseek
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# ── Network Policy: Allow ingress to API Gateway ───────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-gateway
+  namespace: kartseek
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    # From the Ingress controller.
+    # `name: ingress-nginx` matched nothing: Kubernetes stamps every namespace
+    # with the immutable `kubernetes.io/metadata.name` label, and the plain
+    # `name` label is not applied by the ingress-nginx chart. The selector never
+    # matched, so default-deny-ingress silently dropped ALL public traffic.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3001
+    # Prometheus scrape of /metrics. Without this the ServiceMonitor in
+    # ingress.yaml resolves the endpoint and then times out against default-deny.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+
+---
+# ── Network Policy: Allow microservices to communicate ───────────────────────────
+# Services expose HTTP (30xx), the microservice TCP transport (40xx) and gRPC (50xx)
+# across a range of ports (e.g. auth 3010/5001, marketplace 3012/4002/5006, payment
+# 3025/4026/5003). Rather than enumerate every port, allow the API Gateway and other
+# microservices to reach any port on a microservice pod — but ONLY from those trusted
+# in-namespace sources. default-deny-ingress still blocks everything else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-microservice-mesh
+  namespace: kartseek
+spec:
+  podSelector:
+    matchLabels:
+      tier: microservice
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+        - podSelector:
+            matchLabels:
+              tier: microservice
+      # No `ports:` restriction → all microservice HTTP/TCP/gRPC ports are reachable
+      # from trusted in-namespace sources only.
+    # Prometheus scrape (kube-prometheus-stack lives in its own namespace).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+
+---
+# ── Network Policy: Allow Kafka access ─────────────────────────────────────────
+# The event bus was previously unreachable: default-deny blocked it and no policy
+# allowed 9092/29093. Allow client traffic (9092) from microservices + gateway and
+# the controller-quorum port (29093) between Kafka pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kafka-access
+  namespace: kartseek
+spec:
+  podSelector:
+    matchLabels:
+      app: kafka
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              tier: microservice
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+        - protocol: TCP
+          port: 29093
+
+---
+# ── Network Policy: Allow database access ──────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-database-access
+  namespace: kartseek
+spec:
+  # matchExpressions, not matchLabels: the dedicated marketplace instance is
+  # labelled app: postgres-marketplace and an exact `app: postgres` match left it
+  # covered by default-deny with nothing granting access.
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - postgres
+          - postgres-marketplace
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only allow from microservices
+    - from:
+        - podSelector:
+            matchLabels:
+              tier: microservice
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+      ports:
+        - protocol: TCP
+          port: 5432
+
+---
+# ── Network Policy: Allow Redis access ─────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-access
+  namespace: kartseek
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only allow from microservices and API Gateway
+    - from:
+        - podSelector:
+            matchLabels:
+              tier: microservice
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+      ports:
+        - protocol: TCP
+          port: 6379
+
+---
+# ── Limit Range: default requests/limits for containers that omit them ─────────
+# This is not optional decoration — it is what makes the ResourceQuota below
+# survivable. Once a quota tracks requests.cpu/memory, the admission plugin
+# rejects any pod where a container leaves those unset, and it counts INIT
+# containers too. Every Deployment here carries a resourceless `wait-for-db`
+# busybox init container, so applying the quota without this LimitRange failed
+# creation of literally every workload in the namespace with
+# "must specify limits.cpu,limits.memory,requests.cpu,requests.memory".
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: kartseek-defaults
+  namespace: kartseek
+spec:
+  limits:
+    - type: Container
+      default:              # applied as limits when unset
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:       # applied as requests when unset
+        cpu: "50m"
+        memory: "64Mi"
+
+---
+# ── Resource Quota: Prevent runaway resource consumption ───────────────────────
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: kartseek-quota
+  namespace: kartseek
+spec:
+  hard:
+    requests.cpu: "100"
+    requests.memory: "200Gi"
+    limits.cpu: "200"
+    limits.memory: "400Gi"
+    pods: "500"
+    persistentvolumeclaims: "50"
+
+---
+# ── Pod Disruption Budget: Maintain availability during node maintenance ───────
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: critical-services-pdb
+  namespace: kartseek
+spec:
+  # Single-replica StatefulSets (postgres/redis/kafka) carry critical:"true", so
+  # minAvailable:2 would make them un-evictable and block every node drain.
+  # maxUnavailable:1 lets at most one critical pod be disrupted at a time instead.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      critical: "true"

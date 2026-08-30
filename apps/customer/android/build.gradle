@@ -1,0 +1,31 @@
+// KARTSEEK Super App — Root build.gradle
+// Compatible with Flutter 3.44.1 / Dart 3.12.0 / Kotlin 2.4.0
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(":app")
+
+    // Force AndroidX Core to 1.17.0 globally across all subprojects (including Flutter plugins)
+    // to prevent transitive deps from pulling in 1.18.0+ (requires compileSdk 36.1 / AGP 9.1.0)
+    project.configurations.configureEach {
+        resolutionStrategy {
+            force "androidx.core:core-ktx:1.17.0"
+            force "androidx.core:core:1.17.0"
+        }
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

@@ -1,0 +1,28 @@
+# The Dockerfile runs `npm ci` itself, so a host node_modules in the build
+# context is 65MB uploaded to the daemon and then immediately overwritten.
+# Its presence also risks baking host-built native modules into the image.
+node_modules
+**/node_modules
+
+# Build output — the image builds its own via `nest build`.
+dist
+**/dist
+*.tsbuildinfo
+
+# Never copy real credentials into a layer.
+.env
+.env.*
+!.env.example
+
+# Local noise
+.git
+.gitignore
+coverage
+.nyc_output
+*.log
+npm-debug.log*
+test
+**/*.spec.ts
+**/*.e2e-spec.ts
+.vscode
+.idea

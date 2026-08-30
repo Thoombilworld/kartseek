@@ -1,0 +1,9 @@
+/* Hotel-booking shared utility styles
+   Extracted from inline styles to satisfy the CSS-in-external-file lint rule. */
+
+/* Smooth scrollable nav (admin hotel-booking layout) */
+.hotel-nav-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}

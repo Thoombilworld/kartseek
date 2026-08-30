@@ -1,0 +1,77 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# KARTSEEK — Marketplace Service (standalone container)
+#
+# Build:
+#   docker build -f apps/api/Dockerfile.marketplace \
+#     -t kartseek/marketplace-service:2.1.0 apps/api
+#
+# Run:
+#   docker run --rm \
+#     -e DB_HOST=host.docker.internal \
+#     -e MARKETPLACE_DB_HOST=host.docker.internal \
+#     -e MARKETPLACE_DB_PORT=5433 \
+#     -e MARKETPLACE_DB_NAME=kartseek_marketplace \
+#     -e MARKETPLACE_DB_USER=marketplace_user \
+#     -e MARKETPLACE_DB_PASSWORD=marketplace_secret \
+#     -p 3012:3012 -p 5006:5006 -p 4002:4002 \
+#     kartseek/marketplace-service:2.1.0
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
+# Node 25 to match the root package.json `engines` constraint (>=25.0.0).
+FROM node:25-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies first (maximise layer cache)
+COPY package*.json ./
+RUN npm ci --ignore-scripts
+
+# Copy source, shared libs, and build config
+COPY tsconfig.json nest-cli.json webpack.config.js ./
+COPY libs/ ./libs/
+COPY apps/marketplace-service/ ./apps/marketplace-service/
+# Proto files needed for gRPC controller
+COPY proto/ ./proto/
+
+# Build only the marketplace-service target
+RUN npx nest build marketplace-service
+
+# ── Stage 2: Production dependencies ──────────────────────────────────────────
+# Installed separately so the runtime image never inherits dev dependencies from
+# the builder. Without this the image carries the full dev tree for all 26 Nest
+# apps (~1.2 GB) instead of just what marketplace-service needs at runtime.
+FROM node:25-alpine AS prod-deps
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev --ignore-scripts
+
+# ── Stage 3: Production runtime ───────────────────────────────────────────────
+FROM node:25-alpine AS runner
+
+# Security: run as non-root
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nestjs
+
+WORKDIR /app
+
+# Copy only what's needed at runtime
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=prod-deps --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
+# Proto files are needed at runtime for gRPC reflection
+COPY --from=builder --chown=nestjs:nodejs /app/proto ./proto
+
+USER nestjs
+
+# HTTP | gRPC | TCP
+EXPOSE 3012 5006 4002
+
+ENV NODE_ENV=production
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://localhost:3012/health || exit 1
+
+CMD ["node", "dist/apps/marketplace-service/src/main"]

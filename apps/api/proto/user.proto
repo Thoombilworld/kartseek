@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package user;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KARTSEEK User Service — gRPC Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+service UserService {
+  rpc GetUserById       (GetUserRequest)     returns (UserResponse)     {}
+  rpc UpdateProfile     (UpdateProfileRequest) returns (UserResponse)   {}
+  rpc GetUserAddress    (GetAddressRequest)  returns (AddressListResponse) {}
+  rpc AddAddress        (AddAddressRequest)  returns (AddressResponse)  {}
+  rpc DeleteAddress     (DeleteAddressRequest) returns (StatusResponse) {}
+  rpc GetLoyaltyPoints  (GetLoyaltyRequest)  returns (LoyaltyResponse)  {}
+  rpc SearchUsers       (SearchUsersRequest) returns (UserListResponse)  {}
+}
+
+// ── Requests ──────────────────────────────────────────────────────────────────
+
+message GetUserRequest       { string userId = 1; }
+message GetAddressRequest    { string userId = 1; }
+message DeleteAddressRequest { string addressId = 1; string userId = 2; }
+message GetLoyaltyRequest    { string userId = 1; }
+
+message UpdateProfileRequest {
+  string userId    = 1;
+  string name      = 2;
+  string phone     = 3;
+  string avatarUrl = 4;
+  string language  = 5;
+}
+
+message AddAddressRequest {
+  string userId      = 1;
+  string label       = 2;  // Home | Work | Other
+  string line1       = 3;
+  string line2       = 4;
+  string city        = 5;
+  string country     = 6;
+  double lat         = 7;
+  double lng         = 8;
+  bool   isDefault   = 9;
+}
+
+message SearchUsersRequest {
+  string query = 1;
+  string role  = 2;
+  int32  page  = 3;
+  int32  limit = 4;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message UserResponse {
+  string id          = 1;
+  string email       = 2;
+  string phone       = 3;
+  string name        = 4;
+  string role        = 5;
+  string status      = 6;
+  string country     = 7;
+  string avatarUrl   = 8;
+  string createdAt   = 9;
+  bool   kycVerified = 10;
+}
+
+message AddressResponse {
+  string id        = 1;
+  string userId    = 2;
+  string label     = 3;
+  string line1     = 4;
+  string line2     = 5;
+  string city      = 6;
+  string country   = 7;
+  double lat       = 8;
+  double lng       = 9;
+  bool   isDefault = 10;
+}
+
+message AddressListResponse {
+  repeated AddressResponse addresses = 1;
+}
+
+message LoyaltyResponse {
+  string userId          = 1;
+  int32  points          = 2;
+  string tier            = 3;  // Bronze | Silver | Gold | Platinum
+  string nextTier        = 4;
+  int32  pointsToNextTier = 5;
+  int32  totalEarned     = 6;
+}
+
+message UserListResponse {
+  repeated UserResponse data  = 1;
+  int32                 total = 2;
+  int32                 page  = 3;
+  int32                 limit = 4;
+}
+
+message StatusResponse {
+  bool   success = 1;
+  string message = 2;
+}

@@ -1,0 +1,46 @@
+FROM node:25-alpine AS builder
+
+WORKDIR /app
+
+# Install all deps (dev + prod) for build
+COPY package*.json ./
+RUN npm ci
+
+# Copy source and build only api-gateway
+COPY . .
+RUN npm run build api-gateway
+
+# ── Production Dependencies Layer ────────────────────────────────────────────
+FROM node:25-alpine AS prod-deps
+
+WORKDIR /app
+
+# Install only production deps
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# ── Production Image ──────────────────────────────────────────────────────────
+FROM node:25-alpine AS runner
+
+# Security: run as non-root
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nestjs
+
+WORKDIR /app
+
+# Copy only built artifacts + prod node_modules + proto files
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=prod-deps --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nestjs:nodejs /app/proto ./proto
+
+USER nestjs
+
+EXPOSE 3000
+
+ENV NODE_ENV=production
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
+
+CMD ["node", "dist/apps/api-gateway/src/main"]

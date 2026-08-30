@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Rawabi Hypermarket">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#0f766e"/><stop offset="100%" stop-color="#5eead4"/></linearGradient></defs>
+  <rect width="400" height="300" fill="url(#g)"/>
+  <circle cx="200" cy="140" r="72" fill="#fff" fill-opacity=".92"/>
+  <text x="200" y="140" font-size="58" font-family="system-ui,-apple-system,Segoe UI,sans-serif"
+        font-weight="800" fill="#0f766e" text-anchor="middle" dominant-baseline="central">RH</text>
+</svg>

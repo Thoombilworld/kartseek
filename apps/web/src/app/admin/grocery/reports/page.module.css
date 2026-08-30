@@ -1,0 +1,9 @@
+/* Reports page dynamic styles — uses CSS custom properties for data-driven values */
+
+.report-bar {
+  height: var(--bar-height);
+}
+
+.report-progress {
+  width: var(--bar-width);
+}

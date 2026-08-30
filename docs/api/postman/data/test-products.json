@@ -1,0 +1,11 @@
+[
+  { "name": "Samsung Galaxy S25 Ultra", "category": "Electronics", "price": 89999, "currency": "INR", "sku": "EL-SAM-S25U-001", "stock": 150, "brand": "Samsung", "hsn": "8517" },
+  { "name": "Nike Air Max 270", "category": "Footwear", "price": 12995, "currency": "INR", "sku": "FW-NIK-AM270-001", "stock": 300, "brand": "Nike", "hsn": "6404" },
+  { "name": "Organic Basmati Rice 5kg", "category": "Grocery", "price": 599, "currency": "INR", "sku": "GR-ORG-RICE-001", "stock": 500, "brand": "India Gate" },
+  { "name": "Chicken Biryani", "category": "Restaurant", "price": 349, "currency": "INR", "sku": "RS-BIR-001", "stock": 50, "restaurant_id": "REST-001" },
+  { "name": "Paracetamol 500mg Strip", "category": "Pharmacy", "price": 50, "currency": "INR", "sku": "PH-PAR-500-001", "stock": 1000, "requires_prescription": false },
+  { "name": "Amoxicillin 500mg", "category": "Pharmacy", "price": 320, "currency": "INR", "sku": "PH-AMX-500-001", "stock": 200, "requires_prescription": true },
+  { "name": "Deluxe Suite", "category": "Hotel", "price": 8500, "currency": "INR", "sku": "HT-DLX-001", "stock": 5, "hotel_id": "HTL-001" },
+  { "name": "iPhone 16 Pro Max", "category": "Electronics", "price": 1599, "currency": "USD", "sku": "EL-APL-I16PM-001", "stock": 100, "brand": "Apple", "hsn": "8517" },
+  { "name": "Test Invalid Product", "category": "", "price": -10, "currency": "INVALID", "sku": "", "stock": -1, "brand": "" }
+]

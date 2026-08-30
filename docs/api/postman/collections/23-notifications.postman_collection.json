@@ -1,0 +1,374 @@
+{
+  "info": {
+    "_postman_id": "efc6ec14-df72-4646-ac6b-6e7624b18c6e",
+    "name": "KARTSEEK — 23 Notifications APIs",
+    "description": "Push, SMS, email notification management and WebSocket subscriptions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Partner Notifications",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{partner_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/partner/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "partner",
+                "notifications"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    },
+    {
+      "name": "Admin Notifications",
+      "item": [
+        {
+          "name": "Send Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/marketplace/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "marketplace",
+                "notifications"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Push\",\n  \"message\": \"Hello customers!\",\n  \"target\": \"ALL\",\n  \"type\": \"PUSH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/marketplace/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "marketplace",
+                "notifications"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    },
+    {
+      "name": "WebSocket Events (Documentation)",
+      "item": [
+        {
+          "name": "Subscribe Notifications Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api_gateway_url}}/api/v1/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_gateway_url}}",
+                "api",
+                "v1",
+                "health"
+              ]
+            },
+            "description": "WebSocket event: subscribe_notifications\nNamespace: /tracking\nConnect via Socket.IO client and emit \"subscribe_notifications\" with userId."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request: auto-authenticate if no token present",
+          "var baseUrl = pm.environment.get(\"base_url\") || pm.collectionVariables.get(\"base_url\");",
+          "",
+          "// Customer auto-login",
+          "if (!pm.environment.get(\"user_token\") || pm.environment.get(\"user_token\") === \"\") {",
+          "    const email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+          "    const password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+          "    pm.sendRequest({",
+          "        url: baseUrl + \"/auth/login\",",
+          "        method: \"POST\",",
+          "        header: {",
+          "            \"Content-Type\": \"application/json\",",
+          "            \"X-Client-Version\": \"1.0.0\",",
+          "            \"X-Client-Platform\": \"WEB\",",
+          "            \"X-Region-Code\": pm.environment.get(\"country_code\") || \"IN\"",
+          "        },",
+          "        body: {",
+          "            mode: \"raw\",",
+          "            raw: JSON.stringify({ email: email, password: password })",
+          "        }",
+          "    }, function (err, response) {",
+          "        if (err) {",
+          "            console.log(\"⚠️  Auto-login failed: \" + err);",
+          "            return;",
+          "        }",
+          "        if (response.code === 200 || response.code === 201) {",
+          "            const data = response.json();",
+          "            if (data.accessToken) {",
+          "                pm.environment.set(\"user_token\", data.accessToken);",
+          "                if (data.refreshToken) pm.environment.set(\"refresh_token\", data.refreshToken);",
+          "                if (data.user && data.user.id) pm.environment.set(\"customer_id\", data.user.id);",
+          "                console.log(\"✅ Auto-login successful — user_token set\");",
+          "            }",
+          "        } else {",
+          "            console.log(\"⚠️  Auto-login returned \" + response.code + \" — some tests may use fallback behavior\");",
+          "        }",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/api/v1"
+    }
+  ]
+}

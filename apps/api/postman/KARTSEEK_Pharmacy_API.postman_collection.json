@@ -1,0 +1,435 @@
+{
+	"info": {
+		"_postman_id": "kartseek-pharmacy-api-collection",
+		"name": "KARTSEEK Pharmacy API",
+		"description": "Complete API collection for the KARTSEEK Pharmacy service — 40 endpoints.\n\n**Setup**: Create a Postman environment with:\n- `BASE_URL` = http://localhost:3001\n- `JWT_TOKEN` = your auth token\n- `storeId`, `orderId`, `itemId`, `staffId`, `promoId`, `prescId`, `customerId`, `franchiseId`",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "BASE_URL", "value": "http://localhost:3001", "type": "string" },
+		{ "key": "JWT_TOKEN", "value": "", "type": "string" },
+		{ "key": "storeId", "value": "", "type": "string" },
+		{ "key": "orderId", "value": "", "type": "string" },
+		{ "key": "itemId", "value": "", "type": "string" },
+		{ "key": "staffId", "value": "", "type": "string" },
+		{ "key": "promoId", "value": "", "type": "string" },
+		{ "key": "prescId", "value": "", "type": "string" },
+		{ "key": "customerId", "value": "", "type": "string" },
+		{ "key": "categoryId", "value": "", "type": "string" },
+		{ "key": "franchiseId", "value": "", "type": "string" }
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [{ "key": "token", "value": "{{JWT_TOKEN}}", "type": "string" }]
+	},
+	"event": [
+		{
+			"listen": "test",
+			"script": {
+				"exec": [
+					"// Collection-level test: every response must be valid JSON and not a 404/500",
+					"pm.test('Response is valid JSON (not HTML error page)', function() {",
+					"  pm.response.to.be.json;",
+					"  pm.expect(pm.response.code).to.not.equal(404);",
+					"  pm.expect(pm.response.code).to.not.equal(500);",
+					"});"
+				]
+			}
+		}
+	],
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check (direct)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "http://localhost:3020/pharmacy/health", "host": ["http://localhost:3020"], "path": ["pharmacy", "health"] }
+					},
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Pharmacy service healthy', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json.service).to.equal('pharmacy-service');",
+						"  pm.expect(json.dbConnected).to.be.a('boolean');",
+						"});"
+					]}}]
+				}
+			]
+		},
+		{
+			"name": "Customer - Home",
+			"item": [
+				{
+					"name": "Pharmacy Home",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{BASE_URL}}/pharmacy/home", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "home"] }
+					},
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Home returns stores, categories, promotions', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json).to.have.property('featuredStores');",
+						"  pm.expect(json).to.have.property('categories');",
+						"  pm.expect(json).to.have.property('promotions');",
+						"});"
+					]}}]
+				}
+			]
+		},
+		{
+			"name": "Customer - Store Discovery",
+			"item": [
+				{
+					"name": "List Pharmacy Stores",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/pharmacy/stores?page=1&limit=20",
+							"host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "limit", "value": "20" },
+								{ "key": "search", "value": "", "disabled": true },
+								{ "key": "is24hr", "value": "true", "disabled": true },
+								{ "key": "lat", "value": "19.0760", "disabled": true },
+								{ "key": "lng", "value": "72.8777", "disabled": true },
+								{ "key": "radius", "value": "10", "disabled": true }
+							]
+						}
+					},
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Returns paginated store list', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json).to.have.property('data');",
+						"  pm.expect(json).to.have.property('total');",
+						"  if (json.data && json.data.length > 0) {",
+						"    pm.collectionVariables.set('storeId', json.data[0].id);",
+						"  }",
+						"});"
+					]}}]
+				},
+				{
+					"name": "List Stores (Nearby - geo)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/pharmacy/stores?lat=19.0760&lng=72.8777&radius=10&page=1&limit=20",
+							"host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores"],
+							"query": [
+								{ "key": "lat", "value": "19.0760" },
+								{ "key": "lng", "value": "72.8777" },
+								{ "key": "radius", "value": "10" },
+								{ "key": "page", "value": "1" },
+								{ "key": "limit", "value": "20" }
+							]
+						}
+					},
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Nearby stores returned with distance', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json).to.have.property('data');",
+						"});"
+					]}}]
+				},
+				{
+					"name": "Get Store by Slug",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{BASE_URL}}/pharmacy/stores/slug/medplus-pharmacy", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores", "slug", "medplus-pharmacy"] }
+					},
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Store retrieved by slug', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json).to.have.property('slug');",
+						"});"
+					]}}]
+				},
+				{
+					"name": "Get Store by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{BASE_URL}}/pharmacy/stores/{{storeId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores", "{{storeId}}"] }
+					},
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Store details returned', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json).to.have.property('id');",
+						"  pm.expect(json).to.have.property('name');",
+						"});"
+					]}}]
+				},
+				{
+					"name": "Search Medicines",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{BASE_URL}}/pharmacy/search?q=Paracetamol&page=1&limit=20", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "search"], "query": [{ "key": "q", "value": "Paracetamol" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] }
+					},
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Search returns results', () => {",
+						"  pm.response.to.have.status(200);",
+						"  pm.expect(pm.response.json()).to.have.property('data');",
+						"});"
+					]}}]
+				}
+			]
+		},
+		{
+			"name": "Customer - Categories",
+			"item": [
+				{
+					"name": "List Categories",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/categories", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "categories"] } },
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Categories returned', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json).to.be.an('array');",
+						"  if (json.length > 0) pm.collectionVariables.set('categoryId', json[0].id);",
+						"});"
+					]}}]
+				},
+				{
+					"name": "Get Category by ID",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/categories/{{categoryId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "categories", "{{categoryId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Category returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('id'); });"] }}]
+				}
+			]
+		},
+		{
+			"name": "Customer - Medicines",
+			"item": [
+				{
+					"name": "List Medicines for Store",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/stores/{{storeId}}/medicines?page=1&limit=20", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores", "{{storeId}}", "medicines"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] } },
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Medicines returned', () => {",
+						"  pm.response.to.have.status(200);",
+						"  const json = pm.response.json();",
+						"  pm.expect(json).to.have.property('data');",
+						"  if (json.data && json.data.length > 0) pm.collectionVariables.set('itemId', json.data[0].id);",
+						"});"
+					]}}]
+				},
+				{
+					"name": "Get Medicine by ID",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/stores/{{storeId}}/medicines/{{itemId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores", "{{storeId}}", "medicines", "{{itemId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Medicine returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('id'); });"] }}]
+				}
+			]
+		},
+		{
+			"name": "Customer - Prescriptions",
+			"item": [
+				{
+					"name": "Upload Prescription",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"patientName\": \"John Doe\",\n  \"patientAge\": 35,\n  \"fileUrl\": \"https://storage.example.com/prescriptions/rx-001.pdf\",\n  \"storeId\": \"{{storeId}}\",\n  \"notes\": \"Refill\"\n}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/prescriptions/upload", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "prescriptions", "upload"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Prescription uploaded', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.expect(j.success).to.be.true; if (j.prescription) pm.collectionVariables.set('prescId', j.prescription.id); });"] }}]
+				},
+				{
+					"name": "Get My Prescriptions",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/prescriptions/my?customerId={{customerId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "prescriptions", "my"], "query": [{ "key": "customerId", "value": "{{customerId}}" }] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Prescriptions returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"] }}]
+				}
+			]
+		},
+		{
+			"name": "Customer - Orders",
+			"item": [
+				{
+					"name": "Place Order",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"storeId\": \"{{storeId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"items\": [{\"itemId\": \"{{itemId}}\", \"name\": \"Paracetamol 500mg\", \"quantity\": 2, \"price\": 45, \"requiresPrescription\": false}],\n  \"itemTotal\": 90, \"deliveryFee\": 30, \"grandTotal\": 120, \"paymentMethod\": \"COD\",\n  \"deliveryAddress\": {\"line1\": \"123 Test St\", \"city\": \"Mumbai\", \"pincode\": \"00100\"}\n}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/orders", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "orders"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Order placed', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.expect(j.success).to.be.true; if (j.order) pm.collectionVariables.set('orderId', j.order.id); });"] }}]
+				},
+				{
+					"name": "Get Order by ID",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/orders/{{orderId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "orders", "{{orderId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Order returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('id'); });"] }}]
+				},
+				{
+					"name": "Get My Orders",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/my-orders?customerId={{customerId}}&page=1&limit=20", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "my-orders"], "query": [{ "key": "customerId", "value": "{{customerId}}" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('My orders returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('data'); });"] }}]
+				}
+			]
+		},
+		{
+			"name": "Customer - Reviews and Promotions",
+			"item": [
+				{
+					"name": "Get Store Reviews",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/stores/{{storeId}}/reviews?page=1&limit=20", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores", "{{storeId}}", "reviews"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Reviews returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('data'); });"] }}]
+				},
+				{
+					"name": "Submit Review",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"rating\": 5,\n  \"comment\": \"Excellent!\",\n  \"orderId\": \"{{orderId}}\"\n}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/stores/{{storeId}}/review", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores", "{{storeId}}", "review"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Review submitted', () => { pm.response.to.have.status(201); pm.expect(pm.response.json()).to.have.property('id'); });"] }}]
+				},
+				{
+					"name": "Get Store Promotions",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/stores/{{storeId}}/promotions", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "stores", "{{storeId}}", "promotions"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Promotions returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"] }}]
+				}
+			]
+		},
+		{
+			"name": "Seller Portal",
+			"item": [
+				{
+					"name": "Seller Dashboard",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/dashboard", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "dashboard"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Dashboard returned', () => { pm.response.to.have.status(200); const j = pm.response.json(); pm.expect(j).to.have.property('store'); pm.expect(j).to.have.property('totalOrders'); });"] }}]
+				},
+				{
+					"name": "List Seller Orders",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/orders?page=1&limit=20", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "orders"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Seller orders returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('data'); });"] }}]
+				},
+				{
+					"name": "Update Order Status",
+					"request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"status\": \"STORE_ACCEPTED\"}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/orders/{{orderId}}/status", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "orders", "{{orderId}}", "status"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Order status updated', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('status'); });"] }}]
+				},
+				{
+					"name": "Add Medicine",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Amoxicillin 500mg\", \"genericName\": \"Amoxicillin\", \"dosageForm\": \"capsule\",\n  \"manufacturer\": \"Cipla\", \"price\": 120, \"mrp\": 150, \"stockLevel\": 200,\n  \"reorderLevel\": 20, \"requiresPrescription\": true, \"isAvailable\": true\n}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/medicines", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "medicines"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Medicine added', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.expect(j).to.have.property('id'); pm.collectionVariables.set('itemId', j.id); });"] }}]
+				},
+				{
+					"name": "Update Medicine",
+					"request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"price\": 110}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/medicines/{{itemId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "medicines", "{{itemId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Medicine updated', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('id'); });"] }}]
+				},
+				{
+					"name": "View Inventory",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/inventory", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "inventory"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Inventory returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"] }}]
+				},
+				{
+					"name": "Update Stock Level",
+					"request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"stockLevel\": 100}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/medicines/{{itemId}}/stock", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "medicines", "{{itemId}}", "stock"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Stock updated', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('stockLevel'); });"] }}]
+				},
+				{
+					"name": "Delete Medicine",
+					"request": { "method": "DELETE", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/medicines/{{itemId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "medicines", "{{itemId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Medicine deleted', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().success).to.be.true; });"] }}]
+				},
+				{
+					"name": "List Staff",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/staff", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "staff"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Staff returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"] }}]
+				},
+				{
+					"name": "Add Staff",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\": \"Dr. Priya\", \"phone\": \"+91 98765\", \"role\": \"pharmacist\", \"licenseNumber\": \"RPH-88220\"}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/staff", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "staff"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Staff added', () => { pm.response.to.have.status(201); const j = pm.response.json(); if (j.id) pm.collectionVariables.set('staffId', j.id); });"] }}]
+				},
+				{
+					"name": "Update Staff",
+					"request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"role\": \"senior_pharmacist\"}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/staff/{{staffId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "staff", "{{staffId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Staff updated', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('id'); });"] }}]
+				},
+				{
+					"name": "Remove Staff",
+					"request": { "method": "DELETE", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/staff/{{staffId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "staff", "{{staffId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Staff removed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().success).to.be.true; });"] }}]
+				},
+				{
+					"name": "Get Payouts",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/payouts", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "payouts"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Payouts returned', () => { pm.response.to.have.status(200); });"] }}]
+				},
+				{
+					"name": "List Promotions",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/promotions", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "promotions"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Promotions returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"] }}]
+				},
+				{
+					"name": "Create Promotion",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"title\": \"20% Off Vitamins\", \"discountType\": \"PERCENTAGE\", \"discountValue\": 20, \"isActive\": true, \"startDate\": \"2026-07-01\", \"endDate\": \"2026-07-31\"}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/promotions", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "promotions"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Promotion created', () => { pm.response.to.have.status(201); const j = pm.response.json(); if (j.id) pm.collectionVariables.set('promoId', j.id); });"] }}]
+				},
+				{
+					"name": "Update Promotion",
+					"request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"discountValue\": 25}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/seller/promotions/{{promoId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "promotions", "{{promoId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Promotion updated', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('id'); });"] }}]
+				},
+				{
+					"name": "Delete Promotion",
+					"request": { "method": "DELETE", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/promotions/{{promoId}}", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "promotions", "{{promoId}}"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Promotion deleted', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().success).to.be.true; });"] }}]
+				},
+				{
+					"name": "Seller Analytics",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/seller/{{storeId}}/analytics", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "seller", "{{storeId}}", "analytics"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Analytics returned', () => { pm.response.to.have.status(200); const j = pm.response.json(); pm.expect(j).to.have.property('totalOrders'); });"] }}]
+				}
+			]
+		},
+		{
+			"name": "Admin Panel",
+			"item": [
+				{
+					"name": "Admin - List All Stores",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/admin/stores?page=1&limit=50", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "admin", "stores"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "50" }] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Admin store list', () => { pm.response.to.have.status(200); });"] }}]
+				},
+				{
+					"name": "Admin - Approve Store",
+					"request": { "method": "POST", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/admin/{{storeId}}/approve", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "admin", "{{storeId}}", "approve"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Store approved', () => { pm.response.to.have.status(201); pm.expect(pm.response.json().status).to.equal('APPROVED'); });"] }}]
+				},
+				{
+					"name": "Admin - Suspend Store",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"reason\": \"License expired\"}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/admin/{{storeId}}/suspend", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "admin", "{{storeId}}", "suspend"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Store suspended', () => { pm.response.to.have.status(201); pm.expect(pm.response.json().status).to.equal('SUSPENDED'); });"] }}]
+				},
+				{
+					"name": "Admin - Set Commission",
+					"request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"rate\": 15}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/admin/{{storeId}}/commission", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "admin", "{{storeId}}", "commission"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Commission set', () => { pm.response.to.have.status(200); const j = pm.response.json(); pm.expect(j.success).to.be.true; pm.expect(j.commissionRate).to.equal(15); });"] }}]
+				},
+				{
+					"name": "Admin - Get Pending Prescriptions",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/admin/prescriptions/pending?page=1&limit=20", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "admin", "prescriptions", "pending"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Pending prescriptions returned', () => { pm.response.to.have.status(200); });"] }}]
+				},
+				{
+					"name": "Admin - Verify Prescription (Approve)",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"status\": \"VERIFIED_APPROVED\", \"adminId\": \"admin-001\", \"pharmacistNotes\": \"Valid prescription.\"}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/admin/prescriptions/{{prescId}}/verify", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "admin", "prescriptions", "{{prescId}}", "verify"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Prescription verified', () => { pm.response.to.have.status(201); pm.expect(pm.response.json()).to.have.property('status'); });"] }}]
+				},
+				{
+					"name": "Admin - Verify Prescription (Reject)",
+					"request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"status\": \"REJECTED_EXPIRED\", \"adminId\": \"admin-001\", \"rejectionReason\": \"Expired prescription.\"}" }, "url": { "raw": "{{BASE_URL}}/pharmacy/admin/prescriptions/{{prescId}}/verify", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "admin", "prescriptions", "{{prescId}}", "verify"] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Prescription rejected', () => { pm.response.to.have.status(201); pm.expect(pm.response.json()).to.have.property('rejectionReason'); });"] }}]
+				}
+			]
+		},
+		{
+			"name": "Franchise",
+			"item": [
+				{
+					"name": "Franchise - List Pharmacy Stores",
+					"request": { "method": "GET", "header": [], "url": { "raw": "{{BASE_URL}}/pharmacy/franchise/{{franchiseId}}/stores?page=1&limit=20", "host": ["{{BASE_URL}}"], "path": ["pharmacy", "franchise", "{{franchiseId}}", "stores"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] } },
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Franchise stores returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('data'); });"] }}]
+				}
+			]
+		}
+	]
+}

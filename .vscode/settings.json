@@ -1,0 +1,152 @@
+{
+  // ── Editor ──────────────────────────────────────────────────────────────────
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "editor.detectIndentation": false,
+  "editor.rulers": [
+
+    100],
+  "editor.wordWrap": "off",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // ── Files ───────────────────────────────────────────────────────────────────
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.autoSave": "onFocusChange",
+
+  // ── TypeScript ──────────────────────────────────────────────────────────────
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "javascript.updateImportsOnFileMove.enabled": "always",
+
+  // ── Language-specific formatters (only installed extensions) ────────────────
+  "[dart]": {
+    "editor.defaultFormatter": "Dart-Code.dart-code",
+    "editor.formatOnSave": true
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.formatOnSave": true
+  },
+
+  // ── Tailwind CSS IntelliSense ────────────────────────────────────────────────
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+    ["cn\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+  ],
+  "css.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+
+  // ── Search & file watcher excludes ──────────────────────────────────────────
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/.turbo": true,
+    "**/coverage": true,
+    "**/.dart_tool": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/dist/**": true,
+    "**/.turbo/**": true,
+    "**/build/**": true,
+    "**/target/**": true
+  },
+
+  // ── File Nesting (cleaner explorer) ─────────────────────────────────────────
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "*.ts": "${capture}.js, ${capture}.d.ts, ${capture}.spec.ts, ${capture}.test.ts",
+    "*.tsx": "${capture}.css, ${capture}.test.tsx, ${capture}.spec.tsx",
+    "package.json": "package-lock.json, yarn.lock, .npmrc, .nvmrc, .node-version",
+    "turbo.json": ".turbo",
+    "next.config.*": "next-env.d.ts, postcss.config.*, tailwind.config.*",
+    ".env.example": ".env, .env.*"
+  },
+
+  // ── ESLint ───────────────────────────────────────────────────────────────────
+  "eslint.workingDirectories": [
+    { "directory": "apps/web", "changeProcessCWD": true },
+    { "directory": "apps/api", "changeProcessCWD": true }
+  ],
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+
+  // ── Terminal ─────────────────────────────────────────────────────────────────
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.scrollback": 10000,
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.shellIntegration.enabled": true,
+  "terminal.integrated.shellIntegration.showWelcome": false,
+
+  // ── Python ───────────────────────────────────────────────────────────────
+  "python.defaultInterpreterPath": "C:\\Python314\\python.exe",
+
+  // ── Java ─────────────────────────────────────────────────────────────────
+  "java.jdt.ls.java.home": "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.3.9-hotspot",
+
+  // ── Git ──────────────────────────────────────────────────────────────────
+  "git.path": "C:\\Program Files\\Git\\cmd\\git.exe",
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.gradle.enabled": false,
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.metadata/**",
+    "**/archetype-resources/**",
+    "**/META-INF/maven/**",
+    "**/apps/customer/android/**",
+    "**/apps/partner/android/**",
+    "**/apps/mobile/android/**"
+  ],
+  "cmake.sourceDirectory": "${workspaceFolder}/apps/customer/windows",
+  "java.jdt.ls.aspectjSupport.enabled": true,
+  "java.jdt.ls.javac.enabled": "on",
+
+  // ── Accessibility Linter ────────────────────────────────────────────────────
+  // Suppress false positives on dynamic IDs inside .map() loops
+  "axe-linter.rules": {
+    "duplicate-id-active": "off"
+  },
+
+  // ── Spell Checker Dictionary ────────────────────────────────────────────
+  "cSpell.words": [
+    "Neuro", "Gastro", "Indiranagar",
+    "Meera", "Reddy", "Kavita", "Sanjay", "Venkat",
+    "KARTSEEK", "kartseek"
+  ],
+  "editor.renderRichScreenReaderContent": true,
+  "claudeCode.useTerminal": true,
+
+  // ── Todo Tree ────────────────────────────────────────────────────────────
+  // Todo Tree looks for VS Code's old bundled `vscode-ripgrep`, which newer
+  // VS Code builds no longer ship (it moved to @vscode/ripgrep-universal, under
+  // a per-build folder that changes on every update). Point it at a stable copy.
+  "todo-tree.ripgrep.ripgrep": "C:\\Users\\Hp EliteBook\\AppData\\Local\\Programs\\ripgrep\\rg.exe",
+  "todo-tree.filtering.excludeGlobs": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "**/.dart_tool/**"
+  ]
+}

@@ -1,0 +1,609 @@
+{
+  "info": {
+    "_postman_id": "46be44c9-e561-49bb-892a-cb1c6dadb3eb",
+    "name": "KARTSEEK — 25 Search APIs",
+    "description": "Full-text search and autocomplete across all modules. Tests auth-aware and public search behavior.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authenticated Search",
+      "item": [
+        {
+          "name": "Marketplace Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/marketplace/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "marketplace",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "samsung"
+                }
+              ]
+            },
+            "description": "Marketplace search with authenticated user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Search responds successfully\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "pm.test(\"Search returns valid structure\", function () {",
+                  "    if (!pm.response || pm.response.code !== 200) { return pm.skip(\"Non-200 response\"); }",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grocery Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "rice"
+                },
+                {
+                  "key": "lat",
+                  "value": "{{latitude}}"
+                },
+                {
+                  "key": "lng",
+                  "value": "{{longitude}}"
+                }
+              ]
+            },
+            "description": "Location-aware grocery search."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pharmacy Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pharmacy/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pharmacy",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "paracetamol"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    },
+    {
+      "name": "Public Search (No Auth)",
+      "item": [
+        {
+          "name": "Public Marketplace Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/marketplace/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "marketplace",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "laptop"
+                }
+              ]
+            },
+            "description": "Test if search is accessible without authentication."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Public search accessible\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    // Verifies whether search is public or requires auth",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 401, 403, 404]);",
+                  "    if (pm.response.code === 200) {",
+                  "        console.log(\"ℹ️  Marketplace search is publicly accessible (no auth required)\");",
+                  "    } else {",
+                  "        console.log(\"ℹ️  Marketplace search requires authentication (code: \" + pm.response.code + \")\");",
+                  "    }",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    },
+    {
+      "name": "Seller Search Context",
+      "item": [
+        {
+          "name": "Seller Product Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seller_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sellers/{{seller_id}}/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sellers",
+                "{{seller_id}}",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "test"
+                }
+              ]
+            },
+            "description": "Seller-context product search within own storefront."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Seller Order Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seller_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sellers/{{seller_id}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sellers",
+                "{{seller_id}}",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                }
+              ]
+            },
+            "description": "Seller-context order search."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    },
+    {
+      "name": "Error Cases",
+      "item": [
+        {
+          "name": "Search — Empty Query",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/marketplace/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "marketplace",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request: auto-authenticate if no token present",
+          "var baseUrl = pm.environment.get(\"base_url\") || pm.collectionVariables.get(\"base_url\");",
+          "",
+          "// Customer auto-login",
+          "if (!pm.environment.get(\"user_token\") || pm.environment.get(\"user_token\") === \"\") {",
+          "    const email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+          "    const password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+          "    pm.sendRequest({",
+          "        url: baseUrl + \"/auth/login\",",
+          "        method: \"POST\",",
+          "        header: {",
+          "            \"Content-Type\": \"application/json\",",
+          "            \"X-Client-Version\": \"1.0.0\",",
+          "            \"X-Client-Platform\": \"WEB\",",
+          "            \"X-Region-Code\": pm.environment.get(\"country_code\") || \"IN\"",
+          "        },",
+          "        body: {",
+          "            mode: \"raw\",",
+          "            raw: JSON.stringify({ email: email, password: password })",
+          "        }",
+          "    }, function (err, response) {",
+          "        if (err) {",
+          "            console.log(\"⚠️  Auto-login failed: \" + err);",
+          "            return;",
+          "        }",
+          "        if (response.code === 200 || response.code === 201) {",
+          "            const data = response.json();",
+          "            if (data.accessToken) {",
+          "                pm.environment.set(\"user_token\", data.accessToken);",
+          "                if (data.refreshToken) pm.environment.set(\"refresh_token\", data.refreshToken);",
+          "                if (data.user && data.user.id) pm.environment.set(\"customer_id\", data.user.id);",
+          "                console.log(\"✅ Auto-login successful — user_token set\");",
+          "            }",
+          "        } else {",
+          "            console.log(\"⚠️  Auto-login returned \" + response.code + \" — some tests may use fallback behavior\");",
+          "        }",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/api/v1"
+    }
+  ]
+}

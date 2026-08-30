@@ -1,0 +1,7 @@
+[
+  { "code": "IN", "name": "India", "currency": "INR", "currency_symbol": "₹", "language": "en", "tax_type": "GST", "phone_prefix": "+91", "timezone": "Asia/Kolkata", "lat": 12.9716, "lng": 77.5946, "city": "Bangalore" },
+  { "code": "QA", "name": "Qatar", "currency": "QAR", "currency_symbol": "ر.ق", "language": "ar", "tax_type": "VAT", "phone_prefix": "+974", "timezone": "Asia/Qatar", "lat": 25.2854, "lng": 51.5310, "city": "Doha" },
+  { "code": "AE", "name": "UAE", "currency": "AED", "currency_symbol": "د.إ", "language": "en", "tax_type": "VAT", "phone_prefix": "+971", "timezone": "Asia/Dubai", "lat": 25.2048, "lng": 55.2708, "city": "Dubai" },
+  { "code": "GB", "name": "United Kingdom", "currency": "GBP", "currency_symbol": "£", "language": "en", "tax_type": "VAT", "phone_prefix": "+44", "timezone": "Europe/London", "lat": 51.5074, "lng": -0.1278, "city": "London" },
+  { "code": "US", "name": "United States", "currency": "USD", "currency_symbol": "$", "language": "en", "tax_type": "SALES_TAX", "phone_prefix": "+1", "timezone": "America/New_York", "lat": 40.7128, "lng": -74.0060, "city": "New York" }
+]

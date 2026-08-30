@@ -1,0 +1,112 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# ── Environment variables ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── OS files ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
+.idea/
+*.swp
+*.swo
+*~
+
+# ── AI assistant tooling ──────────────────────────────────────────────────────
+# Shared project config (settings.json, hooks, commands) IS tracked.
+# Vendored skill payloads are not — install locally with:
+#   npx ui-ux-pro-max-cli init --ai claude
+# Note: the /** form (not `.claude/skills/`) is required so the negations below
+# can re-include a path — git will not descend into an excluded directory.
+.claude/skills/**
+!.claude/skills/ui-ux-pro-max/
+!.claude/skills/ui-ux-pro-max/SKILL.md
+.claude/settings.local.json
+# Hook scripts/config are tracked; 6.8 MB of audio and any local logs are not.
+.claude/hooks/sounds/
+.claude/hooks/logs/
+
+# ── Binaries & executables ────────────────────────────────────────────────────
+nuget.exe
+*.exe
+!scripts/**/*.exe
+
+# ── Testing / Coverage ────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Turborepo ─────────────────────────────────────────────────────────────────
+.turbo/
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+DockerDesktopWSL/
+
+# ── Debug logs ────────────────────────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# ── Flutter ───────────────────────────────────────────────────────────────────
+**/flutter/ephemeral/
+**/.dart_tool/
+
+# ── Added 2026-08-10, pre-`git init` audit ────────────────────────────────────
+# The `.env` rule above matches only a file named exactly `.env`; it does NOT
+# match `.env.docker`, `.env.production`, … — apps/api/.env.docker was exposed.
+.env.*
+!.env.example
+!.env.*.example
+
+# TLS and signing material. nginx/ssl/kartseek.key — a private key — was exposed.
+*.key
+*.pem
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+*.keystore
+key.properties
+
+# Machine-local SDK paths. customer/ and partner/ cover this in their own
+# android/.gitignore; apps/seller/android has no .gitignore of its own.
+local.properties
+
+# The npm/yarn debug patterns above miss api-dev.log, gateway.log, web-dev.log
+# and the Flutter/Kotlin/CMake build logs.
+*.log
+
+# Local scratch work — drop this line if scratch/fix-mock-ids.js should be kept.
+scratch/
+
+# Vendored clone of github.com/mattpocock/skills, carrying its own .git. Without
+# this, `git add` silently records it as a bare gitlink (not a submodule) and its
+# history is lost. Reinstall it locally instead of committing it.
+/skills/
+
+# Gradle build cache. customer/ and partner/ ignore this in their own
+# android/.gitignore; seller/ has none, so 6.3 MB of .bin was being staged.
+.gradle/
+
+# NuGet restore output — re-restore with ./nuget.exe rather than committing DLLs.
+# Listed explicitly so it can never swallow a real workspace package under
+# packages/ (native-bindings, shared-mobile); extend if more get restored.
+/packages/Newtonsoft.Json.*/
+*.nupkg
+*.snupkg

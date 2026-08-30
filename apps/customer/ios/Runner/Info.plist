@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Transport Security — production-hardened -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>kartseek.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+		</dict>
+	</dict>
+
+	<!-- Bundle Configuration -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>KARTSEEK</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>KARTSEEK</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
+	<!-- Requires iPhone -->
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- Main Storyboard -->
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+
+	<!-- Supported Orientations -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Status Bar -->
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+
+	<!-- ── Privacy Permissions ──────────────────────────────────────────── -->
+
+	<!-- Location Services -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>KARTSEEK needs your location to find nearby stores, restaurants, doctors, and assign taxi drivers.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>KARTSEEK needs your location for real-time delivery tracking and taxi ride navigation.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>KARTSEEK uses background location for active delivery and ride tracking.</string>
+
+	<!-- Camera & Photos (Prescription Upload, Profile) -->
+	<key>NSCameraUsageDescription</key>
+	<string>KARTSEEK needs camera access to scan prescriptions and take profile photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>KARTSEEK needs photo library access to upload prescriptions and product images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>KARTSEEK needs to save photos to your library.</string>
+
+	<!-- Microphone (Voice Search, Video Calls with Doctor) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>KARTSEEK needs microphone access for voice search and doctor video consultations.</string>
+
+	<!-- Face ID / Biometric -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>KARTSEEK uses Face ID for secure login and payment authorization.</string>
+
+	<!-- Contacts (Taxi ride sharing) -->
+	<key>NSContactsUsageDescription</key>
+	<string>KARTSEEK can access your contacts to share ride details with friends and family.</string>
+
+	<!-- Calendars (Doctor Appointment Booking) -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>KARTSEEK can add doctor appointments to your calendar as reminders.</string>
+
+	<!-- App Tracking Transparency (iOS 14.5+) -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>KARTSEEK may use data to personalize your shopping and delivery experience.</string>
+
+	<!-- ── App Store Submission ─────────────────────────────────────────── -->
+
+	<!-- Export compliance: app does not use non-exempt encryption -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- ── Deep Linking ─────────────────────────────────────────────────── -->
+
+	<!-- Custom URL scheme: kartseek:// -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.kartseek.customer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kartseek</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Universal Links -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:kartseek.com</string>
+	</array>
+
+	<!-- ── Google Maps iOS SDK ──────────────────────────────────────────── -->
+	<key>GMSApiKey</key>
+	<string>AIzaSyB29-Nj3zGBNiIHhejSxTCL0iYk4qO_pJA</string>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
+
+	<!-- ── URL Launcher Schemes ─────────────────────────────────────────── -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>tel</string>
+		<string>mailto</string>
+	</array>
+
+	<!-- Launch Storyboard -->
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+</dict>
+</plist>

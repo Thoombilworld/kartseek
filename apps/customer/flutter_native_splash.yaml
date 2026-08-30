@@ -1,0 +1,26 @@
+# KARTSEEK Customer App — Native Splash Screen Configuration
+# Run: dart run flutter_native_splash:create
+# Docs: https://pub.dev/packages/flutter_native_splash
+
+flutter_native_splash:
+  # Splash screen background color (KARTSEEK white)
+  color: "#FFFFFF"
+
+  # App icon displayed in center of splash
+  image: "assets/icons/splash_logo.png"
+  image_dark: "assets/icons/splash_logo.png"
+
+  # Android 12+ splash screen
+  android_12:
+    color: "#FFFFFF"
+    icon_background_color: "#16A34A"    # KARTSEEK primary green
+    image: "assets/icons/splash_logo.png"
+
+  # iOS splash
+  ios: true
+
+  # Web splash (disabled — Next.js handles web)
+  web: false
+
+  # Full screen mode
+  fullscreen: true

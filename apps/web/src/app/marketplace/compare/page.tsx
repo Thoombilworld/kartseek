@@ -1,0 +1,196 @@
+'use client';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import {
+  ArrowLeft, X, Plus, Star, Check, Minus, ShoppingCart, Truck, Shield,
+} from 'lucide-react';
+import { useRegion } from '@/lib/contexts/region-context';
+import { useCartContext } from '@/lib/contexts/cart-context';
+import { useToast } from '@/lib/contexts/toast-context';
+import { productPath } from '@/lib/marketplace/product-url';
+
+type CompareProduct = {
+  id: string; title: string; brand: string; price: number; mrp: number;
+  rating: number; reviews: number; inStock: boolean;
+  specs: Record<string, string>;
+};
+
+/**
+ * The compare tray, written by the "Add to Compare" button on the product page.
+ *
+ * This page used to render three hardcoded sample phones with ids 'p1'/'p2'/'p3'
+ * that are not in the catalogue, so every link on it 404'd — and nothing the user
+ * did could change what was compared.
+ *
+ * Specs come from the same store; the catalogue has no structured spec data on a
+ * list response, so rows the product does not carry render as '—' rather than
+ * inventing values.
+ */
+const COMPARE_KEY = 'kartseek_compare';
+
+const ALL_SPEC_KEYS = ['Display', 'Processor', 'RAM', 'Storage', 'Battery', 'Camera', 'OS', 'Weight', '5G', 'Water Resistance', 'Charging', 'Warranty'];
+
+export default function ComparePage() {
+  const { formatCurrencyValue: fmt } = useRegion();
+  const cart = useCartContext();
+  const toast = useToast();
+  const [products, setProducts] = useState<CompareProduct[]>([]);
+  const [showDiffOnly, setShowDiffOnly] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COMPARE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setProducts((Array.isArray(parsed) ? parsed : [])
+        .filter((p: any) => p?.id)
+        .map((p: any) => ({
+          id: String(p.id),
+          title: p.title ?? 'Product',
+          brand: p.brand ?? '',
+          price: Number(p.price ?? 0) || 0,
+          mrp: Number(p.mrp ?? p.price ?? 0) || 0,
+          rating: Number(p.rating ?? 0) || 0,
+          reviews: Number(p.reviews ?? 0) || 0,
+          inStock: p.inStock !== false,
+          specs: (p.specs && typeof p.specs === 'object') ? p.specs : {},
+        })));
+    } catch { setProducts([]); }
+    setLoaded(true);
+  }, []);
+
+  const removeProduct = (id: string) => {
+    setProducts(prev => {
+      const next = prev.filter(x => x.id !== id);
+      try { localStorage.setItem(COMPARE_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+      return next;
+    });
+  };
+
+  const specRows = ALL_SPEC_KEYS.filter(key => {
+    if (!showDiffOnly) return true;
+    const vals = products.map(p => p.specs[key] || '—');
+    return new Set(vals).size > 1;
+  });
+
+  if (loaded && products.length === 0) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
+        <div className="w-24 h-24 rounded-full bg-blue-50 flex items-center justify-center mb-6">
+          <ArrowLeft className="w-12 h-12 text-blue-300 rotate-180" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">Nothing to compare yet</h2>
+        <p className="text-slate-500 mb-6 max-w-sm">
+          Open any product and tap <span className="font-semibold text-slate-700">Add to Compare</span> to line it up here — up to four at a time.
+        </p>
+        <Link href="/marketplace" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">
+          Browse Products
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[1200px] mx-auto px-3 xs:px-4 py-6 space-y-5 pb-mobile-nav">
+      <div className="flex items-center gap-3">
+        <Link href="/marketplace" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-500" /></Link>
+        <div className="flex-1"><h1 className="text-2xl font-black text-slate-900">Compare Products</h1><p className="text-sm text-slate-500">Side-by-side comparison of up to 4 products</p></div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={showDiffOnly} onChange={e => setShowDiffOnly(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+          <span className="text-slate-600 font-medium">Show differences only</span>
+        </label>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse min-w-[700px]">
+          {/* Product headers */}
+          <thead>
+            <tr>
+              <th className="w-40 p-3 text-left text-xs font-bold text-slate-400 uppercase align-top border-b border-slate-200">Product</th>
+              {products.map(p => {
+                const disc = Math.round(((p.mrp - p.price) / p.mrp) * 100);
+                return (
+                  <th key={p.id} className="p-4 align-top text-left border-b border-slate-200 relative bg-white">
+                    <button onClick={() => removeProduct(p.id)} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg"><X className="w-4 h-4" /></button>
+                    <div className="bg-slate-50 w-full h-28 rounded-lg flex items-center justify-center mb-3"><ShoppingCart className="w-8 h-8 text-slate-200" /></div>
+                    <p className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</p>
+                    <Link href={productPath(p)} className="font-bold text-sm text-slate-900 hover:text-blue-600 line-clamp-2 block mt-0.5">{p.title}</Link>
+                    <div className="flex items-center gap-1 mt-1.5">
+                      <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">{p.rating} <Star className="w-2.5 h-2.5 fill-white" /></span>
+                      <span className="text-[10px] text-slate-400">({p.reviews.toLocaleString()})</span>
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-lg font-black text-slate-900">{fmt(p.price)}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-400 line-through">{fmt(p.mrp)}</span>
+                        {disc > 0 && <span className="text-xs font-bold text-emerald-600">{disc}% off</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        cart.add({ id: p.id, name: p.title, price: Number(p.price) || 0, quantity: 1, brand: p.brand });
+                        toast.success(`Added ${p.title} to cart`);
+                      }}
+                      className="w-full mt-3 bg-[#ff9f00] hover:bg-[#f39800] text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5"
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5" />Add to Cart
+                    </button>
+                  </th>
+                );
+              })}
+              {products.length < 4 && (
+                <th className="p-4 align-top text-center border-b border-slate-200 bg-slate-50">
+                  <div className="w-full h-28 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center mb-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30">
+                    <Plus className="w-6 h-6 text-slate-300" />
+                    <p className="text-xs text-slate-400 mt-1">Add Product</p>
+                  </div>
+                </th>
+              )}
+            </tr>
+          </thead>
+          {/* Spec rows */}
+          <tbody>
+            {specRows.map((key, i) => {
+              const vals = products.map(p => p.specs[key] || '—');
+              const allSame = new Set(vals).size === 1;
+              const bestIdx = key === 'Price' ? vals.indexOf(Math.min(...products.map(p => p.price)).toString()) : -1;
+              return (
+                <tr key={key} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                  <td className="px-3 py-3 text-xs font-bold text-slate-500 border-b border-slate-100">{key}</td>
+                  {products.map((p, j) => (
+                    <td key={p.id} className={`px-4 py-3 text-sm border-b border-slate-100 ${!allSame && showDiffOnly ? 'bg-amber-50/50' : ''}`}>
+                      <span className="text-slate-900 font-medium">{vals[j]}</span>
+                    </td>
+                  ))}
+                  {products.length < 4 && <td className="border-b border-slate-100 bg-slate-50" />}
+                </tr>
+              );
+            })}
+            {/* Availability row */}
+            <tr className="bg-white">
+              <td className="px-3 py-3 text-xs font-bold text-slate-500 border-b border-slate-100">Availability</td>
+              {products.map(p => (
+                <td key={p.id} className="px-4 py-3 border-b border-slate-100">
+                  <span className={`text-xs font-bold flex items-center gap-1 ${p.inStock ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {p.inStock ? <><Check className="w-3 h-3" />In Stock</> : <><Minus className="w-3 h-3" />Out of Stock</>}
+                  </span>
+                </td>
+              ))}
+              {products.length < 4 && <td className="border-b border-slate-100 bg-slate-50" />}
+            </tr>
+            {/* Delivery row */}
+            <tr className="bg-slate-50/60">
+              <td className="px-3 py-3 text-xs font-bold text-slate-500">Delivery</td>
+              {products.map(p => (
+                <td key={p.id} className="px-4 py-3 text-xs text-slate-600 flex items-center gap-1">
+                  <Truck className="w-3 h-3 text-blue-500" />Free Delivery
+                </td>
+              ))}
+              {products.length < 4 && <td className="bg-slate-50" />}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

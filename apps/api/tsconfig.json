@@ -1,0 +1,163 @@
+{
+  "compilerOptions": {
+    "rootDir": "./",
+    "esModuleInterop": true,
+    "types": ["jest", "node"],
+    "module": "commonjs",
+    "declaration": false,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "incremental": true,
+    "skipLibCheck": true,
+    // `noImplicitAny` is on and clean across the whole workspace — all 26
+    // services, plus the specs, scripts and migrations the per-service configs
+    // exclude. It landed as a staged rollout (per-service overrides, enabled as
+    // each reached zero) and those overrides have since been removed, so this is
+    // the single place it is declared and a new service inherits it.
+    //
+    // The 149-error estimate this note used to carry was misleading: measured
+    // per service, 16 were already clean and the rest were annotation-only —
+    // an empty `[]`, a `.catch(() => …)`, a nullable test stub. Nothing needed
+    // restructuring.
+    //
+    // ── strictPropertyInitialization — deliberately off ──────────────────────
+    // `strict` turns this on, and it is wrong for this codebase. A NestJS DTO
+    //
+    //   class CreateRefundDto { @IsString() orderId: string; }
+    //
+    // is never constructed by us — ValidationPipe builds it from the request
+    // body — so there is no constructor to assign in, and the check fires on
+    // every field of every DTO. It accounted for **3088 of the 3461**
+    // `strictNullChecks` errors: 89% of what looked like a null-safety backlog
+    // was this one benign pattern. The alternative, `!` on several thousand DTO
+    // fields, would be noise that hides the assertions that mean something.
+    "strictPropertyInitialization": false,
+
+    // ── strictNullChecks — on, repo-wide ────────────────────────────────────
+    // Rolled out service by service via per-app overrides, then enabled here
+    // once the last one reached zero. The overrides in each
+    // `apps/*/tsconfig.app.json` are now redundant and have been removed.
+    //
+    // Two shared fixes cleared eighteen services at once, which is worth
+    // knowing if this ever regresses:
+    //   • `RedisService` passed an explicit `undefined` default to
+    //     `ConfigService.get`, which selects the wrong overload and made the
+    //     whole `new Redis({...})` call fail to resolve.
+    //   • `requireId()` in `@app/common` — RPC handlers wrote
+    //     `this.svc.approve(d?.id)`, and Postgres answers `WHERE id = NULL`
+    //     with zero rows, so a malformed message reported "not found" instead
+    //     of "bad request" and nobody could tell the two apart. Its sibling
+    //     `requireUuid()` covers ids bound for a `uuid` column, where a
+    //     malformed value came back as a 500 carrying Postgres's own text.
+    //
+    // The last nine errors were in files the per-app configs exclude — specs
+    // and `scripts/` — so the app builds looked clean while `seed-grocery.ts`
+    // still queried `where: { slug: undefined }`, which TypeORM treats as no
+    // condition and answers with the first row in the table.
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@app/common": [
+        "./libs/common/src"
+      ],
+      "@app/common/*": [
+        "./libs/common/src/*"
+      ],
+      "@app/database": [
+        "./libs/database/src"
+      ],
+      "@app/database/*": [
+        "./libs/database/src/*"
+      ],
+      "@app/guards": [
+        "./libs/guards/src"
+      ],
+      "@app/guards/*": [
+        "./libs/guards/src/*"
+      ],
+      "@app/decorators": [
+        "./libs/decorators/src"
+      ],
+      "@app/decorators/*": [
+        "./libs/decorators/src/*"
+      ],
+      "@app/validators": [
+        "./libs/validators/src"
+      ],
+      "@app/validators/*": [
+        "./libs/validators/src/*"
+      ],
+      "@app/dto": [
+        "./libs/dto/src"
+      ],
+      "@app/dto/*": [
+        "./libs/dto/src/*"
+      ],
+      "@app/events": [
+        "./libs/events/src"
+      ],
+      "@app/events/*": [
+        "./libs/events/src/*"
+      ],
+      "@app/logger": [
+        "./libs/logger/src"
+      ],
+      "@app/logger/*": [
+        "./libs/logger/src/*"
+      ],
+      "@app/security": [
+        "./libs/security/src"
+      ],
+      "@app/security/*": [
+        "./libs/security/src/*"
+      ],
+      "@app/grpc": [
+        "./libs/grpc/src"
+      ],
+      "@app/grpc/*": [
+        "./libs/grpc/src/*"
+      ],
+      "@app/kafka": [
+        "./libs/kafka/src"
+      ],
+      "@app/kafka/*": [
+        "./libs/kafka/src/*"
+      ],
+      "@app/redis": [
+        "./libs/redis/src"
+      ],
+      "@app/redis/*": [
+        "./libs/redis/src/*"
+      ],
+      "@app/gdpr": [
+        "./libs/gdpr/src"
+      ],
+      "@app/gdpr/*": [
+        "./libs/gdpr/src/*"
+      ],
+      "@app/region": [
+        "./libs/region/src"
+      ],
+      "@app/region/*": [
+        "./libs/region/src/*"
+      ],
+      "@app/storage": [
+        "./libs/storage/src"
+      ],
+      "@app/storage/*": [
+        "./libs/storage/src/*"
+      ]
+    }
+  }
+}

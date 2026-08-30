@@ -1,0 +1,53 @@
+# Line endings ────────────────────────────────────────────────────────────────
+# Development happens on Windows, but everything runs in Linux containers. A .sh
+# or Dockerfile checked out with CRLF dies at `bad interpreter: /bin/bash^M`, so
+# normalise to LF in the repository *and* on checkout.
+* text=auto eol=lf
+
+# …except scripts only ever run by a Windows shell.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary ──────────────────────────────────────────────────────────────────────
+# Never diff, never touch the bytes.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.avif binary
+*.svgz binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.eot  binary
+*.mp3  binary
+*.wav  binary
+*.mp4  binary
+*.zip  binary
+*.gz   binary
+*.tgz  binary
+*.7z   binary
+*.jar  binary
+*.aar  binary
+*.dll  binary
+*.exe  binary
+*.so   binary
+*.dylib binary
+*.a    binary
+*.bin  binary
+*.nupkg binary
+*.jks  binary
+*.keystore binary
+*.p12  binary
+*.pfx  binary
+
+# Generated / vendored: collapse in diffs and exclude from language stats.
+package-lock.json linguist-generated=true -diff
+*.g.dart linguist-generated=true
+*_generated.dart linguist-generated=true
+docs/api/postman/reports/** linguist-generated=true -diff

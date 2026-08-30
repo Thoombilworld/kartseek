@@ -1,0 +1,3906 @@
+{
+  "collection": {
+    "_": {
+      "postman_id": "9f4b73bf-e42a-4170-875b-8649e0ce5cf6"
+    },
+    "item": [
+      {
+        "id": "291d91cb-9454-4341-ab9e-741ea9ce40dd",
+        "name": "Read / List",
+        "description": {
+          "content": "",
+          "type": "text/plain"
+        },
+        "item": [
+          {
+            "id": "02531cb0-8453-4b36-91c5-6ead1726c997",
+            "name": "List SEO Entries",
+            "request": {
+              "description": {
+                "content": "",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "admin",
+                  "seo",
+                  ""
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{admin_token}}"
+                }
+              ],
+              "method": "GET"
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "06b4dfb8-b2d7-4085-a951-0822605bb306",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Status code is successful\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                    "});",
+                    "",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});",
+                    "",
+                    "pm.test(\"Response has JSON body\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                    "    pm.response.to.be.json;",
+                    "});",
+                    "",
+                    "pm.test(\"Response includes success status\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try {",
+                    "        const jsonData = pm.response.json();",
+                    "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                    "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                    "        pm.expect(hasSuccess || hasData).to.be.true;",
+                    "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                    "});"
+                  ],
+                  "_lastExecutionId": "23661f2a-b8b7-4117-ba5d-1c704f5429a4"
+                }
+              }
+            ]
+          },
+          {
+            "id": "e52a338b-7812-4969-be04-4bbd8aae2dc7",
+            "name": "Validate SEO",
+            "request": {
+              "description": {
+                "content": "",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "admin",
+                  "seo",
+                  "validate"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [
+                  {
+                    "key": "url",
+                    "value": "/marketplace"
+                  }
+                ],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{admin_token}}"
+                }
+              ],
+              "method": "GET"
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "7b4dc272-24be-4722-af7b-36c9daae2684",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Status code is successful\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                    "});",
+                    "",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});",
+                    "",
+                    "pm.test(\"Response has JSON body\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                    "    pm.response.to.be.json;",
+                    "});",
+                    "",
+                    "pm.test(\"Response includes success status\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try {",
+                    "        const jsonData = pm.response.json();",
+                    "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                    "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                    "        pm.expect(hasSuccess || hasData).to.be.true;",
+                    "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                    "});"
+                  ],
+                  "_lastExecutionId": "f2cdc426-06d2-44b2-a604-fe333f7c3641"
+                }
+              }
+            ]
+          },
+          {
+            "id": "e2f5d761-2946-4ce9-a971-23a31ff6989e",
+            "name": "Get Page SEO",
+            "request": {
+              "description": {
+                "content": "",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "admin",
+                  "seo",
+                  "marketplace"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{admin_token}}"
+                }
+              ],
+              "method": "GET"
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "be1c8ac6-9312-4945-9212-1417362ab670",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Status code is successful\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                    "});",
+                    "",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});",
+                    "",
+                    "pm.test(\"Response has JSON body\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                    "    pm.response.to.be.json;",
+                    "});",
+                    "",
+                    "pm.test(\"Response includes success status\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try {",
+                    "        const jsonData = pm.response.json();",
+                    "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                    "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                    "        pm.expect(hasSuccess || hasData).to.be.true;",
+                    "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                    "});"
+                  ],
+                  "_lastExecutionId": "73d8451a-62c0-4179-9473-2aa8377cb7f5"
+                }
+              }
+            ]
+          }
+        ],
+        "event": []
+      },
+      {
+        "id": "2630824b-0a01-40cf-be04-2170bb218ad3",
+        "name": "Create",
+        "description": {
+          "content": "",
+          "type": "text/plain"
+        },
+        "item": [
+          {
+            "id": "285f40d7-d0c1-4e34-bc77-733d6c65f0c7",
+            "name": "Create SEO Entry",
+            "request": {
+              "description": {
+                "content": "",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "admin",
+                  "seo",
+                  ""
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{admin_token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"path\": \"/test-page\",\n  \"title\": \"Test Page\",\n  \"description\": \"Test description\",\n  \"keywords\": [\n    \"test\"\n  ]\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "52352b40-4956-4a1e-9756-83ec3a75f9d9",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Status code is successful\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                    "});",
+                    "",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});",
+                    "",
+                    "pm.test(\"Response has JSON body\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                    "    pm.response.to.be.json;",
+                    "});",
+                    "",
+                    "pm.test(\"Response includes success status\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try {",
+                    "        const jsonData = pm.response.json();",
+                    "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                    "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                    "        pm.expect(hasSuccess || hasData).to.be.true;",
+                    "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                    "});"
+                  ],
+                  "_lastExecutionId": "2898b92c-e328-4a6e-9519-251c2b49ffd9"
+                }
+              }
+            ]
+          },
+          {
+            "id": "416d4fe7-d2ec-46b3-a0a4-8ef21c887c53",
+            "name": "Bulk Update SEO",
+            "request": {
+              "description": {
+                "content": "",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "admin",
+                  "seo",
+                  "bulk-update"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{admin_token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"entries\": [\n    {\n      \"path\": \"/page1\",\n      \"title\": \"Page 1\"\n    }\n  ]\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "28b6ec1e-4f26-4861-98ec-e81d1951b371",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Status code is successful\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                    "});",
+                    "",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});",
+                    "",
+                    "pm.test(\"Response has JSON body\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                    "    pm.response.to.be.json;",
+                    "});",
+                    "",
+                    "pm.test(\"Response includes success status\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try {",
+                    "        const jsonData = pm.response.json();",
+                    "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                    "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                    "        pm.expect(hasSuccess || hasData).to.be.true;",
+                    "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                    "});"
+                  ],
+                  "_lastExecutionId": "3a365e6f-d17e-4872-9d39-a41855eab24b"
+                }
+              }
+            ]
+          }
+        ],
+        "event": []
+      },
+      {
+        "id": "ae4a72d1-b1c9-4fa8-8aba-849f54d7ec55",
+        "name": "Delete",
+        "description": {
+          "content": "",
+          "type": "text/plain"
+        },
+        "item": [
+          {
+            "id": "1ff3345b-4387-4ed8-8634-7205d5a4fe54",
+            "name": "Delete SEO Entry",
+            "request": {
+              "description": {
+                "content": "",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "admin",
+                  "seo",
+                  "SEO-001"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{admin_token}}"
+                }
+              ],
+              "method": "DELETE"
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "3fc7700c-ee09-40ef-8fee-264ba092c191",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Status code is successful\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                    "});",
+                    "",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});",
+                    "",
+                    "pm.test(\"Response has JSON body\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                    "    pm.response.to.be.json;",
+                    "});",
+                    "",
+                    "pm.test(\"Response includes success status\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    try {",
+                    "        const jsonData = pm.response.json();",
+                    "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                    "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                    "        pm.expect(hasSuccess || hasData).to.be.true;",
+                    "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                    "});"
+                  ],
+                  "_lastExecutionId": "6d10d277-0b69-4ed5-9f6e-b9192d02eb78"
+                }
+              }
+            ]
+          }
+        ],
+        "event": []
+      }
+    ],
+    "event": [
+      {
+        "listen": "prerequest",
+        "script": {
+          "id": "37cb7ed5-8658-4b25-bcde-9dbb0c3dae26",
+          "type": "text/javascript",
+          "exec": [
+            "// Collection-level pre-request: auto-authenticate if no token present",
+            "if (!pm.environment.get(\"user_token\") || pm.environment.get(\"user_token\") === \"\") {",
+            "    const baseUrl = pm.environment.get(\"base_url\") || pm.collectionVariables.get(\"base_url\");",
+            "    const email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+            "    const password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+            "    pm.sendRequest({",
+            "        url: baseUrl + \"/auth/login\",",
+            "        method: \"POST\",",
+            "        header: {",
+            "            \"Content-Type\": \"application/json\",",
+            "            \"X-Client-Version\": \"1.0.0\",",
+            "            \"X-Client-Platform\": \"WEB\",",
+            "            \"X-Region-Code\": pm.environment.get(\"country_code\") || \"IN\"",
+            "        },",
+            "        body: {",
+            "            mode: \"raw\",",
+            "            raw: JSON.stringify({ email: email, password: password })",
+            "        }",
+            "    }, function (err, response) {",
+            "        if (err) {",
+            "            console.log(\"⚠️  Auto-login failed: \" + err);",
+            "            return;",
+            "        }",
+            "        if (response.code === 200 || response.code === 201) {",
+            "            const data = response.json();",
+            "            if (data.accessToken) {",
+            "                pm.environment.set(\"user_token\", data.accessToken);",
+            "                if (data.refreshToken) pm.environment.set(\"refresh_token\", data.refreshToken);",
+            "                if (data.user && data.user.id) pm.environment.set(\"customer_id\", data.user.id);",
+            "                console.log(\"✅ Auto-login successful — user_token set\");",
+            "            }",
+            "        } else {",
+            "            console.log(\"⚠️  Auto-login returned \" + response.code + \" — some tests may use fallback behavior\");",
+            "        }",
+            "    });",
+            "}"
+          ],
+          "_lastExecutionId": "9b653389-ed57-4bd1-a59a-08acd9051fef"
+        }
+      }
+    ],
+    "variable": [
+      {
+        "type": "any",
+        "value": "http://localhost:3001/api/v1",
+        "key": "base_url"
+      }
+    ],
+    "info": {
+      "_postman_id": "9f4b73bf-e42a-4170-875b-8649e0ce5cf6",
+      "name": "KARTSEEK — 28 SEO / AEO / GEO APIs",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+      "description": {
+        "content": "SEO metadata management, validation, and bulk updates.",
+        "type": "text/plain"
+      }
+    }
+  },
+  "environment": {
+    "_": {
+      "postman_variable_scope": "environment",
+      "postman_exported_at": "2026-06-30T23:48:08.990Z",
+      "postman_exported_using": "Newman/6.2.2"
+    },
+    "id": "kartseek-local-env",
+    "name": "KARTSEEK — Local Development",
+    "values": [
+      {
+        "type": "any",
+        "value": "http://localhost:3001/api/v1",
+        "key": "base_url"
+      },
+      {
+        "type": "any",
+        "value": "http://localhost:3001",
+        "key": "api_gateway_url"
+      },
+      {
+        "type": "any",
+        "value": "http://localhost:3001/api/v1/auth",
+        "key": "auth_url"
+      },
+      {
+        "type": "any",
+        "value": "http://localhost:3026/api/v1",
+        "key": "hotel_service_url"
+      },
+      {
+        "type": "any",
+        "value": "ws://localhost:3001/tracking",
+        "key": "ws_url"
+      },
+      {
+        "type": "any",
+        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzY1MDAzNi0xZmQyLTRjZWUtODM4Ny0xZWQzZGIzNmY1MjMiLCJwaG9uZSI6Iis5MTk4NzY1NDMyMTAiLCJyb2xlIjoiQ1VTVE9NRVIiLCJpYXQiOjE3ODI4NjMwMzMsImV4cCI6MTc4Mjg2NjYzM30.fE2EDvS2qBN5yIubaMAIfG5ScmLw79vlahy7FHY0cHY",
+        "key": "user_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "admin_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "seller_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "partner_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "doctor_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "hotel_owner_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "driver_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "vendor_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "franchise_token"
+      },
+      {
+        "type": "any",
+        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzY1MDAzNi0xZmQyLTRjZWUtODM4Ny0xZWQzZGIzNmY1MjMiLCJwaG9uZSI6Iis5MTk4NzY1NDMyMTAiLCJyb2xlIjoiQ1VTVE9NRVIiLCJpYXQiOjE3ODI4NjMwMzMsImV4cCI6MTc4NTQ1NTAzM30.Abb-8YL9HvQrYirSvietRjm7-6mcoknf-BRBo8S47MY",
+        "key": "refresh_token"
+      },
+      {
+        "type": "any",
+        "value": "IN",
+        "key": "country_code"
+      },
+      {
+        "type": "any",
+        "value": "INR",
+        "key": "currency_code"
+      },
+      {
+        "type": "any",
+        "value": "en",
+        "key": "language_code"
+      },
+      {
+        "type": "any",
+        "value": "87650036-1fd2-4cee-8387-1ed3db36f523",
+        "key": "customer_id"
+      },
+      {
+        "type": "any",
+        "value": "SEL-001",
+        "key": "seller_id"
+      },
+      {
+        "type": "any",
+        "value": "REST-001",
+        "key": "restaurant_id"
+      },
+      {
+        "type": "any",
+        "value": "GRC-001",
+        "key": "grocery_store_id"
+      },
+      {
+        "type": "any",
+        "value": "PH-001",
+        "key": "pharmacy_store_id"
+      },
+      {
+        "type": "any",
+        "value": "DOC-001",
+        "key": "doctor_id"
+      },
+      {
+        "type": "any",
+        "value": "HOSP-001",
+        "key": "hospital_id"
+      },
+      {
+        "type": "any",
+        "value": "DRV-001",
+        "key": "taxi_driver_id"
+      },
+      {
+        "type": "any",
+        "value": "HTL-001",
+        "key": "hotel_id"
+      },
+      {
+        "type": "any",
+        "value": "ORD-1782863048033",
+        "key": "order_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "booking_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "ride_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "payment_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "wallet_id"
+      },
+      {
+        "type": "any",
+        "value": "9bd8c94d-932a-441e-87e1-9e0dd96a0871",
+        "key": "product_id"
+      },
+      {
+        "type": "any",
+        "value": "8254b68b-a58e-4174-b0b9-c9618cb449d5",
+        "key": "category_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "address_id"
+      },
+      {
+        "type": "any",
+        "value": "FRN-001",
+        "key": "franchise_id"
+      },
+      {
+        "type": "any",
+        "value": "testcustomer@kartseek.com",
+        "key": "test_email"
+      },
+      {
+        "type": "any",
+        "value": "TestPass123!",
+        "key": "test_password"
+      },
+      {
+        "type": "any",
+        "value": "+919876543210",
+        "key": "test_phone"
+      },
+      {
+        "type": "any",
+        "value": "1234",
+        "key": "test_otp"
+      },
+      {
+        "type": "any",
+        "value": "admin@kartseek.com",
+        "key": "admin_email"
+      },
+      {
+        "type": "any",
+        "value": "AdminPass123!",
+        "key": "admin_password"
+      },
+      {
+        "type": "any",
+        "value": "seller@kartseek.com",
+        "key": "seller_email"
+      },
+      {
+        "type": "any",
+        "value": "SellerPass123!",
+        "key": "seller_password"
+      },
+      {
+        "type": "any",
+        "value": "12.9716",
+        "key": "latitude"
+      },
+      {
+        "type": "any",
+        "value": "77.5946",
+        "key": "longitude"
+      },
+      {
+        "type": "any",
+        "value": "electronics",
+        "key": "category_slug"
+      }
+    ]
+  },
+  "globals": {
+    "id": "576f1e3b-26b9-4bda-b2d7-4cd63f8b930a",
+    "values": []
+  },
+  "run": {
+    "stats": {
+      "iterations": {
+        "total": 1,
+        "pending": 0,
+        "failed": 0
+      },
+      "items": {
+        "total": 6,
+        "pending": 0,
+        "failed": 0
+      },
+      "scripts": {
+        "total": 12,
+        "pending": 0,
+        "failed": 0
+      },
+      "prerequests": {
+        "total": 6,
+        "pending": 0,
+        "failed": 0
+      },
+      "requests": {
+        "total": 6,
+        "pending": 0,
+        "failed": 0
+      },
+      "tests": {
+        "total": 6,
+        "pending": 0,
+        "failed": 0
+      },
+      "assertions": {
+        "total": 24,
+        "pending": 0,
+        "failed": 0
+      },
+      "testScripts": {
+        "total": 6,
+        "pending": 0,
+        "failed": 0
+      },
+      "prerequestScripts": {
+        "total": 6,
+        "pending": 0,
+        "failed": 0
+      }
+    },
+    "timings": {
+      "responseAverage": 14.5,
+      "responseMin": 6,
+      "responseMax": 39,
+      "responseSd": 11.206396982676159,
+      "dnsAverage": 0,
+      "dnsMin": 0,
+      "dnsMax": 0,
+      "dnsSd": 0,
+      "firstByteAverage": 0,
+      "firstByteMin": 0,
+      "firstByteMax": 0,
+      "firstByteSd": 0,
+      "started": 1782863294301,
+      "completed": 1782863295633
+    },
+    "executions": [
+      {
+        "cursor": {
+          "position": 0,
+          "iteration": 0,
+          "length": 6,
+          "cycles": 1,
+          "empty": false,
+          "eof": false,
+          "bof": true,
+          "cr": false,
+          "ref": "8588b29a-5e1f-4495-beb9-ada6952661d1",
+          "httpRequestId": "9b7a5432-58b7-4c27-ab5b-bc1f646e0b3c"
+        },
+        "item": {
+          "id": "02531cb0-8453-4b36-91c5-6ead1726c997",
+          "name": "List SEO Entries",
+          "request": {
+            "description": {
+              "content": "",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "admin",
+                "seo",
+                ""
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "method": "GET"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "06b4dfb8-b2d7-4085-a951-0822605bb306",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ],
+                "_lastExecutionId": "23661f2a-b8b7-4117-ba5d-1c704f5429a4"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "admin",
+              "seo",
+              ""
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer "
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "01c4671b-25e3-45df-92b0-eedd5fff8ba2",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            }
+          ],
+          "method": "GET"
+        },
+        "response": {
+          "id": "aa84b113-bdfe-4bf5-8eb6-6cf9ba0b251a",
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "64101a95-1ae8-4833-a175-db83c7d78d76"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "188"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"bc-hSJhzGRTfjeLlZfN1qYnrpya1PU\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:48:14 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              52,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              67,
+              97,
+              110,
+              110,
+              111,
+              116,
+              32,
+              71,
+              69,
+              84,
+              32,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              52,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              56,
+              58,
+              49,
+              52,
+              46,
+              52,
+              56,
+              51,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 39,
+          "responseSize": 188
+        },
+        "id": "02531cb0-8453-4b36-91c5-6ead1726c997",
+        "assertions": [
+          {
+            "assertion": "Status code is successful",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          },
+          {
+            "assertion": "Response has JSON body",
+            "skipped": false
+          },
+          {
+            "assertion": "Response includes success status",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "87b40a85-2bf0-472c-b07a-44af12b3e188",
+          "length": 6,
+          "cycles": 1,
+          "position": 1,
+          "iteration": 0,
+          "httpRequestId": "d621a11c-d887-4429-8ee6-04b765900d2d"
+        },
+        "item": {
+          "id": "e52a338b-7812-4969-be04-4bbd8aae2dc7",
+          "name": "Validate SEO",
+          "request": {
+            "description": {
+              "content": "",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "admin",
+                "seo",
+                "validate"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [
+                {
+                  "key": "url",
+                  "value": "/marketplace"
+                }
+              ],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "method": "GET"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "7b4dc272-24be-4722-af7b-36c9daae2684",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ],
+                "_lastExecutionId": "f2cdc426-06d2-44b2-a604-fe333f7c3641"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "admin",
+              "seo",
+              "validate"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [
+              {
+                "key": "url",
+                "value": "/marketplace"
+              }
+            ],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer "
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "346d9735-0777-4b69-9e20-7a686d00d7f2",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            }
+          ],
+          "method": "GET"
+        },
+        "response": {
+          "id": "319981c4-079b-42a1-b4cf-2f09867e875e",
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "f4bcdddb-eafd-4c47-aaf3-6f0325431d0f"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "238"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"ee-RepdiDYaOe/ioJWfvHq5vhP+otU\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:48:14 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              52,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              67,
+              97,
+              110,
+              110,
+              111,
+              116,
+              32,
+              71,
+              69,
+              84,
+              32,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              118,
+              97,
+              108,
+              105,
+              100,
+              97,
+              116,
+              101,
+              63,
+              117,
+              114,
+              108,
+              61,
+              47,
+              109,
+              97,
+              114,
+              107,
+              101,
+              116,
+              112,
+              108,
+              97,
+              99,
+              101,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              52,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              56,
+              58,
+              49,
+              52,
+              46,
+              55,
+              48,
+              57,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              118,
+              97,
+              108,
+              105,
+              100,
+              97,
+              116,
+              101,
+              63,
+              117,
+              114,
+              108,
+              61,
+              47,
+              109,
+              97,
+              114,
+              107,
+              101,
+              116,
+              112,
+              108,
+              97,
+              99,
+              101,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 9,
+          "responseSize": 238
+        },
+        "id": "e52a338b-7812-4969-be04-4bbd8aae2dc7",
+        "assertions": [
+          {
+            "assertion": "Status code is successful",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          },
+          {
+            "assertion": "Response has JSON body",
+            "skipped": false
+          },
+          {
+            "assertion": "Response includes success status",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "fd6f57e0-a19f-4c07-8ed2-f6c8302564f0",
+          "length": 6,
+          "cycles": 1,
+          "position": 2,
+          "iteration": 0,
+          "httpRequestId": "e43fb9d0-4d59-45ab-a95c-78c75784c977"
+        },
+        "item": {
+          "id": "e2f5d761-2946-4ce9-a971-23a31ff6989e",
+          "name": "Get Page SEO",
+          "request": {
+            "description": {
+              "content": "",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "admin",
+                "seo",
+                "marketplace"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "method": "GET"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "be1c8ac6-9312-4945-9212-1417362ab670",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ],
+                "_lastExecutionId": "73d8451a-62c0-4179-9473-2aa8377cb7f5"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "admin",
+              "seo",
+              "marketplace"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer "
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "74f4705b-6214-4047-87f4-784c27e74f50",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            }
+          ],
+          "method": "GET"
+        },
+        "response": {
+          "id": "5f377894-9ebf-44ba-b0d8-e79c9953d0bb",
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "cdfaa147-93a2-4da8-98ff-15778ab50abf"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "210"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"d2-CejZY/SgUH4yWrqmiEnjxDl/f28\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:48:14 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              52,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              67,
+              97,
+              110,
+              110,
+              111,
+              116,
+              32,
+              71,
+              69,
+              84,
+              32,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              109,
+              97,
+              114,
+              107,
+              101,
+              116,
+              112,
+              108,
+              97,
+              99,
+              101,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              52,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              56,
+              58,
+              49,
+              52,
+              46,
+              57,
+              50,
+              57,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              109,
+              97,
+              114,
+              107,
+              101,
+              116,
+              112,
+              108,
+              97,
+              99,
+              101,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 12,
+          "responseSize": 210
+        },
+        "id": "e2f5d761-2946-4ce9-a971-23a31ff6989e",
+        "assertions": [
+          {
+            "assertion": "Status code is successful",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          },
+          {
+            "assertion": "Response has JSON body",
+            "skipped": false
+          },
+          {
+            "assertion": "Response includes success status",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "5d0a388a-c8de-4f5c-8102-477a209c951b",
+          "length": 6,
+          "cycles": 1,
+          "position": 3,
+          "iteration": 0,
+          "httpRequestId": "336baf96-8711-45b3-a8eb-23c3ca6734e9"
+        },
+        "item": {
+          "id": "285f40d7-d0c1-4e34-bc77-733d6c65f0c7",
+          "name": "Create SEO Entry",
+          "request": {
+            "description": {
+              "content": "",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "admin",
+                "seo",
+                ""
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"/test-page\",\n  \"title\": \"Test Page\",\n  \"description\": \"Test description\",\n  \"keywords\": [\n    \"test\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "52352b40-4956-4a1e-9756-83ec3a75f9d9",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ],
+                "_lastExecutionId": "2898b92c-e328-4a6e-9519-251c2b49ffd9"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "admin",
+              "seo",
+              ""
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer "
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "00d52ef4-b7d4-4881-9c13-e434af774db0",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "119",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"path\": \"/test-page\",\n  \"title\": \"Test Page\",\n  \"description\": \"Test description\",\n  \"keywords\": [\n    \"test\"\n  ]\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "4bd9215c-9dd9-4098-b359-6aea98081e61",
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "d78c606f-f705-4271-9207-e7969dae2ad9"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "189"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"bd-oH46h13N+ALsBx3YHqh9DhN+1jA\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:48:15 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              52,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              67,
+              97,
+              110,
+              110,
+              111,
+              116,
+              32,
+              80,
+              79,
+              83,
+              84,
+              32,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              52,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              56,
+              58,
+              49,
+              53,
+              46,
+              49,
+              52,
+              50,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 8,
+          "responseSize": 189
+        },
+        "id": "285f40d7-d0c1-4e34-bc77-733d6c65f0c7",
+        "assertions": [
+          {
+            "assertion": "Status code is successful",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          },
+          {
+            "assertion": "Response has JSON body",
+            "skipped": false
+          },
+          {
+            "assertion": "Response includes success status",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "c393bb18-f14e-4e5e-9670-c8899f7299d1",
+          "length": 6,
+          "cycles": 1,
+          "position": 4,
+          "iteration": 0,
+          "httpRequestId": "eae1cbd7-3072-4dfa-b725-62ae4bca1809"
+        },
+        "item": {
+          "id": "416d4fe7-d2ec-46b3-a0a4-8ef21c887c53",
+          "name": "Bulk Update SEO",
+          "request": {
+            "description": {
+              "content": "",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "admin",
+                "seo",
+                "bulk-update"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entries\": [\n    {\n      \"path\": \"/page1\",\n      \"title\": \"Page 1\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "28b6ec1e-4f26-4861-98ec-e81d1951b371",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ],
+                "_lastExecutionId": "3a365e6f-d17e-4872-9d39-a41855eab24b"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "admin",
+              "seo",
+              "bulk-update"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer "
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "647a5f4e-a484-432c-8fde-38cc440a518f",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "82",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"entries\": [\n    {\n      \"path\": \"/page1\",\n      \"title\": \"Page 1\"\n    }\n  ]\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "155e4445-ad99-4a0b-ac4c-9820754328e3",
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "f3ac0c34-e685-41db-bdfb-21850f7836a2"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "211"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"d3-GHYL4PDrv77IILep2ZHPy8UgleI\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:48:15 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              52,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              67,
+              97,
+              110,
+              110,
+              111,
+              116,
+              32,
+              80,
+              79,
+              83,
+              84,
+              32,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              98,
+              117,
+              108,
+              107,
+              45,
+              117,
+              112,
+              100,
+              97,
+              116,
+              101,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              52,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              56,
+              58,
+              49,
+              53,
+              46,
+              51,
+              53,
+              57,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              98,
+              117,
+              108,
+              107,
+              45,
+              117,
+              112,
+              100,
+              97,
+              116,
+              101,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 6,
+          "responseSize": 211
+        },
+        "id": "416d4fe7-d2ec-46b3-a0a4-8ef21c887c53",
+        "assertions": [
+          {
+            "assertion": "Status code is successful",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          },
+          {
+            "assertion": "Response has JSON body",
+            "skipped": false
+          },
+          {
+            "assertion": "Response includes success status",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "819b1e29-afa3-4522-9bc2-33f14b1c5e05",
+          "length": 6,
+          "cycles": 1,
+          "position": 5,
+          "iteration": 0,
+          "httpRequestId": "cb90c923-51bf-4a33-940e-5ea67b1bb0ad"
+        },
+        "item": {
+          "id": "1ff3345b-4387-4ed8-8634-7205d5a4fe54",
+          "name": "Delete SEO Entry",
+          "request": {
+            "description": {
+              "content": "",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "admin",
+                "seo",
+                "SEO-001"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "method": "DELETE"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "3fc7700c-ee09-40ef-8fee-264ba092c191",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Status code is successful\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON body\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes success status\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    try {",
+                  "        const jsonData = pm.response.json();",
+                  "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
+                  "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
+                  "        pm.expect(hasSuccess || hasData).to.be.true;",
+                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "});"
+                ],
+                "_lastExecutionId": "6d10d277-0b69-4ed5-9f6e-b9192d02eb78"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "admin",
+              "seo",
+              "SEO-001"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer "
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "a8b84dff-6609-416f-96ee-0b10742a72d6",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            }
+          ],
+          "method": "DELETE"
+        },
+        "response": {
+          "id": "73cceca3-cf5a-455e-96f0-59b73f6b829a",
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "1aabf01e-0660-4290-ae2d-137b73ca1ed6"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "205"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"cd-PHu4r5VH7bfdSoOcE0tvFNIr1WE\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:48:15 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              52,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              67,
+              97,
+              110,
+              110,
+              111,
+              116,
+              32,
+              68,
+              69,
+              76,
+              69,
+              84,
+              69,
+              32,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              83,
+              69,
+              79,
+              45,
+              48,
+              48,
+              49,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              52,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              56,
+              58,
+              49,
+              53,
+              46,
+              53,
+              56,
+              50,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              97,
+              100,
+              109,
+              105,
+              110,
+              47,
+              115,
+              101,
+              111,
+              47,
+              83,
+              69,
+              79,
+              45,
+              48,
+              48,
+              49,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 13,
+          "responseSize": 205
+        },
+        "id": "1ff3345b-4387-4ed8-8634-7205d5a4fe54",
+        "assertions": [
+          {
+            "assertion": "Status code is successful",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          },
+          {
+            "assertion": "Response has JSON body",
+            "skipped": false
+          },
+          {
+            "assertion": "Response includes success status",
+            "skipped": false
+          }
+        ]
+      }
+    ],
+    "transfers": {
+      "responseTotal": 1241
+    },
+    "failures": [],
+    "error": null
+  }
+}

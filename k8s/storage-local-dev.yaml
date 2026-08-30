@@ -1,0 +1,76 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# KARTSEEK Storage — LOCAL DEVELOPMENT ONLY
+# Apply INSTEAD OF k8s/storage.yaml on a laptop cluster:
+#   kubectl delete storageclass fast-ssd --ignore-not-found
+#   kubectl apply -f k8s/storage-local-dev.yaml
+# ══════════════════════════════════════════════════════════════════════════════
+# Every volumeClaimTemplate in databases.yaml asks for `fast-ssd`, which in
+# k8s/storage.yaml is backed by the AWS EBS CSI driver. That driver does not
+# exist on docker-desktop / kind / minikube, so all four database PVCs sit
+# Pending forever and nothing starts.
+#
+# The fix is a same-named StorageClass backed by whatever dynamic provisioner
+# the local cluster ships, NOT hand-written static PVs: a dynamic provisioner
+# creates the backing directory world-writable, whereas hostPath/local PVs stay
+# root-owned because fsGroup is never applied to them — which is what made
+# postgres (uid 70) and kafka (uid 1000) die on AccessDenied.
+#
+# StorageClass fields are immutable, so `kubectl apply` over the production one
+# is rejected; delete it first (the command above). Deleting a StorageClass does
+# not touch already-provisioned volumes.
+#
+# Provisioner per local distribution — set the one you use:
+#   docker-desktop  docker.io/hostpath        (default below)
+#   kind            rancher.io/local-path
+#   minikube        k8s.io/minikube-hostpath
+#   k3s             rancher.io/local-path
+# Confirm yours with:  kubectl get storageclass
+# ══════════════════════════════════════════════════════════════════════════════
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  annotations:
+    kartseek.com/environment: "local-development"
+provisioner: docker.io/hostpath
+reclaimPolicy: Delete
+# Immediate, not WaitForFirstConsumer: the local hostPath provisioners are
+# single-node and do not implement topology-aware delayed binding.
+volumeBindingMode: Immediate
+
+---
+# The other three classes are referenced by nothing in k8s/ today, but are
+# defined so that anything added later that names them still binds locally.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard
+  annotations:
+    kartseek.com/environment: "local-development"
+provisioner: docker.io/hostpath
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: high-performance
+  annotations:
+    kartseek.com/environment: "local-development"
+provisioner: docker.io/hostpath
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: archive
+  annotations:
+    kartseek.com/environment: "local-development"
+provisioner: docker.io/hostpath
+reclaimPolicy: Delete
+volumeBindingMode: Immediate

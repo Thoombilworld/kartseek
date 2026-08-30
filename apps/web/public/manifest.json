@@ -1,0 +1,58 @@
+{
+  "name": "KARTSEEK — The Ultimate Super App",
+  "short_name": "KARTSEEK",
+  "description": "Your all-in-one super app for marketplace shopping, grocery delivery, food ordering, pharmacy, doctor appointments, and taxi booking across 10 countries.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "portrait-primary",
+  "background_color": "#f8fafc",
+  "theme_color": "#1d4ed8",
+  "scope": "/",
+  "lang": "en",
+  "dir": "auto",
+  "categories": ["shopping", "food", "health", "transportation", "medical"],
+  "iarc_rating_id": "",
+  "prefer_related_applications": true,
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.kartseek.customer",
+      "id": "com.kartseek.customer"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/kartseek/id0000000000"
+    }
+  ],
+  "icons": [
+    { "src": "/icons/icon-72x72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-96x96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" }
+  ],
+  "screenshots": [
+    { "src": "/screenshots/marketplace.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "KARTSEEK Marketplace" },
+    { "src": "/screenshots/marketplace-mobile.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "KARTSEEK Marketplace on mobile" }
+  ],
+  "shortcuts": [
+    { "name": "Marketplace", "url": "/marketplace", "icons": [{ "src": "/icons/marketplace.png", "sizes": "96x96" }] },
+    { "name": "Restaurants", "url": "/restaurant", "icons": [{ "src": "/icons/restaurant.png", "sizes": "96x96" }] },
+    { "name": "Grocery", "url": "/grocery", "icons": [{ "src": "/icons/grocery.png", "sizes": "96x96" }] },
+    { "name": "Book Taxi", "url": "/taxi", "icons": [{ "src": "/icons/taxi.png", "sizes": "96x96" }] },
+    { "name": "Pharmacy", "url": "/pharmacy", "icons": [{ "src": "/icons/pharmacy.png", "sizes": "96x96" }] },
+    { "name": "Doctor", "url": "/doctor", "icons": [{ "src": "/icons/doctor.png", "sizes": "96x96" }] }
+  ],
+  "share_target": {
+    "action": "/search",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": { "text": "q" }
+  }
+}

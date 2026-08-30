@@ -1,0 +1,53 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalEnv": [
+    "NODE_ENV",
+    "SKIP_DB",
+    "API_GATEWAY_PORT"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "build/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": [
+        "API_GATEWAY_PORT",
+        "SKIP_DB",
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_HOST",
+        "REDIS_PORT",
+        "KAFKA_BROKERS",
+        "JWT_SECRET"
+      ]
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "inputs": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", ".eslintrc*", "eslint.config*"]
+    },
+    "lint:fix": {
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^test"],
+      "inputs": ["**/*.ts", "**/*.tsx", "**/*.spec.*", "**/*.test.*", "jest.config*"],
+      "outputs": ["coverage/**"]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "type-check": {
+      "dependsOn": ["^type-check"],
+      "inputs": ["**/*.ts", "**/*.tsx", "tsconfig*.json"]
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

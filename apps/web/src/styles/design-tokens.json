@@ -1,0 +1,275 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "_doc": {
+    "purpose": "Single source of truth for KARTSEEK web colour, elevation and motion tokens. Three layers: primitive (raw values, no meaning) -> semantic (purpose) -> component (per-component). Generate design-tokens.css from this file; never hand-edit the generated CSS.",
+    "generate": "node ../../../../.claude/skills/design-system/scripts/generate-tokens.cjs --config src/styles/design-tokens.json -o src/styles/design-tokens.css   (run from apps/web)",
+    "why_var_not_ref": "Semantic and component values are written as literal 'var(--primitive-*)' strings rather than the generator's '{primitive.x.y}' reference syntax. The generator RESOLVES '{...}' to the raw hex and inlines it, which flattens the three layers back into one and makes retheming impossible. Writing var() keeps a real cascade chain in the output.",
+    "scope": "Colour, elevation and easing only -- the values that were duplicated between globals.css :root and tailwind.config.ts. Spacing, type scale, breakpoints and z-index remain in tailwind.config.ts, which is already their single definition."
+  },
+
+  "primitive": {
+    "color": {
+      "white": { "$value": "#ffffff", "$type": "color" },
+
+      "blue": {
+        "25":  { "$value": "#f6f9ff", "$type": "color", "_doc": "Half a step below blue-50. Only the marketplace page backdrop uses it, as the mid-stop that keeps the fade from banding." },
+        "50":  { "$value": "#eff6ff", "$type": "color" },
+        "100": { "$value": "#dbeafe", "$type": "color" },
+        "200": { "$value": "#bfdbfe", "$type": "color" },
+        "300": { "$value": "#93c5fd", "$type": "color" },
+        "400": { "$value": "#60a5fa", "$type": "color" },
+        "500": { "$value": "#3b82f6", "$type": "color" },
+        "600": { "$value": "#2563eb", "$type": "color" },
+        "700": { "$value": "#1d4ed8", "$type": "color" },
+        "800": { "$value": "#1e40af", "$type": "color" },
+        "900": { "$value": "#1e3a8a", "$type": "color" },
+        "950": { "$value": "#172554", "$type": "color" }
+      },
+
+      "slate": {
+        "50":  { "$value": "#f8fafc", "$type": "color" },
+        "100": { "$value": "#f1f5f9", "$type": "color" },
+        "200": { "$value": "#e2e8f0", "$type": "color" },
+        "300": { "$value": "#cbd5e1", "$type": "color" },
+        "400": { "$value": "#94a3b8", "$type": "color" },
+        "600": { "$value": "#475569", "$type": "color" },
+        "900": { "$value": "#0f172a", "$type": "color" }
+      },
+
+      "orange": {
+        "50":  { "$value": "#fff7ed", "$type": "color" },
+        "200": { "$value": "#fed7aa", "$type": "color" },
+        "600": { "$value": "#ea580c", "$type": "color" },
+        "700": { "$value": "#c2410c", "$type": "color" }
+      },
+
+      "teal": {
+        "50":  { "$value": "#f0fdfa", "$type": "color" },
+        "200": { "$value": "#99f6e4", "$type": "color" },
+        "600": { "$value": "#0d9488", "$type": "color" },
+        "700": { "$value": "#0f766e", "$type": "color" }
+      },
+
+      "cyan": {
+        "600": { "$value": "#0891b2", "$type": "color" }
+      },
+
+      "indigo": {
+        "50":  { "$value": "#eef2ff", "$type": "color" },
+        "200": { "$value": "#c7d2fe", "$type": "color" },
+        "600": { "$value": "#4f46e5", "$type": "color" }
+      },
+
+      "violet": {
+        "50":  { "$value": "#f5f3ff", "$type": "color" },
+        "600": { "$value": "#7c3aed", "$type": "color" },
+        "700": { "$value": "#6d28d9", "$type": "color" }
+      },
+
+      "stone": {
+        "_doc": "Warm neutrals, used only by the `hero-warm` backdrop.",
+        "800": { "$value": "#292524", "$type": "color" },
+        "900": { "$value": "#1c1917", "$type": "color" }
+      },
+
+      "navy": {
+        "_doc": "Mid-tone of the dark hero backdrop. Sits between slate-800 and blue-900 and matches neither, so it is its own primitive rather than being rounded to a scale step.",
+        "700": { "$value": "#1e3a5f", "$type": "color" }
+      },
+
+      "rose": {
+        "50":  { "$value": "#fff1f2", "$type": "color" },
+        "200": { "$value": "#fecdd3", "$type": "color" },
+        "600": { "$value": "#e11d48", "$type": "color" },
+        "800": { "$value": "#9f1239", "$type": "color" }
+      },
+
+      "green": {
+        "50":  { "$value": "#f0fdf4", "$type": "color" },
+        "200": { "$value": "#bbf7d0", "$type": "color" },
+        "600": { "$value": "#16a34a", "$type": "color" },
+        "700": { "$value": "#15803d", "$type": "color" }
+      },
+
+      "emerald": {
+        "500": { "$value": "#10b981", "$type": "color" },
+        "600": { "$value": "#059669", "$type": "color" }
+      },
+
+      "amber": {
+        "50":  { "$value": "#fffbeb", "$type": "color" },
+        "200": { "$value": "#fde68a", "$type": "color" },
+        "500": { "$value": "#f59e0b", "$type": "color" },
+        "600": { "$value": "#ca8a04", "$type": "color" },
+        "700": { "$value": "#a16207", "$type": "color" }
+      },
+
+      "pink": {
+        "600": { "$value": "#db2777", "$type": "color" }
+      },
+
+      "red": {
+        "500": { "$value": "#ef4444", "$type": "color" }
+      }
+    },
+
+    "shadow": {
+      "xs":         { "$value": "0 1px 2px rgba(0,0,0,0.05)", "$type": "shadow" },
+      "card":       { "$value": "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)", "$type": "shadow" },
+      "card-hover": { "$value": "0 4px 12px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.10)", "$type": "shadow" },
+      "float":      { "$value": "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)", "$type": "shadow" },
+      "modal":      { "$value": "0 20px 60px rgba(0,0,0,0.20), 0 4px 16px rgba(0,0,0,0.10)", "$type": "shadow" },
+      "nav":        { "$value": "0 -4px 20px rgba(0,0,0,0.06)", "$type": "shadow" },
+      "inner-lg":   { "$value": "inset 0 2px 8px rgba(0,0,0,0.08)", "$type": "shadow" }
+    },
+
+    "ease": {
+      "spring":    { "$value": "cubic-bezier(0.34, 1.56, 0.64, 1)", "$type": "cubicBezier" },
+      "smooth":    { "$value": "cubic-bezier(0.4, 0, 0.2, 1)", "$type": "cubicBezier" },
+      "sharp":     { "$value": "cubic-bezier(0.4, 0, 0.6, 1)", "$type": "cubicBezier" },
+      "bounce-in": { "$value": "cubic-bezier(0.36, 0.07, 0.19, 0.97)", "$type": "cubicBezier" }
+    }
+  },
+
+  "semantic": {
+    "color": {
+      "brand": {
+        "primary":   { "$value": "var(--primitive-color-blue-600)", "$type": "color" },
+        "secondary": { "$value": "var(--primitive-color-violet-600)", "$type": "color" },
+        "accent":    { "$value": "var(--primitive-color-emerald-500)", "$type": "color" }
+      },
+      "surface": {
+        "base":  { "$value": "var(--primitive-color-slate-50)", "$type": "color" },
+        "card":  { "$value": "var(--primitive-color-white)", "$type": "color" },
+        "muted": { "$value": "var(--primitive-color-slate-100)", "$type": "color" }
+      },
+      "text": {
+        "primary":   { "$value": "var(--primitive-color-slate-900)", "$type": "color" },
+        "secondary": { "$value": "var(--primitive-color-slate-600)", "$type": "color" },
+        "muted":     { "$value": "var(--primitive-color-slate-400)", "$type": "color" },
+        "inverse":   { "$value": "var(--primitive-color-white)", "$type": "color", "_doc": "Text on a brand-coloured or dark surface. Distinct from surface-card, which happens to be the same white but means 'a card's background' -- the two would diverge the moment a dark theme lands." }
+      },
+      "border": {
+        "faint":  { "$value": "var(--primitive-color-slate-100)", "$type": "color", "_doc": "One step lighter than subtle. Used for hairlines between rows inside a card, where border-subtle reads as a hard divide." },
+        "subtle": { "$value": "var(--primitive-color-slate-200)", "$type": "color" },
+        "strong": { "$value": "var(--primitive-color-slate-300)", "$type": "color" }
+      },
+      "feedback": {
+        "success": { "$value": "var(--primitive-color-emerald-500)", "$type": "color" },
+        "warning": { "$value": "var(--primitive-color-amber-500)", "$type": "color" },
+        "danger":  { "$value": "var(--primitive-color-red-500)", "$type": "color" },
+        "info":    { "$value": "var(--primitive-color-blue-600)", "$type": "color" }
+      }
+    },
+
+    "shadow": {
+      "card":  { "$value": "var(--primitive-shadow-card)", "$type": "shadow" },
+      "float": { "$value": "var(--primitive-shadow-float)", "$type": "shadow" },
+      "modal": { "$value": "var(--primitive-shadow-modal)", "$type": "shadow" },
+      "glow":  { "$value": "0 0 24px color-mix(in srgb, var(--color-brand-primary) 20%, transparent)", "$type": "shadow" }
+    },
+
+    "ease": {
+      "spring": { "$value": "var(--primitive-ease-spring)", "$type": "cubicBezier" },
+      "smooth": { "$value": "var(--primitive-ease-smooth)", "$type": "cubicBezier" }
+    },
+
+    "gradient": {
+      "_doc": "Named gradients that appear in more than one place. `shimmer` was written out identically in seven separate skeleton rules in globals.css plus once more in tailwind.config.ts -- eight copies of the same three colour stops.",
+      "shimmer": { "$value": "linear-gradient(90deg, var(--color-surface-muted) 25%, var(--color-border-subtle) 50%, var(--color-surface-muted) 75%)", "$type": "gradient" },
+      "brand":   { "$value": "linear-gradient(135deg, var(--color-brand-primary) 0%, var(--color-brand-secondary) 100%)", "$type": "gradient" }
+    }
+  },
+
+  "component": {
+    "_doc": "Per-module identity. Each consumer-facing module carries primary / header gradient / page surface tint / card border / glow. `glow` is derived from the module's own primary via color-mix, so a module's accent is stated exactly once.",
+
+    "module": {
+      "marketplace": {
+        "primary":     { "$value": "var(--primitive-color-blue-600)", "$type": "color" },
+        "header-from": { "$value": "var(--primitive-color-blue-900)", "$type": "color" },
+        "header-to":   { "$value": "var(--primitive-color-blue-600)", "$type": "color" },
+        "surface":     { "$value": "var(--primitive-color-blue-50)", "$type": "color" },
+        "card-border": { "$value": "var(--primitive-color-blue-200)", "$type": "color" },
+        "glow":        { "$value": "color-mix(in srgb, var(--module-marketplace-primary) 15%, transparent)", "$type": "color" }
+      },
+      "grocery": {
+        "primary":     { "$value": "var(--primitive-color-green-600)", "$type": "color" },
+        "header-from": { "$value": "var(--primitive-color-green-700)", "$type": "color" },
+        "header-to":   { "$value": "var(--primitive-color-green-600)", "$type": "color" },
+        "surface":     { "$value": "var(--primitive-color-green-50)", "$type": "color" },
+        "card-border": { "$value": "var(--primitive-color-green-200)", "$type": "color" },
+        "glow":        { "$value": "color-mix(in srgb, var(--module-grocery-primary) 15%, transparent)", "$type": "color" }
+      },
+      "restaurant": {
+        "primary":     { "$value": "var(--primitive-color-orange-600)", "$type": "color" },
+        "header-from": { "$value": "var(--primitive-color-orange-700)", "$type": "color" },
+        "header-to":   { "$value": "var(--primitive-color-orange-600)", "$type": "color" },
+        "surface":     { "$value": "var(--primitive-color-orange-50)", "$type": "color" },
+        "card-border": { "$value": "var(--primitive-color-orange-200)", "$type": "color" },
+        "glow":        { "$value": "color-mix(in srgb, var(--module-restaurant-primary) 15%, transparent)", "$type": "color" }
+      },
+      "pharmacy": {
+        "primary":     { "$value": "var(--primitive-color-teal-600)", "$type": "color" },
+        "header-from": { "$value": "var(--primitive-color-teal-700)", "$type": "color" },
+        "header-to":   { "$value": "var(--primitive-color-cyan-600)", "$type": "color" },
+        "surface":     { "$value": "var(--primitive-color-teal-50)", "$type": "color" },
+        "card-border": { "$value": "var(--primitive-color-teal-200)", "$type": "color" },
+        "glow":        { "$value": "color-mix(in srgb, var(--module-pharmacy-primary) 15%, transparent)", "$type": "color" }
+      },
+      "doctor": {
+        "_doc":        "Indigo, not violet. tailwind.config.ts had module.doctor = #7c3aed (violet-600) while globals.css had --doctor-primary = #4f46e5 (indigo-600); the surrounding globals.css values (header-from blue-800, surface indigo-50, card-border indigo-200) form a coherent indigo identity, so the violet entry was the outlier and is dropped.",
+        "primary":     { "$value": "var(--primitive-color-indigo-600)", "$type": "color" },
+        "header-from": { "$value": "var(--primitive-color-blue-800)", "$type": "color" },
+        "header-to":   { "$value": "var(--primitive-color-indigo-600)", "$type": "color" },
+        "surface":     { "$value": "var(--primitive-color-indigo-50)", "$type": "color" },
+        "card-border": { "$value": "var(--primitive-color-indigo-200)", "$type": "color" },
+        "glow":        { "$value": "color-mix(in srgb, var(--module-doctor-primary) 15%, transparent)", "$type": "color" }
+      },
+      "hotel": {
+        "primary":     { "$value": "var(--primitive-color-rose-600)", "$type": "color" },
+        "header-from": { "$value": "var(--primitive-color-rose-800)", "$type": "color" },
+        "header-to":   { "$value": "var(--primitive-color-rose-600)", "$type": "color" },
+        "surface":     { "$value": "var(--primitive-color-rose-50)", "$type": "color" },
+        "card-border": { "$value": "var(--primitive-color-rose-200)", "$type": "color" },
+        "glow":        { "$value": "color-mix(in srgb, var(--module-hotel-primary) 15%, transparent)", "$type": "color" }
+      },
+      "taxi": {
+        "_doc":        "New. tailwind.config.ts carried module.taxi = #ca8a04 but globals.css had no taxi block at all, so taxi pages had an accent utility and no surface/header/border identity to go with it. Built out on amber to match the existing accent.",
+        "primary":     { "$value": "var(--primitive-color-amber-600)", "$type": "color" },
+        "header-from": { "$value": "var(--primitive-color-amber-700)", "$type": "color" },
+        "header-to":   { "$value": "var(--primitive-color-amber-600)", "$type": "color" },
+        "surface":     { "$value": "var(--primitive-color-amber-50)", "$type": "color" },
+        "card-border": { "$value": "var(--primitive-color-amber-200)", "$type": "color" },
+        "glow":        { "$value": "color-mix(in srgb, var(--module-taxi-primary) 15%, transparent)", "$type": "color" }
+      }
+    },
+
+    "accent": {
+      "_doc":     "Accent-only surfaces. These exist in tailwind.config.ts as module.* colours but have no page identity of their own -- they tint badges and icons inside other modules.",
+      "wallet":  { "$value": "var(--primitive-color-cyan-600)", "$type": "color" },
+      "loyalty": { "$value": "var(--primitive-color-pink-600)", "$type": "color" },
+      "admin":   { "$value": "var(--primitive-color-emerald-600)", "$type": "color" }
+    },
+
+    "button": {
+      "bg":       { "$value": "var(--color-brand-primary)", "$type": "color" },
+      "fg":       { "$value": "var(--primitive-color-white)", "$type": "color" },
+      "hover-bg": { "$value": "var(--primitive-color-blue-700)", "$type": "color" },
+      "radius":   { "$value": "0.75rem", "$type": "dimension" }
+    },
+
+    "card": {
+      "bg":     { "$value": "var(--color-surface-card)", "$type": "color" },
+      "border": { "$value": "var(--color-border-subtle)", "$type": "color" },
+      "shadow": { "$value": "var(--shadow-card)", "$type": "shadow" },
+      "radius": { "$value": "1rem", "$type": "dimension" }
+    },
+
+    "input": {
+      "bg":         { "$value": "var(--color-surface-card)", "$type": "color" },
+      "border":     { "$value": "var(--color-border-subtle)", "$type": "color" },
+      "focus-ring": { "$value": "var(--color-brand-primary)", "$type": "color" }
+    }
+  }
+}

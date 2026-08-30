@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package taxi;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KARTSEEK Taxi Service — gRPC Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+service TaxiService {
+  rpc EstimateFare       (EstimateRequest)    returns (EstimateResponse)    {}
+  rpc RequestRide        (RequestRideInput)   returns (RideResponse)        {}
+  rpc GetRideById        (GetRideRequest)     returns (RideResponse)        {}
+  rpc UpdateRideStatus   (UpdateRideRequest)  returns (StatusResponse)      {}
+  rpc GetNearbyDrivers   (NearbyDriverRequest) returns (DriverListResponse) {}
+  rpc GetRideHistory     (RideHistoryRequest) returns (RideListResponse)    {}
+  rpc AcceptRide         (AcceptRideRequest)  returns (RideResponse)        {}
+  rpc CancelRide         (CancelRideRequest)  returns (StatusResponse)      {}
+}
+
+// ── Requests ──────────────────────────────────────────────────────────────────
+
+message EstimateRequest {
+  double pickupLat   = 1;
+  double pickupLng   = 2;
+  double dropLat     = 3;
+  double dropLng     = 4;
+  string vehicleType = 5;  // economy | comfort | premium | bike
+}
+
+message RequestRideInput {
+  string customerId  = 1;
+  double pickupLat   = 2;
+  double pickupLng   = 3;
+  double dropLat     = 4;
+  double dropLng     = 5;
+  string vehicleType = 6;
+  string paymentMethod = 7;
+}
+
+message GetRideRequest    { string rideId = 1; }
+message AcceptRideRequest { string rideId = 1; string driverId = 2; }
+message CancelRideRequest { string rideId = 1; string reason = 2; string cancelledBy = 3; }
+
+message UpdateRideRequest {
+  string rideId   = 1;
+  string status   = 2;  // SEARCHING_DRIVER | DRIVER_ASSIGNED | IN_PROGRESS | COMPLETED | CANCELLED
+  string driverId = 3;
+}
+
+message NearbyDriverRequest {
+  double lat         = 1;
+  double lng         = 2;
+  double radiusKm    = 3;
+  string vehicleType = 4;
+}
+
+message RideHistoryRequest {
+  string actorId  = 1;  // customerId or driverId
+  string role     = 2;  // CUSTOMER | DRIVER
+  int32  page     = 3;
+  int32  limit    = 4;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message EstimateResponse {
+  string vehicleType         = 1;
+  double distanceKm          = 2;
+  double estimatedFare       = 3;
+  string estimatedFareRange  = 4;
+  int32  etaMinutes          = 5;
+  double surgeMultiplier     = 6;
+}
+
+message RideResponse {
+  string id            = 1;
+  string customerId    = 2;
+  string driverId      = 3;
+  string status        = 4;
+  double pickupLat     = 5;
+  double pickupLng     = 6;
+  double dropLat       = 7;
+  double dropLng       = 8;
+  string vehicleType   = 9;
+  double fare          = 10;
+  string paymentMethod = 11;
+  string createdAt     = 12;
+  string updatedAt     = 13;
+}
+
+message DriverInfo {
+  string driverId   = 1;
+  double lat        = 2;
+  double lng        = 3;
+  double distKm     = 4;
+  int32  etaMins    = 5;
+  string vehicleType = 6;
+  double rating     = 7;
+}
+
+message DriverListResponse {
+  repeated DriverInfo drivers = 1;
+  int32               count   = 2;
+}
+
+message RideListResponse {
+  repeated RideResponse data  = 1;
+  int32                 total = 2;
+  int32                 page  = 3;
+  int32                 limit = 4;
+}
+
+message StatusResponse {
+  bool   success = 1;
+  string message = 2;
+}

@@ -1,0 +1,601 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# KARTSEEK StatefulSets for Databases (PostgreSQL, Redis, Kafka)
+# Deploy: kubectl apply -f k8s/databases.yaml
+# Note: For production, use managed services (RDS, ElastiCache, MSK)
+# ══════════════════════════════════════════════════════════════════════════════
+
+---
+# NOTE: there are no standalone PVCs here. The StatefulSets below own their
+# storage through volumeClaimTemplates (postgres-storage-postgres-0 etc.).
+# The hand-written `postgres-pvc`/`redis-pvc` that used to sit here were
+# mounted by nothing at all — they only sat Pending against the cloud
+# provisioner and burned two slots of the namespace's PVC quota.
+
+# ── Service: PostgreSQL ────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: kartseek
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - name: postgresql
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+
+---
+# ── StatefulSet: PostgreSQL ────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: kartseek
+  labels:
+    app: postgres
+    critical: "true"
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        critical: "true"
+    spec:
+      # postgis/postgis:*-alpine is an Alpine image: its `postgres` account is
+      # uid/gid 70, NOT the 999 the Debian-based postgres images use. Running as
+      # 999 leaves initdb with no matching passwd entry and it aborts with
+      # "could not look up effective user ID 999" before the DB ever starts.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: postgres
+          image: postgis/postgis:16-3.4-alpine
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: DB_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: DB_NAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: DB_PASSWORD
+            # PGDATA must be a SUBDIRECTORY of the mount, never the mount itself.
+            # initdb chmods its data directory to 0700, and chmod needs
+            # ownership — write permission is not enough. A mounted volume's root
+            # belongs to root whatever fsGroup says, so initdb died with
+            # "could not change permissions of directory ... Operation not
+            # permitted". One level down, postgres creates the directory itself,
+            # owns it, and the chmod succeeds. This also keeps initdb away from
+            # the lost+found that `subPath` was previously used to dodge.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 100Gi
+
+---
+# ── Service: Redis ─────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: kartseek
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      protocol: TCP
+      port: 6379
+      targetPort: 6379
+
+---
+# ── StatefulSet: Redis ─────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: kartseek
+  labels:
+    app: redis
+    critical: "true"
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        critical: "true"
+    spec:
+      # redis:*-alpine runs as uid 999 but gid 1000 — fsGroup must match the gid
+      # the process actually carries, or /data ends up group-owned by a group the
+      # container isn't in.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: redis
+          image: redis:8.8.0-alpine
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - redis-server
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            - --save
+            - "60"
+            - "1"
+            - --loglevel
+            - warning
+            - --maxmemory
+            - "2gb"
+            - --maxmemory-policy
+            - "allkeys-lru"
+
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: REDIS_PASSWORD
+
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+
+          # Kubernetes expands $(VAR) in a container's `command`/`args` ONLY —
+          # never inside an exec probe. Written as `-a $(REDIS_PASSWORD)` the
+          # probe sent that string literally, redis answered NOAUTH, and the
+          # pod restarted forever. Go through a shell so the *shell* expands it.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - redis-cli --no-auth-warning -a "$REDIS_PASSWORD" ping | grep -q PONG
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - redis-cli --no-auth-warning -a "$REDIS_PASSWORD" ping | grep -q PONG
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 999
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 50Gi
+
+---
+# ── Service: Kafka (Headless) ──────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: kartseek
+  labels:
+    app: kafka
+spec:
+  clusterIP: None
+  selector:
+    app: kafka
+  ports:
+    - name: client
+      port: 9092
+      targetPort: 9092
+    - name: controller
+      port: 29093
+      targetPort: 29093
+
+---
+# ── StatefulSet: Kafka (KRaft mode) ────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: kartseek
+  labels:
+    app: kafka
+    critical: "true"
+spec:
+  serviceName: kafka   # must match the headless Service above so kafka-0.kafka.<ns>.svc resolves
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+        critical: "true"
+    spec:
+      securityContext:
+        runAsNonRoot: false
+        fsGroup: 1000
+
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: kafka
+          image: apache/kafka:4.3.0
+          imagePullPolicy: IfNotPresent
+
+          # ── Per-pod identity, derived at start-up ─────────────────────────
+          # Three things could not be expressed as static env values:
+          #   • node.id must be an INTEGER. Feeding it metadata.name gave Kafka
+          #     "kafka-0" and it died with `Invalid value kafka-0 for
+          #     configuration broker.id: Not a number of type INT`.
+          #   • controller.quorum.voters is `{id}@{host}:{port}` — the bare
+          #     host:port that was here is not a parseable voter entry.
+          #   • advertised listeners must name THIS pod, not the headless
+          #     Service, or a second replica advertises its peer's address.
+          # `args` (not `command`) so the image's /__cacert_entrypoint.sh still runs.
+          args:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              ORDINAL="${HOSTNAME##*-}"
+              FQDN="${HOSTNAME}.kafka.kartseek.svc.cluster.local"
+              export KAFKA_NODE_ID="${ORDINAL}"
+              export KAFKA_CONTROLLER_QUORUM_VOTERS="${ORDINAL}@${FQDN}:29093"
+              export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://${FQDN}:29092,PLAINTEXT_HOST://${FQDN}:9092"
+              exec /etc/kafka/docker/run
+
+          env:
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            # Listeners BIND here, so they must bind the wildcard. Binding to the
+            # name "kafka" resolved to a headless Service with no address of its
+            # own — and, before the pod is ready, to nothing at all — so the
+            # broker could never bind and never became ready. Deadlock.
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: CLUSTER_ID
+              value: "c1c6d328-9104-4b47-ba03-3fa80eeb7254"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "false"
+
+          ports:
+            - name: client
+              containerPort: 9092
+              protocol: TCP
+            - name: controller
+              containerPort: 29093
+              protocol: TCP
+
+          # kafka-topics.sh boots a whole JVM per probe: it routinely takes
+          # longer than the timeouts that were set here (5s readiness, 10s
+          # liveness) and every invocation costs heap inside a 2Gi limit, so the
+          # probes both flapped and competed with the broker for memory.
+          # The client listener accepting connections is the signal we want.
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 50Gi
+
+---
+# ══════════════════════════════════════════════════════════════════════════════
+# PostgreSQL — Marketplace (dedicated instance)
+# ══════════════════════════════════════════════════════════════════════════════
+# config.yaml has pointed MARKETPLACE_DB_HOST at postgres-marketplace since the
+# Marketplace module was isolated, but nothing in k8s/ ever created it: the
+# service resolved NXDOMAIN and every catalogue query failed at connect.
+# ══════════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-marketplace
+  namespace: kartseek
+  labels:
+    app: postgres-marketplace
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres-marketplace
+  ports:
+    - name: postgresql
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-marketplace
+  namespace: kartseek
+  labels:
+    app: postgres-marketplace
+    critical: "true"
+spec:
+  serviceName: postgres-marketplace
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-marketplace
+  template:
+    metadata:
+      labels:
+        app: postgres-marketplace
+        critical: "true"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: postgres
+          image: postgis/postgis:16-3.4-alpine
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: MARKETPLACE_DB_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: MARKETPLACE_DB_NAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: MARKETPLACE_DB_PASSWORD
+            # PGDATA must be a SUBDIRECTORY of the mount, never the mount itself.
+            # initdb chmods its data directory to 0700, and chmod needs
+            # ownership — write permission is not enough. A mounted volume's root
+            # belongs to root whatever fsGroup says, so initdb died with
+            # "could not change permissions of directory ... Operation not
+            # permitted". One level down, postgres creates the directory itself,
+            # owns it, and the chmod succeeds. This also keeps initdb away from
+            # the lost+found that `subPath` was previously used to dodge.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: marketplace-storage
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: marketplace-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 100Gi

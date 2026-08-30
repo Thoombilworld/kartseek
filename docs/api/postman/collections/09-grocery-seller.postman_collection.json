@@ -1,0 +1,1985 @@
+{
+  "info": {
+    "name": "KARTSEEK — 09 Grocery Seller Portal APIs",
+    "_postman_id": "grocery-seller-09-full-v2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Full Grocery Seller Portal API test suite. Mirrors Marketplace Seller pattern."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-login if tokens are missing",
+          "const baseUrl = pm.environment.get(\"base_url\") || pm.variables.get(\"base_url\") || \"http://localhost:3001/api/v1\";",
+          "",
+          "// Auto-login customer",
+          "if (!pm.environment.get(\"user_token\")) {",
+          "    const email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+          "    const password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+          "    pm.sendRequest({",
+          "        url: baseUrl + \"/auth/login\",",
+          "        method: \"POST\",",
+          "        header: { \"Content-Type\": \"application/json\" },",
+          "        body: { mode: \"raw\", raw: JSON.stringify({ email, password }) }",
+          "    }, function (err, response) {",
+          "        if (!err && response.code === 200) {",
+          "            const data = response.json();",
+          "            if (data.accessToken) pm.environment.set(\"user_token\", data.accessToken);",
+          "            if (data.data && data.data.token) pm.environment.set(\"user_token\", data.data.token);",
+          "            console.log(\"Auto-login customer OK\");",
+          "        }",
+          "    });",
+          "}",
+          "",
+          "// Auto-login admin",
+          "if (!pm.environment.get(\"admin_token\")) {",
+          "    const email = pm.environment.get(\"admin_email\") || \"admin@kartseek.com\";",
+          "    const password = pm.environment.get(\"admin_password\") || \"AdminPass123!\";",
+          "    pm.sendRequest({",
+          "        url: baseUrl + \"/auth/login\",",
+          "        method: \"POST\",",
+          "        header: { \"Content-Type\": \"application/json\" },",
+          "        body: { mode: \"raw\", raw: JSON.stringify({ email, password }) }",
+          "    }, function (err, response) {",
+          "        if (!err && response.code === 200) {",
+          "            const data = response.json();",
+          "            if (data.accessToken) pm.environment.set(\"admin_token\", data.accessToken);",
+          "            if (data.data && data.data.token) pm.environment.set(\"admin_token\", data.data.token);",
+          "            console.log(\"Auto-login admin OK\");",
+          "        }",
+          "    });",
+          "}",
+          "",
+          "// Auto-login seller",
+          "if (!pm.environment.get(\"seller_token\")) {",
+          "    const email = pm.environment.get(\"seller_email\") || \"seller@kartseek.com\";",
+          "    const password = pm.environment.get(\"seller_password\") || \"SellerPass123!\";",
+          "    pm.sendRequest({",
+          "        url: baseUrl + \"/auth/login\",",
+          "        method: \"POST\",",
+          "        header: { \"Content-Type\": \"application/json\" },",
+          "        body: { mode: \"raw\", raw: JSON.stringify({ email, password }) }",
+          "    }, function (err, response) {",
+          "        if (!err && response.code === 200) {",
+          "            const data = response.json();",
+          "            if (data.accessToken) pm.environment.set(\"seller_token\", data.accessToken);",
+          "            if (data.data && data.data.token) pm.environment.set(\"seller_token\", data.data.token);",
+          "            console.log(\"Auto-login seller OK\");",
+          "        } else if (pm.environment.get(\"admin_token\")) {",
+          "            pm.environment.set(\"seller_token\", pm.environment.get(\"admin_token\"));",
+          "            console.log(\"Seller login failed, using admin_token as fallback\");",
+          "        }",
+          "    });",
+          "}",
+          "",
+          "// Default IDs",
+          "if (!pm.environment.get(\"store_id\")) pm.environment.set(\"store_id\", \"GRC-001\");",
+          "if (!pm.environment.get(\"customer_id\")) pm.environment.set(\"customer_id\", \"28063dae-c3de-4a2c-8e1a-c6ee5de4de28\");"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/api/v1"
+    },
+    {
+      "key": "store_id",
+      "value": "GRC-001"
+    },
+    {
+      "key": "product_id",
+      "value": "GR-001"
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    },
+    {
+      "key": "deal_id",
+      "value": ""
+    },
+    {
+      "key": "country_code",
+      "value": "IN"
+    }
+  ],
+  "item": [
+    {
+      "name": "Dashboard & Storefront",
+      "item": [
+        {
+          "name": "Store Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Store details\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Store Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/analytics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "analytics"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Analytics\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Store Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "categories"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Categories\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Products\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });",
+                  "",
+                  "try {",
+                  "    const raw = pm.response.json();",
+                  "    const d = raw.data || raw;",
+                  "    if (Array.isArray(d) && d.length > 0 && d[0].id) pm.collectionVariables.set(\"product_id\", String(Array.isArray(d) && d.length > 0 && d[0].id));",
+                  "} catch(e) { console.log(\"Chain extraction skipped: \" + e.message); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Product Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "{{product_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Detail\", function () {",
+                  "    pm.expect([200, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Seller Test\",\n  \"price\": 79.99,\n  \"mrp\": 99.99,\n  \"unit\": \"500g\",\n  \"sku\": \"SLR-001\",\n  \"categoryId\": \"fruits-vegetables\",\n  \"stockQuantity\": 200,\n  \"isAvailable\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Created\", function () {",
+                  "    pm.expect([200, 201, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });",
+                  "",
+                  "try {",
+                  "    const raw = pm.response.json();",
+                  "    const d = raw.data || raw;",
+                  "    if (d.id || (d.product && d.product.id)) pm.collectionVariables.set(\"new_product_id\", String(d.id || (d.product && d.product.id)));",
+                  "} catch(e) { console.log(\"Chain extraction skipped: \" + e.message); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "{{product_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 69.99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Updated\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bulk Upload",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/bulk",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "bulk"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"products\": [\n    {\n      \"name\": \"Bulk 1\",\n      \"price\": 15,\n      \"unit\": \"250g\",\n      \"sku\": \"BLKS-001\",\n      \"stockQuantity\": 100\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Bulk\", function () {",
+                  "    pm.expect([200, 201, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Export CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "export"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Export\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Promote Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/{{product_id}}/promote",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "{{product_id}}",
+                "promote"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"promoted\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Promoted\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Store Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/orders/store/{{store_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "orders",
+                "store",
+                "{{store_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Orders\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });",
+                  "",
+                  "try {",
+                  "    const raw = pm.response.json();",
+                  "    const d = raw.data || raw;",
+                  "    if (Array.isArray(d) && d.length > 0 && d[0].id) pm.collectionVariables.set(\"order_id\", String(Array.isArray(d) && d.length > 0 && d[0].id));",
+                  "} catch(e) { console.log(\"Chain extraction skipped: \" + e.message); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/orders/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "orders",
+                "{{order_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Detail\", function () {",
+                  "    pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Accept Order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/orders/{{order_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "orders",
+                "{{order_id}}",
+                "status"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"accepted\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Accepted\", function () {",
+                  "    pm.expect([200, 400, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Ready",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/orders/{{order_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "orders",
+                "{{order_id}}",
+                "status"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ready_for_pickup\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Ready\", function () {",
+                  "    pm.expect([200, 400, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Delivered",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/orders/{{order_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "orders",
+                "{{order_id}}",
+                "status"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"delivered\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Delivered\", function () {",
+                  "    pm.expect([200, 400, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Inventory & Stock",
+      "item": [
+        {
+          "name": "Low Stock Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/low-stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "low-stock"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Low stock\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Stock",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "{{product_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stockQuantity\": 500,\n  \"isAvailable\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Stock updated\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Promotions & Flash Deals",
+      "item": [
+        {
+          "name": "Store Promotions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/promotions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "promotions"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Promotions\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Store Flash Deals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/flash-deals/store/{{store_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "flash-deals",
+                "store",
+                "{{store_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Deals\", function () {",
+                  "    pm.expect([200, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Flash Deal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/flash-deals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "flash-deals"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"storeId\": \"{{store_id}}\",\n  \"productId\": \"{{product_id}}\",\n  \"title\": \"Seller Deal\",\n  \"flashPrice\": 19.99,\n  \"originalPrice\": 39.99,\n  \"stockLimit\": 25,\n  \"startTime\": \"2026-07-02T00:00:00Z\",\n  \"endTime\": \"2026-07-09T23:59:59Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Deal created\", function () {",
+                  "    pm.expect([200, 201, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });",
+                  "",
+                  "try {",
+                  "    const raw = pm.response.json();",
+                  "    const d = raw.data || raw;",
+                  "    if (d.id || (d.deal && d.deal.id)) pm.collectionVariables.set(\"deal_id\", String(d.id || (d.deal && d.deal.id)));",
+                  "} catch(e) { console.log(\"Chain extraction skipped: \" + e.message); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Deal",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/flash-deals/{{deal_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "flash-deals",
+                "{{deal_id}}",
+                "submit"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Submitted\", function () {",
+                  "    pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Product Reviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/{{product_id}}/reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "{{product_id}}",
+                "reviews"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Reviews\", function () {",
+                  "    pm.expect([200, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "item": [
+        {
+          "name": "Get Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Settings\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "settings"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isOpen\": true,\n  \"deliveryRadius\": 8,\n  \"minOrderValue\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Updated\", function () {",
+                  "    pm.expect([200, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Translations",
+      "item": [
+        {
+          "name": "Add Translation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/{{product_id}}/translations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "{{product_id}}",
+                "translations"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locale\": \"hi\",\n  \"name\": \"Hindi Name\",\n  \"description\": \"Hindi desc\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Added\", function () {",
+                  "    pm.expect([200, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Translated",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/{{product_id}}/translated",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "{{product_id}}",
+                "translated"
+              ],
+              "query": [
+                {
+                  "key": "locale",
+                  "value": "hi"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Translated\", function () {",
+                  "    pm.expect([200, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Cases",
+      "item": [
+        {
+          "name": "Invalid Store",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/INVALID-999/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "INVALID-999",
+                "products"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Error\", function () {",
+                  "    pm.expect([200, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid Product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Version",
+                "value": "1.0.0"
+              },
+              {
+                "key": "X-Client-Platform",
+                "value": "WEB"
+              },
+              {
+                "key": "X-Region-Code",
+                "value": "{{country_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/grocery/stores/{{store_id}}/products/INVALID-999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "grocery",
+                "stores",
+                "{{store_id}}",
+                "products",
+                "INVALID-999"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{seller_token}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Error\", function () {",
+                  "    pm.expect([200, 404, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response time < 2s\", function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

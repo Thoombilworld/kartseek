@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package notification;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KARTSEEK Notification Service — gRPC Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+service NotificationService {
+  rpc SendPushNotification  (PushRequest)        returns (NotifResponse)       {}
+  rpc SendSMS               (SmsRequest)         returns (NotifResponse)       {}
+  rpc SendEmail             (EmailRequest)       returns (NotifResponse)       {}
+  rpc BroadcastPromo        (BroadcastRequest)   returns (NotifResponse)       {}
+  rpc MarkAsRead            (MarkReadRequest)    returns (NotifResponse)       {}
+  rpc GetUserNotifications  (GetNotifsRequest)   returns (NotifListResponse)   {}
+  rpc GetUnreadCount        (GetUnreadRequest)   returns (UnreadCountResponse) {}
+}
+
+// ── Requests ──────────────────────────────────────────────────────────────────
+
+message PushRequest {
+  string userId  = 1;
+  string title   = 2;
+  string body    = 3;
+  string type    = 4;   // ORDER_UPDATE | PROMO | SYSTEM | RIDE_UPDATE
+  string imageUrl = 5;
+  map<string, string> data = 6;
+}
+
+message SmsRequest {
+  string phone   = 1;
+  string message = 2;
+  string type    = 3;
+}
+
+message EmailRequest {
+  string to          = 1;
+  string subject     = 2;
+  string templateId  = 3;
+  map<string, string> variables = 4;
+}
+
+message BroadcastRequest {
+  string title       = 1;
+  string body        = 2;
+  string targetRole  = 3;  // ALL | CUSTOMER | SELLER | DRIVER
+  string targetCountry = 4;
+  string imageUrl    = 5;
+}
+
+message MarkReadRequest {
+  string notificationId = 1;
+  string userId         = 2;
+}
+
+message GetNotifsRequest {
+  string userId = 1;
+  int32  page   = 2;
+  int32  limit  = 3;
+}
+
+message GetUnreadRequest {
+  string userId = 1;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message NotifResponse {
+  bool   success = 1;
+  string id      = 2;
+  string message = 3;
+}
+
+message Notification {
+  string id        = 1;
+  string userId    = 2;
+  string title     = 3;
+  string body      = 4;
+  string type      = 5;
+  bool   isRead    = 6;
+  string imageUrl  = 7;
+  string createdAt = 8;
+}
+
+message NotifListResponse {
+  repeated Notification data  = 1;
+  int32                 total = 2;
+  int32                 page  = 3;
+  int32                 limit = 4;
+}
+
+message UnreadCountResponse {
+  string userId      = 1;
+  int32  unreadCount = 2;
+}

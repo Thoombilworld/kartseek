@@ -1,0 +1,321 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# KARTSEEK Kubernetes ConfigMap & Secrets
+# Deploy: kubectl apply -f k8s/config.yaml
+# ══════════════════════════════════════════════════════════════════════════════
+
+---
+# ── ConfigMap: Application Configuration ───────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kartseek-config
+  namespace: kartseek
+  labels:
+    app.kubernetes.io/name: kartseek
+data:
+  # ── Application ────────────────────────────────────────────────────────────
+  NODE_ENV: "production"
+  API_GATEWAY_PORT: "3001"
+  SKIP_DB: "false"
+  SKIP_KAFKA: "false"
+  SKIP_REDIS: "false"
+
+  # ── Database (PostgreSQL) ──────────────────────────────────────────────────
+  DB_HOST: "postgres.kartseek.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_USER: "postgres"
+  DB_NAME: "kartseek_db"
+  # Multiple services share this database; letting each one ALTER the shared
+  # tables to match its own entities makes the schema depend on boot order
+  # (and drops non-entity indexes). Migrations only.
+  DB_SYNCHRONIZE: "false"
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  REDIS_HOST: "redis.kartseek.svc.cluster.local"
+  REDIS_PORT: "6379"
+
+  # ── JWT / Auth ─────────────────────────────────────────────────────────────
+  # SECONDS, not a duration string. The gateway and auth-service both validate
+  # this with `Joi.number()`; "1h" fails conversion, ConfigModule throws, and the
+  # pod never finishes booting. 900 = 15 minutes.
+  JWT_EXPIRES_IN: "900"
+  JWT_REFRESH_EXPIRES_IN: "7d"
+
+  # ── CSRF (see env.validation.ts) ───────────────────────────────────────────
+  CSRF_ENABLED: "true"
+  CSRF_COOKIE_SECURE: "true"
+  CSRF_COOKIE_SAMESITE: "Strict"
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  KAFKA_BROKERS: "kafka-0.kafka.kartseek.svc.cluster.local:9092"
+  KAFKA_CLIENT_ID: "kartseek-api"
+  KAFKA_GROUP_ID: "kartseek-consumer"
+
+  # ── gRPC ───────────────────────────────────────────────────────────────────
+  GRPC_HOST: "0.0.0.0"
+  GRPC_PORT: "50051"
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # SERVICE ADDRESSING
+  # ══════════════════════════════════════════════════════════════════════════
+  # Three independent listeners per service, and three independent sets of keys.
+  # Mixing them up is the single most common way to break this deployment:
+  #
+  #   <SVC>_SERVICE_PORT  the port the service's OWN HTTP server binds (probes).
+  #                       Must equal the containerPort/probe port in the manifest.
+  #   <SVC>_TCP_PORT      the Nest TCP microservice transport the GATEWAY dials.
+  #   <SVC>_GRPC_PORT     the gRPC transport the service binds.
+  #   <SVC>_SERVICE_HOST  cluster DNS name the gateway dials for TCP.
+  #   <SVC>_GRPC_URL      host:port the gateway dials for gRPC.
+  #
+  # Every value below is taken from the service's own main.ts. Seven of the
+  # *_SERVICE_PORT values here used to hold a *TCP* port instead: admin (4017),
+  # doctor (4007), grocery (4008) and pharmacy (4010) each made the service bind
+  # its HTTP server to the port its own TCP transport already held (EADDRINUSE at
+  # boot), while restaurant (4009), taxi (4011) and notification (4016) pointed
+  # at ports nothing binds, so the kubelet probe never came up.
+
+  # ── Cluster DNS names (gateway → service, TCP transport) ───────────────────
+  AUTH_SERVICE_HOST: "auth-service.kartseek.svc.cluster.local"
+  USER_SERVICE_HOST: "user-service.kartseek.svc.cluster.local"
+  ORDER_SERVICE_HOST: "order-service.kartseek.svc.cluster.local"
+  PAYMENT_SERVICE_HOST: "payment-service.kartseek.svc.cluster.local"
+  MARKETPLACE_SERVICE_HOST: "marketplace-service.kartseek.svc.cluster.local"
+  CART_SERVICE_HOST: "cart-service.kartseek.svc.cluster.local"
+  LOYALTY_SERVICE_HOST: "loyalty-service.kartseek.svc.cluster.local"
+  FRANCHISE_SERVICE_HOST: "franchise-service.kartseek.svc.cluster.local"
+  DOCTOR_SERVICE_HOST: "doctor-service.kartseek.svc.cluster.local"
+  GROCERY_SERVICE_HOST: "grocery-service.kartseek.svc.cluster.local"
+  PHARMACY_SERVICE_HOST: "pharmacy-service.kartseek.svc.cluster.local"
+  LOCATION_SERVICE_HOST: "location-service.kartseek.svc.cluster.local"
+  WALLET_SERVICE_HOST: "wallet-service.kartseek.svc.cluster.local"
+  ADMIN_SERVICE_HOST: "admin-service.kartseek.svc.cluster.local"
+  RESTAURANT_SERVICE_HOST: "restaurant-service.kartseek.svc.cluster.local"
+  COMMISSION_SERVICE_HOST: "commission-service.kartseek.svc.cluster.local"
+  PAYOUT_SERVICE_HOST: "payout-service.kartseek.svc.cluster.local"
+  REFUND_SERVICE_HOST: "refund-service.kartseek.svc.cluster.local"
+  SEARCH_SERVICE_HOST: "search-service.kartseek.svc.cluster.local"
+  REPORT_SERVICE_HOST: "report-service.kartseek.svc.cluster.local"
+  HOTEL_SERVICE_HOST: "hotel-service.kartseek.svc.cluster.local"
+  TAXI_SERVICE_HOST: "taxi-service.kartseek.svc.cluster.local"
+  NOTIFICATION_SERVICE_HOST: "notification-service.kartseek.svc.cluster.local"
+  DELIVERY_SERVICE_HOST: "delivery-service.kartseek.svc.cluster.local"
+  AUDIT_LOG_SERVICE_HOST: "audit-log-service.kartseek.svc.cluster.local"
+  # Seller is the seller-facing surface of the Marketplace module, not a service
+  # of its own — the gateway's SELLER_SERVICE token resolves to marketplace.
+  SELLER_SERVICE_HOST: "marketplace-service.kartseek.svc.cluster.local"
+
+  # ── HTTP ports (each service's own listen(), and its probe target) ─────────
+  AUTH_SERVICE_PORT: "3010"
+  USER_SERVICE_PORT: "3011"
+  MARKETPLACE_SERVICE_PORT: "3012"
+  CART_SERVICE_PORT: "3013"
+  ORDER_SERVICE_PORT: "3014"
+  LOYALTY_SERVICE_PORT: "3015"
+  FRANCHISE_SERVICE_PORT: "3016"
+  DOCTOR_SERVICE_PORT: "3017"
+  GROCERY_SERVICE_PORT: "3018"
+  RESTAURANT_SERVICE_PORT: "3019"
+  PHARMACY_SERVICE_PORT: "3020"
+  TAXI_SERVICE_PORT: "3021"
+  DELIVERY_SERVICE_PORT: "3022"
+  LOCATION_SERVICE_PORT: "3023"
+  WALLET_SERVICE_PORT: "3024"
+  PAYMENT_SERVICE_PORT: "3025"
+  NOTIFICATION_SERVICE_PORT: "3026"
+  ADMIN_SERVICE_PORT: "3027"
+  AUDIT_LOG_SERVICE_PORT: "3028"
+  COMMISSION_SERVICE_PORT: "3030"
+  PAYOUT_SERVICE_PORT: "3031"
+  REFUND_SERVICE_PORT: "3032"
+  SEARCH_SERVICE_PORT: "3033"
+  REPORT_SERVICE_PORT: "3034"
+  HOTEL_SERVICE_PORT: "3035"
+
+  # ── TCP transport ports (what the gateway's ClientProxy dials) ─────────────
+  MARKETPLACE_TCP_PORT: "4002"
+  CART_TCP_PORT: "4003"
+  ORDER_TCP_PORT: "4004"
+  LOYALTY_TCP_PORT: "4005"
+  FRANCHISE_TCP_PORT: "4006"
+  DOCTOR_TCP_PORT: "4007"
+  GROCERY_TCP_PORT: "4008"
+  PHARMACY_TCP_PORT: "4010"
+  LOCATION_TCP_PORT: "4013"
+  WALLET_TCP_PORT: "4014"
+  ADMIN_TCP_PORT: "4017"
+  RESTAURANT_TCP_PORT: "4018"
+  SELLER_TCP_PORT: "4002"
+  COMMISSION_TCP_PORT: "4020"
+  PAYOUT_TCP_PORT: "4021"
+  REFUND_TCP_PORT: "4022"
+  SEARCH_TCP_PORT: "4023"
+  REPORT_TCP_PORT: "4024"
+  HOTEL_TCP_PORT: "4025"
+  PAYMENT_TCP_PORT: "4026"
+  TAXI_TCP_PORT: "4027"
+
+  # Hotel and Payment were the only two services binding their TCP transport to
+  # 127.0.0.1. That is unreachable from another pod, so every gateway call to
+  # them returned ECONNREFUSED. They now honour these, like the other 18.
+  HOTEL_TCP_HOST: "0.0.0.0"
+  PAYMENT_TCP_HOST: "0.0.0.0"
+
+  # ── gRPC server bind ports ────────────────────────────────────────────────
+  AUTH_GRPC_PORT: "5001"
+  ORDER_GRPC_PORT: "5002"
+  PAYMENT_GRPC_PORT: "5003"
+  NOTIFICATION_GRPC_PORT: "5004"
+  RESTAURANT_GRPC_PORT: "5005"
+  MARKETPLACE_GRPC_PORT: "5006"
+  TAXI_GRPC_PORT: "5007"
+  DELIVERY_GRPC_PORT: "5008"
+  USER_GRPC_PORT: "5009"
+  GROCERY_GRPC_PORT: "5010"
+
+  # ── gRPC client URLs (gateway → service) ──────────────────────────────────
+  # GrpcLibModule.register() falls back to "localhost:5000" when these are unset,
+  # which resolves to the gateway pod itself and answers nothing. The key names
+  # are derived as `<token>` minus a trailing _GRPC, so they are not uniform —
+  # they match apps/api/libs/grpc/src/grpc.module.ts exactly.
+  AUTH_SERVICE_GRPC_URL: "auth-service.kartseek.svc.cluster.local:5001"
+  USER_SERVICE_GRPC_URL: "user-service.kartseek.svc.cluster.local:5009"
+  ORDER_SERVICE_GRPC_URL: "order-service.kartseek.svc.cluster.local:5002"
+  PAYMENT_SERVICE_GRPC_URL: "payment-service.kartseek.svc.cluster.local:5003"
+  NOTIFICATION_GRPC_URL: "notification-service.kartseek.svc.cluster.local:5004"
+  RESTAURANT_GRPC_URL: "restaurant-service.kartseek.svc.cluster.local:5005"
+  MARKETPLACE_GRPC_URL: "marketplace-service.kartseek.svc.cluster.local:5006"
+  TAXI_SERVICE_GRPC_URL: "taxi-service.kartseek.svc.cluster.local:5007"
+  DELIVERY_GRPC_URL: "delivery-service.kartseek.svc.cluster.local:5008"
+  GROCERY_GRPC_URL: "grocery-service.kartseek.svc.cluster.local:5010"
+
+  # ── Marketplace: dedicated database ───────────────────────────────────────
+  # Full isolation from the other verticals. In production point this at a
+  # separate RDS/CloudSQL instance; k8s/databases.yaml ships a StatefulSet for it.
+  MARKETPLACE_DB_HOST: "postgres-marketplace.kartseek.svc.cluster.local"
+  MARKETPLACE_DB_PORT: "5432"
+  MARKETPLACE_DB_NAME: "kartseek_marketplace"
+  MARKETPLACE_DB_USER: "marketplace_user"
+  # Probes arrive on the pod IP, not loopback, so the health listener has to bind
+  # wide here. HttpSurfaceGuard is what keeps that safe: /health is the only route
+  # the HTTP surface serves.
+  MARKETPLACE_HTTP_HOST: "0.0.0.0"
+
+  # ── Storage ────────────────────────────────────────────────────────────────
+  STORAGE_PROVIDER: "s3"
+  CDN_DOMAIN: "cdn.kartseek.com"
+  AWS_REGION: "ap-south-1"
+
+  # ── Email (SMTP) ───────────────────────────────────────────────────────────
+  SMTP_HOST: "smtp.sendgrid.net"
+  SMTP_PORT: "587"
+  SMTP_FROM: "noreply@kartseek.com"
+
+  # ── Logging & Monitoring ──────────────────────────────────────────────────
+  LOG_LEVEL: "info"
+  ENABLE_METRICS: "true"
+  METRICS_PORT: "9090"
+
+---
+# ── Secret: Sensitive Configuration ────────────────────────────────────────────
+# IMPORTANT: Use external secret management in production (AWS Secrets Manager, Vault, etc.)
+# This example uses base64 encoding for demo only.
+#
+# Generate secrets:
+#   echo -n "super-secret-key" | base64
+#
+# To use AWS Secrets Manager:
+#   1. Install External Secrets Operator: https://external-secrets.io/
+#   2. Create SecretStore resource pointing to AWS Secrets Manager
+#   3. Create ExternalSecret to sync AWS secrets into K8s Secret
+#
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kartseek-secrets
+  namespace: kartseek
+  labels:
+    app.kubernetes.io/name: kartseek
+type: Opaque
+stringData:
+  # ── Database Password ────────────────────────────────────────────────────
+  DB_PASSWORD: "CHANGE_IN_PRODUCTION_USE_SECRETS_MANAGER"
+
+  # ── Redis Password ───────────────────────────────────────────────────────
+  REDIS_PASSWORD: "CHANGE_IN_PRODUCTION_USE_SECRETS_MANAGER"
+
+  # ── Marketplace Dedicated DB Password ──────────────────────────────────
+  MARKETPLACE_DB_PASSWORD: "CHANGE_IN_PRODUCTION_USE_SECRETS_MANAGER"
+
+  # ── JWT Secrets ──────────────────────────────────────────────────────────
+  # NOTE: with NODE_ENV=production the gateway's Joi schema REJECTS any secret
+  # containing dev/test/change/example/placeholder, so this placeholder will
+  # deliberately refuse to boot. k8s/deploy.sh preflights for it.
+  JWT_SECRET: "your-super-secret-jwt-key-min-32-chars-change-in-production"
+  JWT_REFRESH_SECRET: "your-refresh-token-secret-min-32-chars-change-in-production"
+
+  # ── Field-Level PII Encryption (AES-256-GCM) ─────────────────────────────
+  # REQUIRED whenever NODE_ENV=production — env.validation.ts marks it
+  # `.when('NODE_ENV', { is: 'production', then: Joi.required() })`, so the
+  # gateway used to fail validation and CrashLoopBackOff with this key absent.
+  # Exactly 64 hex characters (32 bytes). Generate with:
+  #   openssl rand -hex 32
+  ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+
+  # ── Payment Gateway Keys (Razorpay) ──────────────────────────────────────
+  RAZORPAY_KEY_ID: "rzp_live_xxxxxxxxxxxx"
+  RAZORPAY_KEY_SECRET: "CHANGE_IN_PRODUCTION"
+  RAZORPAY_WEBHOOK_SECRET: "CHANGE_IN_PRODUCTION"
+
+  # ── Payment Gateway Keys (Stripe) ────────────────────────────────────────
+  STRIPE_SECRET_KEY: "sk_live_xxxxxxxxxxxx"
+  STRIPE_WEBHOOK_SECRET: "whsec_xxxxxxxxxxxx"
+
+  # ── Cloud Storage (AWS S3) ───────────────────────────────────────────────
+  AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+  AWS_SECRET_ACCESS_KEY: "CHANGE_IN_PRODUCTION"
+  S3_BUCKET: "kartseek-production-uploads"
+
+  # ── Email (SendGrid) ──────────────────────────────────────────────────────
+  SMTP_USER: "apikey"
+  SMTP_PASS: "SG.XXXXX_your_sendgrid_key_XXXXX"
+
+  # ── SMS / OTP (Twilio) ─────────────────────────────────────────────────
+  TWILIO_ACCOUNT_SID: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  TWILIO_AUTH_TOKEN: "your_twilio_auth_token"
+  TWILIO_PHONE_NUMBER: "+1234567890"
+
+  # ── Push Notifications (Firebase) ──────────────────────────────────────
+  FIREBASE_SERVICE_ACCOUNT_KEY: |
+    {
+      "type": "service_account",
+      "project_id": "kartseek-prod",
+      "private_key_id": "key-id",
+      "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBA...",
+      "client_email": "firebase-adminsdk@kartseek-prod.iam.gserviceaccount.com",
+      "client_id": "1234567890",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token"
+    }
+
+---
+# ── Secret: Docker Registry (for pulling images from private registry) ────────
+# Create via:
+#   kubectl create secret docker-registry regcred \
+#     --docker-server=docker.io \
+#     --docker-username=<username> \
+#     --docker-password=<password> \
+#     --docker-email=<email> \
+#     --namespace=kartseek
+#
+# Already created by: kubectl create secret docker-registry regcred ...
+
+---
+# ── Secret: TLS Certificate for Ingress ───────────────────────────────────────
+# Create via:
+#   kubectl create secret tls kartseek-tls \
+#     --cert=path/to/tls.crt \
+#     --key=path/to/tls.key \
+#     --namespace=kartseek
+#
+# Or use cert-manager: https://cert-manager.io/

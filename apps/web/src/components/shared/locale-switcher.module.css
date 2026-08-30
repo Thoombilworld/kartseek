@@ -1,0 +1,164 @@
+/* ─── LocaleSwitcher ─────────────────────────────────────────────────────── */
+
+.wrapper {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1e293b;
+  transition: all 0.2s;
+}
+
+.trigger:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.arrow {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+/* ─── Dropdown Panel ─────────────────────────────────────────────────────── */
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e2e8f0;
+  min-width: 260px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+/* ─── Tabs ────────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: transparent;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.tabActive {
+  background: #f1f5f9;
+  color: #6366f1;
+  border-bottom-color: #6366f1;
+}
+
+/* ─── List ────────────────────────────────────────────────────────────────── */
+
+.list {
+  padding: 8px;
+}
+
+.listScrollable {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ─── Items ───────────────────────────────────────────────────────────────── */
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.item:hover {
+  background: #f8fafc;
+}
+
+.itemActive {
+  background: #eef2ff;
+}
+
+.itemFlag {
+  font-size: 18px;
+}
+
+.countryFlag {
+  font-size: 20px;
+}
+
+.itemName {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.itemNameActive {
+  color: #6366f1;
+}
+
+.itemSub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.checkmark {
+  margin-left: auto;
+  color: #6366f1;
+}
+
+/* ─── Inline Variant ──────────────────────────────────────────────────────── */
+
+.inlineContainer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineBtn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.inlineBtn:hover {
+  border-color: #cbd5e1;
+}
+
+.inlineBtnActive {
+  border-color: #6366f1;
+  background: #6366f1;
+  color: #fff;
+}

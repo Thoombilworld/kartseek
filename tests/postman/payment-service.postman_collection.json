@@ -1,0 +1,848 @@
+{
+  "info": {
+    "name": "KARTSEEK Centralized Payment Service",
+    "description": "Comprehensive API test suite for the centralized payment microservice covering payment lifecycle, region-based methods, taxi billing, invoicing, settlements, and security.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001/api/v1/payments" },
+    { "key": "paymentId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "invoiceId", "value": "" },
+    { "key": "rideId", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Global helper: unwrap TransformInterceptor response.",
+          "// GET (200) responses are wrapped as { success, data, timestamp }.",
+          "// POST (201) responses return raw controller output.",
+          "pm.globals.set('_unwrap', `function unwrap(body) { return body.data !== undefined ? body.data : body; }`);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 — Health Check",
+      "item": [
+        {
+          "name": "Payment Service Health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Service is healthy', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.status).to.eql('ok');",
+                "  pm.expect(d.service).to.eql('payment-service');",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "02 — Payment Method Discovery",
+      "item": [
+        {
+          "name": "Get India Payment Methods",
+          "request": { "method": "GET", "url": "{{baseUrl}}/methods/IN" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Returns Indian payment methods', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const methods = body.data || body;",
+                "  pm.expect(methods).to.be.an('array');",
+                "  const upi = methods.find(m => m.methodType === 'upi');",
+                "  pm.expect(upi).to.not.be.undefined;",
+                "  pm.expect(upi.gateway).to.eql('upi');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get UAE Payment Methods",
+          "request": { "method": "GET", "url": "{{baseUrl}}/methods/AE" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Returns UAE payment methods (no UPI)', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const methods = body.data || body;",
+                "  pm.expect(methods).to.be.an('array');",
+                "  const upi = methods.find(m => m.methodType === 'upi');",
+                "  pm.expect(upi).to.be.undefined;",
+                "  const card = methods.find(m => m.methodType === 'card');",
+                "  pm.expect(card).to.not.be.undefined;",
+                "  pm.expect(card.gateway).to.eql('stripe');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get India Payment Methods",
+          "request": { "method": "GET", "url": "{{baseUrl}}/methods/KE" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Returns Indian payment methods with UPI', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const methods = body.data || body;",
+                "  pm.expect(methods).to.be.an('array');",
+                "  const upi = methods.find(m => m.methodType === 'upi');",
+                "  pm.expect(upi).to.not.be.undefined;",
+                "  pm.expect(upi.isDefault).to.be.true;",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Saudi Payment Methods",
+          "request": { "method": "GET", "url": "{{baseUrl}}/methods/SA" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Returns Saudi payment methods with Mada', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const methods = body.data || body;",
+                "  pm.expect(methods).to.be.an('array');",
+                "  const mada = methods.find(m => m.methodType === 'mada');",
+                "  pm.expect(mada).to.not.be.undefined;",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "03 — Payment Lifecycle",
+      "item": [
+        {
+          "name": "Initiate UPI Payment (India)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/initiate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"module\":\"marketplace\",\"orderId\":\"ORD-TEST-001\",\"customerId\":\"USER-001\",\"amount\":1499,\"currency\":\"INR\",\"countryCode\":\"IN\",\"methodType\":\"upi\",\"callbackUrl\":\"https://kartseek.com/payment/callback\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('UPI payment initiated with intent link', () => {",
+                "  pm.response.to.have.status(201);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.paymentId).to.be.a('string');",
+                "  pm.expect(d.gateway).to.eql('razorpay');",
+                "  pm.expect(d.upiIntentLink).to.match(/^upi:\\/\\/pay/);",
+                "  pm.collectionVariables.set('paymentId', d.paymentId);",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Initiate Card Payment (UAE)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/initiate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"module\":\"hotel\",\"orderId\":\"BOOK-UAE-001\",\"customerId\":\"USER-002\",\"amount\":895,\"currency\":\"AED\",\"countryCode\":\"AE\",\"methodType\":\"card\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Card payment initiated via Stripe', () => {",
+                "  pm.response.to.have.status(201);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.gateway).to.eql('stripe');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/verify",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"paymentId\":\"{{paymentId}}\",\"gatewayRef\":\"pay_test_123\",\"signature\":\"test_sig\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Payment verified', () => {",
+                "  const status = pm.response.code;",
+                "  pm.expect(status).to.be.oneOf([200, 201]);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.status).to.eql('completed');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Payment by ID",
+          "request": { "method": "GET", "url": "{{baseUrl}}/test-payment-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Payment details returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d).to.have.property('status');",
+                "  pm.expect(d).to.have.property('amount');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Payment by Order",
+          "request": { "method": "GET", "url": "{{baseUrl}}/order/ORD-TEST-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Payment found by orderId', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.orderId).to.eql('ORD-TEST-001');",
+                "  pm.expect(d).to.have.property('paymentId');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Customer Payments",
+          "request": { "method": "GET", "url": "{{baseUrl}}/customer/USER-001?page=1&limit=10" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Customer payment history returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d).to.have.property('data');",
+                "  pm.expect(d).to.have.property('total');",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "04 — Module-Specific Payments",
+      "item": [
+        {
+          "name": "Process Order Payment",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/order",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"module\":\"grocery\",\"orderId\":\"GRO-001\",\"customerId\":\"USER-003\",\"amount\":2350,\"currency\":\"INR\",\"countryCode\":\"IN\",\"methodType\":\"upi\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Order payment processed', () => {",
+                "  pm.response.to.have.status(201);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.paymentId).to.be.a('string');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Wallet Top-Up",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/wallet/topup",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"customerId\":\"USER-001\",\"amount\":5000,\"currency\":\"INR\",\"countryCode\":\"IN\",\"methodType\":\"upi\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Wallet top-up initiated', () => {",
+                "  pm.response.to.have.status(201);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.paymentNumber).to.match(/^PAY-TOPUP-/);",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "05 — Taxi Real-Time Billing",
+      "item": [
+        {
+          "name": "Pre-Authorize Taxi Ride",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/taxi/preauth",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"rideId\":\"RIDE-001\",\"customerId\":\"USER-001\",\"estimatedFare\":350,\"currency\":\"INR\",\"countryCode\":\"IN\",\"methodType\":\"upi\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Pre-auth created with 20% buffer', () => {",
+                "  pm.response.to.have.status(201);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.holdAmount).to.be.at.least(350);",
+                "  pm.expect(d.rideId).to.eql('RIDE-001');",
+                "  pm.collectionVariables.set('rideId', d.rideId);",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Billing State",
+          "request": { "method": "GET", "url": "{{baseUrl}}/taxi/billing/RIDE-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Billing state returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.rideId).to.eql('RIDE-001');",
+                "  pm.expect(d).to.have.property('holdAmount');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Capture Final Fare",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/taxi/capture",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"rideId\":\"RIDE-001\",\"finalFare\":320,\"tipAmount\":30,\"discount\":20}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Final fare captured', () => {",
+                "  const status = pm.response.code;",
+                "  pm.expect(status).to.be.oneOf([200, 201]);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.capturedAmount).to.eql(330);",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Cancel Billing (with fee)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/taxi/cancel-billing",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"rideId\":\"RIDE-002\",\"cancellationFee\":50,\"cancelledBy\":\"rider\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Cancellation processed', () => {",
+                "  const status = pm.response.code;",
+                "  pm.expect(status).to.be.oneOf([200, 201]);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.cancellationFee).to.eql(50);",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "06 — Escrow & Refunds",
+      "item": [
+        {
+          "name": "Release Escrow",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/escrow/ORD-TEST-001/release"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Escrow released', () => {",
+                "  const status = pm.response.code;",
+                "  pm.expect(status).to.be.oneOf([200, 201]);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.orderId).to.eql('ORD-TEST-001');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Initiate Full Refund",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/refund",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"paymentId\":\"{{paymentId}}\",\"amount\":1499,\"reason\":\"Customer requested full refund\",\"initiatedBy\":\"admin\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Refund initiated', () => {",
+                "  const status = pm.response.code;",
+                "  pm.expect(status).to.be.oneOf([200, 201]);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.success).to.be.true;",
+                "  pm.expect(d.refundId).to.match(/^REF-/);",
+                "  pm.expect(d.status).to.eql('processing');",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "07 — Invoices",
+      "item": [
+        {
+          "name": "Get Invoice by ID",
+          "request": { "method": "GET", "url": "{{baseUrl}}/invoices/INV-TEST-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Invoice returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.invoiceNumber).to.match(/^INV-/);",
+                "  pm.expect(d).to.have.property('grandTotal');",
+                "  pm.collectionVariables.set('invoiceId', d.id);",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Invoice by Payment",
+          "request": { "method": "GET", "url": "{{baseUrl}}/invoices/payment/test-payment-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Invoice returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.invoiceNumber).to.match(/^INV-/);",
+                "  pm.expect(d.paymentId).to.eql('test-payment-001');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Generate Invoice PDF",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/invoices/INV-TEST-001/pdf"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('PDF URL generated', () => {",
+                "  const status = pm.response.code;",
+                "  pm.expect(status).to.be.oneOf([200, 201]);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.pdfUrl).to.be.a('string');",
+                "  pm.expect(d.expiresAt).to.be.a('string');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Customer Invoices",
+          "request": { "method": "GET", "url": "{{baseUrl}}/invoices/customer/USER-001?page=1&limit=10" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Customer invoices returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d).to.have.property('data');",
+                "  pm.expect(d).to.have.property('total');",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "08 — Super Admin Settlement Dashboard",
+      "item": [
+        {
+          "name": "Get Payment Dashboard",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/dashboard" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Dashboard data returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.summary).to.have.property('totalTransactions');",
+                "  pm.expect(d.summary).to.have.property('totalVolume');",
+                "  pm.expect(d.moduleBreakdown).to.be.an('array').that.has.length.greaterThan(0);",
+                "  pm.expect(d.gatewayBreakdown).to.be.an('array');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Settlement Dashboard",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/settlement/dashboard" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Settlement summary returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.totals).to.have.property('grossRevenue');",
+                "  pm.expect(d.totals).to.have.property('totalCommission');",
+                "  pm.expect(d.topSellers).to.be.an('array');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Seller Balance",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/settlement/seller/SELLER-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Seller balance returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.sellerId).to.eql('SELLER-001');",
+                "  pm.expect(d).to.have.property('pending');",
+                "  pm.expect(d).to.have.property('settled');",
+                "  pm.expect(d).to.have.property('held');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Franchise Earnings",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/settlement/franchise/FRANCHISE-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Franchise earnings returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.franchiseId).to.eql('FRANCHISE-001');",
+                "  pm.expect(d.byModule).to.be.an('array').that.has.length(7);",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Module Revenue (Marketplace)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/revenue/marketplace?startDate=2026-07-01&endDate=2026-07-31" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Module revenue returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.module).to.eql('marketplace');",
+                "  pm.expect(d.stats).to.have.property('grossRevenue');",
+                "  pm.expect(d.dailyTrend).to.be.an('array');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Daily Reconciliation",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/reconciliation/2026-07-07" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Reconciliation report balanced', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.date).to.eql('2026-07-07');",
+                "  pm.expect(d).to.have.property('isBalanced');",
+                "  pm.expect(d).to.have.property('discrepancy');",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "09 — Security Tests",
+      "item": [
+        {
+          "name": "PCI: Card data never in response",
+          "request": { "method": "GET", "url": "{{baseUrl}}/test-payment-001" },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('No raw card data in response', () => {",
+                "  const text = pm.response.text();",
+                "  pm.expect(text).to.not.match(/\\d{16}/);",
+                "  pm.expect(text).to.not.include('cvv');",
+                "  pm.expect(text).to.not.include('cardNumber');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "IDOR: Cannot access other user invoices",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/invoices/customer/USER-ATTACKER",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }]
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('IDOR prevention: empty or forbidden', () => {",
+                "  const body = pm.response.json();",
+                "  if (pm.response.code === 200) {",
+                "    const d = body.data || body;",
+                "    pm.expect(d.total).to.eql(0);",
+                "  } else {",
+                "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                "  }",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "SQL Injection attempt in orderId",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/order/'; DROP TABLE payments;--"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('SQL injection sanitized', () => {",
+                "  pm.expect(pm.response.code).to.be.oneOf([200, 400, 404, 500]);",
+                "  const text = pm.response.text();",
+                "  pm.expect(text).to.not.include('syntax error');",
+                "  pm.expect(text).to.not.include('pg_catalog');",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "XSS in metadata field",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/initiate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"module\":\"marketplace\",\"orderId\":\"ORD-XSS\",\"customerId\":\"USER-001\",\"amount\":100,\"currency\":\"INR\",\"countryCode\":\"IN\",\"methodType\":\"card\",\"metadata\":{\"note\":\"<script>alert('xss')</script>\"}}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('XSS sanitized from response', () => {",
+                "  const text = pm.response.text();",
+                "  pm.expect(text).to.not.include('<script>');",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "10 — Webhook Verification",
+      "item": [
+        {
+          "name": "Razorpay Webhook",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/webhook/razorpay",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-razorpay-signature", "value": "test_webhook_sig" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_test_123\",\"order_id\":\"order_test_123\",\"amount\":149900,\"currency\":\"INR\",\"status\":\"captured\"}}}}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Webhook acknowledged', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.received).to.be.true;",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Stripe Webhook",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/webhook/stripe",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "stripe-signature", "value": "t=1625000000,v1=test_sig" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"type\":\"payment_intent.succeeded\",\"data\":{\"object\":{\"id\":\"pi_test_123\",\"amount\":8950,\"currency\":\"aed\",\"status\":\"succeeded\"}}}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Stripe webhook acknowledged', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const body = pm.response.json();",
+                "  const d = body.data || body;",
+                "  pm.expect(d.received).to.be.true;",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    }
+  ]
+}

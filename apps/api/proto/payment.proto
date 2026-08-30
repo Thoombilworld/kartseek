@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package payment;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KARTSEEK Payment Service — gRPC Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+service PaymentService {
+  rpc InitiatePayment    (InitiatePaymentRequest)  returns (PaymentResponse)     {}
+  rpc VerifyPayment      (VerifyPaymentRequest)    returns (PaymentResponse)     {}
+  rpc GetPaymentByOrder  (GetByOrderRequest)       returns (PaymentResponse)     {}
+  rpc RequestRefund      (RefundRequest)           returns (RefundResponse)      {}
+  rpc GetRefundStatus    (GetRefundRequest)        returns (RefundResponse)      {}
+  rpc GetWalletBalance   (GetWalletRequest)        returns (WalletResponse)      {}
+  rpc CreditWallet       (WalletTransactionRequest) returns (WalletResponse)     {}
+  rpc DebitWallet        (WalletTransactionRequest) returns (WalletResponse)     {}
+  rpc GetTransactions    (GetTransactionsRequest)  returns (TransactionListResponse) {}
+}
+
+// ── Requests ──────────────────────────────────────────────────────────────────
+
+message InitiatePaymentRequest {
+  string orderId       = 1;
+  string userId        = 2;
+  double amount        = 3;
+  string currency      = 4;   // KES, USD, INR
+  string gateway       = 5;   // razorpay | stripe | mpesa | wallet
+  string callbackUrl   = 6;
+}
+
+message VerifyPaymentRequest {
+  string gateway        = 1;
+  string paymentId      = 2;
+  string orderId        = 3;
+  string razorpaySignature = 4;  // Razorpay only
+  string stripePaymentIntentId = 5;
+}
+
+message GetByOrderRequest {
+  string orderId = 1;
+}
+
+message RefundRequest {
+  string orderId   = 1;
+  string userId    = 2;
+  double amount    = 3;
+  string reason    = 4;
+  repeated string itemIds = 5;
+}
+
+message GetRefundRequest {
+  string refundId = 1;
+}
+
+message GetWalletRequest {
+  string userId = 1;
+}
+
+message WalletTransactionRequest {
+  string userId      = 1;
+  double amount      = 2;
+  string reason      = 3;
+  string referenceId = 4;
+}
+
+message GetTransactionsRequest {
+  string userId = 1;
+  int32  page   = 2;
+  int32  limit  = 3;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message PaymentResponse {
+  string id             = 1;
+  string orderId        = 2;
+  string status         = 3;   // PENDING | SUCCESS | FAILED | REFUNDED
+  double amount         = 4;
+  string currency       = 5;
+  string gateway        = 6;
+  string paymentToken   = 7;   // Gateway-specific token for frontend checkout
+  string checkoutUrl    = 8;   // Redirect URL for web payment
+  string createdAt      = 9;
+}
+
+message RefundResponse {
+  string id          = 1;
+  string orderId     = 2;
+  string status      = 3;   // PENDING | APPROVED | REJECTED | PROCESSED
+  double amount      = 4;
+  string reason      = 5;
+  string requestedAt = 6;
+  string processedAt = 7;
+}
+
+message WalletResponse {
+  string userId      = 1;
+  double balance     = 2;
+  string currency    = 3;
+  string lastUpdated = 4;
+}
+
+message Transaction {
+  string id          = 1;
+  string type        = 2;   // CREDIT | DEBIT
+  double amount      = 3;
+  string reason      = 4;
+  string referenceId = 5;
+  string createdAt   = 6;
+}
+
+message TransactionListResponse {
+  repeated Transaction data  = 1;
+  int32                total = 2;
+  int32                page  = 3;
+  int32                limit = 4;
+}

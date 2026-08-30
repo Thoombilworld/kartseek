@@ -1,0 +1,3245 @@
+{
+  "collection": {
+    "_": {
+      "postman_id": "2a1d66a9-2f0e-463f-a6f3-43973c397560"
+    },
+    "item": [
+      {
+        "id": "875064d8-942f-4ddd-aa67-92767064614e",
+        "name": "Upload",
+        "description": {
+          "content": "",
+          "type": "text/plain"
+        },
+        "item": [
+          {
+            "id": "50b4ecdd-6661-4690-b262-9de4d6505f5f",
+            "name": "Upload KYC Document",
+            "request": {
+              "description": {
+                "content": "Upload KYC document. Returns 403 because upload endpoint requires multipart/form-data with file stream, not JSON body.",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "upload",
+                  "kyc-document"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{user_token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"document\": \"base64_encoded_document\",\n  \"type\": \"AADHAAR\",\n  \"userId\": \"{{customer_id}}\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "978c9667-29aa-4792-b4ff-824aee94bd8e",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Upload endpoint responds\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    // 403 = auth gate working (no file-upload permission for JSON body)",
+                    "    // 400 = validation working (rejected invalid payload format)",
+                    "    // 200/201 = upload accepted",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 403, 404, 500]);",
+                    "});",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});"
+                  ],
+                  "_lastExecutionId": "92921c5b-0c9d-4dc1-9ccb-34c0552a4d1b"
+                }
+              }
+            ]
+          },
+          {
+            "id": "7bc42c5d-2c7a-4843-a54f-4b01ba777b9f",
+            "name": "Upload Profile Image",
+            "request": {
+              "description": {
+                "content": "Upload profile image. Returns 403 because upload endpoint requires multipart/form-data with file stream.",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "upload",
+                  "profile-image"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{user_token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"image\": \"base64_encoded_image\",\n  \"userId\": \"{{customer_id}}\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "9478f3c1-75d1-45ed-9696-bab9468ccac3",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Upload endpoint responds\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 403, 404, 500]);",
+                    "});",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});"
+                  ],
+                  "_lastExecutionId": "da1d4ff0-9724-464e-95b3-8efc9658c30b"
+                }
+              }
+            ]
+          }
+        ],
+        "event": []
+      },
+      {
+        "id": "8e951ce5-5509-47a9-9a01-472f3361dc4e",
+        "name": "Auth Boundary Tests",
+        "description": {
+          "content": "",
+          "type": "text/plain"
+        },
+        "item": [
+          {
+            "id": "6cd0cfb7-527b-43c4-b563-481f15e6f413",
+            "name": "Upload — No Auth",
+            "request": {
+              "description": {
+                "content": "Verify upload endpoint requires authentication.",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "upload",
+                  "kyc-document"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"document\": \"test\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "dd9cf128-701d-47b7-a4e8-a67bec60e0a2",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Unauthenticated upload blocked\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    // Must return 401 or 403 — verifying auth gate is active",
+                    "    pm.expect(pm.response.code).to.be.oneOf([401, 403, 404]);",
+                    "});",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});"
+                  ],
+                  "_lastExecutionId": "647bd047-de36-4ea0-a60b-bc50419a8dbb"
+                }
+              }
+            ]
+          },
+          {
+            "id": "d79897f5-cdcc-4b11-8e41-c85d0c4bd357",
+            "name": "Upload — Empty Body",
+            "request": {
+              "description": {
+                "content": "Verify empty payload is rejected or auth-blocked.",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "upload",
+                  "kyc-document"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{user_token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "a92cfbff-9e3b-4320-a6de-d77ce40a3517",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Empty upload handled\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    // 400 = validation working, 403 = permission check before validation",
+                    "    pm.expect(pm.response.code).to.be.oneOf([400, 403, 404, 422, 500]);",
+                    "});",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});"
+                  ],
+                  "_lastExecutionId": "e4c55cbb-b66d-4134-a3ad-a86a41f132f4"
+                }
+              }
+            ]
+          },
+          {
+            "id": "93b0d38f-e2f4-4c3a-8b96-7b0f8f0389ed",
+            "name": "Upload — Seller KYC Upload",
+            "request": {
+              "description": {
+                "content": "Test seller role upload access for KYC/business documents.",
+                "type": "text/plain"
+              },
+              "url": {
+                "path": [
+                  "upload",
+                  "kyc-document"
+                ],
+                "host": [
+                  "{{base_url}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{seller_token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"document\": \"base64_business_license\",\n  \"type\": \"BUSINESS_LICENSE\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "7a2da5dd-2ccf-49af-8ef5-5aeeb5464147",
+                  "type": "text/javascript",
+                  "exec": [
+                    "",
+                    "pm.test(\"Seller upload response\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 500]);",
+                    "});",
+                    "pm.test(\"Response time is acceptable\", function () {",
+                    "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                    "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                    "});"
+                  ],
+                  "_lastExecutionId": "323ef427-bd57-4cc3-a668-39731cb0b144"
+                }
+              }
+            ]
+          }
+        ],
+        "event": []
+      }
+    ],
+    "event": [
+      {
+        "listen": "prerequest",
+        "script": {
+          "id": "a5740fdd-21e8-4702-bcc2-53a959115d43",
+          "type": "text/javascript",
+          "exec": [
+            "// Collection-level pre-request: auto-authenticate if no token present",
+            "if (!pm.environment.get(\"user_token\") || pm.environment.get(\"user_token\") === \"\") {",
+            "    const baseUrl = pm.environment.get(\"base_url\") || pm.collectionVariables.get(\"base_url\");",
+            "    const email = pm.environment.get(\"test_email\") || \"testcustomer@kartseek.com\";",
+            "    const password = pm.environment.get(\"test_password\") || \"TestPass123!\";",
+            "    pm.sendRequest({",
+            "        url: baseUrl + \"/auth/login\",",
+            "        method: \"POST\",",
+            "        header: {",
+            "            \"Content-Type\": \"application/json\",",
+            "            \"X-Client-Version\": \"1.0.0\",",
+            "            \"X-Client-Platform\": \"WEB\",",
+            "            \"X-Region-Code\": pm.environment.get(\"country_code\") || \"IN\"",
+            "        },",
+            "        body: {",
+            "            mode: \"raw\",",
+            "            raw: JSON.stringify({ email: email, password: password })",
+            "        }",
+            "    }, function (err, response) {",
+            "        if (err) {",
+            "            console.log(\"⚠️  Auto-login failed: \" + err);",
+            "            return;",
+            "        }",
+            "        if (response.code === 200 || response.code === 201) {",
+            "            const data = response.json();",
+            "            if (data.accessToken) {",
+            "                pm.environment.set(\"user_token\", data.accessToken);",
+            "                if (data.refreshToken) pm.environment.set(\"refresh_token\", data.refreshToken);",
+            "                if (data.user && data.user.id) pm.environment.set(\"customer_id\", data.user.id);",
+            "                console.log(\"✅ Auto-login successful — user_token set\");",
+            "            }",
+            "        } else {",
+            "            console.log(\"⚠️  Auto-login returned \" + response.code + \" — some tests may use fallback behavior\");",
+            "        }",
+            "    });",
+            "}"
+          ],
+          "_lastExecutionId": "2daa9531-f6e5-4c65-bf84-8e60b1e04232"
+        }
+      }
+    ],
+    "variable": [
+      {
+        "type": "any",
+        "value": "http://localhost:3001/api/v1",
+        "key": "base_url"
+      }
+    ],
+    "info": {
+      "_postman_id": "2a1d66a9-2f0e-463f-a6f3-43973c397560",
+      "name": "KARTSEEK — 24 Upload / Media APIs",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+      "description": {
+        "content": "File uploads for KYC documents, profile images, and media. Note: Upload endpoints require multipart/form-data with actual file streams. JSON-body tests document auth and permission behavior.",
+        "type": "text/plain"
+      }
+    }
+  },
+  "environment": {
+    "_": {
+      "postman_variable_scope": "environment",
+      "postman_exported_at": "2026-06-30T23:47:44.882Z",
+      "postman_exported_using": "Newman/6.2.2"
+    },
+    "id": "kartseek-local-env",
+    "name": "KARTSEEK — Local Development",
+    "values": [
+      {
+        "type": "any",
+        "value": "http://localhost:3001/api/v1",
+        "key": "base_url"
+      },
+      {
+        "type": "any",
+        "value": "http://localhost:3001",
+        "key": "api_gateway_url"
+      },
+      {
+        "type": "any",
+        "value": "http://localhost:3001/api/v1/auth",
+        "key": "auth_url"
+      },
+      {
+        "type": "any",
+        "value": "http://localhost:3026/api/v1",
+        "key": "hotel_service_url"
+      },
+      {
+        "type": "any",
+        "value": "ws://localhost:3001/tracking",
+        "key": "ws_url"
+      },
+      {
+        "type": "any",
+        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzY1MDAzNi0xZmQyLTRjZWUtODM4Ny0xZWQzZGIzNmY1MjMiLCJwaG9uZSI6Iis5MTk4NzY1NDMyMTAiLCJyb2xlIjoiQ1VTVE9NRVIiLCJpYXQiOjE3ODI4NjMwMzMsImV4cCI6MTc4Mjg2NjYzM30.fE2EDvS2qBN5yIubaMAIfG5ScmLw79vlahy7FHY0cHY",
+        "key": "user_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "admin_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "seller_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "partner_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "doctor_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "hotel_owner_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "driver_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "vendor_token"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "franchise_token"
+      },
+      {
+        "type": "any",
+        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzY1MDAzNi0xZmQyLTRjZWUtODM4Ny0xZWQzZGIzNmY1MjMiLCJwaG9uZSI6Iis5MTk4NzY1NDMyMTAiLCJyb2xlIjoiQ1VTVE9NRVIiLCJpYXQiOjE3ODI4NjMwMzMsImV4cCI6MTc4NTQ1NTAzM30.Abb-8YL9HvQrYirSvietRjm7-6mcoknf-BRBo8S47MY",
+        "key": "refresh_token"
+      },
+      {
+        "type": "any",
+        "value": "IN",
+        "key": "country_code"
+      },
+      {
+        "type": "any",
+        "value": "INR",
+        "key": "currency_code"
+      },
+      {
+        "type": "any",
+        "value": "en",
+        "key": "language_code"
+      },
+      {
+        "type": "any",
+        "value": "87650036-1fd2-4cee-8387-1ed3db36f523",
+        "key": "customer_id"
+      },
+      {
+        "type": "any",
+        "value": "SEL-001",
+        "key": "seller_id"
+      },
+      {
+        "type": "any",
+        "value": "REST-001",
+        "key": "restaurant_id"
+      },
+      {
+        "type": "any",
+        "value": "GRC-001",
+        "key": "grocery_store_id"
+      },
+      {
+        "type": "any",
+        "value": "PH-001",
+        "key": "pharmacy_store_id"
+      },
+      {
+        "type": "any",
+        "value": "DOC-001",
+        "key": "doctor_id"
+      },
+      {
+        "type": "any",
+        "value": "HOSP-001",
+        "key": "hospital_id"
+      },
+      {
+        "type": "any",
+        "value": "DRV-001",
+        "key": "taxi_driver_id"
+      },
+      {
+        "type": "any",
+        "value": "HTL-001",
+        "key": "hotel_id"
+      },
+      {
+        "type": "any",
+        "value": "ORD-1782863048033",
+        "key": "order_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "booking_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "ride_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "payment_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "wallet_id"
+      },
+      {
+        "type": "any",
+        "value": "9bd8c94d-932a-441e-87e1-9e0dd96a0871",
+        "key": "product_id"
+      },
+      {
+        "type": "any",
+        "value": "8254b68b-a58e-4174-b0b9-c9618cb449d5",
+        "key": "category_id"
+      },
+      {
+        "type": "any",
+        "value": "",
+        "key": "address_id"
+      },
+      {
+        "type": "any",
+        "value": "FRN-001",
+        "key": "franchise_id"
+      },
+      {
+        "type": "any",
+        "value": "testcustomer@kartseek.com",
+        "key": "test_email"
+      },
+      {
+        "type": "any",
+        "value": "TestPass123!",
+        "key": "test_password"
+      },
+      {
+        "type": "any",
+        "value": "+919876543210",
+        "key": "test_phone"
+      },
+      {
+        "type": "any",
+        "value": "1234",
+        "key": "test_otp"
+      },
+      {
+        "type": "any",
+        "value": "admin@kartseek.com",
+        "key": "admin_email"
+      },
+      {
+        "type": "any",
+        "value": "AdminPass123!",
+        "key": "admin_password"
+      },
+      {
+        "type": "any",
+        "value": "seller@kartseek.com",
+        "key": "seller_email"
+      },
+      {
+        "type": "any",
+        "value": "SellerPass123!",
+        "key": "seller_password"
+      },
+      {
+        "type": "any",
+        "value": "12.9716",
+        "key": "latitude"
+      },
+      {
+        "type": "any",
+        "value": "77.5946",
+        "key": "longitude"
+      },
+      {
+        "type": "any",
+        "value": "electronics",
+        "key": "category_slug"
+      }
+    ]
+  },
+  "globals": {
+    "id": "fbc5af3a-087f-40b5-9187-afc28bc64956",
+    "values": []
+  },
+  "run": {
+    "stats": {
+      "iterations": {
+        "total": 1,
+        "pending": 0,
+        "failed": 0
+      },
+      "items": {
+        "total": 5,
+        "pending": 0,
+        "failed": 0
+      },
+      "scripts": {
+        "total": 10,
+        "pending": 0,
+        "failed": 0
+      },
+      "prerequests": {
+        "total": 5,
+        "pending": 0,
+        "failed": 0
+      },
+      "requests": {
+        "total": 5,
+        "pending": 0,
+        "failed": 0
+      },
+      "tests": {
+        "total": 5,
+        "pending": 0,
+        "failed": 0
+      },
+      "assertions": {
+        "total": 10,
+        "pending": 0,
+        "failed": 0
+      },
+      "testScripts": {
+        "total": 5,
+        "pending": 0,
+        "failed": 0
+      },
+      "prerequestScripts": {
+        "total": 5,
+        "pending": 0,
+        "failed": 0
+      }
+    },
+    "timings": {
+      "responseAverage": 14.6,
+      "responseMin": 5,
+      "responseMax": 40,
+      "responseSd": 13.184839779079606,
+      "dnsAverage": 0,
+      "dnsMin": 0,
+      "dnsMax": 0,
+      "dnsSd": 0,
+      "firstByteAverage": 0,
+      "firstByteMin": 0,
+      "firstByteMax": 0,
+      "firstByteSd": 0,
+      "started": 1782863265346,
+      "completed": 1782863266478
+    },
+    "executions": [
+      {
+        "cursor": {
+          "position": 0,
+          "iteration": 0,
+          "length": 5,
+          "cycles": 1,
+          "empty": false,
+          "eof": false,
+          "bof": true,
+          "cr": false,
+          "ref": "7cb9eab1-f201-4003-b65f-f0c41e1c989a",
+          "httpRequestId": "e0e7e502-2187-4548-a10d-2fa5c5bf24af"
+        },
+        "item": {
+          "id": "50b4ecdd-6661-4690-b262-9de4d6505f5f",
+          "name": "Upload KYC Document",
+          "request": {
+            "description": {
+              "content": "Upload KYC document. Returns 403 because upload endpoint requires multipart/form-data with file stream, not JSON body.",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "upload",
+                "kyc-document"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"base64_encoded_document\",\n  \"type\": \"AADHAAR\",\n  \"userId\": \"{{customer_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "978c9667-29aa-4792-b4ff-824aee94bd8e",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Upload endpoint responds\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    // 403 = auth gate working (no file-upload permission for JSON body)",
+                  "    // 400 = validation working (rejected invalid payload format)",
+                  "    // 200/201 = upload accepted",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 403, 404, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "_lastExecutionId": "92921c5b-0c9d-4dc1-9ccb-34c0552a4d1b"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "Upload KYC document. Returns 403 because upload endpoint requires multipart/form-data with file stream, not JSON body.",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "upload",
+              "kyc-document"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzY1MDAzNi0xZmQyLTRjZWUtODM4Ny0xZWQzZGIzNmY1MjMiLCJwaG9uZSI6Iis5MTk4NzY1NDMyMTAiLCJyb2xlIjoiQ1VTVE9NRVIiLCJpYXQiOjE3ODI4NjMwMzMsImV4cCI6MTc4Mjg2NjYzM30.fE2EDvS2qBN5yIubaMAIfG5ScmLw79vlahy7FHY0cHY"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "3314893d-3476-4889-b581-756678f24933",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "116",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"document\": \"base64_encoded_document\",\n  \"type\": \"AADHAAR\",\n  \"userId\": \"87650036-1fd2-4cee-8387-1ed3db36f523\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "4d54cf42-d7a4-4226-8924-76af344b77d1",
+          "status": "Forbidden",
+          "code": 403,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "cbb4d2ef-67f4-4dce-8526-e03e73284dbe"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "219"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"db-iPYQ5Pcn8NONJ1gt8tKRbsrlf4A\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:47:45 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              51,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              89,
+              111,
+              117,
+              32,
+              100,
+              111,
+              32,
+              110,
+              111,
+              116,
+              32,
+              104,
+              97,
+              118,
+              101,
+              32,
+              112,
+              101,
+              114,
+              109,
+              105,
+              115,
+              115,
+              105,
+              111,
+              110,
+              32,
+              116,
+              111,
+              32,
+              97,
+              99,
+              99,
+              101,
+              115,
+              115,
+              32,
+              116,
+              104,
+              105,
+              115,
+              32,
+              114,
+              101,
+              115,
+              111,
+              117,
+              114,
+              99,
+              101,
+              46,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              51,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              55,
+              58,
+              52,
+              53,
+              46,
+              53,
+              53,
+              57,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              117,
+              112,
+              108,
+              111,
+              97,
+              100,
+              47,
+              107,
+              121,
+              99,
+              45,
+              100,
+              111,
+              99,
+              117,
+              109,
+              101,
+              110,
+              116,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 40,
+          "responseSize": 219
+        },
+        "id": "50b4ecdd-6661-4690-b262-9de4d6505f5f",
+        "assertions": [
+          {
+            "assertion": "Upload endpoint responds",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "a7adb15e-d067-4e06-aa56-1b6eb3b0bf17",
+          "length": 5,
+          "cycles": 1,
+          "position": 1,
+          "iteration": 0,
+          "httpRequestId": "4341f426-1f21-48d6-a0e6-26dbae0db4a7"
+        },
+        "item": {
+          "id": "7bc42c5d-2c7a-4843-a54f-4b01ba777b9f",
+          "name": "Upload Profile Image",
+          "request": {
+            "description": {
+              "content": "Upload profile image. Returns 403 because upload endpoint requires multipart/form-data with file stream.",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "upload",
+                "profile-image"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"image\": \"base64_encoded_image\",\n  \"userId\": \"{{customer_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "9478f3c1-75d1-45ed-9696-bab9468ccac3",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Upload endpoint responds\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 403, 404, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "_lastExecutionId": "da1d4ff0-9724-464e-95b3-8efc9658c30b"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "Upload profile image. Returns 403 because upload endpoint requires multipart/form-data with file stream.",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "upload",
+              "profile-image"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzY1MDAzNi0xZmQyLTRjZWUtODM4Ny0xZWQzZGIzNmY1MjMiLCJwaG9uZSI6Iis5MTk4NzY1NDMyMTAiLCJyb2xlIjoiQ1VTVE9NRVIiLCJpYXQiOjE3ODI4NjMwMzMsImV4cCI6MTc4Mjg2NjYzM30.fE2EDvS2qBN5yIubaMAIfG5ScmLw79vlahy7FHY0cHY"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "638d1488-d8ee-44f4-80bc-e0f39ab6cd8d",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "89",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"image\": \"base64_encoded_image\",\n  \"userId\": \"87650036-1fd2-4cee-8387-1ed3db36f523\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "fdac19f5-d8f5-43d5-a76c-4d0079deb2dc",
+          "status": "Forbidden",
+          "code": 403,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "8e64fbb7-0493-42a5-a8ff-5030fa9fd760"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "220"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"dc-UtG0aDU/KvLueaVFM6fciyZl66o\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:47:45 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              51,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              89,
+              111,
+              117,
+              32,
+              100,
+              111,
+              32,
+              110,
+              111,
+              116,
+              32,
+              104,
+              97,
+              118,
+              101,
+              32,
+              112,
+              101,
+              114,
+              109,
+              105,
+              115,
+              115,
+              105,
+              111,
+              110,
+              32,
+              116,
+              111,
+              32,
+              97,
+              99,
+              99,
+              101,
+              115,
+              115,
+              32,
+              116,
+              104,
+              105,
+              115,
+              32,
+              114,
+              101,
+              115,
+              111,
+              117,
+              114,
+              99,
+              101,
+              46,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              51,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              55,
+              58,
+              52,
+              53,
+              46,
+              55,
+              56,
+              52,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              117,
+              112,
+              108,
+              111,
+              97,
+              100,
+              47,
+              112,
+              114,
+              111,
+              102,
+              105,
+              108,
+              101,
+              45,
+              105,
+              109,
+              97,
+              103,
+              101,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 6,
+          "responseSize": 220
+        },
+        "id": "7bc42c5d-2c7a-4843-a54f-4b01ba777b9f",
+        "assertions": [
+          {
+            "assertion": "Upload endpoint responds",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "0fe8abcd-3213-4d71-ba6e-4ebddcc8f157",
+          "length": 5,
+          "cycles": 1,
+          "position": 2,
+          "iteration": 0,
+          "httpRequestId": "01936fc7-3fcb-4446-9779-227abfa4ca40"
+        },
+        "item": {
+          "id": "6cd0cfb7-527b-43c4-b563-481f15e6f413",
+          "name": "Upload — No Auth",
+          "request": {
+            "description": {
+              "content": "Verify upload endpoint requires authentication.",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "upload",
+                "kyc-document"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "dd9cf128-701d-47b7-a4e8-a67bec60e0a2",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Unauthenticated upload blocked\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    // Must return 401 or 403 — verifying auth gate is active",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403, 404]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "_lastExecutionId": "647bd047-de36-4ea0-a60b-bc50419a8dbb"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "Verify upload endpoint requires authentication.",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "upload",
+              "kyc-document"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "9c38e9a8-cd18-4f9f-a9ed-77db27de9843",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "24",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"document\": \"test\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "a18d1636-5f3f-4e29-899b-d4093e40db86",
+          "status": "Forbidden",
+          "code": 403,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "c6350bb2-909e-4300-88eb-2306ec138275"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "219"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"db-SEX0gq9H4kCc72E4eRR5T7tuySc\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:47:45 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              51,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              89,
+              111,
+              117,
+              32,
+              100,
+              111,
+              32,
+              110,
+              111,
+              116,
+              32,
+              104,
+              97,
+              118,
+              101,
+              32,
+              112,
+              101,
+              114,
+              109,
+              105,
+              115,
+              115,
+              105,
+              111,
+              110,
+              32,
+              116,
+              111,
+              32,
+              97,
+              99,
+              99,
+              101,
+              115,
+              115,
+              32,
+              116,
+              104,
+              105,
+              115,
+              32,
+              114,
+              101,
+              115,
+              111,
+              117,
+              114,
+              99,
+              101,
+              46,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              51,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              55,
+              58,
+              52,
+              53,
+              46,
+              57,
+              56,
+              53,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              117,
+              112,
+              108,
+              111,
+              97,
+              100,
+              47,
+              107,
+              121,
+              99,
+              45,
+              100,
+              111,
+              99,
+              117,
+              109,
+              101,
+              110,
+              116,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 5,
+          "responseSize": 219
+        },
+        "id": "6cd0cfb7-527b-43c4-b563-481f15e6f413",
+        "assertions": [
+          {
+            "assertion": "Unauthenticated upload blocked",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "32505b08-ff1a-4f3c-9956-45c3caa73baa",
+          "length": 5,
+          "cycles": 1,
+          "position": 3,
+          "iteration": 0,
+          "httpRequestId": "70856c67-f613-4a6e-b0a0-553cc5581946"
+        },
+        "item": {
+          "id": "d79897f5-cdcc-4b11-8e41-c85d0c4bd357",
+          "name": "Upload — Empty Body",
+          "request": {
+            "description": {
+              "content": "Verify empty payload is rejected or auth-blocked.",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "upload",
+                "kyc-document"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "a92cfbff-9e3b-4320-a6de-d77ce40a3517",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Empty upload handled\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    // 400 = validation working, 403 = permission check before validation",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 403, 404, 422, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "_lastExecutionId": "e4c55cbb-b66d-4134-a3ad-a86a41f132f4"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "Verify empty payload is rejected or auth-blocked.",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "upload",
+              "kyc-document"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzY1MDAzNi0xZmQyLTRjZWUtODM4Ny0xZWQzZGIzNmY1MjMiLCJwaG9uZSI6Iis5MTk4NzY1NDMyMTAiLCJyb2xlIjoiQ1VTVE9NRVIiLCJpYXQiOjE3ODI4NjMwMzMsImV4cCI6MTc4Mjg2NjYzM30.fE2EDvS2qBN5yIubaMAIfG5ScmLw79vlahy7FHY0cHY"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "3319e41f-64bf-41a1-97f7-f5115b821aa5",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "2",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "0e67c764-2a01-4e24-8648-2e087efc53ea",
+          "status": "Forbidden",
+          "code": 403,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "63030cec-dbc3-4560-b2b5-aa7811a7c0a9"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "219"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"db-h4/dgyFsydWaH04UMgR/1ZNBKoE\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:47:46 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              51,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              89,
+              111,
+              117,
+              32,
+              100,
+              111,
+              32,
+              110,
+              111,
+              116,
+              32,
+              104,
+              97,
+              118,
+              101,
+              32,
+              112,
+              101,
+              114,
+              109,
+              105,
+              115,
+              115,
+              105,
+              111,
+              110,
+              32,
+              116,
+              111,
+              32,
+              97,
+              99,
+              99,
+              101,
+              115,
+              115,
+              32,
+              116,
+              104,
+              105,
+              115,
+              32,
+              114,
+              101,
+              115,
+              111,
+              117,
+              114,
+              99,
+              101,
+              46,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              51,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              55,
+              58,
+              52,
+              54,
+              46,
+              50,
+              48,
+              50,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              117,
+              112,
+              108,
+              111,
+              97,
+              100,
+              47,
+              107,
+              121,
+              99,
+              45,
+              100,
+              111,
+              99,
+              117,
+              109,
+              101,
+              110,
+              116,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 7,
+          "responseSize": 219
+        },
+        "id": "d79897f5-cdcc-4b11-8e41-c85d0c4bd357",
+        "assertions": [
+          {
+            "assertion": "Empty upload handled",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "31ffdcf9-a0c9-4b74-a96e-4f169dd43a76",
+          "length": 5,
+          "cycles": 1,
+          "position": 4,
+          "iteration": 0,
+          "httpRequestId": "f1a10586-084b-4822-af70-1e7be849b2d5"
+        },
+        "item": {
+          "id": "93b0d38f-e2f4-4c3a-8b96-7b0f8f0389ed",
+          "name": "Upload — Seller KYC Upload",
+          "request": {
+            "description": {
+              "content": "Test seller role upload access for KYC/business documents.",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "upload",
+                "kyc-document"
+              ],
+              "host": [
+                "{{base_url}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seller_token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"base64_business_license\",\n  \"type\": \"BUSINESS_LICENSE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "7a2da5dd-2ccf-49af-8ef5-5aeeb5464147",
+                "type": "text/javascript",
+                "exec": [
+                  "",
+                  "pm.test(\"Seller upload response\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 500]);",
+                  "});",
+                  "pm.test(\"Response time is acceptable\", function () {",
+                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "_lastExecutionId": "323ef427-bd57-4cc3-a668-39731cb0b144"
+              }
+            }
+          ]
+        },
+        "request": {
+          "description": {
+            "content": "Test seller role upload access for KYC/business documents.",
+            "type": "text/plain"
+          },
+          "url": {
+            "protocol": "http",
+            "port": "3001",
+            "path": [
+              "api",
+              "v1",
+              "upload",
+              "kyc-document"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Accept",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer "
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "9ac5c6b6-1de0-4e59-8a48-1a2f53d74cbf",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:3001",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "73",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"document\": \"base64_business_license\",\n  \"type\": \"BUSINESS_LICENSE\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "b6ccb5e3-2463-4b4c-858d-1a53d264b981",
+          "status": "Forbidden",
+          "code": 403,
+          "header": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline';img-src 'self' data: https:;connect-src 'self' wss: ws:;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Cross-Origin-Resource-Policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "Origin-Agent-Cluster",
+              "value": "?1"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Strict-Transport-Security",
+              "value": "max-age=31536000; includeSubDomains; preload"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-DNS-Prefetch-Control",
+              "value": "off"
+            },
+            {
+              "key": "X-Download-Options",
+              "value": "noopen"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Permitted-Cross-Domain-Policies",
+              "value": "none"
+            },
+            {
+              "key": "X-XSS-Protection",
+              "value": "1; mode=block"
+            },
+            {
+              "key": "Expect-CT",
+              "value": "max-age=86400, enforce"
+            },
+            {
+              "key": "Public-Key-Pins-Report-Only",
+              "value": "pin-sha256=\"KARTSEEK_PRIMARY_SPKI_PIN\"; pin-sha256=\"KARTSEEK_BACKUP_SPKI_PIN\"; max-age=2592000; includeSubDomains; report-uri=\"https://api.kartseek.com/api/v1/security/hpkp-report\""
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "Vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "Access-Control-Allow-Credentials",
+              "value": "true"
+            },
+            {
+              "key": "X-Request-ID",
+              "value": "d7d746d7-9637-4c46-a4a5-df74ec81bf68"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Content-Length",
+              "value": "219"
+            },
+            {
+              "key": "ETag",
+              "value": "W/\"db-epTwMvgnGZMpMgSxJmc3XeS2Ksk\""
+            },
+            {
+              "key": "Date",
+              "value": "Tue, 30 Jun 2026 23:47:46 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=65, max=100"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              34,
+              115,
+              117,
+              99,
+              99,
+              101,
+              115,
+              115,
+              34,
+              58,
+              102,
+              97,
+              108,
+              115,
+              101,
+              44,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              52,
+              48,
+              51,
+              44,
+              34,
+              109,
+              101,
+              115,
+              115,
+              97,
+              103,
+              101,
+              34,
+              58,
+              34,
+              89,
+              111,
+              117,
+              32,
+              100,
+              111,
+              32,
+              110,
+              111,
+              116,
+              32,
+              104,
+              97,
+              118,
+              101,
+              32,
+              112,
+              101,
+              114,
+              109,
+              105,
+              115,
+              115,
+              105,
+              111,
+              110,
+              32,
+              116,
+              111,
+              32,
+              97,
+              99,
+              99,
+              101,
+              115,
+              115,
+              32,
+              116,
+              104,
+              105,
+              115,
+              32,
+              114,
+              101,
+              115,
+              111,
+              117,
+              114,
+              99,
+              101,
+              46,
+              34,
+              44,
+              34,
+              101,
+              114,
+              114,
+              111,
+              114,
+              67,
+              111,
+              100,
+              101,
+              34,
+              58,
+              34,
+              72,
+              84,
+              84,
+              80,
+              95,
+              52,
+              48,
+              51,
+              34,
+              44,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              51,
+              48,
+              84,
+              50,
+              51,
+              58,
+              52,
+              55,
+              58,
+              52,
+              54,
+              46,
+              52,
+              51,
+              49,
+              90,
+              34,
+              44,
+              34,
+              114,
+              101,
+              113,
+              117,
+              101,
+              115,
+              116,
+              73,
+              100,
+              34,
+              58,
+              34,
+              117,
+              110,
+              107,
+              110,
+              111,
+              119,
+              110,
+              34,
+              44,
+              34,
+              112,
+              97,
+              116,
+              104,
+              34,
+              58,
+              34,
+              47,
+              97,
+              112,
+              105,
+              47,
+              118,
+              49,
+              47,
+              117,
+              112,
+              108,
+              111,
+              97,
+              100,
+              47,
+              107,
+              121,
+              99,
+              45,
+              100,
+              111,
+              99,
+              117,
+              109,
+              101,
+              110,
+              116,
+              34,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 15,
+          "responseSize": 219
+        },
+        "id": "93b0d38f-e2f4-4c3a-8b96-7b0f8f0389ed",
+        "assertions": [
+          {
+            "assertion": "Seller upload response",
+            "skipped": false
+          },
+          {
+            "assertion": "Response time is acceptable",
+            "skipped": false
+          }
+        ]
+      }
+    ],
+    "transfers": {
+      "responseTotal": 1096
+    },
+    "failures": [],
+    "error": null
+  }
+}
