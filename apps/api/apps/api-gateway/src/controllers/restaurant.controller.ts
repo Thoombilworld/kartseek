@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Delete, Inject,
+  Controller, Get, Post, Put, Delete, Inject, Req,
   Param, Query, Body, UseGuards, DefaultValuePipe, ParseIntPipe, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
@@ -21,6 +21,7 @@ import {
 
 import { JwtAuthGuard } from '@app/security';
 import { Public } from '../decorators/public.decorator';
+import { requestRegion } from '../services/request-region';
 
 /**
  * Restaurant Controller — API Gateway Proxy
@@ -34,8 +35,48 @@ import { Public } from '../decorators/public.decorator';
 @Controller('restaurants')
 export class RestaurantController {
   constructor(
-    @Inject('RESTAURANT_SERVICE') private readonly restaurantClient: ClientProxy) {}
+    @Inject('RESTAURANT_SERVICE') private readonly restaurantClient: ClientProxy,
+    // Not everything under /restaurants belongs to restaurant-service. The cart
+    // is cart-service's, orders are order-service's, and payouts are
+    // payout-service's — the same handlers the marketplace routes already use.
+    // These eight commands were being sent to restaurant-service, which has no
+    // handler for any of them, so every one answered 503.
+    @Inject('CART_SERVICE') private readonly cartClient: ClientProxy,
+    @Inject('ORDER_SERVICE_TCP') private readonly orderClient: ClientProxy,
+    @Inject('PAYOUT_SERVICE') private readonly payoutClient: ClientProxy,
+  ) {}
   private readonly logger = new Logger(RestaurantController.name);
+
+  /** Forward to a named service, preserving the failure rather than inventing a result. */
+  private async sendTo<T>(
+    client: ClientProxy,
+    service: string,
+    cmd: string,
+    payload: object,
+  ): Promise<T> {
+    try {
+      return await lastValueFrom(
+        client
+          .send<T>({ cmd }, payload)
+          .pipe(timeout(5000), catchError(rpcCatch(`${service} unavailable`))),
+      );
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      this.logger.error(`${service} error [${cmd}]: ${(err as Error)?.message}`);
+      throw new HttpException(`${service} unavailable`, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+  }
+
+  /**
+   * The signed-in customer, from the verified token.
+   *
+   * The cart routes used to take `userId` from a query parameter or the request
+   * body, so any authenticated caller could read or empty another customer's
+   * cart by naming them.
+   */
+  private userId(req: any): string | undefined {
+    return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub;
+  }
 
   /** Helper � sends TCP message with 5s timeout and graceful fallback. */
     /**
@@ -155,26 +196,29 @@ export class RestaurantController {
   @Get('home-feed')
   @ApiOperation({ summary: 'Restaurant home feed', description: 'Aggregated sections for the restaurant homepage.' })
   @ApiOkResponse({ description: 'Home feed sections' })
-  getHomeFeed() {
-    return this.send('get_home_feed', {});
+  getHomeFeed(@Req() req: any) {
+    // Region-scoped: a customer in Qatar should not be offered restaurants that
+    // cannot deliver to them. requestRegion reads X-Region-Code and falls back
+    // the same way every other module's routes do.
+    return this.send('get_home_feed', { regionCode: requestRegion(req) });
   }
 
   @Get('suggestions')
   @ApiOperation({ summary: 'Search suggestions' })
-  getSuggestions(@Query('q') q?: string) {
-    return this.send('get_suggestions', { q });
+  getSuggestions(@Req() req: any, @Query('q') q?: string) {
+    return this.send('get_suggestions', { q, regionCode: requestRegion(req) });
   }
 
   @Get('popular-dishes')
   @ApiOperation({ summary: 'Popular dishes across restaurants' })
-  getPopularDishes() {
-    return this.send('get_popular_dishes', {});
+  getPopularDishes(@Req() req: any, @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    return this.send('get_popular_dishes', { limit, regionCode: requestRegion(req) });
   }
 
   @Get('collections')
   @ApiOperation({ summary: 'Restaurant collections / curated lists' })
-  getCollections() {
-    return this.send('get_collections', {});
+  getCollections(@Req() req: any) {
+    return this.send('get_collections', { regionCode: requestRegion(req) });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -198,8 +242,8 @@ export class RestaurantController {
 
   @Get('cart')
   @ApiOperation({ summary: 'Get current cart' })
-  getCart(@Query('userId') userId?: string) {
-    return this.send('get_cart', { userId });
+  getCart(@Req() req: any) {
+    return this.sendTo(this.cartClient, 'Cart service', 'get_cart', { userId: this.userId(req) });
   }
 
   @Get('my-reservations')
@@ -368,26 +412,37 @@ export class RestaurantController {
 
   @Post('cart/add')
   @ApiOperation({ summary: 'Add item to cart' })
-  addToCart(@Body() body: any) {
-    return this.send('add_to_cart', body);
+  addToCart(@Req() req: any, @Body() body: any) {
+    return this.sendTo(this.cartClient, 'Cart service', 'add_to_cart', {
+      ...body,
+      userId: this.userId(req),
+    });
   }
 
   @Put('cart/item/:itemId')
   @ApiOperation({ summary: 'Update cart item quantity' })
-  updateCartItem(@Param('itemId') itemId: string, @Body() body: any) {
-    return this.send('update_cart_item', { itemId, ...body });
+  updateCartItem(@Req() req: any, @Param('itemId') itemId: string, @Body() body: any) {
+    return this.sendTo(this.cartClient, 'Cart service', 'update_cart_item', {
+      ...body,
+      itemId,
+      userId: this.userId(req),
+    });
   }
 
   @Delete('cart/item/:itemId')
   @ApiOperation({ summary: 'Remove item from cart' })
-  removeCartItem(@Param('itemId') itemId: string) {
-    return this.send('remove_cart_item', { itemId });
+  removeCartItem(@Req() req: any, @Param('itemId') itemId: string, @Query('variantId') variantId?: string) {
+    return this.sendTo(this.cartClient, 'Cart service', 'remove_cart_item', {
+      itemId,
+      variantId,
+      userId: this.userId(req),
+    });
   }
 
   @Delete('cart/clear')
   @ApiOperation({ summary: 'Clear entire cart' })
-  clearCart(@Body() body: any) {
-    return this.send('clear_cart', body);
+  clearCart(@Req() req: any) {
+    return this.sendTo(this.cartClient, 'Cart service', 'clear_cart', { userId: this.userId(req) });
   }
 
   // ── Customer Reservations ───────────────────────────────────────────────
@@ -547,29 +602,42 @@ export class RestaurantController {
 
   @Get(':restaurantId/orders/:orderId')
   @ApiOperation({ summary: 'Get order detail' })
-  getOrderDetail(@Param('restaurantId') restaurantId: string, @Param('orderId') orderId: string) {
-    return this.send('get_order_by_id', { restaurantId, orderId });
+  getOrderDetail(@Req() req: any, @Param('restaurantId') restaurantId: string, @Param('orderId') orderId: string) {
+    // order-service owns the order record; it scopes the read by the requester.
+    return this.sendTo(this.orderClient, 'Order service', 'get_order_by_id', {
+      orderId,
+      restaurantId,
+      userId: this.userId(req),
+      role: req?.user?.role,
+    });
   }
 
   @Post(':restaurantId/orders/:orderId/accept')
   @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
   @ApiOperation({ summary: 'Accept order (Seller)' })
-  acceptOrder(@Param('restaurantId') rid: string, @Param('orderId') oid: string) {
-    return this.send('update_order_status', { restaurantId: rid, orderId: oid, status: 'RESTAURANT_ACCEPTED' });
+  acceptOrder(@Req() req: any, @Param('restaurantId') rid: string, @Param('orderId') oid: string) {
+    return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
+      orderId: oid, restaurantId: rid, status: 'RESTAURANT_ACCEPTED', updatedBy: this.userId(req),
+    });
   }
 
   @Post(':restaurantId/orders/:orderId/reject')
   @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
   @ApiOperation({ summary: 'Reject order (Seller)' })
-  rejectOrder(@Param('restaurantId') rid: string, @Param('orderId') oid: string, @Body('reason') reason: string) {
-    return this.send('update_order_status', { restaurantId: rid, orderId: oid, status: 'RESTAURANT_REJECTED', reason, cancelledBy: 'restaurant' });
+  rejectOrder(@Req() req: any, @Param('restaurantId') rid: string, @Param('orderId') oid: string, @Body('reason') reason: string) {
+    return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
+      orderId: oid, restaurantId: rid, status: 'RESTAURANT_REJECTED', reason,
+      cancelledBy: 'restaurant', updatedBy: this.userId(req),
+    });
   }
 
   @Put(':restaurantId/orders/:orderId/status')
   @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update order status (Seller)' })
-  updateOrderStatus(@Param('restaurantId') rid: string, @Param('orderId') oid: string, @Body() body: any) {
-    return this.send('update_order_status', { restaurantId: rid, orderId: oid, ...body });
+  updateOrderStatus(@Req() req: any, @Param('restaurantId') rid: string, @Param('orderId') oid: string, @Body() body: any) {
+    return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
+      ...body, orderId: oid, restaurantId: rid, updatedBy: this.userId(req),
+    });
   }
 
   @Post(':restaurantId/orders/:orderId/request-rider')
@@ -619,8 +687,11 @@ export class RestaurantController {
   @Post(':id/payouts/request')
   @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
   @ApiOperation({ summary: 'Request payout' })
-  requestPayout(@Param('id') id: string, @Body() body: any) {
-    return this.send('request_payout', { restaurantId: id, ...body });
+  requestPayout(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    // payout-service owns payouts for every vertical, restaurants included.
+    return this.sendTo(this.payoutClient, 'Payout service', 'request_payout', {
+      ...body, restaurantId: id, requestedBy: this.userId(req),
+    });
   }
 
   // ── Literal routes, declared before the `:slug` catch-all ──────────────

@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike, In } from 'typeorm';
+import { Repository, ILike, In, SelectQueryBuilder, ObjectLiteral } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
@@ -631,15 +631,6 @@ export class RestaurantService {
   //  Reviews
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async getReviews(restaurantId: string, page = 1, limit = 20) {
-    const [data, total] = await this.reviewRepo.findAndCount({
-      where: { restaurantId, isVisible: true },
-      order: { createdAt: 'DESC' },
-      take: limit, skip: (page - 1) * limit,
-    });
-    return { data, total, page, limit };
-  }
-
   async submitReview(dto: { restaurantId: string; customerId: string; customerName: string; orderId?: string; rating: number; comment?: string; photos?: string[] }) {
     const review = this.reviewRepo.create(dto);
     const saved = await this.reviewRepo.save(review);
@@ -921,5 +912,290 @@ export class RestaurantService {
   async updateInventoryItem(restaurantId: string, itemId: string, dto: { stockQuantity?: number; isAvailable?: boolean }) {
     await this.menuItemRepo.update({ id: itemId, restaurantId }, dto);
     return { success: true };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Discovery — the customer-facing home surface
+  //
+  //  The gateway has always exposed /restaurants/home-feed, /collections,
+  //  /popular-dishes and /suggestions, and restaurant-service implemented none
+  //  of them, so all four answered 503. The restaurant home page carried
+  //  ALL_RESTAURANTS, CUISINE_CATEGORIES, PROMO_BANNERS and FLASH_DEALS as
+  //  literals instead, which is why the page looked fine while every endpoint
+  //  behind it was dead.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Apply a region filter that tolerates both codes in use.
+   *
+   * The gateway resolves an ISO country code ('QA'). This module's rows carry a
+   * country-subdivision code ('IN-MH', 'NG-LA'), so an equality test matched
+   * nothing and every region-scoped query came back empty. Comparing the first
+   * two characters covers both spellings.
+   *
+   * Other modules disagree about this column too — grocery stores it as 'QA',
+   * pharmacy as 'MUM-CBD' — so this normalises what restaurant owns and nothing
+   * more.
+   */
+  private scopeToRegion<T extends ObjectLiteral>(
+    qb: SelectQueryBuilder<T>,
+    regionCode?: string,
+  ): SelectQueryBuilder<T> {
+    if (!regionCode) return qb;
+    return qb.andWhere('LEFT(r.regionCode, 2) = :country', {
+      country: regionCode.slice(0, 2).toUpperCase(),
+    });
+  }
+
+  /** Approved and currently open for business — the only rows a customer should see. */
+  private liveRestaurants() {
+    return this.restaurantRepo.createQueryBuilder('r')
+      .where('r.status = :status', { status: RestaurantStatus.APPROVED })
+      .andWhere('r.isOnline = true')
+      .andWhere('r.isTemporarilyClosed = false');
+  }
+
+  private restaurantCard(r: Restaurant) {
+    return {
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      imageUrl: r.bannerUrl ?? r.logoUrl ?? null,
+      cuisines: r.cuisines,
+      rating: Number(r.rating ?? 0),
+      ratingCount: r.ratingCount ?? 0,
+      // Money leaves as a number. Only the client knows the viewer's market, so
+      // it does the formatting — the same rule the franchise KPIs follow.
+      costForTwo: r.costForTwo == null ? null : Number(r.costForTwo),
+      deliveryFee: r.deliveryFee == null ? null : Number(r.deliveryFee),
+      minOrderAmount: r.minOrderAmount == null ? null : Number(r.minOrderAmount),
+      avgPrepTime: r.avgPrepTime ?? null,
+      city: r.city,
+      regionCode: r.regionCode,
+      deliveryEnabled: r.deliveryEnabled,
+      takeawayEnabled: r.takeawayEnabled,
+      dineInEnabled: r.dineInEnabled,
+    };
+  }
+
+  /**
+   * Everything the home page needs, in one round trip.
+   *
+   * Region-scoped when a region is supplied: a customer in Qatar should not be
+   * shown restaurants that cannot deliver to them. Without a region it returns
+   * the global set rather than an empty list, so a first paint before region
+   * detection resolves still has content.
+   */
+  async getHomeFeed(regionCode?: string) {
+    const scope = () => {
+      return this.scopeToRegion(this.liveRestaurants(), regionCode);
+    };
+
+    const [featured, topRated, newest, cuisines, promotions] = await Promise.all([
+      scope().orderBy('r.totalOrders', 'DESC').take(12).getMany(),
+      scope().andWhere('r.ratingCount > 0').orderBy('r.rating', 'DESC').take(12).getMany(),
+      scope().orderBy('r.createdAt', 'DESC').take(12).getMany(),
+      this.getCuisines(),
+      this.promotionRepo.createQueryBuilder('p')
+        .innerJoin('p.restaurant', 'r')
+        .where('p.isActive = true')
+        .andWhere('p.validFrom <= NOW()')
+        .andWhere('p.validUntil >= NOW()')
+        .andWhere('r.status = :status', { status: RestaurantStatus.APPROVED })
+        .orderBy('p.discountValue', 'DESC')
+        .take(8)
+        .getMany(),
+    ]);
+
+    return {
+      // Sections come back even when empty, so the page can tell "nothing here
+      // yet" apart from "the request failed".
+      sections: [
+        { key: 'featured', title: 'Most ordered', restaurants: featured.map((r) => this.restaurantCard(r)) },
+        { key: 'top-rated', title: 'Top rated', restaurants: topRated.map((r) => this.restaurantCard(r)) },
+        { key: 'new', title: 'New on KARTSEEK', restaurants: newest.map((r) => this.restaurantCard(r)) },
+      ],
+      cuisines,
+      promotions: promotions.map((p) => ({
+        id: p.id,
+        restaurantId: p.restaurantId,
+        title: p.title,
+        description: p.description,
+        code: p.code,
+        type: p.type,
+        discountValue: Number(p.discountValue ?? 0),
+        minOrderAmount: p.minOrderAmount == null ? null : Number(p.minOrderAmount),
+        maxDiscount: p.maxDiscount == null ? null : Number(p.maxDiscount),
+        validUntil: p.validUntil,
+      })),
+      regionCode: regionCode ?? null,
+    };
+  }
+
+  /**
+   * Curated lists, derived rather than hand-maintained.
+   *
+   * There is no collections table, and adding one to hold editorial copy would
+   * need an admin surface to fill it. These are computed from what the
+   * restaurants themselves declare, so a collection is never empty and never
+   * goes stale.
+   */
+  async getCollections(regionCode?: string) {
+    const base = () => {
+      return this.scopeToRegion(this.liveRestaurants(), regionCode);
+    };
+
+    const defs = [
+      { key: 'quick-bites', title: 'Ready in 30 minutes',
+        apply: (qb: any) => qb.andWhere('r.avgPrepTime <= 30').orderBy('r.avgPrepTime', 'ASC') },
+      { key: 'free-delivery', title: 'Free delivery',
+        apply: (qb: any) => qb.andWhere('(r.deliveryFee IS NULL OR r.deliveryFee = 0)').orderBy('r.rating', 'DESC') },
+      { key: 'highly-rated', title: 'Rated 4.5 and above',
+        apply: (qb: any) => qb.andWhere('r.rating >= 4.5').orderBy('r.rating', 'DESC') },
+      { key: 'dine-in', title: 'Book a table',
+        apply: (qb: any) => qb.andWhere('r.tableBookingEnabled = true').orderBy('r.rating', 'DESC') },
+    ];
+
+    const collections = await Promise.all(
+      defs.map(async (d) => {
+        const rows: Restaurant[] = await d.apply(base()).take(12).getMany();
+        return {
+          key: d.key,
+          title: d.title,
+          count: rows.length,
+          restaurants: rows.map((r) => this.restaurantCard(r)),
+        };
+      }),
+    );
+    return { collections: collections.filter((c) => c.count > 0) };
+  }
+
+  /** Most-ordered available dishes across every approved restaurant. */
+  async getPopularDishes(limit = 20, regionCode?: string) {
+    const qb = this.menuItemRepo.createQueryBuilder('m')
+      // menu_items.restaurantId is a denormalised copy declared without an
+      // explicit type, so TypeORM made it varchar while restaurants.id is
+      // uuid. Postgres will not compare the two without a cast.
+      .innerJoin(Restaurant, 'r', 'r.id::text = m.restaurantId')
+      .where('m.isAvailable = true')
+      .andWhere('m.isPendingApproval = false')
+      .andWhere('r.status = :status', { status: RestaurantStatus.APPROVED })
+      .andWhere('r.isOnline = true');
+    this.scopeToRegion(qb, regionCode);
+
+    const rows = await qb
+      .select([
+        'm.id AS id', 'm.name AS name', 'm.slug AS slug', 'm.price AS price',
+        'm.imageUrl AS "imageUrl"', 'm.dietaryType AS "dietaryType"',
+        'm.rating AS rating', 'm.orderCount AS "orderCount"', 'm.prepTime AS "prepTime"',
+        'r.id AS "restaurantId"', 'r.name AS "restaurantName"', 'r.slug AS "restaurantSlug"',
+      ])
+      .orderBy('m.orderCount', 'DESC')
+      .addOrderBy('m.rating', 'DESC')
+      .limit(Math.min(Math.max(Number(limit) || 20, 1), 50))
+      .getRawMany();
+
+    return {
+      dishes: rows.map((d) => ({
+        ...d,
+        price: Number(d.price ?? 0),
+        rating: Number(d.rating ?? 0),
+        orderCount: Number(d.orderCount ?? 0),
+      })),
+    };
+  }
+
+  /**
+   * Type-ahead across restaurants, dishes and cuisines.
+   *
+   * A query under two characters returns nothing rather than the whole
+   * catalogue, which is what an unbounded ILIKE would produce.
+   */
+  async getSuggestions(q?: string, regionCode?: string) {
+    const term = (q ?? '').trim();
+    if (term.length < 2) return { restaurants: [], dishes: [], cuisines: [] };
+    const like = '%' + term + '%';
+
+    const rQb = this.scopeToRegion(
+      this.liveRestaurants().andWhere('r.name ILIKE :like', { like }), regionCode);
+
+    const [restaurants, dishes, cuisines] = await Promise.all([
+      rQb.take(6).getMany(),
+      this.menuItemRepo.createQueryBuilder('m')
+        // menu_items.restaurantId is a denormalised copy declared without an
+      // explicit type, so TypeORM made it varchar while restaurants.id is
+      // uuid. Postgres will not compare the two without a cast.
+      .innerJoin(Restaurant, 'r', 'r.id::text = m.restaurantId')
+        .where('m.name ILIKE :like', { like })
+        .andWhere('m.isAvailable = true')
+        .andWhere('r.status = :status', { status: RestaurantStatus.APPROVED })
+        .select([
+          'm.id AS id', 'm.name AS name', 'm.slug AS slug',
+          'r.id AS "restaurantId"', 'r.name AS "restaurantName"',
+        ])
+        .limit(6)
+        .getRawMany(),
+      this.getCuisines().then((cs) =>
+        cs.filter((c) => (c.name ?? '').toLowerCase().includes(term.toLowerCase())).slice(0, 6)),
+    ]);
+
+    return {
+      restaurants: restaurants.map((r) => ({
+        id: r.id, name: r.name, slug: r.slug, cuisines: r.cuisines, logoUrl: r.logoUrl,
+      })),
+      dishes,
+      cuisines,
+    };
+  }
+
+  /**
+   * Public reviews for one restaurant.
+   *
+   * Flagged and hidden rows are excluded — this is the customer-facing list,
+   * not the moderation queue.
+   */
+  async getReviews(restaurantId: string, page = 1, limit = 20) {
+    const take = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
+
+    const [rows, total] = await this.reviewRepo.findAndCount({
+      where: { restaurantId, isVisible: true, isFlagged: false },
+      order: { createdAt: 'DESC' },
+      skip,
+      take,
+    });
+
+    const breakdown = await this.reviewRepo.createQueryBuilder('rv')
+      .select('rv.rating', 'rating')
+      .addSelect('COUNT(*)', 'count')
+      .where('rv.restaurantId = :restaurantId', { restaurantId })
+      .andWhere('rv.isVisible = true')
+      .andWhere('rv.isFlagged = false')
+      .groupBy('rv.rating')
+      .getRawMany();
+
+    return {
+      data: rows.map((rv) => ({
+        id: rv.id,
+        customerName: rv.customerName,
+        customerAvatar: rv.customerAvatar,
+        rating: Number(rv.rating ?? 0),
+        comment: rv.comment,
+        photos: rv.photos,
+        restaurantReply: rv.restaurantReply,
+        repliedAt: rv.repliedAt,
+        createdAt: rv.createdAt,
+      })),
+      total,
+      page: Math.max(Number(page) || 1, 1),
+      limit: take,
+      ratingBreakdown: breakdown.reduce(
+        (acc: Record<string, number>, b: { rating: number; count: string }) => ({
+          ...acc,
+          [String(b.rating)]: Number(b.count),
+        }),
+        {} as Record<string, number>,
+      ),
+    };
   }
 }

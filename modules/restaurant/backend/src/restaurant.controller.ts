@@ -504,4 +504,30 @@ export class RestaurantController {
   @MessagePattern({ cmd: 'admin.restaurant.cuisines' })
   tcpAdminGetCuisines(@Payload() d: EmptyMessage) { return this.svc.getCuisines(); }
 
+  // ── Discovery ──────────────────────────────────────────────────────────────
+  //
+  // The gateway has routed /restaurants/home-feed, /collections,
+  // /popular-dishes, /suggestions and /:id/reviews since it was written. None
+  // of them had a handler here, so each answered 503 and the pages that needed
+  // them shipped hardcoded arrays instead.
+
+  @MessagePattern({ cmd: 'get_home_feed' })
+  tcpGetHomeFeed(@Payload() d: EmptyMessage) { return this.svc.getHomeFeed(d?.regionCode); }
+
+  @MessagePattern({ cmd: 'get_collections' })
+  tcpGetCollections(@Payload() d: EmptyMessage) { return this.svc.getCollections(d?.regionCode); }
+
+  @MessagePattern({ cmd: 'get_popular_dishes' })
+  tcpGetPopularDishes(@Payload() d: EmptyMessage) {
+    return this.svc.getPopularDishes(d?.limit, d?.regionCode);
+  }
+
+  @MessagePattern({ cmd: 'get_suggestions' })
+  tcpGetSuggestions(@Payload() d: EmptyMessage) { return this.svc.getSuggestions(d?.q, d?.regionCode); }
+
+  @MessagePattern({ cmd: 'get_reviews' })
+  tcpGetReviews(@Payload() d: EmptyMessage) {
+    return this.svc.getReviews(d.restaurantId, d?.page, d?.limit);
+  }
+
 }

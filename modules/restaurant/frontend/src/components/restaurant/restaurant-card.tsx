@@ -8,7 +8,12 @@ interface RestaurantProps {
   name: string;
   rating: number;
   deliveryTime: string;
-  distance: string;
+  /**
+   * Optional. Distance needs the customer's coordinates, and the home feed is
+   * not a geo query — it ranks by orders, rating and recency. The row is hidden
+   * rather than filled with a plausible-looking number.
+   */
+  distance?: string;
   cuisines: string[];
   imageUrl?: string;
   emojiImage?: string;
@@ -78,10 +83,12 @@ export default function RestaurantCard({ id, name, rating, deliveryTime, distanc
             <Clock className="w-4 h-4 text-gray-400" />
             <span className="font-semibold">{deliveryTime}</span>
           </div>
-          <div className="flex items-center gap-1 text-xs">
-            <MapPin className="w-3.5 h-3.5 text-gray-400" />
-            <span>{distance}</span>
-          </div>
+          {distance ? (
+            <div className="flex items-center gap-1 text-xs">
+              <MapPin className="w-3.5 h-3.5 text-gray-400" />
+              <span>{distance}</span>
+            </div>
+          ) : null}
         </div>
       </div>
     </Link>

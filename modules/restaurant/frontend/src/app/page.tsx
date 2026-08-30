@@ -14,79 +14,19 @@ import ServiceModeModal from '@/components/restaurant/service-mode-modal';
 import { useRegion } from '@/lib/contexts/region-context';
 import { useRecommendations } from '@/lib/hooks/use-recommendations';
 import { RecommendationCarousel, CrossModulePicks } from '@/components/recommendations';
-import { MOCK_RESTAURANTS } from '@/lib/demo-data/restaurant';
+import { restaurantApi } from '@/lib/api/restaurant';
+import type { RestaurantCardDto, PopularDishDto } from '@/lib/api/restaurant';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    EXTENDED RESTAURANT DATA
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const ALL_RESTAURANTS = [
-  ...MOCK_RESTAURANTS,
-  { id: 'rest-9',  name: 'The Taco Joint',        rating: 4.3, deliveryTime: '22 min',    distance: '1.1 km', cuisines: ['Mexican','Tacos','Wraps'],           offer: '30% OFF',      isPromoted: false, services: ['delivery','takeaway']                              as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹400' },
-  { id: 'rest-10', name: 'Spice Garden',           rating: 4.7, deliveryTime: '28-35 min', distance: '2.3 km', cuisines: ['South Indian','Kerala','Thali'],      offer: 'FREE Delivery',isPromoted: true,  services: ['delivery','takeaway','dine-in']             as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹350' },
-  { id: 'rest-11', name: 'Wok & Roll',             rating: 4.5, deliveryTime: '25 min',    distance: '1.7 km', cuisines: ['Chinese','Pan Asian','Dim Sum'],      offer: '20% OFF',      isPromoted: false, services: ['delivery','dine-in','table-booking']        as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹550' },
-  { id: 'rest-12', name: 'Café Royale',            rating: 4.8, deliveryTime: '20 min',    distance: '0.8 km', cuisines: ['Café','Desserts','Coffee'],           offer: null,           isPromoted: false, services: ['delivery','takeaway','dine-in']             as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹400' },
-  { id: 'rest-13', name: 'Punjab Da Dhaba',        rating: 4.6, deliveryTime: '30-40 min', distance: '3.1 km', cuisines: ['Punjabi','North Indian','Tandoor'],   offer: '25% OFF',      isPromoted: true,  services: ['delivery','takeaway','dine-in','table-booking'] as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹600' },
-  { id: 'rest-14', name: 'Green Bowl',             rating: 4.9, deliveryTime: '18-22 min', distance: '0.6 km', cuisines: ['Healthy','Vegan','Salads','Keto'],    offer: '15% OFF',      isPromoted: false, services: ['delivery','takeaway']                      as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹500' },
-  { id: 'rest-15', name: 'Kebab Express',          rating: 4.4, deliveryTime: '25-30 min', distance: '2.0 km', cuisines: ['Kebabs','Mughlai','Grills'],          offer: 'Flat ₹100 OFF',isPromoted: false, services: ['delivery','takeaway','dine-in']             as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹450' },
-  { id: 'rest-16', name: 'South Street Kitchen',   rating: 4.5, deliveryTime: '32 min',    distance: '2.7 km', cuisines: ['South Indian','Dosa','Filter Coffee'], offer: null,           isPromoted: false, services: ['delivery','takeaway','dine-in']             as ('delivery'|'takeaway'|'dine-in'|'table-booking')[], isOpen: true, costForTwo: '₹300' },
-];
 
-const CUISINE_CATEGORIES = [
-  { id:'all',     name:'All',          emoji:'🍽️' },
-  { id:'indian',  name:'Indian',       emoji:'🍛' },
-  { id:'chinese', name:'Chinese',      emoji:'🥢' },
-  { id:'italian', name:'Italian',      emoji:'🍕' },
-  { id:'japanese',name:'Japanese',     emoji:'🍣' },
-  { id:'arabic',  name:'Arabic',       emoji:'🥙' },
-  { id:'mexican', name:'Mexican',      emoji:'🌮' },
-  { id:'healthy', name:'Healthy',      emoji:'🥗' },
-  { id:'burgers', name:'Burgers',      emoji:'🍔' },
-  { id:'pizza',   name:'Pizza',        emoji:'🍕' },
-  { id:'biryani', name:'Biryani',      emoji:'🍚' },
-  { id:'desserts',name:'Desserts',     emoji:'🍰' },
-  { id:'cafe',    name:'Café',         emoji:'☕' },
-  { id:'seafood', name:'Seafood',      emoji:'🦞' },
-  { id:'south',   name:'South Indian', emoji:'🥥' },
-  { id:'kebabs',  name:'Kebabs',       emoji:'🍢' },
-];
 
-const PROMO_BANNERS = [
-  { id:'p1', title:'🍔 Burger Bonanza',    subtitle:'60% OFF on all burgers this weekend', code:'BURGER60',  colors:'from-orange-500 to-red-600',    emoji:'🍔' },
-  { id:'p2', title:'🍕 Pizza Fiesta',       subtitle:'Buy 1 Get 1 Free on large pizzas',    code:'PIZZA2FOR1', colors:'from-rose-500 to-pink-600',     emoji:'🍕' },
-  { id:'p3', title:'🚀 Free Delivery',      subtitle:'No delivery fee on orders above ₹299', code:'FREEDELIV', colors:'from-violet-600 to-purple-500',  emoji:'🛵' },
-  { id:'p4', title:'🥗 Health Week',        subtitle:'25% off all healthy & vegan meals',   code:'HEALTH25',   colors:'from-emerald-500 to-teal-600',   emoji:'🥗' },
-  { id:'p5', title:'🌙 Late Night Deals',   subtitle:'Extra 15% OFF after 10 PM',           code:'NIGHT15',    colors:'from-indigo-600 to-blue-700',    emoji:'🌙' },
-];
 
-const FLASH_DEALS = [
-  { id:'fd1', name:'Butter Chicken + Naan',      rest:'Punjab Da Dhaba',   img:'🍛', price:299, mrp:450, discount:34, timeLeft:42 },
-  { id:'fd2', name:'Margherita Pizza (12")',      rest:'Pizza Palace',       img:'🍕', price:199, mrp:350, discount:43, timeLeft:28 },
-  { id:'fd3', name:'Chicken Biryani Combo',       rest:'Biryani Blues',      img:'🍚', price:249, mrp:380, discount:34, timeLeft:15 },
-  { id:'fd4', name:'Sushi Platter (12 pcs)',       rest:'Sushi Kingdom',      img:'🍣', price:449, mrp:650, discount:31, timeLeft:55 },
-  { id:'fd5', name:'Shawarma + Fries Combo',       rest:'Arabia Bites',       img:'🥙', price:189, mrp:280, discount:32, timeLeft:38 },
-  { id:'fd6', name:'Pasta Alfredo Bowl',           rest:'Pizza Palace',       img:'🍝', price:179, mrp:260, discount:31, timeLeft:22 },
-  { id:'fd7', name:'Veg Thali (Full)',             rest:'Spice Garden',       img:'🍱', price:219, mrp:320, discount:32, timeLeft:67 },
-  { id:'fd8', name:'Brownie + Ice Cream',          rest:'Café Royale',        img:'🍮', price:129, mrp:199, discount:35, timeLeft:19 },
-];
 
-const FEATURED_DISHES = [
-  { id:'dish1', name:'Hyderabadi Dum Biryani', rest:'Biryani Blues',     img:'🍚', price:349, rating:4.9, tag:'Chef\'s Special',  tagColor:'amber'   },
-  { id:'dish2', name:'Butter Chicken Masala',  rest:'Punjab Da Dhaba',   img:'🍛', price:320, rating:4.8, tag:'Best Seller',     tagColor:'green'   },
-  { id:'dish3', name:'Dragon Roll Sushi',       rest:'Sushi Kingdom',     img:'🍣', price:480, rating:4.9, tag:'Premium Pick',    tagColor:'purple'  },
-  { id:'dish4', name:'Wood-fired Margherita',   rest:'Pizza Palace',      img:'🍕', price:299, rating:4.7, tag:'Trending',        tagColor:'rose'    },
-  { id:'dish5', name:'Acai Power Bowl',         rest:'Green Bowl',        img:'🥗', price:289, rating:4.8, tag:'Healthy Choice',  tagColor:'teal'    },
-  { id:'dish6', name:'Chicken Mandi Platter',   rest:'Arabia Bites',      img:'🥙', price:420, rating:4.7, tag:'House Special',   tagColor:'orange'  },
-  { id:'dish7', name:'Tiramisu Delight',         rest:'Café Royale',       img:'🍰', price:195, rating:4.9, tag:'Must Try',        tagColor:'pink'    },
-  { id:'dish8', name:'Mutton Seekh Kebab',       rest:'Kebab Express',     img:'🍢', price:380, rating:4.6, tag:'Crowd Favourite', tagColor:'red'     },
-];
 
-const SPONSORED_RESTAURANTS = [
-  { id:'sp1', name:'Domino\'s Pizza',   cuisines:'Pizza · Italian',  img:'🍕', offer:'Flat ₹150 OFF',      rating:4.5, time:'30 min',  color:'from-blue-500 to-indigo-600'    },
-  { id:'sp2', name:'Burger King',        cuisines:'Burgers · Fast Food',img:'🍔', offer:'60% OFF up to ₹120', rating:4.2, time:'20 min',  color:'from-amber-500 to-orange-600'   },
-  { id:'sp3', name:'The Grand Biryani', cuisines:'Biryani · Mughlai',  img:'🍚', offer:'FREE Delivery',       rating:4.7, time:'35 min',  color:'from-emerald-500 to-teal-600'   },
-  { id:'sp4', name:'Sushi Kingdom',      cuisines:'Japanese · Sushi',   img:'🍣', offer:'10% OFF',             rating:4.9, time:'40 min',  color:'from-rose-500 to-pink-600'      },
-];
 
 type ServiceMode = 'delivery' | 'takeaway' | 'dine-in' | 'table-booking';
 
@@ -131,7 +71,7 @@ function FlashTimer() {
 
 export default function RestaurantHomePage() {
   useModuleTitle('restaurant');
-  const { currentRegionConfig } = useRegion();
+  const { currentRegionConfig, formatCurrencyValue } = useRegion();
   const defaultCity = currentRegionConfig?.defaultCity || 'your area';
 
   // ── Recommendation Engine ──
@@ -147,13 +87,159 @@ export default function RestaurantHomePage() {
   const openServiceModal = (mode: ServiceMode) => { setModalMode(mode); setModalOpen(true); };
   const toggleWishlist   = (id: string) => setWishlist(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
-  const openRestaurants = ALL_RESTAURANTS.filter(r => r.isOpen);
-  const nearbyStores    = [...openRestaurants].sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
-  const topRated        = [...openRestaurants].filter(r => r.rating >= 4.6).sort((a, b) => b.rating - a.rating);
-  const fastDelivery    = [...openRestaurants].filter(r => parseInt(r.deliveryTime) <= 25).sort((a, b) => parseInt(a.deliveryTime) - parseInt(b.deliveryTime));
-  const withOffers      = openRestaurants.filter(r => r.offer);
-  const dineIn          = openRestaurants.filter(r => r.services.includes('dine-in'));
-  const vegFriendly     = openRestaurants.filter(r => r.cuisines.some(c => ['Healthy','Vegan','Salads','South Indian','Vegetarian'].includes(c)));
+  // ── Live data ─────────────────────────────────────────────────────────────
+  //
+  // One request carries the sections, cuisines and promotions; a second carries
+  // the dishes. Both are region-scoped by the gateway from the request headers.
+  const { data: feed, loading: feedLoading, error: feedError } = useAsyncData(
+    () => restaurantApi.getHomeFeed(),
+    [],
+  );
+  const { data: dishData } = useAsyncData(() => restaurantApi.getPopularDishes(12), []);
+
+  const sections = feed?.sections ?? [];
+  const sectionOf = (key: string) => sections.find(s => s.key === key)?.restaurants ?? [];
+
+  /** Map an API row onto the props RestaurantCard takes. */
+  const toCard = (r: RestaurantCardDto) => ({
+    id: r.slug || r.id,
+    name: r.name,
+    rating: r.rating,
+    // The feed reports preparation time in minutes; distance needs the
+    // customer's coordinates, which this endpoint does not take, so it is left
+    // out rather than approximated.
+    deliveryTime: r.avgPrepTime ? `${r.avgPrepTime} min` : '—',
+    cuisines: r.cuisines ?? [],
+    imageUrl: r.imageUrl ?? undefined,
+    offer: undefined as string | undefined,
+    isPromoted: false,
+    costForTwo: r.costForTwo,
+    services: [
+      ...(r.deliveryEnabled ? ['delivery'] : []),
+      ...(r.takeawayEnabled ? ['takeaway'] : []),
+      ...(r.dineInEnabled ? ['dine-in'] : []),
+    ] as ('delivery' | 'takeaway' | 'dine-in' | 'table-booking')[],
+  });
+
+  // Every restaurant the feed returned, once each — the three sections overlap.
+  const openRestaurants = useMemo(() => {
+    const seen = new Map<string, ReturnType<typeof toCard>>();
+    for (const s of sections) for (const r of s.restaurants) if (!seen.has(r.id)) seen.set(r.id, toCard(r));
+    return [...seen.values()];
+  }, [feed]);
+
+  // The server already ranked these; re-sorting them here would only invent an
+  // order it did not choose.
+  const nearbyStores = useMemo(() => sectionOf('new').map(toCard), [feed]);
+  const topRated     = useMemo(() => sectionOf('top-rated').map(toCard), [feed]);
+  const fastDelivery = useMemo(
+    () => sectionOf('featured').map(toCard).filter(r => r.deliveryTime !== '—'),
+    [feed],
+  );
+
+  // Which restaurants a live promotion actually applies to.
+  const promotedIds = useMemo(
+    () => new Set((feed?.promotions ?? []).map(p => p.restaurantId)),
+    [feed],
+  );
+  const withOffers  = useMemo(() => openRestaurants.filter(r => promotedIds.has(r.id)), [openRestaurants, promotedIds]);
+  const dineIn      = useMemo(() => openRestaurants.filter(r => r.services.includes('dine-in')), [openRestaurants]);
+  const vegFriendly = useMemo(
+    () => openRestaurants.filter(r =>
+      r.cuisines.some(c => ['Healthy', 'Vegan', 'Salads', 'South Indian', 'Vegetarian'].includes(c))),
+    [openRestaurants],
+  );
+
+  const CUISINE_CATEGORIES = useMemo(
+    () => (feed?.cuisines ?? []).map(c => ({
+      id: c.slug,
+      name: c.name,
+      // No emoji column exists, and guessing one per cuisine name would be a
+      // lookup table that silently fails on every cuisine not in it.
+      emoji: '🍽️',
+    })),
+    [feed],
+  );
+
+  const PROMO_BANNERS = useMemo(() => {
+    const palette = [
+      'from-orange-500 to-amber-500', 'from-rose-500 to-pink-500',
+      'from-emerald-500 to-teal-500', 'from-violet-500 to-purple-500',
+    ];
+    const seen = new Set<string>();
+    const distinct = (feed?.promotions ?? []).filter(p => {
+      if (seen.has(p.title)) return false;
+      seen.add(p.title);
+      return true;
+    });
+    return distinct.slice(0, 4).map((p, i) => ({
+      id: p.id,
+      emoji: '🎁',
+      title: p.title,
+      subtitle: p.description
+        ?? (p.type === 'PERCENTAGE'
+          ? `${p.discountValue}% off`
+          : `${formatCurrencyValue(p.discountValue)} off`),
+      code: p.code ?? '',
+      colors: palette[i % palette.length],
+    }));
+  }, [feed, formatCurrencyValue]);
+
+  // "Flash deals" are the promotions that actually expire soon.
+  const FLASH_DEALS = useMemo(() => {
+    const now = Date.now();
+    return (feed?.promotions ?? [])
+      .filter(p => p.validUntil && new Date(p.validUntil).getTime() > now)
+      .sort((a, b) => new Date(a.validUntil!).getTime() - new Date(b.validUntil!).getTime())
+      .slice(0, 6)
+      .map(p => ({
+        id: p.id,
+        restaurantId: p.restaurantId,
+        name: p.title,
+        rest: openRestaurants.find(r => r.id === p.restaurantId)?.name ?? '',
+        discount: p.type === 'PERCENTAGE' ? Math.round(p.discountValue) : null,
+        amountOff: p.type === 'PERCENTAGE' ? null : p.discountValue,
+        minOrder: p.minOrderAmount,
+        minutesLeft: Math.max(0, Math.round((new Date(p.validUntil!).getTime() - now) / 60000)),
+      }));
+  }, [feed, openRestaurants]);
+
+  const FEATURED_DISHES = useMemo(
+    () => (dishData?.dishes ?? []).map((d: PopularDishDto) => ({
+      id: d.id,
+      name: d.name,
+      rest: d.restaurantName,
+      price: d.price,
+      rating: d.rating,
+      dietaryType: d.dietaryType,
+      imageUrl: d.imageUrl,
+    })),
+    [dishData],
+  );
+
+  // Promoted placement is a paid product this module does not sell yet, so the
+  // section shows the restaurants running the largest live discount instead of
+  // a hardcoded list of four.
+  const SPONSORED_RESTAURANTS = useMemo(() => {
+    const palette = [
+      'from-orange-600 to-red-600', 'from-emerald-600 to-teal-600',
+      'from-violet-600 to-indigo-600', 'from-rose-600 to-pink-600',
+    ];
+    return (feed?.promotions ?? []).slice(0, 4).map((p, i) => {
+      const r = openRestaurants.find(x => x.id === p.restaurantId);
+      return {
+        id: r?.id ?? p.restaurantId,
+        name: r?.name ?? p.title,
+        cuisines: (r?.cuisines ?? []).join(' · '),
+        offer: p.type === 'PERCENTAGE'
+          ? `${Math.round(p.discountValue)}% OFF`
+          : `${formatCurrencyValue(p.discountValue)} OFF`,
+        rating: r?.rating ?? 0,
+        time: r?.deliveryTime ?? '—',
+        color: palette[i % palette.length],
+      };
+    }).filter(x => x.name);
+  }, [feed, openRestaurants, formatCurrencyValue]);
 
   const cuisineFiltered = useMemo(() => {
     if (activeCuisine === 'all') return openRestaurants;
@@ -184,6 +270,61 @@ export default function RestaurantHomePage() {
     teal:'bg-teal-100 text-teal-700', orange:'bg-orange-100 text-orange-700',
     pink:'bg-pink-100 text-pink-700', red:'bg-red-100 text-red-700',
   };
+
+  // ── Loading / failure / empty ─────────────────────────────────────────────
+  //
+  // Three distinct states, deliberately. This page used to render hardcoded
+  // restaurants, which meant a dead service and a healthy one looked exactly
+  // the same on screen. A failure now says so instead of quietly showing an
+  // empty storefront, and an empty region says *that* rather than pretending
+  // the request failed.
+  if (feedLoading) {
+    return (
+      <div className="px-3 xs:px-4 3xl:px-8 py-8 space-y-6">
+        <div className="h-8 w-2/3 max-w-md bg-slate-100 rounded-xl animate-pulse" />
+        <div className="flex gap-4 overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="shrink-0 w-[280px] h-40 bg-slate-100 rounded-2xl animate-pulse" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-72 bg-slate-100 rounded-2xl animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (feedError) {
+    return (
+      <div className="px-3 xs:px-4 3xl:px-8 py-16 flex flex-col items-center text-center">
+        <Utensils className="w-12 h-12 text-slate-300 mb-4" />
+        <h1 className="text-xl font-black text-slate-900 mb-1">We could not load restaurants</h1>
+        <p className="text-sm text-slate-500 max-w-md mb-6">
+          The restaurant service did not respond. Nothing is wrong with your order history or account.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (openRestaurants.length === 0) {
+    return (
+      <div className="px-3 xs:px-4 3xl:px-8 py-16 flex flex-col items-center text-center">
+        <MapPin className="w-12 h-12 text-slate-300 mb-4" />
+        <h1 className="text-xl font-black text-slate-900 mb-1">No restaurants here yet</h1>
+        <p className="text-sm text-slate-500 max-w-md">
+          We have not signed up any restaurants in {defaultCity} so far. Try another area, or check back soon.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-3 xs:px-4 3xl:px-8 space-y-8 py-4 xs:py-5 md:py-8 pb-mobile-nav">
@@ -286,9 +427,9 @@ export default function RestaurantHomePage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-orange-500" /> Nearby Restaurants
+              <Sparkles className="w-5 h-5 text-orange-500" /> New on KARTSEEK
             </h2>
-            <p className="text-sm text-slate-500 mt-0.5">Closest to you in {defaultCity} · fastest delivery</p>
+            <p className="text-sm text-slate-500 mt-0.5">Recently joined in {defaultCity}</p>
           </div>
           <Link href="/list?sort=nearby" className="text-sm font-semibold text-orange-600 hover:underline flex items-center gap-1">
             View All <ChevronRight className="w-4 h-4" />
@@ -299,7 +440,7 @@ export default function RestaurantHomePage() {
             <div key={r.id} className="snap-start shrink-0 w-[280px] md:w-[320px]">
               <RestaurantCard
                 id={r.id} name={r.name} rating={r.rating}
-                deliveryTime={r.deliveryTime} distance={r.distance}
+                deliveryTime={r.deliveryTime} 
                 cuisines={r.cuisines} imageUrl={(r as { imageUrl?: string }).imageUrl} emojiImage={(r as { img?: string }).img}
                 offer={r.offer ?? undefined} isPromoted={r.isPromoted}
               />
@@ -330,21 +471,28 @@ export default function RestaurantHomePage() {
         </div>
         <div className="relative z-10 flex gap-3 overflow-x-auto hide-scrollbar pb-1 snap-x snap-mandatory">
           {FLASH_DEALS.map(deal => (
-            <Link key={deal.id} href={`/item/${deal.id}`} id={`flash-${deal.id}`}
+            <Link key={deal.id} href={`/${deal.restaurantId}`} id={`flash-${deal.id}`}
               className="snap-start shrink-0 w-[165px] bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer block">
               <div className="h-24 bg-linear-to-br from-orange-50 to-amber-50 flex items-center justify-center relative">
-                <span className="text-4xl group-hover:scale-110 transition-transform duration-300">{deal.img}</span>
-                <span className="absolute top-2 right-2 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">{deal.discount}% OFF</span>
-                <span className="absolute bottom-2 left-2 bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md">⏱ {deal.timeLeft} min left</span>
+                <BadgePercent className="w-9 h-9 text-orange-400 group-hover:scale-110 transition-transform duration-300" />
+                <span className="absolute top-2 right-2 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">
+                  {deal.discount !== null ? `${deal.discount}% OFF` : `${formatCurrencyValue(deal.amountOff ?? 0)} OFF`}
+                </span>
+                {deal.minutesLeft < 24 * 60 ? (
+                  <span className="absolute bottom-2 left-2 bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md">
+                    ⏱ {deal.minutesLeft < 60 ? `${deal.minutesLeft} min` : `${Math.round(deal.minutesLeft / 60)} hr`} left
+                  </span>
+                ) : null}
               </div>
               <div className="p-2.5">
                 <p className="font-bold text-slate-900 text-[11px] leading-tight line-clamp-2 mb-0.5">{deal.name}</p>
                 <p className="text-slate-400 text-[10px] mb-1.5">{deal.rest}</p>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="font-black text-slate-900 text-sm">₹{deal.price}</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹{deal.mrp}</span>
+                <div className="flex items-center gap-1.5 mb-2 min-h-[20px]">
+                  {deal.minOrder ? (
+                    <span className="text-[10px] text-slate-500">Min {formatCurrencyValue(deal.minOrder)}</span>
+                  ) : null}
                 </div>
-                <button className="w-full bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black py-1.5 rounded-lg transition-colors">Order Now</button>
+                <button className="w-full bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black py-1.5 rounded-lg transition-colors">View Restaurant</button>
               </div>
             </Link>
           ))}
@@ -371,7 +519,7 @@ export default function RestaurantHomePage() {
             <div key={r.id} className="snap-start shrink-0 w-[280px] md:w-[320px]">
               <RestaurantCard
                 id={r.id} name={r.name} rating={r.rating}
-                deliveryTime={r.deliveryTime} distance={r.distance}
+                deliveryTime={r.deliveryTime} 
                 cuisines={r.cuisines} imageUrl={(r as { imageUrl?: string }).imageUrl} emojiImage={(r as { img?: string }).img}
                 offer={r.offer ?? undefined} isPromoted={r.isPromoted}
               />
@@ -400,8 +548,18 @@ export default function RestaurantHomePage() {
             <Link key={dish.id} href={`/item/${dish.id}`} id={`dish-${dish.id}`}
               className="snap-start shrink-0 w-[180px] bg-white rounded-2xl border border-slate-100 overflow-hidden hover:border-orange-300 hover:shadow-xl transition-all duration-300 group cursor-pointer block">
               <div className="h-28 bg-linear-to-br from-orange-50 to-amber-50 flex items-center justify-center relative">
-                <span className="text-4xl group-hover:scale-110 transition-transform duration-300">{dish.img}</span>
-                <span className={`absolute top-2 left-2 text-[9px] font-black px-2 py-0.5 rounded-lg ${tagColorMap[dish.tagColor]}`}>{dish.tag}</span>
+                {dish.imageUrl
+                  ? <img src={dish.imageUrl} alt={dish.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                  : <ChefHat className="w-9 h-9 text-orange-300 group-hover:scale-110 transition-transform duration-300" />}
+                {dish.dietaryType ? (
+                  <span className={`absolute top-2 left-2 text-[9px] font-black px-2 py-0.5 rounded-lg ${
+                    dish.dietaryType === 'VEG' ? 'bg-emerald-100 text-emerald-700'
+                      : dish.dietaryType === 'VEGAN' ? 'bg-lime-100 text-lime-700'
+                      : 'bg-rose-100 text-rose-700'
+                  }`}>
+                    {dish.dietaryType.replace('_', ' ')}
+                  </span>
+                ) : null}
                 <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-white/90 px-1.5 py-0.5 rounded-md">
                   <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
                   <span className="text-[10px] font-bold">{dish.rating}</span>
@@ -411,7 +569,7 @@ export default function RestaurantHomePage() {
                 <p className="font-bold text-slate-900 text-[12px] leading-tight line-clamp-2 mb-0.5 group-hover:text-orange-600 transition-colors">{dish.name}</p>
                 <p className="text-slate-400 text-[10px] mb-2">{dish.rest}</p>
                 <div className="flex items-center justify-between">
-                  <span className="font-black text-slate-900 text-sm">₹{dish.price}</span>
+                  <span className="font-black text-slate-900 text-sm">{formatCurrencyValue(dish.price)}</span>
                   <button className="bg-orange-100 hover:bg-orange-200 text-orange-700 text-[9px] font-black px-2.5 py-1.5 rounded-lg transition-colors">Add +</button>
                 </div>
               </div>
@@ -440,7 +598,7 @@ export default function RestaurantHomePage() {
             <div key={r.id} className="snap-start shrink-0 w-[280px] md:w-[320px]">
               <RestaurantCard
                 id={r.id} name={r.name} rating={r.rating}
-                deliveryTime={r.deliveryTime} distance={r.distance}
+                deliveryTime={r.deliveryTime} 
                 cuisines={r.cuisines} imageUrl={(r as { imageUrl?: string }).imageUrl} emojiImage={(r as { img?: string }).img}
                 offer={r.offer ?? undefined} isPromoted={r.isPromoted}
               />
@@ -483,8 +641,14 @@ export default function RestaurantHomePage() {
             <Link key={sp.id} href={`/${sp.id}`} id={`sponsored-${sp.id}`}
               className={`snap-start shrink-0 w-[270px] bg-linear-to-br ${sp.color} rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group`}>
               <div className="p-5 relative">
-                <div className="absolute top-3 right-3 bg-white/20 border border-white/30 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md">SPONSORED</div>
-                <span className="text-5xl block mb-3 group-hover:scale-110 transition-transform duration-300">{sp.img}</span>
+                {/*
+                  Labelled "Offer", not "Sponsored". Promoted placement is a paid
+                  product this module does not sell yet, so calling these
+                  sponsored would be a false disclosure — these are simply the
+                  restaurants running the largest live discount.
+                */}
+                <div className="absolute top-3 right-3 bg-white/20 border border-white/30 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md">OFFER</div>
+                <BadgePercent className="w-11 h-11 text-white/90 block mb-3 group-hover:scale-110 transition-transform duration-300" />
                 <h3 className="font-black text-white text-base mb-0.5">{sp.name}</h3>
                 <p className="text-white/70 text-xs mb-3">{sp.cuisines}</p>
                 <div className="flex items-center justify-between">
@@ -525,7 +689,7 @@ export default function RestaurantHomePage() {
             <div key={r.id} className="snap-start shrink-0 w-[280px] md:w-[320px]">
               <RestaurantCard
                 id={r.id} name={r.name} rating={r.rating}
-                deliveryTime={r.deliveryTime} distance={r.distance}
+                deliveryTime={r.deliveryTime} 
                 cuisines={r.cuisines} imageUrl={(r as { imageUrl?: string }).imageUrl} emojiImage={(r as { img?: string }).img}
                 offer={r.offer ?? undefined} isPromoted={r.isPromoted}
               />
@@ -554,7 +718,7 @@ export default function RestaurantHomePage() {
             <div key={r.id} className="snap-start shrink-0 w-[280px] md:w-[320px]">
               <RestaurantCard
                 id={r.id} name={r.name} rating={r.rating}
-                deliveryTime={r.deliveryTime} distance={r.distance}
+                deliveryTime={r.deliveryTime} 
                 cuisines={r.cuisines} imageUrl={(r as { imageUrl?: string }).imageUrl} emojiImage={(r as { img?: string }).img}
                 offer={r.offer ?? undefined} isPromoted={r.isPromoted}
               />
@@ -583,7 +747,7 @@ export default function RestaurantHomePage() {
             <div key={r.id} className="snap-start shrink-0 w-[280px] md:w-[320px]">
               <RestaurantCard
                 id={r.id} name={r.name} rating={r.rating}
-                deliveryTime={r.deliveryTime} distance={r.distance}
+                deliveryTime={r.deliveryTime} 
                 cuisines={r.cuisines} imageUrl={(r as { imageUrl?: string }).imageUrl} emojiImage={(r as { img?: string }).img}
                 offer={r.offer ?? undefined} isPromoted={r.isPromoted}
               />
@@ -611,7 +775,7 @@ export default function RestaurantHomePage() {
             {searchFiltered.map(r => (
               <RestaurantCard
                 key={r.id} id={r.id} name={r.name} rating={r.rating}
-                deliveryTime={r.deliveryTime} distance={r.distance}
+                deliveryTime={r.deliveryTime} 
                 cuisines={r.cuisines} imageUrl={(r as { imageUrl?: string }).imageUrl} emojiImage={(r as { img?: string }).img}
                 offer={r.offer ?? undefined} isPromoted={r.isPromoted}
               />

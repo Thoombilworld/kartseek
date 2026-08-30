@@ -8,12 +8,99 @@ import { api } from '@/lib/api-endpoints';
 const BASE = '/restaurants';
 const ORDERS_BASE = '/orders/restaurant';
 
+/**
+ * Shapes returned by the discovery endpoints.
+ *
+ * Money arrives as a number, never a formatted string: only the client knows
+ * the viewer's market, so formatting happens at render with the region's
+ * `formatCurrencyValue`.
+ */
+export interface RestaurantCardDto {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrl: string | null;
+  cuisines: string[];
+  rating: number;
+  ratingCount: number;
+  costForTwo: number | null;
+  deliveryFee: number | null;
+  minOrderAmount: number | null;
+  avgPrepTime: number | null;
+  city: string | null;
+  regionCode: string | null;
+  deliveryEnabled: boolean;
+  takeawayEnabled: boolean;
+  dineInEnabled: boolean;
+}
+
+export interface RestaurantPromotionDto {
+  id: string;
+  restaurantId: string;
+  title: string;
+  description: string | null;
+  code: string | null;
+  type: string;
+  discountValue: number;
+  minOrderAmount: number | null;
+  maxDiscount: number | null;
+  validUntil: string | null;
+}
+
+export interface PopularDishDto {
+  id: string;
+  name: string;
+  slug: string | null;
+  price: number;
+  imageUrl: string | null;
+  dietaryType: string | null;
+  rating: number;
+  orderCount: number;
+  prepTime: number | null;
+  restaurantId: string;
+  restaurantName: string;
+  restaurantSlug: string;
+}
+
 export const restaurantApi = {
   // ── Discovery ────────────────────────────────────────────────────────────
 
   /** List restaurants with filters */
   getList: (params?: { page?: number; limit?: number; cuisine?: string; minRating?: string; priceRange?: string; service?: string }) =>
     api.get<{ data: any[]; total: number }>(`${BASE}/`, params as any),
+
+  /**
+   * Everything the home page needs in one request: the restaurant sections,
+   * the cuisine list and the live promotions.
+   *
+   * Region comes from the request headers, not a parameter — `api` attaches
+   * X-Region-Code, and the gateway scopes the query by it.
+   */
+  getHomeFeed: () =>
+    api.get<{
+      sections: { key: string; title: string; restaurants: RestaurantCardDto[] }[];
+      cuisines: { id: string; name: string; slug: string; restaurantCount: number }[];
+      promotions: RestaurantPromotionDto[];
+      regionCode: string | null;
+    }>(`${BASE}/home-feed`),
+
+  /** Curated lists, derived from what the restaurants declare. */
+  getCollections: () =>
+    api.get<{ collections: { key: string; title: string; count: number; restaurants: RestaurantCardDto[] }[] }>(
+      `${BASE}/collections`,
+    ),
+
+  /** Most-ordered available dishes across every approved restaurant. */
+  getPopularDishes: (limit?: number) =>
+    api.get<{ dishes: PopularDishDto[] }>(`${BASE}/popular-dishes`, { limit } as any),
+
+  /** Type-ahead across restaurants, dishes and cuisines. Under 2 characters returns nothing. */
+  getSuggestions: (q: string) =>
+    api.get<{
+      restaurants: { id: string; name: string; slug: string; cuisines: string[]; logoUrl: string | null }[];
+      dishes: { id: string; name: string; slug: string; restaurantId: string; restaurantName: string }[];
+      cuisines: { id: string; name: string; slug: string; restaurantCount: number }[];
+    }>(`${BASE}/suggestions`, { q } as any),
 
   /** Get nearby restaurants */
   getNearby: (params?: { lat?: string; lng?: string; radius?: number; cuisine?: string }) =>

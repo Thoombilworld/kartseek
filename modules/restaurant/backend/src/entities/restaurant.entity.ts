@@ -104,7 +104,12 @@ export class Restaurant {
   @Column({ default: false })
   isOnline: boolean;
 
-  @Column({ default: true })
+  // Defaulted false. It used to default true, which meant a restaurant that
+  // finished onboarding and was approved still did not appear to customers
+  // until someone flipped a flag — every one of the eight seeded restaurants
+  // was invisible for exactly this reason. Closing is the exception a
+  // restaurant opts into, not the state it starts in.
+  @Column({ default: false })
   isTemporarilyClosed: boolean;
 
   @Column({ type: 'int', default: 30, comment: 'Average preparation time in minutes' })
