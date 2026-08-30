@@ -63,62 +63,98 @@ export class AdminService {
   }
 
   // ── Dashboard Stats (Live Aggregation) ─────────────────────────────────────
+  /**
+   * Headline counters for the platform admin landing page.
+   *
+   * These used to be read entirely from `admin:counter:*` keys in Redis —
+   * `admin:counter:users`, `admin:counter:orders`, `admin:counter:revenue` and
+   * friends. Nothing in the platform ever wrote them. `incrementCounter` below
+   * is the only writer and its sole caller is this service's own HTTP endpoint,
+   * which nothing calls, so every figure on the dashboard was a hard zero while
+   * the database held 44 users and 26 orders.
+   *
+   * The service split was worse: when Redis had no value it fell back to a
+   * literal `{ marketplace: 35, grocery: 22, restaurant: 28, ... }`. Those are
+   * not measurements, they are numbers someone typed, and they rendered as a
+   * traffic breakdown chart.
+   *
+   * Counts now come from the database. Redis is kept only as a cache of the
+   * result. Figures this service cannot reach are reported as `null` with a
+   * reason rather than as zero — a module that moved to its own database is not
+   * the same thing as a module with nothing in it, and the dashboard should not
+   * present the two identically.
+   */
   async getDashboardStats() {
     const cacheKey = 'admin:dashboard:stats';
     const cached = await this.redis.getJson<any>(cacheKey);
     if (cached) return cached;
 
-    // Aggregate live stats from Redis counters and DB
-    const stats: Record<string, unknown> = {};
+    const today = new Date().toISOString().slice(0, 10);
+    let users = { total: 0, active: 0, newToday: 0 };
+    let orders = { total: 0, today: 0, pending: 0 };
+    let revenue = { total: 0, today: 0 };
 
-    // User metrics
-    const userCount = await this.redis.get('admin:counter:users') ?? '0';
-    const activeUsers = await this.redis.get('admin:counter:active_users') ?? '0';
-    const newUsersToday = await this.redis.get(`admin:counter:new_users:${new Date().toISOString().split('T')[0]}`) ?? '0';
+    if (this.isDbActive() && this.em) {
+      try {
+        // Schema-qualified on purpose: this service connects with schema
+        // `admin`, so an unqualified `users` resolves to admin.users and finds
+        // nothing.
+        const [u] = await this.em.query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+             COUNT(*) FILTER (WHERE "createdAt"::date = $1)::int AS new_today
+           FROM public.users`,
+          [today],
+        );
+        users = { total: u?.total ?? 0, active: u?.active ?? 0, newToday: u?.new_today ?? 0 };
 
-    stats.totalUsers = parseInt(userCount, 10) || 0;
-    stats.activeUsers = parseInt(activeUsers, 10) || 0;
-    stats.newUsersToday = parseInt(newUsersToday, 10) || 0;
+        const [o] = await this.em.query(
+          `SELECT
+             COUNT(*)::int AS total,
+             -- placedAt, not createdAt: order.orders has no createdAt column,
+             -- and asking for one made the whole aggregate fail.
+             COUNT(*) FILTER (WHERE "placedAt"::date = $1)::int AS today,
+             -- status is an enum, so it is compared as text.
+             COUNT(*) FILTER (WHERE status::text IN ('PENDING','PLACED','CONFIRMED'))::int AS pending,
+             COALESCE(SUM("totalAmount"), 0)::float AS revenue_total,
+             COALESCE(SUM("totalAmount") FILTER (WHERE "placedAt"::date = $1), 0)::float AS revenue_today
+           FROM "order".orders`,
+          [today],
+        );
+        orders = { total: o?.total ?? 0, today: o?.today ?? 0, pending: o?.pending ?? 0 };
+        revenue = { total: o?.revenue_total ?? 0, today: o?.revenue_today ?? 0 };
+      } catch (err) {
+        // Surfaced rather than swallowed: a failed aggregate must not be
+        // indistinguishable from a genuinely empty platform.
+        this.logger.error(`Dashboard aggregate failed: ${(err as Error)?.message}`);
+        throw err;
+      }
+    }
 
-    // Order metrics
-    const orderCount = await this.redis.get('admin:counter:orders') ?? '0';
-    const todayOrders = await this.redis.get(`admin:counter:orders:${new Date().toISOString().split('T')[0]}`) ?? '0';
-    const pendingOrders = await this.redis.get('admin:counter:orders:pending') ?? '0';
-
-    stats.totalOrders = parseInt(orderCount, 10) || 0;
-    stats.ordersToday = parseInt(todayOrders, 10) || 0;
-    stats.pendingOrders = parseInt(pendingOrders, 10) || 0;
-
-    // Revenue metrics
-    const totalRevenue = await this.redis.get('admin:counter:revenue') ?? '0';
-    const todayRevenue = await this.redis.get(`admin:counter:revenue:${new Date().toISOString().split('T')[0]}`) ?? '0';
-
-    stats.totalRevenue = parseFloat(totalRevenue) || 0;
-    stats.revenueToday = parseFloat(todayRevenue) || 0;
-
-    // Seller & Driver metrics
-    const sellerCount = await this.redis.get('admin:counter:sellers') ?? '0';
-    const activeSellers = await this.redis.get('admin:counter:active_sellers') ?? '0';
-    const pendingKyc = await this.redis.get('admin:counter:pending_kyc') ?? '0';
-    const driverCount = await this.redis.get('admin:counter:drivers') ?? '0';
-    const onlineDrivers = await this.redis.get('admin:counter:online_drivers') ?? '0';
-
-    stats.totalSellers = parseInt(sellerCount, 10) || 0;
-    stats.activeSellers = parseInt(activeSellers, 10) || 0;
-    stats.pendingKyc = parseInt(pendingKyc, 10) || 0;
-    stats.totalDrivers = parseInt(driverCount, 10) || 0;
-    stats.onlineDrivers = parseInt(onlineDrivers, 10) || 0;
-
-    // Service split from Redis
-    const serviceSplit = await this.redis.getJson<any>('admin:service_split');
-    stats.serviceSplit = serviceSplit ?? {
-      marketplace: 35, grocery: 22, restaurant: 28,
-      pharmacy: 8, doctor: 4, taxi: 3,
+    // Sellers and drivers live in kartseek_marketplace and kartseek_taxi now,
+    // which this service has no connection to. Reported as unavailable rather
+    // than zero, and rather than reaching across a database boundary the
+    // module split exists to prevent — the figures belong behind each module's
+    // own API.
+    const crossModule = {
+      value: null as number | null,
+      unavailable: 'Owned by another module — query that module API directly',
     };
 
-    stats.generatedAt = new Date().toISOString();
+    const stats: Record<string, unknown> = {
+      users,
+      orders,
+      revenue,
+      sellers: crossModule,
+      drivers: crossModule,
+      pendingKyc: crossModule,
+      // Null unless something has actually measured it. The previous literal
+      // fallback rendered invented percentages as a traffic chart.
+      serviceSplit: (await this.redis.getJson<any>('admin:service_split')) ?? null,
+      generatedAt: new Date().toISOString(),
+    };
 
-    // Cache for 60 seconds (live data refreshes frequently)
     await this.redis.setJson(cacheKey, stats, 60);
     return stats;
   }

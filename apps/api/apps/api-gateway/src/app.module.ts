@@ -77,6 +77,7 @@ import { PaymentGatewayController } from './controllers/payment.controller';
 import { HotelController } from './controllers/hotel.controller';
 import { AdminStaticPagesController, PublicPagesController } from './controllers/static-pages.controller';
 import { AdminSeoController } from './controllers/admin-seo.controller';
+import { AdminCoreController } from './controllers/admin-core.controller';
 import { TestSeedService } from './services/test-seed.service';
 import { MarketplaceCatalogService } from './services/marketplace-catalog.service';
 import { SellerOwnershipGuard } from './guards/seller-ownership.guard';
@@ -298,6 +299,7 @@ const svcHost = (name: string): string =>
     RecommendationController,      // /recommendations — personalized recommendations
     AdminStaticPagesController,    // /admin/static-pages — CMS for legal & company pages
     AdminSeoController,            // /admin/seo — per-path SEO metadata overrides
+    AdminCoreController,           // /admin — platform-wide admin (users, KYC, audit, revenue)
     PublicPagesController,         // /pages/:slug — public page content API
   ],
   providers: [

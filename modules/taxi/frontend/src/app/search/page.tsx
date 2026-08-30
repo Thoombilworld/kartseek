@@ -5,6 +5,7 @@ import { ArrowLeft, MapPin, Clock, Shield, Star, Navigation, Loader2, AlertCircl
 import Link from 'next/link';
 import { useRegion } from '@/lib/contexts/region-context';
 import { API_BASE_URL } from '@/lib/config/api-base';
+import { getAuthToken } from '@/lib/auth-token';
 
 // Gateway origin resolved once in lib/config/api-base.ts — it fails loudly
 // in production rather than silently falling back to a developer machine.
@@ -89,6 +90,13 @@ function SearchResults() {
   const [booking, setBooking] = React.useState(false);
   const [booked, setBooked] = React.useState(false);
   const [routeInfo, setRouteInfo] = React.useState<RouteInfo | null>(null);
+  // The booking payload needs the pickup and drop coordinates, not just the
+  // distance derived from them, so they are kept rather than discarded.
+  const [coords, setCoords] = React.useState<{
+    from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
+  } | null>(null);
+  const [bookError, setBookError] = React.useState<string | null>(null);
   const [routeLoading, setRouteLoading] = React.useState(true);
   const [routeError, setRouteError] = React.useState<string | null>(null);
 
@@ -126,6 +134,8 @@ function SearchResults() {
           return;
         }
 
+        setCoords({ from: fromCoords, to: toCoords });
+
         const route = await getOSRMRoute(fromCoords, toCoords);
         if (cancelled) return;
 
@@ -157,27 +167,63 @@ function SearchResults() {
   };
 
   const handleBook = async () => {
+    setBookError(null);
+
+    // The gateway needs coordinates. Without them the ride cannot be dispatched,
+    // so this stops here rather than posting a request that will be rejected.
+    if (!coords) {
+      setBookError('We could not resolve those addresses. Please re-enter your pickup and destination.');
+      return;
+    }
+
     setBooking(true);
     try {
-      // Call booking API
-      await fetch(`${API_BASE}/taxi/book`, {
+      const token = getAuthToken();
+      // POST /taxi/request, not /taxi/book — the latter is not a route the
+      // gateway declares, so every booking 404'd. The payload shape is the
+      // gateway's own: coordinates and addresses as separate fields, and
+      // `fareEstimate` rather than `estimatedFare`.
+      const res = await fetch(`${API_BASE}/taxi/request`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
-          pickup,
-          destination,
+          pickupLat: coords.from.lat,
+          pickupLng: coords.from.lng,
+          dropLat: coords.to.lat,
+          dropLng: coords.to.lng,
+          pickupAddress: pickup,
+          dropAddress: destination,
           vehicleType: selected,
-          estimatedFare: getFare(vehicleTypes.find(v => v.id === selected)!),
-          distanceKm: routeInfo?.distanceKm,
-          durationMin: routeInfo?.durationMin,
+          paymentMethod: 'cash',
+          fareEstimate: getFare(vehicleTypes.find((v) => v.id === selected)!),
           scheduledAt: schedule || null,
         }),
         signal: AbortSignal.timeout(10000),
       });
-    } catch { /* Continue with optimistic booking */ }
-    await new Promise((r) => setTimeout(r, 1000));
-    setBooking(false);
-    setBooked(true);
+
+      if (!res.ok) {
+        // This used to be `catch { /* Continue with optimistic booking */ }`
+        // followed by an unconditional success screen: the rider was told a car
+        // was on the way whether or not anything had been dispatched. A failed
+        // booking now says so.
+        setBookError(
+          res.status === 401
+            ? 'Please sign in to book a ride.'
+            : 'We could not book that ride. Please try again.',
+        );
+        setBooking(false);
+        return;
+      }
+
+      setBooked(true);
+    } catch {
+      setBookError('We could not reach the booking service. Please try again.');
+    } finally {
+      setBooking(false);
+    }
   };
 
   if (booked) {
@@ -334,6 +380,18 @@ function SearchResults() {
             </div>
           ))}
         </div>
+
+        {/* A failed booking has to be visible. The previous version swallowed the
+            error and showed the success screen regardless. */}
+        {bookError && (
+          <div
+            role="alert"
+            className="mb-3 flex items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{bookError}</span>
+          </div>
+        )}
 
         {/* Confirm button */}
         <button

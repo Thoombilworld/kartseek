@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getSocket } from '@/lib/socket/socket';
 import type { Socket } from 'socket.io-client';
 import { API_BASE_URL } from '@/lib/config/api-base';
+import { getAuthToken } from '@/lib/auth-token';
 
 // Gateway origin resolved once in lib/config/api-base.ts — it fails loudly
 // in production rather than silently falling back to a developer machine.
@@ -67,7 +68,12 @@ export default function ActiveTripPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/taxi/rides/${id}`, {
+        // `ride`, singular — the gateway declares GET /taxi/ride/:rideId. The
+        // plural form is not a route, so this always 404'd and the page fell
+        // through to its placeholder ride below without saying so.
+        const token = getAuthToken();
+        const res = await fetch(`${API_BASE}/taxi/ride/${id}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           signal: AbortSignal.timeout(5000),
         });
         if (res.ok) {
