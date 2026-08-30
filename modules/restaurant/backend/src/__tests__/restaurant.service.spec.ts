@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { RestaurantService } from './restaurant.service';
+import { RestaurantService } from '../restaurant.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import {
   Restaurant, MenuCategory, MenuItem, RestaurantOrder, Reservation,
   RestaurantReview, RestaurantTable, RestaurantPromotion, RestaurantStaff,
   RestaurantOrderType, RestaurantPaymentMethod,
-} from './entities';
+} from '../entities';
 
 describe('RestaurantService', () => {
   let service: RestaurantService;
@@ -138,7 +138,14 @@ describe('RestaurantService', () => {
   describe('placeOrder', () => {
     it('should create restaurant order', async () => {
       restaurantRepo.findOne.mockResolvedValue({ id: 'r1', name: 'Test', isOnline: true });
-      menuItemRepo.find.mockResolvedValue([{ id: 'mi-1', price: 250, name: 'Burger' }]);
+      // `isAvailable` is load-bearing: placeOrder re-reads each item from the
+      // menu and refuses one the restaurant has switched off, rather than
+      // trusting the price and availability the request claimed. The fixture
+      // predates that check, so it was ordering an item the service correctly
+      // treats as unavailable.
+      menuItemRepo.find.mockResolvedValue([
+        { id: 'mi-1', price: 250, name: 'Burger', isAvailable: true },
+      ]);
       const result = await service.placeOrder({
         restaurantId: 'r1',
         customerId: 'u1',

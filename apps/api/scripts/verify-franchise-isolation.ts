@@ -15,11 +15,11 @@ import { GroceryItem } from '../../../modules/grocery/backend/src/entities/groce
 import { GroceryOrder } from '../../../modules/grocery/backend/src/entities/grocery-order.entity';
 import { FranchiseViewService as GroceryView } from '../../../modules/grocery/backend/src/franchise/franchise-view.service';
 
-import { Restaurant } from '../apps/restaurant-service/src/entities/restaurant.entity';
-import { RestaurantOrder } from '../apps/restaurant-service/src/entities/restaurant-order.entity';
-import { MenuItem } from '../apps/restaurant-service/src/entities/menu-item.entity';
-import { MenuCategory } from '../apps/restaurant-service/src/entities/menu-category.entity';
-import { FranchiseViewService as RestaurantView } from '../apps/restaurant-service/src/franchise-view.service';
+import { Restaurant } from '../../../modules/restaurant/backend/src/entities/restaurant.entity';
+import { RestaurantOrder } from '../../../modules/restaurant/backend/src/entities/restaurant-order.entity';
+import { MenuItem } from '../../../modules/restaurant/backend/src/entities/menu-item.entity';
+import { MenuCategory } from '../../../modules/restaurant/backend/src/entities/menu-category.entity';
+import { FranchiseViewService as RestaurantView } from '../../../modules/restaurant/backend/src/franchise/franchise-view.service';
 
 import { PharmacyStore } from '../apps/pharmacy-service/src/entities/pharmacy-store.entity';
 import { PharmacyItem } from '../apps/pharmacy-service/src/entities/pharmacy-item.entity';
@@ -51,7 +51,7 @@ const ds = new DataSource({
   // not webpack, so __dirname resolves to real source directories.
   entities: [
     __dirname + '/../../../modules/grocery/backend/src/entities/*.entity.ts',
-    __dirname + '/../apps/restaurant-service/src/entities/*.entity.ts',
+    __dirname + '/../../../modules/restaurant/backend/src/entities/*.entity.ts',
     __dirname + '/../apps/pharmacy-service/src/entities/*.entity.ts',
     __dirname + '/../apps/doctor-service/src/entities/*.entity.ts',
     __dirname + '/../../../modules/marketplace/backend/src/entities/*.entity.ts',

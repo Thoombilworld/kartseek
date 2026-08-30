@@ -5,7 +5,7 @@ import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { RestaurantController } from './restaurant.controller';
 import { RestaurantService } from './restaurant.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { FranchiseViewService } from './franchise/franchise-view.service';
 
 import {
   Restaurant, MenuCategory, MenuItem,
@@ -34,7 +34,11 @@ const envSchema = buildEnvSchema({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Resolved against process.cwd(). As an extracted microservice this is
+      // started from its own directory, so its own `.env` wins; the platform
+      // file stays as a fallback for the ~120 shared values (Redis, Kafka
+      // brokers, JWT secret) rather than copying them per module.
+      envFilePath: ['.env', '../../../apps/api/.env'],
       validationSchema: envSchema,
       validationOptions: { abortEarly: false },
     }),
@@ -43,7 +47,18 @@ const envSchema = buildEnvSchema({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres',
+        // Dedicated RESTAURANT_DB_* values win; anything unset falls back to the
+        // shared DB_* credentials, so pointing this module at its own database is
+        // config, not a code change. `databaseCredentials` still supplies the
+        // password default and its production guard.
         ...databaseCredentials(cfg),
+        host: cfg.get<string>('RESTAURANT_DB_HOST') || cfg.get<string>('DB_HOST', 'localhost'),
+        port: cfg.get<number>('RESTAURANT_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
+        username: cfg.get<string>('RESTAURANT_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
+        password: cfg.get<string>('RESTAURANT_DB_PASSWORD') || databaseCredentials(cfg).password,
+        database: cfg.get<string>('RESTAURANT_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
+        // Fixed, not configurable: the same entity definitions must work whether
+        // this points at the dedicated instance or back at shared Postgres.
         schema: 'restaurant',
         // Explicit classes, never a __dirname glob — the bundled build makes the
         // glob match nothing, leaving TypeORM with no metadata and every

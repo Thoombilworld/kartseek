@@ -32,6 +32,9 @@
       "@/components/marketplace/product-thumb": [
         "../../../packages/shared-ui/src/marketplace-product-thumb"
       ],
+      "@/components/orders/*": [
+        "../../../packages/shared-ui/src/orders/*"
+      ],
       "@/components/profile/*": [
         "../../../packages/shared-ui/src/profile/*"
       ],
@@ -73,6 +76,9 @@
       ],
       "@/lib/api": [
         "../../../packages/shared-core/src/api"
+      ],
+      "@/lib/api-client": [
+        "../../../packages/shared-core/src/api-client"
       ],
       "@/lib/api-endpoints": [
         "../../../packages/shared-core/src/api-endpoints"

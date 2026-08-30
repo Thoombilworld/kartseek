@@ -21,7 +21,7 @@
     "start:user": "nest start user-service --watch",
     "start:marketplace": "npm run dev -w @kartseek/marketplace-backend",
     "start:grocery": "npm run dev -w @kartseek/grocery-backend",
-    "start:restaurant": "nest start restaurant-service --watch",
+    "start:restaurant": "npm run dev -w @kartseek/restaurant-backend",
     "start:pharmacy": "nest start pharmacy-service --watch",
     "start:doctor": "nest start doctor-service --watch",
     "start:taxi": "nest start taxi-service --watch",

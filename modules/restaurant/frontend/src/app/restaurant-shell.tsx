@@ -1,16 +1,18 @@
 import React from 'react';
 import Link from 'next/link';
-import type { Metadata } from 'next';
 import { MapPin, Search, ShoppingBag, User, Home } from 'lucide-react';
-import { moduleMeta } from '@/lib/seo/metadata';
 import RestaurantLocationSelector from '@/components/restaurant/location-selector';
 import RestaurantSearchInput from '@/components/restaurant/search-input';
 import { AccountMenu } from '@/components/shared/account-menu';
 
-// ── SEO: Dynamic Metadata ───────────────────────────────────────────────────
-export const metadata: Metadata = moduleMeta('restaurant');
-
-export default function RestaurantLayout({ children }: { children: React.ReactNode }) {
+/**
+ * The restaurant chrome — header, location selector, search, bottom nav.
+ *
+ * This was app/restaurant/layout.tsx in the shell. In the zone every route is
+ * restaurant, so it has no distinct layout level left to occupy: the zone root
+ * layout renders it inside <AppShell>, and its metadata moved up there too.
+ */
+export default function RestaurantShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen module-surface-restaurant flex flex-col">
       {/* Food Delivery Header */}

@@ -14,8 +14,8 @@
  */
 
 import { DataSource } from 'typeorm';
-import { Restaurant } from '../apps/restaurant-service/src/entities/restaurant.entity';
-import { MenuItem } from '../apps/restaurant-service/src/entities/menu-item.entity';
+import { Restaurant } from '../../../modules/restaurant/backend/src/entities/restaurant.entity';
+import { MenuItem } from '../../../modules/restaurant/backend/src/entities/menu-item.entity';
 
 import * as path from 'path';
 
@@ -32,7 +32,7 @@ const ds = new DataSource({
   // with `synchronize: true` below, the seed was also *creating* the shadow
   // public.* tables that then masquerade as the real ones.
   schema: 'restaurant',
-  entities: [path.join(__dirname, '../apps/restaurant-service/src/entities/*.entity.{ts,js}')],
+  entities: [path.join(__dirname, '../../../modules/restaurant/backend/src/entities/*.entity.{ts,js}')],
   synchronize: true,
   logging: false,
 });

@@ -165,15 +165,6 @@
         "tsConfigPath": "apps/user-service/tsconfig.app.json"
       }
     },
-    "restaurant-service": {
-      "type": "application",
-      "root": "apps/restaurant-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/restaurant-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/restaurant-service/tsconfig.app.json"
-      }
-    },
     "pharmacy-service": {
       "type": "application",
       "root": "apps/pharmacy-service",

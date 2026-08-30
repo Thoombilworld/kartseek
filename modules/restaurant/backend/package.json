@@ -1,0 +1,85 @@
+{
+  "name": "@kartseek/restaurant-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KARTSEEK Restaurant \u2014 independent backend microservice (HTTP 3019 \u00b7 TCP 4018 \u00b7 gRPC 5005)",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
+    "dev": "nest start --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "type-check": "tsc --noEmit -p tsconfig.json"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": ".",
+    "testRegex": ".*\\.spec\\.ts$",
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "src/**/*.(t|j)s"
+    ],
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@app/common(|/.*)$": "<rootDir>/../../../apps/api/libs/common/src/$1",
+      "^@app/database(|/.*)$": "<rootDir>/../../../apps/api/libs/database/src/$1",
+      "^@app/redis(|/.*)$": "<rootDir>/../../../apps/api/libs/redis/src/$1",
+      "^@app/kafka(|/.*)$": "<rootDir>/../../../apps/api/libs/kafka/src/$1",
+      "^@app/grpc(|/.*)$": "<rootDir>/../../../apps/api/libs/grpc/src/$1",
+      "^@app/security(|/.*)$": "<rootDir>/../../../apps/api/libs/security/src/$1",
+      "^uuid$": "<rootDir>/../../../apps/api/test/uuid-mock.ts",
+      "^@app/([^/]+)(|/.*)$": "<rootDir>/../../../apps/api/libs/$1/src/$2"
+    }
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
+    "@nestjs/common": "^11.1.27",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.1.27",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/microservices": "^11.1.27",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.1.27",
+    "@nestjs/swagger": "^11.4.4",
+    "@nestjs/typeorm": "^11.0.2",
+    "bcrypt": "^6.0.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "express": "^5.2.1",
+    "ioredis": "^5.11.1",
+    "joi": "^18.2.3",
+    "jsonwebtoken": "^9.0.3",
+    "kafkajs": "^2.2.4",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.22.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "typeorm": "^0.3.31",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.23",
+    "@nestjs/schematics": "^11.1.0",
+    "@nestjs/testing": "^11.1.27",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.0.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "ts-loader": "^9.6.2",
+    "typescript": "^6.0.3"
+  }
+}

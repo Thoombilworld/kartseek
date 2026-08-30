@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RestaurantService } from './restaurant.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { FranchiseViewService } from './franchise/franchise-view.service';
 import { RestaurantOrderStatus, ReservationStatus } from './entities';
 import { DtoMessage, EmptyMessage, IdMessage, PaginatedMessage, RestaurantScopedMessage, RpcAwareExceptionsFilter, messageId, requireId, requireValue } from '@app/common';
 

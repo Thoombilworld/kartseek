@@ -124,6 +124,7 @@ const nextConfig = {
     // and then fails to hydrate on a 404 for its own JavaScript.
     const marketplaceZone = (process.env.MARKETPLACE_ZONE_ORIGIN ?? 'http://localhost:3002').replace(/\/$/, '');
     const groceryZone = (process.env.GROCERY_ZONE_ORIGIN ?? 'http://localhost:3003').replace(/\/$/, '');
+    const restaurantZone = (process.env.RESTAURANT_ZONE_ORIGIN ?? 'http://localhost:3004').replace(/\/$/, '');
 
     return [
       {
@@ -157,6 +158,18 @@ const nextConfig = {
       {
         source: '/grocery/_next/:path*',
         destination: `${groceryZone}/grocery/_next/:path*`,
+      },
+      {
+        source: '/restaurant',
+        destination: `${restaurantZone}/restaurant`,
+      },
+      {
+        source: '/restaurant/:path*',
+        destination: `${restaurantZone}/restaurant/:path*`,
+      },
+      {
+        source: '/restaurant/_next/:path*',
+        destination: `${restaurantZone}/restaurant/_next/:path*`,
       },
     ];
   },

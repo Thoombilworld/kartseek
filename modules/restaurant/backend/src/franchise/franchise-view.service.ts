@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Restaurant, RestaurantStatus } from './entities/restaurant.entity';
-import { RestaurantOrder } from './entities/restaurant-order.entity';
-import { MenuItem } from './entities/menu-item.entity';
+import { Restaurant, RestaurantStatus } from '../entities/restaurant.entity';
+import { RestaurantOrder } from '../entities/restaurant-order.entity';
+import { MenuItem } from '../entities/menu-item.entity';
 
 /**
  * FranchiseViewService — the ONLY sanctioned read path into Restaurant's data for
