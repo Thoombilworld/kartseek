@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete, Param,
+  Controller, Get, Post, Put, Patch, Delete, Param, Req,
   Body, Query, UseGuards, Inject, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import {
   ApiTags, ApiOperation, ApiBearerAuth, ApiQuery,
@@ -40,6 +40,11 @@ export class AdminTaxiController {
    * rather than an error. The fallback parameter is gone; failures propagate and
    * the client can tell the two apart.
    */
+  /** The acting administrator, from the verified token — recorded on decisions. */
+  private actorId(req: any): string {
+    return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
+  }
+
   private async send<T>(cmd: string, payload: object): Promise<T> {
     try {
       return await lastValueFrom(
@@ -226,5 +231,125 @@ export class AdminTaxiController {
   @ApiOperation({ summary: 'Update taxi settings' })
   async updateSettings(@Body() body: any) {
     return { data: await this.send('admin.taxi.updateSettings', body) };
+  }
+
+  // ── Driver documents ──────────────────────────────────────────
+  //
+  // The onboarding queue. taxi-service has implemented getPendingDocuments and
+  // reviewDocument all along; neither was exposed over TCP, so the admin
+  // console had no route for either and the whole document-review screen 404'd.
+
+  @Get('documents/pending')
+  @ApiOperation({ summary: 'Driver and vendor documents awaiting review' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  @ApiQuery({ name: 'ownerType', required: false, enum: ['vendor', 'driver'] })
+  async pendingDocuments(
+    @Query('countryCode') countryCode?: string,
+    @Query('ownerType') ownerType?: 'vendor' | 'driver',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.send('admin.taxi.documents.pending', {
+      countryCode, ownerType, page: page ? +page : 1, limit: limit ? +limit : 20,
+    });
+  }
+
+  @Post('documents/:documentId/approve')
+  @ApiOperation({ summary: 'Approve a submitted document' })
+  async approveDocument(@Req() req: any, @Param('documentId') documentId: string) {
+    return this.send('admin.taxi.documents.review', {
+      documentId, adminId: this.actorId(req), decision: 'approved',
+    });
+  }
+
+  @Post('documents/:documentId/reject')
+  @ApiOperation({ summary: 'Reject a submitted document, with a reason' })
+  async rejectDocument(
+    @Req() req: any,
+    @Param('documentId') documentId: string,
+    @Body() dto: { reason?: string },
+  ) {
+    return this.send('admin.taxi.documents.review', {
+      documentId, adminId: this.actorId(req), decision: 'rejected', rejectionReason: dto?.reason,
+    });
+  }
+
+  // ── Driver enforcement ────────────────────────────────────────
+
+  @Post('drivers/:driverId/block')
+  @ApiOperation({ summary: 'Block a driver' })
+  async blockDriver(@Param('driverId') driverId: string, @Body() dto: { reason?: string }) {
+    return this.send('admin.taxi.driver.block', { driverId, reason: dto?.reason ?? '' });
+  }
+
+  // ── Rate cards ────────────────────────────────────────────────
+  // Distinct from `pricing` above, which is the aggregate view: these are the
+  // per-country, per-vehicle-type cards the fare calculator actually reads.
+
+  @Get('rates')
+  @ApiOperation({ summary: 'Rate cards for a country' })
+  @ApiQuery({ name: 'countryCode', required: true })
+  async rateCards(@Query('countryCode') countryCode: string) {
+    return this.send('admin.taxi.rate_cards', { countryCode });
+  }
+
+  @Post('rates')
+  @ApiOperation({ summary: 'Create or update a rate card' })
+  async upsertRateCard(@Body() dto: { countryCode: string; vehicleType: string; [k: string]: unknown }) {
+    return this.send('admin.taxi.rate_card.upsert', dto);
+  }
+
+  // ── Country configuration ─────────────────────────────────────
+
+  @Get('config')
+  @ApiOperation({ summary: 'All country configurations' })
+  async allConfigs() {
+    return this.send('admin.taxi.configs', {});
+  }
+
+  @Get('config/:countryCode')
+  @ApiOperation({ summary: 'One country configuration' })
+  async getConfig(@Param('countryCode') countryCode: string) {
+    return this.send('admin.taxi.config.get', { countryCode });
+  }
+
+  @Put('config/:countryCode')
+  @ApiOperation({ summary: 'Create or update a country configuration' })
+  async upsertConfig(@Param('countryCode') countryCode: string, @Body() dto: Record<string, unknown>) {
+    return this.send('admin.taxi.config.upsert', { countryCode, ...dto });
+  }
+
+  // ── Payout batches ────────────────────────────────────────────
+
+  @Post('payouts/process')
+  @ApiOperation({ summary: 'Process a batch of approved payouts' })
+  async processPayouts(@Body() dto: { payoutIds?: string[] }) {
+    return this.send('admin.taxi.payouts.process', { payoutIds: dto?.payoutIds ?? [] });
+  }
+
+  @Get('payouts/summary')
+  @ApiOperation({ summary: 'Platform payout totals' })
+  async payoutSummary(
+    @Query('countryCode') countryCode?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.send('admin.taxi.payouts.summary', { countryCode, startDate, endDate });
+  }
+
+  // ── Fleet ─────────────────────────────────────────────────────
+
+  @Get('drivers/nearby')
+  @ApiOperation({ summary: 'Drivers near a point, for the live fleet map' })
+  async nearbyDrivers(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+    @Query('radiusKm') radiusKm?: string,
+    @Query('vehicleType') vehicleType?: string,
+  ) {
+    return this.send('admin.taxi.drivers.nearby', {
+      lat: Number(lat), lng: Number(lng),
+      radiusKm: radiusKm ? Number(radiusKm) : 5, vehicleType,
+    });
   }
 }

@@ -153,7 +153,7 @@ export default function TaxiSettingsPage() {
     setDirty(false);
     setSaved(false);
     // Fetch config from API
-    fetch(`${API_BASE_URL}/taxi/admin/config/${code}`, {
+    fetch(`${API_BASE_URL}/admin/taxi/config/${code}`, {
       signal: AbortSignal.timeout(5000),
     }).then(res => res.ok ? res.json() : null).then(data => {
       if (data) setConfig(prev => ({ ...prev, ...data }));
@@ -162,7 +162,7 @@ export default function TaxiSettingsPage() {
 
   // Fetch initial config from API
   useEffect(() => {
-    fetch(`${API_BASE_URL}/taxi/admin/config/${country}`, {
+    fetch(`${API_BASE_URL}/admin/taxi/config/${country}`, {
       signal: AbortSignal.timeout(5000),
     }).then(res => res.ok ? res.json() : null).then(data => {
       if (data) setConfig(prev => ({ ...prev, ...data }));
@@ -177,7 +177,7 @@ export default function TaxiSettingsPage() {
 
   const handleSave = async () => {
     try {
-      await fetch(`${API_BASE_URL}/taxi/admin/config/${country}`, {
+      await fetch(`${API_BASE_URL}/admin/taxi/config/${country}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),

@@ -20,8 +20,8 @@ export {
   groupBy, pick, omit, uniqueBy, chunk, uid,
   buildQueryString, parseQueryString, lockScroll, unlockScroll, scrollToId, validate,
 } from '@/lib/utils';
-export * from './api-endpoints';
-export * from './locale-utils';
+export * from '@/lib/api-endpoints';
+export * from '@/lib/locale-utils';
 
 
 // ── Custom Hooks ──────────────────────────────────────────────────────────────
@@ -37,4 +37,4 @@ export * from '@/lib/socket';
 export * from '@/lib/modules';
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
-export * from './error-boundary';
+export * from '@/lib/error-boundary';

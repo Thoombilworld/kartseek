@@ -119,7 +119,7 @@ export default function TripTrackingPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/taxi/rides/${tripId}`, {
+        const res = await fetch(`${API_BASE}/taxi/ride/${tripId}`, {
           signal: AbortSignal.timeout(5000),
         });
         if (res.ok) {

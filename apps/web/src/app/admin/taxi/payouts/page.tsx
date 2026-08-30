@@ -63,7 +63,7 @@ export default function TaxiPayoutsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/taxi/admin/payouts`, {
+        const res = await fetch(`${API_BASE_URL}/admin/taxi/payouts`, {
           signal: AbortSignal.timeout(5000),
         });
         if (res.ok) {
@@ -97,7 +97,7 @@ export default function TaxiPayoutsPage() {
 
   const batchApprove = async () => {
     try {
-      await fetch(`${API_BASE_URL}/taxi/admin/payouts/process`, {
+      await fetch(`${API_BASE_URL}/admin/taxi/payouts/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payoutIds: [...selected], action: 'approve' }),
@@ -110,7 +110,7 @@ export default function TaxiPayoutsPage() {
 
   const batchProcess = async () => {
     try {
-      await fetch(`${API_BASE_URL}/taxi/admin/payouts/process`, {
+      await fetch(`${API_BASE_URL}/admin/taxi/payouts/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payoutIds: [...selected], action: 'settle' }),

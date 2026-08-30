@@ -119,7 +119,7 @@ export default function TaxiPricingPage() {
 
   // Fetch rates from API
   const fetchRates = (code: string) => {
-    fetch(`${API_BASE_URL}/taxi/admin/rates?country=${code}`, {
+    fetch(`${API_BASE_URL}/admin/taxi/rates?country=${code}`, {
       signal: AbortSignal.timeout(5000),
     }).then(res => res.ok ? res.json() : null).then(data => {
       if (data?.rates?.length) setCards(data.rates);
@@ -141,7 +141,7 @@ export default function TaxiPricingPage() {
 
   const handleSave = async () => {
     try {
-      await fetch(`${API_BASE_URL}/taxi/admin/rates`, {
+      await fetch(`${API_BASE_URL}/admin/taxi/rates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ country, rates: cards }),

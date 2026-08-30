@@ -133,7 +133,7 @@ export default function AdminLandingEditorPage() {
   const handleSave = async () => {
     try {
       await fetch(`${API_BASE_URL}/admin/layouts/taxi/homepage`, {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sections: content }),
         signal: AbortSignal.timeout(5000)

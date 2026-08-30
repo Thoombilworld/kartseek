@@ -90,9 +90,9 @@ export default function FleetMonitoringPage() {
   const fetchLiveData = useCallback(async () => {
     try {
       const [driversRes, ridesRes, surgeRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/taxi/drivers/nearby?radius=50`, { signal: AbortSignal.timeout(5000) }),
-        fetch(`${API_BASE_URL}/taxi/admin/rides/active`, { signal: AbortSignal.timeout(5000) }),
-        fetch(`${API_BASE_URL}/taxi/admin/surge`, { signal: AbortSignal.timeout(5000) }),
+        fetch(`${API_BASE_URL}/admin/taxi/drivers/nearby?radius=50`, { signal: AbortSignal.timeout(5000) }),
+        fetch(`${API_BASE_URL}/admin/taxi/rides?status=active`, { signal: AbortSignal.timeout(5000) }),
+        fetch(`${API_BASE_URL}/admin/taxi/surge`, { signal: AbortSignal.timeout(5000) }),
       ]);
       if (driversRes.status === 'fulfilled' && driversRes.value.ok) {
         const data = await driversRes.value.json();

@@ -66,7 +66,7 @@ export default function CompliancePage() {
 
   // Fetch compliance data from API
   useEffect(() => {
-    fetch(`${API_BASE_URL}/taxi/admin/compliance?country=${selectedCountry}`, {
+    fetch(`${API_BASE_URL}/admin/taxi/compliance?country=${selectedCountry}`, {
       signal: AbortSignal.timeout(5000),
     }).then(res => res.ok ? res.json() : null).then(data => {
       if (data?.compliance?.length) setLiveRules(data.compliance);

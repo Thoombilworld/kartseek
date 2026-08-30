@@ -557,4 +557,84 @@ export class TaxiController {
 
   @MessagePattern({ cmd: 'admin.taxi.drivers' })
   tcpAdminGetDrivers(@Payload() d: EmptyMessage) { return this.onboarding.getDrivers(d); }
+
+  // ── Admin console, continued ──────────────────────────────────────────────
+  //
+  // Everything below already existed as a service method and was reachable only
+  // on this service's own HTTP port. The gateway talks TCP, so the admin taxi
+  // console had no route for any of it and every screen 404'd.
+
+  @MessagePattern({ cmd: 'admin.taxi.documents.pending' })
+  tcpPendingDocuments(@Payload() d: { countryCode?: string; ownerType?: 'vendor' | 'driver'; page?: number; limit?: number }) {
+    return this.onboarding.getPendingDocuments(d ?? {});
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.documents.review' })
+  tcpReviewDocument(@Payload() d: { documentId: string; adminId: string; decision: 'approved' | 'rejected'; rejectionReason?: string }) {
+    return this.onboarding.reviewDocument(d?.documentId, d?.adminId, d?.decision, d?.rejectionReason);
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.driver.suspend' })
+  tcpSuspendDriver(@Payload() d: { driverId: string; reason: string }) {
+    return this.onboarding.suspendDriver(d?.driverId, d?.reason ?? '');
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.driver.block' })
+  tcpBlockDriver(@Payload() d: { driverId: string; reason: string }) {
+    return this.onboarding.blockDriver(d?.driverId, d?.reason ?? '');
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.rate_cards' })
+  tcpRateCards(@Payload() d: { countryCode: string }) {
+    return this.config.getRateCards(d?.countryCode);
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.rate_card.upsert' })
+  tcpUpsertRateCard(@Payload() d: { countryCode: string; vehicleType: string; [k: string]: unknown }) {
+    const { countryCode, vehicleType, ...rest } = d ?? ({} as any);
+    return this.config.upsertRateCard(countryCode, vehicleType, rest);
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.configs' })
+  tcpAllConfigs() { return this.config.getAllConfigs(); }
+
+  @MessagePattern({ cmd: 'admin.taxi.config.get' })
+  tcpGetConfig(@Payload() d: { countryCode: string }) {
+    return this.config.getCountryConfig(d?.countryCode);
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.config.upsert' })
+  tcpUpsertConfig(@Payload() d: { countryCode: string; [k: string]: unknown }) {
+    const { countryCode, ...rest } = d ?? ({} as any);
+    return this.config.upsertCountryConfig(countryCode, rest);
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.payouts' })
+  tcpPayouts(@Payload() d: { countryCode?: string; recipientType?: 'vendor' | 'driver'; status?: string; search?: string; page?: number; limit?: number }) {
+    return this.payouts.getAllPayouts(d ?? {});
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.payouts.process' })
+  tcpProcessPayouts(@Payload() d: { payoutIds: string[] }) {
+    return this.payouts.processPayouts(d?.payoutIds ?? []);
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.payouts.summary' })
+  tcpPayoutSummary(@Payload() d: { countryCode?: string; startDate?: string; endDate?: string }) {
+    return this.payouts.getPlatformPayoutSummary({
+      countryCode: d?.countryCode,
+      startDate: d?.startDate ? new Date(d.startDate) : undefined,
+      endDate: d?.endDate ? new Date(d.endDate) : undefined,
+    });
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.drivers.nearby' })
+  tcpNearbyDrivers(@Payload() d: { lat: number; lng: number; radiusKm?: number; vehicleType?: string }) {
+    return this.svc.getNearbyDrivers(d?.lat, d?.lng, d?.radiusKm ?? 5, d?.vehicleType);
+  }
+
+  @MessagePattern({ cmd: 'admin.taxi.surge' })
+  tcpSurge(@Payload() d: { lat: number; lng: number }) {
+    return this.svc.getSurgeMultiplier(d?.lat, d?.lng);
+  }
 }

@@ -92,7 +92,7 @@ export default function TaxiDriversPage() {
     // Call API for status change
     const action = status === 'active' ? 'approve' : status === 'suspended' ? 'suspend' : 'block';
     try {
-      await fetch(`${API_BASE_URL}/taxi/admin/drivers/${id}/${action}`, {
+      await fetch(`${API_BASE_URL}/admin/taxi/drivers/${id}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(5000),

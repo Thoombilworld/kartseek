@@ -702,7 +702,9 @@ function AdminLoginForm() {
       </div>
 
       {/* Shake animation */}
-      {/* @ts-expect-error - styled-jsx types are incomplete in React 19 */}
+      {/* styled-jsx's `jsx`/`global` props type-check under React 19 now, so the
+          suppression that stood here had nothing left to suppress and became an
+          error itself. */}
       <style jsx global>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }

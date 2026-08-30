@@ -18,6 +18,12 @@ import type { VehicleType, RideEstimate, Ride } from '../types/taxi.types';
 
 const BASE = '/taxi';
 
+// Admin taxi routes live under /admin/taxi, matching every other module's admin
+// surface (/admin/grocery, /admin/marketplace, and so on). These were written as
+// BASE + '/admin/...', i.e. /taxi/admin/..., which is not a prefix the gateway
+// declares — so the whole admin taxi console 404'd.
+const ADMIN_BASE = '/admin/taxi';
+
 export const taxiModuleApi = {
   /** Get available vehicle types */
   getVehicleTypes: () =>
@@ -64,85 +70,85 @@ export const taxiModuleApi = {
   getAdminDrivers: (filters?: {
     status?: string; country?: string; search?: string; page?: number;
   }) =>
-    api.get<{ drivers: any[]; total: number }>(`${BASE}/admin/drivers`, filters),
+    api.get<{ drivers: any[]; total: number }>(`${ADMIN_BASE}/drivers`, filters),
 
   /** Approve a driver */
   approveDriver: (driverId: string) =>
-    api.post<{ success: boolean }>(`${BASE}/admin/drivers/${driverId}/approve`),
+    api.patch<{ success: boolean }>(`${ADMIN_BASE}/drivers/${driverId}/approve`),
 
   /** Suspend a driver */
   suspendDriver: (driverId: string, reason?: string) =>
-    api.post<{ success: boolean }>(`${BASE}/admin/drivers/${driverId}/suspend`, { reason }),
+    api.patch<{ success: boolean }>(`${ADMIN_BASE}/drivers/${driverId}/suspend`, { reason }),
 
   /** Block a driver */
   blockDriver: (driverId: string, reason?: string) =>
-    api.post<{ success: boolean }>(`${BASE}/admin/drivers/${driverId}/block`, { reason }),
+    api.post<{ success: boolean }>(`${ADMIN_BASE}/drivers/${driverId}/block`, { reason }),
 
   /** Get admin config for a country */
   getAdminConfig: (countryCode: string) =>
-    api.get<any>(`${BASE}/admin/config/${countryCode}`),
+    api.get<any>(`${ADMIN_BASE}/config/${countryCode}`),
 
   /** Update admin config */
   updateAdminConfig: (countryCode: string, config: any) =>
-    api.put<{ success: boolean }>(`${BASE}/admin/config/${countryCode}`, config),
+    api.put<{ success: boolean }>(`${ADMIN_BASE}/config/${countryCode}`, config),
 
   /** Get pricing rates */
   getAdminRates: (countryCode?: string) =>
-    api.get<{ rates: any[] }>(`${BASE}/admin/rates`, { country: countryCode }),
+    api.get<{ rates: any[] }>(`${ADMIN_BASE}/rates`, { country: countryCode }),
 
   /** Create/update pricing rate */
   createRate: (rate: any) =>
-    api.post<{ success: boolean }>(`${BASE}/admin/rates`, rate),
+    api.post<{ success: boolean }>(`${ADMIN_BASE}/rates`, rate),
 
   /** Get payouts list */
   getAdminPayouts: (filters?: { status?: string; page?: number }) =>
-    api.get<{ payouts: any[]; total: number }>(`${BASE}/admin/payouts`, filters),
+    api.get<{ payouts: any[]; total: number }>(`${ADMIN_BASE}/payouts`, filters),
 
   /** Process pending payouts */
   processPayouts: (payoutIds: string[]) =>
-    api.post<{ success: boolean; processed: number }>(`${BASE}/admin/payouts/process`, { payoutIds }),
+    api.post<{ success: boolean; processed: number }>(`${ADMIN_BASE}/payouts/process`, { payoutIds }),
 
   /** Get pending documents for approval */
   getPendingDocuments: (filters?: { type?: string; page?: number }) =>
-    api.get<{ documents: any[]; total: number }>(`${BASE}/admin/documents/pending`, filters),
+    api.get<{ documents: any[]; total: number }>(`${ADMIN_BASE}/documents/pending`, filters),
 
   /** Approve a document */
   approveDocument: (documentId: string) =>
-    api.post<{ success: boolean }>(`${BASE}/admin/documents/${documentId}/approve`),
+    api.post<{ success: boolean }>(`${ADMIN_BASE}/documents/${documentId}/approve`),
 
   /** Reject a document */
   rejectDocument: (documentId: string, reason: string) =>
-    api.post<{ success: boolean }>(`${BASE}/admin/documents/${documentId}/reject`, { reason }),
+    api.post<{ success: boolean }>(`${ADMIN_BASE}/documents/${documentId}/reject`, { reason }),
 
   /** Get compliance data */
   getComplianceData: (countryCode?: string) =>
-    api.get<{ compliance: any[] }>(`${BASE}/admin/compliance`, { country: countryCode }),
+    api.get<{ compliance: any[] }>(`${ADMIN_BASE}/compliance`, { country: countryCode }),
 
   /** Get fleet monitoring stats */
   getFleetStats: () =>
-    api.get<{ activeDrivers: number; onTrip: number; available: number; totalRides: number }>(`${BASE}/admin/fleet/stats`),
+    api.get<{ activeDrivers: number; onTrip: number; available: number; totalRides: number }>(`${ADMIN_BASE}/fleet`),
 
   /** Get nearby drivers for fleet map */
   getFleetDrivers: (lat?: number, lng?: number) =>
-    api.get<{ drivers: any[] }>(`${BASE}/drivers/nearby`, { lat, lng, radius: 50 }),
+    api.get<{ drivers: any[] }>(`${ADMIN_BASE}/drivers/nearby`, { lat, lng, radius: 50 }),
 
   /** Get active rides */
   getActiveRides: () =>
-    api.get<{ rides: any[] }>(`${BASE}/admin/rides/active`),
+    api.get<{ rides: any[] }>(`${ADMIN_BASE}/rides/active`),
 
   /** Get surge zones */
   getSurgeZones: () =>
-    api.get<{ zones: any[] }>(`${BASE}/admin/surge`),
+    api.get<{ zones: any[] }>(`${ADMIN_BASE}/surge`),
 
   /** Get matching/dispatch stats */
   getMatchingStats: () =>
-    api.get<any>(`${BASE}/matching/stats`),
+    api.get<any>(`${ADMIN_BASE}/fleet`),
 
   /** Save landing page layout */
   saveLandingLayout: (layout: any) =>
-    api.post<{ success: boolean }>(`${BASE}/admin/layouts/taxi/homepage`, layout),
+    api.post<{ success: boolean }>(`/admin/layouts/taxi/homepage`, layout),
 
   /** Get landing page layout */
   getLandingLayout: () =>
-    api.get<any>(`${BASE}/admin/layouts/taxi/homepage`),
+    api.get<any>(`/admin/layouts/taxi/homepage`),
 };

@@ -34,41 +34,29 @@ export const franchiseApi = {
   submitCompliance: async (id: string, storeId: string, payload: any) =>
     api.post(`${BASE}/${id}/stores/${storeId}/compliance`, payload),
 
-  // ── Analytics ──────────────────────────────────────────────────────────────
-  getAnalytics: async (id: string, period = '30d') =>
-    api.get(`${BASE}/${id}/analytics?period=${period}`),
-
-  // ── Delivery Partners ──────────────────────────────────────────────────────
-  getDeliveryPartners: async (id: string, page = 1) =>
-    api.get(`${BASE}/${id}/delivery-partners?page=${page}`),
-  updateDeliveryPartnerStatus: async (id: string, partnerId: string, status: string) =>
-    api.post(`${BASE}/${id}/delivery-partners/${partnerId}/status`, { status }),
-
-  // ── Commission ─────────────────────────────────────────────────────────────
-  getCommission: async (id: string) => api.get(`${BASE}/${id}/commission`),
-  getPayouts: async (id: string, page = 1) =>
-    api.get(`${BASE}/${id}/payouts?page=${page}`),
-
-  // ── Orders ─────────────────────────────────────────────────────────────────
-  getOrders: async (id: string, params?: { page?: number; status?: string }) =>
-    api.get(`${BASE}/${id}/orders?page=${params?.page || 1}${params?.status ? `&status=${params.status}` : ''}`),
-
-  // ── Settings ───────────────────────────────────────────────────────────────
-  getSettings: async (id: string) => api.get(`${BASE}/${id}/settings`),
-  updateSettings: async (id: string, payload: any) =>
-    api.post(`${BASE}/${id}/settings`, payload),
-
-  // ── Zone Management ────────────────────────────────────────────────────────
-  getZones: async (id: string) => api.get(`${BASE}/${id}/zones`),
+  // ── Removed: franchise-wide analytics, delivery partners, commission,
+  //    payouts, orders, settings and zones ─────────────────────────────────────
+  //
+  // Nine methods stood here — getAnalytics, getDeliveryPartners,
+  // updateDeliveryPartnerStatus, getCommission, getPayouts, getOrders,
+  // getSettings, updateSettings and getZones — plus marketplace.getProducts,
+  // marketplace.getAnalytics and pharmacy.getAnalytics below.
+  //
+  // None had a gateway route, none had a message pattern in franchise-service,
+  // and nothing in the platform called any of them: the only franchiseApi
+  // methods any page invokes are getDashboard, getMine and register. They were
+  // an API surface for features that were never built.
+  //
+  // Removed rather than left in place, because a dead method is a trap: it
+  // type-checks, it autocompletes, and the first UI wired to `getCommission()`
+  // gets a 404 that looks like a bug in the new screen rather than a feature
+  // that does not exist. The per-module calls below are kept — those do have
+  // routes and patterns behind them.
 
   // ── Marketplace Module ─────────────────────────────────────────────────────
   marketplace: {
-    getProducts: async (id: string, page = 1) =>
-      api.get(`${BASE}/${id}/marketplace/products?page=${page}`),
     getSellers: async (id: string) =>
       api.get(`${BASE}/${id}/marketplace/sellers`),
-    getAnalytics: async (id: string, period = '30d') =>
-      api.get(`${BASE}/${id}/marketplace/analytics?period=${period}`),
     updateSellerStatus: async (id: string, sellerId: string, status: string) =>
       api.post(`${BASE}/${id}/marketplace/sellers/${sellerId}/status`, { status }),
   },
@@ -107,8 +95,6 @@ export const franchiseApi = {
       api.get(`${BASE}/${id}/pharmacy/stores`),
     getOrders: async (id: string, page = 1, status?: string) =>
       api.get(`${BASE}/${id}/pharmacy/orders?page=${page}${status ? `&status=${status}` : ''}`),
-    getAnalytics: async (id: string, period?: string) =>
-      api.get(`${BASE}/${id}/pharmacy/analytics${period ? `?period=${period}` : ''}`),
     getSettings: async (id: string) =>
       api.get(`${BASE}/${id}/pharmacy/settings`),
   },
