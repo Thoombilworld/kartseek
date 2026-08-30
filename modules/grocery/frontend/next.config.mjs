@@ -11,10 +11,16 @@
  * prefix. A zone without basePath renders once and then 404s on its own
  * JavaScript, because the shell has no /_next route pointing here.
  */
+import createNextIntlPlugin from 'next-intl/plugin';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Same i18n request config the shell and the marketplace zone load, so all
+// three resolve locale and messages identically. Literal path, not a tsconfig
+// alias — the plugin reads it at config-load time.
+const withNextIntl = createNextIntlPlugin('../../../packages/shared-core/src/i18n/request.ts');
 
 const nextConfig = {
   reactStrictMode: true,
@@ -45,4 +51,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

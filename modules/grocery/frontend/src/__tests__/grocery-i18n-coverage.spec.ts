@@ -16,7 +16,11 @@ import { t, missingTranslationKeys } from '@/i18n/grocery-locale';
  * Doha.
  */
 const SRC = path.join(process.cwd(), 'src');
-const ROOTS = [path.join(SRC, 'app', 'grocery'), path.join(SRC, 'components', 'grocery')];
+// In the grocery zone the routes sit at src/app/*, not src/app/grocery/* —
+// the `/grocery` segment comes from the zone's basePath, not from a directory.
+// Scanning the old path found nothing and the coverage assertions passed
+// vacuously, which is exactly what the second test below exists to catch.
+const ROOTS = [path.join(SRC, 'app'), path.join(SRC, 'components', 'grocery')];
 
 function walk(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
@@ -83,13 +87,13 @@ describe('grocery Arabic coverage', () => {
     for (const { file } of keys) byFile.set(file, (byFile.get(file) ?? 0) + 1);
 
     for (const page of [
-      'app/grocery/cart/page.tsx',
-      'app/grocery/checkout/page.tsx',
-      'app/grocery/product/[id]/page.tsx',
-      'app/grocery/store/[slug]/page.tsx',
-      'app/grocery/search/page.tsx',
-      'app/grocery/stores/page.tsx',
-      'app/grocery/orders/page.tsx',
+      'app/cart/page.tsx',
+      'app/checkout/page.tsx',
+      'app/product/[id]/page.tsx',
+      'app/store/[slug]/page.tsx',
+      'app/search/page.tsx',
+      'app/stores/page.tsx',
+      'app/orders/page.tsx',
     ]) {
       expect(byFile.get(page) ?? 0).toBeGreaterThan(5);
     }
