@@ -108,7 +108,12 @@ const ENTITIES = [
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Resolved against process.cwd(). As an extracted microservice this
+      // service is started from its own directory, so its own `.env` wins;
+      // the platform file is kept as a fallback so the ~120 shared variables
+      // (DB host, Redis, Kafka brokers, JWT secret) do not have to be copied
+      // into every module during the transition. First match wins.
+      envFilePath: ['.env', '../../../apps/api/.env'],
       validationSchema: envSchema,
       validationOptions: { abortEarly: false },
     }),

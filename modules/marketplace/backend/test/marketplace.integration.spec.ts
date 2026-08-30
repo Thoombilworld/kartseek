@@ -2,13 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule, getRepositoryToken, getConnectionToken } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { ConfigModule } from '@nestjs/config';
-import { Seller } from '../apps/marketplace-service/src/entities/seller.entity';
-import { Category } from '../apps/marketplace-service/src/entities/category.entity';
-import { Brand } from '../apps/marketplace-service/src/entities/brand.entity';
-import { Product } from '../apps/marketplace-service/src/entities/product.entity';
-import { ProductListing } from '../apps/marketplace-service/src/entities/product-listing.entity';
-import { MarketplaceOrder } from '../apps/marketplace-service/src/entities/marketplace-order.entity';
-import { Review } from '../apps/marketplace-service/src/entities/review.entity';
+import { Seller } from '../src/entities/seller.entity';
+import { Category } from '../src/entities/category.entity';
+import { Brand } from '../src/entities/brand.entity';
+import { Product } from '../src/entities/product.entity';
+import { ProductListing } from '../src/entities/product-listing.entity';
+import { MarketplaceOrder } from '../src/entities/marketplace-order.entity';
+import { Review } from '../src/entities/review.entity';
 
 /**
  * Integration tests with real PostgreSQL database.

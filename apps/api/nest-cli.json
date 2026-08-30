@@ -165,15 +165,6 @@
         "tsConfigPath": "apps/user-service/tsconfig.app.json"
       }
     },
-    "marketplace-service": {
-      "type": "application",
-      "root": "apps/marketplace-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/marketplace-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/marketplace-service/tsconfig.app.json"
-      }
-    },
     "grocery-service": {
       "type": "application",
       "root": "apps/grocery-service",

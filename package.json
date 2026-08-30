@@ -10,7 +10,9 @@
   },
   "workspaces": [
     "apps/web",
-    "apps/api"
+    "apps/api",
+    "modules/*/backend",
+    "modules/*/frontend"
   ],
   "scripts": {
     "dev": "turbo run dev",

@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+package marketplace;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KARTSEEK Marketplace Service — gRPC Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+service MarketplaceService {
+  // Liveness probe. A handler for this already existed in the service but the RPC
+  // was missing from this contract, so it could never actually be called.
+  rpc HealthCheck       (EmptyRequest)          returns (HealthResponse)      {}
+  rpc GetHome           (EmptyRequest)          returns (HomeResponse)         {}
+  rpc GetCategories     (EmptyRequest)          returns (CategoryListResponse) {}
+  rpc GetCategoryById   (GetByIdRequest)        returns (CategoryResponse)     {}
+  rpc GetProducts       (ProductFilterRequest)  returns (ProductListResponse)  {}
+  rpc GetProductById    (GetByIdRequest)        returns (ProductResponse)      {}
+  rpc SearchProducts    (SearchRequest)         returns (ProductListResponse)  {}
+  rpc GetTopBrands      (EmptyRequest)          returns (BrandListResponse)    {}
+  rpc GetVerifiedSellers(EmptyRequest)          returns (SellerListResponse)   {}
+  rpc GetSellerById     (GetByIdRequest)        returns (SellerResponse)       {}
+  rpc GetDeals          (EmptyRequest)          returns (ProductListResponse)  {}
+  rpc GetFlashDeals     (EmptyRequest)          returns (ProductListResponse)  {}
+}
+
+// ── Shared ────────────────────────────────────────────────────────────────────
+
+message EmptyRequest {}
+
+message HealthResponse {
+  string service   = 1;
+  string status    = 2;
+  string timestamp = 3;
+}
+message GetByIdRequest { string id = 1; }
+
+// ── Requests ──────────────────────────────────────────────────────────────────
+
+message ProductFilterRequest {
+  string category  = 1;
+  string brand     = 2;
+  double minPrice  = 3;
+  double maxPrice  = 4;
+  string sortBy    = 5;  // price_asc | price_desc | rating | newest
+  int32  page      = 6;
+  int32  limit     = 7;
+  string sellerId  = 8;
+  string country   = 9;
+}
+
+message SearchRequest {
+  string query    = 1;
+  string category = 2;
+  double minPrice = 3;
+  double maxPrice = 4;
+  string sortBy   = 5;
+  int32  page     = 6;
+  int32  limit    = 7;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message CategoryResponse {
+  string id           = 1;
+  string name         = 2;
+  string slug         = 3;
+  string icon         = 4;
+  string imageUrl     = 5;
+  int32  productCount = 6;
+  string parentId     = 7;
+}
+
+message ProductVariant {
+  string id    = 1;
+  string name  = 2;  // e.g. "Red / XL"
+  double price = 3;
+  int32  stock = 4;
+}
+
+message ProductResponse {
+  string                 id               = 1;
+  string                 name             = 2;
+  string                 slug             = 3;
+  string                 description      = 4;
+  string                 categoryId       = 5;
+  string                 brandId          = 6;
+  string                 sellerId         = 7;
+  double                 price            = 8;
+  double                 discountedPrice  = 9;
+  int32                  discountPercent  = 10;
+  double                 rating           = 11;
+  int32                  reviewCount      = 12;
+  int32                  stock            = 13;
+  repeated string        images           = 14;
+  repeated ProductVariant variants        = 15;
+  bool                   isFeatured       = 16;
+  bool                   isDeal           = 17;
+  string                 country          = 18;
+}
+
+message BrandResponse {
+  string id      = 1;
+  string name    = 2;
+  string logoUrl = 3;
+  string slug    = 4;
+  int32  productCount = 5;
+}
+
+message SellerResponse {
+  string id           = 1;
+  string businessName = 2;
+  string logoUrl      = 3;
+  double rating       = 4;
+  int32  totalProducts = 5;
+  bool   isVerified   = 6;
+  string country      = 7;
+}
+
+message BannerResponse {
+  string id       = 1;
+  string imageUrl = 2;
+  string title    = 3;
+  string link     = 4;
+}
+
+message HomeResponse {
+  repeated BannerResponse   banners     = 1;
+  repeated ProductResponse  flashDeals  = 2;
+  repeated CategoryResponse categories  = 3;
+  repeated BrandResponse    topBrands   = 4;
+  repeated ProductResponse  featured    = 5;
+  repeated SellerResponse   topSellers  = 6;
+}
+
+message CategoryListResponse { repeated CategoryResponse data = 1; }
+message ProductListResponse  {
+  repeated ProductResponse data  = 1;
+  int32                    total = 2;
+  int32                    page  = 3;
+  int32                    limit = 4;
+}
+message BrandListResponse  { repeated BrandResponse  data = 1; }
+message SellerListResponse { repeated SellerResponse data = 1; }

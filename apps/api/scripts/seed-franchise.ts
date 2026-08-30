@@ -21,7 +21,7 @@ import { Franchise } from '../apps/franchise-service/src/entities/franchise.enti
 // franchise-local shadow of it. The old FranchiseSeller shadow declared columns
 // (revenue, category, location, total_products, total_orders, returns_percentage)
 // that the table has never had.
-import { Seller } from '../apps/marketplace-service/src/entities/seller.entity';
+import { Seller } from '../../../modules/marketplace/backend/src/entities/seller.entity';
 
 const AppDataSource = new DataSource({
   type: 'postgres',

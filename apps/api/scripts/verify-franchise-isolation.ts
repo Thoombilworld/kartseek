@@ -31,11 +31,11 @@ import { Doctor } from '../apps/doctor-service/src/entities/doctor.entity';
 import { Appointment } from '../apps/doctor-service/src/entities/appointment.entity';
 import { FranchiseViewService as DoctorView } from '../apps/doctor-service/src/franchise-view.service';
 
-import { Seller } from '../apps/marketplace-service/src/entities/seller.entity';
-import { Product } from '../apps/marketplace-service/src/entities/product.entity';
-import { Category } from '../apps/marketplace-service/src/entities/category.entity';
-import { MarketplaceOrder } from '../apps/marketplace-service/src/entities/marketplace-order.entity';
-import { FranchiseViewService as MarketplaceView } from '../apps/marketplace-service/src/franchise-view.service';
+import { Seller } from '../../../modules/marketplace/backend/src/entities/seller.entity';
+import { Product } from '../../../modules/marketplace/backend/src/entities/product.entity';
+import { Category } from '../../../modules/marketplace/backend/src/entities/category.entity';
+import { MarketplaceOrder } from '../../../modules/marketplace/backend/src/entities/marketplace-order.entity';
+import { FranchiseViewService as MarketplaceView } from '../../../modules/marketplace/backend/src/franchise-view.service';
 
 const FRANCHISE_ID = process.env.VERIFY_FRANCHISE_ID || 'FR-001';
 
@@ -54,7 +54,7 @@ const ds = new DataSource({
     __dirname + '/../apps/restaurant-service/src/entities/*.entity.ts',
     __dirname + '/../apps/pharmacy-service/src/entities/*.entity.ts',
     __dirname + '/../apps/doctor-service/src/entities/*.entity.ts',
-    __dirname + '/../apps/marketplace-service/src/entities/*.entity.ts',
+    __dirname + '/../../../modules/marketplace/backend/src/entities/*.entity.ts',
   ],
   synchronize: false,
   logging: false,

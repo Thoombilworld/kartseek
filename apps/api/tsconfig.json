@@ -1,6 +1,12 @@
 {
   "compilerOptions": {
-    "rootDir": "./",
+    // The repo root, not apps/api. `scripts/seed-franchise.ts` and
+    // `scripts/verify-franchise-isolation.ts` legitimately import marketplace
+    // entities, and marketplace now lives in modules/marketplace/backend — a
+    // rootDir of "./" rejects those with TS6059. This only shapes the
+    // `tsc --noEmit` type-check program: every service is built by `nest build`,
+    // which bundles through webpack and does not use this setting for layout.
+    "rootDir": "../..",
     "esModuleInterop": true,
     "types": ["jest", "node"],
     "module": "commonjs",
