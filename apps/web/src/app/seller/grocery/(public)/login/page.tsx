@@ -55,7 +55,7 @@ export default function GrocerySellerLoginPage() {
 
         <p className="text-center text-sm text-slate-400 mt-4">
           Don't have an account?{' '}
-          <Link href="/seller/grocery/register" className="text-blue-400 hover:text-blue-300 font-semibold">Register</Link>
+          <Link href="/seller/register?module=grocery" className="text-blue-400 hover:text-blue-300 font-semibold">Register</Link>
         </p>
       </div>
     </div>

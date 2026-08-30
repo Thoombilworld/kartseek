@@ -14,7 +14,7 @@
     "dev": "npm run dev:all",
     "start:debug": "nest start api-gateway --debug --watch",
     "start:prod": "node dist/apps/api-gateway/apps/api-gateway/src/main",
-    "dev:all": "concurrently \"npm run start:gateway\" \"npm run start:marketplace\" \"npm run start:auth\" \"npm run start:user\" \"npm run start:cart\" \"npm run start:order\" \"npm run start:payment\" \"npm run start:grocery\" \"npm run start:hotel\" \"npm run start:pharmacy\" \"npm run start:restaurant\" \"npm run start:doctor\" \"npm run start:franchise\" \"npm run start:notification\" \"npm run start:wallet\" \"npm run start:commission\" \"npm run start:payout\" \"npm run start:refund\" \"npm run start:report\" \"npm run start:search\" \"npm run start:admin\" \"npm run start:audit\" \"npm run start:loyalty\" \"npm run start:location\" \"npm run start:taxi\" \"npm run start:delivery\"",
+    "dev:all": "concurrently \"npm run start:gateway\" \"npm run start:auth\" \"npm run start:user\" \"npm run start:cart\" \"npm run start:order\" \"npm run start:payment\" \"npm run start:franchise\" \"npm run start:notification\" \"npm run start:wallet\" \"npm run start:commission\" \"npm run start:payout\" \"npm run start:refund\" \"npm run start:report\" \"npm run start:search\" \"npm run start:admin\" \"npm run start:audit\" \"npm run start:loyalty\" \"npm run start:location\" \"npm run start:delivery\"",
     "dev:marketplace": "concurrently \"npm run start:gateway\" \"npm run start:marketplace\" \"npm run start:order\" \"npm run start:cart\" \"npm run start:payment\" \"npm run start:wallet\" \"npm run start:commission\" \"npm run start:payout\" \"npm run start:refund\" \"npm run start:report\" \"npm run start:search\" \"npm run start:notification\" \"npm run start:user\"",
     "start:gateway": "nest start api-gateway --watch",
     "start:auth": "nest start auth-service --watch",
@@ -105,7 +105,7 @@
     "typeorm": "^0.3.31",
     "uuid": "^14.0.1"
   },
-  "_comment_optionalDependencies": "libs/storage/src/storage.service.ts dynamically imports these. @aws-sdk/client-s3 covers STORAGE_PROVIDER=s3 and =r2. STORAGE_PROVIDER=gcs additionally needs `npm i -w apps/api @google-cloud/storage` \u2014 left out by default because it ships 4 unfixed moderate advisories (teeny-request/retry-request/gaxios) and pins gcp-metadata@6 against mongodb's ^7 peer.",
+  "_comment_optionalDependencies": "libs/storage/src/storage.service.ts dynamically imports these. @aws-sdk/client-s3 covers STORAGE_PROVIDER=s3 and =r2. STORAGE_PROVIDER=gcs additionally needs `npm i -w apps/api @google-cloud/storage` — left out by default because it ships 4 unfixed moderate advisories (teeny-request/retry-request/gaxios) and pins gcp-metadata@6 against mongodb's ^7 peer.",
   "optionalDependencies": {
     "@aws-sdk/client-s3": "^3.716.0"
   },
@@ -170,7 +170,8 @@
       "^@app/([^/]+)(|/.*)$": "<rootDir>/libs/$1/src/$2"
     }
   },
-  "_comment_overrides": "npm only honours `overrides` in the workspace ROOT package.json. Security pins live in ../../package.json \u2014 do not re-add them here.",
+  "_comment_overrides": "npm only honours `overrides` in the workspace ROOT package.json. Security pins live in ../../package.json — do not re-add them here.",
   "overrides": {},
-  "_comment_bull": "@nestjs/bull and bull were removed: nothing in the repo imported either, and they were the sole source of the last three advisories (bull -> uuid <11.1.1, missing buffer bounds check, no fix available). If a job queue is wanted later, add it back deliberately with a supported version."
+  "_comment_bull": "@nestjs/bull and bull were removed: nothing in the repo imported either, and they were the sole source of the last three advisories (bull -> uuid <11.1.1, missing buffer bounds check, no fix available). If a job queue is wanted later, add it back deliberately with a supported version.",
+  "_comment_dev_all": "Starts the platform services that still live in this workspace. The seven extracted verticals (marketplace, grocery, restaurant, pharmacy, doctor, hotel, taxi) are their own workspaces and are started by turbo run dev from the repo root. Listing them here too made each boot twice and collide on its own port. The individual start:<module> scripts are kept for running one on its own."
 }
