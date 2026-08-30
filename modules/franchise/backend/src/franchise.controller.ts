@@ -19,6 +19,19 @@ export class FranchiseController {
   @MessagePattern({ cmd: 'franchise.get_by_owner' })
   getByOwner(@Payload() data: { ownerId: string }) { return this.svc.getFranchiseByOwner(data.ownerId); }
 
+  // ── Market ──────────────────────────────────────────────────────────────
+  //
+  // Which country this franchise operates in, and everything that follows from
+  // it: currency and its minor units, tax, timezone, locale, and the modules
+  // the market actually runs.
+
+  @MessagePattern({ cmd: 'franchise.get_region' })
+  getRegion(@Payload() data: { id: string }) { return this.svc.getRegionSettings(data.id); }
+
+  /** The markets a franchise may register in — for the registration form. */
+  @MessagePattern({ cmd: 'franchise.list_markets' })
+  listMarkets() { return this.svc.listSupportedMarkets(); }
+
   @MessagePattern({ cmd: 'franchise.get_dashboard' })
   getDashboard(@Payload() data: { id: string }) { return this.svc.getFranchiseDashboard(data.id); }
 

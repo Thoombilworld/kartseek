@@ -3,12 +3,49 @@ import { api } from '@/lib/api-endpoints';
 const BASE = '/franchise';
 
 /** What `GET /franchise/me` resolves for the caller, or null if they own none. */
+/**
+ * A franchise's market, resolved from `franchises.country_code` through the
+ * region registry. Currency, tax, timezone and the module list are all derived
+ * server-side, so the console never has to know a country's rules itself.
+ */
+export interface FranchiseRegion {
+  countryCode: string;
+  countryName?: string;
+  flag?: string;
+  supported: boolean;
+  /** Absent when `supported` is false — an unknown market has no currency to guess. */
+  currency?: { code: string; symbol: string; decimals: number };
+  tax?: { name: string; rate: number; isInclusive: boolean };
+  locale?: string;
+  timezone?: string;
+  callingCode?: string;
+  defaultCity?: string;
+  /** Verticals this market runs, so the console shows only what can have data. */
+  enabledModules?: string[];
+  paymentMethods?: { methodType: string; displayName: string; isDefault: boolean }[];
+  reason?: string;
+  supportedMarkets?: string[];
+}
+
+export interface FranchiseMarket {
+  code: string;
+  name: string;
+  flag: string;
+  currency: { code: string; symbol: string; decimals: number };
+  tax: { name: string; rate: number; isInclusive: boolean };
+  timezone: string;
+  callingCode: string;
+  enabledModules: string[];
+}
+
 export interface FranchiseMe {
   id: string;
   businessName?: string;
   countryCode?: string;
   status?: string;
   operationalZones?: unknown[];
+  /** Sent with the identity so the console can format before any other call. */
+  region?: FranchiseRegion;
 }
 
 export const franchiseApi = {
@@ -22,6 +59,12 @@ export const franchiseApi = {
    * owner is read from the token server-side, so there is nothing to pass.
    */
   getMine: async () => api.get<FranchiseMe | null>(`${BASE}/me`),
+
+  /** The franchise's market: currency and minor units, tax, timezone, modules. */
+  getRegion: async (id: string) => api.get<FranchiseRegion>(`${BASE}/${id}/region`),
+
+  /** Markets a franchise may register in — public, for the registration form. */
+  getMarkets: async () => api.get<{ markets: FranchiseMarket[] }>(`${BASE}/markets`),
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
   getDashboard: async (id: string) => api.get(`${BASE}/${id}/dashboard`),

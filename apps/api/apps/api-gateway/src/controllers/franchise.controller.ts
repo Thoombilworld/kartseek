@@ -45,6 +45,18 @@ export class FranchiseGatewayController {
     return this.send('franchise.health', {});
   }
 
+  /**
+   * The markets a franchise may operate in.
+   *
+   * Public, and declared before every `:id` route — the registration form needs
+   * it before anyone has an account, let alone a franchise.
+   */
+  @Get('markets')
+  @ApiOperation({ summary: 'Countries a franchise can be registered in, with currency and tax' })
+  async markets() {
+    return this.send('franchise.list_markets', {});
+  }
+
   @Post('register')
   @ApiOperation({ summary: 'Register for a new franchise opportunity' })
   async register(@Body() payload: any) {
@@ -69,6 +81,14 @@ export class FranchiseGatewayController {
     const ownerId = req.user?.sub ?? req.user?.id;
     if (!ownerId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     return this.send('franchise.get_by_owner', { ownerId });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Get(':id/region')
+  @ApiOperation({ summary: "A franchise's market: currency, minor units, tax, timezone and enabled modules" })
+  async region(@Param('id') id: string) {
+    return this.send('franchise.get_region', { id });
   }
 
   @UseGuards(JwtAuthGuard)

@@ -142,6 +142,16 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // A zone serves its own build under its basePath, so its assets arrive here
+  // as `/franchise/_next/...` rather than `/_next/...`. The prefix list above
+  // only matches the leading form, so every asset request for a zone under a
+  // protected prefix was redirected to a login page — and the console rendered
+  // with no CSS and no JavaScript while still returning 200. Assets carry no
+  // data and need no session.
+  if (pathname.includes('/_next/')) {
+    return NextResponse.next();
+  }
+
   // ── Skip RSC payload requests & Next.js internal fetches ─────────────────
   const isRscRequest =
     request.headers.has('Next-Router-State-Tree') ||

@@ -6,6 +6,7 @@ import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Franchise } from './entities/franchise.entity';
+import { REGION_CONFIGS, SupportedCountryCode } from '@app/region';
 
 /**
  * FranchiseService
@@ -122,6 +123,10 @@ export class FranchiseService {
       countryCode: franchise.countryCode,
       status: franchise.status,
       operationalZones: franchise.operationalZones ?? [],
+      // The console needs the currency before it can render a single figure,
+      // and this is the first call it makes. Sending it here saves a round trip
+      // and removes any window in which money is displayed unformatted.
+      region: this.buildRegionSettings(franchise.countryCode),
     };
   }
 
@@ -137,7 +142,11 @@ export class FranchiseService {
     return {
       franchiseId,
       name: franchise?.businessName || 'Unknown Franchise',
+      // `region` used to be the bare country code. Every amount on this
+      // dashboard is denominated in that country's currency, and nothing said
+      // which currency that was, so the console assumed rupees.
       region: franchise?.countryCode || 'N/A',
+      regionSettings: this.buildRegionSettings(franchise?.countryCode),
       totalStores: counts.total,
       activeStores: counts.verified,
       zones: franchise?.operationalZones?.length || 0,
@@ -169,17 +178,59 @@ export class FranchiseService {
   }
 
   async registerFranchise(dto: Record<string, unknown>) {
+    // The country decides the currency every figure in this estate is
+    // denominated in, so it is validated rather than defaulted. It used to fall
+    // back to 'IN', which meant a typo in a Doha application produced a
+    // franchise quietly settling in rupees.
+    const market = this.resolveMarket(dto['countryCode'] as string);
+    if (!market) {
+      return {
+        success: false,
+        message: `'${dto['countryCode'] ?? ''}' is not an active franchise market.`,
+        supportedMarkets: FranchiseService.SUPPORTED_MARKETS,
+      };
+    }
+
+    const requested = (dto['commissionRates'] as Record<string, number>) || {};
     const franchise = this.franchiseRepo.create({
       ownerId: dto['ownerId'] as string,
       businessName: dto['businessName'] as string,
-      countryCode: (dto['countryCode'] as string) || 'IN',
+      countryCode: market,
       operationalZones: (dto['operationalZones'] as string[]) || [],
-      commissionRates: (dto['commissionRates'] as Record<string, number>) || {},
+      // Only the modules this market actually runs. Carrying a rate for a
+      // module the country does not enable makes the settings page offer a
+      // dashboard that can never have data behind it.
+      commissionRates: this.ratesForMarket(market, requested),
       status: 'pending',
     });
     const saved = await this.franchiseRepo.save(franchise);
-    await this.kafka.publish('franchise.registered', { id: saved.id, name: saved.businessName });
-    return { success: true, franchise: saved };
+    await this.kafka.publish('franchise.registered', {
+      id: saved.id, name: saved.businessName, countryCode: saved.countryCode,
+    });
+    return { success: true, franchise: saved, region: this.buildRegionSettings(saved.countryCode) };
+  }
+
+  /**
+   * Commission rates limited to the modules the market enables.
+   *
+   * A rate the applicant supplied is kept; anything else falls back to the
+   * module's platform default. Rates for modules the country does not run are
+   * dropped rather than stored, so `commissionRates` and `enabledModules`
+   * cannot disagree.
+   */
+  private ratesForMarket(market: SupportedCountryCode, requested: Record<string, number> = {}) {
+    const DEFAULTS: Record<string, number> = {
+      marketplace: 8, grocery: 12, restaurant: 18, pharmacy: 10,
+      doctor: 12, taxi: 20, 'hotel-booking': 15,
+    };
+    const enabled = REGION_CONFIGS[market].enabledModules.filter((m) => m !== 'franchise');
+    const rates: Record<string, number> = {};
+    for (const m of enabled) {
+      if (!(m in DEFAULTS)) continue;      // wallet, loyalty, delivery take no commission
+      const supplied = Number(requested[m]);
+      rates[m] = Number.isFinite(supplied) && supplied >= 0 && supplied <= 100 ? supplied : DEFAULTS[m];
+    }
+    return rates;
   }
 
   // ─── MARKETPLACE MODULE ────────────────────────────────────────────────────
@@ -520,7 +571,11 @@ export class FranchiseService {
   }
 
   async getHotelSettings(franchiseId: string) {
-    return this.getModuleSettings(franchiseId, 'hotel');
+    // 'hotel-booking', not 'hotel'. The region registry, the zone and the URL
+    // all use the hyphenated name; only the commission key said 'hotel', so an
+    // enablement check against enabledModules never matched and the hotel
+    // settings page reported the module as unavailable in every market.
+    return this.getModuleSettings(franchiseId, 'hotel-booking');
   }
 
   // ─── SHARED HELPERS ────────────────────────────────────────────────────────
@@ -528,11 +583,26 @@ export class FranchiseService {
   private async getModuleSettings(franchiseId: string, module: string) {
     const franchise = await this.franchiseRepo.findOne({ where: { id: franchiseId } });
     const rate = franchise?.commissionRates?.[module] || 0;
+    const region = this.buildRegionSettings(franchise?.countryCode);
+
     return {
       settings: {
-        commissionRate: `${rate}%`,
+        // A number, not '12%'. The string could not be compared, summed or
+        // re-formatted, and it was the only thing this endpoint returned.
+        commissionRate: rate,
         franchiseId,
         module,
+        // Whether this market runs the module at all. Qatar does not enable
+        // doctor, so a Qatar franchise asking for doctor settings should be
+        // told that rather than handed a commission rate for a module it
+        // cannot operate.
+        enabledInMarket: region.supported
+          ? (region.enabledModules ?? []).includes(module as never)
+          : false,
+        // Currency, tax, timezone and locale all follow the franchise's
+        // country. They are derived, never stored, so a region correction
+        // reaches every franchise without a migration.
+        region,
         lastUpdated: franchise?.updatedAt?.toISOString() || new Date().toISOString(),
       },
     };
@@ -557,5 +627,114 @@ export class FranchiseService {
       await this.kafka.publish(kafkaTopic, { ...event, updatedAt: new Date().toISOString() });
     }
     return result;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Multi-region operation
+  //
+  //  A franchise is run from one country and settles in that country's
+  //  currency. That was recorded — `franchises.country_code` — and then never
+  //  read: the console formatted every figure as Indian rupees, so the Doha
+  //  operator saw their riyal revenue with a ₹ in front of it.
+  //
+  //  Currency, tax, timezone and the module list all come from REGION_CONFIGS,
+  //  the same registry the storefronts use. Nothing is stored twice: the
+  //  country code is the single fact, and everything else is derived from it,
+  //  so a correction to a region's tax rate does not need a data migration.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** The markets a franchise may operate in. */
+  static readonly SUPPORTED_MARKETS: SupportedCountryCode[] =
+    (Object.keys(REGION_CONFIGS) as SupportedCountryCode[])
+      .filter((c) => REGION_CONFIGS[c].isActive && REGION_CONFIGS[c].enabledModules.includes('franchise'));
+
+  /**
+   * Resolve a country code to a market this module can operate in.
+   *
+   * Returns null rather than silently substituting a default. A franchise
+   * pinned to the wrong country reports its revenue in the wrong currency, and
+   * quietly defaulting is how that happens without anyone noticing.
+   */
+  private resolveMarket(countryCode?: string | null): SupportedCountryCode | null {
+    const code = (countryCode ?? '').trim().toUpperCase();
+    return (FranchiseService.SUPPORTED_MARKETS as string[]).includes(code)
+      ? (code as SupportedCountryCode)
+      : null;
+  }
+
+  /**
+   * Everything the console needs to render this franchise's market correctly.
+   *
+   * `currency.decimals` matters more than it looks: Bahrain, Kuwait and Oman
+   * divide into thousandths, so formatting their commission to two places
+   * rounds away a real unit of money on every line.
+   */
+  buildRegionSettings(countryCode?: string | null) {
+    const market = this.resolveMarket(countryCode);
+    if (!market) {
+      return {
+        countryCode: (countryCode ?? '').toUpperCase() || null,
+        supported: false,
+        // Deliberately no currency block. A caller that cannot tell which
+        // currency an amount is in must not be handed a plausible guess.
+        reason: 'This country is not an active franchise market.',
+        supportedMarkets: FranchiseService.SUPPORTED_MARKETS,
+      };
+    }
+
+    const r = REGION_CONFIGS[market];
+    return {
+      countryCode: r.code,
+      countryName: r.name,
+      flag: r.flag,
+      supported: true,
+      currency: {
+        code: r.currencyCode,
+        symbol: r.currencySymbol,
+        decimals: r.currencyDecimals,
+      },
+      tax: r.tax,
+      locale: r.locale,
+      timezone: r.timezone,
+      callingCode: r.callingCode,
+      defaultCity: r.defaultCity,
+      // Which verticals this franchise can actually run. The console used to
+      // show all seven to everyone, so a Qatar operator was offered a Doctor
+      // dashboard for a module the market does not enable.
+      enabledModules: r.enabledModules.filter((m) => m !== 'franchise'),
+      paymentMethods: (r.supportedPaymentMethods ?? []).map((p) => ({
+        methodType: p.methodType,
+        displayName: p.displayName,
+        isDefault: !!p.isDefault,
+      })),
+    };
+  }
+
+  /** The franchise's own market settings, by id. */
+  async getRegionSettings(franchiseId: string) {
+    const franchise = await this.franchiseRepo.findOne({ where: { id: franchiseId } });
+    if (!franchise) {
+      return { franchiseId, ...this.buildRegionSettings(null) };
+    }
+    return { franchiseId, businessName: franchise.businessName, ...this.buildRegionSettings(franchise.countryCode) };
+  }
+
+  /** The markets a franchise may be registered in, for the registration form. */
+  listSupportedMarkets() {
+    return {
+      markets: FranchiseService.SUPPORTED_MARKETS.map((code) => {
+        const r = REGION_CONFIGS[code];
+        return {
+          code: r.code,
+          name: r.name,
+          flag: r.flag,
+          currency: { code: r.currencyCode, symbol: r.currencySymbol, decimals: r.currencyDecimals },
+          tax: r.tax,
+          timezone: r.timezone,
+          callingCode: r.callingCode,
+          enabledModules: r.enabledModules.filter((m) => m !== 'franchise'),
+        };
+      }),
+    };
   }
 }

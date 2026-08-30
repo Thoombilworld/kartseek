@@ -24,6 +24,15 @@ export interface RegionConfig {
   /** Currency symbol for display */
   currencySymbol: string;
   /**
+   * Minor units the currency actually divides into.
+   *
+   * Not decorative: the Bahraini dinar, Kuwaiti dinar and Omani rial are
+   * thousandths, so 2 decimals silently rounds away a real unit of money —
+   * KD 1.235 becomes KD 1.24, and a franchise's commission is understated on
+   * every line. Everything else here is hundredths.
+   */
+  currencyDecimals: number;
+  /**
    * Consumption tax for the market.
    *
    * Lives on the region config so a service that has a region also has its tax

@@ -12,6 +12,7 @@ import { ZoneLink } from '@/components/zone-link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { FranchiseToastProvider } from '@/lib/contexts/franchise-toast-context';
+import { useFranchiseRegion } from '@/lib/hooks/use-franchise-region';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
 // ─── Sidebar Navigation Sections ──────────────────────────────────────────────
@@ -27,13 +28,17 @@ const navSections = [
   {
     label: 'Modules',
     items: [
-      { href: '/grocery', label: 'Grocery', icon: ShoppingCart },
-      { href: '/restaurant', label: 'Restaurant', icon: UtensilsCrossed },
-      { href: '/pharmacy', label: 'Pharmacy', icon: Pill },
-      { href: '/marketplace', label: 'Marketplace', icon: Store },
-      { href: '/taxi', label: 'Taxi & Rides', icon: Car },
-      { href: '/doctor', label: 'Doctor & Clinics', icon: Stethoscope },
-      { href: '/hotel-booking', label: 'Hotel Booking', icon: Landmark },
+      // `module` is the registry key this entry corresponds to. Markets do not
+      // all run every vertical — Qatar, Bahrain, Kuwait and Oman do not enable
+      // doctor, and the UK and US run a shorter list again — so an operator was
+      // being offered dashboards that could never have data behind them.
+      { href: '/grocery', label: 'Grocery', icon: ShoppingCart, module: 'grocery' },
+      { href: '/restaurant', label: 'Restaurant', icon: UtensilsCrossed, module: 'restaurant' },
+      { href: '/pharmacy', label: 'Pharmacy', icon: Pill, module: 'pharmacy' },
+      { href: '/marketplace', label: 'Marketplace', icon: Store, module: 'marketplace' },
+      { href: '/taxi', label: 'Taxi & Rides', icon: Car, module: 'taxi' },
+      { href: '/doctor', label: 'Doctor & Clinics', icon: Stethoscope, module: 'doctor' },
+      { href: '/hotel-booking', label: 'Hotel Booking', icon: Landmark, module: 'hotel-booking' },
     ],
   },
   {
@@ -86,6 +91,9 @@ export default function FranchiseLayout({ children }: { children: React.ReactNod
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+
+  // The franchise's own market — not the viewer's. See useFranchiseRegion.
+  const { region, isModuleEnabled } = useFranchiseRegion();
 
   const isPublic = isPublicRoute(pathname);
 
@@ -162,8 +170,23 @@ export default function FranchiseLayout({ children }: { children: React.ReactNod
       {/* Territory Badge */}
       <div className="px-4 py-3 border-b border-slate-800">
         <div className="flex items-center gap-2 bg-slate-800/60 px-3 py-2 rounded-lg">
+          {/*
+            The estate's market, not the viewer's city. This read `user.city`
+            with 'Mumbai South' behind it, so every operator in every country
+            was told they were running a Mumbai region — and the currency their
+            books settle in was nowhere on screen.
+          */}
           <Globe className="w-4 h-4 text-teal-400" />
-          <span className="text-xs font-bold text-slate-300 flex-1">{user?.city || 'Mumbai South'} Region</span>
+          <span className="text-xs font-bold text-slate-300 flex-1">
+            {region
+              ? `${region.flag ?? ''} ${region.countryName ?? region.countryCode}`.trim()
+              : (user?.city ?? 'Region')}
+          </span>
+          {region?.currency ? (
+            <span className="text-[10px] font-bold text-teal-300 bg-teal-500/10 border border-teal-500/20 px-1.5 py-0.5 rounded">
+              {region.currency.code}
+            </span>
+          ) : null}
           <span className="w-2 h-2 bg-teal-500 rounded-full animate-pulse" />
         </div>
       </div>
@@ -175,7 +198,9 @@ export default function FranchiseLayout({ children }: { children: React.ReactNod
             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 mt-5 px-3 first:mt-2">
               {section.label}
             </div>
-            {section.items.map((item) => {
+            {section.items
+              .filter((item) => !(item as any).module || isModuleEnabled((item as any).module))
+              .map((item) => {
               const active = isActive(item.href, (item as any).exact);
               return (
                 <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}

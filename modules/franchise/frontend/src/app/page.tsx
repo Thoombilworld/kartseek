@@ -5,6 +5,8 @@ import { Activity, TrendingUp, Users, Store, DollarSign, ArrowUpRight, ArrowRigh
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { DEMO_FRANCHISE, PACKAGE_INFO, MODULE_COLORS } from '@/lib/data/franchise-data';
+import { useFranchiseId } from '@/lib/hooks/use-franchise-id';
+import { useFranchiseRegion } from '@/lib/hooks/use-franchise-region';
 
 const MOCK_RECENT_ORDERS = [
   { id: 'KS-78432', vendor: 'City Supermart', module: 'Grocery', customer: 'Rahul K.', amount: '₹487', status: 'delivered', time: '12 min ago' },
@@ -38,6 +40,11 @@ const MOCK_MODULE_REVENUE: Record<string, string> = {
 
 export default function FranchiseDashboard() {
   const { user } = useAuth();
+  // The estate this operator runs, resolved from the token — not their user id.
+  const { franchiseId } = useFranchiseId();
+  // Currency, tax and modules for the estate's own country. Amounts below are
+  // denominated where the franchise settles, wherever the operator is sitting.
+  const { region, formatCurrency, isModuleEnabled } = useFranchiseRegion();
 
   const [recentOrders, setRecentOrders] = useState(MOCK_RECENT_ORDERS);
   const [topVendors, setTopVendors] = useState(MOCK_TOP_VENDORS);
@@ -59,28 +66,42 @@ export default function FranchiseDashboard() {
     }
   }, [user?.city]);
 
-  // Fetch dashboard data (falls back to mock)
+  // What the dashboard endpoint actually returns: name, region, store counts,
+  // zones, commission rates and status. It has never returned recentOrders,
+  // topVendors, stats or packageInfo, so the previous version of this effect
+  // read four keys that do not exist and left every figure on the mock value.
+  const [estate, setEstate] = useState<{
+    name?: string; region?: string; totalStores?: number; activeStores?: number;
+    zones?: number; commissionRates?: Record<string, number>; status?: string;
+  } | null>(null);
+  const [estateError, setEstateError] = useState(false);
+
   useEffect(() => {
-    async function fetchDashboard() {
+    if (!franchiseId) return;
+    let cancelled = false;
+    (async () => {
       try {
         const { franchiseApi } = await import('@/lib/api/index');
-        const res: any = await franchiseApi.getDashboard(user?.id || 'FR-1001');
-        if (res?.data) {
-          if (res.data.recentOrders) setRecentOrders(res.data.recentOrders);
-          if (res.data.topVendors) setTopVendors(res.data.topVendors);
-          if (res.data.stats) setStats(prev => ({ ...prev, ...res.data.stats }));
-          if (res.data.packageInfo) setPackageInfo(prev => ({ ...prev, ...res.data.packageInfo }));
-        }
+        const res: any = await franchiseApi.getDashboard(franchiseId);
+        if (!cancelled) setEstate(res?.data ?? res ?? null);
       } catch {
-        // Using fallback mock data — no action needed
+        // Surfaced, not swallowed. A dashboard that silently shows demo figures
+        // when its own service is down is worse than one that says so.
+        if (!cancelled) setEstateError(true);
       }
-    }
-    fetchDashboard();
-  }, [user?.id]);
+    })();
+    return () => { cancelled = true; };
+  }, [franchiseId]);
 
-  // Filter UI based on approved modules to ensure strict multi-tenancy rules
-  const filteredOrders = recentOrders.filter(o => (packageInfo.approvedModules as string[]).includes(o.module));
-  const filteredVendors = topVendors.filter(v => (packageInfo.approvedModules as string[]).includes(v.module));
+  // Two filters, not one. The package decides what this franchise bought; the
+  // market decides what the country runs at all. A Qatar operator on an
+  // all-modules package still has no doctor vertical to look at.
+  const showsModule = (label: string) =>
+    (packageInfo.approvedModules as string[]).includes(label) &&
+    isModuleEnabled(label.toLowerCase() === 'hotel' ? 'hotel-booking' : label.toLowerCase());
+
+  const filteredOrders = recentOrders.filter(o => showsModule(o.module));
+  const filteredVendors = topVendors.filter(v => showsModule(v.module));
 
   return (
     <div className="space-y-6">
@@ -88,8 +109,20 @@ export default function FranchiseDashboard() {
       {/* Header & Package Banner */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-2">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{packageInfo.territory} Overview</h1>
-          <p className="text-slate-500 text-sm">Real-time monitoring of your franchise region performance.</p>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {estate?.name ?? packageInfo.territory} Overview
+          </h1>
+          <p className="text-slate-500 text-sm">
+            {region
+              ? `${region.countryName ?? region.countryCode} · settles in ${region.currency?.code}` +
+                (region.tax && region.tax.rate > 0 ? ` · ${region.tax.name} ${region.tax.rate}%` : '')
+              : 'Real-time monitoring of your franchise region performance.'}
+          </p>
+          {estateError ? (
+            <p className="text-xs text-rose-600 mt-1">
+              Live figures are unavailable — the franchise service did not respond.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-xl flex items-center gap-3">
@@ -117,14 +150,39 @@ export default function FranchiseDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-linear-to-br from-teal-500 to-teal-600 p-5 rounded-xl shadow-md text-white">
           <DollarSign className="w-5 h-5 opacity-80" />
-          <p className="text-3xl font-black mt-3">{stats.commission}</p>
-          <p className="text-sm font-medium opacity-80 mt-1">Total Commission (MTD)</p>
-          <div className="flex items-center gap-1 mt-2 text-xs font-bold opacity-90"><ArrowUpRight className="w-3.5 h-3.5" /> +15.2% vs last month</div>
+          {/*
+            franchise-service returns commission *rates*, not a month-to-date
+            amount — no service computes one yet. Showing the agreed rates is
+            true; showing '₹1.2L' with "+15.2% vs last month" under it was a
+            number and a trend that nothing produced.
+          */}
+          {estate?.commissionRates && Object.keys(estate.commissionRates).length ? (
+            <>
+              <p className="text-3xl font-black mt-3">
+                {Math.min(...Object.values(estate.commissionRates))}–
+                {Math.max(...Object.values(estate.commissionRates))}%
+              </p>
+              <p className="text-sm font-medium opacity-80 mt-1">
+                Commission rates · {Object.keys(estate.commissionRates).length} modules
+              </p>
+              <div className="mt-2 text-xs font-bold opacity-90">
+                {region?.currency ? `Settled in ${region.currency.code}` : ''}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-3xl font-black mt-3">—</p>
+              <p className="text-sm font-medium opacity-80 mt-1">Commission rates</p>
+              <div className="mt-2 text-xs font-bold opacity-90">
+                {estateError ? 'Unavailable' : 'Loading…'}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <Store className="w-5 h-5 text-indigo-500" />
-          <p className="text-2xl font-black text-slate-900 mt-3">{stats.activeVendors}</p>
+          <p className="text-2xl font-black text-slate-900 mt-3">{estate?.activeStores ?? stats.activeVendors}</p>
           <p className="text-sm text-slate-500 font-medium mt-1">Active Partners</p>
           <p className="text-xs text-slate-400 mt-1">Across {packageInfo.approvedModules.length} modules</p>
         </div>
@@ -166,7 +224,18 @@ export default function FranchiseDashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-emerald-600">{MOCK_MODULE_REVENUE[mod] || '₹0'}</p>
+                  {/*
+                    Per-module revenue has no endpoint on franchise-service yet
+                    — the KPI commands return it per vertical, but nothing rolls
+                    them up here. The commission rate is a real number this
+                    franchise agreed to, so it is shown instead of a revenue
+                    figure that would be invented.
+                  */}
+                  <p className="font-bold text-emerald-600">
+                    {estate?.commissionRates?.[mod.toLowerCase() === 'hotel' ? 'hotel-booking' : mod.toLowerCase()] != null
+                      ? `${estate.commissionRates[mod.toLowerCase() === 'hotel' ? 'hotel-booking' : mod.toLowerCase()]}% commission`
+                      : '—'}
+                  </p>
                   <p className="text-xs text-slate-400">Commission MTD</p>
                 </div>
               </div>

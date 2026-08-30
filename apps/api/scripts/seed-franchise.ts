@@ -40,10 +40,20 @@ const PG = {
 };
 
 /**
- * Fixed ids, so re-running the seed updates the same six zones instead of
- * creating six more, and so the vertical rows linked below keep pointing at
- * something after a re-run. The `f000000N-` prefix makes demo data obvious in a
- * table full of generated uuids.
+ * One franchise per active market.
+ *
+ * Five of the six seeded estates were Indian and the sixth was in Doha, so the
+ * console was only ever exercised against ₹ and QR — both two-decimal
+ * currencies, both left-positioned. Bahrain, Kuwait and Oman divide into
+ * thousandths, and a rounding bug there is invisible until a market that uses
+ * them exists.
+ *
+ * `commissionRates` carries only the modules the market actually enables:
+ * Qatar, Bahrain, Kuwait and Oman do not run doctor, and the UK and US run a
+ * shorter list again. The registry in apps/api/libs/region decides, not this
+ * file — these rates are the market-specific numbers, nothing more.
+ *
+ * The `f000000N-` prefix makes demo data obvious in a table of generated uuids.
  */
 const FRANCHISES = [
   {
@@ -52,7 +62,7 @@ const FRANCHISES = [
     businessName: 'Mumbai Metro Franchise',
     countryCode: 'IN',
     operationalZones: ['Andheri', 'Bandra', 'Juhu', 'Versova', 'Goregaon'],
-    commissionRates: { grocery: 12, restaurant: 18, pharmacy: 10, marketplace: 8, doctor: 12, taxi: 20, hotel: 15 },
+    commissionRates: { marketplace: 8, grocery: 12, restaurant: 18, pharmacy: 10, doctor: 12, taxi: 20, 'hotel-booking': 15 },
     status: 'active',
   },
   {
@@ -61,7 +71,7 @@ const FRANCHISES = [
     businessName: 'Bandra West Franchise',
     countryCode: 'IN',
     operationalZones: ['Bandra West', 'Khar', 'Santacruz'],
-    commissionRates: { grocery: 12, restaurant: 18, pharmacy: 10, marketplace: 8, doctor: 12, taxi: 20, hotel: 15 },
+    commissionRates: { marketplace: 8, grocery: 12, restaurant: 18, pharmacy: 10, doctor: 12, taxi: 20, 'hotel-booking': 15 },
     status: 'active',
   },
   {
@@ -70,7 +80,7 @@ const FRANCHISES = [
     businessName: 'Powai Franchise',
     countryCode: 'IN',
     operationalZones: ['Powai', 'Chandivali', 'Saki Naka'],
-    commissionRates: { grocery: 11, restaurant: 16, pharmacy: 10, marketplace: 8, doctor: 11, taxi: 18, hotel: 14 },
+    commissionRates: { marketplace: 8, grocery: 11, restaurant: 16, pharmacy: 10, doctor: 11, taxi: 18, 'hotel-booking': 14 },
     status: 'active',
   },
   {
@@ -79,7 +89,8 @@ const FRANCHISES = [
     businessName: 'Doha Central Franchise',
     countryCode: 'QA',
     operationalZones: ['West Bay', 'The Pearl', 'Al Sadd', 'Msheireb'],
-    commissionRates: { grocery: 10, restaurant: 15, pharmacy: 9, marketplace: 7, doctor: 10, taxi: 18, hotel: 12 },
+    // No doctor rate: Qatar does not enable the module.
+    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
     status: 'active',
   },
   {
@@ -88,7 +99,7 @@ const FRANCHISES = [
     businessName: 'Bengaluru South Franchise',
     countryCode: 'IN',
     operationalZones: ['Koramangala', 'Indiranagar', 'HSR Layout', 'BTM Layout'],
-    commissionRates: { grocery: 12, restaurant: 17, pharmacy: 10, marketplace: 8, doctor: 12, taxi: 19, hotel: 14 },
+    commissionRates: { marketplace: 8, grocery: 12, restaurant: 17, pharmacy: 10, doctor: 12, taxi: 19, 'hotel-booking': 14 },
     status: 'active',
   },
   {
@@ -97,7 +108,73 @@ const FRANCHISES = [
     businessName: 'Pune Central Franchise',
     countryCode: 'IN',
     operationalZones: ['Koregaon Park', 'Kalyani Nagar', 'Viman Nagar', 'Baner', 'Hinjewadi'],
-    commissionRates: { grocery: 10, restaurant: 15, pharmacy: 10, marketplace: 8, doctor: 10, taxi: 20, hotel: 12 },
+    commissionRates: { marketplace: 8, grocery: 10, restaurant: 15, pharmacy: 10, doctor: 10, taxi: 20, 'hotel-booking': 12 },
+    status: 'pending',
+  },
+  {
+    id: 'f0000007-0000-4000-8000-000000000007',
+    ownerId: 'usr-franchise-007',
+    businessName: 'Dubai Marina Franchise',
+    countryCode: 'AE',
+    operationalZones: ['Dubai Marina', 'JBR', 'Business Bay', 'Downtown'],
+    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, doctor: 11, taxi: 18, 'hotel-booking': 12 },
+    status: 'active',
+  },
+  {
+    id: 'f0000008-0000-4000-8000-000000000008',
+    ownerId: 'usr-franchise-008',
+    businessName: 'Riyadh North Franchise',
+    countryCode: 'SA',
+    operationalZones: ['Olaya', 'Al Malqa', 'Hittin', 'Al Nakheel'],
+    commissionRates: { marketplace: 7, grocery: 11, restaurant: 16, pharmacy: 9, doctor: 11, taxi: 19, 'hotel-booking': 13 },
+    status: 'active',
+  },
+  {
+    id: 'f0000009-0000-4000-8000-000000000009',
+    ownerId: 'usr-franchise-009',
+    businessName: 'Manama Bay Franchise',
+    countryCode: 'BH',
+    // Bahraini dinar — three decimal places.
+    operationalZones: ['Manama', 'Seef', 'Juffair', 'Amwaj'],
+    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
+    status: 'active',
+  },
+  {
+    id: 'f000000a-0000-4000-8000-00000000000a',
+    ownerId: 'usr-franchise-010',
+    businessName: 'Kuwait City Franchise',
+    countryCode: 'KW',
+    // Kuwaiti dinar — three decimal places, and the highest-value unit here.
+    operationalZones: ['Salmiya', 'Hawally', 'Kuwait City', 'Farwaniya'],
+    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
+    status: 'active',
+  },
+  {
+    id: 'f000000b-0000-4000-8000-00000000000b',
+    ownerId: 'usr-franchise-011',
+    businessName: 'Muscat Franchise',
+    countryCode: 'OM',
+    // Omani rial — three decimal places.
+    operationalZones: ['Muscat', 'Seeb', 'Bawshar', 'Qurum'],
+    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
+    status: 'active',
+  },
+  {
+    id: 'f000000c-0000-4000-8000-00000000000c',
+    ownerId: 'usr-franchise-012',
+    businessName: 'London Central Franchise',
+    countryCode: 'GB',
+    operationalZones: ['Camden', 'Shoreditch', 'Southwark', 'Islington'],
+    commissionRates: { marketplace: 9, grocery: 12, restaurant: 18, pharmacy: 10 },
+    status: 'active',
+  },
+  {
+    id: 'f000000d-0000-4000-8000-00000000000d',
+    ownerId: 'usr-franchise-013',
+    businessName: 'New York Metro Franchise',
+    countryCode: 'US',
+    operationalZones: ['Manhattan', 'Brooklyn', 'Queens', 'Jersey City'],
+    commissionRates: { marketplace: 10, grocery: 13, restaurant: 20, pharmacy: 11 },
     status: 'pending',
   },
 ];

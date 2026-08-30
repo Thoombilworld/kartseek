@@ -79,9 +79,13 @@ describe('FranchiseService', () => {
       });
       const result = await service.getFranchiseByOwner('user-9');
       expect(franchiseRepo.findOne).toHaveBeenCalledWith({ where: { ownerId: 'user-9' } });
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         id: 'f-1', businessName: 'Colaba Estate', countryCode: 'IN', status: 'active', operationalZones: ['400001'],
       });
+      // The console's first call, and the one it formats every figure from.
+      // An Indian estate settles in rupees; a Doha one must not.
+      expect(result?.region.currency).toEqual({ code: 'INR', symbol: '₹', decimals: 2 });
+      expect(result?.region.timezone).toBe('Asia/Kolkata');
     });
 
     it('returns null when the user owns no franchise', async () => {
@@ -150,14 +154,63 @@ describe('FranchiseService', () => {
   });
 
   describe('registerFranchise', () => {
-    it('should register new franchise', async () => {
+    it('registers into a supported market', async () => {
       const result = await service.registerFranchise({
-        businessName: 'East Africa Foods', contactEmail: 'ea@test.com', region: 'EA',
+        businessName: 'Doha Retail Group', contactEmail: 'doha@test.com', countryCode: 'QA',
       });
       expect(result.success).toBe(true);
-      expect(result.franchise.businessName).toBe('East Africa Foods');
-      expect(result.franchise.status).toBe('pending');
+      expect(result.franchise?.businessName).toBe('Doha Retail Group');
+      expect(result.franchise?.status).toBe('pending');
+      expect(result.franchise?.countryCode).toBe('QA');
+      // Qatar settles in riyals, and the reply says so — the console formats
+      // from this rather than assuming the platform's home currency.
+      expect(result.region?.currency).toEqual({ code: 'QAR', symbol: 'QR', decimals: 2 });
       expect(kafka.publish).toHaveBeenCalledWith('franchise.registered', expect.any(Object));
+    });
+
+    it('rejects a country that is not an active franchise market', async () => {
+      // Used to default to 'IN' and save, so a typo produced a franchise
+      // quietly settling in a currency nobody chose.
+      const result = await service.registerFranchise({
+        businessName: 'East Africa Foods', contactEmail: 'ea@test.com', countryCode: 'EA',
+      });
+      expect(result.success).toBe(false);
+      expect(result.supportedMarkets).toContain('QA');
+      expect(kafka.publish).not.toHaveBeenCalledWith('franchise.registered', expect.any(Object));
+    });
+
+    it('keeps commission rates only for modules the market runs', async () => {
+      // Qatar does not enable doctor; a rate for it must not be stored.
+      const result = await service.registerFranchise({
+        businessName: 'Pearl Franchise', countryCode: 'QA',
+        commissionRates: { grocery: 9, doctor: 14 },
+      });
+      expect(result.franchise?.commissionRates.grocery).toBe(9);
+      expect(result.franchise?.commissionRates).not.toHaveProperty('doctor');
+    });
+  });
+
+  describe('region settings', () => {
+    it('resolves currency, tax and modules from the franchise country', () => {
+      const kw = service.buildRegionSettings('KW');
+      expect(kw.supported).toBe(true);
+      // The Kuwaiti dinar divides into thousandths. Two decimals would round
+      // away a real unit of money on every commission line.
+      expect(kw.currency).toEqual({ code: 'KWD', symbol: 'KD', decimals: 3 });
+      expect(kw.tax?.rate).toBe(0);
+    });
+
+    it('reports an unsupported country instead of guessing a currency', () => {
+      const zz = service.buildRegionSettings('ZZ');
+      expect(zz.supported).toBe(false);
+      expect(zz).not.toHaveProperty('currency');
+    });
+
+    it('offers every active franchise market', () => {
+      const codes = service.listSupportedMarkets().markets.map((m) => m.code);
+      expect(codes).toEqual(
+        expect.arrayContaining(['QA', 'AE', 'SA', 'BH', 'KW', 'OM', 'IN', 'GB', 'US']),
+      );
     });
   });
 
