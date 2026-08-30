@@ -3,19 +3,19 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { MarketplaceFulfillmentService } from './marketplace-fulfillment.service';
-import { Product } from './entities/product.entity';
-import { Seller } from './entities/seller.entity';
-import { MarketplaceOrder } from './entities/marketplace-order.entity';
-import { ReturnRequest } from './entities/return-request.entity';
-import { Coupon, CouponUsage } from './entities/coupon.entity';
-import { ShipmentTrackingEvent } from './entities/shipment-tracking-event.entity';
-import { ProductVariant } from './entities/product-variant.entity';
-import { ProductQuestion, ProductAnswer } from './entities/product-qa.entity';
-import { DeliveryAssignment } from './entities/delivery-assignment.entity';
-import { ProductReport } from './entities/product-report.entity';
-import { PriceAlert } from './entities/price-alert.entity';
-import { ProductListing } from './entities/product-listing.entity';
+import { MarketplaceFulfillmentService } from './fulfillment.service';
+import { Product } from '../entities/product.entity';
+import { Seller } from '../entities/seller.entity';
+import { MarketplaceOrder } from '../entities/marketplace-order.entity';
+import { ReturnRequest } from '../entities/return-request.entity';
+import { Coupon, CouponUsage } from '../entities/coupon.entity';
+import { ShipmentTrackingEvent } from '../entities/shipment-tracking-event.entity';
+import { ProductVariant } from '../entities/product-variant.entity';
+import { ProductQuestion, ProductAnswer } from '../entities/product-qa.entity';
+import { DeliveryAssignment } from '../entities/delivery-assignment.entity';
+import { ProductReport } from '../entities/product-report.entity';
+import { PriceAlert } from '../entities/price-alert.entity';
+import { ProductListing } from '../entities/product-listing.entity';
 
 /**
  * Cross-seller authorisation.

@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Seller } from './entities/seller.entity';
-import { Product } from './entities/product.entity';
-import { Category } from './entities/category.entity';
-import { MarketplaceOrder } from './entities/marketplace-order.entity';
+import { Seller } from '../entities/seller.entity';
+import { Product } from '../entities/product.entity';
+import { Category } from '../entities/category.entity';
+import { MarketplaceOrder } from '../entities/marketplace-order.entity';
 
 /**
  * FranchiseViewService — the ONLY sanctioned read path into Marketplace's data for

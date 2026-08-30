@@ -21,11 +21,11 @@ import { DeliveryAssignment } from './entities/delivery-assignment.entity';
 import { ProductAttribute } from './entities/product-attribute.entity';
 import { MarketplaceNotification } from './entities/marketplace-notification.entity';
 import { GiftCard, GiftCardStatus } from './entities/gift-card.entity';
-import { ProductFilter, DataList } from './marketplace.types';
+import { ProductFilter, DataList } from './types/marketplace.types';
 import { PUBLIC_SELLER_FIELDS, publicSellerColumns } from './entities/seller.public-fields';
-import { CatalogService } from './catalog.service';
-import { MarketplaceHomeCacheService } from './marketplace-home-cache.service';
-import { MarketplaceFulfillmentService } from './marketplace-fulfillment.service';
+import { CatalogService } from './catalog/catalog.service';
+import { MarketplaceHomeCacheService } from './catalog/home-cache.service';
+import { MarketplaceFulfillmentService } from './fulfillment/fulfillment.service';
 import { getRegionConfig, DEFAULT_REGION } from '@app/region';
 
 @Injectable()

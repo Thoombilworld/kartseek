@@ -4,7 +4,7 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { EncryptionService } from '@app/security';
 import { SellerService } from '../src/seller/seller.service';
-import { CatalogService } from '../src/catalog.service';
+import { CatalogService } from '../src/catalog/catalog.service';
 import { Seller } from '../src/entities/seller.entity';
 import { SellerSettings } from '../src/entities/seller-settings.entity';
 import { SellerKyc } from '../src/entities/seller-kyc.entity';

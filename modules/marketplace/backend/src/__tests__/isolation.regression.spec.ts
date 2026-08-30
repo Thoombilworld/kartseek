@@ -12,8 +12,14 @@ import * as path from 'path';
  *   3. The TypeORM config reads MARKETPLACE_DB_* env vars for dedicated DB support.
  */
 
-const MARKETPLACE_SRC = path.resolve(__dirname);
-const SERVICES_ROOT = path.resolve(__dirname, '../../');
+// This spec lives in src/__tests__, so the module's source root is one level up.
+const MARKETPLACE_SRC = path.resolve(__dirname, '..');
+
+// The other services still live in the apps/api Nest monorepo; marketplace was
+// extracted out of it into modules/marketplace/backend. Test 1 below scans for
+// imports that reach back into any of them, which is now a genuine physical
+// boundary rather than a naming convention within one project.
+const SERVICES_ROOT = path.resolve(__dirname, '../../../../../apps/api/apps');
 
 /** Recursively collect all .ts files (excluding .spec.ts, .d.ts). */
 function collectTsFiles(dir: string): string[] {

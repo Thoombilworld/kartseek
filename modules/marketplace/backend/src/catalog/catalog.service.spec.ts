@@ -1,18 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CatalogService } from './catalog.service';
-import { MarketplaceFulfillmentService } from './marketplace-fulfillment.service';
+import { MarketplaceFulfillmentService } from '../fulfillment/fulfillment.service';
 import { RedisService } from '@app/redis';
-import { Product } from './entities/product.entity';
-import { Seller } from './entities/seller.entity';
-import { Category } from './entities/category.entity';
-import { Brand } from './entities/brand.entity';
-import { ProductListing } from './entities/product-listing.entity';
-import { ProductImage } from './entities/product-image.entity';
-import { Review } from './entities/review.entity';
-import { ProductVariant } from './entities/product-variant.entity';
-import { ProductAttribute } from './entities/product-attribute.entity';
-import { FlashDealNomination } from './entities/flash-deal.entity';
+import { Product } from '../entities/product.entity';
+import { Seller } from '../entities/seller.entity';
+import { Category } from '../entities/category.entity';
+import { Brand } from '../entities/brand.entity';
+import { ProductListing } from '../entities/product-listing.entity';
+import { ProductImage } from '../entities/product-image.entity';
+import { Review } from '../entities/review.entity';
+import { ProductVariant } from '../entities/product-variant.entity';
+import { ProductAttribute } from '../entities/product-attribute.entity';
+import { FlashDealNomination } from '../entities/flash-deal.entity';
 
 /**
  * Catalogue read tests. These moved here with the methods when CatalogService was

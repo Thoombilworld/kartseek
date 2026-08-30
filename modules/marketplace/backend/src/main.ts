@@ -4,7 +4,7 @@ import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { MarketplaceModule } from './marketplace.module';
 import { createGrpcMicroserviceOptions } from '@app/grpc';
 import { InternalServiceGuard } from '@app/security';
-import { HttpSurfaceGuard } from './http-surface.guard';
+import { HttpSurfaceGuard } from './transport/http-surface.guard';
 
 async function bootstrap() {
   const app = await NestFactory.create(MarketplaceModule);

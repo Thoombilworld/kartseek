@@ -1,7 +1,7 @@
 import { UseFilters, Controller, Logger } from '@nestjs/common';
 import { RpcAwareExceptionsFilter } from '@app/common';
 import { GrpcMethod } from '@nestjs/microservices';
-import { CatalogService } from './catalog.service';
+import { CatalogService } from '../catalog/catalog.service';
 
 /**
  * gRPC surface for the Marketplace catalogue — implements `service MarketplaceService`

@@ -5,7 +5,7 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { EncryptionService } from '@app/security';
 import { getRegionConfig, isSupportedRegion, DEFAULT_REGION } from '@app/region';
-import { CatalogService } from '../catalog.service';
+import { CatalogService } from '../catalog/catalog.service';
 import { Seller } from '../entities/seller.entity';
 import { Product } from '../entities/product.entity';
 import { ProductListing } from '../entities/product-listing.entity';

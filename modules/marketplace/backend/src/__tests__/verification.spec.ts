@@ -75,7 +75,7 @@ describe('Marketplace Module Verification', () => {
       const fs = require('fs');
       const path = require('path');
       const moduleSource = fs.readFileSync(
-        path.resolve(__dirname, 'marketplace.module.ts'),
+        path.resolve(__dirname, '..', 'marketplace.module.ts'),
         'utf-8',
       );
 
@@ -96,7 +96,7 @@ describe('Marketplace Module Verification', () => {
     it('should have entity files on disk for every expected entity', () => {
       const fs = require('fs');
       const path = require('path');
-      const entitiesDir = path.resolve(__dirname, 'entities');
+      const entitiesDir = path.resolve(__dirname, '..', 'entities');
       const entityFiles = fs.readdirSync(entitiesDir).filter((f: string) => f.endsWith('.entity.ts'));
 
       // 22 entity files produce 24 entity classes (coupon.entity.ts exports Coupon +
@@ -108,7 +108,7 @@ describe('Marketplace Module Verification', () => {
       const fs = require('fs');
       const path = require('path');
       const moduleSource = fs.readFileSync(
-        path.resolve(__dirname, 'marketplace.module.ts'),
+        path.resolve(__dirname, '..', 'marketplace.module.ts'),
         'utf-8',
       );
       expect(moduleSource).toContain("schema: 'marketplace'");

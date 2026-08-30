@@ -2,12 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository, MoreThanOrEqual } from 'typeorm';
 import { RedisService } from '@app/redis';
-import { Product } from './entities/product.entity';
-import { Seller } from './entities/seller.entity';
-import { Category } from './entities/category.entity';
-import { Review } from './entities/review.entity';
-import { MarketplaceOrder } from './entities/marketplace-order.entity';
-import { ReturnRequest } from './entities/return-request.entity';
+import { Product } from '../entities/product.entity';
+import { Seller } from '../entities/seller.entity';
+import { Category } from '../entities/category.entity';
+import { Review } from '../entities/review.entity';
+import { MarketplaceOrder } from '../entities/marketplace-order.entity';
+import { ReturnRequest } from '../entities/return-request.entity';
 
 /**
  * MarketplaceAnalyticsService — admin reporting over the marketplace's own data.

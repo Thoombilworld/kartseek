@@ -4,19 +4,19 @@ import { Repository, DataSource, ILike, In, MoreThanOrEqual } from 'typeorm';
 import { requireId } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { Product } from './entities/product.entity';
-import { Seller } from './entities/seller.entity';
-import { PUBLIC_SELLER_FIELDS } from './entities/seller.public-fields';
-import { MarketplaceOrder } from './entities/marketplace-order.entity';
-import { ReturnRequest } from './entities/return-request.entity';
-import { Coupon, CouponUsage } from './entities/coupon.entity';
-import { ShipmentTrackingEvent } from './entities/shipment-tracking-event.entity';
-import { ProductVariant } from './entities/product-variant.entity';
-import { ProductQuestion, ProductAnswer } from './entities/product-qa.entity';
-import { DeliveryAssignment } from './entities/delivery-assignment.entity';
-import { ProductReport, type ProductReportReason, type ProductReportStatus } from './entities/product-report.entity';
-import { PriceAlert } from './entities/price-alert.entity';
-import { ProductListing } from './entities/product-listing.entity';
+import { Product } from '../entities/product.entity';
+import { Seller } from '../entities/seller.entity';
+import { PUBLIC_SELLER_FIELDS } from '../entities/seller.public-fields';
+import { MarketplaceOrder } from '../entities/marketplace-order.entity';
+import { ReturnRequest } from '../entities/return-request.entity';
+import { Coupon, CouponUsage } from '../entities/coupon.entity';
+import { ShipmentTrackingEvent } from '../entities/shipment-tracking-event.entity';
+import { ProductVariant } from '../entities/product-variant.entity';
+import { ProductQuestion, ProductAnswer } from '../entities/product-qa.entity';
+import { DeliveryAssignment } from '../entities/delivery-assignment.entity';
+import { ProductReport, type ProductReportReason, type ProductReportStatus } from '../entities/product-report.entity';
+import { PriceAlert } from '../entities/price-alert.entity';
+import { ProductListing } from '../entities/product-listing.entity';
 
 /**
  * The authenticated caller, as forwarded by the API Gateway from the verified

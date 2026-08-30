@@ -2,19 +2,19 @@ import { BadRequestException, Inject, Injectable, Logger, NotFoundException, for
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityTarget, Repository, TreeRepository, ILike, In, IsNull, MoreThanOrEqual, SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
-import { Product } from './entities/product.entity';
-import { Seller } from './entities/seller.entity';
-import { Category } from './entities/category.entity';
-import { Brand } from './entities/brand.entity';
-import { ProductListing } from './entities/product-listing.entity';
-import { ProductImage } from './entities/product-image.entity';
-import { Review } from './entities/review.entity';
-import { ProductVariant } from './entities/product-variant.entity';
-import { ProductAttribute } from './entities/product-attribute.entity';
-import { FlashDealNomination } from './entities/flash-deal.entity';
-import { MarketplaceFulfillmentService } from './marketplace-fulfillment.service';
-import { PUBLIC_SELLER_FIELDS, INVOICE_SELLER_FIELDS } from './entities/seller.public-fields';
-import { ProductFilter } from './marketplace.types';
+import { Product } from '../entities/product.entity';
+import { Seller } from '../entities/seller.entity';
+import { Category } from '../entities/category.entity';
+import { Brand } from '../entities/brand.entity';
+import { ProductListing } from '../entities/product-listing.entity';
+import { ProductImage } from '../entities/product-image.entity';
+import { Review } from '../entities/review.entity';
+import { ProductVariant } from '../entities/product-variant.entity';
+import { ProductAttribute } from '../entities/product-attribute.entity';
+import { FlashDealNomination } from '../entities/flash-deal.entity';
+import { MarketplaceFulfillmentService } from '../fulfillment/fulfillment.service';
+import { PUBLIC_SELLER_FIELDS, INVOICE_SELLER_FIELDS } from '../entities/seller.public-fields';
+import { ProductFilter } from '../types/marketplace.types';
 
 /**
  * CatalogService — public, read-only view of the Marketplace catalogue.

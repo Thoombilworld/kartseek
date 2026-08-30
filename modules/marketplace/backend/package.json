@@ -25,7 +25,7 @@
     "testRegex": ".*\\.spec\\.ts$",
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "<rootDir>/src/marketplace-schema.integration.spec.ts",
+      "<rootDir>/src/__tests__/schema.integration.spec.ts",
       "<rootDir>/test/marketplace.integration.spec.ts"
     ],
     "transform": {

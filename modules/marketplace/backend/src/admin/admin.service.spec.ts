@@ -1,20 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { MarketplaceAdminService } from './marketplace-admin.service';
-import { MarketplaceHomeCacheService } from './marketplace-home-cache.service';
+import { MarketplaceAdminService } from './admin.service';
+import { MarketplaceHomeCacheService } from '../catalog/home-cache.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { Product } from './entities/product.entity';
-import { Seller } from './entities/seller.entity';
-import { Category } from './entities/category.entity';
-import { Brand } from './entities/brand.entity';
-import { Review } from './entities/review.entity';
-import { MarketplaceOrder } from './entities/marketplace-order.entity';
-import { ReturnRequest } from './entities/return-request.entity';
-import { ProductAttribute } from './entities/product-attribute.entity';
-import { ProductQuestion } from './entities/product-qa.entity';
-import { MarketplaceNotification } from './entities/marketplace-notification.entity';
-import { FlashDeal, FlashDealNomination } from './entities/flash-deal.entity';
+import { Product } from '../entities/product.entity';
+import { Seller } from '../entities/seller.entity';
+import { Category } from '../entities/category.entity';
+import { Brand } from '../entities/brand.entity';
+import { Review } from '../entities/review.entity';
+import { MarketplaceOrder } from '../entities/marketplace-order.entity';
+import { ReturnRequest } from '../entities/return-request.entity';
+import { ProductAttribute } from '../entities/product-attribute.entity';
+import { ProductQuestion } from '../entities/product-qa.entity';
+import { MarketplaceNotification } from '../entities/marketplace-notification.entity';
+import { FlashDeal, FlashDealNomination } from '../entities/flash-deal.entity';
 
 /**
  * Admin governance tests. Moved here with the methods when MarketplaceAdminService

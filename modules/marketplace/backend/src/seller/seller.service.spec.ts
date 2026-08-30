@@ -20,7 +20,7 @@ import { SellerBankAccount } from '../entities/seller-bank-account.entity';
 import { SellerStaff } from '../entities/seller-staff.entity';
 import { SellerPromotion } from '../entities/seller-promotion.entity';
 import { SellerSupportTicket } from '../entities/seller-support-ticket.entity';
-import { CatalogService } from '../catalog.service';
+import { CatalogService } from '../catalog/catalog.service';
 
 describe('SellerService', () => {
   let service: SellerService;

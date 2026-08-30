@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
 import { MarketplaceService } from './marketplace.service';
-import { CatalogService } from './catalog.service';
-import { MarketplaceHomeCacheService } from './marketplace-home-cache.service';
-import { MarketplaceFulfillmentService } from './marketplace-fulfillment.service';
+import { CatalogService } from './catalog/catalog.service';
+import { MarketplaceHomeCacheService } from './catalog/home-cache.service';
+import { MarketplaceFulfillmentService } from './fulfillment/fulfillment.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { Product } from './entities/product.entity';
