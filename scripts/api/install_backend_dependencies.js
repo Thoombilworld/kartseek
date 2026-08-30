@@ -49,12 +49,10 @@ const PACKAGES = [
   '@nestjs/microservices',
   '@nestjs/throttler',
   '@nestjs/schedule',
-  '@nestjs/bull',
   '@nestjs/websockets',
   '@nestjs/platform-socket.io',
   '@nestjs/typeorm',
   // Infra
-  'bull',
   'socket.io',
   'typeorm',
   'pg',
