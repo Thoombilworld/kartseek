@@ -14,15 +14,15 @@
  */
 
 import { DataSource } from 'typeorm';
-import { Hotel, HotelStatus, HotelType } from '../apps/hotel-service/src/entities/hotel.entity';
-import { HotelRoom, RoomType, RoomBedType, RoomStatus } from '../apps/hotel-service/src/entities/hotel-room.entity';
-import { HotelBooking, HotelBookingStatus, HotelPaymentMethod, HotelPaymentStatus } from '../apps/hotel-service/src/entities/hotel-booking.entity';
-import { HotelReview } from '../apps/hotel-service/src/entities/hotel-review.entity';
-import { HotelOwner, HotelOwnerStatus } from '../apps/hotel-service/src/entities/hotel-owner.entity';
-import { HotelGuest } from '../apps/hotel-service/src/entities/hotel-guest.entity';
-import { HotelPayout } from '../apps/hotel-service/src/entities/hotel-payout.entity';
-import { HotelStaff } from '../apps/hotel-service/src/entities/hotel-staff.entity';
-import { HotelSeasonalPricing } from '../apps/hotel-service/src/entities/hotel-seasonal-pricing.entity';
+import { Hotel, HotelStatus, HotelType } from '../../../modules/hotel/backend/src/entities/hotel.entity';
+import { HotelRoom, RoomType, RoomBedType, RoomStatus } from '../../../modules/hotel/backend/src/entities/hotel-room.entity';
+import { HotelBooking, HotelBookingStatus, HotelPaymentMethod, HotelPaymentStatus } from '../../../modules/hotel/backend/src/entities/hotel-booking.entity';
+import { HotelReview } from '../../../modules/hotel/backend/src/entities/hotel-review.entity';
+import { HotelOwner, HotelOwnerStatus } from '../../../modules/hotel/backend/src/entities/hotel-owner.entity';
+import { HotelGuest } from '../../../modules/hotel/backend/src/entities/hotel-guest.entity';
+import { HotelPayout } from '../../../modules/hotel/backend/src/entities/hotel-payout.entity';
+import { HotelStaff } from '../../../modules/hotel/backend/src/entities/hotel-staff.entity';
+import { HotelSeasonalPricing } from '../../../modules/hotel/backend/src/entities/hotel-seasonal-pricing.entity';
 
 const ds = new DataSource({
   type: 'postgres',

@@ -7,9 +7,9 @@ import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { HotelController } from './hotel.controller';
 import { HotelService } from './hotel.service';
-import { HotelOwnerController } from './hotel-owner.controller';
-import { HotelAdminController } from './hotel-admin.controller';
-import { HotelWebhookController } from './hotel-webhook.controller';
+import { HotelOwnerController } from './owner/owner.controller';
+import { HotelAdminController } from './admin/admin.controller';
+import { HotelWebhookController } from './webhooks/webhook.controller';
 
 // ── Entities ──────────────────────────────────────────────────────────────────
 import { Hotel } from './entities/hotel.entity';
@@ -39,7 +39,10 @@ const envSchema = buildEnvSchema({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Resolved against process.cwd(). As an extracted microservice this is
+      // started from its own directory, so its own `.env` wins; the platform
+      // file stays as a fallback for the ~120 shared values.
+      envFilePath: ['.env', '../../../apps/api/.env'],
       validationSchema: envSchema,
       validationOptions: { abortEarly: false },
     }),
@@ -47,7 +50,16 @@ const envSchema = buildEnvSchema({
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule], inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        type: 'postgres' as const,        ...databaseCredentials(cfg),
+        type: 'postgres' as const,        // Dedicated HOTEL_DB_* values win; anything unset falls back to the
+        // shared DB_* credentials. `databaseCredentials` still supplies the
+        // password default and its production guard.
+        ...databaseCredentials(cfg),
+        host: cfg.get<string>('HOTEL_DB_HOST') || cfg.get<string>('DB_HOST', 'localhost'),
+        port: cfg.get<number>('HOTEL_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
+        username: cfg.get<string>('HOTEL_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
+        password: cfg.get<string>('HOTEL_DB_PASSWORD') || databaseCredentials(cfg).password,
+        database: cfg.get<string>('HOTEL_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
+        // Fixed, not configurable: the same entities must work against either.
         schema: 'hotel',
         entities: ENTITIES,
         // See marketplace-service: dedicated schema, so dev auto-sync is safe.

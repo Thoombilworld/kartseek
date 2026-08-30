@@ -1,18 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { HotelService } from './hotel.service';
+import { HotelService } from '../hotel.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { HotelPaymentMethod } from './dto/create-booking.dto';
-import { Hotel } from './entities/hotel.entity';
-import { HotelRoom } from './entities/hotel-room.entity';
-import { HotelBooking } from './entities/hotel-booking.entity';
-import { HotelReview } from './entities/hotel-review.entity';
-import { HotelOwner } from './entities/hotel-owner.entity';
-import { HotelGuest } from './entities/hotel-guest.entity';
-import { HotelPayout } from './entities/hotel-payout.entity';
-import { HotelStaff } from './entities/hotel-staff.entity';
-import { HotelSeasonalPricing } from './entities/hotel-seasonal-pricing.entity';
+import { HotelPaymentMethod } from '../dto/create-booking.dto';
+import { Hotel } from '../entities/hotel.entity';
+import { HotelRoom } from '../entities/hotel-room.entity';
+import { HotelBooking } from '../entities/hotel-booking.entity';
+import { HotelReview } from '../entities/hotel-review.entity';
+import { HotelOwner } from '../entities/hotel-owner.entity';
+import { HotelGuest } from '../entities/hotel-guest.entity';
+import { HotelPayout } from '../entities/hotel-payout.entity';
+import { HotelStaff } from '../entities/hotel-staff.entity';
+import { HotelSeasonalPricing } from '../entities/hotel-seasonal-pricing.entity';
 
 describe('HotelService', () => {
   let service: HotelService;
@@ -147,13 +147,19 @@ describe('HotelService', () => {
       bookingRepo.findOne.mockResolvedValue({
         id: 'bk-1', hotelId: 'h1', status: 'CONFIRMED',
       });
-      const result = await service.getBookingById('bk-1');
+      // A requester is mandatory: findBookingFor scopes the lookup to the
+      // booking's own customer unless the caller holds a privileged role, so a
+      // guest cannot read someone else's reservation by id. The spec predates
+      // that scoping and called it with no requester at all.
+      const result = await service.getBookingById('bk-1', { requesterId: 'u1' });
       expect(result.id).toBe('bk-1');
     });
 
     it('should throw when booking not found', async () => {
       bookingRepo.findOne.mockResolvedValue(null);
-      await expect(service.getBookingById('missing')).rejects.toThrow();
+      // Also passes a requester: without one this would throw on the missing
+      // requester rather than the missing booking, and pass for the wrong reason.
+      await expect(service.getBookingById('missing', { requesterId: 'u1' })).rejects.toThrow();
     });
   });
 

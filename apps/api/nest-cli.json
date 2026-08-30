@@ -165,15 +165,6 @@
         "tsConfigPath": "apps/user-service/tsconfig.app.json"
       }
     },
-    "hotel-service": {
-      "type": "application",
-      "root": "apps/hotel-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/hotel-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/hotel-service/tsconfig.app.json"
-      }
-    },
     "taxi-service": {
       "type": "application",
       "root": "apps/taxi-service",

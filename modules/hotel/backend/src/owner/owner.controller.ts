@@ -1,9 +1,9 @@
 import { Controller, Get, Post, Put, Param, Body, Query, UsePipes, ValidationPipe, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { HotelService } from './hotel.service';
-import { RegisterOwnerDto } from './dto/register-owner.dto';
-import { CreateHotelDto } from './dto/create-hotel.dto';
-import { UpdatePricingDto } from './dto/update-pricing.dto';
+import { HotelService } from '../hotel.service';
+import { RegisterOwnerDto } from '../dto/register-owner.dto';
+import { CreateHotelDto } from '../dto/create-hotel.dto';
+import { UpdatePricingDto } from '../dto/update-pricing.dto';
 import { EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)

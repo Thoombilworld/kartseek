@@ -127,6 +127,7 @@ const nextConfig = {
     const restaurantZone = (process.env.RESTAURANT_ZONE_ORIGIN ?? 'http://localhost:3004').replace(/\/$/, '');
     const pharmacyZone = (process.env.PHARMACY_ZONE_ORIGIN ?? 'http://localhost:3005').replace(/\/$/, '');
     const doctorZone = (process.env.DOCTOR_ZONE_ORIGIN ?? 'http://localhost:3006').replace(/\/$/, '');
+    const hotelZone = (process.env.HOTEL_ZONE_ORIGIN ?? 'http://localhost:3007').replace(/\/$/, '');
 
     return [
       {
@@ -196,6 +197,21 @@ const nextConfig = {
       {
         source: '/doctor/_next/:path*',
         destination: `${doctorZone}/doctor/_next/:path*`,
+      },
+      // Only the customer booking surface is a zone. /hotel-owner is the vendor
+      // portal and stays in this app alongside the other /seller/* portals,
+      // which share its login, OTP, registration and approval-status flows.
+      {
+        source: '/hotel-booking',
+        destination: `${hotelZone}/hotel-booking`,
+      },
+      {
+        source: '/hotel-booking/:path*',
+        destination: `${hotelZone}/hotel-booking/:path*`,
+      },
+      {
+        source: '/hotel-booking/_next/:path*',
+        destination: `${hotelZone}/hotel-booking/_next/:path*`,
       },
     ];
   },

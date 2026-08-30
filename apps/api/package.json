@@ -39,7 +39,7 @@
     "start:notification": "nest start notification-service --watch",
     "start:admin": "nest start admin-service --watch",
     "start:franchise": "nest start franchise-service --watch",
-    "start:hotel": "nest start hotel-service --watch",
+    "start:hotel": "npm run dev -w @kartseek/hotel-backend",
     "start:audit": "nest start audit-log-service --watch",
     "start:report": "nest start report-service --watch",
     "test": "jest",

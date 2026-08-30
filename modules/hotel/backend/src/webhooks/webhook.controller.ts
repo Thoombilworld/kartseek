@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Logger, HttpCode, HttpStatus } from '@nestjs/common';
-import { HotelService } from './hotel.service';
-import { WebhookPaymentDto, WebhookRefundDto } from './dto/webhook-payment.dto';
+import { HotelService } from '../hotel.service';
+import { WebhookPaymentDto, WebhookRefundDto } from '../dto/webhook-payment.dto';
 
 @Controller('webhooks')
 export class HotelWebhookController {
