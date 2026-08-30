@@ -1,7 +1,7 @@
 {
   "name": "kartseek-super-app",
   "version": "2.0.0",
-  "description": "KARTSEEK \u2014 Multi-vertical Super App monorepo (Web \u00b7 API \u00b7 Mobile)",
+  "description": "KARTSEEK — Multi-vertical Super App monorepo (Web · API · Mobile)",
   "private": true,
   "packageManager": "npm@11.17.0",
   "engines": {
@@ -15,7 +15,7 @@
     "modules/*/frontend"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --concurrency=20",
     "dev:web": "turbo run dev --filter=kartseek-web",
     "dev:api": "turbo run dev --filter=kartseek-api",
     "build": "turbo run build",
