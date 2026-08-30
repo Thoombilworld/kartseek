@@ -1,21 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { DoctorService } from './doctor.service';
+import { DoctorService } from '../doctor.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { Doctor } from './entities/doctor.entity';
-import { Appointment } from './entities/appointment.entity';
-import { DoctorAvailability } from './entities/doctor-availability.entity';
-import { Hospital } from './entities/hospital.entity';
-import { Clinic } from './entities/clinic.entity';
-import { Specialty } from './entities/specialty.entity';
-import { Department } from './entities/department.entity';
-import { Review } from './entities/review.entity';
-import { Document } from './entities/document.entity';
-import { Prescription } from './entities/prescription.entity';
-import { PrescriptionItem } from './entities/prescription-item.entity';
-import { FamilyMember } from './entities/family-member.entity';
-import { IntakeForm } from './entities/intake-form.entity';
+import { Doctor } from '../entities/doctor.entity';
+import { Appointment } from '../entities/appointment.entity';
+import { DoctorAvailability } from '../entities/doctor-availability.entity';
+import { Hospital } from '../entities/hospital.entity';
+import { Clinic } from '../entities/clinic.entity';
+import { Specialty } from '../entities/specialty.entity';
+import { Department } from '../entities/department.entity';
+import { Review } from '../entities/review.entity';
+import { Document } from '../entities/document.entity';
+import { Prescription } from '../entities/prescription.entity';
+import { PrescriptionItem } from '../entities/prescription-item.entity';
+import { FamilyMember } from '../entities/family-member.entity';
+import { IntakeForm } from '../entities/intake-form.entity';
 
 describe('DoctorService', () => {
   let service: DoctorService;

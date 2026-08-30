@@ -26,10 +26,10 @@ import { PharmacyItem } from '../../../modules/pharmacy/backend/src/entities/pha
 import { PharmacyOrder } from '../../../modules/pharmacy/backend/src/entities/pharmacy-order.entity';
 import { FranchiseViewService as PharmacyView } from '../../../modules/pharmacy/backend/src/franchise/franchise-view.service';
 
-import { Clinic } from '../apps/doctor-service/src/entities/clinic.entity';
-import { Doctor } from '../apps/doctor-service/src/entities/doctor.entity';
-import { Appointment } from '../apps/doctor-service/src/entities/appointment.entity';
-import { FranchiseViewService as DoctorView } from '../apps/doctor-service/src/franchise-view.service';
+import { Clinic } from '../../../modules/doctor/backend/src/entities/clinic.entity';
+import { Doctor } from '../../../modules/doctor/backend/src/entities/doctor.entity';
+import { Appointment } from '../../../modules/doctor/backend/src/entities/appointment.entity';
+import { FranchiseViewService as DoctorView } from '../../../modules/doctor/backend/src/franchise/franchise-view.service';
 
 import { Seller } from '../../../modules/marketplace/backend/src/entities/seller.entity';
 import { Product } from '../../../modules/marketplace/backend/src/entities/product.entity';
@@ -53,7 +53,7 @@ const ds = new DataSource({
     __dirname + '/../../../modules/grocery/backend/src/entities/*.entity.ts',
     __dirname + '/../../../modules/restaurant/backend/src/entities/*.entity.ts',
     __dirname + '/../../../modules/pharmacy/backend/src/entities/*.entity.ts',
-    __dirname + '/../apps/doctor-service/src/entities/*.entity.ts',
+    __dirname + '/../../../modules/doctor/backend/src/entities/*.entity.ts',
     __dirname + '/../../../modules/marketplace/backend/src/entities/*.entity.ts',
   ],
   synchronize: false,

@@ -150,6 +150,12 @@
       "@/lib/region-headers": [
         "../../packages/shared-core/src/region-headers"
       ],
+      "@/lib/routes": [
+        "../../packages/shared-core/src/routes"
+      ],
+      "@/lib/routes/*": [
+        "../../packages/shared-core/src/routes/*"
+      ],
       "@/lib/sanitize-html": [
         "../../packages/shared-core/src/sanitize-html"
       ],

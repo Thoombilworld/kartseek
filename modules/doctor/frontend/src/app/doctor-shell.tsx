@@ -1,14 +1,16 @@
 import React from 'react';
-import type { Metadata } from 'next';
 import { Stethoscope, Calendar, Search, MapPin, User, HeartPulse } from 'lucide-react';
 import Link from 'next/link';
-import { moduleMeta } from '@/lib/seo/metadata';
 import { AccountMenu } from '@/components/shared/account-menu';
 
-// ── SEO: Dynamic Metadata ───────────────────────────────────────────────────
-export const metadata: Metadata = moduleMeta('doctor');
-
-export default function DoctorLayout({ children }: { children: React.ReactNode }) {
+/**
+ * The doctor chrome — header, search, nav.
+ *
+ * This was app/doctor/layout.tsx in the shell. In the zone every route is
+ * doctor, so it has no distinct layout level left to occupy: the zone root
+ * layout renders it inside <AppShell>, and its metadata moved up there too.
+ */
+export default function DoctorShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen module-surface-doctor flex flex-col">
       <header className="module-header-doctor sticky top-0 z-50">

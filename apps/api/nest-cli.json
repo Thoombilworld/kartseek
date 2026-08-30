@@ -174,15 +174,6 @@
         "tsConfigPath": "apps/hotel-service/tsconfig.app.json"
       }
     },
-    "doctor-service": {
-      "type": "application",
-      "root": "apps/doctor-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/doctor-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/doctor-service/tsconfig.app.json"
-      }
-    },
     "taxi-service": {
       "type": "application",
       "root": "apps/taxi-service",

@@ -13,15 +13,15 @@
  */
 
 import { DataSource } from 'typeorm';
-import { Specialty } from '../apps/doctor-service/src/entities/specialty.entity';
-import { Hospital } from '../apps/doctor-service/src/entities/hospital.entity';
-import { Clinic } from '../apps/doctor-service/src/entities/clinic.entity';
-import { Department } from '../apps/doctor-service/src/entities/department.entity';
-import { Doctor } from '../apps/doctor-service/src/entities/doctor.entity';
-import { DoctorAvailability } from '../apps/doctor-service/src/entities/doctor-availability.entity';
-import { Appointment } from '../apps/doctor-service/src/entities/appointment.entity';
+import { Specialty } from '../../../modules/doctor/backend/src/entities/specialty.entity';
+import { Hospital } from '../../../modules/doctor/backend/src/entities/hospital.entity';
+import { Clinic } from '../../../modules/doctor/backend/src/entities/clinic.entity';
+import { Department } from '../../../modules/doctor/backend/src/entities/department.entity';
+import { Doctor } from '../../../modules/doctor/backend/src/entities/doctor.entity';
+import { DoctorAvailability } from '../../../modules/doctor/backend/src/entities/doctor-availability.entity';
+import { Appointment } from '../../../modules/doctor/backend/src/entities/appointment.entity';
 // Note: Review entity excluded — shares 'reviews' table with marketplace module
-import { Document } from '../apps/doctor-service/src/entities/document.entity';
+import { Document } from '../../../modules/doctor/backend/src/entities/document.entity';
 
 const ENTITIES = [Specialty, Hospital, Clinic, Department, Doctor, DoctorAvailability, Appointment, Document];
 

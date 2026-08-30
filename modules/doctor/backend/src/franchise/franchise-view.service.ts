@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Clinic } from './entities/clinic.entity';
-import { Doctor } from './entities/doctor.entity';
-import { Appointment } from './entities/appointment.entity';
+import { Clinic } from '../entities/clinic.entity';
+import { Doctor } from '../entities/doctor.entity';
+import { Appointment } from '../entities/appointment.entity';
 
 /**
  * FranchiseViewService — the ONLY sanctioned read path into Doctor's data for

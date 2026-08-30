@@ -6,7 +6,7 @@ import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { DoctorController } from './doctor.controller';
 import { DoctorService } from './doctor.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { FranchiseViewService } from './franchise/franchise-view.service';
 
 // ── Entities ─────────────────────────────────────────────────────────────────
 import { Doctor } from './entities/doctor.entity';
@@ -45,7 +45,10 @@ const envSchema = buildEnvSchema({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Resolved against process.cwd(). As an extracted microservice this is
+      // started from its own directory, so its own `.env` wins; the platform
+      // file stays as a fallback for the ~120 shared values.
+      envFilePath: ['.env', '../../../apps/api/.env'],
       validationSchema: envSchema,
       validationOptions: { abortEarly: false },
     }),
@@ -56,7 +59,16 @@ const envSchema = buildEnvSchema({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres' as const,
+        // Dedicated DOCTOR_DB_* values win; anything unset falls back to the
+        // shared DB_* credentials. `databaseCredentials` still supplies the
+        // password default and its production guard.
         ...databaseCredentials(cfg),
+        host: cfg.get<string>('DOCTOR_DB_HOST') || cfg.get<string>('DB_HOST', 'localhost'),
+        port: cfg.get<number>('DOCTOR_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
+        username: cfg.get<string>('DOCTOR_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
+        password: cfg.get<string>('DOCTOR_DB_PASSWORD') || databaseCredentials(cfg).password,
+        database: cfg.get<string>('DOCTOR_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
+        // Fixed, not configurable: the same entities must work against either.
         schema: 'doctor',
         entities: ENTITIES,
         // Matches marketplace-service: each vertical owns a dedicated schema, so a

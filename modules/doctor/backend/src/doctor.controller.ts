@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Param, Body, Query, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DoctorService } from './doctor.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { FranchiseViewService } from './franchise/franchise-view.service';
 import { DtoMessage, EmptyMessage, PaginatedMessage, RpcAwareExceptionsFilter, requireId } from '@app/common';
 import {
   CreateAppointmentDto, UpdateAppointmentStatusDto, AdvanceTokenDto,
