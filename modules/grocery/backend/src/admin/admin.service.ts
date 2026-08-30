@@ -4,12 +4,12 @@ import { Repository, In, ILike } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
 
-import { GroceryStore } from './entities/grocery-store.entity';
-import { GroceryItem } from './entities/grocery-item.entity';
-import { GroceryOrder, GroceryOrderStatus } from './entities/grocery-order.entity';
-import { GroceryFlashDeal, FlashDealStatus } from './entities/grocery-flash-deal.entity';
-import { GroceryDeliveryZone } from './entities/grocery-delivery-zone.entity';
-import { GrocerySetting, GROCERY_SETTING_DEFAULTS } from './entities/grocery-setting.entity';
+import { GroceryStore } from '../entities/grocery-store.entity';
+import { GroceryItem } from '../entities/grocery-item.entity';
+import { GroceryOrder, GroceryOrderStatus } from '../entities/grocery-order.entity';
+import { GroceryFlashDeal, FlashDealStatus } from '../entities/grocery-flash-deal.entity';
+import { GroceryDeliveryZone } from '../entities/grocery-delivery-zone.entity';
+import { GrocerySetting, GROCERY_SETTING_DEFAULTS } from '../entities/grocery-setting.entity';
 
 /**
  * GroceryAdminService — the super-admin console's read/write surface.

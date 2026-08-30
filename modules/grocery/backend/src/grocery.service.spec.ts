@@ -1,11 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { GroceryService } from './grocery.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { GroceryCategory } from './entities/grocery-category.entity';
+import { GroceryBrand } from './entities/grocery-brand.entity';
+import { GroceryProductVariant } from './entities/grocery-product-variant.entity';
+import { GroceryStockMovement } from './entities/grocery-stock-movement.entity';
+import { GroceryWarehouse } from './entities/grocery-warehouse.entity';
+import { GroceryVariantStock } from './entities/grocery-variant-stock.entity';
 import { GroceryStore } from './entities/grocery-store.entity';
 import { GroceryItem } from './entities/grocery-item.entity';
 import { GroceryOrder, GroceryOrderStatus, GroceryPaymentMethod } from './entities/grocery-order.entity';
@@ -93,6 +98,22 @@ describe('GroceryService', () => {
         GroceryService,
         { provide: RedisService, useValue: redisMock },
         { provide: KafkaProducerService, useValue: kafkaMock },
+        // GroceryService takes a DataSource at constructor index 0 (it opens
+        // transactions for stock movements). Neither spec provided one, so the
+        // testing module could not construct the service and every test in both
+        // files failed on the same UnknownDependenciesException — the suites had
+        // drifted behind the constructor.
+        {
+          provide: getDataSourceToken(),
+          useValue: {
+            transaction: jest.fn().mockImplementation((cb: any) => cb(mockEntityManager)),
+          },
+        },
+        { provide: getRepositoryToken(GroceryBrand), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryProductVariant), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryStockMovement), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryWarehouse), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryVariantStock), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryCategory), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryStore), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryItem), useFactory: mockRepoFactory },

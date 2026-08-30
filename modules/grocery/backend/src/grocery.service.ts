@@ -12,7 +12,7 @@ import { GroceryProductVariant } from './entities/grocery-product-variant.entity
 import { GroceryStockMovement, StockMovementType } from './entities/grocery-stock-movement.entity';
 import { GroceryWarehouse, WarehouseType } from './entities/grocery-warehouse.entity';
 import { GroceryVariantStock } from './entities/grocery-variant-stock.entity';
-import { GROCERY_TAXONOMY, LEGACY_CATEGORY_MAP, ALL_MARKETS, taxonomyId } from './catalog-tree';
+import { GROCERY_TAXONOMY, LEGACY_CATEGORY_MAP, ALL_MARKETS, taxonomyId } from './catalog/catalog-tree';
 import { GroceryItem } from './entities/grocery-item.entity';
 import {
   GroceryOrder,

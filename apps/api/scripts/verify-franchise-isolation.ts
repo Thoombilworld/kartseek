@@ -10,10 +10,10 @@
  */
 import { DataSource } from 'typeorm';
 
-import { GroceryStore } from '../apps/grocery-service/src/entities/grocery-store.entity';
-import { GroceryItem } from '../apps/grocery-service/src/entities/grocery-item.entity';
-import { GroceryOrder } from '../apps/grocery-service/src/entities/grocery-order.entity';
-import { FranchiseViewService as GroceryView } from '../apps/grocery-service/src/franchise-view.service';
+import { GroceryStore } from '../../../modules/grocery/backend/src/entities/grocery-store.entity';
+import { GroceryItem } from '../../../modules/grocery/backend/src/entities/grocery-item.entity';
+import { GroceryOrder } from '../../../modules/grocery/backend/src/entities/grocery-order.entity';
+import { FranchiseViewService as GroceryView } from '../../../modules/grocery/backend/src/franchise/franchise-view.service';
 
 import { Restaurant } from '../apps/restaurant-service/src/entities/restaurant.entity';
 import { RestaurantOrder } from '../apps/restaurant-service/src/entities/restaurant-order.entity';
@@ -35,7 +35,7 @@ import { Seller } from '../../../modules/marketplace/backend/src/entities/seller
 import { Product } from '../../../modules/marketplace/backend/src/entities/product.entity';
 import { Category } from '../../../modules/marketplace/backend/src/entities/category.entity';
 import { MarketplaceOrder } from '../../../modules/marketplace/backend/src/entities/marketplace-order.entity';
-import { FranchiseViewService as MarketplaceView } from '../../../modules/marketplace/backend/src/franchise-view.service';
+import { FranchiseViewService as MarketplaceView } from '../../../modules/marketplace/backend/src/franchise/franchise-view.service';
 
 const FRANCHISE_ID = process.env.VERIFY_FRANCHISE_ID || 'FR-001';
 
@@ -50,7 +50,7 @@ const ds = new DataSource({
   // their inverse sides registered. Globs are fine here: this runs under ts-node,
   // not webpack, so __dirname resolves to real source directories.
   entities: [
-    __dirname + '/../apps/grocery-service/src/entities/*.entity.ts',
+    __dirname + '/../../../modules/grocery/backend/src/entities/*.entity.ts',
     __dirname + '/../apps/restaurant-service/src/entities/*.entity.ts',
     __dirname + '/../apps/pharmacy-service/src/entities/*.entity.ts',
     __dirname + '/../apps/doctor-service/src/entities/*.entity.ts',

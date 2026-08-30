@@ -4,18 +4,23 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { GroceryService } from './grocery.service';
+import { GroceryService } from '../grocery.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { GroceryCategory } from './entities/grocery-category.entity';
-import { GroceryStore } from './entities/grocery-store.entity';
-import { GroceryItem } from './entities/grocery-item.entity';
-import { GroceryOrder, GroceryOrderStatus, GroceryPaymentMethod } from './entities/grocery-order.entity';
-import { GroceryFlashDeal, FlashDealStatus } from './entities/grocery-flash-deal.entity';
-import { GroceryReview } from './entities/grocery-review.entity';
-import { GroceryWishlist } from './entities/grocery-wishlist.entity';
+import { GroceryCategory } from '../entities/grocery-category.entity';
+import { GroceryBrand } from '../entities/grocery-brand.entity';
+import { GroceryProductVariant } from '../entities/grocery-product-variant.entity';
+import { GroceryStockMovement } from '../entities/grocery-stock-movement.entity';
+import { GroceryWarehouse } from '../entities/grocery-warehouse.entity';
+import { GroceryVariantStock } from '../entities/grocery-variant-stock.entity';
+import { GroceryStore } from '../entities/grocery-store.entity';
+import { GroceryItem } from '../entities/grocery-item.entity';
+import { GroceryOrder, GroceryOrderStatus, GroceryPaymentMethod } from '../entities/grocery-order.entity';
+import { GroceryFlashDeal, FlashDealStatus } from '../entities/grocery-flash-deal.entity';
+import { GroceryReview } from '../entities/grocery-review.entity';
+import { GroceryWishlist } from '../entities/grocery-wishlist.entity';
 
 /**
  * `storeId` and `productId` are uuid columns, so the fixtures below use
@@ -24,6 +29,14 @@ import { GroceryWishlist } from './entities/grocery-wishlist.entity';
  * and come back as a 500 carrying `invalid input syntax for type uuid`, and an
  * undefined one was worse: TypeORM discards an undefined condition, so the
  * lookup returned the first row in the table instead of nothing.
+ */
+/**
+ * Flash-deal management is authorised by `assertStoreActor`: an actor is either
+ * an admin role or the store's own owner. These specs predate that check and
+ * called the methods with no actor at all, so once the suite could construct
+ * the service again they failed with ForbiddenException rather than exercising
+ * the lifecycle they describe. They pass an admin actor now, which is how the
+ * gateway calls them.
  */
 describe('GroceryService — Extended Features', () => {
   let service: GroceryService;
@@ -93,6 +106,22 @@ describe('GroceryService — Extended Features', () => {
         GroceryService,
         { provide: RedisService, useValue: redisMock },
         { provide: KafkaProducerService, useValue: kafkaMock },
+        // GroceryService takes a DataSource at constructor index 0 (it opens
+        // transactions for stock movements). Neither spec provided one, so the
+        // testing module could not construct the service and every test in both
+        // files failed on the same UnknownDependenciesException — the suites had
+        // drifted behind the constructor.
+        {
+          provide: getDataSourceToken(),
+          useValue: {
+            transaction: jest.fn().mockImplementation((cb: any) => cb(mockEntityManager)),
+          },
+        },
+        { provide: getRepositoryToken(GroceryBrand), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryProductVariant), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryStockMovement), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryWarehouse), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(GroceryVariantStock), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryCategory), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryStore), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryItem), useFactory: mockRepoFactory },
@@ -146,7 +175,7 @@ describe('GroceryService — Extended Features', () => {
           discountPercent: 50, soldCount: 0,
         } as any);
 
-        const result = await service.createFlashDeal(createDto);
+        const result = await service.createFlashDeal(createDto, { id: 'admin-1', role: 'ADMIN' });
 
         expect(result).toBeDefined();
         expect(flashDealRepo.save).toHaveBeenCalled();
@@ -155,14 +184,14 @@ describe('GroceryService — Extended Features', () => {
       it('should reject flash deal if store not found', async () => {
         storeRepo.findOne.mockResolvedValue(null);
 
-        await expect(service.createFlashDeal(createDto)).rejects.toThrow();
+        await expect(service.createFlashDeal(createDto, { id: 'admin-1', role: 'ADMIN' })).rejects.toThrow();
       });
 
       it('should reject flash deal if product not found', async () => {
         storeRepo.findOne.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' } as any);
         itemRepo.findOne.mockResolvedValue(null);
 
-        await expect(service.createFlashDeal(createDto)).rejects.toThrow();
+        await expect(service.createFlashDeal(createDto, { id: 'admin-1', role: 'ADMIN' })).rejects.toThrow();
       });
     });
 
@@ -172,7 +201,7 @@ describe('GroceryService — Extended Features', () => {
         flashDealRepo.findOne.mockResolvedValue(deal as any);
         flashDealRepo.save.mockResolvedValue({ ...deal, status: FlashDealStatus.PENDING, submittedAt: new Date() } as any);
 
-        const result = await service.submitFlashDeal('fd-1');
+        const result = await service.submitFlashDeal('fd-1', { id: 'admin-1', role: 'ADMIN' });
 
         expect(result).toBeDefined();
         expect(flashDealRepo.save).toHaveBeenCalledWith(
@@ -189,13 +218,13 @@ describe('GroceryService — Extended Features', () => {
           id: 'fd-1', status: FlashDealStatus.ACTIVE,
         } as any);
 
-        await expect(service.submitFlashDeal('fd-1')).rejects.toThrow();
+        await expect(service.submitFlashDeal('fd-1', { id: 'admin-1', role: 'ADMIN' })).rejects.toThrow();
       });
 
       it('should throw if deal not found', async () => {
         flashDealRepo.findOne.mockResolvedValue(null);
 
-        await expect(service.submitFlashDeal('non-existent')).rejects.toThrow();
+        await expect(service.submitFlashDeal('non-existent', { id: 'admin-1', role: 'ADMIN' })).rejects.toThrow();
       });
     });
 
@@ -259,7 +288,7 @@ describe('GroceryService — Extended Features', () => {
         flashDealRepo.findOne.mockResolvedValue(deal as any);
         flashDealRepo.save.mockResolvedValue({ ...deal, status: FlashDealStatus.PAUSED } as any);
 
-        const result = await service.pauseFlashDeal('fd-1');
+        const result = await service.pauseFlashDeal('fd-1', { id: 'admin-1', role: 'ADMIN' });
 
         expect(flashDealRepo.save).toHaveBeenCalledWith(
           expect.objectContaining({ status: FlashDealStatus.PAUSED }),
@@ -271,7 +300,7 @@ describe('GroceryService — Extended Features', () => {
           id: 'fd-1', status: FlashDealStatus.DRAFT,
         } as any);
 
-        await expect(service.pauseFlashDeal('fd-1')).rejects.toThrow();
+        await expect(service.pauseFlashDeal('fd-1', { id: 'admin-1', role: 'ADMIN' })).rejects.toThrow();
       });
     });
 
@@ -281,7 +310,7 @@ describe('GroceryService — Extended Features', () => {
         flashDealRepo.findOne.mockResolvedValue(deal as any);
         flashDealRepo.save.mockResolvedValue({ ...deal, status: FlashDealStatus.ACTIVE } as any);
 
-        const result = await service.resumeFlashDeal('fd-1');
+        const result = await service.resumeFlashDeal('fd-1', { id: 'admin-1', role: 'ADMIN' });
 
         expect(flashDealRepo.save).toHaveBeenCalledWith(
           expect.objectContaining({ status: FlashDealStatus.ACTIVE }),

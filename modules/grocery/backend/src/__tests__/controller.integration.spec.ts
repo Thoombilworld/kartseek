@@ -7,10 +7,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
-import { GroceryController } from './grocery.controller';
-import { GroceryService } from './grocery.service';
-import { GroceryAdminService } from './admin.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { GroceryController } from '../grocery.controller';
+import { GroceryService } from '../grocery.service';
+import { GroceryAdminService } from '../admin/admin.service';
+import { FranchiseViewService } from '../franchise/franchise-view.service';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 

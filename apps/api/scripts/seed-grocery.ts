@@ -14,10 +14,10 @@
  */
 
 import { DataSource } from 'typeorm';
-import { GroceryCategory } from '../apps/grocery-service/src/entities/grocery-category.entity';
-import { GroceryStore } from '../apps/grocery-service/src/entities/grocery-store.entity';
-import { GroceryItem } from '../apps/grocery-service/src/entities/grocery-item.entity';
-import { GroceryOrder } from '../apps/grocery-service/src/entities/grocery-order.entity';
+import { GroceryCategory } from '../../../modules/grocery/backend/src/entities/grocery-category.entity';
+import { GroceryStore } from '../../../modules/grocery/backend/src/entities/grocery-store.entity';
+import { GroceryItem } from '../../../modules/grocery/backend/src/entities/grocery-item.entity';
+import { GroceryOrder } from '../../../modules/grocery/backend/src/entities/grocery-order.entity';
 
 const ds = new DataSource({
   type: 'postgres',

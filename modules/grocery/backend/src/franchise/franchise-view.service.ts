@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
-import { GroceryStore } from './entities/grocery-store.entity';
-import { GroceryItem } from './entities/grocery-item.entity';
-import { GroceryOrder } from './entities/grocery-order.entity';
+import { GroceryStore } from '../entities/grocery-store.entity';
+import { GroceryItem } from '../entities/grocery-item.entity';
+import { GroceryOrder } from '../entities/grocery-order.entity';
 
 /**
  * FranchiseViewService — the ONLY sanctioned read path into Grocery's data for

@@ -3,8 +3,8 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { GroceryService } from './grocery.service';
-import { GroceryAdminService } from './admin.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { GroceryAdminService } from './admin/admin.service';
+import { FranchiseViewService } from './franchise/franchise-view.service';
 import { CreateGroceryOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateFlashDealDto, RejectFlashDealDto, CreateReviewDto, AddToWishlistDto, ReorderDto, ProductTranslationDto } from './dto/flash-deal.dto';
@@ -21,7 +21,7 @@ import {
   StoreMsg, StoreProductMsg, PageMsg, StoreListMsg, SearchMsg, OrderMsg,
   CustomerOrdersMsg, FlashDealMsg, WishlistMsg, CategoryMsg, FranchiseMsg,
   AdminIdMsg, AdminListMsg, DtoPayload,
-} from './rpc-payloads';
+} from './transport/rpc-payloads';
 
 /** The caller the gateway attached, in the shape the service expects. */
 function actorOf(d: any): { id?: string; role?: string } {

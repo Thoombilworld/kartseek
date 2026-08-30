@@ -1,12 +1,12 @@
 import { Controller, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { RpcAwareExceptionsFilter } from '@app/common';
-import { GroceryService } from './grocery.service';
-import { GroceryAdminService } from './admin.service';
-import { CreateGroceryOrderDto } from './dto/create-order.dto';
-import { GroceryPaymentMethod } from './entities/grocery-order.entity';
-import type { GroceryStore } from './entities/grocery-store.entity';
-import type { GroceryItem } from './entities/grocery-item.entity';
+import { GroceryService } from '../grocery.service';
+import { GroceryAdminService } from '../admin/admin.service';
+import { CreateGroceryOrderDto } from '../dto/create-order.dto';
+import { GroceryPaymentMethod } from '../entities/grocery-order.entity';
+import type { GroceryStore } from '../entities/grocery-store.entity';
+import type { GroceryItem } from '../entities/grocery-item.entity';
 
 /**
  * GroceryService gRPC surface.

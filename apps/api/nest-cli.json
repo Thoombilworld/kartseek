@@ -165,15 +165,6 @@
         "tsConfigPath": "apps/user-service/tsconfig.app.json"
       }
     },
-    "grocery-service": {
-      "type": "application",
-      "root": "apps/grocery-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/grocery-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/grocery-service/tsconfig.app.json"
-      }
-    },
     "restaurant-service": {
       "type": "application",
       "root": "apps/restaurant-service",

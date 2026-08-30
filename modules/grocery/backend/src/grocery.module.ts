@@ -7,10 +7,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { GroceryController } from './grocery.controller';
-import { GroceryGrpcController } from './grocery.grpc.controller';
+import { GroceryGrpcController } from './transport/grpc.controller';
 import { GroceryService } from './grocery.service';
-import { GroceryAdminService } from './admin.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { GroceryAdminService } from './admin/admin.service';
+import { FranchiseViewService } from './franchise/franchise-view.service';
 import { GroceryCategory } from './entities/grocery-category.entity';
 import { GroceryStore } from './entities/grocery-store.entity';
 import { GroceryItem } from './entities/grocery-item.entity';
@@ -49,7 +49,11 @@ const envSchema = buildEnvSchema({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Resolved against process.cwd(). As an extracted microservice this is
+      // started from its own directory, so its own `.env` wins; the platform
+      // file stays as a fallback for the ~120 shared values (Redis, Kafka
+      // brokers, JWT secret) rather than copying them per module.
+      envFilePath: ['.env', '../../../apps/api/.env'],
       validationSchema: envSchema,
       validationOptions: { abortEarly: false },
     }),
@@ -57,7 +61,19 @@ const envSchema = buildEnvSchema({
       imports: [ConfigModule], inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres',
+        // Dedicated GROCERY_DB_* values win; anything unset falls back to the
+        // shared DB_* credentials, so pointing this module at its own database
+        // is config, not a code change, and a partial override is valid.
+        // `databaseCredentials` still supplies the password default and its
+        // production guard.
         ...databaseCredentials(cfg),
+        host: cfg.get<string>('GROCERY_DB_HOST') || cfg.get<string>('DB_HOST', 'localhost'),
+        port: cfg.get<number>('GROCERY_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
+        username: cfg.get<string>('GROCERY_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
+        password: cfg.get<string>('GROCERY_DB_PASSWORD') || databaseCredentials(cfg).password,
+        database: cfg.get<string>('GROCERY_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
+        // Fixed, not configurable: the same entity definitions must work whether
+        // this points at the dedicated instance or back at shared Postgres.
         schema: 'grocery',
         entities: GROCERY_ENTITIES,
         // Matches marketplace-service: each vertical owns a dedicated schema, so a
