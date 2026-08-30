@@ -23,11 +23,23 @@
       }
     ],
     "paths": {
+      "@/components/app-shell": [
+        "../../../packages/shared-ui/src/app-shell"
+      ],
       "@/components/kartseek-loader": [
         "../../../packages/shared-ui/src/kartseek-loader"
       ],
       "@/components/marketplace/product-thumb": [
         "../../../packages/shared-ui/src/marketplace-product-thumb"
+      ],
+      "@/components/profile/*": [
+        "../../../packages/shared-ui/src/profile/*"
+      ],
+      "@/components/recommendations": [
+        "../../../packages/shared-ui/src/recommendations"
+      ],
+      "@/components/recommendations/*": [
+        "../../../packages/shared-ui/src/recommendations/*"
       ],
       "@/components/seo": [
         "../../../packages/shared-ui/src/seo"
@@ -43,6 +55,9 @@
       ],
       "@/components/ui": [
         "../../../packages/shared-ui/src/ui"
+      ],
+      "@/hooks/*": [
+        "../../../packages/shared-core/src/hooks/*"
       ],
       "@/i18n": [
         "../../../packages/shared-core/src/i18n"

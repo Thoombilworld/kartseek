@@ -2,24 +2,13 @@ import React from 'react';
 import type { Metadata, Viewport } from 'next';
 import { Outfit, Inter } from 'next/font/google';
 import '@/styles/globals.css';
-import { AuthProvider }   from '@/lib/contexts/auth-context';
-import { AuditProvider }  from '@/lib/contexts/audit-context';
-import { PincodeSearchLogProvider } from '@/lib/contexts/pincode-search-log';
-import { ToastProvider }  from '@/lib/contexts/toast-context';
-import { RegionProvider } from '@/lib/contexts/region-context';
-import { PageErrorBoundary } from '@/lib/error-boundary';
 import { cookies, headers } from 'next/headers';
-import { AnalyticsScripts, GoogleTagManagerNoScript } from '@/lib/seo/analytics';
+import { AnalyticsScripts } from '@/lib/seo/analytics';
+import { AppShell } from '@/components/app-shell';
 import { JsonLd } from '@/components/seo/json-ld';
 import { organizationSchema, websiteSchema } from '@/lib/seo/schema';
 import { SITE_URL } from '@/lib/seo/metadata';
-import { NavigationProgress } from '@/components/shared/navigation-progress';
-import { NextIntlClientProvider } from 'next-intl';
-import { CartProvider } from '@/lib/contexts/cart-context';
-import { LoginPromptProvider } from '@/lib/contexts/login-prompt';
-import { WishlistProvider } from '@/lib/contexts/wishlist-context';
 import { getMessages } from 'next-intl/server';
-import { ConsentBanner } from '@/components/shared/consent-banner';
 import { resolveLocaleForCountry, getLocaleDirection } from '@/i18n/config';
 import { DEFAULT_COUNTRY, isCountryCode } from '@/lib/localization';
 
@@ -200,51 +189,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to main content
         </a>
-        {/* Top progress bar for App Router page transitions */}
-        <NavigationProgress />
-        <GoogleTagManagerNoScript />
-        {/*
-          Provider nesting order (outer → inner):
-          AuthProvider:   JWT + user state (needed by RegionProvider for user prefs)
-          RegionProvider: Country/city context with auto-detection (needed everywhere)
-          ToastProvider:  Notification system + DOM portal
-          PageErrorBoundary: Catches top-level render errors
-        */}
-        <AuthProvider>
-          <NextIntlClientProvider messages={messages} locale={language}>
-            <RegionProvider serverRegion={country} serverLanguage={language}>
-              <ToastProvider>
-                <AuditProvider>
-                  <PincodeSearchLogProvider>
-                    <CartProvider>
-                      {/* Inside CartProvider so a sign-in from the prompt at
-                          checkout re-syncs the server cart immediately. */}
-                      <LoginPromptProvider>
-                      {/* Inside LoginPromptProvider so a heart clicked while
-                          signed out can prompt and then complete the save. */}
-                      <WishlistProvider>
-                      <PageErrorBoundary>
-                        {children}
-                      </PageErrorBoundary>
-                      {/* No region-confirmation prompt here. The marketplace
-                          header already shows the detected location and country
-                          and lets either be changed, so a pop-up saying the same
-                          thing was a second interruption carrying no new
-                          information. Detection itself is unaffected — the edge
-                          proxy resolves the region, and the header's own
-                          GPS/IP lookup keeps it current. */}
-                      {/* Consent on the terms of the customer's own regime —
-                          in Qatar (PDPPL) nothing optional starts enabled. */}
-                      <ConsentBanner />
-                      </WishlistProvider>
-                      </LoginPromptProvider>
-                    </CartProvider>
-                  </PincodeSearchLogProvider>
-                </AuditProvider>
-              </ToastProvider>
-            </RegionProvider>
-          </NextIntlClientProvider>
-        </AuthProvider>
+        {/* The provider stack lives in <AppShell> (packages/shared-ui) so this
+            app and every module zone mount an identical tree. Nesting order and
+            the reasons for it are documented there. */}
+        <AppShell messages={messages as Record<string, unknown>} language={language} country={country}>
+          {children}
+        </AppShell>
         {/* Service Worker Registration */}
         <script dangerouslySetInnerHTML={{ __html: "if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').then(function(r){console.log('[KARTSEEK] SW registered:',r.scope)}).catch(function(e){console.warn('[KARTSEEK] SW failed:',e)})})}" }} />
       </body>
