@@ -10,6 +10,7 @@ import { useGroceryLocale } from '@/i18n/grocery-locale';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { brandLogoUrl } from '@/lib/grocery/brand-logo';
 import { productPath } from '@/lib/grocery/urls';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /**
  * A brand's catalogue.
@@ -79,7 +80,7 @@ export default function GroceryBrandDetailPage() {
             return (
               <Link
                 key={p.id}
-                href={productPath({ id: p.id, name: p.name, storeName: p.storeName })}
+                href={zoneHref(productPath({ id: p.id, name: p.name, storeName: p.storeName }))}
                 className="bg-white border border-slate-200/80 rounded-xl p-3 flex flex-col group hover:shadow-md transition-all"
               >
                 <div className="w-full aspect-square bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-2 overflow-hidden flex items-center justify-center">

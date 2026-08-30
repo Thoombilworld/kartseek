@@ -24,6 +24,7 @@ import { brandLogoUrl } from '@/lib/grocery/brand-logo';
 import { railsFor, railHref } from '@/lib/grocery/store-rails';
 import { deliveryWindow, distanceKm } from '@/lib/grocery/delivery-estimate';
 import { useAsyncData } from '@/lib/hooks/use-async-data';
+import { zoneHref } from '@/lib/routes/zone-href';
 // ═══════════════════════════════════════════════════════════════════════════
 // PERFORMANCE: Lazy Section — defers rendering until visible in viewport
 // ═══════════════════════════════════════════════════════════════════════════
@@ -146,7 +147,7 @@ function StoreCard({ store, variant = 'default' }: { store: GroceryStore; varian
 
   if (variant === 'promoted') {
     return (
-      <Link href={storePath(store)} className={`group relative bg-linear-to-br from-amber-50 via-white to-orange-50 rounded-2xl border-2 border-amber-200/70 shadow-md hover:shadow-xl hover:border-amber-300 transition-all overflow-hidden ${STORE_CARD_W} shrink-0`}>
+      <Link href={zoneHref(storePath(store))} className={`group relative bg-linear-to-br from-amber-50 via-white to-orange-50 rounded-2xl border-2 border-amber-200/70 shadow-md hover:shadow-xl hover:border-amber-300 transition-all overflow-hidden ${STORE_CARD_W} shrink-0`}>
         {/* Promoted Badge */}
         <div className="absolute top-0 left-0 right-0 bg-linear-to-r from-amber-500 via-orange-500 to-amber-500 text-white text-sm font-bold text-center py-1 tracking-wider flex items-center justify-center gap-1">
           <Crown className="w-4 h-4" />{tr('SPONSORED STORE')}<Crown className="w-4 h-4" />
@@ -196,7 +197,7 @@ function StoreCard({ store, variant = 'default' }: { store: GroceryStore; varian
 
   if (variant === 'compact') {
     return (
-      <Link href={storePath(store)} className={`group bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-green-200 transition-all overflow-hidden ${STORE_CARD_W} shrink-0`}>
+      <Link href={zoneHref(storePath(store))} className={`group bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-green-200 transition-all overflow-hidden ${STORE_CARD_W} shrink-0`}>
         <StoreBanner
           banner={storeBanner}
           logo={storeLogo}
@@ -229,7 +230,7 @@ function StoreCard({ store, variant = 'default' }: { store: GroceryStore; varian
 
   // Default variant
   return (
-    <Link href={storePath(store)} className={`group bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden ${STORE_CARD_W} shrink-0`}>
+    <Link href={zoneHref(storePath(store))} className={`group bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden ${STORE_CARD_W} shrink-0`}>
       <StoreBanner
         banner={storeBanner}
         logo={storeLogo}

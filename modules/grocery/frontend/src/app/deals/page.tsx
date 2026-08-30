@@ -11,6 +11,7 @@ import type { GroceryProduct } from '@/lib/demo-data/grocery-home';
 import { groceryApi } from '@/lib/grocery-api';
 import { useGroceryLocale } from '@/i18n/grocery-locale';
 import { productPath } from '@/lib/grocery/urls';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /* ── Flash deal mock data ──────────────────────────────────────────────── */
 const FLASH_DEALS = [
@@ -76,7 +77,7 @@ function DealProductCard({ product }: { product: GroceryProduct }) {
           <Flame className="w-2.5 h-2.5" />{discount}% OFF
         </div>
       )}
-      <Link href={productPath({ id: product.id, name: product.name, storeName: product.storeName })} className="block">
+      <Link href={zoneHref(productPath({ id: product.id, name: product.name, storeName: product.storeName }))} className="block">
         <div className="w-full aspect-square bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-2 flex items-center justify-center group-hover:scale-105 transition-transform">
           <span className="text-4xl">{product.emoji}</span>
         </div>

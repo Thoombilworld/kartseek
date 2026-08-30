@@ -31,7 +31,34 @@ const nextConfig = {
   turbopack: {
     root: path.resolve(__dirname, '../../..'),
   },
+  // ── Images ────────────────────────────────────────────────────────────────
+  //
+  // Carried over from the shell. A zone is its own Next application, so it
+  // needs its own image configuration — and none of the eight had one after
+  // the extraction. Every remote image threw "Invalid src prop ...
+  // next-image-unconfigured-host", which is not a broken image but a thrown
+  // error: the nearest error boundary caught it and replaced the whole page
+  // with "Page failed to load".
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+      { protocol: 'http',  hostname: 'localhost' },
+    ],
+    minimumCacheTTL: 3600,
+    deviceSizes: [360, 640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+  },
+
   basePath: '/franchise',
+
+  // The same value, readable from client code.
+  //
+  // `zoneHref()` needs to know this application's basePath so it can strip it
+  // from the full public paths the shared route helpers return — otherwise
+  // next/link prepends it a second time. Declared here beside `basePath`
+  // rather than read from Next's private __NEXT_ROUTER_BASEPATH.
+  env: { NEXT_PUBLIC_ZONE_BASE_PATH: '/franchise' },
 
   // Asset requests arrive at the shell's origin, so they must carry the prefix
   // that the shell rewrites back to this zone.

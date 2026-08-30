@@ -20,6 +20,7 @@ import { storePath, productPath } from '@/lib/grocery/urls';
 
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { useAsyncData } from '@/lib/hooks/use-async-data';
+import { zoneHref } from '@/lib/routes/zone-href';
 /**
  * A product tile in the category grid.
  *
@@ -76,7 +77,7 @@ function CategoryProductCard({
 
       {/* Square well, image when the product has one, emoji otherwise — so the
           grid keeps its rhythm and no URL is ever rendered as text. */}
-      <Link href={productPath({ id: product.id, name: product.name, storeName: product.storeName })} className="w-full aspect-square bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-2.5 overflow-hidden flex items-center justify-center group-hover:from-green-50 group-hover:to-emerald-50 transition-colors">
+      <Link href={zoneHref(productPath({ id: product.id, name: product.name, storeName: product.storeName }))} className="w-full aspect-square bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-2.5 overflow-hidden flex items-center justify-center group-hover:from-green-50 group-hover:to-emerald-50 transition-colors">
         {product.imageUrl
           ? <ProductThumb src={product.imageUrl} alt={product.name} sizes={THUMB_SIZES.grid4} className="rounded-lg" />
           : <span className="text-4xl group-hover:scale-110 transition-transform duration-200">{product.emoji}</span>}
@@ -90,7 +91,7 @@ function CategoryProductCard({
             {product.storeName}
           </p>
         )}
-        <Link href={productPath({ id: product.id, name: product.name, storeName: product.storeName })} className="font-bold text-sm text-slate-900 line-clamp-2 hover:text-green-700 transition-colors">
+        <Link href={zoneHref(productPath({ id: product.id, name: product.name, storeName: product.storeName }))} className="font-bold text-sm text-slate-900 line-clamp-2 hover:text-green-700 transition-colors">
           {product.name}
         </Link>
         <p className="text-xs text-slate-400 mt-0.5">{product.weight}</p>
@@ -307,7 +308,7 @@ export default function CategoryPage() {
               {categoryStores.map((st) => (
                 <Link
                   key={st.id}
-                  href={storePath(st)}
+                  href={zoneHref(storePath(st))}
                   className="group flex items-center gap-3 bg-white rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-green-300 transition-all p-3 min-h-[44px]"
                 >
                   <StoreThumb logoUrl={st.logoUrl} emoji="🛒" name={st.name} size="md" />

@@ -18,6 +18,7 @@ import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thum
 import { ShareButton } from '@/components/shared/share-button';
 import { productPath } from '@/lib/marketplace/product-url';
 import { requestCurrency } from '@/lib/localization/request-region';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /**
  * The brand store, from the catalogue.
@@ -280,7 +281,7 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
             const discount = discountPercent(product.mrp, product.price);
             return (
               <Link
-                href={productPath(product)}
+                href={zoneHref(productPath(product))}
                 key={product.id}
                 className="bg-white border border-slate-100 rounded-2xl p-4 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 group relative flex flex-col"
               >

@@ -12,3 +12,4 @@ export * from './restaurant-routes';
 export * from './pharmacy-routes';
 export * from './doctor-routes';
 export * from './taxi-routes';
+export * from './zone-href';

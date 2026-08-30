@@ -32,6 +32,7 @@ import { useCartContext } from '@/lib/contexts/cart-context';
 import { useToast } from '@/lib/contexts/toast-context';
 import NotifyMeModal from '@/components/shared/NotifyMeModal';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /*
  * The variant selector that used to live here has moved to
@@ -766,7 +767,7 @@ export function FrequentlyBoughtTogether({ productId }: { productId: string }) {
                 aria-label={`Include ${item.name} in the bundle`}
               />
               <div>
-                <Link href={productPath(item)} className="text-sm font-bold text-slate-900 hover:text-blue-600">
+                <Link href={zoneHref(productPath(item))} className="text-sm font-bold text-slate-900 hover:text-blue-600">
                   {item.name}
                 </Link>
                 <div className="flex items-center gap-2 mt-0.5">

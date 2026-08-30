@@ -8,6 +8,7 @@ import { useRegion } from '@/lib/contexts/region-context';
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { useToast } from '@/lib/contexts/toast-context';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 type CompareProduct = {
   id: string; title: string; brand: string; price: number; mrp: number;
@@ -114,7 +115,7 @@ export default function ComparePage() {
                     <button onClick={() => removeProduct(p.id)} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg"><X className="w-4 h-4" /></button>
                     <div className="bg-slate-50 w-full h-28 rounded-lg flex items-center justify-center mb-3"><ShoppingCart className="w-8 h-8 text-slate-200" /></div>
                     <p className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</p>
-                    <Link href={productPath(p)} className="font-bold text-sm text-slate-900 hover:text-blue-600 line-clamp-2 block mt-0.5">{p.title}</Link>
+                    <Link href={zoneHref(productPath(p))} className="font-bold text-sm text-slate-900 hover:text-blue-600 line-clamp-2 block mt-0.5">{p.title}</Link>
                     <div className="flex items-center gap-1 mt-1.5">
                       <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">{p.rating} <Star className="w-2.5 h-2.5 fill-white" /></span>
                       <span className="text-[10px] text-slate-400">({p.reviews.toLocaleString()})</span>

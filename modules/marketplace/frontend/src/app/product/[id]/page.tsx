@@ -13,6 +13,7 @@ import { productSchema, breadcrumbSchema } from '@/lib/seo/schema';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getProductById } from '@/lib/api/marketplace';
 import { parseProductParam, productPath, isCanonicalProductParam } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 import { buyBoxPrice } from '@/lib/api/map-catalog-product';
 import { productImageList } from '@/lib/product-image';
 import { ReportProductButton } from './report-product';
@@ -182,7 +183,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
    * temporary detour.
    */
   if (!isCanonicalProductParam(segment, apiProduct)) {
-    permanentRedirect(productPath(apiProduct));
+    // productPath() returns the full public path; permanentRedirect prepends
+    // basePath to it, exactly as next/link does. Without zoneHref the
+    // canonical redirect sent every product click to
+    // /marketplace/marketplace/product/... — a 404 reached by clicking a
+    // link whose own href was correct, which is why it survived a sweep of
+    // the rendered HTML.
+    permanentRedirect(zoneHref(productPath(apiProduct)));
   }
 
   let product = apiProduct;

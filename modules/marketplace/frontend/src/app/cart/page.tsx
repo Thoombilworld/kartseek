@@ -11,6 +11,7 @@ import {
   marketplaceDeliveryFee, amountToFreeDelivery, MARKETPLACE_DELIVERY_FEE,
 } from '@/lib/marketplace/delivery';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /** A coupon as the catalogue actually holds it. */
 interface AvailableCoupon {
@@ -289,13 +290,13 @@ export default function CartPage() {
                 return (
                   <div key={item.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex gap-5">
                     {/* Product Thumb */}
-                    <Link href={productPath(item)} className="w-24 h-24 bg-linear-to-br from-blue-50 to-indigo-50 rounded-xl flex items-center justify-center border border-slate-100 shrink-0 hover:border-blue-200 transition-colors">
+                    <Link href={zoneHref(productPath(item))} className="w-24 h-24 bg-linear-to-br from-blue-50 to-indigo-50 rounded-xl flex items-center justify-center border border-slate-100 shrink-0 hover:border-blue-200 transition-colors">
                       <ShoppingBag className="w-8 h-8 text-blue-300" />
                     </Link>
 
                     <div className="flex-1 min-w-0">
                       <span className="text-xs font-bold text-blue-600 uppercase tracking-wide">{item.brand}</span>
-                      <Link href={productPath(item)}>
+                      <Link href={zoneHref(productPath(item))}>
                         <h3 className="font-bold text-slate-900 leading-snug mt-0.5 hover:text-blue-600 transition-colors line-clamp-2">{item.title}</h3>
                       </Link>
 

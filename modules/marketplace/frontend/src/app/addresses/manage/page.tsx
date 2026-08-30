@@ -16,5 +16,7 @@ import { redirect } from 'next/navigation';
  * duplicate. Nothing in the app linked here; the redirect exists for bookmarks.
  */
 export default function ManageAddressesPage() {
-  redirect('/marketplace/addresses');
+  // Zone-relative — see the note in product/[id]/page.tsx: redirect() gets
+  // basePath prepended just like next/link does.
+  redirect('/addresses');
 }

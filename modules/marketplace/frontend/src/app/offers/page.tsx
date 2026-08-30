@@ -11,13 +11,14 @@ import { apiFetch } from '@/lib/api-fetch';
 import { PriceTag } from '../components/price-tag';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 function OfferCard({ product }: { product: HomeProduct }) {
   const disc = discountPercent(product.mrp, product.price);
   // Unclickable without an id — see the offline fallback below. A card that links
   // to /marketplace/product/ with no id can only ever render the 404 page.
   const Card = product.id ? Link : 'div';
-  const cardProps = product.id ? { href: productPath(product) } : {};
+  const cardProps = product.id ? { href: zoneHref(productPath(product)) } : {};
   return (
     <Card {...(cardProps as any)} className="bg-white border border-slate-200 rounded-sm p-3 hover:shadow-lg transition-all group flex flex-col h-full relative">
       {disc > 0 && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 z-10">{disc}% OFF</div>}

@@ -15,5 +15,7 @@ import { redirect } from 'next/navigation';
  * sends them to the checkout that actually prices and places the order.
  */
 export default function GroceryPaymentPage() {
-  redirect('/grocery/checkout');
+  // Zone-relative: redirect() is basePath-aware, so spelling the prefix here
+  // sent the browser to /grocery/grocery/checkout.
+  redirect('/checkout');
 }

@@ -9,6 +9,7 @@ import { groceryOrderTotals } from '@/lib/grocery-totals';
 import { applyGroceryCoupon, GROCERY_COUPONS } from '@/lib/grocery-coupons';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { storePath } from '@/lib/grocery/urls';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /**
  * Grocery basket.
@@ -116,7 +117,7 @@ export default function GroceryCartPage() {
           <p className="text-sm font-bold text-green-800 truncate">Ordering from {storeName}</p>
         </div>
         {storeId && (
-          <Link href={storePath({ id: storeId, name: storeName })} className="shrink-0 text-green-600 text-sm font-semibold hover:underline flex items-center gap-0.5 min-h-[44px] px-1">{tr('Add more')}<ChevronRight className="w-4 h-4" />
+          <Link href={zoneHref(storePath({ id: storeId, name: storeName }))} className="shrink-0 text-green-600 text-sm font-semibold hover:underline flex items-center gap-0.5 min-h-[44px] px-1">{tr('Add more')}<ChevronRight className="w-4 h-4" />
           </Link>
         )}
       </div>

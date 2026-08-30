@@ -14,5 +14,5 @@ import { redirect } from 'next/navigation';
  * linked here; the redirect exists for bookmarks.
  */
 export default function CompareDetailPage() {
-  redirect('/marketplace/compare');
+  redirect('/compare');
 }

@@ -19,6 +19,7 @@ import {
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 /**
  * The delivery address is persisted as a JSON *string* on the order, not as a
  * nested object, and its keys are `line`/`city`/`state`/`pin` — none of which
@@ -251,7 +252,7 @@ export default function OrderDetailPage() {
                 <div key={i} className="flex items-start gap-4 px-5 py-4">
                   <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center"><Package className="w-6 h-6 text-slate-400" /></div>
                   <div className="flex-1 min-w-0">
-                    <Link href={productPath({ id: it.productId, name: it.name })} className="text-sm font-semibold text-slate-800 hover:text-blue-600">{it.name}</Link>
+                    <Link href={zoneHref(productPath({ id: it.productId, name: it.name }))} className="text-sm font-semibold text-slate-800 hover:text-blue-600">{it.name}</Link>
                     <p className="text-xs text-slate-500 mt-0.5">Sold by: {it.seller} &middot; Qty: {it.qty}</p>
                     <div className="flex gap-3 mt-2">
                       {isReturnable(o.status) && <button onClick={() => setShowReviewModal(true)} className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1 min-h-[44px] pr-2"><Star className="w-3 h-3" />Rate & Review</button>}

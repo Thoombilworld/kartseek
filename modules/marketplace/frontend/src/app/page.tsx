@@ -47,6 +47,7 @@ import { buildBrandLookup, loadBrandLookup, type BrandLookup } from '@/lib/api/r
 import { productImageList } from '@/lib/product-image';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 // ── Approved Products by Category Hook ───────────────────────────────────
 // Fetches APPROVED seller products grouped by homepage section key.
@@ -829,7 +830,7 @@ function SellerProductCard({ product, formatCurrencyValue }: { product: any; for
   // catalogue rejects as a malformed id — a guaranteed 404. Without an id there
   // is nothing to link to, so render the card unclickable instead.
   const Card = product.id ? Link : 'div';
-  const cardProps = product.id ? { href: productPath(product) } : {};
+  const cardProps = product.id ? { href: zoneHref(productPath(product)) } : {};
   return (
     <Card
       {...(cardProps as any)}

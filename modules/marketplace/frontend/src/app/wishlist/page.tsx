@@ -7,6 +7,7 @@ import { getWishlist, removeFromWishlist, addToCart as apiAddToCart, createPrice
 import { buyBoxPrice } from '@/lib/api/map-catalog-product';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 interface WishlistCard {
   id: string; title: string; brand: string; category: string;
@@ -194,7 +195,7 @@ export default function WishlistPage() {
               <button title="Remove from wishlist" onClick={() => removeItem(item.id)} className="absolute top-2 right-2 z-10 p-1.5 bg-white rounded-full shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:border-red-200">
                 <Trash2 className="w-4 h-4 text-red-500" />
               </button>
-              <Link href={productPath(item)}>
+              <Link href={zoneHref(productPath(item))}>
                 <ProductThumb
                   src={item.image}
                   alt={item.title}

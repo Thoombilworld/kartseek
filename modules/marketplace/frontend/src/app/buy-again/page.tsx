@@ -7,6 +7,7 @@ import {
 import { useRegion } from '@/lib/contexts/region-context';
 import { getOrders, addToCart } from '@/lib/api/marketplace';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 interface PastPurchase {
   id: string; productId: string; title: string; brand: string;
@@ -148,13 +149,13 @@ export default function BuyAgainPage() {
             const isAdded = added.has(p.id);
             return (
               <div key={p.id} className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col h-full">
-                <Link href={productPath({ id: p.productId, name: p.title })}>
+                <Link href={zoneHref(productPath({ id: p.productId, name: p.title }))}>
                   <div className="w-full h-28 bg-slate-50 mb-2 flex items-center justify-center rounded-lg">
                     <ShoppingCart className="w-8 h-8 text-slate-200" />
                   </div>
                 </Link>
                 <p className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</p>
-                <Link href={productPath({ id: p.productId, name: p.title })} className="font-medium text-sm text-slate-900 line-clamp-2 hover:text-blue-600 mt-0.5">{p.title}</Link>
+                <Link href={zoneHref(productPath({ id: p.productId, name: p.title }))} className="font-medium text-sm text-slate-900 line-clamp-2 hover:text-blue-600 mt-0.5">{p.title}</Link>
                 {/* The order snapshot carries no rating, so show one only when
                     there is a real value rather than a permanent "0 ★ (0)". */}
                 {p.rating > 0 && (

@@ -112,8 +112,15 @@ export default function HotelBookingLayout({ children }: { children: React.React
             </Link>
 
             {/* My Bookings */}
+            {/*
+              The route is /my-bookings. '/hotel-bookings' exists in neither the
+              shell nor this zone, and basePath turned it into
+              /hotel-booking/hotel-bookings — which the zone's [slug] catch-all
+              answered with a fixture hotel. A 200, and the wrong page, which is
+              why it never surfaced as a broken link.
+            */}
             <Link
-              href="/hotel-bookings"
+              href="/my-bookings"
               className="module-nav-btn"
               title="My Bookings"
               aria-label="My Bookings"

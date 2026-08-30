@@ -17,6 +17,7 @@ import { parseIdParam, productPath, isCanonicalProductParam } from '@/lib/grocer
 import { deliveryWindow } from '@/lib/grocery/delivery-estimate';
 
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 interface SimilarTile {
   id: string; name: string; brand: string; price: number; mrp: number;
@@ -27,7 +28,7 @@ function SimilarProductCard({ product }: { product: SimilarTile }) {
   const { formatPrice } = useGroceryLocale();
   const discount = groceryDiscountPercent(product.mrp, product.price);
   return (
-    <Link href={productPath({ id: product.id, name: product.name, storeName: product.storeName })} className="bg-white border border-slate-200/80 rounded-xl p-3 flex flex-col group hover:shadow-md transition-all min-w-[140px]">
+    <Link href={zoneHref(productPath({ id: product.id, name: product.name, storeName: product.storeName }))} className="bg-white border border-slate-200/80 rounded-xl p-3 flex flex-col group hover:shadow-md transition-all min-w-[140px]">
       <div className="w-full aspect-square bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-2 flex items-center justify-center relative overflow-hidden">
         {(product as { imageUrl?: string }).imageUrl
           ? <ProductThumb src={(product as { imageUrl?: string }).imageUrl!} alt={product.name} sizes={THUMB_SIZES.grid4} className="rounded-lg" />

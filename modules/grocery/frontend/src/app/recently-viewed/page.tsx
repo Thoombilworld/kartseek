@@ -10,6 +10,7 @@ import {
 import type { GroceryProduct } from '@/lib/demo-data/grocery-home';
 import { useGroceryLocale } from '@/i18n/grocery-locale';
 import { productPath } from '@/lib/grocery/urls';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 const STORAGE_KEY = 'kartseek_grocery_recently_viewed';
 
@@ -41,7 +42,7 @@ function RecentProductCard({
       >
         <X className="w-3 h-3 text-slate-500 hover:text-red-500" />
       </button>
-      <Link href={productPath({ id: product.id, name: product.name, storeName: product.storeName })} className="block">
+      <Link href={zoneHref(productPath({ id: product.id, name: product.name, storeName: product.storeName }))} className="block">
         <div className="w-full aspect-square bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-2 flex items-center justify-center">
           <span className="text-4xl">{product.emoji}</span>
         </div>

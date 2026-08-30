@@ -23,6 +23,7 @@ import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thum
 
 import { brandLogoUrl } from '@/lib/grocery/brand-logo';
 import { AutoScrollRow } from '@/components/grocery/auto-scroll-row';
+import { zoneHref } from '@/lib/routes/zone-href';
 // ── Store Categories for sidebar ──────────────────────────────────────────
 
 const STORE_CATEGORIES = [
@@ -310,7 +311,7 @@ function StoreProductCard({
         <div className="absolute top-2 right-2 bg-green-100 text-green-700 text-xs font-bold px-1.5 py-0.5 rounded z-10">{product.freshLabel}</div>
       )}
 
-      <Link href={productPath({ id: product.id, name: product.name, storeName: product.storeName })} className="block">
+      <Link href={zoneHref(productPath({ id: product.id, name: product.name, storeName: product.storeName }))} className="block">
         {/* One square well per tile, whether the product has a picture or not,
             so the grid keeps its rhythm. ProductThumb measures the object-fit
             per image rather than assuming, and is what cart and wishlist
@@ -480,7 +481,7 @@ export default function GroceryStorePage() {
           // than `push` so the non-canonical form does not sit in history and
           // send the back button in a loop.
           if (s.id && !isCanonicalStoreParam(routeParam, { id: s.id, slug: s.slug, name: s.name })) {
-            router.replace(storePath({ id: s.id, slug: s.slug, name: s.name }));
+            router.replace(zoneHref(storePath({ id: s.id, slug: s.slug, name: s.name })));
           }
 
           // Every field comes from the row. Nothing is carried over from a

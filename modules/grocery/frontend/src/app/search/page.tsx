@@ -16,6 +16,7 @@ import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { storePath, productPath } from '@/lib/grocery/urls';
 
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
+import { zoneHref } from '@/lib/routes/zone-href';
 /**
  * A search result tile.
  *
@@ -63,7 +64,7 @@ function SearchProductCard({
       {discount > 0 && (
         <div className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded z-10">{discount}% OFF</div>
       )}
-      <Link href={productPath({ id: product.id, name: product.name, storeName: product.storeName })} className="block">
+      <Link href={zoneHref(productPath({ id: product.id, name: product.name, storeName: product.storeName }))} className="block">
         {/* One square well per tile. ProductThumb measures object-fit per image
             rather than assuming, and falls back to the emoji when a product has
             no picture — so the grid keeps its rhythm either way. */}
@@ -214,7 +215,7 @@ function SearchContent() {
           <h2 className="text-sm font-bold text-slate-800 mb-3">Stores ({results.stores.length})</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {results.stores.slice(0, 4).map(store => (
-              <Link key={store.id} href={storePath(store)} className="bg-white border border-slate-200/80 rounded-xl p-3 flex items-center gap-3 hover:shadow-md transition-shadow group">
+              <Link key={store.id} href={zoneHref(storePath(store))} className="bg-white border border-slate-200/80 rounded-xl p-3 flex items-center gap-3 hover:shadow-md transition-shadow group">
                 <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center shrink-0">
                   <span className="text-2xl">{store.emoji}</span>
                 </div>

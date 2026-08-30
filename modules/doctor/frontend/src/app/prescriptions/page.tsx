@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { doctorApi } from '@/lib/api/doctor';
 import { DOCTOR_ROUTES } from '@/lib/routes/doctor-routes';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 export default function MyPrescriptionsPage() {
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
@@ -44,7 +45,7 @@ export default function MyPrescriptionsPage() {
         ) : (
           <div className="space-y-4">
             {prescriptions.map(rx => (
-              <Link key={rx.id} href={DOCTOR_ROUTES.PRESCRIPTION_DETAIL(rx.id)}
+              <Link key={rx.id} href={zoneHref(DOCTOR_ROUTES.PRESCRIPTION_DETAIL(rx.id))}
                 className="block bg-white rounded-2xl shadow-sm border border-slate-100 p-5 hover:shadow-md hover:border-violet-200 transition-all group">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">

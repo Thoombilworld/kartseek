@@ -15,6 +15,7 @@ import { formatReviewCount } from '@/lib/product-image';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { swatchFill, isColourAxis, variantAxisLabel } from '@/lib/marketplace/variant-display';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /**
  * What a card needs to render, stated structurally rather than as one concrete
@@ -309,7 +310,7 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
   // placeholder shown while the catalogue is unreachable — same reasoning.
   const linkable = !!product.id && !product.displayOnly;
   const Card = linkable ? Link : 'div';
-  const cardProps = linkable ? { href: productPath(product) } : {};
+  const cardProps = linkable ? { href: zoneHref(productPath(product)) } : {};
 
   const rating = Number(product.rating) || 0;
 

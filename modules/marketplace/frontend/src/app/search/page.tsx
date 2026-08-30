@@ -17,6 +17,7 @@ import { useRequireAuth } from '@/lib/contexts/login-prompt';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 // ── Product normalizer — maps the backend Product shape → search-card shape ──
 // Search is the one catalogue read served over gRPC, so rows arrive as the proto
 // ProductResponse rather than the entity: the list price is `price` (not `mrp`),
@@ -410,7 +411,7 @@ function SearchPageContent() {
                     <button title="Add to wishlist" onClick={() => toggleWishlist(p.id)} className="absolute top-2 right-2 z-10 p-1.5 bg-white rounded-full shadow-sm border border-slate-100">
                       <Heart className={`w-4 h-4 ${wishlist.has(p.id) ? 'fill-red-500 text-red-500' : 'text-slate-300'}`} />
                     </button>
-                    <Link href={productPath(p)}>
+                    <Link href={zoneHref(productPath(p))}>
                       <ProductThumb
                         src={p.image}
                         alt={p.title}
@@ -446,7 +447,7 @@ function SearchPageContent() {
                 const disc = discountPct(p.mrp, p.price);
                 return (
                   <div key={p.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow flex">
-                    <Link href={productPath(p)} className="flex flex-1">
+                    <Link href={zoneHref(productPath(p))} className="flex flex-1">
                       <div className="w-36 shrink-0">
                         <ProductThumb
                           src={p.image}

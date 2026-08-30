@@ -11,6 +11,7 @@ import type { GroceryStoreApi } from '@/lib/grocery-api';
 import { storePath } from '@/lib/grocery/urls';
 import { railsFor, STORE_RAILS, isRailKey } from '@/lib/grocery/store-rails';
 import { deliveryWindow, distanceKm, distanceLabel } from '@/lib/grocery/delivery-estimate';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 // ── Filter options ──────────────────────────────────────────────────────
 const SORT_OPTIONS = [
@@ -249,7 +250,7 @@ export default function GroceryStoresPage() {
           {filteredStores.map(store => (
             <Link
               key={store.id}
-              href={storePath(store)}
+              href={zoneHref(storePath(store))}
               className="group bg-white border border-slate-200/80 rounded-2xl overflow-hidden hover:shadow-lg hover:border-green-200 transition-all duration-200"
             >
               {/* Store Banner */}

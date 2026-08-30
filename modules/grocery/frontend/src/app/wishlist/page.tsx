@@ -11,6 +11,7 @@ import { useGroceryCart, type GroceryCartItem } from '@/lib/contexts/grocery-car
 import { StoreSwitchDialog } from '@/components/grocery/store-switch-dialog';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { productPath } from '@/lib/grocery/urls';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 /**
  * Saved grocery products.
@@ -122,7 +123,7 @@ function GroceryWishlistContent() {
                 className={`bg-white border border-slate-200/80 rounded-xl p-4 flex items-center gap-4 shadow-sm transition-all duration-300 ${isRemoving ? 'opacity-40' : 'opacity-100'}`}
               >
                 {/* Product image */}
-                <Link href={productPath({ id: item.productId, name: item.productName })} className="shrink-0 w-20 h-20">
+                <Link href={zoneHref(productPath({ id: item.productId, name: item.productName }))} className="shrink-0 w-20 h-20">
                   <div className="w-20 h-20 relative">
                     {item.imageUrl
                       ? <ProductThumb src={item.imageUrl} alt={item.productName} sizes={THUMB_SIZES.row} className="rounded-xl" />
@@ -139,7 +140,7 @@ function GroceryWishlistContent() {
 
                 {/* Product info */}
                 <div className="flex-1 min-w-0">
-                  <Link href={productPath({ id: item.productId, name: item.productName })}>
+                  <Link href={zoneHref(productPath({ id: item.productId, name: item.productName }))}>
                     <h2 className="font-semibold text-slate-800 text-sm line-clamp-1 hover:text-green-600 transition-colors">{item.productName}</h2>
                   </Link>
                   <p className="text-xs text-slate-500 mt-0.5">

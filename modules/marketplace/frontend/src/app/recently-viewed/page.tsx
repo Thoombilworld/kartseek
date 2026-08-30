@@ -6,6 +6,7 @@ import { Clock, ChevronRight, Trash2, Star, ShoppingCart } from 'lucide-react';
 import { useRegion } from '@/lib/contexts/region-context';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { productPath } from '@/lib/marketplace/product-url';
+import { zoneHref } from '@/lib/routes/zone-href';
 
 interface ViewedProduct { id: string; title: string; brand: string; price: number; mrp: number; rating: number; imageUrl?: string; viewedAt: number; }
 
@@ -85,7 +86,7 @@ export default function RecentlyViewedPage() {
                     className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/90 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all shadow-sm border border-slate-100">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                  <Link href={productPath(product)}>
+                  <Link href={zoneHref(productPath(product))}>
                     <ProductThumb
                       src={product.imageUrl}
                       alt={product.title}

@@ -17,5 +17,5 @@ import { redirect } from 'next/navigation';
  * redirects until the feature is built. Nothing linked here.
  */
 export default function SubscribeSavePage() {
-  redirect('/marketplace');
+  redirect('/');
 }
