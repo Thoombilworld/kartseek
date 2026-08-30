@@ -20,7 +20,9 @@ const ds = new DataSource({
   port: +(process.env.DB_PORT ?? 5432),
   username: process.env.DB_USER ?? 'postgres',
   password: process.env.DB_PASSWORD ?? 'kartseek123',
-  database: process.env.DB_NAME ?? 'kartseek_db',
+  // This vertical owns its own database now. Seeding kartseek_db would write
+  // rows the service never reads, and leave the module looking empty.
+  database: process.env.PHARMACY_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_pharmacy',
   // Without this the seed connects on the default search_path and writes to
   // `public`, while the service reads its own schema -- so seeding "succeeded"
   // and the storefront stayed empty.

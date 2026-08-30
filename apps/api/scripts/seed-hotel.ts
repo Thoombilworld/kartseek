@@ -30,9 +30,17 @@ const ds = new DataSource({
   port: parseInt(process.env.DB_PORT ?? '5432', 10),
   username: process.env.DB_USER ?? 'postgres',
   password: process.env.DB_PASSWORD ?? 'kartseek123',
-  database: process.env.DB_NAME ?? 'kartseek_db',
+  // This vertical owns its own database now. Seeding kartseek_db would write
+  // rows the service never reads, and leave the module looking empty.
+  database: process.env.HOTEL_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_hotel',
+  // The module keeps its tables in the `hotel` schema, not `public`. Without
+  // this the seed resolved `hotel_owners` against public and failed with
+  // "relation does not exist" while the table sat one schema away.
+  schema: 'hotel',
   entities: [Hotel, HotelRoom, HotelBooking, HotelReview, HotelOwner, HotelGuest, HotelPayout, HotelStaff, HotelSeasonalPricing],
-  synchronize: false, // Creates tables if missing
+  // The comment here used to read "creates tables if missing", which is the
+  // opposite of what `false` does. The schema is created by the service on boot.
+  synchronize: false,
 });
 
 // ── SEED DATA ──────────────────────────────────────────────────────────────────

@@ -31,7 +31,14 @@ const AppDataSource = new DataSource({
   port: +(process.env.DB_PORT || 5432),
   username: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'kartseek123',
-  database: process.env.DB_NAME || 'kartseek_db',
+  // This vertical owns its own database now. Seeding kartseek_db would write
+  // rows the service never reads, and leave the module looking empty.
+  database: process.env.DOCTOR_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_doctor',
+  // The module keeps its tables in the `doctor` schema. Without this the seed
+  // created a second, empty-looking set of tables in `public` and wrote every
+  // row there — the service read doctor.specialties and found nothing while
+  // public.specialties held all twelve.
+  schema: 'doctor',
   entities: ENTITIES,
   synchronize: true, // Doctor tables have no gateway entity — seed creates them
   logging: false,

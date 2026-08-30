@@ -32,7 +32,11 @@ const AppDataSource = new DataSource({
   port: +(process.env.DB_PORT || 5432),
   username: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'kartseek123',
-  database: process.env.DB_NAME || 'kartseek_db',
+  // This vertical owns its own database now. Seeding kartseek_db would write
+  // rows the service never reads, and leave the module looking empty.
+  database: process.env.TAXI_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_taxi',
+  // Tables live in the `taxi` schema, not `public`.
+  schema: 'taxi',
   entities: [
     TaxiVendor, TaxiVendorUser, TaxiDriver, TaxiVehicle,
     TaxiDriverDocument, TaxiVehicleDocument, TaxiRide,
