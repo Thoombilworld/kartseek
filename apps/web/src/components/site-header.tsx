@@ -1,3 +1,3 @@
 ﻿// Redirect stub — keeps old import paths working after reorganisation
-export * from './shared/site-header';
+export * from '@/components/shared/site-header';
 

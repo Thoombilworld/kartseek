@@ -1,3 +1,3 @@
 ﻿// Redirect stub — keeps old import paths working after reorganisation
-export * from './shared/bar-fill';
+export * from '@/components/shared/bar-fill';
 

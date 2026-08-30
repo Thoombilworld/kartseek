@@ -1,3 +1,3 @@
 ﻿// Redirect stub — keeps old import paths working after reorganisation
-export * from './shared/protected-route';
+export * from '@/components/shared/protected-route';
 

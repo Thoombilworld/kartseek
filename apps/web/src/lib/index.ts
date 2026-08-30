@@ -19,22 +19,22 @@ export {
   maskPhone, maskEmail, relativeTime, formatDateTime,
   groupBy, pick, omit, uniqueBy, chunk, uid,
   buildQueryString, parseQueryString, lockScroll, unlockScroll, scrollToId, validate,
-} from './utils';
+} from '@/lib/utils';
 export * from './api-endpoints';
 export * from './locale-utils';
 
 
 // ── Custom Hooks ──────────────────────────────────────────────────────────────
-export * from './hooks';
+export * from '@/lib/hooks';
 
 // ── Contexts ──────────────────────────────────────────────────────────────────
-export * from './contexts';
+export * from '@/lib/contexts';
 
 // ── Socket Client ─────────────────────────────────────────────────────────────
-export * from './socket';
+export * from '@/lib/socket';
 
 // ── Domain Modules ────────────────────────────────────────────────────────────
-export * from './modules';
+export * from '@/lib/modules';
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
 export * from './error-boundary';

@@ -1,3 +1,3 @@
 ﻿// Redirect stub — keeps old import paths working after reorganisation
-export * from './shared/vpn-detection-overlay';
+export * from '@/components/shared/vpn-detection-overlay';
 

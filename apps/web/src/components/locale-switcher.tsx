@@ -1,3 +1,3 @@
 ﻿// Redirect stub — keeps old import paths working after reorganisation
-export * from './shared/locale-switcher';
+export * from '@/components/shared/locale-switcher';
 

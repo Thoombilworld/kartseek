@@ -24,6 +24,126 @@
       }
     ],
     "paths": {
+      "@/lib/contexts": [
+        "../../packages/shared-core/src/contexts"
+      ],
+      "@/lib/contexts/*": [
+        "../../packages/shared-core/src/contexts/*"
+      ],
+      "@/lib/api": [
+        "../../packages/shared-core/src/api"
+      ],
+      "@/lib/api/*": [
+        "../../packages/shared-core/src/api/*"
+      ],
+      "@/lib/seo": [
+        "../../packages/shared-core/src/seo"
+      ],
+      "@/lib/seo/*": [
+        "../../packages/shared-core/src/seo/*"
+      ],
+      "@/lib/localization": [
+        "../../packages/shared-core/src/localization"
+      ],
+      "@/lib/localization/*": [
+        "../../packages/shared-core/src/localization/*"
+      ],
+      "@/lib/config": [
+        "../../packages/shared-core/src/config"
+      ],
+      "@/lib/config/*": [
+        "../../packages/shared-core/src/config/*"
+      ],
+      "@/lib/hooks": [
+        "../../packages/shared-core/src/hooks"
+      ],
+      "@/lib/hooks/*": [
+        "../../packages/shared-core/src/hooks/*"
+      ],
+      "@/lib/types": [
+        "../../packages/shared-core/src/types"
+      ],
+      "@/lib/types/*": [
+        "../../packages/shared-core/src/types/*"
+      ],
+      "@/lib/modules": [
+        "../../packages/shared-core/src/modules"
+      ],
+      "@/lib/modules/*": [
+        "../../packages/shared-core/src/modules/*"
+      ],
+      "@/lib/marketplace": [
+        "../../packages/shared-core/src/marketplace"
+      ],
+      "@/lib/marketplace/*": [
+        "../../packages/shared-core/src/marketplace/*"
+      ],
+      "@/lib/demo-data": [
+        "../../packages/shared-core/src/demo-data"
+      ],
+      "@/lib/demo-data/*": [
+        "../../packages/shared-core/src/demo-data/*"
+      ],
+      "@/lib/utils": [
+        "../../packages/shared-core/src/utils"
+      ],
+      "@/lib/utils/*": [
+        "../../packages/shared-core/src/utils/*"
+      ],
+      "@/lib/a11y": [
+        "../../packages/shared-core/src/a11y"
+      ],
+      "@/lib/a11y/*": [
+        "../../packages/shared-core/src/a11y/*"
+      ],
+      "@/lib/socket": [
+        "../../packages/shared-core/src/socket"
+      ],
+      "@/lib/socket/*": [
+        "../../packages/shared-core/src/socket/*"
+      ],
+      "@/lib/api-fetch": [
+        "../../packages/shared-core/src/api-fetch"
+      ],
+      "@/lib/api-endpoints": [
+        "../../packages/shared-core/src/api-endpoints"
+      ],
+      "@/lib/sanitize-html": [
+        "../../packages/shared-core/src/sanitize-html"
+      ],
+      "@/lib/region-headers": [
+        "../../packages/shared-core/src/region-headers"
+      ],
+      "@/lib/auth-token": [
+        "../../packages/shared-core/src/auth-token"
+      ],
+      "@/lib/grocery-api": [
+        "../../packages/shared-core/src/grocery-api"
+      ],
+      "@/lib/locale-utils": [
+        "../../packages/shared-core/src/locale-utils"
+      ],
+      "@/lib/product-image": [
+        "../../packages/shared-core/src/product-image"
+      ],
+      "@/components/shared": [
+        "../../packages/shared-ui/src/shared"
+      ],
+      "@/components/shared/*": [
+        "../../packages/shared-ui/src/shared/*"
+      ],
+      "@/components/seo": [
+        "../../packages/shared-ui/src/seo"
+      ],
+      "@/components/seo/*": [
+        "../../packages/shared-ui/src/seo/*"
+      ],
+      "@/components/kartseek-loader": [
+        "../../packages/shared-ui/src/kartseek-loader"
+      ],
+      "@/components/ui": [
+        "../../packages/shared-ui/src/ui"
+      ],
       "@/*": [
         "./src/*"
       ]

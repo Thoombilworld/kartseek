@@ -7,15 +7,15 @@
 
 // ── Shared UI & Application components ───────────────────────────────────────
 // All generic components now live in components/shared/
-export * from './shared/ui';
-export { Field }                 from './shared/field';
-export { SiteHeader }            from './shared/site-header';
-export { KartseekLoader, FullPageLoader, SkeletonPageLoader } from './shared/kartseek-loader';
-export { ProtectedRoute }        from './shared/protected-route';
-export { CurrencyDisplay }       from './shared/currency-display';
-export { BarFill }               from './shared/bar-fill';
-export { LocaleSwitcher }        from './shared/locale-switcher';
-export { VpnDetectionOverlay }   from './shared/vpn-detection-overlay';
+export * from '@/components/shared/ui';
+export { Field }                 from '@/components/shared/field';
+export { SiteHeader }            from '@/components/shared/site-header';
+export { KartseekLoader, FullPageLoader, SkeletonPageLoader } from '@/components/shared/kartseek-loader';
+export { ProtectedRoute }        from '@/components/shared/protected-route';
+export { CurrencyDisplay }       from '@/components/shared/currency-display';
+export { BarFill }               from '@/components/shared/bar-fill';
+export { LocaleSwitcher }        from '@/components/shared/locale-switcher';
+export { VpnDetectionOverlay }   from '@/components/shared/vpn-detection-overlay';
 
 // ── Module-scoped components (import from sub-paths when populated) ──────────
 // @/components/shared           → Generic UI primitives & app-wide components

@@ -1,0 +1,12 @@
+{
+  "name": "@kartseek/shared-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KARTSEEK \u2014 shared React components used by the shell and every module zone.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  }
+}

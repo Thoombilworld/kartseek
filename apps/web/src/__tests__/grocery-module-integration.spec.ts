@@ -13,8 +13,8 @@ import {
   DAILY_ESSENTIALS, SNACKS_BEVERAGES, HOUSEHOLD_PRODUCTS, BABY_PET_PRODUCTS,
   groceryDiscountPercent,
   findStoreById, getStoreProducts, getFlashDealsByStore,
-} from '../lib/demo-data/grocery-home';
-import type { GroceryProduct, GroceryStore, GroceryCategory, FlashDeal } from '../lib/demo-data/grocery-home';
+} from '@/lib/demo-data/grocery-home';
+import type { GroceryProduct, GroceryStore, GroceryCategory, FlashDeal } from '@/lib/demo-data/grocery-home';
 
 const ALL_PRODUCTS = [
   ...FRUITS_VEGETABLES, ...FRESH_MEAT_FISH, ...DAIRY_BREAD,

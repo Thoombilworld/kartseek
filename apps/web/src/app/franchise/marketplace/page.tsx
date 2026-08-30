@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ShoppingCart, TrendingUp, Users, Package, Search, CheckCircle, Clock, XCircle, Eye, Edit, Ban, Star, MapPin, Tag } from 'lucide-react';
-import { franchiseMarketplaceApi, FranchiseKpis, FranchiseSeller } from '../../../lib/modules/franchise-marketplace-api';
-import { useFranchiseMarketplaceEvents } from '../../../lib/hooks/use-franchise-socket';
+import { franchiseMarketplaceApi, FranchiseKpis, FranchiseSeller } from '@/lib/modules/franchise-marketplace-api';
+import { useFranchiseMarketplaceEvents } from '@/lib/hooks/use-franchise-socket';
 
 import { activateOnKey } from '@/lib/a11y/activate-on-key';
 const categoryColors: Record<string, string> = {

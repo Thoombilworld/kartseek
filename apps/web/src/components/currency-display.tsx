@@ -1,3 +1,3 @@
 ﻿// Redirect stub — keeps old import paths working after reorganisation
-export * from './shared/currency-display';
+export * from '@/components/shared/currency-display';
 
