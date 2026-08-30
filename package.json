@@ -1,7 +1,7 @@
 {
   "name": "kartseek-super-app",
   "version": "2.0.0",
-  "description": "KARTSEEK — Multi-vertical Super App monorepo (Web · API · Mobile)",
+  "description": "KARTSEEK \u2014 Multi-vertical Super App monorepo (Web \u00b7 API \u00b7 Mobile)",
   "private": true,
   "packageManager": "npm@11.17.0",
   "engines": {
@@ -57,7 +57,8 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
     "prettier": "^3.8.4",
-    "turbo": "^2.9.18"
+    "turbo": "^2.9.18",
+    "typeorm": "^0.3.31"
   },
   "overrides": {
     "ws": "^8.21.3",
@@ -76,7 +77,8 @@
     "form-data": "^4.0.4",
     "elliptic": "^6.6.1",
     "axios": "^1.9.0",
-    "cookie": "^0.7.2"
+    "cookie": "^0.7.2",
+    "typeorm": "^0.3.31"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -107,5 +109,6 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-is": "^19.2.7"
-  }
+  },
+  "_comment_typeorm": "Declared at the root on purpose, alongside the override. @nestjs/typeorm@11 lists typeorm as a peer with range '^0.3.0 || ^1.0.0-dev', so npm auto-installed the highest match (1.1.0) and hoisted it. TypeORM 1.x dropped the array forms of `select` and `relations` that this codebase uses in dozens of places, so every workspace package had to pin ^0.3.31 to get a nested copy. Pinning the hoisted version here means one typeorm for the whole repo and no per-module workaround."
 }
