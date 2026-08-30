@@ -1,9 +1,7 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, ManyToOne, JoinColumn, Index,
+  UpdateDateColumn, JoinColumn, Index,
 } from 'typeorm';
-import { TaxiVendorEntity } from './taxi-vendor.entity';
-import { TaxiDriverEntity } from './taxi-driver.entity';
 
 /**
  * TaxiDocumentEntity — Polymorphic document record for vendors and drivers.
@@ -27,21 +25,29 @@ export class TaxiDocumentEntity {
   @Index()
   ownerId: string;
 
-  // ─── Polymorphic Relations ─────────────────────────────────────────────────
-
-  @ManyToOne(() => TaxiVendorEntity, (vendor) => vendor.documents, {
-    nullable: true,
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'ownerId' })
-  vendorOwner: TaxiVendorEntity;
-
-  @ManyToOne(() => TaxiDriverEntity, (driver) => driver.documents, {
-    nullable: true,
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'ownerId' })
-  driverOwner: TaxiDriverEntity;
+  // ─── Polymorphic ownership ─────────────────────────────────────────────────
+  //
+  // `ownerType` + `ownerId` above are the whole association: a document belongs
+  // to either a vendor or a driver, and which one is decided by the
+  // discriminator, not by the schema.
+  //
+  // This used to be modelled as two @ManyToOne relations, both with
+  // @JoinColumn({ name: 'ownerId' }). That cannot work. A foreign key points at
+  // exactly one table, so two of them on one column means every row has to be a
+  // vendor *and* a driver simultaneously — and TypeORM derives the constraint
+  // name from the table and column, so both got the same name and synchronize
+  // aborted with `constraint "FK_e8e9..." already exists`.
+  //
+  // Because synchronize runs in one transaction, that abort rolled back the
+  // whole thing: none of taxi's nine tables were ever created. The service
+  // still booted and still answered /health with 200, so what it looked like
+  // from outside was every database-backed taxi route failing with
+  // "relation ... does not exist".
+  //
+  // Resolve the owner in the service, branching on `ownerType`. Nothing read
+  // `vendorOwner` or `driverOwner`; only the inverse @OneToMany sides on
+  // TaxiVendorEntity and TaxiDriverEntity referenced them, and those are gone
+  // too.
 
   // ─── Document Info ─────────────────────────────────────────────────────────
 

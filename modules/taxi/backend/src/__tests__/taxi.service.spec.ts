@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { TaxiService } from './taxi.service';
+import { TaxiService } from '../taxi.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { RideMatchingService } from './services/ride-matching.service';
-import { FareCalculationService } from './services/fare-calculation.service';
-import { DriverDispatchService } from './services/driver-dispatch.service';
-import { TaxiRideEntity } from './entities/taxi-ride.entity';
+import { RideMatchingService } from '../services/ride-matching.service';
+import { FareCalculationService } from '../services/fare-calculation.service';
+import { DriverDispatchService } from '../services/driver-dispatch.service';
+import { TaxiRideEntity } from '../entities/taxi-ride.entity';
 
 describe('TaxiService', () => {
   let service: TaxiService;

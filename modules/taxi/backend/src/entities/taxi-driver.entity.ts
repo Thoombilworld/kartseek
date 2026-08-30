@@ -127,9 +127,10 @@ export class TaxiDriverEntity {
   };
 
   // ─── Relations ─────────────────────────────────────────────────────────────
-
-  @OneToMany(() => TaxiDocumentEntity, (doc) => doc.driverOwner)
-  documents: TaxiDocumentEntity[];
+  // Documents are polymorphic (see TaxiDocumentEntity): loaded by
+  // { ownerType, ownerId } rather than through a relation, so this is a
+  // plain in-memory field the service populates — not a mapped column.
+  documents?: TaxiDocumentEntity[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

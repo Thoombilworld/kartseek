@@ -57,7 +57,10 @@ const ENTITIES = [
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Resolved against process.cwd(). As an extracted microservice this is
+      // started from its own directory, so its own `.env` wins; the platform
+      // file stays as a fallback for the ~120 shared values.
+      envFilePath: ['.env', '../../../apps/api/.env'],
       validationSchema: envSchema,
       validationOptions: { abortEarly: false },
     }),
@@ -65,10 +68,33 @@ const ENTITIES = [
       imports: [ConfigModule], inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres' as const,
+        // Dedicated TAXI_DB_* values win; anything unset falls back to the
+        // shared DB_* credentials. `databaseCredentials` still supplies the
+        // password default and its production guard.
         ...databaseCredentials(cfg),
+        host: cfg.get<string>('TAXI_DB_HOST') || cfg.get<string>('DB_HOST', 'localhost'),
+        port: cfg.get<number>('TAXI_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
+        username: cfg.get<string>('TAXI_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
+        password: cfg.get<string>('TAXI_DB_PASSWORD') || databaseCredentials(cfg).password,
+        database: cfg.get<string>('TAXI_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
+        // Fixed, not configurable: the same entities must work against either.
         schema: 'taxi',
         entities: ENTITIES,
-        synchronize: cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
+        // Matches the other verticals now that taxi owns its own database.
+        //
+        // This was gated on DB_SYNCHRONIZE, which is explicitly false because
+        // the services used to share one database and an auto-sync could ALTER
+        // another service's tables. The consequence here was that none of the
+        // nine entities below ever became tables: the `taxi` schema existed in
+        // kartseek_db with zero tables in it, so the service booted, answered
+        // /health with 200, and failed every database-backed route with
+        // "relation ... does not exist". Nothing created them — no migration
+        // covers this schema either.
+        //
+        // With a dedicated kartseek_taxi database that risk is gone: an
+        // auto-sync here cannot reach another service's tables. Production
+        // still uses migrations.
+        synchronize: cfg.get('NODE_ENV', 'development') !== 'production',
       }),
     }),
     TypeOrmModule.forFeature(ENTITIES),

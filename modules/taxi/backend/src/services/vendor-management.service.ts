@@ -363,11 +363,17 @@ export class VendorManagementService {
   private async getVendorOrFail(vendorId: string): Promise<TaxiVendorEntity> {
     const vendor = await this.vendorRepo.findOne({
       where: { id: vendorId },
-      relations: { drivers: true, documents: true },
+      relations: { drivers: true },
     });
     if (!vendor) {
       throw new NotFoundException(`Vendor ${vendorId} not found`);
     }
+
+    // Polymorphic, same as on the driver side — loaded by discriminator rather
+    // than through a relation.
+    vendor.documents = await this.documentRepo.find({
+      where: { ownerType: 'vendor', ownerId: vendorId },
+    });
     return vendor;
   }
 }

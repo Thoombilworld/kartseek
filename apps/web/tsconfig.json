@@ -60,6 +60,9 @@
       "@/components/ui": [
         "../../packages/shared-ui/src/ui"
       ],
+      "@/components/ui/*": [
+        "../../packages/shared-ui/src/ui-widgets/*"
+      ],
       "@/hooks/*": [
         "../../packages/shared-core/src/hooks/*"
       ],

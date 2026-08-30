@@ -24,7 +24,7 @@
     "start:restaurant": "npm run dev -w @kartseek/restaurant-backend",
     "start:pharmacy": "npm run dev -w @kartseek/pharmacy-backend",
     "start:doctor": "npm run dev -w @kartseek/doctor-backend",
-    "start:taxi": "nest start taxi-service --watch",
+    "start:taxi": "npm run dev -w @kartseek/taxi-backend",
     "start:delivery": "nest start delivery-service --watch",
     "start:location": "nest start location-service --watch",
     "start:search": "nest start search-service --watch",

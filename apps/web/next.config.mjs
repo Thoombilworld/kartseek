@@ -128,6 +128,7 @@ const nextConfig = {
     const pharmacyZone = (process.env.PHARMACY_ZONE_ORIGIN ?? 'http://localhost:3005').replace(/\/$/, '');
     const doctorZone = (process.env.DOCTOR_ZONE_ORIGIN ?? 'http://localhost:3006').replace(/\/$/, '');
     const hotelZone = (process.env.HOTEL_ZONE_ORIGIN ?? 'http://localhost:3007').replace(/\/$/, '');
+    const taxiZone = (process.env.TAXI_ZONE_ORIGIN ?? 'http://localhost:3008').replace(/\/$/, '');
 
     return [
       {
@@ -212,6 +213,20 @@ const nextConfig = {
       {
         source: '/hotel-booking/_next/:path*',
         destination: `${hotelZone}/hotel-booking/_next/:path*`,
+      },
+      // Customer ride booking only. /admin/taxi and /seller/taxi stay in this
+      // app with the other admin and vendor surfaces.
+      {
+        source: '/taxi',
+        destination: `${taxiZone}/taxi`,
+      },
+      {
+        source: '/taxi/:path*',
+        destination: `${taxiZone}/taxi/:path*`,
+      },
+      {
+        source: '/taxi/_next/:path*',
+        destination: `${taxiZone}/taxi/_next/:path*`,
       },
     ];
   },

@@ -415,9 +415,17 @@ export class DriverOnboardingService {
   async getDriverById(driverId: string): Promise<TaxiDriverEntity> {
     const driver = await this.driverRepo.findOne({
       where: { id: driverId },
-      relations: { vendor: true, documents: true },
+      relations: { vendor: true },
     });
     if (!driver) throw new NotFoundException(`Driver ${driverId} not found`);
+
+    // Documents are polymorphic — one table serving both vendors and drivers,
+    // keyed by { ownerType, ownerId } — so they cannot be loaded through a
+    // relation. See TaxiDocumentEntity for why the two foreign keys that used
+    // to express this could never be created.
+    driver.documents = await this.documentRepo.find({
+      where: { ownerType: 'driver', ownerId: driverId },
+    });
     return driver;
   }
 }
