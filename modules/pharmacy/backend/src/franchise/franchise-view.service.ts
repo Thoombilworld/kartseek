@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { PharmacyStore, PharmacyStoreStatus } from './entities/pharmacy-store.entity';
-import { PharmacyOrder } from './entities/pharmacy-order.entity';
-import { PharmacyItem } from './entities/pharmacy-item.entity';
+import { PharmacyStore, PharmacyStoreStatus } from '../entities/pharmacy-store.entity';
+import { PharmacyOrder } from '../entities/pharmacy-order.entity';
+import { PharmacyItem } from '../entities/pharmacy-item.entity';
 
 /**
  * FranchiseViewService — the ONLY sanctioned read path into Pharmacy's data for

@@ -21,10 +21,10 @@ import { MenuItem } from '../../../modules/restaurant/backend/src/entities/menu-
 import { MenuCategory } from '../../../modules/restaurant/backend/src/entities/menu-category.entity';
 import { FranchiseViewService as RestaurantView } from '../../../modules/restaurant/backend/src/franchise/franchise-view.service';
 
-import { PharmacyStore } from '../apps/pharmacy-service/src/entities/pharmacy-store.entity';
-import { PharmacyItem } from '../apps/pharmacy-service/src/entities/pharmacy-item.entity';
-import { PharmacyOrder } from '../apps/pharmacy-service/src/entities/pharmacy-order.entity';
-import { FranchiseViewService as PharmacyView } from '../apps/pharmacy-service/src/franchise-view.service';
+import { PharmacyStore } from '../../../modules/pharmacy/backend/src/entities/pharmacy-store.entity';
+import { PharmacyItem } from '../../../modules/pharmacy/backend/src/entities/pharmacy-item.entity';
+import { PharmacyOrder } from '../../../modules/pharmacy/backend/src/entities/pharmacy-order.entity';
+import { FranchiseViewService as PharmacyView } from '../../../modules/pharmacy/backend/src/franchise/franchise-view.service';
 
 import { Clinic } from '../apps/doctor-service/src/entities/clinic.entity';
 import { Doctor } from '../apps/doctor-service/src/entities/doctor.entity';
@@ -52,7 +52,7 @@ const ds = new DataSource({
   entities: [
     __dirname + '/../../../modules/grocery/backend/src/entities/*.entity.ts',
     __dirname + '/../../../modules/restaurant/backend/src/entities/*.entity.ts',
-    __dirname + '/../apps/pharmacy-service/src/entities/*.entity.ts',
+    __dirname + '/../../../modules/pharmacy/backend/src/entities/*.entity.ts',
     __dirname + '/../apps/doctor-service/src/entities/*.entity.ts',
     __dirname + '/../../../modules/marketplace/backend/src/entities/*.entity.ts',
   ],

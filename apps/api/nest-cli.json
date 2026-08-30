@@ -165,15 +165,6 @@
         "tsConfigPath": "apps/user-service/tsconfig.app.json"
       }
     },
-    "pharmacy-service": {
-      "type": "application",
-      "root": "apps/pharmacy-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/pharmacy-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/pharmacy-service/tsconfig.app.json"
-      }
-    },
     "hotel-service": {
       "type": "application",
       "root": "apps/hotel-service",

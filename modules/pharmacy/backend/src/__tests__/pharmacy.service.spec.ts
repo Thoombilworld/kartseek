@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { PharmacyService } from './pharmacy.service';
+import { PharmacyService } from '../pharmacy.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import {
   PharmacyStore, PharmacyCategory, PharmacyItem, PharmacyOrder,
   Prescription, PharmacyReview, PharmacyStaff, PharmacyPromotion,
-} from './entities';
+} from '../entities';
 
 describe('PharmacyService', () => {
   let service: PharmacyService;
@@ -128,7 +128,14 @@ describe('PharmacyService', () => {
   describe('placeOrder', () => {
     it('should create pharmacy order', async () => {
       storeRepo.findOneBy.mockResolvedValue({ id: 's1', name: 'Test' });
-      itemRepo.find.mockResolvedValue([{ id: 'i1', price: 150, name: 'Cough Syrup', requiresPrescription: false }]);
+      // `isAvailable` is load-bearing: placeOrder re-reads each item from the
+      // pharmacy's own catalogue and refuses one that is switched off, rather
+      // than trusting the price and availability the request claimed. The
+      // fixture predates that check — the same gap restaurant-service's
+      // placeOrder spec had.
+      itemRepo.find.mockResolvedValue([
+        { id: 'i1', price: 150, name: 'Cough Syrup', requiresPrescription: false, isAvailable: true },
+      ]);
       const result = await service.placeOrder({
         storeId: 's1', customerId: 'u1',
         items: [{ itemId: 'i1', quantity: 1 }],

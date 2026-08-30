@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { PharmacyService } from './pharmacy.service';
-import { FranchiseViewService } from './franchise-view.service';
+import { FranchiseViewService } from './franchise/franchise-view.service';
 import { EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)

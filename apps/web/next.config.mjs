@@ -125,6 +125,7 @@ const nextConfig = {
     const marketplaceZone = (process.env.MARKETPLACE_ZONE_ORIGIN ?? 'http://localhost:3002').replace(/\/$/, '');
     const groceryZone = (process.env.GROCERY_ZONE_ORIGIN ?? 'http://localhost:3003').replace(/\/$/, '');
     const restaurantZone = (process.env.RESTAURANT_ZONE_ORIGIN ?? 'http://localhost:3004').replace(/\/$/, '');
+    const pharmacyZone = (process.env.PHARMACY_ZONE_ORIGIN ?? 'http://localhost:3005').replace(/\/$/, '');
 
     return [
       {
@@ -170,6 +171,18 @@ const nextConfig = {
       {
         source: '/restaurant/_next/:path*',
         destination: `${restaurantZone}/restaurant/_next/:path*`,
+      },
+      {
+        source: '/pharmacy',
+        destination: `${pharmacyZone}/pharmacy`,
+      },
+      {
+        source: '/pharmacy/:path*',
+        destination: `${pharmacyZone}/pharmacy/:path*`,
+      },
+      {
+        source: '/pharmacy/_next/:path*',
+        destination: `${pharmacyZone}/pharmacy/_next/:path*`,
       },
     ];
   },
