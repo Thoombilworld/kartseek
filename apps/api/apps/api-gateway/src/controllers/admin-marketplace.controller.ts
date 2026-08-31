@@ -49,7 +49,33 @@ export class AdminMarketplaceController {
     private readonly userRepo: Repository<User>,
     // Finance. Both of these surfaces used to return hardcoded empty lists.
     @Inject('COMMISSION_SERVICE') private readonly commissionClient: ClientProxy,
-    @Inject('PAYOUT_SERVICE') private readonly payoutClient: ClientProxy) {}
+    @Inject('PAYOUT_SERVICE') private readonly payoutClient: ClientProxy,
+    // Customer balances and points are not marketplace-service's to change.
+    // These five admin routes published an audit-log entry saying the
+    // adjustment had happened, returned `success: true` with the amount, and
+    // asked neither service — so an admin crediting a wallet saw a confirmation
+    // and a logged credit while the customer's balance never moved.
+    @Inject('WALLET_SERVICE') private readonly walletClient: ClientProxy,
+    @Inject('LOYALTY_SERVICE') private readonly loyaltyClient: ClientProxy) {}
+
+  /** Forward to a named service, preserving the failure rather than inventing a result. */
+  private async sendTo<T = any>(client: ClientProxy, service: string, cmd: string, payload: object): Promise<T> {
+    try {
+      return await lastValueFrom(
+        client.send<T>({ cmd }, payload).pipe(
+          timeout(10000),
+          catchError(rpcCatch(`${service} unavailable`)),
+        ),
+      );
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      throw new HttpException(`${service} unavailable`, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+  }
+
+  private actor(req: any): string {
+    return req?.user?.id ?? req?.user?.sub ?? 'admin';
+  }
 
   /**
    * Finance reads that must never invent a number.
@@ -567,8 +593,14 @@ export class AdminMarketplaceController {
 
   @Patch('brands/:id/approve')
   @ApiOperation({ summary: 'Approve a brand' })
-  async approveBrand(@Param('id') id: string) {
-    return { data: { success: true, brandId: id, status: 'APPROVED' } };
+  async approveBrand(@Param('id') id: string, @Req() req: any) {
+    // Reported `status: 'APPROVED'` without asking marketplace-service, so a
+    // brand approved in the admin panel stayed pending everywhere else. Its
+    // sibling `rejectBrand` two handlers down always forwarded correctly.
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, {
+      id,
+      dto: { status: 'APPROVED', approvedBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
+    });
   }
 
   @Patch('brands/:id/reject')
@@ -580,8 +612,15 @@ export class AdminMarketplaceController {
 
   @Patch('brands/:id/request-correction')
   @ApiOperation({ summary: 'Request brand correction' })
-  async requestBrandCorrection(@Param('id') id: string, @Body() body: { notes: string }) {
-    return { data: { success: true, brandId: id, notes: body.notes } };
+  async requestBrandCorrection(@Param('id') id: string, @Body() body: { notes: string }, @Req() req: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, {
+      id,
+      dto: {
+        status: 'CORRECTION_REQUESTED',
+        correctionNotes: body?.notes ?? '',
+        reviewedBy: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      },
+    });
   }
 
   @Patch('brands/:id/suspend')
@@ -613,28 +652,40 @@ export class AdminMarketplaceController {
     return this.updateCampaign(id, dto);
   }
 
+  // The four campaign lifecycle routes each returned the status they were named
+  // after and asked nothing. An admin could approve, reject, pause and resume a
+  // campaign all day; the row never moved, and the seller kept seeing whatever
+  // state it was actually in. They are all one write on the campaign, which
+  // `admin_update_campaign` already performs.
+  private campaignStatus(id: string, status: string, req: any, extra: Record<string, unknown> = {}) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_CAMPAIGN, {
+      id,
+      dto: { status, ...extra, reviewedBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
+    });
+  }
+
   @Patch('campaigns/:id/approve')
   @ApiOperation({ summary: 'Approve a campaign' })
-  async approveCampaign(@Param('id') id: string) {
-    return { data: { success: true, campaignId: id, status: 'APPROVED' } };
+  async approveCampaign(@Param('id') id: string, @Req() req: any) {
+    return this.campaignStatus(id, 'APPROVED', req);
   }
 
   @Patch('campaigns/:id/reject')
   @ApiOperation({ summary: 'Reject a campaign' })
-  async rejectCampaign(@Param('id') id: string, @Body() body: { reason: string }) {
-    return { data: { success: true, campaignId: id, status: 'REJECTED' } };
+  async rejectCampaign(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
+    return this.campaignStatus(id, 'REJECTED', req, { rejectionReason: body?.reason ?? '' });
   }
 
   @Patch('campaigns/:id/pause')
   @ApiOperation({ summary: 'Pause a campaign' })
-  async pauseCampaign(@Param('id') id: string) {
-    return { data: { success: true, campaignId: id, status: 'PAUSED' } };
+  async pauseCampaign(@Param('id') id: string, @Req() req: any) {
+    return this.campaignStatus(id, 'PAUSED', req);
   }
 
   @Patch('campaigns/:id/resume')
   @ApiOperation({ summary: 'Resume a paused campaign' })
-  async resumeCampaign(@Param('id') id: string) {
-    return { data: { success: true, campaignId: id, status: 'ACTIVE' } };
+  async resumeCampaign(@Param('id') id: string, @Req() req: any) {
+    return this.campaignStatus(id, 'ACTIVE', req);
   }
 
   // â”€â”€ Orders / Returns / Refunds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1479,10 +1530,11 @@ export class AdminMarketplaceController {
      * results and no way to tell that from a customer who genuinely has none.
      * Wiring it needs a wallet-service search pattern that does not exist yet.
      */
-    throw new HttpException(
-      'Wallet transaction search is not available yet — wallet-service exposes no search endpoint.',
-      HttpStatus.NOT_IMPLEMENTED,
-    );
+    // wallet-service does expose a search pattern now; the comment above
+    // predates it. Forwarded rather than refused.
+    return this.sendTo(this.walletClient, 'Wallet service', 'wallet_search_transactions', {
+      userId, type, module, startDate, endDate, page: +page, limit: +limit,
+    });
   }
 
   @Post('wallet/adjust')
@@ -1491,35 +1543,59 @@ export class AdminMarketplaceController {
     userId: { type: 'string' }, amount: { type: 'number' },
     reason: { type: 'string' }, type: { type: 'string', enum: ['CREDIT', 'DEBIT'] },
   }}})
-  async adjustWalletBalance(@Body() dto: { userId: string; amount: number; reason: string; type: 'CREDIT' | 'DEBIT' }) {
+  async adjustWalletBalance(
+    @Req() req: any,
+    @Body() dto: { userId: string; amount: number; reason: string; type: 'CREDIT' | 'DEBIT' },
+  ) {
+    // The money moves first. The audit entry is written after, and only if the
+    // adjustment actually landed — logging it first recorded credits that never
+    // happened and made the log the least trustworthy record of the two.
+    const result = await this.sendTo(
+      this.walletClient, 'Wallet service',
+      dto.type === 'DEBIT' ? 'wallet_debit' : 'wallet_credit',
+      {
+        userId: dto.userId,
+        amount: Math.abs(Number(dto.amount) || 0),
+        reason: dto.reason,
+        module: 'admin',
+        referenceId: `admin-adjust-${Date.now()}`,
+      },
+    );
+
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'wallet.admin_adjust', target: dto.userId,
+      action: 'wallet.admin_adjust', target: dto.userId, actor: this.actor(req),
       details: { amount: dto.amount, type: dto.type, reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
-    return { success: true, userId: dto.userId, adjustment: dto.type === 'CREDIT' ? dto.amount : -dto.amount, reason: dto.reason };
+    return { success: true, userId: dto.userId, type: dto.type, reason: dto.reason, wallet: result };
   }
 
   @Post('wallet/freeze')
   @ApiOperation({ summary: 'Freeze a user wallet (fraud prevention)' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } }}})
-  async freezeWallet(@Body() dto: { userId: string; reason: string }) {
+  async freezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
+    const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_freeze', {
+      userId: dto.userId, reason: dto.reason, adminId: this.actor(req),
+    });
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'wallet.freeze', target: dto.userId,
+      action: 'wallet.freeze', target: dto.userId, actor: this.actor(req),
       details: { reason: dto.reason }, timestamp: new Date().toISOString(),
     });
-    return { success: true, userId: dto.userId, frozen: true, reason: dto.reason };
+    return { success: true, userId: dto.userId, frozen: true, reason: dto.reason, wallet: result };
   }
 
   @Post('wallet/unfreeze')
   @ApiOperation({ summary: 'Unfreeze a user wallet' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } }}})
-  async unfreezeWallet(@Body() dto: { userId: string; reason: string }) {
+  async unfreezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
+    const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_unfreeze', {
+      userId: dto.userId, reason: dto.reason, adminId: this.actor(req),
+    });
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'wallet.unfreeze', target: dto.userId,
+      action: 'wallet.unfreeze', target: dto.userId, actor: this.actor(req),
       details: { reason: dto.reason }, timestamp: new Date().toISOString(),
     });
-    return { success: true, userId: dto.userId, frozen: false, reason: dto.reason };
+    return { success: true, userId: dto.userId, frozen: false, reason: dto.reason, wallet: result };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1572,13 +1648,17 @@ export class AdminMarketplaceController {
     userId: { type: 'string' }, points: { type: 'number', description: 'Positive to grant, negative to revoke' },
     reason: { type: 'string' },
   }}})
-  async adjustLoyaltyPoints(@Body() dto: { userId: string; points: number; reason: string }) {
+  async adjustLoyaltyPoints(@Req() req: any, @Body() dto: { userId: string; points: number; reason: string }) {
+    const result = await this.sendTo(this.loyaltyClient, 'Loyalty service', 'adjust_loyalty_points', {
+      userId: dto.userId, points: Number(dto.points) || 0,
+      reason: dto.reason, adminId: this.actor(req),
+    });
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'loyalty.admin_adjust', target: dto.userId,
+      action: 'loyalty.admin_adjust', target: dto.userId, actor: this.actor(req),
       details: { points: dto.points, reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
-    return { success: true, userId: dto.userId, adjustment: dto.points, reason: dto.reason };
+    return { success: true, userId: dto.userId, adjustment: dto.points, reason: dto.reason, loyalty: result };
   }
 
   @Get('loyalty/analytics')
