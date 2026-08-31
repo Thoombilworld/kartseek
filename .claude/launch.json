@@ -4,21 +4,78 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": false
     },
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev:web"
-      ],
+      "runtimeArgs": ["run", "dev:web"],
       "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:api"],
+      "port": 3001,
+      "autoPort": false
+    },
+    {
+      "name": "marketplace",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/marketplace-frontend"],
+      "port": 3002,
+      "autoPort": false
+    },
+    {
+      "name": "grocery",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/grocery-frontend"],
+      "port": 3003,
+      "autoPort": false
+    },
+    {
+      "name": "restaurant",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/restaurant-frontend"],
+      "port": 3004,
+      "autoPort": false
+    },
+    {
+      "name": "pharmacy",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/pharmacy-frontend"],
+      "port": 3005,
+      "autoPort": false
+    },
+    {
+      "name": "doctor",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/doctor-frontend"],
+      "port": 3006,
+      "autoPort": false
+    },
+    {
+      "name": "hotel",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/hotel-frontend"],
+      "port": 3007,
+      "autoPort": false
+    },
+    {
+      "name": "taxi",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/taxi-frontend"],
+      "port": 3008,
+      "autoPort": false
+    },
+    {
+      "name": "franchise",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@kartseek/franchise-frontend"],
+      "port": 3009,
       "autoPort": false
     }
   ]

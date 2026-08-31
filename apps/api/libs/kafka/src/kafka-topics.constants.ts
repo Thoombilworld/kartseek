@@ -117,6 +117,20 @@ export const KAFKA_TOPICS = {
   SELLER_BLOCKED:           'seller.blocked',
   SELLER_REACTIVATED:       'seller.reactivated',
   SELLER_PRODUCT_CREATED:   'seller.product.created',
+
+  /**
+   * Marketplace catalogue moderation.
+   *
+   * marketplace-service has published these since it was written; they were
+   * simply never declared here, so `create-kafka-topics.js` never created them
+   * and the broker runs with auto-creation disabled. search-service consumes
+   * all four to keep the index in step with what an admin has approved — an
+   * undeclared topic meant its consumer could not even start.
+   */
+  PRODUCT_APPROVED:         'product.approved',
+  PRODUCT_REJECTED:         'product.rejected',
+  PRODUCT_UPDATED:          'product.updated',
+  PRODUCT_SUSPENDED:        'product.suspended',
   INVENTORY_UPDATED:        'inventory.updated',
   MARKETPLACE_HOME_UPDATED: 'marketplace.home.updated',
   /**

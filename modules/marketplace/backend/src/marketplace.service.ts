@@ -153,7 +153,8 @@ export class MarketplaceService {
           'activated none of them; approve each offer individually.',
         );
         await this.catalog.recomputeBuyBox(productId);
-        await this.kafka.publish('product.approved', { id: productId, approvedBy: adminId });
+        await this.invalidateCatalogueCaches(productId);
+        await this.kafka.publish('product.approved', { ...this.indexPayload(product), approvedBy: adminId });
         return { success: true, productId, listingsActivated: 0 };
       }
     }
@@ -162,7 +163,8 @@ export class MarketplaceService {
 
     await this.catalog.recomputeBuyBox(productId);
 
-    await this.kafka.publish('product.approved', { id: productId, approvedBy: adminId });
+    await this.invalidateCatalogueCaches(productId);
+        await this.kafka.publish('product.approved', { ...this.indexPayload(product), approvedBy: adminId });
     this.logger.log(`Product ${productId} approved by ${adminId} — ${activated.affected ?? 0} listing(s) live`);
     return { success: true, productId, listingsActivated: activated.affected ?? 0 };
   }
@@ -292,15 +294,88 @@ export class MarketplaceService {
     return { success: true, productId, isActive: published };
   }
 
+  /**
+   * The payload search-service needs to make a product findable.
+   *
+   * The event used to carry `{ id, approvedBy }` alone. A consumer holding only
+   * an id can index a document with no title, which matches nothing — so the
+   * indexable fields travel with the event rather than costing a round trip
+   * back to this service for data it already has in hand.
+   */
+  /**
+   * Drop the cached lists a catalogue decision has just made wrong.
+   *
+   * Approving a product cleared `marketplace:featured` and `product:<id>` and
+   * stopped there, so two caches kept serving the old world:
+   *
+   *   products:{...}   the browse listing — a newly approved product did not
+   *                    appear until the entry expired
+   *   search:<region>:<query>:<page>:<limit>
+   *                    a search result — and worse, a customer who searched for
+   *                    the product *before* it was approved cached the empty
+   *                    result and kept being told it does not exist
+   *
+   * `search:index:*` is deliberately excluded: that is the search index itself,
+   * not a cached query, and clearing it would delete the documents this
+   * decision is trying to publish.
+   */
+  private async invalidateCatalogueCaches(productId: string) {
+    await this.redis.del(`product:${productId}`);
+    await this.redis.del('marketplace:featured');
+
+    const stale = [
+      ...(await this.redis.keys('products:*')),
+      ...(await this.redis.keys('search:*')).filter((k) => !k.startsWith('search:index:')),
+    ];
+    await Promise.all(stale.map((k) => this.redis.del(k)));
+    if (stale.length) {
+      this.logger.log(`Invalidated ${stale.length} cached listing/search result(s) for ${productId}`);
+    }
+  }
+
+  private indexPayload(product: Product) {
+    return {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      description: product.short_description ?? product.long_description ?? '',
+      price: product.mrp == null ? undefined : Number(product.mrp),
+      sellerId: product.seller_id,
+      countryCode: (product as unknown as { country_code?: string }).country_code,
+    };
+  }
+
   async rejectProduct(productId: string, adminId: string, reason: string) {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
+
     product.approval_status = 'REJECTED';
+    // Rejection has to take the product off sale, not just relabel it.
+    //
+    // This set `approval_status` alone. Approving a product sets `is_active`
+    // true and activates the seller's listing, so rejecting one that had been
+    // approved — a correction, a compliance takedown — left it live and
+    // buyable with REJECTED in the admin panel. `suspendProduct` two methods
+    // down always did this correctly; rejection did not.
+    product.is_active = false;
+    if (product.status === 'ACTIVE') product.status = 'DRAFT';
     await this.productRepo.save(product);
 
+    const deactivated = await this.listingRepo
+      .createQueryBuilder()
+      .update(ProductListing)
+      .set({ isActive: false, approvalStatus: 'REJECTED' })
+      .where('product_id = :productId', { productId })
+      .execute();
+
+    await this.invalidateCatalogueCaches(productId);
+
     await this.kafka.publish('product.rejected', { id: productId, rejectedBy: adminId, reason });
-    this.logger.log(`Product ${productId} rejected by ${adminId}: ${reason}`);
-    return { success: true, productId, reason };
+    this.logger.log(
+      `Product ${productId} rejected by ${adminId}: ${reason} ` +
+      `(${deactivated.affected ?? 0} listing(s) taken off sale)`,
+    );
+    return { success: true, productId, reason, listingsDeactivated: deactivated.affected ?? 0 };
   }
 
   async suspendProduct(productId: string, adminId: string) {
@@ -310,6 +385,9 @@ export class MarketplaceService {
     product.is_active = false;
     await this.productRepo.save(product);
 
+    // Suspension takes a product off sale exactly like rejection does, so the
+    // same cached lists are wrong the moment it happens.
+    await this.invalidateCatalogueCaches(productId);
     await this.kafka.publish('product.suspended', { id: productId, suspendedBy: adminId });
     return { success: true, productId };
   }

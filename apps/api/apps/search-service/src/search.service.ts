@@ -455,4 +455,76 @@ export class SearchService {
       this.logger.warn(`⚠️  Elasticsearch not available at ${this.esNode} — using Redis fallback`);
     }
   }
+
+  // ── Catalogue events ────────────────────────────────────────────────────────
+  //
+  // Entry points for the Kafka handlers in the controller. They exist so the
+  // handlers never throw: an indexing failure must not fail the admin approval
+  // that produced the event. The product is already committed in Postgres and
+  // served by the catalogue endpoints — a missing index entry degrades search,
+  // it does not un-approve anything.
+
+  /** Fields an event has to carry for the document to be worth indexing. */
+  private indexableFrom(data: Record<string, unknown> | null | undefined) {
+    if (!data) return null;
+    const id = (data.id ?? data.productId ?? data.entityId) as string | undefined;
+    if (!id) return null;
+
+    const title = (data.name ?? data.title ?? '') as string;
+    // An event carrying only an id cannot produce a findable document — it
+    // would index an entry with an empty title that matches nothing. Say so
+    // rather than writing a blank record and reporting success.
+    if (!title) return { id, incomplete: true as const };
+
+    return {
+      id,
+      incomplete: false as const,
+      data: {
+        name: title,
+        description: data.description ?? data.short_description ?? data.summary ?? '',
+        price: data.price ?? data.sellingPrice ?? data.mrp,
+        rating: data.rating,
+        imageUrl: data.imageUrl ?? data.image ?? data.thumbnail,
+        slug: data.slug,
+        brand: data.brand,
+        category: data.category,
+        sellerId: data.sellerId ?? data.seller_id,
+        countryCode: data.countryCode ?? data.country,
+      } as Record<string, unknown>,
+    };
+  }
+
+  async indexFromEvent(module: SearchableModule, data: Record<string, unknown>) {
+    try {
+      const target = this.indexableFrom(data);
+      if (!target) {
+        this.logger.warn(`${module}: index event carried no id — nothing to index`);
+        return;
+      }
+      if (target.incomplete) {
+        this.logger.warn(
+          `${module}/${target.id}: index event carried only an id, so the document ` +
+          'would have no title to match on. Publish the indexable fields with the event.',
+        );
+        return;
+      }
+      await this.indexDocument(module, target.id, target.data);
+    } catch (err) {
+      this.logger.error(`${module}: indexing from event failed — ${(err as Error).message}`);
+    }
+  }
+
+  async removeFromEvent(module: SearchableModule, data: Record<string, unknown>) {
+    try {
+      const id = (data?.id ?? data?.productId ?? data?.entityId) as string | undefined;
+      if (!id) {
+        this.logger.warn(`${module}: removal event carried no id`);
+        return;
+      }
+      await this.removeDocument(module, id);
+      this.logger.log(`${module}/${id} removed from the index`);
+    } catch (err) {
+      this.logger.error(`${module}: removal from event failed — ${(err as Error).message}`);
+    }
+  }
 }
