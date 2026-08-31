@@ -53,7 +53,8 @@
     "clean": "rimraf dist",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:infra": "docker compose up -d postgres mongodb redis kafka"
+    "docker:infra": "docker compose up -d postgres mongodb redis kafka",
+    "test:e2e:marketplace": "ts-node -r tsconfig-paths/register scripts/e2e-marketplace.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

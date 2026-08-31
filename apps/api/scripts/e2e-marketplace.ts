@@ -32,7 +32,8 @@ import * as path from 'path';
 // Credentials come from the API's own .env, never from literals in here — the
 // first version hardcoded the Redis password, which is both wrong to commit and
 // wrong the moment the environment changes.
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// quiet: dotenv's banner goes to stdout and corrupts --json output.
+dotenv.config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 
 // 127.0.0.1, not localhost. Node's fetch resolves localhost to ::1 first and
 // the gateway binds IPv4, so every request failed with a bare "fetch failed"
