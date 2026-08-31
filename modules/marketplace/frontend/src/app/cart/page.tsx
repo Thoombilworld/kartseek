@@ -34,6 +34,10 @@ export default function CartPage() {
   const { formatCurrencyValue: fmt } = useRegion();
   const cart = useCartContext();
   const [coupon, setCoupon] = useState('');
+  // Section-level, not page-level. Coupons and bank offers are secondary
+  // here: if they fail the basket is still correct and orderable, so the
+  // strip says it could not load rather than claiming there are none.
+  const [offersFailed, setOffersFailed] = useState(false);
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [couponChecking, setCouponChecking] = useState(false);
@@ -96,7 +100,7 @@ export default function CartPage() {
           })),
         );
       })
-      .catch(() => { if (!cancelled) setAvailableCoupons([]); });
+      .catch(() => { if (!cancelled) { setAvailableCoupons([]); setOffersFailed(true); } });
     return () => { cancelled = true; };
   }, []);
 
@@ -120,7 +124,7 @@ export default function CartPage() {
           })).filter((o) => o.text),
         );
       })
-      .catch(() => { if (!cancelled) setBankOffers([]); });
+      .catch(() => { if (!cancelled) { setBankOffers([]); setOffersFailed(true); } });
     return () => { cancelled = true; };
   }, []);
 

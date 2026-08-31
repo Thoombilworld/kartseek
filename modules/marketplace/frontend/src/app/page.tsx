@@ -237,8 +237,17 @@ function mapFeedCategory(c: any): any {
   };
 }
 
-function pickCategories(feedArr: any, fallback: any[]): any[] {
-  return Array.isArray(feedArr) && feedArr.length > 0 ? feedArr.map(mapFeedCategory) : fallback;
+/**
+ * Categories from the home feed, or nothing.
+ *
+ * This used to fall back to the bundled `CATEGORIES` array, so an unreachable
+ * catalogue rendered a full category grid built at compile time — every tile
+ * linking to a category page that would then fail on its own. An empty grid is
+ * a worse-looking page and a truthful one; the caller shows the failure state
+ * beside it.
+ */
+function pickCategories(feedArr: any): any[] {
+  return Array.isArray(feedArr) && feedArr.length > 0 ? feedArr.map(mapFeedCategory) : [];
 }
 
 /**
@@ -940,7 +949,7 @@ export default function MarketplaceHome() {
   const { forYou, trending: recoTrending, crossModule, isLoading: recoLoading, trackClick } = useRecommendations('marketplace', null);
 
   // Real categories from the feed (with curated demo fallback when empty).
-  const categories = pickCategories(feed?.categories, CATEGORIES);
+  const categories = pickCategories(feed?.categories);
 
   // Brand promo cards need a *real* brand to link to. Neither source supplies
   // one: the live feed's ids are presentation keys (`bp-e1`), and a third of the
@@ -1024,7 +1033,7 @@ export default function MarketplaceHome() {
                 three 12px gaps into a 256px content box on a 320px phone, so
                 the row ran 4px past the card on every small handset. */}
             <div className="cat-grid pt-1">
-              {CATEGORIES.map((cat) => {
+              {categories.map((cat: any) => {
                 const Icon = getCatIcon(cat.iconName);
                 const catImg = cat.imageUrl;
                 return (
@@ -1066,7 +1075,13 @@ export default function MarketplaceHome() {
               </Link>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {FLASH_DEALS.map((product) => (
+              {/*
+                Through pickProducts like every other rail: this rendered the
+                bundled FLASH_DEALS unconditionally, so a live storefront with
+                no flash deals still showed five of them at prices nothing had
+                quoted, and each card linked to a product page that would 404.
+              */}
+              {pickProducts(feed?.flashDeals, FLASH_DEALS, isLive).map((product) => (
                 <ProductCard key={product.id} product={product} formatCurrencyValue={formatCurrencyValue} />
               ))}
             </div>
@@ -1106,10 +1121,11 @@ export default function MarketplaceHome() {
         );
       default:
         return (
+           /* Was pickProducts(null, ...), so this rail never looked at the feed. */
            <ProductGridSection
              key={section.id}
              title={section.title || "Products"}
-             products={pickProducts(null, RECOMMENDED, isLive)}
+             products={pickProducts(feed?.recommended, RECOMMENDED, isLive)}
              formatCurrencyValue={formatCurrencyValue}
            />
         );
@@ -1448,11 +1464,11 @@ export default function MarketplaceHome() {
         <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Explore All Categories</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            {CATEGORIES.slice(0, 12).map((cat) => (
+            {categories.slice(0, 12).map((cat: any) => (
               <div key={cat.id}>
                 <Link href={`/category/${cat.id}`} className="text-sm font-bold text-slate-800 hover:text-blue-600 hover:underline mb-2 block">{cat.label}</Link>
                 <div className="flex flex-col gap-0.5">
-                  {cat.subcategories.slice(0, 5).map((sub) => (
+                  {(cat.subcategories || []).slice(0, 5).map((sub: any) => (
                     <Link
                       key={sub}
                       href={`/category/${cat.id}`}
@@ -1461,7 +1477,7 @@ export default function MarketplaceHome() {
                       {sub}
                     </Link>
                   ))}
-                  {cat.subcategories.length > 5 && (
+                  {(cat.subcategories || []).length > 5 && (
                     <Link href={`/category/${cat.id}`} className="text-xs text-blue-600 hover:underline mt-0.5">See more…</Link>
                   )}
                 </div>

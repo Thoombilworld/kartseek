@@ -9,4 +9,4 @@ export * from './bar-fill';
 export * from './locale-switcher';
 export * from './vpn-detection-overlay';
 export * from './country-flag';
-
+export * from './load-failed';

@@ -8,6 +8,7 @@ import { buyBoxPrice } from '@/lib/api/map-catalog-product';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { productPath } from '@/lib/marketplace/product-url';
 import { zoneHref } from '@/lib/routes/zone-href';
+import { LoadFailed } from '@/components/shared/load-failed';
 
 interface WishlistCard {
   id: string; title: string; brand: string; category: string;
@@ -45,6 +46,11 @@ export default function WishlistPage() {
   // every saved item linked to a product page that 404'd — and the heart button
   // on product cards, which does call the API, had no effect on what showed here.
   const [items, setItems] = useState<WishlistCard[]>([]);
+  // Distinguishes "the request failed" from "you have no wishlist".
+  // The catch below emptied the list and recorded nothing, so an
+  // unreachable service rendered the empty state and told the customer
+  // something untrue about their account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [watching, setWatching] = useState(false);
   const [watchResult, setWatchResult] = useState<{ message: string; failed: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +64,7 @@ export default function WishlistPage() {
         const rows = res?.products ?? res?.data?.products ?? res?.data ?? [];
         setItems((Array.isArray(rows) ? rows : []).map(toCard).filter(c => c.id));
       })
-      .catch(() => { if (!cancelled) setItems([]); })
+      .catch(() => { if (!cancelled) { setItems([]); setLoadFailed(true); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -114,6 +120,10 @@ export default function WishlistPage() {
         </div>
       </div>
     );
+  }
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load your wishlist" onRetry={() => window.location.reload()} />;
   }
 
   if (items.length === 0) {

@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getCategoryById, getProducts } from '@/lib/api/marketplace';
 import { categoryMeta } from '@/lib/seo/metadata';
-import { CATEGORIES } from '@/lib/demo-data/marketplace-home';
 import {
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby,
   Sparkles, BookOpen, Car, ShoppingBasket, Tv, Headphones,
@@ -132,16 +131,11 @@ export default async function CategoryPage({ params, searchParams }: {
   // subcategory pills visible even before seed data is loaded. Skipped for a
   // leaf: a subcategory legitimately has no children, and the fallback would
   // graft on pills belonging to a same-named top-level demo category.
-  let subcategories = dbSubs;
-  if (subcategories.length === 0 && !isSubcategoryRoute) {
-    const demoCat = CATEGORIES.find(c => c.id === id);
-    if (demoCat) {
-      subcategories = demoCat.subcategories.map(sub => ({
-        label: sub,
-        slug: slugify(sub),
-      }));
-    }
-  }
+  // No demo fallback. This grafted the bundled category's subcategory names on
+  // when the database returned none, so a category with no subcategories showed
+  // pills that led nowhere — each one filtering on a slug no row carries. A
+  // category with no children should show none.
+  const subcategories = dbSubs;
 
   // Filter by the **resolved** category's slug, not by the raw route segment.
   //

@@ -13,6 +13,7 @@ import type { AddressFieldKey } from '@/lib/localization/types';
 import { getUserAddresses, addUserAddress, updateUserAddress, deleteUserAddress } from '@/lib/api/user';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
+import { LoadFailed } from '@/components/shared/load-failed';
 type Address = {
   id: string; name: string; phone: string; line1: string; line2: string;
   city: string; state: string; pincode: string; type: 'home' | 'work' | 'other';
@@ -78,6 +79,11 @@ function AddressField({
 export default function AddressBookPage() {
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
+  // Distinguishes "the request failed" from "you have no addresses".
+  // The catch below emptied the list and recorded nothing, so an
+  // unreachable service rendered the empty state and told the customer
+  // something untrue about their account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -91,14 +97,14 @@ export default function AddressBookPage() {
   const { country } = useRegion();
 
   const loadAddresses = useCallback(async () => {
-    if (!user?.id) { setAddresses([]); setLoading(false); return; }
+    if (!user?.id) { setAddresses([]); setLoadFailed(true); setLoading(false); return; }
     setLoading(true);
     try {
       const res: any = await getUserAddresses(user.id);
       const list = res?.addresses ?? res?.data ?? [];
       setAddresses(Array.isArray(list) ? list : []);
     } catch {
-      setAddresses([]);
+      setAddresses([]); setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -201,6 +207,10 @@ export default function AddressBookPage() {
     setForm({ name: '', phone: '', line1: '', line2: '', city: '', state: '', pincode: '', type: 'home' });
     setEditId(null); setShowAdd(true);
   };
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load your addresses" onRetry={() => window.location.reload()} />;
+  }
 
   return (
     <div className="max-w-[800px] mx-auto px-3 xs:px-4 py-6 space-y-5 pb-mobile-nav">

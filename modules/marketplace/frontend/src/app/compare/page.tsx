@@ -9,6 +9,7 @@ import { useCartContext } from '@/lib/contexts/cart-context';
 import { useToast } from '@/lib/contexts/toast-context';
 import { productPath } from '@/lib/marketplace/product-url';
 import { zoneHref } from '@/lib/routes/zone-href';
+import { LoadFailed } from '@/components/shared/load-failed';
 
 type CompareProduct = {
   id: string; title: string; brand: string; price: number; mrp: number;
@@ -36,6 +37,8 @@ export default function ComparePage() {
   const cart = useCartContext();
   const toast = useToast();
   const [products, setProducts] = useState<CompareProduct[]>([]);
+  // Separates "we could not load the products being compared" from "there are none".
+  const [loadFailed, setLoadFailed] = useState(false);
   const [showDiffOnly, setShowDiffOnly] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -56,7 +59,7 @@ export default function ComparePage() {
           inStock: p.inStock !== false,
           specs: (p.specs && typeof p.specs === 'object') ? p.specs : {},
         })));
-    } catch { setProducts([]); }
+    } catch { setProducts([]); setLoadFailed(true); }
     setLoaded(true);
   }, []);
 
@@ -89,6 +92,10 @@ export default function ComparePage() {
         </Link>
       </div>
     );
+  }
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load the products being compared" />;
   }
 
   return (

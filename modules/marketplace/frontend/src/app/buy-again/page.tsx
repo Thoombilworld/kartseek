@@ -8,6 +8,7 @@ import { useRegion } from '@/lib/contexts/region-context';
 import { getOrders, addToCart } from '@/lib/api/marketplace';
 import { productPath } from '@/lib/marketplace/product-url';
 import { zoneHref } from '@/lib/routes/zone-href';
+import { LoadFailed } from '@/components/shared/load-failed';
 
 interface PastPurchase {
   id: string; productId: string; title: string; brand: string;
@@ -67,6 +68,11 @@ function collapseOrders(orders: any[]): PastPurchase[] {
 export default function BuyAgainPage() {
   const { formatCurrencyValue: fmt } = useRegion();
   const [search, setSearch] = useState('');
+  // Distinguishes "the request failed" from "you have no previous purchases".
+  // The catch below emptied the list and recorded nothing, so an
+  // unreachable service rendered the empty state and told the customer
+  // something untrue about their account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [purchases, setPurchases] = useState<PastPurchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +85,7 @@ export default function BuyAgainPage() {
         const rows = res?.data ?? (Array.isArray(res) ? res : []);
         setPurchases(collapseOrders(Array.isArray(rows) ? rows : []));
       })
-      .catch(() => { if (!cancelled) setPurchases([]); })
+      .catch(() => { if (!cancelled) { setPurchases([]); setLoadFailed(true); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -107,6 +113,10 @@ export default function BuyAgainPage() {
         </Link>
       </div>
     );
+  }
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load your purchases" onRetry={() => window.location.reload()} />;
   }
 
   return (

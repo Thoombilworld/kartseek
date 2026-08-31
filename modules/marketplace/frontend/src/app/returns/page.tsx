@@ -12,6 +12,7 @@ import { getReturnRequests, getOrders, createReturn, cancelReturn } from '@/lib/
 
 import { activateOnKey } from '@/lib/a11y/activate-on-key';
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
+import { LoadFailed } from '@/components/shared/load-failed';
 type ReturnStatus = 'pending' | 'approved' | 'pickup_scheduled' | 'picked_up' | 'refund_initiated' | 'refund_completed' | 'rejected' | 'cancelled';
 type RefundStatus = 'processing' | 'completed' | 'failed';
 
@@ -124,6 +125,11 @@ export default function ReturnsPage() {
   const { formatCurrencyValue: fmt } = useRegion();
   const { user } = useAuth();
   const [returns, setReturns] = useState<ReturnItem[]>([]);
+  // Distinguishes "the request failed" from "you have no returns".
+  // The catch below emptied the list and recorded nothing, so an
+  // unreachable service rendered the empty state and told the customer
+  // something untrue about their account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | ReturnStatus>('all');
   const [search, setSearch] = useState('');
@@ -147,7 +153,7 @@ export default function ReturnsPage() {
       const list = res?.data ?? res?.returns ?? [];
       setReturns(Array.isArray(list) ? list.map(normalizeReturn) : []);
     } catch {
-      setReturns([]);
+      setReturns([]); setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -199,7 +205,7 @@ export default function ReturnsPage() {
         });
         if (!cancelled) setReturnableOrders(flat);
       } catch {
-        if (!cancelled) setReturnableOrders([]);
+        if (!cancelled) setReturnableOrders([]); setLoadFailed(true);
       }
     })();
     return () => { cancelled = true; };
@@ -237,6 +243,10 @@ export default function ReturnsPage() {
   const activeCount = returns.filter(r => !['refund_completed', 'rejected'].includes(r.status)).length;
   const completedCount = returns.filter(r => r.status === 'refund_completed').length;
   const totalRefunded = returns.filter(r => r.refundStatus === 'completed').reduce((s, r) => s + r.refundAmount, 0);
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load your returns" onRetry={() => window.location.reload()} />;
+  }
 
   return (
     <div className="max-w-[1200px] mx-auto px-3 xs:px-4 py-6 space-y-6 pb-mobile-nav">

@@ -8,6 +8,7 @@ import { useToast } from '@/lib/contexts/toast-context';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { useRegion } from '@/lib/contexts/region-context';
 import { getOrders, createReturn } from '@/lib/api/marketplace';
+import { LoadFailed } from '@/components/shared/load-failed';
 
 /**
  * Raise a return against one of the customer's delivered orders.
@@ -72,6 +73,10 @@ export default function ReturnRequestPage() {
   const { formatCurrencyValue: fmt } = useRegion();
 
   const [step, setStep] = useState<Step>('select');
+
+  // Separates "we could not load the items you can return" from "there are none".
+
+  const [loadFailed, setLoadFailed] = useState(false);
   const [items, setItems] = useState<ReturnableItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedKey, setSelectedKey] = useState('');
@@ -106,7 +111,7 @@ export default function ReturnRequestPage() {
         });
         setItems(flat);
       })
-      .catch(() => { if (!cancelled) setItems([]); })
+      .catch(() => { if (!cancelled) setItems([]); setLoadFailed(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
@@ -133,6 +138,10 @@ export default function ReturnRequestPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load the items you can return" />;
   }
 
   return (

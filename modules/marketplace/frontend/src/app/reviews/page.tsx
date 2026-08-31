@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { getCustomerReviews, getOrders, addProductReview, voteReviewHelpful } from '@/lib/api/marketplace';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
+import { LoadFailed } from '@/components/shared/load-failed';
 type Review = {
   id: string; productId: string; productName: string; rating: number; title: string;
   body: string; author: string; date: string; verified: boolean; helpful: number;
@@ -39,6 +40,11 @@ function normalizeReview(r: any): Review {
 export default function ReviewsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'pending' | 'written'>('pending');
+  // Distinguishes "the request failed" from "you have no reviews".
+  // The catch below emptied the list and recorded nothing, so an
+  // unreachable service rendered the empty state and told the customer
+  // something untrue about their account.
+  const [loadFailed, setLoadFailed] = useState(false);
   /** Reviews this session has voted on, so the button reads as spent. */
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
   /** Server-confirmed counts, which replace the loaded value once known. */
@@ -87,7 +93,7 @@ export default function ReviewsPage() {
         const res: any = await getCustomerReviews(user?.id);
         const list = res?.data ?? res?.reviews ?? [];
         if (!cancelled) setReviews(Array.isArray(list) ? list.map(normalizeReview) : []);
-      } catch { if (!cancelled) setReviews([]); }
+      } catch { if (!cancelled) { setReviews([]); setLoadFailed(true); } }
     })();
     (async () => {
       try {
@@ -104,7 +110,7 @@ export default function ReviewsPage() {
           }));
         });
         if (!cancelled) setPending(items);
-      } catch { if (!cancelled) setPending([]); }
+      } catch { if (!cancelled) setPending([]); setLoadFailed(true); }
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -152,6 +158,10 @@ export default function ReviewsPage() {
     } finally {
       setSubmittingReview(false);
     }
+  }
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load your reviews" onRetry={() => window.location.reload()} />;
   }
 
   return (

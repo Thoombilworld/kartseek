@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Bell, Sparkles, Tag, Package, Megaphone, ArrowRight, Filter, Clock, ArrowLeft } from 'lucide-react';
 import { unwrapCatalogList } from '@/lib/api/map-catalog-product';
 import { apiFetch } from '@/lib/api-fetch';
+import { LoadFailed } from '@/components/shared/load-failed';
 
 interface BrandUpdate {
   id: string;
@@ -44,6 +45,11 @@ function timeAgo(dateStr: string): string {
 
 export default function BrandFeedPage() {
   const [updates, setUpdates] = useState<BrandUpdate[]>([]);
+  // Distinguishes "the request failed" from "you have no brand updates".
+  // The catch below emptied the list and recorded nothing, so an
+  // unreachable service rendered the empty state and told the customer
+  // something untrue about their account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('ALL');
 
@@ -60,7 +66,7 @@ export default function BrandFeedPage() {
         // customer's real feed was replaced by demo posts every time.
         setUpdates(unwrapCatalogList(await res.json()) as BrandUpdate[]);
       } catch {
-        setUpdates([]);
+        setUpdates([]); setLoadFailed(true);
       } finally {
         setLoading(false);
       }
@@ -68,6 +74,10 @@ export default function BrandFeedPage() {
     setLoading(true);
     fetchFeed();
   }, [activeFilter]);
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load the brand feed" onRetry={() => window.location.reload()} />;
+  }
 
   return (
     <div className="bg-slate-50 min-h-screen pb-12">

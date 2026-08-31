@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Tag, Copy, Check, Clock, Search, Sparkles, Zap } from 'lucide-react';
 import { useRegion } from '@/lib/contexts/region-context';
 import { getCoupons } from '@/lib/api/marketplace';
+import { LoadFailed } from '@/components/shared/load-failed';
 
 /**
  * Coupons a shopper can apply at checkout.
@@ -50,6 +51,11 @@ function normalise(row: any): Coupon {
 export default function CouponsPage() {
   const { formatCurrencyValue: fmt } = useRegion();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  // Distinguishes "the request failed" from "you have no coupons".
+  // The catch below emptied the list and recorded nothing, so an
+  // unreachable service rendered the empty state and told the customer
+  // something untrue about their account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [copiedCode, setCopiedCode] = useState('');
@@ -62,7 +68,7 @@ export default function CouponsPage() {
         const rows = res?.data ?? res?.coupons ?? res;
         setCoupons(Array.isArray(rows) ? rows.map(normalise).filter(c => c.code) : []);
       })
-      .catch(() => { if (!cancelled) setCoupons([]); })
+      .catch(() => { if (!cancelled) { setCoupons([]); setLoadFailed(true); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -103,6 +109,10 @@ export default function CouponsPage() {
     c.discountType === 'PERCENTAGE'
       ? `${c.discountValue}% off${c.maxDiscount ? ` up to ${fmt(c.maxDiscount)}` : ''}`
       : `${fmt(c.discountValue)} off`;
+
+  if (loadFailed) {
+    return <LoadFailed title="We could not load your coupons" onRetry={() => window.location.reload()} />;
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-3 xs:px-4 py-6">
