@@ -34,8 +34,12 @@ import * as path from 'path';
 // wrong the moment the environment changes.
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-const GATEWAY = process.env.E2E_GATEWAY ?? 'http://localhost:3001/api/v1';
-const SHELL = process.env.E2E_SHELL ?? 'http://localhost:3000';
+// 127.0.0.1, not localhost. Node's fetch resolves localhost to ::1 first and
+// the gateway binds IPv4, so every request failed with a bare "fetch failed"
+// while curl to the same URL returned 200 — curl falls back to IPv4, fetch
+// does not.
+const GATEWAY = process.env.E2E_GATEWAY ?? 'http://127.0.0.1:3001/api/v1';
+const SHELL = process.env.E2E_SHELL ?? 'http://127.0.0.1:3000';
 const JSON_OUT = process.argv.includes('--json');
 
 // ── Reporting ───────────────────────────────────────────────────────────────
@@ -393,6 +397,124 @@ async function main() {
     if (!gone.value) ok('search', 'rejected product removed from the search index',
       gone.waitedMs ? `after ${gone.waitedMs}ms` : 'immediately');
     else bad('search', 'rejected product still findable in the search index');
+  }
+
+  // ── 8. Admin: category management ─────────────────────────────────────────
+  section('Admin: category management writes to the catalogue');
+
+  const CAT_NAME = `E2E Category ${STAMP}`;
+  await db.query('DELETE FROM marketplace.categories WHERE name = $1', [CAT_NAME]);
+
+  const catCreate = await call('POST', '/admin/marketplace/categories', {
+    name: CAT_NAME,
+    slug: `e2e-category-${STAMP}`,
+    description: 'Created by the marketplace end-to-end integration test.',
+    isActive: true,
+  });
+
+  const catRow = await db.query(
+    'SELECT id, name, slug, is_active FROM marketplace.categories WHERE name = $1', [CAT_NAME]);
+  if (catRow.length === 1)
+    ok('database', 'admin category create wrote a row', `id ${catRow[0].id}`);
+  else
+    bad('database', 'admin category create wrote nothing',
+      `status ${catCreate.status}, ${catRow.length} rows matched`);
+
+  const categoryId = catRow[0]?.id;
+  if (categoryId) {
+    // The category list is cached under marketplace:categories; creating one has
+    // to clear it or the storefront menu keeps the old set.
+    if (redisUp) {
+      const cached = await redis.get('marketplace:categories');
+      if (!cached) ok('cache', 'marketplace:categories cleared by the write');
+      else bad('cache', 'marketplace:categories still cached after a create',
+        'the storefront category menu can serve a set that predates it');
+    }
+
+    const RENAMED = `${CAT_NAME} renamed`;
+    await call('PATCH', `/admin/marketplace/categories/${categoryId}`, { name: RENAMED });
+    const afterUpdate = await db.query(
+      'SELECT name FROM marketplace.categories WHERE id = $1', [categoryId]);
+    if (afterUpdate[0]?.name === RENAMED)
+      ok('database', 'admin category update persisted');
+    else
+      bad('database', 'admin category update did not persist',
+        `name is still "${afterUpdate[0]?.name}"`);
+
+    // The PUT alias must reach the same implementation as the PATCH. Both are
+    // declared because the admin client sends PUT, and stacking two verb
+    // decorators on one handler registers only the last.
+    await call('PUT', `/admin/marketplace/categories/${categoryId}`, { name: CAT_NAME });
+    const afterPut = await db.query(
+      'SELECT name FROM marketplace.categories WHERE id = $1', [categoryId]);
+    if (afterPut[0]?.name === CAT_NAME)
+      ok('database', 'the PUT alias writes as the PATCH does');
+    else
+      bad('database', 'the PUT alias did not write', `name is "${afterPut[0]?.name}"`);
+
+    const del = await call('DELETE', `/admin/marketplace/categories/${categoryId}`);
+    const afterDelete = await db.query(
+      'SELECT is_active FROM marketplace.categories WHERE id = $1', [categoryId]);
+    // Deleting a category that has products deactivates rather than removes it;
+    // either outcome is a real write, and an unchanged active row is not.
+    if (afterDelete.length === 0 || afterDelete[0]?.is_active === false)
+      ok('database', 'admin category delete removed or deactivated it',
+        afterDelete.length === 0 ? 'row removed' : 'deactivated (products reference it)');
+    else
+      bad('database', 'admin category delete changed nothing', `status ${del.status}`);
+  }
+
+  // ── 9. Admin: flash deals ─────────────────────────────────────────────────
+  section('Admin: flash deals write to the catalogue');
+
+  // The column is `name`, not `title`, and the discount is
+  // `min_discount_percent` — this table is snake_case throughout.
+  const DEAL_TITLE = `E2E Flash Deal ${STAMP}`;
+  await db.query('DELETE FROM marketplace.flash_deals WHERE name = $1', [DEAL_TITLE]).catch(() => undefined);
+
+  const now = Date.now();
+  const dealCreate = await call('POST', '/admin/marketplace/flash-deals', {
+    name: DEAL_TITLE,
+    description: 'Created by the marketplace end-to-end integration test.',
+    minDiscountPercent: 25,
+    windowStart: new Date(now - 60_000).toISOString(),
+    windowEnd: new Date(now + 3_600_000).toISOString(),
+    status: 'ACTIVE',
+    regionCode: 'QA',
+  });
+
+  const dealRow = await db.query(
+    'SELECT id, name FROM marketplace.flash_deals WHERE name = $1', [DEAL_TITLE]).catch(() => []);
+  if (dealRow.length === 1)
+    ok('database', 'admin flash deal create wrote a row', `id ${dealRow[0].id}`);
+  else
+    bad('database', 'admin flash deal create wrote nothing',
+      `status ${dealCreate.status} ${dealCreate.text.slice(0, 100)}`);
+
+  if (dealRow[0]?.id) {
+    const dealId = dealRow[0].id;
+    await call('PATCH', `/admin/marketplace/flash-deals/${dealId}`, { minDiscountPercent: 40 });
+    const afterDeal = await db.query(
+      'SELECT * FROM marketplace.flash_deals WHERE id = $1', [dealId]).catch(() => []);
+    const pct = afterDeal[0]?.min_discount_percent;
+    if (Number(pct) === 40) ok('database', 'admin flash deal update persisted');
+    else bad('database', 'admin flash deal update did not persist', `discount is ${pct}`);
+
+    // DELETE cancels rather than removes — the route is labelled "Cancel flash
+    // deal" and the service sets status CANCELLED, keeping the row for the
+    // sellers whose nominations reference it. Asserting the row had vanished
+    // reported a working soft delete as a no-op.
+    const dealDel = await call('DELETE', `/admin/marketplace/flash-deals/${dealId}`);
+    const cancelled = await db.query(
+      'SELECT status FROM marketplace.flash_deals WHERE id = $1', [dealId]).catch(() => []);
+    if (cancelled[0]?.status === 'CANCELLED')
+      ok('database', 'admin flash deal delete cancelled the campaign', 'status CANCELLED, row retained');
+    else
+      bad('database', 'admin flash deal delete changed nothing',
+        `status ${dealDel.status}, deal status ${cancelled[0]?.status}`);
+
+    // Clean up the probe campaign so re-running starts from the same place.
+    await db.query('DELETE FROM marketplace.flash_deals WHERE id = $1', [dealId]).catch(() => undefined);
   }
 
   // Leave the probe approved so the artefact it creates is a coherent one.
