@@ -155,10 +155,33 @@ export class LoyaltyService {
     return { success: true, pointsReversed: pointsToReverse, newTotal: newPoints };
   }
 
+  /**
+   * The programme settings an admin has configured, with the built-in defaults
+   * behind them.
+   *
+   * The admin panel writes these to `admin:loyalty:config` and nothing read
+   * them — the earn rate below was hardcoded — so changing the rate in the
+   * console altered the number shown on the settings page and nothing else.
+   */
+  private async loyaltyConfig() {
+    const stored = await this.redis.getJson<any>('admin:loyalty:config');
+    const earn = stored?.earning ?? stored?.earn ?? {};
+    const redemption = stored?.redemption ?? {};
+    return {
+      // Currency spent per point earned. 100 keeps the previous behaviour for
+      // any deployment that has never opened the settings page.
+      spendPerPoint: Number(earn.spendPerPoint ?? earn.perUnit ?? 100) || 100,
+      maxPointsPerOrder: Number(earn.maxPointsPerOrder ?? 0) || 0,
+      // Points needed for one unit of currency when redeeming.
+      pointsPerUnit: Number(redemption.pointsPerUnit ?? 10) || 10,
+    };
+  }
+
   // ── Points Preview (for checkout display) ───────────────────────────────
   async calculatePointsPreview(orderTotal: number, userId?: string) {
-    // Base: 1 point per ₹100 spent
-    const basePoints = Math.floor(orderTotal / 100);
+    const config = await this.loyaltyConfig();
+    let basePoints = Math.floor(orderTotal / config.spendPerPoint);
+    if (config.maxPointsPerOrder > 0) basePoints = Math.min(basePoints, config.maxPointsPerOrder);
 
     // Get tier multiplier if userId provided
     let multiplier = 1;
@@ -175,7 +198,9 @@ export class LoyaltyService {
       tierMultiplier: multiplier,
       tier,
       totalPoints,
-      estimatedValue: Math.floor(totalPoints / 10), // 10 pts = INR 1
+      // Redemption rate comes from the same configured settings, so the value
+      // shown at checkout matches what the programme actually pays out.
+      estimatedValue: Math.floor(totalPoints / config.pointsPerUnit),
     };
   }
 

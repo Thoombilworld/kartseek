@@ -12,5 +12,43 @@ export class RefundController {
   @Get(':id') getById(@Param('id') id: string) { return this.svc.getRefundById(id); }
   @Get('order/:orderId') getByOrder(@Param('orderId') orderId: string) { return this.svc.getRefundsByOrder(orderId); }
   @Put(':id/process') process(@Param('id') id: string, @Body('adminId') adminId: string, @Body('decision') decision: 'APPROVED' | 'REJECTED', @Body('remarks') remarks?: string) { return this.svc.processRefund(id, adminId, decision, remarks); }
-  @MessagePattern({ cmd: 'request_refund' }) msgRequest(@Payload() d: EmptyMessage) { return this.svc.requestRefund(d); }
+  // ── TCP surface ─────────────────────────────────────────────────────────
+  //
+  // Only `request_refund` was exposed, so everything an admin does to a refund
+  // was unreachable from the gateway — which answered approve, process and
+  // reject with a fabricated `{ success: true }` instead. The service methods
+  // behind these have existed all along; they simply had no way in.
+
+  @MessagePattern({ cmd: 'request_refund' })
+  msgRequest(@Payload() d: EmptyMessage) { return this.svc.requestRefund(d); }
+
+  /** Approve or reject in one call — the service takes the decision as an argument. */
+  @MessagePattern({ cmd: 'process_refund' })
+  msgProcess(@Payload() d: { id: string; adminId: string; decision: 'APPROVED' | 'REJECTED'; remarks?: string }) {
+    return this.svc.processRefund(d.id, d.adminId, d.decision, d.remarks);
+  }
+
+  @MessagePattern({ cmd: 'escalate_refund' })
+  msgEscalate(@Payload() d: { id: string; adminId: string; notes?: string }) {
+    return this.svc.escalateToReview(d.id, d.adminId, d.notes);
+  }
+
+  @MessagePattern({ cmd: 'get_refund_by_id' })
+  msgGetById(@Payload() d: { id: string }) { return this.svc.getRefundById(d.id); }
+
+  @MessagePattern({ cmd: 'get_refunds_by_order' })
+  msgGetByOrder(@Payload() d: { orderId: string }) { return this.svc.getRefundsByOrder(d.orderId); }
+
+  @MessagePattern({ cmd: 'get_refunds_by_user' })
+  msgGetByUser(@Payload() d: { userId: string; page?: number; limit?: number }) {
+    return this.svc.getRefundsByUser(d.userId, d.page, d.limit);
+  }
+
+  @MessagePattern({ cmd: 'get_pending_refunds' })
+  msgPending(@Payload() d: { page?: number; limit?: number }) {
+    return this.svc.getPendingRefunds(d?.page, d?.limit);
+  }
+
+  @MessagePattern({ cmd: 'get_refund_stats' })
+  msgStats() { return this.svc.getRefundStats(); }
 }

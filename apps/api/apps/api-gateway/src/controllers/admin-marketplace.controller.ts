@@ -56,7 +56,11 @@ export class AdminMarketplaceController {
     // asked neither service — so an admin crediting a wallet saw a confirmation
     // and a logged credit while the customer's balance never moved.
     @Inject('WALLET_SERVICE') private readonly walletClient: ClientProxy,
-    @Inject('LOYALTY_SERVICE') private readonly loyaltyClient: ClientProxy) {}
+    @Inject('LOYALTY_SERVICE') private readonly loyaltyClient: ClientProxy,
+    // Orders and refunds belong to their own services. The admin routes for
+    // both answered with the outcome they were named after and asked nobody.
+    @Inject('ORDER_SERVICE_TCP') private readonly orderClient: ClientProxy,
+    @Inject('REFUND_SERVICE') private readonly refundClient: ClientProxy) {}
 
   /** Forward to a named service, preserving the failure rather than inventing a result. */
   private async sendTo<T = any>(client: ClientProxy, service: string, cmd: string, payload: object): Promise<T> {
@@ -703,14 +707,21 @@ export class AdminMarketplaceController {
 
   @Put('orders/:id')
   @ApiOperation({ summary: 'Update order status/details' })
-  async updateOrder(@Param('id') id: string, @Body() dto: { action: string; reason?: string }) {
-    return { data: { success: true, orderId: id, action: dto.action } };
+  async updateOrder(@Req() req: any, @Param('id') id: string, @Body() dto: { action: string; reason?: string }) {
+    // `action` is the target status. Echoing it back without asking
+    // order-service meant an admin could move an order through any state and
+    // the customer's order never changed.
+    return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
+      orderId: id, status: dto.action, reason: dto.reason, updatedBy: this.actor(req),
+    });
   }
 
   @Put('orders/:id/cancel')
   @ApiOperation({ summary: 'Cancel an order' })
-  async cancelOrder(@Param('id') id: string, @Body() body: { reason: string }) {
-    return { data: { success: true, orderId: id, status: 'CANCELLED', reason: body.reason } };
+  async cancelOrder(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    return this.sendTo(this.orderClient, 'Order service', 'cancel_order', {
+      orderId: id, reason: body?.reason, cancelledBy: this.actor(req),
+    });
   }
 
   @Get('returns')
@@ -733,27 +744,45 @@ export class AdminMarketplaceController {
   }
 
   @Get('refunds')
-  @ApiOperation({ summary: 'List refund requests' })
-  async getRefunds() {
-    return { data: [] as unknown[], total: 0 };
+  @ApiOperation({ summary: 'List refund requests awaiting a decision' })
+  async getRefunds(
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+  ) {
+    // Returned an empty list inline, so the refunds queue was always empty and
+    // an admin had no way to tell that from "nothing is pending".
+    return this.sendTo(this.refundClient, 'Refund service', 'get_pending_refunds', {
+      page: +page, limit: +limit,
+    });
   }
 
+  // Approve, process and reject are one decision on the refund — the service
+  // takes it as an argument. All three used to answer with the status in their
+  // own name and write nothing, so a refund could be approved and processed in
+  // the admin panel while the customer was never paid.
   @Post('refunds/:id/approve')
   @ApiOperation({ summary: 'Approve a refund' })
-  async approveRefund(@Param('id') id: string, @Body() body?: { adminId?: string }) {
-    return { data: { success: true, refundId: id, status: 'APPROVED' } };
+  async approveRefund(@Req() req: any, @Param('id') id: string, @Body() body?: { remarks?: string }) {
+    return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
+      id, adminId: this.actor(req), decision: 'APPROVED', remarks: body?.remarks,
+    });
   }
 
   @Post('refunds/:id/process')
-  @ApiOperation({ summary: 'Process a refund' })
-  async processRefund(@Param('id') id: string, @Body() body: { amount: number; reason?: string; note?: string }) {
-    return { data: { success: true, refundId: id, status: 'PROCESSED', amount: body.amount } };
+  @ApiOperation({ summary: 'Process an approved refund' })
+  async processRefund(@Req() req: any, @Param('id') id: string, @Body() body: { amount?: number; reason?: string; note?: string }) {
+    return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
+      id, adminId: this.actor(req), decision: 'APPROVED',
+      remarks: body?.note ?? body?.reason,
+    });
   }
 
   @Put('refunds/:id/reject')
   @ApiOperation({ summary: 'Reject a refund' })
-  async rejectRefund(@Param('id') id: string, @Body() body: { reason: string }) {
-    return { data: { success: true, refundId: id, status: 'REJECTED', reason: body.reason } };
+  async rejectRefund(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
+      id, adminId: this.actor(req), decision: 'REJECTED', remarks: body?.reason,
+    });
   }
 
   // â”€â”€ Finance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
