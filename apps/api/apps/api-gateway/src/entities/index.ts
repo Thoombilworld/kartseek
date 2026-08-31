@@ -21,7 +21,5 @@ export * from './delivery.entity';
 // controllers/localization.controller.ts.
 export * from './geo-security.entities';
 export * from './page-layout.entity';
-export * from './bank-offer.entity';
-export * from './exchange-offer.entity';
 export * from './static-page.entity';
 

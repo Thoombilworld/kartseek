@@ -14,6 +14,8 @@ import { ProductAttribute, AttributeOption } from '../entities/product-attribute
 import { ProductQuestion } from '../entities/product-qa.entity';
 import { MarketplaceNotification } from '../entities/marketplace-notification.entity';
 import { FlashDeal, FlashDealNomination, FlashDealStatus } from '../entities/flash-deal.entity';
+import { BankOffer } from '../entities/bank-offer.entity';
+import { ExchangeOffer } from '../entities/exchange-offer.entity';
 import { MarketplaceHomeCacheService } from '../catalog/home-cache.service';
 import { getRegionConfig, DEFAULT_REGION } from '@app/region';
 
@@ -47,6 +49,8 @@ export class MarketplaceAdminService {
     private readonly home: MarketplaceHomeCacheService,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     @InjectRepository(Seller) private readonly sellerRepo: Repository<Seller>,
+    @InjectRepository(BankOffer) private readonly bankOfferRepo: Repository<BankOffer>,
+    @InjectRepository(ExchangeOffer) private readonly exchangeOfferRepo: Repository<ExchangeOffer>,
     @InjectRepository(Category) private readonly categoryRepo: TreeRepository<Category>,
     @InjectRepository(Brand) private readonly brandRepo: Repository<Brand>,
     @InjectRepository(Review) private readonly reviewRepo: Repository<Review>,
@@ -1241,29 +1245,122 @@ export class MarketplaceAdminService {
     return result;
   }
 
+  // ── Bank and exchange offers ────────────────────────────────────────────
+  //
+  // All six of these published a Kafka event and returned success without
+  // writing a row — `createBankOffer` even minted a `bo-<timestamp>` id for a
+  // record that did not exist. The working implementation lived in the API
+  // gateway against its own database connection, which is why nothing here
+  // ever needed to work: the admin panel talked to the gateway, and the module
+  // that owns the catalogue could not see its own offers.
+  //
+  // The entity and the table belong to this service now, so these are real.
+
+  /**
+   * Offers shown on product pages and at checkout.
+   *
+   * `activeOnly` means live *now*, not merely flagged ACTIVE — an offer whose
+   * window has closed is still ACTIVE in the row. The storefront asks for the
+   * live set; the admin list asks for everything.
+   */
+  async listBankOffers(activeOnly = false, category?: string) {
+    const qb = this.bankOfferRepo.createQueryBuilder('bo')
+      .orderBy('bo.isFeatured', 'DESC')
+      .addOrderBy('bo.priority', 'ASC');
+    if (activeOnly) {
+      const now = new Date();
+      qb.where('bo.status = :status', { status: 'ACTIVE' })
+        .andWhere('bo.startsAt <= :now', { now })
+        .andWhere('bo.expiresAt >= :now', { now });
+    }
+    if (category) {
+      qb.andWhere('(:cat = ANY(bo.applicableCategories) OR bo.applicableCategories IS NULL)', { cat: category });
+    }
+    const [data, total] = await qb.getManyAndCount();
+    return { data, total };
+  }
+
   async createBankOffer(dto: any) {
-    await this.kafka.publish('bank-offer.created', dto);
-    return { success: true, id: `bo-${Date.now()}` };
+    const saved = await this.bankOfferRepo.save(this.bankOfferRepo.create(dto as any));
+    const row: any = Array.isArray(saved) ? saved[0] : saved;
+    await this.invalidateOfferCaches();
+    await this.kafka.publish('bank-offer.created', { id: row.id, ...dto });
+    return { success: true, id: row.id, offer: row };
   }
 
   async updateBankOffer(id: string, dto: any) {
+    const result = await this.bankOfferRepo.update(id, dto);
+    if (!result.affected) throw new NotFoundException(`Bank offer ${id} not found`);
+    const offer = await this.bankOfferRepo.findOne({ where: { id } });
+    await this.invalidateOfferCaches();
     await this.kafka.publish('bank-offer.updated', { id, ...dto });
-    return { success: true, id };
+    return { success: true, id, offer };
   }
 
   async deleteBankOffer(id: string) {
+    const result = await this.bankOfferRepo.delete(id);
+    if (!result.affected) throw new NotFoundException(`Bank offer ${id} not found`);
+    await this.invalidateOfferCaches();
     await this.kafka.publish('bank-offer.deleted', { id });
     return { success: true, id };
   }
 
+  async listExchangeOffers(activeOnly = false, targetCategory?: string) {
+    const qb = this.exchangeOfferRepo.createQueryBuilder('eo')
+      .orderBy('eo.isFeatured', 'DESC')
+      .addOrderBy('eo.priority', 'ASC');
+    if (activeOnly) {
+      const now = new Date();
+      qb.where('eo.status = :status', { status: 'ACTIVE' })
+        .andWhere('eo.startsAt <= :now', { now })
+        .andWhere('eo.expiresAt >= :now', { now });
+    }
+    if (targetCategory) {
+      qb.andWhere('eo.targetCategory ILIKE :cat', { cat: `%${targetCategory}%` });
+    }
+    const [data, total] = await qb.getManyAndCount();
+    return { data, total };
+  }
+
+  /** Both offer kinds for one product, as the product page needs them. */
+  async listOffersForProduct(category?: string) {
+    const [bank, exchange] = await Promise.all([
+      this.listBankOffers(true, category),
+      this.listExchangeOffers(true, category),
+    ]);
+    return { bankOffers: bank.data, exchangeOffers: exchange.data };
+  }
+
   async createExchangeOffer(dto: any) {
-    await this.kafka.publish('exchange-offer.created', dto);
-    return { success: true, id: `eo-${Date.now()}` };
+    const saved = await this.exchangeOfferRepo.save(this.exchangeOfferRepo.create(dto as any));
+    const row: any = Array.isArray(saved) ? saved[0] : saved;
+    await this.invalidateOfferCaches();
+    await this.kafka.publish('exchange-offer.created', { id: row.id, ...dto });
+    return { success: true, id: row.id, offer: row };
   }
 
   async updateExchangeOffer(id: string, dto: any) {
+    const result = await this.exchangeOfferRepo.update(id, dto);
+    if (!result.affected) throw new NotFoundException(`Exchange offer ${id} not found`);
+    const offer = await this.exchangeOfferRepo.findOne({ where: { id } });
+    await this.invalidateOfferCaches();
     await this.kafka.publish('exchange-offer.updated', { id, ...dto });
+    return { success: true, id, offer };
+  }
+
+  async deleteExchangeOffer(id: string) {
+    const result = await this.exchangeOfferRepo.delete(id);
+    if (!result.affected) throw new NotFoundException(`Exchange offer ${id} not found`);
+    await this.invalidateOfferCaches();
+    await this.kafka.publish('exchange-offer.deleted', { id });
     return { success: true, id };
+  }
+
+  /** Offers appear on the home feed and every product page, so both go stale. */
+  private async invalidateOfferCaches() {
+    await this.redis.del('marketplace:bank-offers');
+    await this.redis.del('marketplace:exchange-offers');
+    await this.redis.del('marketplace:featured');
   }
 
   async getSponsoredProducts(status?: string) {

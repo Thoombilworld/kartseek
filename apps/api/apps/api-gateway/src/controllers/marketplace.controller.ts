@@ -22,8 +22,6 @@ import {
   GiftCardBalanceDto,
   RedeemGiftCardDto,
 } from '../dto/gateway.dto';
-import { BankOffer } from '../entities/bank-offer.entity';
-import { ExchangeOffer } from '../entities/exchange-offer.entity';
 import { MARKETPLACE_PATTERNS } from '../contracts';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
@@ -49,10 +47,6 @@ export class MarketplaceGatewayController {
     // that need a reply, and the order service listens for them over TCP.
     @Inject('ORDER_SERVICE_TCP') private readonly orderClient: ClientProxy,
     private readonly catalogGrpc: MarketplaceCatalogService,
-    @InjectRepository(BankOffer)
-    private readonly bankOfferRepo: Repository<BankOffer>,
-    @InjectRepository(ExchangeOffer)
-    private readonly exchangeOfferRepo: Repository<ExchangeOffer>,
     // Optional so a checkout can never fail because the socket layer is absent
     // (tests construct this controller without it).
     @Optional() private readonly sellerGateway?: SellerGateway,
@@ -1266,18 +1260,11 @@ export class MarketplaceGatewayController {
   @ApiQuery({ name: 'category', required: false, description: 'Filter by applicable product category' })
   @ApiOkResponse({ description: 'Active bank offers' })
   async getActiveBankOffers(@Query('category') category?: string) {
-    const now = new Date();
-    const qb = this.bankOfferRepo.createQueryBuilder('bo')
-      .where('bo.status = :status', { status: 'ACTIVE' })
-      .andWhere('bo.startsAt <= :now', { now })
-      .andWhere('bo.expiresAt >= :now', { now })
-      .orderBy('bo.isFeatured', 'DESC')
-      .addOrderBy('bo.priority', 'ASC');
-    if (category) {
-      qb.andWhere(':cat = ANY(bo.applicableCategories) OR bo.applicableCategories IS NULL', { cat: category });
-    }
-    const offers = await qb.getMany();
-    return { data: offers };
+    // The live-window and category filtering moved with the data; the gateway
+    // held its own query builder against a table it no longer owns.
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_BANK_OFFERS, {
+      activeOnly: true, category,
+    });
   }
 
   @Get('offers/exchange')
@@ -1287,49 +1274,17 @@ export class MarketplaceGatewayController {
   @ApiQuery({ name: 'targetCategory', required: false, description: 'Filter by target product category' })
   @ApiOkResponse({ description: 'Active exchange offers' })
   async getActiveExchangeOffers(@Query('targetCategory') targetCategory?: string) {
-    const now = new Date();
-    const qb = this.exchangeOfferRepo.createQueryBuilder('eo')
-      .where('eo.status = :status', { status: 'ACTIVE' })
-      .andWhere('eo.startsAt <= :now', { now })
-      .andWhere('eo.expiresAt >= :now', { now })
-      .orderBy('eo.isFeatured', 'DESC')
-      .addOrderBy('eo.priority', 'ASC');
-    if (targetCategory) {
-      qb.andWhere('eo.targetCategory ILIKE :cat', { cat: `%${targetCategory}%` });
-    }
-    const offers = await qb.getMany();
-    return { data: offers };
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, {
+      activeOnly: true, targetCategory,
+    });
   }
 
   @Get('products/:id/offers')
   @ApiOperation({ summary: 'Get all offers applicable to a specific product' })
   @ApiParam({ name: 'id', example: 'PRD-001', description: 'Product ID' })
   @ApiOkResponse({ description: 'Bank and exchange offers for a product' })
-  async getOffersForProduct(@Param('id') id: string) {
-    const now = new Date();
-    const bankOffers = await this.bankOfferRepo.createQueryBuilder('bo')
-      .where('bo.status = :status', { status: 'ACTIVE' })
-      .andWhere('bo.startsAt <= :now', { now })
-      .andWhere('bo.expiresAt >= :now', { now })
-      .orderBy('bo.isFeatured', 'DESC')
-      .addOrderBy('bo.priority', 'ASC')
-      .getMany();
-
-    const exchangeOffers = await this.exchangeOfferRepo.createQueryBuilder('eo')
-      .where('eo.status = :status', { status: 'ACTIVE' })
-      .andWhere('eo.startsAt <= :now', { now })
-      .andWhere('eo.expiresAt >= :now', { now })
-      .orderBy('eo.isFeatured', 'DESC')
-      .addOrderBy('eo.priority', 'ASC')
-      .getMany();
-
-    return {
-      data: {
-      productId: id,
-      bankOffers,
-      exchangeOffers,
-      },
-    };
+  async getOffersForProduct(@Param('id') id: string, @Query('category') category?: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_OFFERS_FOR_PRODUCT, { productId: id, category });
   }
 
   // ── Phase 1: Customer-Facing Discovery Routes ───────────────────────────
@@ -1461,14 +1416,10 @@ export class MarketplaceGatewayController {
   @Get('products/:id/exchange-offers')
   @ApiOperation({ summary: 'Get exchange/trade-in offers for a product' })
   async getExchangeOffers(@Param('id') productId: string) {
-    const now = new Date();
-    const exchangeOffers = await this.exchangeOfferRepo.createQueryBuilder('eo')
-      .where('eo.status = :status', { status: 'ACTIVE' })
-      .andWhere('eo.startsAt <= :now', { now })
-      .andWhere('eo.expiresAt >= :now', { now })
-      .orderBy('eo.isFeatured', 'DESC')
-      .getMany();
-    return { data: { productId, exchangeOffers } };
+    const offers: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, {
+      activeOnly: true,
+    });
+    return { data: { productId, exchangeOffers: offers?.data ?? offers ?? [] } };
   }
 
   @Get('products/:id/emi-options')
@@ -1727,19 +1678,12 @@ export class MarketplaceGatewayController {
   @Get('offers')
   @ApiOperation({ summary: 'Get all active offers' })
   async getAllOffers() {
-    const now = new Date();
-      const bankOffers = await this.bankOfferRepo.createQueryBuilder('bo')
-      .where('bo.status = :status', { status: 'ACTIVE' })
-      .andWhere('bo.startsAt <= :now', { now })
-      .andWhere('bo.expiresAt >= :now', { now })
-      .orderBy('bo.isFeatured', 'DESC')
-      .getMany();
-      const exchangeOffers = await this.exchangeOfferRepo.createQueryBuilder('eo')
-      .where('eo.status = :status', { status: 'ACTIVE' })
-      .andWhere('eo.startsAt <= :now', { now })
-      .andWhere('eo.expiresAt >= :now', { now })
-      .orderBy('eo.isFeatured', 'DESC')
-      .getMany();
+    const [bank, exchange]: any[] = await Promise.all([
+      this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_BANK_OFFERS, { activeOnly: true }),
+      this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, { activeOnly: true }),
+    ]);
+    const bankOffers = bank?.data ?? bank ?? [];
+    const exchangeOffers = exchange?.data ?? exchange ?? [];
     return { data: { bankOffers, exchangeOffers }, total: bankOffers.length + exchangeOffers.length };
   }
 

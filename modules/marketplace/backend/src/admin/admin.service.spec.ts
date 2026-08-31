@@ -15,6 +15,8 @@ import { ProductAttribute } from '../entities/product-attribute.entity';
 import { ProductQuestion } from '../entities/product-qa.entity';
 import { MarketplaceNotification } from '../entities/marketplace-notification.entity';
 import { FlashDeal, FlashDealNomination } from '../entities/flash-deal.entity';
+import { BankOffer } from '../entities/bank-offer.entity';
+import { ExchangeOffer } from '../entities/exchange-offer.entity';
 
 /**
  * Admin governance tests. Moved here with the methods when MarketplaceAdminService
@@ -77,6 +79,9 @@ describe('MarketplaceAdminService', () => {
         } },
         { provide: getRepositoryToken(Product), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Seller), useFactory: mockRepoFactory },
+        // Bank and exchange offers moved into this service from the gateway.
+        { provide: getRepositoryToken(BankOffer), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(ExchangeOffer), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Category), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Brand), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Review), useFactory: mockRepoFactory },

@@ -23,7 +23,7 @@ describe('MarketplaceGatewayController', () => {
       getCategories: jest.fn().mockResolvedValue(null),
       searchProducts: jest.fn().mockResolvedValue(null),
     };
-    controller = new MarketplaceGatewayController(client, client, client, catalogGrpc, repo, repo);
+    controller = new MarketplaceGatewayController(client, client, client, catalogGrpc);
   });
 
   /** Payload sent downstream, minus the optional internal-auth field. */
@@ -111,7 +111,7 @@ describe('MarketplaceGatewayController', () => {
       };
       const ctrl = new MarketplaceGatewayController(
         { send: marketplaceSend } as any, { send: cartSend } as any, { send: cartSend } as any,
-        catalogGrpc, repo, repo,
+        catalogGrpc,
       );
       return { ctrl, cartSend };
     }
@@ -207,7 +207,7 @@ describe('MarketplaceGatewayController', () => {
       const tcp = jest.fn().mockReturnValue(of(fullFeed));
       const client: any = { send: tcp };
       const repo: any = { find: jest.fn(), findOne: jest.fn() };
-      const ctrl = new MarketplaceGatewayController(client, client, client, catalogGrpc, repo, repo);
+      const ctrl = new MarketplaceGatewayController(client, client, client, catalogGrpc);
 
       const result = await ctrl.getMarketplaceHome({ regionCode: 'QA' } as any);
 
@@ -230,7 +230,7 @@ describe('MarketplaceGatewayController', () => {
       const tcp = jest.fn().mockReturnValue(of({}));
       const client: any = { send: tcp };
       const repo: any = { find: jest.fn(), findOne: jest.fn() };
-      const ctrl = new MarketplaceGatewayController(client, client, client, catalogGrpc, repo, repo);
+      const ctrl = new MarketplaceGatewayController(client, client, client, catalogGrpc);
 
       await ctrl.getMarketplaceHome({ regionCode: 'QA' } as any);
 

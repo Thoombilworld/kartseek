@@ -94,7 +94,6 @@ import {
   PartnerOnlineSession, PartnerLocationUpdate, PartnerEarning, PartnerPayout, PartnerSosCase,
   DeliveryPartner, DeliveryTask, DeliveryTaskStatusHistory, DeliveryPartnerEarning, DeliveryCodCollection, DeliveryReturnTask,
   PageLayout,
-  BankOffer, ExchangeOffer,
   StaticPage,
 } from './entities';
 import { User } from './entities/user.entity';
@@ -142,13 +141,15 @@ const svcHost = (name: string): string =>
       Partner, PartnerUser, PartnerRole, PartnerRoleAssignment, PartnerDocument, PartnerComplianceStatus,
       PartnerOnlineSession, PartnerLocationUpdate, PartnerEarning, PartnerPayout, PartnerSosCase,
       PageLayout,
-      BankOffer, ExchangeOffer,
       StaticPage,
       User,
     ])]),
 
     TypeOrmModule.forFeature([
-      PageLayout, BankOffer, ExchangeOffer, User, StaticPage,
+      // BankOffer and ExchangeOffer moved to marketplace-service, which owns
+      // the tables now. The gateway forwards to it instead of holding a
+      // second connection to rows it does not own.
+      PageLayout, User, StaticPage,
     ]),
 
     // ── Security: DDoS Protection + JWT Auth ────────────────────────────────

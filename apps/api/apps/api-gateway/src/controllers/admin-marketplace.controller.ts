@@ -14,8 +14,6 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { BankOffer } from '../entities/bank-offer.entity';
-import { ExchangeOffer } from '../entities/exchange-offer.entity';
 import { User } from '../entities/user.entity';
 import { MARKETPLACE_PATTERNS } from '../contracts';
 import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagination.pipe';
@@ -41,10 +39,6 @@ export class AdminMarketplaceController {
     private readonly redis: RedisService,
     private readonly kafka: KafkaProducerService,
     @Inject('MARKETPLACE_SERVICE') private readonly marketplaceClient: ClientProxy,
-    @InjectRepository(BankOffer)
-    private readonly bankOfferRepo: Repository<BankOffer>,
-    @InjectRepository(ExchangeOffer)
-    private readonly exchangeOfferRepo: Repository<ExchangeOffer>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     // Finance. Both of these surfaces used to return hardcoded empty lists.
@@ -1042,181 +1036,106 @@ export class AdminMarketplaceController {
 
   // ── Bank Offers Management ──────────────────────────────────────────────────
 
+  // ── Bank and exchange offers ────────────────────────────────────────────────
+  //
+  // These thirteen routes wrote to `bank_offers` and `exchange_offers` through
+  // a TypeORM repository injected into the gateway, against the old shared
+  // `kartseek_db`. marketplace-service carried methods for the same records
+  // that published a Kafka event and returned a fabricated `bo-<timestamp>` id
+  // without writing a row — so the module that owns the catalogue could not
+  // read or change its own offers, and the only working implementation lived
+  // in the layer that is supposed to route, not to store.
+  //
+  // Ownership has moved: entities, rows and behaviour are marketplace-service's
+  // now, and these forward like every other admin route on this controller.
+
   @Get('bank-offers')
   @ApiOperation({ summary: 'List all bank offers' })
   @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'EXPIRED', 'ARCHIVED'] })
-  @ApiQuery({ name: 'bankName', required: false })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'limit', required: false })
-  async getBankOffers(
-    @Query('status') status?: string,
-    @Query('bankName') bankName?: string,
-    @Query('page', ParsePagePipe) page = 1,
-    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE) {
-    const qb = this.bankOfferRepo.createQueryBuilder('bo');
-    if (status) qb.andWhere('bo.status = :status', { status });
-    if (bankName) qb.andWhere('bo.bankName ILIKE :bankName', { bankName: `%${bankName}%` });
-    qb.orderBy('bo.priority', 'ASC').addOrderBy('bo.createdAt', 'DESC');
-    qb.skip((Number(page) - 1) * Number(limit)).take(Number(limit));
-    const [data, total] = await qb.getManyAndCount();
-    return { data, total, page: Number(page), limit: Number(limit), hasMore: total > Number(page) * Number(limit) };
-  }
-
-  @Get('bank-offers/:id')
-  @ApiOperation({ summary: 'Get bank offer by ID' })
-  async getBankOfferById(@Param('id') id: string) {
-    const offer = await this.bankOfferRepo.findOneByOrFail({ id });
-    return { data: offer };
+  @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
+  async getBankOffers(@Query('activeOnly') activeOnly?: string, @Query('status') status?: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_BANK_OFFERS, {
+      activeOnly: activeOnly === 'true' || status === 'ACTIVE',
+    });
   }
 
   @Post('bank-offers')
-  @ApiOperation({ summary: 'Create a new bank offer' })
-  @ApiBody({ schema: { type: 'object', properties: {
-    title: { type: 'string', example: '10% Instant Discount with HDFC Credit Card' },
-    description: { type: 'string', example: 'Get 10% instant discount up to ₹1500 on orders above ₹5000' },
-    bankName: { type: 'string', example: 'HDFC Bank' },
-    cardType: { type: 'string', example: 'CREDIT', enum: ['CREDIT', 'DEBIT', 'ALL', 'EMI', 'UPI', 'WALLET'] },
-    cardNetwork: { type: 'string', example: 'ALL' },
-    discountType: { type: 'string', example: 'PERCENTAGE', enum: ['PERCENTAGE', 'FLAT'] },
-    discountValue: { type: 'number', example: 10 },
-    maxDiscount: { type: 'number', example: 1500 },
-    minOrderValue: { type: 'number', example: 5000 },
-    startsAt: { type: 'string', format: 'date-time' },
-    expiresAt: { type: 'string', format: 'date-time' },
-  }, required: ['title', 'description', 'bankName', 'discountType', 'discountValue', 'startsAt', 'expiresAt'] } })
-  async createBankOffer(@Body() body: Partial<BankOffer>) {
-    const offer = this.bankOfferRepo.create(body);
-    const saved = await this.bankOfferRepo.save(offer);
-    await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type: 'bank_offer', id: saved.id, action: 'created', timestamp: new Date().toISOString(),
-    });
-    return { data: saved };
+  @ApiOperation({ summary: 'Create a bank offer' })
+  async createBankOffer(@Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_BANK_OFFER, { dto });
   }
 
   @Patch('bank-offers/:id')
   @ApiOperation({ summary: 'Update a bank offer' })
-  async updateBankOffer(@Param('id') id: string, @Body() body: Partial<BankOffer>) {
-    await this.bankOfferRepo.update(id, body);
-    const updated = await this.bankOfferRepo.findOneByOrFail({ id });
-    await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type: 'bank_offer', id, action: 'updated', timestamp: new Date().toISOString(),
-    });
-    return { data: updated };
+  async updateBankOffer(@Param('id') id: string, @Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, { id, dto });
   }
 
   @Patch('bank-offers/:id/status')
   @ApiOperation({ summary: 'Change bank offer status (activate, pause, archive)' })
   @ApiBody({ schema: { type: 'object', properties: { status: { type: 'string', enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'ARCHIVED'] } } } })
   async updateBankOfferStatus(@Param('id') id: string, @Body('status') status: string) {
-    await this.bankOfferRepo.update(id, { status });
-    return { data: { success: true, id, status } };
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, { id, dto: { status } });
   }
 
   @Patch('bank-offers/:id/feature')
-  @ApiOperation({ summary: 'Toggle bank offer featured status' })
-  async toggleBankOfferFeatured(@Param('id') id: string) {
-    const offer = await this.bankOfferRepo.findOneByOrFail({ id });
-    await this.bankOfferRepo.update(id, { isFeatured: !offer.isFeatured });
-    return { data: { success: true, id, isFeatured: !offer.isFeatured } };
+  @ApiOperation({ summary: 'Set the bank offer featured flag' })
+  @ApiBody({ schema: { type: 'object', properties: { isFeatured: { type: 'boolean' } } } })
+  async setBankOfferFeatured(@Param('id') id: string, @Body('isFeatured') isFeatured?: boolean) {
+    // Takes the value rather than toggling. Read-then-flip in the gateway raced
+    // with itself: two admins on the offers page each read the same value and
+    // wrote the same flip, so the second click undid the first.
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, {
+      id, dto: { isFeatured: isFeatured !== false },
+    });
   }
 
   @Delete('bank-offers/:id')
   @ApiOperation({ summary: 'Delete a bank offer permanently' })
   async deleteBankOffer(@Param('id') id: string) {
-    await this.bankOfferRepo.delete(id);
-    await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type: 'bank_offer', id, action: 'deleted', timestamp: new Date().toISOString(),
-    });
-    return { data: { success: true, id } };
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_BANK_OFFER, { id });
   }
-
-  // ── Exchange Offers Management ──────────────────────────────────────────────
 
   @Get('exchange-offers')
-  @ApiOperation({ summary: 'List all exchange/trade-in offers' })
-  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'EXPIRED', 'ARCHIVED'] })
-  @ApiQuery({ name: 'targetCategory', required: false })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'limit', required: false })
-  async getExchangeOffers(
-    @Query('status') status?: string,
-    @Query('targetCategory') targetCategory?: string,
-    @Query('page', ParsePagePipe) page = 1,
-    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE) {
-    const qb = this.exchangeOfferRepo.createQueryBuilder('eo');
-    if (status) qb.andWhere('eo.status = :status', { status });
-    if (targetCategory) qb.andWhere('eo.targetCategory ILIKE :cat', { cat: `%${targetCategory}%` });
-    qb.orderBy('eo.priority', 'ASC').addOrderBy('eo.createdAt', 'DESC');
-    qb.skip((Number(page) - 1) * Number(limit)).take(Number(limit));
-    const [data, total] = await qb.getManyAndCount();
-    return { data, total, page: Number(page), limit: Number(limit), hasMore: total > Number(page) * Number(limit) };
-  }
-
-  @Get('exchange-offers/:id')
-  @ApiOperation({ summary: 'Get exchange offer by ID' })
-  async getExchangeOfferById(@Param('id') id: string) {
-    const offer = await this.exchangeOfferRepo.findOneByOrFail({ id });
-    return { data: offer };
+  @ApiOperation({ summary: 'List all exchange offers' })
+  @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
+  async getExchangeOffers(@Query('activeOnly') activeOnly?: string, @Query('status') status?: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, {
+      activeOnly: activeOnly === 'true' || status === 'ACTIVE',
+    });
   }
 
   @Post('exchange-offers')
-  @ApiOperation({ summary: 'Create a new exchange/trade-in offer' })
-  @ApiBody({ schema: { type: 'object', properties: {
-    title: { type: 'string', example: 'Exchange your old phone — get up to ₹15,000 off' },
-    description: { type: 'string', example: 'Trade in your old smartphone and get instant discount on a new one' },
-    exchangeCategory: { type: 'string', example: 'Smartphones' },
-    targetCategory: { type: 'string', example: 'Smartphones' },
-    maxExchangeValue: { type: 'number', example: 15000 },
-    minExchangeValue: { type: 'number', example: 1000 },
-    bonusAmount: { type: 'number', example: 2000 },
-    fulfillmentMode: { type: 'string', example: 'PICKUP', enum: ['PICKUP', 'DROP_OFF', 'COURIER'] },
-    startsAt: { type: 'string', format: 'date-time' },
-    expiresAt: { type: 'string', format: 'date-time' },
-  }, required: ['title', 'description', 'exchangeCategory', 'targetCategory', 'maxExchangeValue', 'startsAt', 'expiresAt'] } })
-  async createExchangeOffer(@Body() body: Partial<ExchangeOffer>) {
-    const offer = this.exchangeOfferRepo.create(body);
-    const saved = await this.exchangeOfferRepo.save(offer);
-    await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type: 'exchange_offer', id: saved.id, action: 'created', timestamp: new Date().toISOString(),
-    });
-    return { data: saved };
+  @ApiOperation({ summary: 'Create an exchange offer' })
+  async createExchangeOffer(@Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_EXCHANGE_OFFER, { dto });
   }
 
   @Patch('exchange-offers/:id')
   @ApiOperation({ summary: 'Update an exchange offer' })
-  async updateExchangeOffer(@Param('id') id: string, @Body() body: Partial<ExchangeOffer>) {
-    await this.exchangeOfferRepo.update(id, body);
-    const updated = await this.exchangeOfferRepo.findOneByOrFail({ id });
-    await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type: 'exchange_offer', id, action: 'updated', timestamp: new Date().toISOString(),
-    });
-    return { data: updated };
+  async updateExchangeOffer(@Param('id') id: string, @Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, { id, dto });
   }
 
   @Patch('exchange-offers/:id/status')
   @ApiOperation({ summary: 'Change exchange offer status' })
-  @ApiBody({ schema: { type: 'object', properties: { status: { type: 'string', enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'ARCHIVED'] } } } })
   async updateExchangeOfferStatus(@Param('id') id: string, @Body('status') status: string) {
-    await this.exchangeOfferRepo.update(id, { status });
-    return { data: { success: true, id, status } };
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, { id, dto: { status } });
   }
 
   @Patch('exchange-offers/:id/feature')
-  @ApiOperation({ summary: 'Toggle exchange offer featured status' })
-  async toggleExchangeOfferFeatured(@Param('id') id: string) {
-    const offer = await this.exchangeOfferRepo.findOneByOrFail({ id });
-    await this.exchangeOfferRepo.update(id, { isFeatured: !offer.isFeatured });
-    return { data: { success: true, id, isFeatured: !offer.isFeatured } };
+  @ApiOperation({ summary: 'Set the exchange offer featured flag' })
+  @ApiBody({ schema: { type: 'object', properties: { isFeatured: { type: 'boolean' } } } })
+  async setExchangeOfferFeatured(@Param('id') id: string, @Body('isFeatured') isFeatured?: boolean) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, {
+      id, dto: { isFeatured: isFeatured !== false },
+    });
   }
 
   @Delete('exchange-offers/:id')
   @ApiOperation({ summary: 'Delete an exchange offer permanently' })
   async deleteExchangeOffer(@Param('id') id: string) {
-    await this.exchangeOfferRepo.delete(id);
-    await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type: 'exchange_offer', id, action: 'deleted', timestamp: new Date().toISOString(),
-    });
-    return { data: { success: true, id } };
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_EXCHANGE_OFFER, { id });
   }
 
   // ── Page Layout ─────────────────────────────────────────────────────────────
@@ -2046,13 +1965,13 @@ export class AdminMarketplaceController {
 
   @Put('bank-offers/:id')
   @ApiOperation({ summary: 'Update bank offer (PUT alias)' })
-  async putBankOffer(@Param('id') id: string, @Body() body: Partial<BankOffer>) {
+  async putBankOffer(@Param('id') id: string, @Body() body: any) {
     return this.updateBankOffer(id, body);
   }
 
   @Put('exchange-offers/:id')
   @ApiOperation({ summary: 'Update exchange offer (PUT alias)' })
-  async putExchangeOffer(@Param('id') id: string, @Body() body: Partial<ExchangeOffer>) {
+  async putExchangeOffer(@Param('id') id: string, @Body() body: any) {
     return this.updateExchangeOffer(id, body);
   }
 

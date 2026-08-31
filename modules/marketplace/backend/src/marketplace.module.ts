@@ -48,6 +48,8 @@ import { SellerBankAccount } from './entities/seller-bank-account.entity';
 import { SellerStaff } from './entities/seller-staff.entity';
 import { SellerPromotion } from './entities/seller-promotion.entity';
 import { SellerSupportTicket } from './entities/seller-support-ticket.entity';
+import { BankOffer } from './entities/bank-offer.entity';
+import { ExchangeOffer } from './entities/exchange-offer.entity';
 import { SellerController } from './seller/seller.controller';
 import { SellerMessagesController } from './seller/seller.messages.controller';
 import { SellerOwnershipGuard } from './seller/seller-ownership.guard';
@@ -77,6 +79,13 @@ const envSchema = buildEnvSchema({
 // because the gateway turns those 500s into 503s that the pages swallow).
 const ENTITIES = [
   Product, Seller, Category, Brand,
+  // Bank and exchange offers. These lived in the API gateway — entity, table
+  // and all — while marketplace-service carried six admin methods for them
+  // that published a Kafka event and returned a fabricated `bo-<timestamp>`
+  // id without writing anything. The gateway held the only real
+  // implementation, so the module that owns the catalogue could not read its
+  // own offers. Ownership moved here; the gateway forwards.
+  BankOffer, ExchangeOffer,
   ProductListing, ProductImage,
   Review, WishlistItem, MarketplaceOrder,
   ReturnRequest, Coupon, CouponUsage,

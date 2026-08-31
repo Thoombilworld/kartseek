@@ -1270,6 +1270,26 @@ export class MarketplaceController {
   @MessagePattern({ cmd: 'admin_update_bank_offer' })
   tcpAdminUpdateBankOffer(@Payload() d: IdMessage & DtoMessage) { return this.admin.updateBankOffer(requireId(d?.id, 'record'), d?.dto ?? d); }
 
+  // Listing and deleting exchange offers had no pattern at all, so the gateway
+  // could not have forwarded them even had it wanted to.
+  @MessagePattern({ cmd: 'get_offers_for_product' })
+  tcpOffersForProduct(@Payload() d: EmptyMessage) { return this.admin.listOffersForProduct(d?.category); }
+
+  @MessagePattern({ cmd: 'admin_create_bank_offer' })
+  tcpAdminCreateBankOffer(@Payload() d: DtoMessage) { return this.admin.createBankOffer(d?.dto ?? d); }
+
+  @MessagePattern({ cmd: 'admin_create_exchange_offer' })
+  tcpAdminCreateExchangeOffer(@Payload() d: DtoMessage) { return this.admin.createExchangeOffer(d?.dto ?? d); }
+
+  @MessagePattern({ cmd: 'admin_list_bank_offers' })
+  tcpAdminListBankOffers(@Payload() d: EmptyMessage) { return this.admin.listBankOffers(!!d?.activeOnly, d?.category); }
+
+  @MessagePattern({ cmd: 'admin_list_exchange_offers' })
+  tcpAdminListExchangeOffers(@Payload() d: EmptyMessage) { return this.admin.listExchangeOffers(!!d?.activeOnly, d?.targetCategory); }
+
+  @MessagePattern({ cmd: 'admin_delete_exchange_offer' })
+  tcpAdminDeleteExchangeOffer(@Payload() d: IdMessage) { return this.admin.deleteExchangeOffer(requireId(d?.id, 'record')); }
+
   @MessagePattern({ cmd: 'admin_delete_bank_offer' })
   tcpAdminDeleteBankOffer(@Payload() d: IdMessage) { return this.admin.deleteBankOffer(requireId(d?.id, 'record')); }
 

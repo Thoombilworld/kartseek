@@ -16,6 +16,8 @@ import { ReturnRequest } from '../entities/return-request.entity';
 import { ProductAttribute } from '../entities/product-attribute.entity';
 import { ProductQuestion } from '../entities/product-qa.entity';
 import { MarketplaceNotification } from '../entities/marketplace-notification.entity';
+import { BankOffer } from '../entities/bank-offer.entity';
+import { ExchangeOffer } from '../entities/exchange-offer.entity';
 
 /**
  * Flash-deal pipeline regressions.
@@ -83,6 +85,9 @@ describe('MarketplaceAdminService — flash deals', () => {
         { provide: getRepositoryToken(FlashDealNomination), useValue: repoStub() },
         { provide: getRepositoryToken(Product), useValue: repoStub() },
         { provide: getRepositoryToken(Seller), useValue: repoStub() },
+        // Bank and exchange offers moved into this service from the API gateway.
+        { provide: getRepositoryToken(BankOffer), useValue: repoStub() },
+        { provide: getRepositoryToken(ExchangeOffer), useValue: repoStub() },
         { provide: getRepositoryToken(Category), useValue: repoStub() },
         { provide: getRepositoryToken(Brand), useValue: repoStub() },
         { provide: getRepositoryToken(Review), useValue: repoStub() },
