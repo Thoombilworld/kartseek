@@ -54,7 +54,8 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:infra": "docker compose up -d postgres mongodb redis kafka",
-    "test:e2e:marketplace": "ts-node -r tsconfig-paths/register scripts/e2e-marketplace.ts"
+    "test:e2e:marketplace": "ts-node -r tsconfig-paths/register scripts/e2e-marketplace.ts",
+    "db:split": "ts-node -r tsconfig-paths/register scripts/split-databases.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
