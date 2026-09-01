@@ -4,6 +4,7 @@ import { rpcCatch } from '@app/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@app/security';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
+import { Public } from '../decorators/public.decorator';
 
 @ApiTags('🏢 Franchise Operations')
 @Controller('franchise')
@@ -50,7 +51,13 @@ export class FranchiseGatewayController {
    *
    * Public, and declared before every `:id` route — the registration form needs
    * it before anyone has an account, let alone a franchise.
+   *
+   * `@Public()` states that in code rather than only in this comment: the route
+   * exposure guard treats an undecorated, unauthenticated route as an oversight,
+   * which is the right default. It returns the market registry — country,
+   * currency, tax rate, timezone — and no user or franchise data.
    */
+  @Public()
   @Get('markets')
   @ApiOperation({ summary: 'Countries a franchise can be registered in, with currency and tax' })
   async markets() {

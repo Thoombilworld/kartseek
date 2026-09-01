@@ -6,6 +6,7 @@ import { categoryMeta } from '@/lib/seo/metadata';
 import {
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby,
   Sparkles, BookOpen, Car, ShoppingBasket, Tv, Headphones,
+  Monitor, Briefcase, PawPrint, Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick,
 } from 'lucide-react';
 import CategoryFilters from './category-filters';
 import { buyBoxPrice } from '@/lib/api/map-catalog-product';
@@ -32,7 +33,8 @@ function slugify(label: string): string {
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
-  Car, ShoppingBasket, Tv, Headphones,
+  Car, ShoppingBasket, Tv, Headphones, Monitor, Briefcase, PawPrint,
+  Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick,
 };
 
 // ── Deterministic product data generator (no random prices) ─────────────────

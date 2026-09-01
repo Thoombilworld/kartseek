@@ -21,14 +21,24 @@ import {
   ErrorResponseDto,
   GiftCardBalanceDto,
   RedeemGiftCardDto,
+  CreateCheckoutDto, CreatePriceAlertDto, ReportProductDto,
+  ResolveProductReportDto, ValidateCouponDto, RedeemCouponRequestDto,
+  CreateQuestionDto, CreateAnswerDto, VerifyDeliveryOtpDto,
+  WishlistProductDto, RemoveCartItemDto,
+  ForwardedReturnRequestDto, ForwardedReturnStatusDto, ForwardedPickupDto,
+  ForwardedCouponDto, ForwardedTrackingEventDto, ForwardedVariantDto,
+  ForwardedVariantStockDto, ForwardedDeliveryAssignmentDto,
+  ForwardedDeliveryStatusDto, ForwardedDeliveryProofDto,
+  ForwardedCartItemDto, ForwardedOrderDto, ForwardedBrandUpdateDto,
 } from '../dto/gateway.dto';
 import { MARKETPLACE_PATTERNS } from '../contracts';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
 import { RolesGuard } from '@app/guards';
 import { Roles } from '@app/decorators';
-import { UserRole } from '@app/common';
+import { UserRole, rpcCatch } from '@app/common';
 import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagination.pipe';
+import { ForwardingValidationPipe } from '../pipes/forwarding-validation.pipe';
 import { SellerModuleGuard, SellerModule } from '../guards/seller-module.guard';
 import { SellerGateway } from '../gateways/seller.gateway';
 import { getRegionConfig } from '@app/region';
@@ -150,24 +160,19 @@ export class MarketplaceGatewayController {
       return await lastValueFrom(
       this.marketplaceClient.send<T>({ cmd }, body).pipe(
         timeout(10000),
-        catchError((err) => {
-          // marketplace-service's RpcAwareExceptionsFilter puts the original
-          // HTTP status on `statusCode`; `status` is the RPC status and is the
-          // string 'error' for anything Nest handled by default. Reading only
-          // `status` meant no failure ever produced a numeric code, so a
-          // deleted or unpublished product came back 503 "service unavailable"
-          // rather than 404 — the client cannot tell an outage from a genuinely
-          // missing product, and retries a request that will never succeed.
-          const rawStatus = err?.statusCode ?? err?.status;
-          const status =
-            typeof rawStatus === 'number' && rawStatus >= 100 && rawStatus < 600
-              ? rawStatus
-              : HttpStatus.SERVICE_UNAVAILABLE;
-          throw new HttpException(
-            err?.message || 'Marketplace service unavailable',
-            status,
-          );
-        }),
+        // Through the shared helper, not a local copy.
+        //
+        // This controller carried its own inline version of the rule, and it
+        // treated any status from 100 to 599 as a domain error whose message
+        // could be forwarded. marketplace-service reports unhandled failures as
+        // `{ statusCode: 500, message: <driver text> }`, so a non-uuid sent to
+        // the wishlist route answered
+        //   500 invalid input syntax for type uuid: "12345"
+        // naming the datastore and column type to the caller. `rpcCatch` keeps
+        // the original reason for the local copy — read `statusCode` so a
+        // missing product is 404 rather than 503 — while forwarding a message
+        // only for 4xx, which is the half that was written for the caller.
+        catchError(rpcCatch('Marketplace service unavailable')),
       ),
       );
     } catch (error) {
@@ -457,7 +462,7 @@ export class MarketplaceGatewayController {
   @Post('orders/checkout')
   @ApiOperation({ summary: 'Place a marketplace order' })
   @ApiCreatedResponse({ description: 'Order placed' })
-  async createCheckout(@Req() req: any, @Body() payload: any) {
+  async createCheckout(@Req() req: any, @Body() payload: CreateCheckoutDto) {
     return this.placeMarketplaceOrder(req, payload);
   }
 
@@ -789,7 +794,8 @@ export class MarketplaceGatewayController {
   @Post('returns')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Create a return request' })
-  async createReturnRequest(@Req() req: any, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async createReturnRequest(@Req() req: any, @Body() payload: ForwardedReturnRequestDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_RETURN, { ...payload, customerId: this.userId(req) });
   }
 
@@ -820,7 +826,8 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update return request status (seller/admin)' })
-  async updateReturnStatus(@Req() req: any, @Param('id') id: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async updateReturnStatus(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedReturnStatusDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, { id, ...payload, _actor: this.actor(req) });
   }
 
@@ -832,7 +839,7 @@ export class MarketplaceGatewayController {
       '`targetPrice` to be told only at or below a specific figure.',
   })
   @ApiParam({ name: 'id', description: 'Product UUID' })
-  async createPriceAlert(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+  async createPriceAlert(@Req() req: any, @Param('id') id: string, @Body() body: CreatePriceAlertDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_PRICE_ALERT, {
       productId: id,
       customerId: req.user?.userId ?? req.user?.sub,
@@ -869,7 +876,7 @@ export class MarketplaceGatewayController {
       'reporting again updates the existing report rather than creating a second.',
   })
   @ApiParam({ name: 'id', description: 'Product UUID' })
-  async reportProduct(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+  async reportProduct(@Req() req: any, @Param('id') id: string, @Body() body: ReportProductDto) {
     // The reporter is the token subject. Taking it from the body would let a
     // caller file on another shopper's behalf and sidestep the one-per-shopper
     // constraint by inventing reporter ids.
@@ -900,7 +907,7 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Resolve a product report (admin)' })
-  async resolveProductReport(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+  async resolveProductReport(@Req() req: any, @Param('id') id: string, @Body() body: ResolveProductReportDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.RESOLVE_PRODUCT_REPORT, {
       id,
       status: body?.status,
@@ -923,7 +930,8 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Assign pickup for a return (admin)' })
-  async assignReturnPickup(@Param('id') id: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async assignReturnPickup(@Param('id') id: string, @Body() payload: ForwardedPickupDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ASSIGN_RETURN_PICKUP, { id, ...payload });
   }
 
@@ -961,7 +969,8 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Create a coupon (seller/admin)' })
-  async createCoupon(@Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async createCoupon(@Body() payload: ForwardedCouponDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_COUPON, payload);
   }
 
@@ -970,7 +979,8 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update a coupon (seller/admin)' })
-  async updateCoupon(@Req() req: any, @Param('id') id: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async updateCoupon(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedCouponDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_COUPON, { id, dto: payload, _actor: this.actor(req) });
   }
 
@@ -985,7 +995,7 @@ export class MarketplaceGatewayController {
 
   @Post('coupons/validate')
   @ApiOperation({ summary: 'Validate a coupon code' })
-  async validateCoupon(@Req() req: any, @Body() payload: any) {
+  async validateCoupon(@Req() req: any, @Body() payload: ValidateCouponDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.VALIDATE_COUPON, {
       code: payload.code,
       customerId: this.userId(req) || payload.userId || payload.customerId || 'guest',
@@ -998,7 +1008,7 @@ export class MarketplaceGatewayController {
   @Post('coupons/redeem')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Redeem a coupon' })
-  async redeemCoupon(@Req() req: any, @Body() payload: any) {
+  async redeemCoupon(@Req() req: any, @Body() payload: RedeemCouponRequestDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.REDEEM_COUPON, {
       couponId: payload.couponId,
       customerId: this.userId(req),
@@ -1039,7 +1049,8 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER, UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Add a tracking event (seller/driver/admin)' })
-  async addTrackingEvent(@Req() req: any, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async addTrackingEvent(@Req() req: any, @Body() payload: ForwardedTrackingEventDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TRACKING_EVENT, { ...payload, _actor: this.actor(req) });
   }
 
@@ -1056,7 +1067,8 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Create a variant for a product (seller/admin)' })
-  async createVariant(@Req() req: any, @Param('productId') productId: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async createVariant(@Req() req: any, @Param('productId') productId: string, @Body() payload: ForwardedVariantDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_VARIANT, { productId, dto: payload, _actor: this.actor(req) });
   }
 
@@ -1071,7 +1083,8 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update a variant (seller/admin)' })
-  async updateVariant(@Req() req: any, @Param('id') id: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async updateVariant(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedVariantDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_VARIANT, { id, dto: payload, _actor: this.actor(req) });
   }
 
@@ -1089,7 +1102,8 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update variant stock (seller/admin)' })
-  async updateVariantStock(@Req() req: any, @Param('id') id: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async updateVariantStock(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedVariantStockDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_VARIANT_STOCK, { id, ...payload, _actor: this.actor(req) });
   }
 
@@ -1117,7 +1131,7 @@ export class MarketplaceGatewayController {
   @Post('products/:productId/questions')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Ask a question about a product' })
-  async createQuestion(@Req() req: any, @Param('productId') productId: string, @Body() payload: any) {
+  async createQuestion(@Req() req: any, @Param('productId') productId: string, @Body() payload: CreateQuestionDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_QUESTION, {
       productId,
       customerId: this.userId(req),
@@ -1135,7 +1149,7 @@ export class MarketplaceGatewayController {
   @Post('questions/:questionId/answers')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Answer a product question' })
-  async createAnswer(@Req() req: any, @Param('questionId') questionId: string, @Body() payload: any) {
+  async createAnswer(@Req() req: any, @Param('questionId') questionId: string, @Body() payload: CreateAnswerDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_ANSWER, {
       questionId,
       authorId: this.userId(req),
@@ -1218,7 +1232,8 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create a delivery assignment (admin)' })
-  async createDeliveryAssignment(@Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async createDeliveryAssignment(@Body() payload: ForwardedDeliveryAssignmentDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_DELIVERY_ASSIGNMENT, payload);
   }
 
@@ -1226,7 +1241,8 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update delivery status (driver/admin)' })
-  async updateDeliveryStatus(@Param('id') id: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async updateDeliveryStatus(@Param('id') id: string, @Body() payload: ForwardedDeliveryStatusDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_DELIVERY_STATUS, { id, ...payload });
   }
 
@@ -1234,7 +1250,7 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Verify delivery OTP (driver/admin)' })
-  async verifyDeliveryOtp(@Param('id') id: string, @Body() payload: any) {
+  async verifyDeliveryOtp(@Param('id') id: string, @Body() payload: VerifyDeliveryOtpDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.VERIFY_DELIVERY_OTP, { id, otp: payload.otp });
   }
 
@@ -1242,7 +1258,8 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Submit delivery proof (driver/admin)' })
-  async submitDeliveryProof(@Param('id') id: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async submitDeliveryProof(@Param('id') id: string, @Body() payload: ForwardedDeliveryProofDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_DELIVERY_STATUS, { id, ...payload });
   }
 
@@ -1703,7 +1720,7 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard)
   @Post('wishlist')
   @ApiOperation({ summary: 'Add product to my wishlist' })
-  async addToOwnWishlist(@Req() req: any, @Body() payload: any) {
+  async addToOwnWishlist(@Req() req: any, @Body() payload: WishlistProductDto) {
     if (!payload?.productId) throw new HttpException('productId is required', HttpStatus.BAD_REQUEST);
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TO_WISHLIST, {
       userId: this.userId(req),
@@ -1815,7 +1832,8 @@ export class MarketplaceGatewayController {
   @Put('cart/:itemId')
   @ApiOperation({ summary: 'Update cart item quantity (current user)' })
   @ApiParam({ name: 'itemId', description: 'Product ID of the cart line' })
-  async updateOwnCartItem(@Req() req: any, @Param('itemId') itemId: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async updateOwnCartItem(@Req() req: any, @Param('itemId') itemId: string, @Body() payload: ForwardedCartItemDto) {
     return lastValueFrom(
       this.cartClient.send({ cmd: 'update_cart_item' }, { userId: this.userId(req), itemId, ...payload }),
     ).catch(() => {
@@ -1827,7 +1845,7 @@ export class MarketplaceGatewayController {
   @Delete('cart/:itemId')
   @ApiOperation({ summary: 'Remove item from cart (current user)' })
   @ApiParam({ name: 'itemId', description: 'Product ID of the cart line' })
-  async removeOwnCartItem(@Req() req: any, @Param('itemId') itemId: string, @Body() body?: any) {
+  async removeOwnCartItem(@Req() req: any, @Param('itemId') itemId: string, @Body() body?: RemoveCartItemDto) {
     // variantId is part of the line's identity, so it has to be forwarded —
     // without it a request to drop one variant matches the plain line instead.
     return lastValueFrom(
@@ -1843,10 +1861,11 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Update cart item quantity' })
   @ApiParam({ name: 'userId', description: 'User ID' })
   @ApiParam({ name: 'itemId', description: 'Cart item ID' })
+  @UsePipes(ForwardingValidationPipe)
   async updateCartItem(
     @Param('userId') userId: string,
     @Param('itemId') itemId: string,
-    @Body() payload: any,
+    @Body() payload: ForwardedCartItemDto,
   ) {
     return lastValueFrom(
       this.cartClient.send({ cmd: 'update_cart_item' }, { userId, itemId, ...payload }),
@@ -1893,7 +1912,7 @@ export class MarketplaceGatewayController {
   @Post('wishlist/:userId')
   @ApiOperation({ summary: 'Add product to wishlist' })
   @ApiParam({ name: 'userId', description: 'User ID' })
-  async addToWishlist(@Param('userId') userId: string, @Body() payload: any) {
+  async addToWishlist(@Param('userId') userId: string, @Body() payload: WishlistProductDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TO_WISHLIST, { userId, productId: payload.productId });
   }
 
@@ -1915,7 +1934,8 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard)
   @Post('orders')
   @ApiOperation({ summary: 'Place order (alias for orders/checkout)' })
-  async placeOrder(@Req() req: any, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async placeOrder(@Req() req: any, @Body() payload: ForwardedOrderDto) {
     return this.placeMarketplaceOrder(req, payload);
   }
 
@@ -1924,7 +1944,8 @@ export class MarketplaceGatewayController {
   @Put('orders/:id/cancel')
   @ApiOperation({ summary: 'Cancel an order' })
   @ApiParam({ name: 'id', description: 'Order ID' })
-  async cancelOrder(@Req() req: any, @Param('id') orderId: string, @Body() payload: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async cancelOrder(@Req() req: any, @Param('id') orderId: string, @Body() payload: ForwardedOrderDto) {
     return lastValueFrom(
       this.orderClient.send({ cmd: 'cancel_order' }, { orderId, userId: this.userId(req), ...payload }),
     ).catch(() => {
@@ -2051,7 +2072,8 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Create a brand update (seller/admin)' })
-  async createBrandUpdate(@Param('id') brandId: string, @Body() body: any) {
+  @UsePipes(ForwardingValidationPipe)
+  async createBrandUpdate(@Param('id') brandId: string, @Body() body: ForwardedBrandUpdateDto) {
     return this.sendToMarketplace('brand_create_update', { brandId, ...body });
   }
 }

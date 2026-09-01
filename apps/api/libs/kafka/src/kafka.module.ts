@@ -56,6 +56,32 @@ function serviceIdentity(cfg: ConfigService): string {
   if (fromScript && fromScript !== script) return fromScript.toLowerCase();
 
   /**
+   * The workspace directory, for the extracted module backends.
+   *
+   * `modules/<name>/backend` has neither of the shapes the two derivations
+   * above look for: its npm script is a plain `dev` (not `dev:<service>`) and
+   * its path has no `apps/<service>` segment. So all eight extracted backends
+   * fell through to the `'app'` fallback and joined a single consumer group,
+   * `kartseek-consumers-app-client`, with eight members — the exact collision
+   * this function exists to prevent, complete with the rebalance storm and the
+   * reply misrouting described above.
+   *
+   * The working directory rather than `require.main`: these run under
+   * `nest start --watch`, where `require.main` is the Nest CLI. Turbo runs each
+   * workspace's script in that workspace's own directory, so `cwd` identifies
+   * the module in watch mode and in the bundled output alike.
+   *
+   * `-service` suffix to match what the `apps/` derivation yields, so grocery
+   * consumes as `kartseek-consumers-grocery-service` either way. None of the
+   * eight module names collides with a directory in `apps/api/apps`.
+   */
+  const cwdSegments = process.cwd().split(/[\\/]+/);
+  const modulesAt = cwdSegments.lastIndexOf('modules');
+  if (modulesAt >= 0 && cwdSegments[modulesAt + 1]) {
+    return `${cwdSegments[modulesAt + 1].toLowerCase()}-service`;
+  }
+
+  /**
    * The bundled entry point, for production where npm is not in the picture:
    * `…/apps/api/dist/apps/<service>/main.js`.
    *

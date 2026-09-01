@@ -26,6 +26,23 @@ import {
   CreateVariantDto, UpdateVariantStockDto,
   CreateQuestionDto, CreateAnswerDto,
 } from './dto/marketplace.dto';
+import {
+  AdminRejectDto, AddToWishlistDto, CreateBrandUpdateDto,
+  CategoryUpsertDto, AttributeUpsertDto, BrandUpsertDto,
+  BannerUpsertDto, FlashDealUpsertDto, FeaturedProductDto, PageLayoutDto,
+  BankOfferUpsertDto, ExchangeOfferUpsertDto, SellerWalletAdjustmentDto,
+  AssignReturnPickupDto, RedeemCouponDto,
+  CourierWebhookDto, CouponUpsertDto, VariantUpsertDto,
+  UpdateDeliveryStatusDto, SubmitDeliveryProofDto,
+} from './dto/admin-request.dto';
+import {
+  CampaignUpsertDto, PromotionUpsertDto, CommissionUpsertDto, HsnCodeUpsertDto,
+  ComplaintUpdateDto, AdminNotificationDto, MarketplaceSettingsDto, SeoSettingsDto,
+  SponsoredProductUpdateDto, ComplianceCountryDto, QaModerationDto, IndiaOpsConfigDto,
+  SupportTicketDto, ProductUpdateDto, ReturnRequestLegacyDto, ProductBundleDto,
+  DeliveryAssignmentDto,
+} from './dto/admin-request.dto';
+import { AdminForwardingValidationPipe } from './dto/forwarding-validation.pipe';
 
 
 /**
@@ -160,7 +177,7 @@ export class MarketplaceController {
   @Post('brands/:id/updates')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER, UserRole.SUPER_ADMIN)
-  createBrandUpdate(@Param('id') id: string, @Body() data: { type: string; title: string; message: string; imageUrl?: string; actionUrl?: string; productId?: string }) {
+  createBrandUpdate(@Param('id') id: string, @Body() data: CreateBrandUpdateDto) {
     return this.brandFollowSvc.createBrandUpdate(id, data);
   }
 
@@ -227,7 +244,7 @@ export class MarketplaceController {
 
   @UseGuards(JwtAuthGuard)
   @Post('wishlist')
-  addToWishlist(@Body() dto: { userId: string; productId: string }) { return this.svc.addToWishlist(dto); }
+  addToWishlist(@Body() dto: AddToWishlistDto) { return this.svc.addToWishlist(dto); }
 
   @UseGuards(JwtAuthGuard)
   @Delete('wishlist/:productId')
@@ -270,7 +287,8 @@ export class MarketplaceController {
   // ── Returns & Refunds (authenticated) ─────────────────────────────────────
   @UseGuards(JwtAuthGuard)
   @Post('orders/:id/returns')
-  createReturnRequestLegacy(@Param('id') id: string, @Body() dto: any) { return this.svc.createReturnRequestLegacy(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createReturnRequestLegacy(@Param('id') id: string, @Body() dto: ReturnRequestLegacyDto) { return this.svc.createReturnRequestLegacy(id, dto); }
 
   @UseGuards(JwtAuthGuard)
   @Get('refunds')
@@ -290,7 +308,8 @@ export class MarketplaceController {
   // ── Support (authenticated) ───────────────────────────────────────────────
   @UseGuards(JwtAuthGuard)
   @Post('support')
-  createSupportTicket(@Body() dto: any) { return this.svc.createSupportTicket(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createSupportTicket(@Body() dto: SupportTicketDto) { return this.svc.createSupportTicket(dto); }
 
   // ═════════════════════════════════════════════════════════════════════════
   // Admin-Only Endpoints — Require JWT + admin/super_admin role
@@ -299,12 +318,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('categories')
-  createCategory(@Body() dto: any) { return this.admin.createCategory(dto); }
+  createCategory(@Body() dto: CategoryUpsertDto) { return this.admin.createCategory(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('categories/:id')
-  updateCategory(@Param('id') id: string, @Body() dto: any) { return this.admin.updateCategory(id, dto); }
+  updateCategory(@Param('id') id: string, @Body() dto: CategoryUpsertDto) { return this.admin.updateCategory(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -315,7 +334,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('products/:id')
-  updateProduct(@Param('id') id: string, @Body() dto: any) { return this.svc.updateProduct(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateProduct(@Param('id') id: string, @Body() dto: ProductUpdateDto) { return this.svc.updateProduct(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -328,7 +348,7 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('products/:id/reject')
-  rejectProduct(@Param('id') id: string, @Body() dto: { adminId: string; reason: string }) {
+  rejectProduct(@Param('id') id: string, @Body() dto: AdminRejectDto) {
     return this.svc.rejectProduct(id, dto.adminId, dto.reason);
   }
 
@@ -389,12 +409,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('subcategories')
-  createSubcategory(@Body() dto: any) { return this.admin.createSubcategory(dto); }
+  createSubcategory(@Body() dto: CategoryUpsertDto) { return this.admin.createSubcategory(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('subcategories/:id')
-  updateSubcategory(@Param('id') id: string, @Body() dto: any) { return this.admin.updateSubcategory(id, dto); }
+  updateSubcategory(@Param('id') id: string, @Body() dto: CategoryUpsertDto) { return this.admin.updateSubcategory(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -415,12 +435,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/attributes')
-  createAttribute(@Body() dto: any) { return this.admin.createAttribute(dto); }
+  createAttribute(@Body() dto: AttributeUpsertDto) { return this.admin.createAttribute(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/attributes/:id')
-  updateAttribute(@Param('id') id: string, @Body() dto: any) { return this.admin.updateAttribute(id, dto); }
+  updateAttribute(@Param('id') id: string, @Body() dto: AttributeUpsertDto) { return this.admin.updateAttribute(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -431,12 +451,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('brands')
-  createBrand(@Body() dto: any) { return this.admin.createBrand(dto); }
+  createBrand(@Body() dto: BrandUpsertDto) { return this.admin.createBrand(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('brands/:id')
-  updateBrand(@Param('id') id: string, @Body() dto: any) { return this.admin.updateBrand(id, dto); }
+  updateBrand(@Param('id') id: string, @Body() dto: BrandUpsertDto) { return this.admin.updateBrand(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -446,7 +466,7 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('brands/:id/reject')
-  rejectBrand(@Param('id') id: string, @Body() dto: { adminId: string; reason: string }) { return this.admin.rejectBrand(id, dto.adminId, dto.reason); }
+  rejectBrand(@Param('id') id: string, @Body() dto: AdminRejectDto) { return this.admin.rejectBrand(id, dto.adminId, dto.reason); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -483,12 +503,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/banners')
-  createBanner(@Body() dto: any) { return this.admin.createAdminBanner(dto); }
+  createBanner(@Body() dto: BannerUpsertDto) { return this.admin.createAdminBanner(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/banners/:id')
-  updateBanner(@Param('id') id: string, @Body() dto: any) { return this.admin.updateAdminBanner(id, dto); }
+  updateBanner(@Param('id') id: string, @Body() dto: BannerUpsertDto) { return this.admin.updateAdminBanner(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -504,12 +524,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/flash-deals')
-  createFlashDeal(@Body() dto: any) { return this.admin.createFlashDeal(dto); }
+  createFlashDeal(@Body() dto: FlashDealUpsertDto) { return this.admin.createFlashDeal(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/flash-deals/:id')
-  updateFlashDeal(@Param('id') id: string, @Body() dto: any) { return this.admin.updateFlashDeal(id, dto); }
+  updateFlashDeal(@Param('id') id: string, @Body() dto: FlashDealUpsertDto) { return this.admin.updateFlashDeal(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -525,12 +545,14 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/campaigns')
-  createCampaign(@Body() dto: any) { return this.admin.createCampaign(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createCampaign(@Body() dto: CampaignUpsertDto) { return this.admin.createCampaign(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/campaigns/:id')
-  updateCampaign(@Param('id') id: string, @Body() dto: any) { return this.admin.updateCampaign(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateCampaign(@Param('id') id: string, @Body() dto: CampaignUpsertDto) { return this.admin.updateCampaign(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -546,12 +568,14 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/promotions')
-  createPromotion(@Body() dto: any) { return this.admin.createPromotion(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createPromotion(@Body() dto: PromotionUpsertDto) { return this.admin.createPromotion(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/promotions/:id')
-  updatePromotion(@Param('id') id: string, @Body() dto: any) { return this.admin.updatePromotion(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updatePromotion(@Param('id') id: string, @Body() dto: PromotionUpsertDto) { return this.admin.updatePromotion(id, dto); }
 
   // ── Commissions (admin CRUD) ──────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -562,12 +586,14 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/commissions')
-  createCommission(@Body() dto: any) { return this.admin.createCommission(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createCommission(@Body() dto: CommissionUpsertDto) { return this.admin.createCommission(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/commissions/:id')
-  updateCommission(@Param('id') id: string, @Body() dto: any) { return this.admin.updateCommission(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateCommission(@Param('id') id: string, @Body() dto: CommissionUpsertDto) { return this.admin.updateCommission(id, dto); }
 
   // ── Payouts (admin) ───────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -605,7 +631,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/complaints/:id')
-  updateComplaint(@Param('id') id: string, @Body() dto: any) { return this.admin.updateComplaint(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateComplaint(@Param('id') id: string, @Body() dto: ComplaintUpdateDto) { return this.admin.updateComplaint(id, dto); }
 
   // ── Notifications ─────────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -616,7 +643,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/notifications')
-  sendNotification(@Body() dto: any) { return this.admin.sendNotification(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  sendNotification(@Body() dto: AdminNotificationDto) { return this.admin.sendNotification(dto); }
 
   // ── Settings ──────────────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -627,7 +655,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/settings')
-  updateSettings(@Body() dto: any) { return this.admin.updateMarketplaceSettings(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateSettings(@Body() dto: MarketplaceSettingsDto) { return this.admin.updateMarketplaceSettings(dto); }
 
   // ── Audit Logs ────────────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -654,7 +683,7 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/page-layout')
-  updatePageLayout(@Body() dto: any) { return this.admin.updatePageLayout(dto); }
+  updatePageLayout(@Body() dto: PageLayoutDto) { return this.admin.updatePageLayout(dto); }
 
   // ── SEO Settings ──────────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -665,7 +694,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/seo')
-  updateSeoSettings(@Body() dto: any) { return this.admin.updateSeoSettings(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateSeoSettings(@Body() dto: SeoSettingsDto) { return this.admin.updateSeoSettings(dto); }
 
   // ── HSN / Tax Master ──────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -676,18 +706,20 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/hsn-codes')
-  createHsnCode(@Body() dto: any) { return this.admin.createHsnCode(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createHsnCode(@Body() dto: HsnCodeUpsertDto) { return this.admin.createHsnCode(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/hsn-codes/:id')
-  updateHsnCode(@Param('id') id: string, @Body() dto: any) { return this.admin.updateHsnCode(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateHsnCode(@Param('id') id: string, @Body() dto: HsnCodeUpsertDto) { return this.admin.updateHsnCode(id, dto); }
 
   // ── Featured Products ─────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/featured')
-  addFeaturedProduct(@Body() dto: any) { return this.admin.addFeaturedProduct(dto); }
+  addFeaturedProduct(@Body() dto: FeaturedProductDto) { return this.admin.addFeaturedProduct(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -703,12 +735,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/bank-offers')
-  createBankOffer(@Body() dto: any) { return this.admin.createBankOffer(dto); }
+  createBankOffer(@Body() dto: BankOfferUpsertDto) { return this.admin.createBankOffer(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/bank-offers/:id')
-  updateBankOffer(@Param('id') id: string, @Body() dto: any) { return this.admin.updateBankOffer(id, dto); }
+  updateBankOffer(@Param('id') id: string, @Body() dto: BankOfferUpsertDto) { return this.admin.updateBankOffer(id, dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -724,12 +756,12 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/exchange-offers')
-  createExchangeOffer(@Body() dto: any) { return this.admin.createExchangeOffer(dto); }
+  createExchangeOffer(@Body() dto: ExchangeOfferUpsertDto) { return this.admin.createExchangeOffer(dto); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/exchange-offers/:id')
-  updateExchangeOffer(@Param('id') id: string, @Body() dto: any) { return this.admin.updateExchangeOffer(id, dto); }
+  updateExchangeOffer(@Param('id') id: string, @Body() dto: ExchangeOfferUpsertDto) { return this.admin.updateExchangeOffer(id, dto); }
 
   // ── Sponsored Products ────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -740,7 +772,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/sponsored/:id')
-  updateSponsoredProduct(@Param('id') id: string, @Body() dto: any) { return this.admin.updateSponsoredProduct(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateSponsoredProduct(@Param('id') id: string, @Body() dto: SponsoredProductUpdateDto) { return this.admin.updateSponsoredProduct(id, dto); }
 
   // ── Compliance / Countries ────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -751,7 +784,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/compliance/countries/:code')
-  updateComplianceCountry(@Param('code') code: string, @Body() dto: any) { return this.admin.updateComplianceCountry(code, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateComplianceCountry(@Param('code') code: string, @Body() dto: ComplianceCountryDto) { return this.admin.updateComplianceCountry(code, dto); }
 
   // ── Customers ─────────────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -773,7 +807,7 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post('admin/seller-wallets/:id/adjust')
-  adjustSellerWallet(@Param('id') id: string, @Body() dto: { amount: number; reason: string }) {
+  adjustSellerWallet(@Param('id') id: string, @Body() dto: SellerWalletAdjustmentDto) {
     return this.admin.adjustSellerWallet(id, dto.amount, dto.reason);
   }
 
@@ -786,7 +820,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/qa-moderation/:id')
-  moderateQAItem(@Param('id') id: string, @Body() dto: any) { return this.admin.moderateQAItem(id, dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  moderateQAItem(@Param('id') id: string, @Body() dto: QaModerationDto) { return this.admin.moderateQAItem(id, dto); }
 
   // ── India Operations ──────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -797,7 +832,8 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('admin/india-ops')
-  updateIndiaOpsConfig(@Body() dto: any) { return this.admin.updateIndiaOpsConfig(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  updateIndiaOpsConfig(@Body() dto: IndiaOpsConfigDto) { return this.admin.updateIndiaOpsConfig(dto); }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ██ PHASE 2 — Admin Analytics & Seller APIs
@@ -865,7 +901,7 @@ export class MarketplaceController {
 
   @UseGuards(JwtAuthGuard)
   @Post('sellers/:sellerId/coupons')
-  createSellerCoupon(@Param('sellerId') sellerId: string, @Body() dto: any) { return this.svc.createSellerCoupon(sellerId, dto); }
+  createSellerCoupon(@Param('sellerId') sellerId: string, @Body() dto: CouponUpsertDto) { return this.svc.createSellerCoupon(sellerId, dto); }
 
   @UseGuards(JwtAuthGuard)
   @Get('sellers/:sellerId/bundles')
@@ -873,7 +909,8 @@ export class MarketplaceController {
 
   @UseGuards(JwtAuthGuard)
   @Post('sellers/:sellerId/bundles')
-  createSellerBundle(@Param('sellerId') sellerId: string, @Body() dto: any) { return this.svc.createProductBundle({ ...dto, sellerId }); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createSellerBundle(@Param('sellerId') sellerId: string, @Body() dto: ProductBundleDto) { return this.svc.createProductBundle({ ...dto, sellerId }); }
 
   @Get('bundles')
   getProductBundles() { return this.svc.getProductBundles(); }
@@ -1397,12 +1434,12 @@ export class MarketplaceController {
   @Put('returns/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  updateReturnStatus(@Param('id') id: string, @Body() dto: any) { return this.fulfillment.updateReturnStatus(id, dto); }
+  updateReturnStatus(@Param('id') id: string, @Body() dto: UpdateReturnStatusDto) { return this.fulfillment.updateReturnStatus(id, dto); }
 
   @Put('returns/:id/assign-pickup')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  assignReturnPickup(@Param('id') id: string, @Body() dto: any) { return this.fulfillment.assignReturnPickup(id, dto); }
+  assignReturnPickup(@Param('id') id: string, @Body() dto: AssignReturnPickupDto) { return this.fulfillment.assignReturnPickup(id, dto); }
 
   @MessagePattern({ cmd: 'create_return' })
   tcpCreateReturn(@Payload() data: any) { return this.fulfillment.createReturnRequest(data); }
@@ -1472,12 +1509,12 @@ export class MarketplaceController {
 
   @Post('coupons/redeem')
   @UseGuards(JwtAuthGuard)
-  redeemCoupon(@Body() dto: any) { return this.fulfillment.redeemCoupon(dto); }
+  redeemCoupon(@Body() dto: RedeemCouponDto) { return this.fulfillment.redeemCoupon(dto); }
 
   @Put('coupons/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  updateCoupon(@Param('id') id: string, @Body() dto: any) { return this.fulfillment.updateCoupon(id, dto); }
+  updateCoupon(@Param('id') id: string, @Body() dto: CouponUpsertDto) { return this.fulfillment.updateCoupon(id, dto); }
 
   @Delete('coupons/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -1512,7 +1549,7 @@ export class MarketplaceController {
   getTrackingById(@Param('trackingId') trackingId: string) { return this.fulfillment.getTrackingByTrackingId(trackingId); }
 
   @Post('tracking/webhook')
-  ingestWebhook(@Body() dto: any) { return this.fulfillment.ingestCourierWebhook(dto); }
+  ingestWebhook(@Body() dto: CourierWebhookDto) { return this.fulfillment.ingestCourierWebhook(dto); }
 
   @MessagePattern({ cmd: 'add_tracking_event' })
   tcpAddTracking(@Payload() data: any) { return this.fulfillment.addTrackingEvent(data, actorOf(data)); }
@@ -1537,7 +1574,7 @@ export class MarketplaceController {
   @Put('variants/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  updateVariant(@Param('id') id: string, @Body() dto: any) { return this.fulfillment.updateVariant(id, dto); }
+  updateVariant(@Param('id') id: string, @Body() dto: VariantUpsertDto) { return this.fulfillment.updateVariant(id, dto); }
 
   @Delete('variants/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -1612,7 +1649,8 @@ export class MarketplaceController {
   @Post('delivery-assignments')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  createDeliveryAssignment(@Body() dto: any) { return this.fulfillment.createDeliveryAssignment(dto); }
+  @UsePipes(AdminForwardingValidationPipe)
+  createDeliveryAssignment(@Body() dto: DeliveryAssignmentDto) { return this.fulfillment.createDeliveryAssignment(dto); }
 
   @Get('delivery-assignments')
   @UseGuards(JwtAuthGuard)
@@ -1627,7 +1665,7 @@ export class MarketplaceController {
 
   @Put('delivery-assignments/:id/status')
   @UseGuards(JwtAuthGuard)
-  updateDeliveryStatus(@Param('id') id: string, @Body() dto: any) { return this.fulfillment.updateDeliveryStatus(id, dto); }
+  updateDeliveryStatus(@Param('id') id: string, @Body() dto: UpdateDeliveryStatusDto) { return this.fulfillment.updateDeliveryStatus(id, dto); }
 
   @Post('delivery-assignments/:id/verify-otp')
   @UseGuards(JwtAuthGuard)
@@ -1635,7 +1673,7 @@ export class MarketplaceController {
 
   @Post('delivery-assignments/:id/proof')
   @UseGuards(JwtAuthGuard)
-  submitDeliveryProof(@Param('id') id: string, @Body() dto: any) { return this.fulfillment.submitDeliveryProof(id, dto); }
+  submitDeliveryProof(@Param('id') id: string, @Body() dto: SubmitDeliveryProofDto) { return this.fulfillment.submitDeliveryProof(id, dto); }
 
   @Get('delivery-assignments/partner/:partnerId/active')
   @UseGuards(JwtAuthGuard)

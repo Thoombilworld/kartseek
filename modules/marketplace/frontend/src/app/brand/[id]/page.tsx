@@ -153,8 +153,14 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
       {/* Brand Hero */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 relative overflow-hidden">
         {/* Brand banner background */}
-        {getBrandImage(brand.slug, 'banner') && (
-          <img src={getBrandImage(brand.slug, 'banner')} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+        {/*
+          Decorative only — 20% opacity behind the header, alt="" so it is not
+          announced. The demo image stays as a fallback here precisely because
+          it claims nothing: unlike the logo above, nobody reads this as "this
+          is the brand's photograph". A real banner still wins when set.
+        */}
+        {(brand.bannerUrl || getBrandImage(brand.slug, 'banner')) && (
+          <img src={brand.bannerUrl || getBrandImage(brand.slug, 'banner')} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
         )}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(59,130,246,0.15),transparent_60%)]"></div>
         <div className="max-w-7xl mx-auto px-4 py-12 md:py-16 relative z-10">
@@ -171,8 +177,19 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
           </div>
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-xl overflow-hidden">
-              {getBrandImage(brand.slug, 'logo') ? (
-                <img src={getBrandImage(brand.slug, 'logo')} alt={`${brandName} logo`} className="w-full h-full object-cover" />
+              {/*
+                The brand's own logo, or its initial — never a stock photo.
+
+                This read `getBrandImage(brand.slug, 'logo')` from the bundled
+                demo map and ignored `brand.logoUrl` entirely, so a real logo
+                could not have displayed even once uploaded. Worse, the demo map
+                answers with an unrelated Unsplash photograph captioned
+                "<brand> logo": Apple's was a desk shot. A monogram says "no
+                logo yet"; a photograph of someone else's product asserts
+                something untrue about the brand.
+              */}
+              {brand.logoUrl ? (
+                <img src={brand.logoUrl} alt={`${brandName} logo`} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-blue-700 font-black text-3xl">{brandName[0]}</span>
               )}
@@ -198,7 +215,10 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
           {/* Trust badges */}
           <div className="flex flex-wrap gap-4 mt-6">
             {[
-              { icon: ShieldCheck, text: 'Authorized Store' },
+              // "Authorized Store" is a claim about this brand, so it follows
+              // the same flag as the verified line above rather than being
+              // asserted for every brand that happens to have a page.
+              ...(brand.isVerified ? [{ icon: ShieldCheck, text: 'Authorized Store' }] : []),
               { icon: Truck, text: 'Free Delivery' },
               { icon: Store, text: `${products.length} Products` },
             ].map((b, i) => (

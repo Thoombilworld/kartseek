@@ -97,7 +97,12 @@ export default function OffersPage() {
         })
         .catch(() => null);
 
-    Promise.all([get('/flash-deals'), get('/deals-of-the-day')])
+    // Both paths carry the `/marketplace` prefix. `apiFetch` prepends a base URL
+    // that already ends in `/api/v1`, so a bare `/flash-deals` resolved to
+    // `/api/v1/flash-deals` — a route the gateway does not declare. Both calls
+    // 404'd, both resolved to null, and `setFailed` below then rendered the
+    // "we couldn't load this" state on every visit, in every region, forever.
+    Promise.all([get('/marketplace/flash-deals'), get('/marketplace/deals-of-the-day')])
       .then(([f, d]) => {
         if (cancelled) return;
         // The bundled `FLASH_DEALS` / `DEALS_OF_DAY` fallback that stood here

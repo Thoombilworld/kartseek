@@ -68,6 +68,15 @@ android {
         targetSdk = 35        // Android 15 — current Play Store requirement
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
+
+        // Google Maps key, injected at build time — never committed.
+        // Set `maps.apiKey` in android/local.properties (gitignored), or export
+        // MAPS_API_KEY. Defaults to empty so a missing key surfaces as a blank
+        // map during development instead of silently shipping a real key.
+        manifestPlaceholders += [
+            MAPS_API_KEY: (localProperties.getProperty("maps.apiKey")
+                ?: System.getenv("MAPS_API_KEY") ?: "")
+        ]
         multiDexEnabled = true
 
         ndk {

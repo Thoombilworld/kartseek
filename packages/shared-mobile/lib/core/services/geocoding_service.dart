@@ -8,8 +8,13 @@ class GeocodingService {
   GeocodingService._();
   static final GeocodingService instance = GeocodingService._();
 
-  // ── The same key used in AndroidManifest / Info.plist ──
-  static const _apiKey = 'AIzaSyB29-Nj3zGBNiIHhejSxTCL0iYk4qO_pJA';
+  /// Supplied at build time, never committed:
+  ///   flutter run --dart-define=MAPS_API_KEY=...
+  ///
+  /// Empty by default. Callers below already surface a failed lookup, so an
+  /// absent key degrades to "no result" rather than throwing — check this
+  /// first if geocoding silently returns nothing.
+  static const _apiKey = String.fromEnvironment('MAPS_API_KEY');
 
   final _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 5),

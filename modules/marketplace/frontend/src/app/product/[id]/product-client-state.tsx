@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { GitCompare, Check } from 'lucide-react';
+import Link from 'next/link';
+import { GitCompare, Check, ArrowRight } from 'lucide-react';
 
 /**
  * Client-side product state that lives in the browser, not the API: the
@@ -41,6 +42,15 @@ function writeList(key: string, value: unknown[]) {
 
 export function ProductClientState({ product }: { product: ViewedProduct }) {
   const [compared, setCompared] = useState(false);
+  /**
+   * How many products are in the tray, so the button can offer a way to see it.
+   *
+   * Adding worked — storage was written, the label flipped — but nothing in the
+   * marketplace linked to /marketplace/compare: no header entry, no nav item,
+   * no toast. A shopper could fill the tray and never reach the comparison
+   * short of typing the URL, which made a working feature look dead.
+   */
+  const [count, setCount] = useState(0);
 
   useEffect(() => {
     if (!product.id) return;
@@ -53,26 +63,33 @@ export function ProductClientState({ product }: { product: ViewedProduct }) {
     ].slice(0, MAX_RECENT);
     writeList(RECENTLY_VIEWED_KEY, next);
 
-    setCompared(readList<ViewedProduct>(COMPARE_KEY).some(p => p?.id === product.id));
+    const tray = readList<ViewedProduct>(COMPARE_KEY).filter(p => p?.id);
+    setCompared(tray.some(p => p.id === product.id));
+    setCount(tray.length);
   }, [product]);
 
   const toggleCompare = () => {
     const current = readList<ViewedProduct>(COMPARE_KEY).filter(p => p?.id);
     if (current.some(p => p.id === product.id)) {
-      writeList(COMPARE_KEY, current.filter(p => p.id !== product.id));
+      const next = current.filter(p => p.id !== product.id);
+      writeList(COMPARE_KEY, next);
       setCompared(false);
+      setCount(next.length);
       return;
     }
     // Comparison tables stop being readable past a handful of columns; drop the
     // oldest rather than refusing the click.
-    writeList(COMPARE_KEY, [...current, product].slice(-MAX_COMPARE));
+    const next = [...current, product].slice(-MAX_COMPARE);
+    writeList(COMPARE_KEY, next);
     setCompared(true);
+    setCount(next.length);
   };
 
   if (!product.id) return null;
 
   return (
-    <button
+    <>
+      <button
       onClick={toggleCompare}
       aria-pressed={compared}
       className={`mt-3 w-full flex items-center justify-center gap-2 rounded-sm py-2.5 text-sm font-bold border transition-colors ${
@@ -84,6 +101,23 @@ export function ProductClientState({ product }: { product: ViewedProduct }) {
       {compared
         ? <><Check className="w-4 h-4" /> Added to Compare</>
         : <><GitCompare className="w-4 h-4" /> Add to Compare</>}
-    </button>
+      </button>
+
+      {/*
+        The way out of the tray. `next/link` and the compare page are both
+        inside this zone, so the basePath is applied for us and this resolves
+        to /marketplace/compare — do not write the prefix by hand here or it
+        doubles.
+      */}
+      {count > 0 && (
+        <Link
+          href="/compare"
+          className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-sm py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+        >
+          Compare {count} {count === 1 ? 'product' : 'products'}
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      )}
+    </>
   );
 }

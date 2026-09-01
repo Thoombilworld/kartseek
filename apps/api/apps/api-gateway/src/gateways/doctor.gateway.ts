@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { WsDdosGuard } from '@app/security';
+import { authenticateWsClient } from './ws-auth.util';
 
 const ACK_TIMEOUT_MS = 5000;
 const ACK_MAX_RETRIES = 3;
@@ -59,8 +60,23 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
     const allowed = await this.wsDdosGuard.validateConnection(client);
     if (!allowed) return;
 
-    const userId = client.handshake.query.userId as string;
-    const userType = (client.handshake.query.userType as string) || 'customer';
+    /**
+     * Identity comes from the verified token, never the query string.
+     *
+     * This read `userId` straight off `handshake.query` and joined
+     * `user_${userId}` with it, so connecting as
+     * `?userId=<somebody-else>` put you in that patient's private room and
+     * delivered their appointment and queue notifications. The other nine
+     * gateways already route through `authenticateWsClient`; this one did not.
+     *
+     * `authenticateWsClient` emits an AUTH_REQUIRED error and disconnects when
+     * the token is missing or invalid, so returning here is the whole handling.
+     */
+    const user = authenticateWsClient(client, 'DoctorGateway');
+    if (!user) return;
+
+    const userId = user.id;
+    const userType = user.role?.toLowerCase() || 'customer';
 
     if (userId) {
       client.join(`user_${userId}`);

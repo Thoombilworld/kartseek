@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { ChevronLeft, ChevronRight, ZoomIn, X, RotateCw, Minus, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, X, RotateCw, Minus, Plus, ImageOff } from 'lucide-react';
 import { useVariants } from './variant-context';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
@@ -214,7 +214,9 @@ export default function ProductGallery({
                 i === active ? 'border-blue-600' : 'border-slate-200 bg-white hover:border-blue-400'
               }`}
             >
-              <Image src={img} alt="" fill sizes="64px" className="object-contain p-1" />
+              {/* Same failure handling as the main frame — a thumbnail strip of
+                  broken glyphs is what the fallback above exists to avoid. */}
+              <ThumbImage src={img} index={i} />
             </button>
           ))}
         </div>
@@ -249,6 +251,34 @@ const MIN_SPIN_FRAMES = 8;
  * the hover state sticks after a tap and leaves the image stuck at 2× with no
  * way back, which is why the modal is the touch path.
  */
+/**
+ * One 64px thumbnail, falling back to an icon when the upstream image fails.
+ *
+ * Its own component because the failure has to be tracked per thumbnail, and a
+ * hook cannot live inside the `images.map()` callback that renders the strip.
+ */
+function ThumbImage({ src, index }: { src: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <span className="absolute inset-0 flex items-center justify-center bg-slate-50">
+        <ImageOff className="h-4 w-4 text-slate-300" aria-hidden="true" />
+        <span className="sr-only">Image {index + 1} unavailable</span>
+      </span>
+    );
+  }
+  return (
+    <Image
+      src={src}
+      alt=""
+      fill
+      sizes="64px"
+      onError={() => setFailed(true)}
+      className="object-contain p-1"
+    />
+  );
+}
+
 function HoverZoomImage({
   src, alt, priority, onOpen,
 }: {
@@ -259,6 +289,18 @@ function HoverZoomImage({
 }) {
   const [origin, setOrigin] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Product imagery is served by third parties, and they fail.
+   *
+   * `ProductThumb` — every card on every listing — has always degraded to an
+   * icon via `onError`. This gallery did not, so the same dead upstream that a
+   * card absorbed left the detail page showing the browser's broken-image
+   * glyph next to alt text. loremflickr 500s for whole tag combinations at a
+   * time (10 of the 52 in this catalogue right now, 42 images across 14
+   * products), so this is the normal case, not an edge one.
+   */
+  const [failed, setFailed] = useState(false);
 
   const canHover = useCallback(
     () => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -285,17 +327,37 @@ function HoverZoomImage({
       tabIndex={-1}
       aria-label={`${alt} — click to enlarge`}
     ><DismissOnEscape onDismiss={onOpen} />
+      {failed ? (
+        // Matches how ProductThumb fails on the listings: a quiet placeholder
+        // that says there is no picture, rather than a broken glyph that reads
+        // as a broken page. The alt text still names the product for anyone
+        // who cannot see either.
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-50">
+          <ImageOff className="h-10 w-10 text-slate-300" aria-hidden="true" />
+          <span className="sr-only">{alt}</span>
+          <span className="text-xs text-slate-400">Image unavailable</span>
+        </div>
+      ) : (
       <Image
         src={src}
         alt={alt}
         fill
+        onError={() => setFailed(true)}
         sizes="(min-width: 768px) 50vw, 100vw"
         // Only the first image is part of the initial view; the rest sit
         // off-screen in the track and must not compete for bandwidth.
-        priority={priority}
+        //
+        // Spelled out rather than `priority`, which Next 16 superseded. The old
+        // prop still suppressed lazy-loading — the first slide correctly had no
+        // `loading="lazy"` — but emitted no `fetchpriority`, so the image the
+        // page is measured on queued at default priority behind every other
+        // request, and Next warned about the LCP element on every product page.
+        loading={priority ? 'eager' : 'lazy'}
+        fetchPriority={priority ? 'high' : 'auto'}
         className="object-contain p-4 transition-transform duration-200 ease-out"
         style={origin ? { transform: 'scale(2)', transformOrigin: origin } : undefined}
       />
+      )}
     </div>
   );
 }

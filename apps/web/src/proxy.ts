@@ -153,7 +153,26 @@ export function proxy(request: NextRequest) {
   }
 
   // ── Skip RSC payload requests & Next.js internal fetches ─────────────────
+  //
+  // `Accept: text/x-component` is the only marker that survives to here.
+  //
+  // Next 16 sanitises the request before middleware runs: the `RSC` header,
+  // `Next-Router-State-Tree`, `Next-Router-Prefetch` and even the `_rsc` query
+  // parameter are all stripped. Every check below except the Accept one was
+  // therefore dead code — verified by dumping the headers middleware actually
+  // receives, which are only accept/host/user-agent/x-forwarded-*.
+  //
+  // The consequence was not cosmetic. A signed-out visitor tapping "Account"
+  // in the marketplace made an RSC fetch for /marketplace/profile; this guard
+  // failed to skip it, the auth block below answered 307 to /auth/login, and
+  // the client router followed that redirect *inside the zone* — which owns no
+  // /auth/login route. The URL changed, no document was ever requested, and
+  // the page rendered blank under marketplace chrome. A hard load of the same
+  // URL was always fine, which is what made it look intermittent.
+  //
+  // The others are kept for other Next versions; they cost nothing.
   const isRscRequest =
+    request.headers.get('accept')?.includes('text/x-component') === true ||
     request.headers.has('Next-Router-State-Tree') ||
     request.headers.get('RSC') === '1' ||
     request.headers.has('Next-Router-Prefetch') ||

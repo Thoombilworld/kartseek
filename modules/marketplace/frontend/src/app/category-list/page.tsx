@@ -3,12 +3,14 @@ import Link from 'next/link';
 import {
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby,
   Sparkles, BookOpen, Car, ShoppingBasket, Tv, ArrowRight,
+  Monitor, Briefcase, PawPrint, Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick, Headphones,
 } from 'lucide-react';
 import { getCategories } from '@/lib/api/marketplace';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
-  Car, ShoppingBasket, Tv,
+  Car, ShoppingBasket, Tv, Headphones, Monitor, Briefcase, PawPrint,
+  Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick,
 };
 
 /** Uniform shape the template renders, whichever level a row sits at. */

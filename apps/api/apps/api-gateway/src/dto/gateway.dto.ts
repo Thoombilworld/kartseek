@@ -9,7 +9,7 @@
  *  Delivery · Upload · Partner · Search · Region · Security
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsNumber, IsInt, Min, Max, IsNotEmpty, IsEmail, MinLength, MaxLength, Matches, IsIn, IsPositive } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsInt, Min, Max, IsNotEmpty, IsEmail, MinLength, MaxLength, Matches, IsIn, IsPositive, IsUUID, IsArray } from 'class-validator';
 import { SELLER_TYPES } from '@app/common';
 
 /**
@@ -1433,3 +1433,188 @@ export class UploadDocumentDto {
   documentUrl: string;
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Marketplace request bodies
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// The gateway is the client-facing boundary, so these are the bodies that reach
+// us from browsers and apps. They were typed `any`, which erases at runtime and
+// left the global ValidationPipe with no class to validate against — a non-uuid
+// posted to the wishlist route travelled all the way to Postgres.
+//
+// Only handlers whose fields are known are declared here. Handlers that spread
+// the whole payload into the RPC call are deliberately left alone: whitelisting
+// strips undeclared properties, so a partial DTO at this layer would truncate
+// the body before the owning service ever saw it. Those are validated by the
+// service's own DTOs one hop downstream.
+
+export class CreateCheckoutDto {
+  @ApiPropertyOptional({ description: 'Server uses the token subject when omitted.' })
+  @IsOptional() @IsString() userId?: string;
+}
+
+export class CreatePriceAlertDto {
+  @ApiProperty({ example: 4999 })
+  @IsNumber() @Min(0) targetPrice: number;
+}
+
+export class ReportProductDto {
+  @ApiProperty({ example: 'COUNTERFEIT' })
+  @IsString() @MaxLength(120) reason: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsString() @MaxLength(2000) details?: string;
+}
+
+export class ResolveProductReportDto {
+  @ApiProperty({ example: 'RESOLVED' })
+  @IsString() @MaxLength(60) status: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsString() @MaxLength(2000) resolutionNote?: string;
+}
+
+export class ValidateCouponDto {
+  @ApiProperty()
+  @IsString() @MaxLength(120) code: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() customerId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() userId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) cartTotal?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) orderTotal?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() paymentMethod?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsArray() @IsString({ each: true }) productIds?: string[];
+}
+
+export class RedeemCouponRequestDto {
+  @ApiProperty()
+  @IsString() couponId: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() orderId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) cartTotal?: number;
+
+  @ApiPropertyOptional({ description: 'Amount taken off this order.' })
+  @IsOptional() @IsNumber() @Min(0) discountApplied?: number;
+}
+
+export class CreateQuestionDto {
+  @ApiPropertyOptional({ description: 'Either spelling is accepted by the handler.' })
+  @IsOptional() @IsString() @MaxLength(2000) questionText?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsString() @MaxLength(2000) text?: string;
+}
+
+export class CreateAnswerDto {
+  @ApiPropertyOptional({ description: 'Either spelling is accepted by the handler.' })
+  @IsOptional() @IsString() @MaxLength(4000) answerText?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsString() @MaxLength(4000) text?: string;
+}
+
+export class VerifyDeliveryOtpDto {
+  @ApiProperty({ example: '4821' })
+  @IsString() @MaxLength(12) otp: string;
+}
+
+export class WishlistProductDto {
+  @ApiProperty()
+  @IsUUID() productId: string;
+
+  /**
+   * Accepted but ignored — the handler takes the owner from the token.
+   *
+   * Declared because the pipe runs with `forbidNonWhitelisted`, which rejects
+   * unknown properties rather than stripping them, and
+   * `shared-core/src/api/marketplace.ts` posts `{ productId, userId }`. Leaving
+   * it out turned every existing add-to-wishlist call into
+   * `400 property userId should not exist`.
+   */
+  @ApiPropertyOptional({ description: 'Ignored; the session owns the wishlist.' })
+  @IsOptional() @IsString() userId?: string;
+}
+
+export class RemoveCartItemDto {
+  @ApiPropertyOptional({ description: 'Removes only this variant when given.' })
+  @IsOptional() @IsString() variantId?: string;
+}
+
+// ── Forwarded bodies ─────────────────────────────────────────────────────────
+//
+// Used with `ForwardingValidationPipe`, which validates the declared fields and
+// lets the rest through. These routes hand the payload to the owning service,
+// which has the authoritative DTO; declaring a partial shape here and
+// whitelisting it would truncate the body before that service ever saw it.
+// Each class names the fields the *gateway* reads or requires.
+
+/** Body is forwarded whole; the id comes from the path. */
+export class ForwardedBodyDto {}
+
+export class ForwardedReturnRequestDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() orderId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
+}
+
+export class ForwardedReturnStatusDto {
+  @ApiPropertyOptional({ description: 'Validated in full by marketplace-service.' })
+  @IsOptional() @IsString() status?: string;
+}
+
+export class ForwardedPickupDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() pickupPartnerId?: string;
+}
+
+export class ForwardedCouponDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) code?: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) discountValue?: number;
+}
+
+export class ForwardedTrackingEventDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() trackingId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
+}
+
+export class ForwardedVariantDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() sku?: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) sellingPrice?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) stockQuantity?: number;
+}
+
+export class ForwardedVariantStockDto {
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) stockQuantity?: number;
+}
+
+export class ForwardedDeliveryAssignmentDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() orderId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() partnerId?: string;
+}
+
+export class ForwardedDeliveryStatusDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
+}
+
+export class ForwardedDeliveryProofDto {
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsArray() @IsString({ each: true }) proofPhotos?: string[];
+
+  @ApiPropertyOptional() @IsOptional() @IsString() deliveryMode?: string;
+}
+
+export class ForwardedCartItemDto {
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) quantity?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() variantId?: string;
+}
+
+export class ForwardedOrderDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
+}
+
+export class ForwardedBrandUpdateDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) type?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(300) title?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) message?: string;
+}

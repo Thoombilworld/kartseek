@@ -7,6 +7,7 @@ import {
 import { useRegion } from '@/lib/contexts/region-context';
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { useToast } from '@/lib/contexts/toast-context';
+import { apiFetch } from '@/lib/api-fetch';
 import { productPath } from '@/lib/marketplace/product-url';
 import { zoneHref } from '@/lib/routes/zone-href';
 import { LoadFailed } from '@/components/shared/load-failed';
@@ -14,6 +15,7 @@ import { LoadFailed } from '@/components/shared/load-failed';
 type CompareProduct = {
   id: string; title: string; brand: string; price: number; mrp: number;
   rating: number; reviews: number; inStock: boolean;
+  imageUrl?: string;
   specs: Record<string, string>;
 };
 
@@ -43,24 +45,93 @@ export default function ComparePage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(COMPARE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setProducts((Array.isArray(parsed) ? parsed : [])
-        .filter((p: any) => p?.id)
-        .map((p: any) => ({
-          id: String(p.id),
-          title: p.title ?? 'Product',
-          brand: p.brand ?? '',
-          price: Number(p.price ?? 0) || 0,
-          mrp: Number(p.mrp ?? p.price ?? 0) || 0,
-          rating: Number(p.rating ?? 0) || 0,
-          reviews: Number(p.reviews ?? 0) || 0,
-          inStock: p.inStock !== false,
-          specs: (p.specs && typeof p.specs === 'object') ? p.specs : {},
-        })));
-    } catch { setProducts([]); setLoadFailed(true); }
-    setLoaded(true);
+    let cancelled = false;
+
+    /** The snapshot the product page wrote — ids, and a stale copy of the rest. */
+    const readSnapshot = (): any[] => {
+      try {
+        const raw = localStorage.getItem(COMPARE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter((p: any) => p?.id) : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const fromSnapshot = (p: any): CompareProduct => ({
+      id: String(p.id),
+      title: p.title ?? 'Product',
+      brand: p.brand ?? '',
+      price: Number(p.price ?? 0) || 0,
+      mrp: Number(p.mrp ?? p.price ?? 0) || 0,
+      rating: Number(p.rating ?? 0) || 0,
+      reviews: Number(p.reviews ?? 0) || 0,
+      inStock: p.inStock !== false,
+      imageUrl: p.imageUrl,
+      specs: (p.specs && typeof p.specs === 'object') ? p.specs : {},
+    });
+
+    /**
+     * Live product, by id.
+     *
+     * The tray is a snapshot taken whenever the shopper pressed "Add to
+     * Compare", so on its own this page showed prices that may have changed
+     * since, no image at all (the writer stores `imageUrl`, the old mapping
+     * dropped it), and `(0)` reviews for a product with 15,600 of them. Ids are
+     * the only thing worth trusting from storage; everything else comes from
+     * the catalogue.
+     *
+     * Payable price is the buy-box listing's `sellingPrice` — `mrp` is the list
+     * price and quoting it as the price would overstate what the shopper pays.
+     */
+    const fetchOne = async (p: any): Promise<CompareProduct> => {
+      const snap = fromSnapshot(p);
+      try {
+        const res = await apiFetch(`/marketplace/products/${encodeURIComponent(snap.id)}`, {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return snap;
+        const json = await res.json();
+        const d = json?.data ?? json;
+        if (!d?.id) return snap;
+
+        const listings = Array.isArray(d.listings) ? d.listings : [];
+        const buyBox = listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0];
+        const price = Number(buyBox?.sellingPrice ?? 0) || 0;
+
+        return {
+          id: String(d.id),
+          title: d.name ?? snap.title,
+          brand: typeof d.brand === 'string' ? d.brand : (d.brand?.name ?? snap.brand),
+          price: price || snap.price,
+          mrp: Number(d.mrp ?? 0) || snap.mrp,
+          rating: Number(d.averageRating ?? 0) || 0,
+          reviews: Number(d.reviewCount ?? 0) || 0,
+          inStock: Number(buyBox?.stockQuantity ?? 0) > 0,
+          imageUrl: d.images?.[0]?.url ?? snap.imageUrl,
+          specs: (d.specs && typeof d.specs === 'object') ? d.specs : snap.specs,
+        };
+      } catch {
+        return snap;   // offline or gateway down — the stale row still beats a blank page
+      }
+    };
+
+    const snapshot = readSnapshot();
+    if (snapshot.length === 0) {
+      setLoaded(true);
+      return;
+    }
+    // Render the snapshot immediately, then correct it from the catalogue, so
+    // the table does not sit empty while four requests are in flight.
+    setProducts(snapshot.map(fromSnapshot));
+
+    Promise.all(snapshot.map(fetchOne))
+      .then((live) => { if (!cancelled) setProducts(live); })
+      .catch(() => { if (!cancelled) setLoadFailed(true); })
+      .finally(() => { if (!cancelled) setLoaded(true); });
+
+    return () => { cancelled = true; };
   }, []);
 
   const removeProduct = (id: string) => {
@@ -72,6 +143,19 @@ export default function ComparePage() {
   };
 
   const specRows = ALL_SPEC_KEYS.filter(key => {
+    // Drop rows no product can fill.
+    //
+    // These twelve keys are phone specifications, rendered against whatever is
+    // being compared — so a pair of supplement capsules got asked about 5G and
+    // Water Resistance and answered "—" to all twelve. Nothing in the
+    // catalogue carries spec values today (`product_attributes` holds
+    // definitions, not per-product values, and the API exposes no specs
+    // field), so this table was a wall of dashes under the real rows.
+    //
+    // Filtering on presence rather than deleting the keys means the rows come
+    // back on their own the moment products do carry specs.
+    const present = products.some(p => p.specs[key]);
+    if (!present) return false;
     if (!showDiffOnly) return true;
     const vals = products.map(p => p.specs[key] || '—');
     return new Set(vals).size > 1;
@@ -120,7 +204,18 @@ export default function ComparePage() {
                 return (
                   <th key={p.id} className="p-4 align-top text-left border-b border-slate-200 relative bg-white">
                     <button onClick={() => removeProduct(p.id)} className="absolute top-2 right-2 p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg"><X className="w-4 h-4" /></button>
-                    <div className="bg-slate-50 w-full h-28 rounded-lg flex items-center justify-center mb-3"><ShoppingCart className="w-8 h-8 text-slate-200" /></div>
+                    {/*
+                      The product's own picture. This well rendered a shopping
+                      cart glyph unconditionally, so every column looked like a
+                      product with no image even though the catalogue has one.
+                      The icon stays as the fallback for a product that really
+                      has none.
+                    */}
+                    <div className="bg-slate-50 w-full h-28 rounded-lg flex items-center justify-center mb-3 overflow-hidden">
+                      {p.imageUrl
+                        ? <img src={p.imageUrl} alt="" className="w-full h-full object-contain" loading="lazy" />
+                        : <ShoppingCart className="w-8 h-8 text-slate-200" />}
+                    </div>
                     <p className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</p>
                     <Link href={zoneHref(productPath(p))} className="font-bold text-sm text-slate-900 hover:text-blue-600 line-clamp-2 block mt-0.5">{p.title}</Link>
                     <div className="flex items-center gap-1 mt-1.5">

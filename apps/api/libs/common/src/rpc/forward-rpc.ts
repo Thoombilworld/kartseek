@@ -29,10 +29,38 @@ const logger = new Logger('RpcForward');
  */
 export function toHttpException(err: any, serviceLabel: string): HttpException {
   const raw = err?.statusCode ?? err?.status;
-  const isDomainStatus = typeof raw === 'number' && raw >= 100 && raw < 600;
+
+  /**
+   * Only a 4xx is a domain error whose message belongs to the caller.
+   *
+   * This accepted anything from 100 to 599, so a service's *own* 500 counted as
+   * a domain error and its message was forwarded verbatim. Services wrap
+   * unhandled failures as `{ statusCode: 500, message: <driver text> }`, so
+   * `POST /marketplace/wishlist` with a non-uuid answered
+   *
+   *     500 invalid input syntax for type uuid: "12345"
+   *
+   * publishing the datastore and the column type to the client. The gateway's
+   * exception filter has sanitisers for exactly this (SQLSTATE 22P02, 23502,
+   * 23503) but never saw the error — it arrived already wrapped as an
+   * HttpException carrying the raw text, which the filter is right to trust.
+   *
+   * 4xx means the service examined the request and rejected it; that text is
+   * written for whoever sent it. 5xx means the service broke, and its message
+   * describes our internals.
+   */
+  const isDomainStatus = typeof raw === 'number' && raw >= 400 && raw < 500;
 
   if (isDomainStatus) {
     return new HttpException(err?.message || serviceLabel, raw);
+  }
+
+  // A service that answered 5xx is reachable but failed, which is not the same
+  // as unreachable — keep its status so monitoring can tell the two apart, and
+  // replace the message. The cause is logged below either way.
+  if (typeof raw === 'number' && raw >= 500 && raw < 600) {
+    logger.error(`${serviceLabel} - internal failure ${raw}: ${err?.message ?? String(err)}`);
+    return new HttpException(serviceLabel, raw);
   }
 
   // The client is told only `serviceLabel`, so the real cause has to be recorded

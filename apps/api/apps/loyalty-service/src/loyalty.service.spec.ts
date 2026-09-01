@@ -52,8 +52,12 @@ describe('LoyaltyService', () => {
       redis.getJson.mockResolvedValue(null);
       const result = await service.getPoints('NEW-USER');
       expect(result.userId).toBe('NEW-USER');
-      expect(result.points).toBe(750);
-      expect(result.tier).toBe('Silver');
+      // A new account starts empty. This asserted 750 points at Silver — a
+      // joining balance nothing had awarded, which the service handed to anyone
+      // who had never placed an order. The value is 0/Bronze now; what this test
+      // is really for is that the record is created and cached on first read.
+      expect(result.points).toBe(0);
+      expect(result.tier).toBe('Bronze');
       expect(redis.setJson).toHaveBeenCalled();
     });
   });
@@ -63,7 +67,7 @@ describe('LoyaltyService', () => {
       redis.getJson.mockResolvedValue(null); // triggers getPoints default
       const result = await service.awardPoints('U1', 100, 'Order completed', 'ORD-001');
       expect(result.success).toBe(true);
-      expect(result.newTotal).toBe(850); // 750 default + 100
+      expect(result.newTotal).toBe(100); // 0 for a new account + 100 awarded
       expect(kafka.publish).toHaveBeenCalledWith('loyalty.points.awarded', expect.any(Object));
     });
 

@@ -29,7 +29,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore",
     "type-check": "turbo run type-check",
     "clean": "turbo run clean && rm -rf node_modules",
-    "infra:up": "docker compose -f docker-compose.yml up -d",
+    "infra:up": "docker compose -f docker-compose.yml up -d && npm run kafka:topics",
     "infra:down": "docker compose -f docker-compose.yml down",
     "infra:logs": "docker compose -f docker-compose.yml logs -f",
     "infra:restart": "docker compose -f docker-compose.yml restart",
@@ -46,7 +46,8 @@
     "db:seed:marketplace": "npx ts-node -r tsconfig-paths/register apps/api/scripts/seed-marketplace.ts",
     "db:seed:restaurant": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed-restaurant.ts",
     "db:seed:pharmacy": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed-pharmacy.ts",
-    "prepare": "node -e \"try { require('husky').install() } catch(e) {}\""
+    "prepare": "node -e \"try { require('husky').install() } catch(e) {}\"",
+    "kafka:topics": "node apps/api/scripts/create-kafka-topics.js"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",

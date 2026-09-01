@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight,
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
   Car, ShoppingBasket, Tv, Headphones,
+  Monitor, Briefcase, PawPrint, Paperclip, Watch, Armchair, Footprints, ToyBrick,
 } from 'lucide-react';
 import { addToWishlist, removeFromWishlist } from '@/lib/api/marketplace';
 import { useCartContext } from '@/lib/contexts/cart-context';
@@ -73,7 +74,8 @@ const MAX_CARD_IMAGES = 6;
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
-  Car, ShoppingBasket, Tv, Headphones,
+  Car, ShoppingBasket, Tv, Headphones, Monitor, Briefcase, PawPrint,
+  Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick,
 };
 
 function discountPercent(mrp: number, price: number): number {

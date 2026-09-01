@@ -32,14 +32,27 @@ import * as path from 'path';
 const API_ROOT = path.resolve(__dirname, '..', 'apps');
 const GATEWAY_CONTROLLERS = path.join(API_ROOT, 'api-gateway', 'src', 'controllers');
 
+/**
+ * The extracted vertical backends. Each owns the commands for its module and
+ * lives outside `apps/api`, so it has to be listed explicitly — a directory
+ * added here is picked up automatically, one added to `modules/` is not.
+ */
+const MODULES_DIR = path.resolve(__dirname, '..', '..', '..', 'modules');
+const MODULE_BACKEND_ROOTS: string[] = fs.existsSync(MODULES_DIR)
+  ? fs
+      .readdirSync(MODULES_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => path.join(MODULES_DIR, d.name, 'backend', 'src'))
+      .filter((p) => fs.existsSync(p))
+  : [];
+
 /** Commands the gateway sends that no service implements yet. May only shrink. */
 const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   // Restaurant — customer surface not yet built service-side
   'add_address', 'delete_address', 'list_addresses', 'update_address',
   'add_favorite', 'remove_favorite', 'list_favorites',
   'list_gift_cards', 'purchase_gift_card', 'subscribe', 'list_subscriptions',
-  'apply_coupon', 'remove_coupon', 'get_collections', 'get_home_feed',
-  'get_popular_dishes', 'get_suggestions', 'call_waiter', 'update_customization',
+  'apply_coupon', 'remove_coupon', 'call_waiter', 'update_customization',
   'get_order_receipt', 'request_rider',
   // Restaurant — operator surface
   'approve_menu_change', 'reject_menu_change', 'get_menu_approvals', 'get_menu_audit',
@@ -75,9 +88,13 @@ const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   'admin.restaurant.complaints', 'admin.restaurant.dashboard', 'admin.restaurant.get',
   'admin.restaurant.orders', 'admin.restaurant.zones',
   'admin.taxi.complaints', 'admin.taxi.compliance', 'admin.taxi.dashboard',
-  'admin.taxi.fleet', 'admin.taxi.payouts', 'admin.taxi.pricing', 'admin.taxi.rides',
-  'admin.taxi.routes', 'admin.taxi.settings', 'admin.taxi.surge',
-]);
+  'admin.taxi.fleet', 'admin.taxi.pricing', 'admin.taxi.rides',
+  'admin.taxi.routes', 'admin.taxi.settings', ]);
+
+// Removed 2026-09-01: implemented in the extracted module backends, and only
+// still listed because this suite could not see `modules/*/backend`. The
+// restaurant home-feed commands live in restaurant-service, the two taxi admin
+// commands in taxi-service.
 
 // ── source helpers ──────────────────────────────────────────────────────────
 
@@ -114,7 +131,21 @@ function readPatternConstants(): Map<string, string> {
 /** Every command any service answers, via @MessagePattern. */
 function readHandledCommands(): Set<string> {
   const handled = new Set<string>();
-  for (const file of walk(API_ROOT, (f) => f.endsWith('.ts'))) {
+
+  /**
+   * Both homes for a service.
+   *
+   * Eight verticals were extracted to `modules/<name>/backend` and this scan
+   * still only looked in `apps/api/apps`, so their `@MessagePattern` handlers
+   * were invisible: it found 94 commands where the gateway sends over 400, and
+   * every command owned by a module read as unimplemented. The check that is
+   * supposed to catch a gateway calling a pattern nobody serves had, in effect,
+   * stopped covering two thirds of the platform.
+   */
+  const roots = [API_ROOT, ...MODULE_BACKEND_ROOTS];
+
+  for (const root of roots) {
+  for (const file of walk(root, (f) => f.endsWith('.ts'))) {
     if (file.includes(`${path.sep}api-gateway${path.sep}`)) continue;
     const source = stripComments(fs.readFileSync(file, 'utf8'));
     for (const [, cmd] of source.matchAll(/@MessagePattern\(\s*\{\s*cmd\s*:\s*['"`]([^'"`]+)['"`]/g)) {
@@ -123,6 +154,7 @@ function readHandledCommands(): Set<string> {
     for (const [, cmd] of source.matchAll(/@MessagePattern\(\s*['"`]([^'"`]+)['"`]\s*\)/g)) {
       handled.add(cmd);
     }
+  }
   }
   return handled;
 }

@@ -41,7 +41,16 @@ function declaredTopics() {
     process.exit(1);
   }
 
-  const kafka = new Kafka({ clientId: 'kartseek-topic-provisioner', brokers: BROKERS });
+  // Retry hard. This runs straight after `docker compose up -d`, when the
+  // broker is usually still electing a controller — the default 5 retries give
+  // up well before Kafka is ready, and a provisioner that quietly fails is what
+  // leaves consumers crash-looping on a missing topic.
+  const kafka = new Kafka({
+    clientId: 'kartseek-topic-provisioner',
+    brokers: BROKERS,
+    retry: { retries: 12, initialRetryTime: 1000, maxRetryTime: 8000 },
+    logLevel: 1, // ERROR — connection retries are expected here, not news
+  });
   const admin = kafka.admin();
   await admin.connect();
 

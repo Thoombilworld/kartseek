@@ -141,7 +141,7 @@
 
 	<!-- ── Google Maps iOS SDK ──────────────────────────────────────────── -->
 	<key>GMSApiKey</key>
-	<string>AIzaSyB29-Nj3zGBNiIHhejSxTCL0iYk4qO_pJA</string>
+	<string>$(MAPS_API_KEY)</string>
 	<key>io.flutter.embedded_views_preview</key>
 	<true/>
 

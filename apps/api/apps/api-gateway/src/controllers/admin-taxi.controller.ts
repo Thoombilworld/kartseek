@@ -103,6 +103,29 @@ export class AdminTaxiController {
     return await this.send('admin.taxi.drivers', { page, status });
   }
 
+  /**
+   * Declared before `drivers/:id`, and it has to stay there.
+   *
+   * Nest matches in declaration order, so with `:id` first this route was
+   * unreachable: `/admin/taxi/drivers/nearby` was read as a driver whose id is
+   * the string "nearby", which reaches Postgres as
+   * `invalid input syntax for type uuid`. The live fleet map called an endpoint
+   * that could only ever fail.
+   */
+  @Get('drivers/nearby')
+  @ApiOperation({ summary: 'Drivers near a point, for the live fleet map' })
+  async nearbyDrivers(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+    @Query('radiusKm') radiusKm?: string,
+    @Query('vehicleType') vehicleType?: string,
+  ) {
+    return this.send('admin.taxi.drivers.nearby', {
+      lat: Number(lat), lng: Number(lng),
+      radiusKm: radiusKm ? Number(radiusKm) : 5, vehicleType,
+    });
+  }
+
   @Get('drivers/:id')
   @ApiOperation({ summary: 'Get driver detail' })
   async getDriverById(@Param('id') id: string) {
@@ -337,19 +360,4 @@ export class AdminTaxiController {
     return this.send('admin.taxi.payouts.summary', { countryCode, startDate, endDate });
   }
 
-  // ── Fleet ─────────────────────────────────────────────────────
-
-  @Get('drivers/nearby')
-  @ApiOperation({ summary: 'Drivers near a point, for the live fleet map' })
-  async nearbyDrivers(
-    @Query('lat') lat: string,
-    @Query('lng') lng: string,
-    @Query('radiusKm') radiusKm?: string,
-    @Query('vehicleType') vehicleType?: string,
-  ) {
-    return this.send('admin.taxi.drivers.nearby', {
-      lat: Number(lat), lng: Number(lng),
-      radiusKm: radiusKm ? Number(radiusKm) : 5, vehicleType,
-    });
-  }
 }

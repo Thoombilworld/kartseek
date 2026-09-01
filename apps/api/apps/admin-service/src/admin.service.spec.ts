@@ -62,13 +62,14 @@ describe('AdminService', () => {
       expect(result).toEqual(cached);
     });
 
-    it('should aggregate from Redis counters', async () => {
-      redis.getJson.mockResolvedValue(null);
-      redis.get.mockResolvedValue('42');
-      const result = await service.getDashboardStats();
-      expect(result.totalUsers).toBe(42);
-      expect(result.generatedAt).toBeDefined();
-    });
+    // Removed 2026-09-01: `getDashboardStats` no longer aggregates Redis
+    // counters — it queries Postgres directly. The test mocked `redis.get` to
+    // return '42' and asserted that reached `totalUsers`, which stopped being
+    // true when the counters were replaced by a real query, and no adjustment of
+    // the number can fix it. Covering the current path needs a database double
+    // this suite does not have; it belongs in an integration test rather than
+    // here, and leaving a green assertion against a dead code path is worse than
+    // leaving the gap visible.
   });
 
   describe('banUser / unbanUser', () => {

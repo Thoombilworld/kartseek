@@ -9,6 +9,7 @@ import {
   Monitor, Briefcase, PawPrint, Paperclip, Watch, Armchair,
   BadgeCheck, TrendingUp, Crown, Flame, Tag, Sun, GraduationCap, Award,
   ArrowRight, Footprints, Clock, Gift, Store,
+  ToyBrick,
 } from 'lucide-react';
 import { CATEGORIES, FLASH_DEALS, ELECTRONICS_PRODUCTS, FASHION_PRODUCTS, HOME_PRODUCTS, BEAUTY_PRODUCTS, SPORTS_PRODUCTS, TOYS_PRODUCTS, APPLIANCES_PRODUCTS, BRAND_PROMOS, TRENDING_PRODUCTS, DEALS_OF_DAY, NEW_ARRIVALS, BEST_SELLERS, RECOMMENDED, SPONSORED_PRODUCTS, MARKETPLACE_FAQ, TRUST_BADGES } from '@/lib/demo-data/marketplace-home';
 import { discountPercent, buildBrandDiscount, forRegion } from '@/lib/marketplace/pricing';
@@ -296,7 +297,7 @@ function useMarketplaceHome(region: string) {
 const ICON_MAP: Record<string, React.ElementType> = {
   Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
   Car, ShoppingBasket, Tv, Headphones, Monitor, Briefcase, PawPrint,
-  Paperclip, Watch, Armchair, Heart, Footprints, BabyIcon: Baby,
+  Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick, BabyIcon: Baby,
   Tablet: Smartphone, Speaker: Headphones, Camera: Smartphone,
   Glasses: Sparkles, Sun, GraduationCap, Truck, ShieldCheck,
   RotateCcw, BadgeCheck,
@@ -1052,7 +1053,18 @@ export default function MarketplaceHome() {
             </div>
           </section>
         );
-      case 'flash_deals':
+      case 'flash_deals': {
+        /**
+         * A rail with nothing in it is not a rail.
+         *
+         * Routing this through `pickProducts` stopped it inventing five deals
+         * at prices nothing had quoted, but left the header, the countdown and
+         * the gradient rule rendering over an empty grid — which reads as a
+         * broken page rather than a quiet promotions period. The dedicated
+         * /flash-deals route says so in words; a home rail just steps aside.
+         */
+        const deals = pickProducts(feed?.flashDeals, FLASH_DEALS, isLive);
+        if (deals.length === 0) return null;
         return (
           <section key={section.id} className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-red-500 via-orange-500 to-yellow-500" />
@@ -1081,12 +1093,13 @@ export default function MarketplaceHome() {
                 no flash deals still showed five of them at prices nothing had
                 quoted, and each card linked to a product page that would 404.
               */}
-              {pickProducts(feed?.flashDeals, FLASH_DEALS, isLive).map((product) => (
+              {deals.map((product) => (
                 <ProductCard key={product.id} product={product} formatCurrencyValue={formatCurrencyValue} />
               ))}
             </div>
           </section>
         );
+      }
       case 'product_carousel':
         return (
           <ProductGridSection
@@ -1193,7 +1206,8 @@ export default function MarketplaceHome() {
               </div>
             </section>
 
-            {/* 4. Flash Deals */}
+            {/* 4. Flash Deals — hidden entirely when no campaign is running. */}
+            {pickProducts(feed?.flashDeals, FLASH_DEALS, isLive).length > 0 && (
             <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-red-500 via-orange-500 to-yellow-500" />
               <div className="flex items-center justify-between mb-5">
@@ -1220,6 +1234,7 @@ export default function MarketplaceHome() {
                 ))}
               </div>
             </section>
+            )}
 
             {/* 5. Best of Electronics + Brand Cards */}
             <ProductGridSection
