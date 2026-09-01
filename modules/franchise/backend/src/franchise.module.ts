@@ -30,7 +30,12 @@ const envSchema = buildEnvSchema({
       // file stays as a fallback for the ~120 shared values.
       envFilePath: ['.env', '../../../apps/api/.env'],
       validationSchema: envSchema,
-      validationOptions: { abortEarly: false },
+      // `validationOptions: { abortEarly: false }` was removed for
+      // @nestjs/config v12: it validates through Standard Schema now, and
+      // `abortEarly` is a Joi option the new type does not accept. Joi still
+      // works as the schema — what changes is that a bad .env reports its
+      // first problem rather than all of them, so fixing one may reveal the
+      // next.
     }),
     RedisModule.register({ keyPrefix: 'kartseek:franchise:' }),
     KafkaModule,

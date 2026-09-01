@@ -1,7 +1,7 @@
 {
   "name": "kartseek-super-app",
   "version": "2.0.0",
-  "description": "KARTSEEK — Multi-vertical Super App monorepo (Web · API · Mobile)",
+  "description": "KARTSEEK \u2014 Multi-vertical Super App monorepo (Web \u00b7 API \u00b7 Mobile)",
   "private": true,
   "packageManager": "npm@11.17.0",
   "engines": {
@@ -56,12 +56,27 @@
     "@swc/core": "^1.15.43",
     "@vitest/coverage-v8": "^4.1.11",
     "chokidar": "^5.0.0",
+    "fork-ts-checker-webpack-plugin": "^9.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
     "prettier": "^3.8.4",
+    "ts-loader": "^9.6.2",
+    "tsconfig-paths-webpack-plugin": "^4.2.0",
     "turbo": "^2.9.18",
     "typeorm": "^0.3.31",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "webpack": "^5.110.2",
+    "webpack-node-externals": "^3.0.0",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/websockets": "^12.0.1",
+    "@nestjs/platform-socket.io": "^12.0.1",
+    "@nestjs/microservices": "^12.0.1",
+    "@nestjs/platform-express": "^12.0.1",
+    "@nestjs/swagger": "^12.0.1",
+    "@nestjs/testing": "^12.0.1",
+    "@nestjs/graphql": "^14.0.0",
+    "@nestjs/apollo": "^14.0.0"
   },
   "overrides": {
     "axios": "^1.9.0",
@@ -85,7 +100,9 @@
     "tar": "^7.5.16",
     "tmp": "^0.2.7",
     "typeorm": "^0.3.31",
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/common": "^12.0.1"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -117,5 +134,7 @@
     "react-dom": "^19.2.7",
     "react-is": "^19.2.7"
   },
-  "_comment_typeorm": "Declared at the root on purpose, alongside the override. @nestjs/typeorm@11 lists typeorm as a peer with range '^0.3.0 || ^1.0.0-dev', so npm auto-installed the highest match (1.1.0) and hoisted it. TypeORM 1.x dropped the array forms of `select` and `relations` that this codebase uses in dozens of places, so every workspace package had to pin ^0.3.31 to get a nested copy. Pinning the hoisted version here means one typeorm for the whole repo and no per-module workaround."
+  "_comment_typeorm": "Declared at the root on purpose, alongside the override. @nestjs/typeorm@11 lists typeorm as a peer with range '^0.3.0 || ^1.0.0-dev', so npm auto-installed the highest match (1.1.0) and hoisted it. TypeORM 1.x dropped the array forms of `select` and `relations` that this codebase uses in dozens of places, so every workspace package had to pin ^0.3.31 to get a nested copy. Pinning the hoisted version here means one typeorm for the whole repo and no per-module workaround.",
+  "_comment_nest_core_override": "@nestjs/typeorm and @nestjs/mongoose peer on ^10 || ^11 || ^12, and npm satisfied that with a leftover 11.x while every workspace resolved 12. Two copies of @nestjs/core in one tree is the dual-package hazard: an HttpException built against one is not instanceof the other, so the gateway's exception filter would classify a real HttpException as an unknown error and answer 500. Pinned to one version rather than trusting hoisting.",
+  "_comment_nest_root_pin": "Declared at the root on purpose. Nothing here imports Nest \u2014 these exist to pin one version for the whole tree. @nestjs/typeorm and @nestjs/mongoose peer on ^10 || ^11 || ^12, and npm satisfied that by hoisting an 11.x to the root while the workspaces resolved 12. The v12 packages import '@nestjs/common/internal', a subpath that 11.x does not export, so every build that reached the hoisted copy failed with 'Can't resolve @nestjs/common/internal'. `overrides` did not fix this \u2014 npm reported 'up to date' through --force and after clearing the install-state cache. A direct dependency outranks a peer-satisfied hoist, which does. @nestjs/websockets is here for the same reason: @nestjs/core lazily requires '@nestjs/websockets/socket-module.js', webpack resolves that statically, and only apps/api declared it \u2014 so a module backend building against the root core could not find it. Under Nest 11 it happened to be hoisted; that is not something to rely on."
 }

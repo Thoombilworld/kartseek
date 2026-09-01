@@ -16,6 +16,7 @@
 module.exports = function (options) {
   const path = require('path');
   const webpack = require('webpack');
+  const nodeExternals = require('webpack-node-externals');
   // Resolve @app/* monorepo lib aliases explicitly. The base tsconfig no longer
   // sets `baseUrl` (it triggered a TS6/ts-loader `ignoreDeprecations` conflict),
   // so webpack's TsconfigPaths resolution needs these aliases to find the libs.
@@ -90,8 +91,32 @@ module.exports = function (options) {
       }),
     ],
     externals: [
-      // Preserve any existing externals
-      ...(Array.isArray(options.externals) ? options.externals : options.externals ? [options.externals] : []),
+      /**
+       * Every dependency is external, including the ones hoisted to the
+       * repository root.
+       *
+       * The CLI's own default is `nodeExternals()` with no arguments, which
+       * only recognises `apps/api/node_modules`. That was harmless while every
+       * Nest package sat there. It stopped being harmless when @nestjs/core and
+       * @nestjs/common moved to the root as direct devDependencies (the fix for
+       * the duplicate-core problem): webpack no longer recognised them as
+       * externals and bundled them, while the six packages still nested here —
+       * apollo, graphql, microservices, platform-express, swagger, testing —
+       * stayed external and loaded their own copy of @nestjs/core from disk.
+       *
+       * Two copies of @nestjs/core means two `HttpAdapterHost` classes, and
+       * Nest's DI matches providers by class identity, so the container's
+       * instance never satisfies the external module's token. It surfaced as
+       * `Nest can't resolve dependencies of the GraphQLModule` at boot, and
+       * @nestjs/microservices had the same split waiting behind it. The build
+       * gives no warning of any of this — only starting the process does.
+       *
+       * `additionalModuleDirs` puts the root back in scope, so the whole
+       * dependency set resolves once, at runtime, from disk.
+       */
+      nodeExternals({
+        additionalModuleDirs: [path.resolve(__dirname, '../../node_modules')],
+      }),
       // Mark unused @nestjs/microservices optional transport deps as external
       {
         'mqtt': 'commonjs mqtt',
