@@ -2,18 +2,19 @@
   "name": "@kartseek/marketplace-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "KARTSEEK Marketplace \u2014 independent backend microservice (HTTP 3012 \u00b7 TCP 4002 \u00b7 gRPC 5006)",
+  "description": "KARTSEEK Marketplace — independent backend microservice (HTTP 3012 · TCP 4002 · gRPC 5006)",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "dev": "nest start --watch",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "db:create": "node scripts/create-database.js",
-    "db:schema": "node scripts/apply-schema.js"
+    "db:schema": "node scripts/apply-schema.js",
+    "test:integration": "vitest run --config vitest.integration.mts"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -26,7 +27,8 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "<rootDir>/src/__tests__/schema.integration.spec.ts",
-      "<rootDir>/test/marketplace.integration.spec.ts"
+      "<rootDir>/test/marketplace.integration.spec.ts",
+      "<rootDir>/test/marketplace-smoke.integration.spec.ts"
     ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"

@@ -9,6 +9,7 @@ import { Product } from '../src/entities/product.entity';
 import { ProductListing } from '../src/entities/product-listing.entity';
 import { MarketplaceOrder } from '../src/entities/marketplace-order.entity';
 import { Review } from '../src/entities/review.entity';
+import { ProductImage } from '../src/entities/product-image.entity';
 
 /**
  * Integration tests with real PostgreSQL database.
@@ -16,6 +17,23 @@ import { Review } from '../src/entities/review.entity';
  * REQUIRES: PostgreSQL running on localhost:5432
  * Set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME env vars or use defaults.
  */
+/**
+ * The target database, and a refusal to run against anything but a scratch one.
+ *
+ * The suite below sets `dropSchema: true`, which destroys every table in the
+ * target before it runs — correct for a throwaway database, catastrophic for
+ * any other. The target comes from `DB_NAME`, and this repository runs a
+ * Postgres per module, so exporting `DB_NAME` to work against one of them is
+ * an ordinary thing to do. Refuse rather than trust the environment.
+ */
+const DB_NAME = process.env.DB_NAME || 'kartseek_test';
+if (!/test/i.test(DB_NAME)) {
+  throw new Error(
+    `Refusing to run: this suite sets dropSchema and would destroy the database ` +
+      `"${DB_NAME}". Point DB_NAME at a scratch database with "test" in its name.`,
+  );
+}
+
 describe('Marketplace Integration Tests', () => {
   let module: TestingModule;
   let ds: DataSource;
@@ -37,12 +55,12 @@ describe('Marketplace Integration Tests', () => {
           port: +(process.env.DB_PORT || 5432),
           username: process.env.DB_USER || 'postgres',
           password: process.env.DB_PASSWORD || 'kartseek123',
-          database: process.env.DB_NAME || 'kartseek_test',
-          entities: [Seller, Category, Brand, Product, ProductListing, MarketplaceOrder, Review],
+          database: DB_NAME,
+          entities: [Seller, Category, Brand, Product, ProductImage, ProductListing, MarketplaceOrder, Review],
           synchronize: true,
           dropSchema: true, // fresh DB for each test run
         }),
-        TypeOrmModule.forFeature([Seller, Category, Brand, Product, ProductListing, MarketplaceOrder, Review]),
+        TypeOrmModule.forFeature([Seller, Category, Brand, Product, ProductImage, ProductListing, MarketplaceOrder, Review]),
       ],
     }).compile();
 

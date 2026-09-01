@@ -2,15 +2,15 @@
   "name": "@kartseek/taxi-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "KARTSEEK Taxi \u2014 independent backend microservice (HTTP 3021 \u00b7 TCP 4027 \u00b7 gRPC 5007)",
+  "description": "KARTSEEK Taxi — independent backend microservice (HTTP 3021 · TCP 4027 · gRPC 5007)",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "dev": "nest start --watch",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "type-check": "tsc --noEmit -p tsconfig.json"
   },
   "jest": {

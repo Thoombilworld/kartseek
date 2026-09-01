@@ -1,18 +1,18 @@
 /**
- * Marketplace Module — Comprehensive Verification Script
+ * Marketplace — entity registration checks.
  *
- * Verifies:
- *   Part 1: All 22 marketplace entity tables exist and are queryable
- *   Part 2: All public marketplace API endpoints respond correctly
+ * Static checks only: every case reads source files off disk, so this runs
+ * anywhere, with no database, gateway or network.
  *
- * Usage: npx ts-node apps/marketplace-service/scripts/verify-marketplace.ts
- * Or:    npx jest apps/marketplace-service/src/marketplace-verification.spec.ts --verbose
+ * The endpoint-connectivity cases that used to sit alongside these moved to
+ * `test/marketplace-smoke.integration.spec.ts`. They performed real HTTP
+ * requests against a gateway on port 3001, so on any machine without the stack
+ * running they failed 13 times on every unit run — which trained people to
+ * ignore a red suite, and would have hidden a real failure among the noise.
  */
 
-const BASE_URL = 'http://localhost:3001/api/v1/marketplace';
-
 // ═══════════════════════════════════════════════════════════════════════════
-// Part 1: Entity Table Definitions — 22 entities mapped to the marketplace schema
+// Entity table definitions — 22 entities mapped to the marketplace schema
 // ═══════════════════════════════════════════════════════════════════════════
 const EXPECTED_ENTITIES = [
   { name: 'Product',                table: 'products',                  columns: ['id', 'name', 'slug', 'seller_id', 'mrp', 'status'] },
@@ -42,35 +42,15 @@ const EXPECTED_ENTITIES = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Part 2: Public API Endpoint Definitions
 // ═══════════════════════════════════════════════════════════════════════════
-const PUBLIC_API_ENDPOINTS = [
-  // ── Home & Discovery ───────────────────────────────────────────────────
-  { method: 'GET', path: '/home',                    name: 'Marketplace Home Feed' },
-  // ── Categories ─────────────────────────────────────────────────────────
-  { method: 'GET', path: '/categories',              name: 'List Categories' },
-  { method: 'GET', path: '/category-list',           name: 'List Categories (alias)' },
-  // ── Products ───────────────────────────────────────────────────────────
-  { method: 'GET', path: '/products',                name: 'List Products' },
-  { method: 'GET', path: '/products?category=electronics', name: 'Products filtered by category' },
-  { method: 'GET', path: '/products?page=1&limit=5', name: 'Products with pagination' },
-  // ── Search ─────────────────────────────────────────────────────────────
-  { method: 'GET', path: '/search?q=test',           name: 'Search Marketplace' },
-  // ── Coupons (public list) ──────────────────────────────────────────────
-  { method: 'GET', path: '/coupons',                 name: 'List Coupons' },
-  // ── Bank & Exchange Offers ─────────────────────────────────────────────
-  { method: 'GET', path: '/offers/bank',             name: 'Bank Offers' },
-  { method: 'GET', path: '/offers/exchange',         name: 'Exchange Offers' },
-];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Suite
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('Marketplace Module Verification', () => {
+describe('Marketplace entity registration', () => {
 
-  // ── Part 1: Database Tables ──────────────────────────────────────────────
-  describe('Part 1: Entity/Table Registration', () => {
+  describe('Entity/Table Registration', () => {
     it(`should have all ${EXPECTED_ENTITIES.length} entities registered in marketplace.module.ts`, () => {
       const fs = require('fs');
       const path = require('path');
@@ -113,87 +93,5 @@ describe('Marketplace Module Verification', () => {
       );
       expect(moduleSource).toContain("schema: 'marketplace'");
     });
-  });
-
-  // ── Part 2: API Endpoints ────────────────────────────────────────────────
-  describe('Part 2: API Endpoint Connectivity', () => {
-
-    for (const endpoint of PUBLIC_API_ENDPOINTS) {
-      it(`${endpoint.method} ${endpoint.path} — ${endpoint.name}`, async () => {
-        const url = `${BASE_URL}${endpoint.path}`;
-        try {
-          const response = await fetch(url, {
-            method: endpoint.method,
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(10000),
-          });
-
-          // We accept any of these as "the route exists and is reachable":
-          // 200 = success
-          // 401 = route exists but requires auth (expected for guarded endpoints)
-          // 403 = route exists, auth is valid, but role is wrong
-          // 503 = route exists, gateway reached, downstream microservice is down
-          // We REJECT: 404 (route doesn't exist) and 500 (unhandled crash)
-          const acceptableStatuses = [200, 201, 401, 403, 503];
-
-          if (!acceptableStatuses.includes(response.status)) {
-            const body = await response.text().catch(() => '(no body)');
-            throw new Error(
-              `Unexpected status ${response.status} for ${endpoint.method} ${endpoint.path}.\n` +
-              `Body: ${body.substring(0, 300)}`
-            );
-          }
-
-          expect(acceptableStatuses).toContain(response.status);
-        } catch (error: any) {
-          if (error.name === 'TimeoutError' || error.cause?.code === 'ECONNREFUSED') {
-            throw new Error(
-              `API gateway not reachable at ${url}. ` +
-              `Ensure 'npm run dev' is running. Error: ${error.message}`
-            );
-          }
-          throw error;
-        }
-      // Each request already carries its own 10s AbortSignal, but Jest's default
-      // per-test timeout is 5s — so a slow gateway failed the test before the
-      // fetch could time out and report the useful error. The two must not
-      // disagree; this one is the outer bound.
-      }, 15_000);
-    }
-  });
-
-  // ── Part 3: Authenticated endpoint patterns (route existence check) ─────
-  describe('Part 3: Authenticated route patterns', () => {
-    const AUTHENTICATED_ENDPOINTS = [
-      { method: 'GET',  path: '/cart',                name: 'Get Cart' },
-      { method: 'GET',  path: '/returns',             name: 'List Returns' },
-      { method: 'POST', path: '/orders/checkout',     name: 'Create Checkout' },
-    ];
-
-    for (const endpoint of AUTHENTICATED_ENDPOINTS) {
-      it(`${endpoint.method} ${endpoint.path} — ${endpoint.name} (should require auth, not 404)`, async () => {
-        const url = `${BASE_URL}${endpoint.path}`;
-        try {
-          const response = await fetch(url, {
-            method: endpoint.method,
-            headers: { 'Content-Type': 'application/json' },
-            body: endpoint.method !== 'GET' ? '{}' : undefined,
-            signal: AbortSignal.timeout(10000),
-          });
-
-          // 401 Unauthorized = route exists but requires a JWT (correct!)
-          // 403 Forbidden = route exists, role check failed (correct!)
-          // 200 = works without auth (unexpected but ok for now)
-          // 503 = downstream service down (route exists in gateway)
-          // NOT acceptable: 404 means the route is missing
-          expect(response.status).not.toBe(404);
-        } catch (error: any) {
-          if (error.cause?.code === 'ECONNREFUSED') {
-            throw new Error(`API gateway not reachable at ${url}`);
-          }
-          throw error;
-        }
-      }, 15_000);
-    }
   });
 });

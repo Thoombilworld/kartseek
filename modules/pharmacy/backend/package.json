@@ -2,15 +2,15 @@
   "name": "@kartseek/pharmacy-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "KARTSEEK Pharmacy \u2014 independent backend microservice (HTTP 3020 \u00b7 TCP 4010)",
+  "description": "KARTSEEK Pharmacy — independent backend microservice (HTTP 3020 · TCP 4010)",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "dev": "nest start --watch",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "type-check": "tsc --noEmit -p tsconfig.json"
   },
   "jest": {
