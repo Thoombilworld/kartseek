@@ -18,7 +18,7 @@ import { SellerOwnershipGuard } from '../guards/seller-ownership.guard';
 import { SellerModuleGuard, SellerModule } from '../guards/seller-module.guard';
 import { SellerApprovalGuard } from '../guards/seller-approval.guard';
 import { Roles } from '../decorators/roles.decorator';
-import { requestRegion, RequestWithRegion } from '../services/request-region';
+import { requestRegion, type RequestWithRegion } from '../services/request-region';
 import { getRegionConfig, DEFAULT_REGION } from '@app/region';
 
 /**

@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Hotel } from './hotel.entity';
 import { HotelRoom } from './hotel-room.entity';
 
@@ -69,7 +70,7 @@ export class HotelBooking {
   @Index()
   @ManyToOne(() => Hotel, (hotel) => hotel.bookings, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'hotel_id' })
-  hotel: Hotel;
+  hotel: Relation<Hotel>;
 
   @Column({ name: 'hotel_id' })
   hotelId: string;
@@ -77,7 +78,7 @@ export class HotelBooking {
   @Index()
   @ManyToOne(() => HotelRoom, (room) => room.bookings, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'room_id' })
-  room: HotelRoom;
+  room: Relation<HotelRoom>;
 
   @Column({ name: 'room_id' })
   roomId: string;

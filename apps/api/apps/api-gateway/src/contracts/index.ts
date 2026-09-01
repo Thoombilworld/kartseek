@@ -1,5 +1,5 @@
 // ── TCP Message Pattern Contracts ──────────────────────────────────────────
-export { MARKETPLACE_PATTERNS, MarketplacePattern } from './marketplace.patterns';
+export { MARKETPLACE_PATTERNS, type MarketplacePattern } from './marketplace.patterns';
 export {
   GROCERY_PATTERNS, RESTAURANT_PATTERNS, PHARMACY_PATTERNS,
   TAXI_PATTERNS, HOTEL_PATTERNS, DOCTOR_PATTERNS,

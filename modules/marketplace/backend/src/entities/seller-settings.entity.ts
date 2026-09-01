@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
 @Entity('seller_settings')
@@ -11,7 +12,7 @@ export class SellerSettings {
 
   @OneToOne(() => Seller)
   @JoinColumn({ name: 'seller_id' })
-  seller: Seller;
+  seller: Relation<Seller>;
 
   // ── Store Settings ────────────────────────────────────────────
   @Column({ type: 'varchar', nullable: true })

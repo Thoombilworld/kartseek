@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { MarketplaceOrder } from './marketplace-order.entity';
 
 /**
@@ -23,7 +24,7 @@ export class ShipmentTrackingEvent {
 
   @ManyToOne(() => MarketplaceOrder, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'order_id' })
-  order: MarketplaceOrder;
+  order: Relation<MarketplaceOrder>;
 
   @Column({ comment: 'AWB / tracking number from courier' })
   trackingId: string;

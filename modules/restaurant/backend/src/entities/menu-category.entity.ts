@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 import { MenuItem } from './menu-item.entity';
 
@@ -10,7 +11,7 @@ export class MenuCategory {
   @Index()
   @ManyToOne(() => Restaurant, (r) => r.menuCategories, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'restaurant_id' })
-  restaurant: Restaurant;
+  restaurant: Relation<Restaurant>;
 
   @Column({ name: 'restaurant_id' })
   restaurantId: string;
@@ -37,7 +38,7 @@ export class MenuCategory {
   availableHours: { startTime: string; endTime: string } | null;
 
   @OneToMany(() => MenuItem, (item) => item.category)
-  items: MenuItem[];
+  items: Relation<MenuItem[]>;
 
   @CreateDateColumn()
   createdAt: Date;

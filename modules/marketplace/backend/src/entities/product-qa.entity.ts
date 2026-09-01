@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
 /**
@@ -20,7 +21,7 @@ export class ProductQuestion {
 
   @ManyToOne(() => Product, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'product_id' })
-  product: Product;
+  product: Relation<Product>;
 
   @Column({ name: 'customer_id' })
   customerId: string;
@@ -58,7 +59,7 @@ export class ProductAnswer {
 
   @ManyToOne(() => ProductQuestion, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'question_id' })
-  question: ProductQuestion;
+  question: Relation<ProductQuestion>;
 
   @Column({ name: 'author_id', comment: 'User ID of the person who answered' })
   authorId: string;

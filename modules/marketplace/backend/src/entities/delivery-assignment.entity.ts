@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { MarketplaceOrder } from './marketplace-order.entity';
 
 /**
@@ -27,7 +28,7 @@ export class DeliveryAssignment {
 
   @ManyToOne(() => MarketplaceOrder, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'order_id' })
-  order: MarketplaceOrder;
+  order: Relation<MarketplaceOrder>;
 
   @Column({ type: 'varchar', nullable: true, name: 'return_request_id', comment: 'Linked return request for reverse pickups' })
   returnRequestId: string | null;

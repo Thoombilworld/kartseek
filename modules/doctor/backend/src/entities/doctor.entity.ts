@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Hospital } from './hospital.entity';
 import { Clinic } from './clinic.entity';
 
@@ -68,7 +69,7 @@ export class Doctor {
 
   @ManyToOne(() => Hospital, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'hospitalId' })
-  hospital: Hospital;
+  hospital: Relation<Hospital>;
 
   @Column({ type: 'uuid', nullable: true })
   @Index()
@@ -76,7 +77,7 @@ export class Doctor {
 
   @ManyToOne(() => Clinic, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'clinicId' })
-  clinic: Clinic;
+  clinic: Relation<Clinic>;
 
   // Keep for backward compat; prefer hospitalId/clinicId
   @Column({ type: 'varchar', length: 200, nullable: true })

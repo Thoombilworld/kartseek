@@ -4,7 +4,7 @@ import { HotelService } from '../hotel.service';
 import { RegisterOwnerDto } from '../dto/register-owner.dto';
 import { CreateHotelDto } from '../dto/create-hotel.dto';
 import { UpdatePricingDto } from '../dto/update-pricing.dto';
-import { EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
+import { type EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('owner')

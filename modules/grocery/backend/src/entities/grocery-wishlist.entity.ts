@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index, Unique, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { GroceryItem } from './grocery-item.entity';
 import { GroceryStore } from './grocery-store.entity';
 
@@ -28,7 +29,7 @@ export class GroceryWishlist {
 
   @ManyToOne(() => GroceryItem, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'productId' })
-  product: GroceryItem;
+  product: Relation<GroceryItem>;
 
   @Column({ type: 'uuid' })
   @Index()
@@ -36,7 +37,7 @@ export class GroceryWishlist {
 
   @ManyToOne(() => GroceryStore, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'storeId' })
-  store: GroceryStore;
+  store: Relation<GroceryStore>;
 
   @Column({ type: 'uuid' })
   storeId: string;

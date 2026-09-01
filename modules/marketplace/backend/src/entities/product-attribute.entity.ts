@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Category } from './category.entity';
 
 /** One selectable value of a SELECT / MULTI_SELECT / COLOR attribute. */
@@ -77,7 +78,7 @@ export class ProductAttribute {
 
   @ManyToOne(() => Category, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'categoryId' })
-  category: Category;
+  category: Relation<Category>;
 
   @Column({ default: true })
   isActive: boolean;

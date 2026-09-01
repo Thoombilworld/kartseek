@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 import { Seller } from './seller.entity';
 
@@ -23,7 +24,7 @@ export class MarketplaceOrder {
 
   @ManyToOne(() => Seller)
   @JoinColumn({ name: 'seller_id' })
-  seller: Seller;
+  seller: Relation<Seller>;
 
   @Column({ type: 'jsonb', comment: 'Snapshot of ordered items with prices at time of purchase' })
   items: Array<{

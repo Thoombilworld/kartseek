@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Hospital } from './hospital.entity';
 
 @Entity('departments')
@@ -12,7 +13,7 @@ export class Department {
 
   @ManyToOne(() => Hospital)
   @JoinColumn({ name: 'hospitalId' })
-  hospital: Hospital;
+  hospital: Relation<Hospital>;
 
   @Column({ length: 200 })
   name: string;

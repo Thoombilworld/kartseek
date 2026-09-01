@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
 /**
@@ -24,7 +25,7 @@ export class SellerSupportTicket {
 
   @ManyToOne(() => Seller, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'seller_id' })
-  seller: Seller;
+  seller: Relation<Seller>;
 
   @Column()
   subject: string;

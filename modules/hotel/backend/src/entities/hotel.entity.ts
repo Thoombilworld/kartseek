@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { HotelRoom } from './hotel-room.entity';
 import { HotelBooking } from './hotel-booking.entity';
 import { HotelReview } from './hotel-review.entity';
@@ -244,16 +245,16 @@ export class Hotel {
   // ── Relations ───────────────────────────────────────────────────────────────
 
   @OneToMany(() => HotelRoom, (room) => room.hotel)
-  rooms: HotelRoom[];
+  rooms: Relation<HotelRoom[]>;
 
   @OneToMany(() => HotelBooking, (booking) => booking.hotel)
-  bookings: HotelBooking[];
+  bookings: Relation<HotelBooking[]>;
 
   @OneToMany(() => HotelReview, (review) => review.hotel)
-  reviews: HotelReview[];
+  reviews: Relation<HotelReview[]>;
 
   @OneToMany(() => HotelStaff, (staff) => staff.hotel)
-  staff: HotelStaff[];
+  staff: Relation<HotelStaff[]>;
 
   // ── Timestamps ──────────────────────────────────────────────────────────────
 

@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
   UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { TaxiVendorEntity } from './taxi-vendor.entity';
 import { TaxiDocumentEntity } from './taxi-document.entity';
 
@@ -46,7 +47,7 @@ export class TaxiDriverEntity {
     onDelete: 'SET NULL',
   })
   @JoinColumn({ name: 'vendorId' })
-  vendor: TaxiVendorEntity;
+  vendor: Relation<TaxiVendorEntity>;
 
   @Column({
     type: 'enum',

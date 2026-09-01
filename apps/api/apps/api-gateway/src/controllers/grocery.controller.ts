@@ -6,7 +6,7 @@ import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
-import { requestRegion, RequestWithRegion } from '../services/request-region';
+import { requestRegion, type RequestWithRegion } from '../services/request-region';
 import { Public } from '../decorators/public.decorator';
 import { GroceryStoreOwnershipGuard } from '../guards/grocery-store-ownership.guard';
 

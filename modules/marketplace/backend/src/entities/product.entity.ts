@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Category } from './category.entity';
 import { Brand } from './brand.entity';
 import { ProductImage } from './product-image.entity';
@@ -59,15 +60,15 @@ export class Product {
 
   @ManyToOne(() => Brand)
   @JoinColumn({ name: 'brand_id' })
-  brand: Brand;
+  brand: Relation<Brand>;
 
   @ManyToOne(() => Category)
   @JoinColumn({ name: 'category_id' })
-  category: Category;
+  category: Relation<Category>;
 
   @ManyToOne(() => Category)
   @JoinColumn({ name: 'subcategory_id' })
-  subcategory: Category;
+  subcategory: Relation<Category>;
 
   /**
    * The seller who lists this product.
@@ -166,7 +167,7 @@ export class Product {
   // ── Image Gallery ──
 
   @OneToMany(() => ProductImage, (img) => img.product, { cascade: true })
-  images: ProductImage[];
+  images: Relation<ProductImage[]>;
 
   // ── Seller Listings ──
 
@@ -183,5 +184,5 @@ export class Product {
    * so the rest of the catalogue reads keep their current payload size.
    */
   @OneToMany(() => ProductListing, (listing) => listing.product)
-  listings: ProductListing[];
+  listings: Relation<ProductListing[]>;
 }

@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { GroceryStore } from './grocery-store.entity';
 import { GroceryItem } from './grocery-item.entity';
 
@@ -76,11 +77,11 @@ export class GroceryFlashDeal {
 
   @ManyToOne(() => GroceryStore, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'storeId', referencedColumnName: 'id' })
-  store?: GroceryStore;
+  store?: Relation<GroceryStore>;
 
   @ManyToOne(() => GroceryItem, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'productId', referencedColumnName: 'id' })
-  product?: GroceryItem;
+  product?: Relation<GroceryItem>;
 
   @CreateDateColumn()
   createdAt: Date;

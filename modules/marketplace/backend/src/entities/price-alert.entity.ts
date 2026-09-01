@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
 /**
@@ -39,7 +40,7 @@ export class PriceAlert {
 
   @ManyToOne(() => Product, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'product_id' })
-  product: Product;
+  product: Relation<Product>;
 
   /**
    * The payable price when the alert was created.

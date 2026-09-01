@@ -4,13 +4,21 @@
   "sourceRoot": "src",
   "entryFile": "main",
   "compilerOptions": {
-    "webpack": true,
-    "webpackConfigPath": "webpack.config.js",
     "tsConfigPath": "tsconfig.app.json",
     "typeCheck": false,
     "deleteOutDir": true,
     "assets": [
-      { "include": "../../../apps/api/proto/**/*.proto", "outDir": "./dist/proto", "watchAssets": true }
-    ]
+      {
+        "include": "../../../apps/api/proto/**/*.proto",
+        "outDir": "./dist/proto",
+        "watchAssets": true
+      }
+    ],
+    "builder": {
+      "type": "rspack",
+      "options": {
+        "configPath": "rspack.config.js"
+      }
+    }
   }
 }

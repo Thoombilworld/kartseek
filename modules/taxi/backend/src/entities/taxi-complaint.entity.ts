@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
   UpdateDateColumn, ManyToOne, JoinColumn, Index,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { TaxiDriverEntity } from './taxi-driver.entity';
 import { TaxiVendorEntity } from './taxi-vendor.entity';
 
@@ -77,7 +78,7 @@ export class TaxiComplaintEntity {
   /** The driver involved in this complaint */
   @ManyToOne(() => TaxiDriverEntity, { nullable: true })
   @JoinColumn({ name: 'driverId' })
-  driver: TaxiDriverEntity;
+  driver: Relation<TaxiDriverEntity>;
 
   @Column({ type: 'varchar', nullable: true })
   @Index()
@@ -93,7 +94,7 @@ export class TaxiComplaintEntity {
    */
   @ManyToOne(() => TaxiVendorEntity, { nullable: true })
   @JoinColumn({ name: 'vendorId' })
-  vendor: TaxiVendorEntity;
+  vendor: Relation<TaxiVendorEntity>;
 
   @Column({ type: 'varchar', nullable: true })
   @Index()

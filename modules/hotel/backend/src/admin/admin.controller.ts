@@ -1,7 +1,7 @@
 import { Controller, Get, Put, Param, Body, Query, UsePipes, ValidationPipe, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { HotelService } from '../hotel.service';
-import { DtoMessage, EmptyMessage, IdMessage, RpcAwareExceptionsFilter, requireId } from '@app/common';
+import { DtoMessage, type EmptyMessage, type IdMessage, RpcAwareExceptionsFilter, requireId } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('admin')

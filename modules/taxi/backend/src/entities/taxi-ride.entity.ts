@@ -2,6 +2,7 @@ import {
   Entity, PrimaryColumn, Column, CreateDateColumn,
   UpdateDateColumn, ManyToOne, JoinColumn, Index,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { TaxiDriverEntity } from './taxi-driver.entity';
 
 /**
@@ -35,7 +36,7 @@ export class TaxiRideEntity {
 
   @ManyToOne(() => TaxiDriverEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'driverId', referencedColumnName: 'id' })
-  driver: TaxiDriverEntity;
+  driver: Relation<TaxiDriverEntity>;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   vendorId: string | null;

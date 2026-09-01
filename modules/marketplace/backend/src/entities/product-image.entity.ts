@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
 @Entity('product_images')
@@ -8,7 +9,7 @@ export class ProductImage {
 
   @ManyToOne(() => Product, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'product_id' })
-  product: Product;
+  product: Relation<Product>;
 
   @Column()
   url: string;

@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { MenuCategory } from './menu-category.entity';
 
 export enum DietaryType {
@@ -26,7 +27,7 @@ export class MenuItem {
   @Index()
   @ManyToOne(() => MenuCategory, (cat) => cat.items, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'category_id' })
-  category: MenuCategory;
+  category: Relation<MenuCategory>;
 
   @Column({ type: 'varchar', name: 'category_id', nullable: true })
   categoryId: string | null;

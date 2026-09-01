@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Brand } from './brand.entity';
 
 @Entity('brand_follows')
@@ -15,7 +16,7 @@ export class BrandFollow {
 
   @ManyToOne(() => Brand, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'brand_id' })
-  brand: Brand;
+  brand: Relation<Brand>;
 
   @CreateDateColumn()
   createdAt: Date;

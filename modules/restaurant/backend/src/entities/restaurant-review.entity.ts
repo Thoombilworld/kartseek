@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 
 @Entity('restaurant_reviews')
@@ -9,7 +10,7 @@ export class RestaurantReview {
   @Index()
   @ManyToOne(() => Restaurant, (r) => r.reviews, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'restaurant_id' })
-  restaurant: Restaurant;
+  restaurant: Relation<Restaurant>;
 
   @Column({ name: 'restaurant_id' })
   restaurantId: string;

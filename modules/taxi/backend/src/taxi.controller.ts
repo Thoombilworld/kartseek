@@ -7,7 +7,7 @@ import { VendorManagementService } from './services/vendor-management.service';
 import { DriverOnboardingService } from './services/driver-onboarding.service';
 import { TaxiConfigService } from './services/taxi-config.service';
 import { TaxiPayoutService } from './services/taxi-payout.service';
-import { EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
+import { type EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 import {
   EstimateFareDto, RequestRideDto, CancelRideDto, RateRideDto,
   DriverOnlineDto, DriverIdDto, DriverLocationDto, DriverStartRideDto, DriverCompleteRideDto,

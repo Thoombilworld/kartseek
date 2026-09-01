@@ -1,53 +1,42 @@
 
 /**
- * Custom Webpack configuration for NestJS watch mode.
+ * Rspack build configuration for every NestJS service in this repository.
  *
- * 1. @nestjs/microservices dynamically requires transport drivers (mqtt, nats,
- *    amqplib, amqp-connection-manager, kafkajs, @grpc/grpc-js, @grpc/proto-loader)
- *    even when they are not used. This config marks unused ones as externals so
- *    Webpack doesn't fail trying to resolve them.
+ * The Nest CLI deprecated its webpack builder in favour of rspack; this file
+ * replaces webpack.config.js and keeps the same hard-won detail. The notes
+ * below are the reasons each entry exists, not decoration.
  *
- * 2. Force ts-loader into `transpileOnly` mode. Type-checking is handled
- *    separately by `tsc --noEmit` (which passes). This avoids a ts-loader /
- *    TypeScript version mismatch on the `ignoreDeprecations` compiler option
- *    (TS5103) that otherwise blocks the webpack build. This matches the
- *    `typeCheck: false` intent already declared in nest-cli.json.
+ * The eight module backends delegate to this file rather than copying it, so a
+ * fix made here reaches all of them. That is deliberate: the first attempt at
+ * those files duplicated the externals list, omitted geoip-lite, and the
+ * service died on boot with ENOENT on `data/geoip-country.dat`.
+ *
+ * What changed in the move from webpack:
+ *
+ *   The CLI hands rspack `builtin:swc-loader` where webpack got the TypeScript
+ *   loader, so the block that forced that loader into `transpileOnly` is gone —
+ *   there is nothing left in the pipeline for it to match. Type-checking is
+ *   still done separately by `tsc --noEmit`, matching the `typeCheck: false`
+ *   already declared in nest-cli.json.
+ *
+ *   `webpack.DefinePlugin` became `rspack.DefinePlugin`; same semantics.
+ *
+ *   The `@app/*` aliases stay explicit. rspack passes `resolve.tsConfig` and
+ *   can read path mappings from tsconfig, but the base tsconfig here
+ *   deliberately has no `baseUrl` (it triggered a TS6 `ignoreDeprecations`
+ *   conflict), so there are no mappings for it to read.
  */
 module.exports = function (options) {
   const path = require('path');
-  const webpack = require('webpack');
+  const rspack = require('@rspack/core');
   const nodeExternals = require('webpack-node-externals');
   // Resolve @app/* monorepo lib aliases explicitly. The base tsconfig no longer
   // sets `baseUrl` (it triggered a TS6/ts-loader `ignoreDeprecations` conflict),
   // so webpack's TsconfigPaths resolution needs these aliases to find the libs.
   const appLibs = ['common', 'database', 'guards', 'decorators', 'validators', 'dto', 'events', 'logger', 'security', 'grpc', 'kafka', 'redis', 'gdpr', 'region', 'storage'];
   const appAliases = Object.fromEntries(appLibs.map((l) => [`@app/${l}`, path.resolve(__dirname, `libs/${l}/src`)]));
-  const setTranspileOnly = (loaderEntry) => {
-    if (!loaderEntry) return loaderEntry;
-    if (typeof loaderEntry === 'string') return loaderEntry;
-    if (typeof loaderEntry.loader === 'string' && loaderEntry.loader.includes('ts-loader')) {
-      return { ...loaderEntry, options: { ...(loaderEntry.options || {}), transpileOnly: true } };
-    }
-    return loaderEntry;
-  };
-
-  const rules = ((options.module && options.module.rules) || []).map((rule) => {
-    if (!rule) return rule;
-    const next = { ...rule };
-    if (typeof rule.loader === 'string' && rule.loader.includes('ts-loader')) {
-      next.options = { ...(rule.options || {}), transpileOnly: true };
-    }
-    if (Array.isArray(rule.use)) {
-      next.use = rule.use.map(setTranspileOnly);
-    } else if (rule.use) {
-      next.use = setTranspileOnly(rule.use);
-    }
-    return next;
-  });
-
   return {
     ...options,
-    module: { ...options.module, rules },
     resolve: {
       ...(options.resolve || {}),
       alias: { ...((options.resolve && options.resolve.alias) || {}), ...appAliases },
@@ -85,7 +74,7 @@ module.exports = function (options) {
        * To actually use the native accelerators, install both packages and drop
        * this plugin plus their `externals` entries below.
        */
-      new webpack.DefinePlugin({
+      new rspack.DefinePlugin({
         'process.env.WS_NO_BUFFER_UTIL': JSON.stringify('true'),
         'process.env.WS_NO_UTF_8_VALIDATE': JSON.stringify('true'),
       }),

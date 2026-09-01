@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn,
   ManyToOne, JoinColumn, OneToMany, Index,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Appointment } from './appointment.entity';
 import { Doctor } from './doctor.entity';
 import { PrescriptionItem } from './prescription-item.entity';
@@ -17,7 +18,7 @@ export class Prescription {
 
   @ManyToOne(() => Appointment, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'appointmentId' })
-  appointment: Appointment;
+  appointment: Relation<Appointment>;
 
   @Column()
   @Index()
@@ -25,7 +26,7 @@ export class Prescription {
 
   @ManyToOne(() => Doctor)
   @JoinColumn({ name: 'doctorId' })
-  doctor: Doctor;
+  doctor: Relation<Doctor>;
 
   @Column()
   @Index()
@@ -68,7 +69,7 @@ export class Prescription {
   pharmacyOrderId: string | null;
 
   @OneToMany(() => PrescriptionItem, (item) => item.prescription, { cascade: true, eager: true })
-  items: PrescriptionItem[];
+  items: Relation<PrescriptionItem[]>;
 
   @CreateDateColumn()
   createdAt: Date;

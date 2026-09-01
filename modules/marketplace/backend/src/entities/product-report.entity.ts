@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
 /**
@@ -48,7 +49,7 @@ export class ProductReport {
 
   @ManyToOne(() => Product, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'product_id' })
-  product: Product;
+  product: Relation<Product>;
 
   /** The reporting customer's user id, taken from the verified JWT. */
   @Column({ name: 'reporter_id' })

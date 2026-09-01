@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { GroceryItem } from './grocery-item.entity';
 import { GroceryOrder } from './grocery-order.entity';
 
@@ -98,10 +99,10 @@ export class GroceryStore {
   phone: string | null;
 
   @OneToMany(() => GroceryItem, (item) => item.store)
-  inventory: GroceryItem[];
+  inventory: Relation<GroceryItem[]>;
 
   @OneToMany(() => GroceryOrder, (order) => order.store)
-  orders: GroceryOrder[];
+  orders: Relation<GroceryOrder[]>;
 
   @Column({
     type: 'enum',

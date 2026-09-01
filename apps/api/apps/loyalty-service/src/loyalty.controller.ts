@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Param, Body, UseFilters } from '@nestjs/common';
 import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
 import { LoyaltyService } from './loyalty.service';
-import { EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
+import { type EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('loyalty')

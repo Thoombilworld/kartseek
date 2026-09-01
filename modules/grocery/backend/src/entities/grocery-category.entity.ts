@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
 
 @Entity('grocery_categories')
 export class GroceryCategory {
@@ -65,10 +66,10 @@ export class GroceryCategory {
 
   @ManyToOne(() => GroceryCategory, (cat) => cat.children, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'parentId' })
-  parent: GroceryCategory;
+  parent: Relation<GroceryCategory>;
 
   @OneToMany(() => GroceryCategory, (cat) => cat.parent)
-  children: GroceryCategory[];
+  children: Relation<GroceryCategory[]>;
 
   // ── Display & filtering ───────────────────────────────────────────────────
   @Column({ type: 'int', default: 0 })

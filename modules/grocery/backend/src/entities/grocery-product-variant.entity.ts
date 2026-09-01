@@ -2,6 +2,7 @@ import {
   Entity, Column, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn,
   CreateDateColumn, UpdateDateColumn,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { GroceryItem } from './grocery-item.entity';
 
 /**
@@ -28,7 +29,7 @@ export class GroceryProductVariant {
 
   @ManyToOne(() => GroceryItem, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'productId' })
-  product: GroceryItem;
+  product: Relation<GroceryItem>;
 
   /**
    * Stock-keeping unit. Unique across the platform, because it is what a

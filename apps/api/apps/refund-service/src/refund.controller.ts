@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Param, Body, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RefundService, RefundRequest } from './refund.service';
-import { EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
+import { type EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('refunds')

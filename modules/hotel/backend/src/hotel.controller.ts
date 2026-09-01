@@ -5,7 +5,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { ModifyBookingDto } from './dto/modify-booking.dto';
 import { SearchHotelsDto } from './dto/search-hotels.dto';
 import { SubmitReviewDto } from './dto/submit-review.dto';
-import { EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
+import { type EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('hotels')

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Param, Body, Query, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiBearerAuth, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
-import { GdprService, ConsentType } from './gdpr.service';
+import { GdprService, type ConsentType } from './gdpr.service';
 import { Request } from 'express';
 
 @ApiTags('🔒 GDPR & Privacy')

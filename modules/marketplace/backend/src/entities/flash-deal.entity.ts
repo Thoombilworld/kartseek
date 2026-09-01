@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 import { Seller } from './seller.entity';
 
@@ -115,21 +116,21 @@ export class FlashDealNomination {
 
   @ManyToOne(() => FlashDeal, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'deal_id' })
-  deal: FlashDeal;
+  deal: Relation<FlashDeal>;
 
   @Column({ name: 'seller_id' })
   sellerId: string;
 
   @ManyToOne(() => Seller, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'seller_id' })
-  seller: Seller;
+  seller: Relation<Seller>;
 
   @Column({ name: 'product_id' })
   productId: string;
 
   @ManyToOne(() => Product, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'product_id' })
-  product: Product;
+  product: Relation<Product>;
 
   @Column({
     type: 'decimal',

@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { GroceryItem } from './grocery-item.entity';
 import { GroceryStore } from './grocery-store.entity';
 
@@ -33,11 +34,11 @@ export class GroceryReview {
 
   @ManyToOne(() => GroceryItem, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'productId', referencedColumnName: 'id' })
-  product?: GroceryItem;
+  product?: Relation<GroceryItem>;
 
   @ManyToOne(() => GroceryStore, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'storeId', referencedColumnName: 'id' })
-  store?: GroceryStore;
+  store?: Relation<GroceryStore>;
 
   @CreateDateColumn()
   createdAt: Date;

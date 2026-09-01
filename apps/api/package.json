@@ -107,7 +107,7 @@
     "typeorm": "^0.3.31",
     "uuid": "^14.0.1"
   },
-  "_comment_optionalDependencies": "libs/storage/src/storage.service.ts dynamically imports these. @aws-sdk/client-s3 covers STORAGE_PROVIDER=s3 and =r2. STORAGE_PROVIDER=gcs additionally needs `npm i -w apps/api @google-cloud/storage` — left out by default because it ships 4 unfixed moderate advisories (teeny-request/retry-request/gaxios) and pins gcp-metadata@6 against mongodb's ^7 peer.",
+  "_comment_optionalDependencies": "libs/storage/src/storage.service.ts dynamically imports these. @aws-sdk/client-s3 covers STORAGE_PROVIDER=s3 and =r2. STORAGE_PROVIDER=gcs additionally needs `npm i -w apps/api @google-cloud/storage` \u2014 left out by default because it ships 4 unfixed moderate advisories (teeny-request/retry-request/gaxios) and pins gcp-metadata@6 against mongodb's ^7 peer.",
   "optionalDependencies": {
     "@aws-sdk/client-s3": "^3.716.0"
   },
@@ -137,7 +137,6 @@
     "jest": "^30.4.2",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.11",
-    "ts-loader": "^9.6.2",
     "typescript": "^6.0.3"
   },
   "jest": {
@@ -172,7 +171,7 @@
       "^@app/([^/]+)(|/.*)$": "<rootDir>/libs/$1/src/$2"
     }
   },
-  "_comment_overrides": "npm only honours `overrides` in the workspace ROOT package.json. Security pins live in ../../package.json — do not re-add them here.",
+  "_comment_overrides": "npm only honours `overrides` in the workspace ROOT package.json. Security pins live in ../../package.json \u2014 do not re-add them here.",
   "overrides": {},
   "_comment_bull": "@nestjs/bull and bull were removed: nothing in the repo imported either, and they were the sole source of the last three advisories (bull -> uuid <11.1.1, missing buffer bounds check, no fix available). If a job queue is wanted later, add it back deliberately with a supported version.",
   "_comment_dev_all": "Starts the platform services that still live in this workspace. The seven extracted verticals (marketplace, grocery, restaurant, pharmacy, doctor, hotel, taxi) are their own workspaces and are started by turbo run dev from the repo root. Listing them here too made each boot twice and collide on its own port. The individual start:<module> scripts are kept for running one on its own."

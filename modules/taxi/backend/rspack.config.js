@@ -1,5 +1,5 @@
 /**
- * Webpack configuration for the hotel backend microservice.
+ * Rspack build configuration for the taxi backend microservice.
  *
  * This delegates to the platform build config in apps/api rather than copying
  * it. That file carries a hundred lines of hard-won detail — the `ws`
@@ -18,8 +18,8 @@
  * When the platform libraries are eventually extracted to packages/, this file
  * is the single place this service needs changing.
  */
-const platformWebpackConfig = require('../../../apps/api/webpack.config.js');
+const platformRspackConfig = require('../../../apps/api/rspack.config.js');
 
 module.exports = function (options) {
-  return platformWebpackConfig(options);
+  return platformRspackConfig(options);
 };

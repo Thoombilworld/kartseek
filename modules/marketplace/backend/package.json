@@ -2,7 +2,7 @@
   "name": "@kartseek/marketplace-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "KARTSEEK Marketplace — independent backend microservice (HTTP 3012 · TCP 4002 · gRPC 5006)",
+  "description": "KARTSEEK Marketplace \u2014 independent backend microservice (HTTP 3012 \u00b7 TCP 4002 \u00b7 gRPC 5006)",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
@@ -86,7 +86,6 @@
     "@types/node": "^26.0.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
-    "ts-loader": "^9.6.2",
     "typescript": "^6.0.3"
   }
 }

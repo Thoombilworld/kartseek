@@ -32,11 +32,11 @@ import { RedisService } from '@app/redis';
 import { authenticateWsClient } from './ws-auth.util';
 import { RecommendationService } from '../services/recommendation.service';
 import {
-  RecommendationModule,
-  WsSubscribeModule,
-  WsTrackView,
-  WsRecommendationClicked,
-  WsRecommendationUpdate,
+  type RecommendationModule,
+  type WsSubscribeModule,
+  type WsTrackView,
+  type WsRecommendationClicked,
+  type WsRecommendationUpdate,
   ALL_RECOMMENDATION_MODULES,
 } from '../services/recommendation.types';
 

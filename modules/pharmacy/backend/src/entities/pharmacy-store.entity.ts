@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { PharmacyCategory } from './pharmacy-category.entity';
 import { PharmacyItem } from './pharmacy-item.entity';
 import { PharmacyOrder } from './pharmacy-order.entity';
@@ -183,19 +184,19 @@ export class PharmacyStore {
   // ── Relations ───────────────────────────────────────────────────────────────
 
   @OneToMany(() => PharmacyItem, (item) => item.store)
-  items: PharmacyItem[];
+  items: Relation<PharmacyItem[]>;
 
   @OneToMany(() => PharmacyOrder, (order) => order.store)
-  orders: PharmacyOrder[];
+  orders: Relation<PharmacyOrder[]>;
 
   @OneToMany(() => PharmacyReview, (rev) => rev.store)
-  reviews: PharmacyReview[];
+  reviews: Relation<PharmacyReview[]>;
 
   @OneToMany(() => PharmacyStaff, (staff) => staff.store)
-  staff: PharmacyStaff[];
+  staff: Relation<PharmacyStaff[]>;
 
   @OneToMany(() => PharmacyPromotion, (promo) => promo.store)
-  promotions: PharmacyPromotion[];
+  promotions: Relation<PharmacyPromotion[]>;
 
   // ── Timestamps ──────────────────────────────────────────────────────────────
 

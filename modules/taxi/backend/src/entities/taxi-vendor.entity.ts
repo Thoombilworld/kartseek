@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
   UpdateDateColumn, OneToMany, Index,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { TaxiDriverEntity } from './taxi-driver.entity';
 import { TaxiDocumentEntity } from './taxi-document.entity';
 
@@ -85,11 +86,11 @@ export class TaxiVendorEntity {
   notes: string | null;
 
   @OneToMany(() => TaxiDriverEntity, (driver) => driver.vendor)
-  drivers: TaxiDriverEntity[];
+  drivers: Relation<TaxiDriverEntity[]>;
   // Documents are polymorphic (see TaxiDocumentEntity): loaded by
   // { ownerType, ownerId } rather than through a relation, so this is a
   // plain in-memory field the service populates — not a mapped column.
-  documents?: TaxiDocumentEntity[];
+  documents?: Relation<TaxiDocumentEntity[]>;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

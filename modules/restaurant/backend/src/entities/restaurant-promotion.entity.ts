@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 
 export enum PromotionType {
@@ -17,7 +18,7 @@ export class RestaurantPromotion {
   @Index()
   @ManyToOne(() => Restaurant, (r) => r.promotions, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'restaurant_id' })
-  restaurant: Restaurant;
+  restaurant: Relation<Restaurant>;
 
   @Column({ name: 'restaurant_id' })
   restaurantId: string;

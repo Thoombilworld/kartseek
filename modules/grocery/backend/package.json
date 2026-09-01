@@ -2,7 +2,7 @@
   "name": "@kartseek/grocery-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "KARTSEEK Grocery — independent backend microservice (HTTP 3018 · TCP 4008 · gRPC 5010)",
+  "description": "KARTSEEK Grocery \u2014 independent backend microservice (HTTP 3018 \u00b7 TCP 4008 \u00b7 gRPC 5010)",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
@@ -80,7 +80,6 @@
     "@types/node": "^26.0.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
-    "ts-loader": "^9.6.2",
     "typescript": "^6.0.3"
   }
 }

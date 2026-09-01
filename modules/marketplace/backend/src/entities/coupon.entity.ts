@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
 /**
@@ -77,7 +78,7 @@ export class Coupon {
 
   @ManyToOne(() => Seller, { nullable: true })
   @JoinColumn({ name: 'seller_id' })
-  seller: Seller;
+  seller: Relation<Seller>;
 
   @Column('simple-array', { nullable: true, comment: 'Restrict to specific product IDs' })
   applicableProductIds: string[];
@@ -119,7 +120,7 @@ export class CouponUsage {
 
   @ManyToOne(() => Coupon, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coupon_id' })
-  coupon: Coupon;
+  coupon: Relation<Coupon>;
 
   @Column({ name: 'customer_id' })
   customerId: string;

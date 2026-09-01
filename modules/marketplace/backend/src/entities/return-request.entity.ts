@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { MarketplaceOrder } from './marketplace-order.entity';
 import { Seller } from './seller.entity';
 
@@ -28,7 +29,7 @@ export class ReturnRequest {
 
   @ManyToOne(() => MarketplaceOrder, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'order_id' })
-  order: MarketplaceOrder;
+  order: Relation<MarketplaceOrder>;
 
   @Column({ name: 'customer_id' })
   customerId: string;
@@ -41,7 +42,7 @@ export class ReturnRequest {
 
   @ManyToOne(() => Seller)
   @JoinColumn({ name: 'seller_id' })
-  seller: Seller;
+  seller: Relation<Seller>;
 
   @Column({ type: 'jsonb', comment: 'Items being returned with quantities' })
   items: Array<{

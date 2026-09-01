@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { MenuCategory } from './menu-category.entity';
 import { RestaurantOrder } from './restaurant-order.entity';
 import { Reservation } from './reservation.entity';
@@ -204,25 +205,25 @@ export class Restaurant {
   // ── Relations ───────────────────────────────────────────────────────────────
 
   @OneToMany(() => MenuCategory, (cat) => cat.restaurant)
-  menuCategories: MenuCategory[];
+  menuCategories: Relation<MenuCategory[]>;
 
   @OneToMany(() => RestaurantOrder, (order) => order.restaurant)
-  orders: RestaurantOrder[];
+  orders: Relation<RestaurantOrder[]>;
 
   @OneToMany(() => Reservation, (res) => res.restaurant)
-  reservations: Reservation[];
+  reservations: Relation<Reservation[]>;
 
   @OneToMany(() => RestaurantReview, (rev) => rev.restaurant)
-  reviews: RestaurantReview[];
+  reviews: Relation<RestaurantReview[]>;
 
   @OneToMany(() => RestaurantTable, (tbl) => tbl.restaurant)
-  tables: RestaurantTable[];
+  tables: Relation<RestaurantTable[]>;
 
   @OneToMany(() => RestaurantPromotion, (promo) => promo.restaurant)
-  promotions: RestaurantPromotion[];
+  promotions: Relation<RestaurantPromotion[]>;
 
   @OneToMany(() => RestaurantStaff, (staff) => staff.restaurant)
-  staff: RestaurantStaff[];
+  staff: Relation<RestaurantStaff[]>;
 
   // ── Timestamps ──────────────────────────────────────────────────────────────
 

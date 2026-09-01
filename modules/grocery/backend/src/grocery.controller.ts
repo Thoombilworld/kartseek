@@ -16,11 +16,11 @@ import { GroceryItem } from './entities/grocery-item.entity';
 import { FlashDealStatus } from './entities/grocery-flash-deal.entity';
 import { Observable, interval, map, switchMap, startWith, from } from 'rxjs';
 import { Response } from 'express';
-import { EmptyMessage, RpcAwareExceptionsFilter, requireId, requireValue } from '@app/common';
+import { type EmptyMessage, RpcAwareExceptionsFilter, requireId, requireValue } from '@app/common';
 import {
-  StoreMsg, StoreProductMsg, PageMsg, StoreListMsg, SearchMsg, OrderMsg,
-  CustomerOrdersMsg, FlashDealMsg, WishlistMsg, CategoryMsg, FranchiseMsg,
-  AdminIdMsg, AdminListMsg, DtoPayload,
+  type StoreMsg, type StoreProductMsg, PageMsg, type StoreListMsg, type SearchMsg, type OrderMsg,
+  type CustomerOrdersMsg, type FlashDealMsg, type WishlistMsg, type CategoryMsg, type FranchiseMsg,
+  type AdminIdMsg, type AdminListMsg, type DtoPayload,
 } from './transport/rpc-payloads';
 
 /** The caller the gateway attached, in the shape the service expects. */

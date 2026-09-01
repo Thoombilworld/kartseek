@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Hotel } from './hotel.entity';
 import { HotelBooking } from './hotel-booking.entity';
 
@@ -44,7 +45,7 @@ export class HotelRoom {
   @Index()
   @ManyToOne(() => Hotel, (hotel) => hotel.rooms, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'hotel_id' })
-  hotel: Hotel;
+  hotel: Relation<Hotel>;
 
   @Column({ name: 'hotel_id' })
   hotelId: string;
@@ -164,7 +165,7 @@ export class HotelRoom {
   // ── Relations ───────────────────────────────────────────────────────────────
 
   @OneToMany(() => HotelBooking, (booking) => booking.room)
-  bookings: HotelBooking[];
+  bookings: Relation<HotelBooking[]>;
 
   // ── Timestamps ──────────────────────────────────────────────────────────────
 

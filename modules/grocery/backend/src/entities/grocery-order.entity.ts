@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { GroceryStore } from './grocery-store.entity';
 
 export enum GroceryPaymentMethod {
@@ -57,7 +58,7 @@ export class GroceryOrder {
    */
   @ManyToOne(() => GroceryStore, (store) => store.orders, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'storeId' })
-  store: GroceryStore;
+  store: Relation<GroceryStore>;
 
   @Index()
   @Column()

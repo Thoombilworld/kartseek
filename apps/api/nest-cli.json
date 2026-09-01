@@ -3,11 +3,14 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "apps/api-gateway/src",
   "compilerOptions": {
-    "webpack": true,
     "deleteOutDir": true,
-    "builder": "swc",
-    "typeCheck": false,
-    "webpackConfigPath": "webpack.config.js"
+    "builder": {
+      "type": "rspack",
+      "options": {
+        "configPath": "rspack.config.js"
+      }
+    },
+    "typeCheck": false
   },
   "monorepo": true,
   "root": "apps/api-gateway",

@@ -165,5 +165,14 @@
         "./libs/storage/src/*"
       ]
     }
-  }
+  },
+  /**
+   * `vitest.config.mts` is excluded because it is ESM tooling, not application
+   * source: it uses `import.meta`, which this CommonJS `module` setting rejects
+   * with TS1343. Vitest loads it natively and never consults this tsconfig.
+   * The module workspaces avoid this by scoping `include` to `src`; apps/api
+   * has no `include`, so it needs the exclusion stated. `node_modules` and
+   * `dist` are listed to preserve the defaults an explicit `exclude` replaces.
+   */
+  "exclude": ["node_modules", "dist", "vitest.config.mts"]
 }

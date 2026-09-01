@@ -1,6 +1,7 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Prescription } from './prescription.entity';
 
 @Entity('prescription_items')
@@ -13,7 +14,7 @@ export class PrescriptionItem {
 
   @ManyToOne(() => Prescription, (p) => p.items, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'prescriptionId' })
-  prescription: Prescription;
+  prescription: Relation<Prescription>;
 
   @Column({ length: 300 })
   drugName: string;

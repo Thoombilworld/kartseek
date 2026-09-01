@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { GroceryStore } from './grocery-store.entity';
 
 @Entity('grocery_items')
@@ -178,7 +179,7 @@ export class GroceryItem {
 
   @ManyToOne(() => GroceryStore, (store) => store.inventory, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'storeId' })
-  store: GroceryStore;
+  store: Relation<GroceryStore>;
 
   /**
    * Indexed explicitly.

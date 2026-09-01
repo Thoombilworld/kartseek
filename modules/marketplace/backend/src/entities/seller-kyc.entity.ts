@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
 @Entity('seller_kyc')
@@ -12,7 +13,7 @@ export class SellerKyc {
 
   @OneToOne(() => Seller)
   @JoinColumn({ name: 'seller_id' })
-  seller: Seller;
+  seller: Relation<Seller>;
 
   // ── Owner / Business Identity ─────────────────────────────────
   @Column()

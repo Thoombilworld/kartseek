@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { Brand } from './brand.entity';
 
 /**
@@ -16,7 +17,7 @@ export class BrandUpdate {
 
   @ManyToOne(() => Brand, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'brand_id' })
-  brand: Brand;
+  brand: Relation<Brand>;
 
   /** NEW_PRODUCT | OFFER | LAUNCH | ANNOUNCEMENT */
   @Column({ default: 'ANNOUNCEMENT' })
