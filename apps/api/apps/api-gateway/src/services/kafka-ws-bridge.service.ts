@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { KafkaConsumerService } from '@app/kafka';
 import { TrackingGateway } from '../socket.gateway';
 import { FranchiseGateway } from '../gateways/franchise.gateway';

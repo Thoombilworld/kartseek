@@ -1,7 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { type Repository } from 'typeorm';
 import { GroceryService } from './grocery.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';

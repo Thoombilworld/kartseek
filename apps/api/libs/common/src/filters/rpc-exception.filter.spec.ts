@@ -1,10 +1,10 @@
 import { Controller, NotFoundException, BadRequestException, Module, UseFilters } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
-  ClientProxy, ClientProxyFactory, MessagePattern, MicroserviceOptions,
+  ClientProxy, ClientProxyFactory, MessagePattern, type MicroserviceOptions,
   Payload, Transport,
 } from '@nestjs/microservices';
-import { INestApplication } from '@nestjs/common';
+import { type INestApplication } from '@nestjs/common';
 import { lastValueFrom } from 'rxjs';
 import { RpcAwareExceptionsFilter } from './rpc-exception.filter';
 

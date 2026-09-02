@@ -7,7 +7,7 @@
  *     { name: 'AUTH_SERVICE', packageName: 'auth', protoFileName: 'auth.proto' },
  *   ])
  */
-import { DynamicModule, Module, Global } from '@nestjs/common';
+import { type DynamicModule, Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';

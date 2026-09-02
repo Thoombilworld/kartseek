@@ -14,17 +14,17 @@
  */
 import {
   Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
+  type NestInterceptor,
+  type ExecutionContext,
+  type CallHandler,
   Logger,
 } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 import { RecommendationService } from '../services/recommendation.service';
 import {
-  UserActivityEvent,
-  RecommendationModule,
-  ActivityAction,
+  type UserActivityEvent,
+  type RecommendationModule,
+  type ActivityAction,
   ROUTE_MODULE_MAP,
 } from '../services/recommendation.types';
 

@@ -1,5 +1,5 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { DataSource } from 'typeorm';
+import { Test, type TestingModule } from '@nestjs/testing';
+import { type DataSource } from 'typeorm';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { MarketplaceModule } from '../marketplace.module';
 import { ConfigModule } from '@nestjs/config';

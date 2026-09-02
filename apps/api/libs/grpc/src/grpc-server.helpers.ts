@@ -6,7 +6,7 @@
  *   import { createGrpcMicroserviceOptions } from '@app/grpc';
  *   const app = await NestFactory.createMicroservice(MyModule, createGrpcMicroserviceOptions('auth', 'auth.proto', 5001));
  */
-import { GrpcOptions, Transport } from '@nestjs/microservices';
+import { type GrpcOptions, Transport } from '@nestjs/microservices';
 import { join } from 'path';
 
 const DEFAULT_LOADER = {

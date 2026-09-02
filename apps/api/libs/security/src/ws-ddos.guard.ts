@@ -1,7 +1,7 @@
 import {
   Injectable,
-  CanActivate,
-  ExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
   Logger,
 } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';

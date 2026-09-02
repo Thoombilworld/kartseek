@@ -1,4 +1,4 @@
-import { PipeTransform, Injectable } from '@nestjs/common';
+import { type PipeTransform, Injectable } from '@nestjs/common';
 
 /** Hard ceiling for any single page of results. */
 export const MAX_PAGE_SIZE = 100;

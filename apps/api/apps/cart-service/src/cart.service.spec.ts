@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { CartService } from './cart.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';

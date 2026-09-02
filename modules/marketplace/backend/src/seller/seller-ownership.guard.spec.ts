@@ -1,7 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { type ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { SellerOwnershipGuard } from './seller-ownership.guard';
 import { Seller } from '../entities/seller.entity';
 

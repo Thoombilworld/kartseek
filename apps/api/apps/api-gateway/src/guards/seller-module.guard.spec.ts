@@ -1,5 +1,5 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { type Reflector } from '@nestjs/core';
 import { SellerModuleGuard } from './seller-module.guard';
 
 function contextFor(user: any, type: 'http' | 'rpc' = 'http') {

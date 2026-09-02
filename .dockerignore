@@ -1,0 +1,54 @@
+# Build context for the API images is the repository ROOT, not apps/api:
+#
+#   docker build -f apps/api/Dockerfile.prod .
+#
+# The repository has one lockfile, at the root, and installs through npm
+# workspaces, so an image can only run `npm ci` from here. Keep the upload
+# small: the backend images need apps/api, the module backends and every
+# workspace's package.json — nothing else.
+
+# The image runs `npm ci` itself; a host node_modules is dead weight and risks
+# baking host-built native modules into the image.
+node_modules
+**/node_modules
+
+# Build output — the image builds its own.
+dist
+**/dist
+.next
+**/.next
+*.tsbuildinfo
+
+# Never copy real credentials into a layer.
+.env
+.env.*
+!.env.example
+
+# Tests are not built or shipped.
+**/*.spec.ts
+**/*.e2e-spec.ts
+**/__tests__
+coverage
+**/coverage
+
+# Frontends and tooling the backend images never touch. Their package.json
+# files stay in: npm ci reconciles every workspace against the root lock and
+# needs each workspace directory to exist.
+apps/web/**
+!apps/web/package.json
+modules/*/frontend/**
+!modules/*/frontend/package.json
+apps/mcp-server
+packages
+docs
+k8s
+skills
+.claude
+.github
+
+# Local noise
+.git
+*.log
+npm-debug.log*
+.vscode
+.idea

@@ -15,7 +15,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from '@app/database';
 import { GraphQLModule } from '@nestjs/graphql';
-import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { ApolloDriver, type ApolloDriverConfig } from '@nestjs/apollo';
 import { SecurityModule } from '@app/security';
 import { GdprModule } from '@app/gdpr';
 import { RegionModule } from '@app/region';
@@ -202,7 +202,11 @@ const svcHost = (name: string): string =>
     // GraphQL Gateway Module
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: 'schema.gql',
+      // In production the schema stays in memory. As a file it is written
+      // into the working directory at startup, and the container runs as a
+      // non-root user in a root-owned directory, so the gateway died with
+      // EACCES on schema.gql. Development keeps the file for tooling.
+      autoSchemaFile: process.env.NODE_ENV === 'production' ? true : 'schema.gql',
       path: '/graphql',
       playground: process.env.NODE_ENV !== 'production',
       introspection: process.env.NODE_ENV !== 'production',

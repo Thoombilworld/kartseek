@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Body, Query, Param, UseFilters } from '@nestjs/common';
 import { MessagePattern, EventPattern, Payload, Transport } from '@nestjs/microservices';
-import { SearchService, SearchableModule, SearchFilters } from './search.service';
+import { SearchService, SearchableModule, type SearchFilters } from './search.service';
 import { RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)

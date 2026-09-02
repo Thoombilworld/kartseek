@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { AuditLogService } from './audit-log.service';
 import { AuditLog } from './schemas/audit-log.schema';

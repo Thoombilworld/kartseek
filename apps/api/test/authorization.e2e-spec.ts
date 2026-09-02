@@ -6,7 +6,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../apps/api-gateway/src/app.module';
 

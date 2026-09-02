@@ -6,7 +6,7 @@ import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Franchise } from './entities/franchise.entity';
-import { REGION_CONFIGS, SupportedCountryCode } from '@app/region';
+import { REGION_CONFIGS, type SupportedCountryCode } from '@app/region';
 
 /**
  * FranchiseService

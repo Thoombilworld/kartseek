@@ -1,8 +1,8 @@
-import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
+import { Injectable, type NestMiddleware, Logger } from '@nestjs/common';
+import { type Request, type Response, type NextFunction } from 'express';
 import { RegionService } from './region.service';
 import { REGION_HEADER } from './region.decorator';
-import { SupportedCountryCode } from './region.types';
+import { type SupportedCountryCode } from './region.types';
 import { isActiveRegion, DEFAULT_REGION } from './region.config';
 
 // Extend Express Request with region data

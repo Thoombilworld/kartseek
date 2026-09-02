@@ -3,7 +3,7 @@
  * Auto-aligned with .proto definitions in /proto/*.proto
  * Use these types when injecting gRPC clients with @GrpcService decorators.
  */
-import { Observable } from 'rxjs';
+import { type Observable } from 'rxjs';
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 

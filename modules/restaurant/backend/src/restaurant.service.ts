@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike, In, SelectQueryBuilder, ObjectLiteral } from 'typeorm';
+import { Repository, ILike, In, SelectQueryBuilder, type ObjectLiteral } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 

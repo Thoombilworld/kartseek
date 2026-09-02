@@ -1,4 +1,4 @@
-import { Module, Global, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { Module, Global, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { RedisModule } from '@app/redis';
 import { RegionService } from './region.service';
 import { RegionMiddleware } from './region.middleware';

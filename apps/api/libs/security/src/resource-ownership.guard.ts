@@ -1,9 +1,9 @@
 import {
-  Injectable, CanActivate, ExecutionContext,
+  Injectable, type CanActivate, type ExecutionContext,
   ForbiddenException, Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { RESOURCE_OWNER_KEY, ResourceOwnerOptions } from './resource-owner.decorator';
+import { RESOURCE_OWNER_KEY, type ResourceOwnerOptions } from './resource-owner.decorator';
 
 /**
  * ResourceOwnershipGuard — IDOR Protection Guard

@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
 import { ReportServiceModule } from './report-service.module';
 import { validateDatabaseConfig } from '@app/database';
 

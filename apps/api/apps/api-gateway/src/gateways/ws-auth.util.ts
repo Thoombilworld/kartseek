@@ -11,7 +11,7 @@
  *   // or
  *   const socket = io('/chat?token=<jwt>');
  */
-import { Socket } from 'socket.io';
+import { type Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 

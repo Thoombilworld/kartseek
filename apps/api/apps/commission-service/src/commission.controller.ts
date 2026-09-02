@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { CommissionService, CommissionRecord, CategoryRate, CommissionRate, SellerOverride } from './commission.service';
+import { CommissionService, type CommissionRecord, type CategoryRate, type CommissionRate, type SellerOverride } from './commission.service';
 import { RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)

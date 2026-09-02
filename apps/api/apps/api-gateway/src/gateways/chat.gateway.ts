@@ -2,8 +2,8 @@ import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
+  type OnGatewayConnection,
+  type OnGatewayDisconnect,
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
@@ -11,7 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { WsDdosGuard } from '@app/security';
-import { authenticateWsClient, WsUser } from './ws-auth.util';
+import { authenticateWsClient, type WsUser } from './ws-auth.util';
 import { WsTrackingGrantService } from '../services/ws-tracking-grant.service';
 import { SellerOwnershipService } from '../services/seller-ownership.service';
 

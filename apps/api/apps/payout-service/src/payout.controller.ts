@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Param, Body, Query, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload, EventPattern } from '@nestjs/microservices';
-import { PayoutService, PayoutRecord } from './payout.service';
+import { PayoutService, type PayoutRecord } from './payout.service';
 import { type EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)

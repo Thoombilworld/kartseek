@@ -1,5 +1,5 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
-import { ClientGrpc } from '@nestjs/microservices';
+import { Inject, Injectable, Logger, type OnModuleInit, Optional } from '@nestjs/common';
+import { type ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, Observable, timeout } from 'rxjs';
 
 /**

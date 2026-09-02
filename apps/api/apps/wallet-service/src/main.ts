@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
 // `WalletModule`, not `WalletServiceModule`. Two modules of the same shape exist
 // here; only this one registers the database. Booting the other one threw
 // `Nest can't resolve dependencies of the WalletService (…, ?)` for

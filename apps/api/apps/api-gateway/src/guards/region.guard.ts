@@ -1,7 +1,7 @@
 import {
   Injectable,
-  CanActivate,
-  ExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';

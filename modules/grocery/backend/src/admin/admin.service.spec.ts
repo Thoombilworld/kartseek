@@ -5,9 +5,9 @@
 // answered 503 for the entire super-admin grocery section.
 // ══════════════════════════════════════════════════════════════════════════
 
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { type Repository } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GroceryAdminService } from './admin.service';
 import { RedisService } from '@app/redis';

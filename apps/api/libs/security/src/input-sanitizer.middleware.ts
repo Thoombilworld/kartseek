@@ -1,9 +1,9 @@
 import {
   Injectable,
-  NestMiddleware,
+  type NestMiddleware,
   Logger,
 } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 
 /**
  * InputSanitizerMiddleware — Deep-scan and neutralize injection patterns.

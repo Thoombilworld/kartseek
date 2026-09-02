@@ -3,7 +3,7 @@
  * Provides a singleton RedisService wrapping ioredis.
  * Import { RedisModule } or RedisModule.register({ keyPrefix }) into any microservice.
  */
-import { DynamicModule, Module, Global } from '@nestjs/common';
+import { type DynamicModule, Module, Global } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { RedisService } from './redis.service';
 

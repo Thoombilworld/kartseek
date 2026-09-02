@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, type CanActivate, type ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { REGION_REQUIRED_KEY, BYPASS_REGION_KEY } from './region.decorator';
 import { isActiveRegion, ACTIVE_REGION_CODES } from './region.config';

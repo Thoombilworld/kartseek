@@ -14,17 +14,17 @@
  *  - Collaborative filtering: "users who X also Y" via Redis sorted sets
  *  - Regional popularity: trending items in the user's region
  */
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import {
-  UserActivityEvent,
-  UserRecommendationProfile,
-  Recommendation,
-  RecommendationSet,
-  RecommendationModule,
-  RecommendationReason,
-  CachedEntityMetadata,
+  type UserActivityEvent,
+  type UserRecommendationProfile,
+  type Recommendation,
+  type RecommendationSet,
+  type RecommendationModule,
+  type RecommendationReason,
+  type CachedEntityMetadata,
   ACTION_WEIGHT,
   ALL_RECOMMENDATION_MODULES,
 } from './recommendation.types';

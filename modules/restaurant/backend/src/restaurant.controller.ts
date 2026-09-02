@@ -3,7 +3,7 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RestaurantService } from './restaurant.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
 import { RestaurantOrderStatus, ReservationStatus } from './entities';
-import { type DtoMessage, type EmptyMessage, IdMessage, PaginatedMessage, type RestaurantScopedMessage, RpcAwareExceptionsFilter, messageId, requireId, requireValue } from '@app/common';
+import { type DtoMessage, type EmptyMessage, type IdMessage, type PaginatedMessage, type RestaurantScopedMessage, RpcAwareExceptionsFilter, messageId, requireId, requireValue } from '@app/common';
 
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('restaurants')

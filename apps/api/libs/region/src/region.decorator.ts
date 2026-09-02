@@ -1,5 +1,5 @@
-import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
-import { SupportedCountryCode } from './region.types';
+import { createParamDecorator, type ExecutionContext, SetMetadata } from '@nestjs/common';
+import { type SupportedCountryCode } from './region.types';
 
 /**
  * Custom header name used to identify the client's operational region.

@@ -1,4 +1,4 @@
-import { ArgumentsHost, Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { type ArgumentsHost, Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Observable, throwError } from 'rxjs';
 import { AllExceptionsFilter } from './http-exception.filter';
 import { BusinessException } from '../exceptions/business.exception';

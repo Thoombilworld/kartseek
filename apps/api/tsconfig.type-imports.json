@@ -1,0 +1,7 @@
+{
+  // Used only by scripts/check-type-imports.js. verbatimModuleSyntax cannot
+  // live in tsconfig.json (it forbids ESM syntax in CommonJS output), so it
+  // sits here and the script keeps only the TS1484/TS1205 errors it wants.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "verbatimModuleSyntax": true }
+}

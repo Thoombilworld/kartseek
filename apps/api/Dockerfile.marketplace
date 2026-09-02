@@ -1,77 +1,75 @@
-# ══════════════════════════════════════════════════════════════════════════════
-# KARTSEEK — Marketplace Service (standalone container)
+# syntax=docker/dockerfile:1
 #
-# Build:
-#   docker build -f apps/api/Dockerfile.marketplace \
-#     -t kartseek/marketplace-service:2.1.0 apps/api
+# Marketplace service image. Build from the repository ROOT:
 #
-# Run:
-#   docker run --rm \
-#     -e DB_HOST=host.docker.internal \
-#     -e MARKETPLACE_DB_HOST=host.docker.internal \
-#     -e MARKETPLACE_DB_PORT=5433 \
-#     -e MARKETPLACE_DB_NAME=kartseek_marketplace \
-#     -e MARKETPLACE_DB_USER=marketplace_user \
-#     -e MARKETPLACE_DB_PASSWORD=marketplace_secret \
-#     -p 3012:3012 -p 5006:5006 -p 4002:4002 \
-#     kartseek/marketplace-service:2.1.0
-# ══════════════════════════════════════════════════════════════════════════════
+#   docker build -f apps/api/Dockerfile.marketplace -t kartseek/marketplace-service:2.0.0 .
+#
+# The service lives in modules/marketplace/backend and builds against the
+# platform libraries in apps/api/libs through the shared rspack config, so the
+# builder needs both trees. Root context for the same reason as the other API
+# images: one lockfile, at the root, installed through npm workspaces.
 
-# ── Stage 1: Build ────────────────────────────────────────────────────────────
-# Node 25 to match the root package.json `engines` constraint (>=25.0.0).
-FROM node:25-alpine AS builder
+FROM node:25-alpine AS deps
+WORKDIR /repo
 
-WORKDIR /app
+# The root lockfile and every workspace manifest — npm ci reconciles the whole
+# workspace tree against the lock, so each workspace directory must exist.
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY modules/doctor/backend/package.json modules/doctor/backend/
+COPY modules/doctor/frontend/package.json modules/doctor/frontend/
+COPY modules/franchise/backend/package.json modules/franchise/backend/
+COPY modules/franchise/frontend/package.json modules/franchise/frontend/
+COPY modules/grocery/backend/package.json modules/grocery/backend/
+COPY modules/grocery/frontend/package.json modules/grocery/frontend/
+COPY modules/hotel/backend/package.json modules/hotel/backend/
+COPY modules/hotel/frontend/package.json modules/hotel/frontend/
+COPY modules/marketplace/backend/package.json modules/marketplace/backend/
+COPY modules/marketplace/frontend/package.json modules/marketplace/frontend/
+COPY modules/pharmacy/backend/package.json modules/pharmacy/backend/
+COPY modules/pharmacy/frontend/package.json modules/pharmacy/frontend/
+COPY modules/restaurant/backend/package.json modules/restaurant/backend/
+COPY modules/restaurant/frontend/package.json modules/restaurant/frontend/
+COPY modules/taxi/backend/package.json modules/taxi/backend/
+COPY modules/taxi/frontend/package.json modules/taxi/frontend/
+RUN npm ci --workspace=modules/marketplace/backend --include-workspace-root
 
-# Install dependencies first (maximise layer cache)
-COPY package*.json ./
-RUN npm ci --ignore-scripts
+# ── Build ────────────────────────────────────────────────────────────────────
+FROM deps AS builder
+# apps/api supplies libs/, rspack.config.js, tsconfig.json and proto/; the
+# module's nest-cli.json copies the protos into dist/proto as build assets.
+COPY apps/api ./apps/api
+COPY modules/marketplace/backend ./modules/marketplace/backend
+RUN cd modules/marketplace/backend && npx nest build
 
-# Copy source, shared libs, and build config
-COPY tsconfig.json nest-cli.json webpack.config.js ./
-COPY libs/ ./libs/
-COPY apps/marketplace-service/ ./apps/marketplace-service/
-# Proto files needed for gRPC controller
-COPY proto/ ./proto/
+# ── Production dependencies ─────────────────────────────────────────────────
+FROM deps AS prod-deps
+RUN npm ci --workspace=modules/marketplace/backend --include-workspace-root --omit=dev \
+  && mkdir -p modules/marketplace/backend/node_modules
 
-# Build only the marketplace-service target
-RUN npx nest build marketplace-service
-
-# ── Stage 2: Production dependencies ──────────────────────────────────────────
-# Installed separately so the runtime image never inherits dev dependencies from
-# the builder. Without this the image carries the full dev tree for all 26 Nest
-# apps (~1.2 GB) instead of just what marketplace-service needs at runtime.
-FROM node:25-alpine AS prod-deps
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
-
-# ── Stage 3: Production runtime ───────────────────────────────────────────────
+# ── Runtime ──────────────────────────────────────────────────────────────────
 FROM node:25-alpine AS runner
-
-# Security: run as non-root
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nestjs
 
-WORKDIR /app
+WORKDIR /repo/modules/marketplace/backend
+ENV NODE_ENV=production
+ENV MARKETPLACE_SERVICE_PORT=3012
+ENV MARKETPLACE_TCP_PORT=4002
+ENV MARKETPLACE_GRPC_PORT=5006
 
-# Copy only what's needed at runtime
-COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
-COPY --from=prod-deps --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
-# Proto files are needed at runtime for gRPC reflection
-COPY --from=builder --chown=nestjs:nodejs /app/proto ./proto
+COPY --from=prod-deps --chown=nestjs:nodejs /repo/node_modules /repo/node_modules
+COPY --from=prod-deps --chown=nestjs:nodejs /repo/modules/marketplace/backend/node_modules ./node_modules
+COPY --from=builder   --chown=nestjs:nodejs /repo/modules/marketplace/backend/dist ./dist
+COPY --from=builder   --chown=nestjs:nodejs /repo/modules/marketplace/backend/package.json ./package.json
 
 USER nestjs
 
-# HTTP | gRPC | TCP
-EXPOSE 3012 5006 4002
-
-ENV NODE_ENV=production
-
+# The service is consumed over TCP and gRPC. Its HTTP listener binds to
+# loopback and exists for the health check only, so it is not exposed.
+EXPOSE 4002 5006
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://localhost:3012/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3012/health || exit 1
 
-CMD ["node", "dist/apps/marketplace-service/src/main"]
+CMD ["node", "dist/main.js"]

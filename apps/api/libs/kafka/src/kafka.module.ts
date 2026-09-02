@@ -7,9 +7,9 @@
  * Each token in the array becomes an injectable ClientKafka.
  * Inject them via @Inject('ORDER_SERVICE') private client: ClientKafka.
  */
-import { DynamicModule, Module, Global } from '@nestjs/common';
+import { type DynamicModule, Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport, KafkaOptions } from '@nestjs/microservices';
+import { ClientsModule, Transport, type KafkaOptions } from '@nestjs/microservices';
 import { Partitioners } from 'kafkajs';
 import { KafkaProducerService } from './kafka-producer.service';
 

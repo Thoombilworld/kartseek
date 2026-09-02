@@ -1,4 +1,4 @@
-import { RegionConfig, SupportedCountryCode } from './region.types';
+import { type RegionConfig, type SupportedCountryCode } from './region.types';
 
 /**
  * KARTSEEK Operational Regions Registry

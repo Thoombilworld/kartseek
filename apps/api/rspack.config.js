@@ -15,24 +15,28 @@
  *
  *   The CLI hands rspack `builtin:swc-loader` where webpack got the TypeScript
  *   loader, so the block that forced that loader into `transpileOnly` is gone —
- *   there is nothing left in the pipeline for it to match. Type-checking is
- *   still done separately by `tsc --noEmit`, matching the `typeCheck: false`
- *   already declared in nest-cli.json.
+ *   there is nothing left in the pipeline for it to match. The builder still
+ *   type-checks: the CLI injects fork-ts-checker-webpack-plugin into every
+ *   rspack build (node_modules/@nestjs/cli/lib/compiler/defaults/rspack-defaults.js),
+ *   so a type error fails the build — nest-cli.json's `typeCheck: false` is
+ *   read only by the swc builder. `tsc --noEmit` remains the gate for what a
+ *   given build does not reach.
  *
  *   `webpack.DefinePlugin` became `rspack.DefinePlugin`; same semantics.
  *
- *   The `@app/*` aliases stay explicit. rspack passes `resolve.tsConfig` and
- *   can read path mappings from tsconfig, but the base tsconfig here
- *   deliberately has no `baseUrl` (it triggered a TS6 `ignoreDeprecations`
- *   conflict), so there are no mappings for it to read.
+ *   The `@app/*` aliases stay explicit even though apps/api/tsconfig.json
+ *   declares `paths` for them and the CLI passes `resolve.tsConfig`: the
+ *   eight module backends build with their own tsconfig, and these aliases
+ *   resolve to apps/api/libs from any of them without depending on each
+ *   workspace's `paths` staying in step. Verified on all 26 builds.
  */
 module.exports = function (options) {
   const path = require('path');
   const rspack = require('@rspack/core');
   const nodeExternals = require('webpack-node-externals');
-  // Resolve @app/* monorepo lib aliases explicitly. The base tsconfig no longer
-  // sets `baseUrl` (it triggered a TS6/ts-loader `ignoreDeprecations` conflict),
-  // so webpack's TsconfigPaths resolution needs these aliases to find the libs.
+  // Resolve @app/* explicitly; see the note above on why these stay alongside
+  // the tsconfig `paths`. `baseUrl` is deliberately absent: TypeScript 6
+  // deprecates it and `tsc --noEmit` rejects it.
   const appLibs = ['common', 'database', 'guards', 'decorators', 'validators', 'dto', 'events', 'logger', 'security', 'grpc', 'kafka', 'redis', 'gdpr', 'region', 'storage'];
   const appAliases = Object.fromEntries(appLibs.map((l) => [`@app/${l}`, path.resolve(__dirname, `libs/${l}/src`)]));
   return {
@@ -88,7 +92,7 @@ module.exports = function (options) {
        * only recognises `apps/api/node_modules`. That was harmless while every
        * Nest package sat there. It stopped being harmless when @nestjs/core and
        * @nestjs/common moved to the root as direct devDependencies (the fix for
-       * the duplicate-core problem): webpack no longer recognised them as
+       * the duplicate-core problem): the builder no longer recognised them as
        * externals and bundled them, while the six packages still nested here —
        * apollo, graphql, microservices, platform-express, swagger, testing —
        * stayed external and loaded their own copy of @nestjs/core from disk.

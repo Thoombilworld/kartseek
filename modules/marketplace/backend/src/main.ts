@@ -1,6 +1,6 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
 import { MarketplaceModule } from './marketplace.module';
 import { createGrpcMicroserviceOptions } from '@app/grpc';
 import { InternalServiceGuard } from '@app/security';

@@ -1,5 +1,5 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
-import { Request } from 'express';
+import { Injectable, type CanActivate, type ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
+import { type Request } from 'express';
 
 const INTERNAL_KEY_HEADER = 'x-internal-api-key';
 

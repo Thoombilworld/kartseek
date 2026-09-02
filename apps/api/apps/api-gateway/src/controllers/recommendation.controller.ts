@@ -30,8 +30,8 @@ import { JwtAuthGuard } from '@app/security';
 import { Public } from '../decorators/public.decorator';
 import { RecommendationService } from '../services/recommendation.service';
 import {
-  RecommendationModule,
-  RecommendationSet,
+  type RecommendationModule,
+  type RecommendationSet,
   ALL_RECOMMENDATION_MODULES,
 } from '../services/recommendation.types';
 

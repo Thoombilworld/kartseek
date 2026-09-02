@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import {
-  PaymentGatewayAdapter,
-  InitiateParams, GatewayInitiateResult,
-  VerifyParams, GatewayVerifyResult,
-  RefundParams, GatewayRefundResult,
-  PreAuthParams, GatewayPreAuthResult,
-  CaptureParams, GatewayCaptureResult,
-  GatewayStatusResult,
+  type PaymentGatewayAdapter,
+  type InitiateParams, type GatewayInitiateResult,
+  type VerifyParams, type GatewayVerifyResult,
+  type RefundParams, type GatewayRefundResult,
+  type PreAuthParams, type GatewayPreAuthResult,
+  type CaptureParams, type GatewayCaptureResult,
+  type GatewayStatusResult,
 } from './gateway-adapter.interface';
 
 /**

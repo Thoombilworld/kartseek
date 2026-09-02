@@ -1,12 +1,12 @@
 import {
-  ExceptionFilter,
+  type ExceptionFilter,
   Catch,
-  ArgumentsHost,
+  type ArgumentsHost,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { type Request, type Response } from 'express';
 import { RpcException } from '@nestjs/microservices';
 import { BusinessException } from '../exceptions/business.exception';
 

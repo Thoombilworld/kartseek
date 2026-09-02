@@ -21,7 +21,7 @@ import { DeliveryAssignment } from './entities/delivery-assignment.entity';
 import { ProductAttribute } from './entities/product-attribute.entity';
 import { MarketplaceNotification } from './entities/marketplace-notification.entity';
 import { GiftCard, GiftCardStatus } from './entities/gift-card.entity';
-import { ProductFilter, DataList } from './types/marketplace.types';
+import { type ProductFilter, type DataList } from './types/marketplace.types';
 import { PUBLIC_SELLER_FIELDS, publicSellerColumns } from './entities/seller.public-fields';
 import { CatalogService } from './catalog/catalog.service';
 import { MarketplaceHomeCacheService } from './catalog/home-cache.service';

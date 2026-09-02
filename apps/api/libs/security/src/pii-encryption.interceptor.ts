@@ -1,5 +1,5 @@
 import {
-  Injectable, NestInterceptor, ExecutionContext, CallHandler,
+  Injectable, type NestInterceptor, type ExecutionContext, type CallHandler,
   SetMetadata, Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';

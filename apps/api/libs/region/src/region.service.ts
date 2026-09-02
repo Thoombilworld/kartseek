@@ -2,10 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import * as geoip from 'geoip-lite';
 import {
-  SupportedCountryCode,
-  RegionConfig,
-  RegionDetectionResult,
-  RegionStats
+  type SupportedCountryCode,
+  type RegionConfig,
+  type RegionDetectionResult,
+  type RegionStats
 } from './region.types';
 import {
   REGION_CONFIGS,

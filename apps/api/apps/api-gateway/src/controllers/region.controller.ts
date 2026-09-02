@@ -6,7 +6,7 @@ import {
   ApiQuery,
   ApiParam
 } from '@nestjs/swagger';
-import { Request } from 'express';
+import { type Request } from 'express';
 import { RegionService, Region, BypassRegion } from '@app/region';
 import { IndiaPinCodeService } from '@app/region/india-pincode.service';
 import { JwtAuthGuard } from '@app/security';

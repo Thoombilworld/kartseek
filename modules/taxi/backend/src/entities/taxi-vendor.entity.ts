@@ -90,7 +90,7 @@ export class TaxiVendorEntity {
   // Documents are polymorphic (see TaxiDocumentEntity): loaded by
   // { ownerType, ownerId } rather than through a relation, so this is a
   // plain in-memory field the service populates — not a mapped column.
-  documents?: Relation<TaxiDocumentEntity[]>;
+  documents?: TaxiDocumentEntity[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

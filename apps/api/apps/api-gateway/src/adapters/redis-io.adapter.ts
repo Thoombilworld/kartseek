@@ -13,8 +13,8 @@
  *   app.useWebSocketAdapter(adapter);
  */
 import { IoAdapter } from '@nestjs/platform-socket.io';
-import { INestApplication, Logger } from '@nestjs/common';
-import { ServerOptions } from 'socket.io';
+import { type INestApplication, Logger } from '@nestjs/common';
+import { type ServerOptions } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
 

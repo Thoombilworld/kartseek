@@ -1,6 +1,6 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityTarget, Repository, TreeRepository, ILike, In, IsNull, MoreThanOrEqual, SelectQueryBuilder } from 'typeorm';
+import { type EntityTarget, Repository, TreeRepository, ILike, In, IsNull, MoreThanOrEqual, SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
@@ -14,7 +14,7 @@ import { ProductAttribute } from '../entities/product-attribute.entity';
 import { FlashDealNomination } from '../entities/flash-deal.entity';
 import { MarketplaceFulfillmentService } from '../fulfillment/fulfillment.service';
 import { PUBLIC_SELLER_FIELDS, INVOICE_SELLER_FIELDS } from '../entities/seller.public-fields';
-import { ProductFilter } from '../types/marketplace.types';
+import { type ProductFilter } from '../types/marketplace.types';
 
 /**
  * CatalogService — public, read-only view of the Marketplace catalogue.

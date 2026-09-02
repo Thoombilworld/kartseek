@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, Controller, Get, UseGuards, Param } from '@nestjs/common';
+import { type INestApplication, Controller, Get, UseGuards, Param } from '@nestjs/common';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import request from 'supertest';

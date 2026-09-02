@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PaymentMethodConfig } from '../entities/payment-method-config.entity';
-import { PaymentGatewayAdapter } from './gateway-adapter.interface';
+import { type PaymentGatewayAdapter } from './gateway-adapter.interface';
 import { RazorpayAdapter } from './razorpay.adapter';
 import { StripeAdapter } from './stripe.adapter';
 import { UpiAdapter } from './upi.adapter';

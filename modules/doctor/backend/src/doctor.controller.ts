@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Param, Body, Query, UseFilters } from '@nes
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DoctorService } from './doctor.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
-import { DtoMessage, type EmptyMessage, PaginatedMessage, RpcAwareExceptionsFilter, requireId } from '@app/common';
+import { type DtoMessage, type EmptyMessage, type PaginatedMessage, RpcAwareExceptionsFilter, requireId } from '@app/common';
 import {
   CreateAppointmentDto, UpdateAppointmentStatusDto, AdvanceTokenDto,
   UpdateDoctorStatusDto, UpdateHospitalStatusDto, UpdateClinicStatusDto,

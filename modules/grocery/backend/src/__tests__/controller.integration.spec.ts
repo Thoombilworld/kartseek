@@ -4,8 +4,8 @@
 // request → service → response chain for all grocery endpoints.
 // ══════════════════════════════════════════════════════════════════════════
 
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { Test, type TestingModule } from '@nestjs/testing';
+import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { GroceryController } from '../grocery.controller';
 import { GroceryService } from '../grocery.service';

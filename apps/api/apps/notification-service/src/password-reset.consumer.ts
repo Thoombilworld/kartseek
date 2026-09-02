@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
 import { Kafka, type Consumer } from 'kafkajs';
 import { KAFKA_TOPICS } from '@app/kafka';
 import { NotificationService } from './notification.service';

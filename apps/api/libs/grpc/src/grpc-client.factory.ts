@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientOptions, Transport, GrpcOptions } from '@nestjs/microservices';
+import { type ClientOptions, Transport, type GrpcOptions } from '@nestjs/microservices';
 import { join } from 'path';
 
 /** Default proto loader options for all KARTSEEK gRPC clients. */

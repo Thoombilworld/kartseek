@@ -1,4 +1,4 @@
-import { DEFAULT_REGION, isActiveRegion, SupportedCountryCode } from '@app/region';
+import { DEFAULT_REGION, isActiveRegion, type SupportedCountryCode } from '@app/region';
 
 /**
  * The trading market a request belongs to.

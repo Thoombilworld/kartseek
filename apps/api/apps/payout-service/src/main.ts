@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
 // `PayoutModule`, not `PayoutServiceModule` — see the note in wallet-service's
 // main.ts. The other module registers no database, so booting it threw on
 // `SellerWalletRepository` and payout-service never came up.

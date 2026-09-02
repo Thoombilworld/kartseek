@@ -1,9 +1,9 @@
 import {
-  Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy,
+  Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy,
 } from '@nestjs/common';
 import { Inject, Optional } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
-import { Kafka, Consumer } from 'kafkajs';
+import { Kafka, type Consumer } from 'kafkajs';
 
 export interface KafkaEventHandler {
   topic: string;
