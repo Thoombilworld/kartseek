@@ -110,3 +110,6 @@ scratch/
 /packages/Newtonsoft.Json.*/
 *.nupkg
 *.snupkg
+
+# Git Bash crash dumps (bash.exe.stackdump) — never source.
+*.stackdump
