@@ -33,7 +33,12 @@ COPY modules/restaurant/backend/package.json modules/restaurant/backend/
 COPY modules/restaurant/frontend/package.json modules/restaurant/frontend/
 COPY modules/taxi/backend/package.json modules/taxi/backend/
 COPY modules/taxi/frontend/package.json modules/taxi/frontend/
-RUN npm ci --workspace=modules/marketplace/backend --include-workspace-root
+# apps/api is installed as well: the module compiles the platform libraries in
+# apps/api/libs into its bundle, and their imports (@nestjs/schedule, and the
+# rest of the platform set) are declared by apps/api, not by the module. On a
+# developer machine hoisting hides that; in an image it is a build failure —
+# "Can't resolve '@nestjs/schedule' in apps/api/libs/security/src".
+RUN npm ci --workspace=modules/marketplace/backend --workspace=apps/api --include-workspace-root
 
 # ── Build ────────────────────────────────────────────────────────────────────
 FROM deps AS builder
@@ -45,7 +50,9 @@ RUN cd modules/marketplace/backend && npx nest build
 
 # ── Production dependencies ─────────────────────────────────────────────────
 FROM deps AS prod-deps
-RUN npm ci --workspace=modules/marketplace/backend --include-workspace-root --omit=dev \
+# Same two workspaces at runtime: the bundle requires the platform libraries'
+# dependencies from node_modules rather than inlining them.
+RUN npm ci --workspace=modules/marketplace/backend --workspace=apps/api --include-workspace-root --omit=dev \
   && mkdir -p modules/marketplace/backend/node_modules
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -63,6 +70,11 @@ COPY --from=prod-deps --chown=nestjs:nodejs /repo/node_modules /repo/node_module
 COPY --from=prod-deps --chown=nestjs:nodejs /repo/modules/marketplace/backend/node_modules ./node_modules
 COPY --from=builder   --chown=nestjs:nodejs /repo/modules/marketplace/backend/dist ./dist
 COPY --from=builder   --chown=nestjs:nodejs /repo/modules/marketplace/backend/package.json ./package.json
+# The gRPC server loads proto/marketplace.proto relative to the working
+# directory (createGrpcMicroserviceOptions in @app/grpc), not from dist/proto
+# where the build assets land. Without this the service dies after the TCP
+# transport starts: "file at .../proto/marketplace.proto not found".
+COPY --from=builder   --chown=nestjs:nodejs /repo/modules/marketplace/backend/proto ./proto
 
 USER nestjs
 
