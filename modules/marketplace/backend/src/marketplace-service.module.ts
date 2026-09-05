@@ -184,4 +184,4 @@ const ENTITIES = [
     SellerService,
   ],
 })
-export class MarketplaceModule {}
+export class MarketplaceServiceModule {}

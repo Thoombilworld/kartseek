@@ -80,4 +80,4 @@ const envSchema = buildEnvSchema({
   controllers: [FranchiseController],
   providers: [FranchiseService],
 })
-export class FranchiseModule {}
+export class FranchiseServiceModule {}

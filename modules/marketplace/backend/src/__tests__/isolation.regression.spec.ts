@@ -8,7 +8,7 @@ import * as path from 'path';
  * database or NestJS application context.  They verify:
  *
  *   1. No source file inside marketplace-service imports from another service.
- *   2. The ENTITIES array in marketplace.module.ts matches the entity files on disk.
+ *   2. The ENTITIES array in marketplace-service.module.ts matches the entity files on disk.
  *   3. The TypeORM config reads MARKETPLACE_DB_* env vars for dedicated DB support.
  */
 
@@ -101,12 +101,12 @@ describe('Marketplace Module Isolation (Regression)', () => {
 
   // ── Test 2: Entity completeness ─────────────────────────────────────────────
   describe('Entity completeness', () => {
-    it('every .entity.ts file should be referenced in marketplace.module.ts', () => {
+    it('every .entity.ts file should be referenced in marketplace-service.module.ts', () => {
       const entityFiles = collectEntityFiles();
       expect(entityFiles.length).toBeGreaterThan(0);
 
       const moduleSource = fs.readFileSync(
-        path.join(MARKETPLACE_SRC, 'marketplace.module.ts'),
+        path.join(MARKETPLACE_SRC, 'marketplace-service.module.ts'),
         'utf-8',
       );
 
@@ -118,7 +118,7 @@ describe('Marketplace Module Isolation (Regression)', () => {
 
       if (unregistered.length > 0) {
         throw new Error(
-          `Entity files not imported in marketplace.module.ts: ${unregistered.join(', ')}\n` +
+          `Entity files not imported in marketplace-service.module.ts: ${unregistered.join(', ')}\n` +
             `Every entity must be explicitly imported and added to the ENTITIES array.`,
         );
       }
@@ -133,7 +133,7 @@ describe('Marketplace Module Isolation (Regression)', () => {
 
     beforeAll(() => {
       moduleSource = fs.readFileSync(
-        path.join(MARKETPLACE_SRC, 'marketplace.module.ts'),
+        path.join(MARKETPLACE_SRC, 'marketplace-service.module.ts'),
         'utf-8',
       );
     });

@@ -126,4 +126,4 @@ const envSchema = buildEnvSchema({
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
-export class GroceryModule {}
+export class GroceryServiceModule {}

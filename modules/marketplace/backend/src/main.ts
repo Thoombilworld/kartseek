@@ -1,13 +1,13 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
-import { MarketplaceModule } from './marketplace.module';
+import { MarketplaceServiceModule } from './marketplace-service.module';
 import { createGrpcMicroserviceOptions } from '@app/grpc';
 import { InternalServiceGuard } from '@app/security';
 import { HttpSurfaceGuard } from './transport/http-surface.guard';
 
 async function bootstrap() {
-  const app = await NestFactory.create(MarketplaceModule);
+  const app = await NestFactory.create(MarketplaceServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   // NOTE: exceptions from TCP/gRPC handlers are shaped by RpcAwareExceptionsFilter,
   // bound with @UseFilters on each controller that owns message handlers. It cannot

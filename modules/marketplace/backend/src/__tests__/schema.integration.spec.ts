@@ -1,7 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { type DataSource } from 'typeorm';
 import { getDataSourceToken } from '@nestjs/typeorm';
-import { MarketplaceModule } from '../marketplace.module';
+import { MarketplaceServiceModule } from '../marketplace-service.module';
 import { ConfigModule } from '@nestjs/config';
 
 describe('Marketplace Schema Isolation (Integration)', () => {
@@ -13,13 +13,13 @@ describe('Marketplace Schema Isolation (Integration)', () => {
       imports: [
         // Ensure env variables don't prevent testing
         ConfigModule.forRoot({ ignoreEnvFile: true, isGlobal: true }),
-        MarketplaceModule,
+        MarketplaceServiceModule,
       ],
     }).compile();
 
     dataSource = moduleRef.get<DataSource>(getDataSourceToken());
     // Jest's default 5s hook timeout is not enough to stand the whole module up:
-    // this compiles MarketplaceModule for real, which opens Postgres, Redis and
+    // this compiles MarketplaceServiceModule for real, which opens Postgres, Redis and
     // Kafka connections. It fits comfortably when the spec runs alone and does
     // not when the rest of the suite is competing for the same database, so the
     // suite failed intermittently on a spec that was doing nothing wrong.

@@ -1,14 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
-import { HotelModule } from './hotel.module';
+import { HotelServiceModule } from './hotel-service.module';
 import { validateDatabaseConfig } from '@app/database';
 
 async function bootstrap() {
   // Fail fast if DB_SYNCHRONIZE=true: these services share one PostgreSQL
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
-  const app = await NestFactory.create(HotelModule);
+  const app = await NestFactory.create(HotelServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 

@@ -51,11 +51,11 @@ const EXPECTED_ENTITIES = [
 describe('Marketplace entity registration', () => {
 
   describe('Entity/Table Registration', () => {
-    it(`should have all ${EXPECTED_ENTITIES.length} entities registered in marketplace.module.ts`, () => {
+    it(`should have all ${EXPECTED_ENTITIES.length} entities registered in marketplace-service.module.ts`, () => {
       const fs = require('fs');
       const path = require('path');
       const moduleSource = fs.readFileSync(
-        path.resolve(__dirname, '..', 'marketplace.module.ts'),
+        path.resolve(__dirname, '..', 'marketplace-service.module.ts'),
         'utf-8',
       );
 
@@ -68,7 +68,7 @@ describe('Marketplace entity registration', () => {
       }
 
       if (missingEntities.length > 0) {
-        throw new Error(`Missing entities in marketplace.module.ts: ${missingEntities.join(', ')}`);
+        throw new Error(`Missing entities in marketplace-service.module.ts: ${missingEntities.join(', ')}`);
       }
       expect(missingEntities).toHaveLength(0);
     });
@@ -88,7 +88,7 @@ describe('Marketplace entity registration', () => {
       const fs = require('fs');
       const path = require('path');
       const moduleSource = fs.readFileSync(
-        path.resolve(__dirname, '..', 'marketplace.module.ts'),
+        path.resolve(__dirname, '..', 'marketplace-service.module.ts'),
         'utf-8',
       );
       expect(moduleSource).toContain("schema: 'marketplace'");

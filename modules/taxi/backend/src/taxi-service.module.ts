@@ -132,4 +132,4 @@ const ENTITIES = [
     ComplaintManagementService,
   ],
 })
-export class TaxiModule {}
+export class TaxiServiceModule {}

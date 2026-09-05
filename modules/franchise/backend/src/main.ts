@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
-import { FranchiseModule } from './franchise.module';
+import { FranchiseServiceModule } from './franchise-service.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(FranchiseModule);
+  const app = await NestFactory.create(FranchiseServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 

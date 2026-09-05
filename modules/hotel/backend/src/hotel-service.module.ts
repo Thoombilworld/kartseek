@@ -80,4 +80,4 @@ const envSchema = buildEnvSchema({
   controllers: [HotelController, HotelOwnerController, HotelAdminController, HotelWebhookController],
   providers: [HotelService],
 })
-export class HotelModule {}
+export class HotelServiceModule {}
