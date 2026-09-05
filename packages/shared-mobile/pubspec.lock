@@ -747,7 +747,7 @@ packages:
   objective_c:
     dependency: "direct overridden"
     description:
-      path: "../native-bindings"
+      path: "../vendor/objective_c"
       relative: true
     source: path
     version: "9.4.1"

@@ -55,5 +55,5 @@ flutter:
 # ─── Dependency Overrides ───────────────────────────────────────────────
 dependency_overrides:
   objective_c:
-    path: ../../packages/native-bindings
+    path: ../../packages/vendor/objective_c
   flutter_plugin_android_lifecycle: 2.0.35

@@ -106,7 +106,7 @@ scratch/
 
 # NuGet restore output — re-restore with ./nuget.exe rather than committing DLLs.
 # Listed explicitly so it can never swallow a real workspace package under
-# packages/ (native-bindings, shared-mobile); extend if more get restored.
+# packages/ (vendor/objective_c, shared-mobile); extend if more get restored.
 /packages/Newtonsoft.Json.*/
 *.nupkg
 *.snupkg
