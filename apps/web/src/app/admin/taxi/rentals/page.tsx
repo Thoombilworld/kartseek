@@ -8,7 +8,7 @@ import {
   Download, User, Calendar, DollarSign, Key, Timer, UserCheck,
   Shield, Gauge, ChevronDown, ChevronUp, History,
 } from 'lucide-react';
-import { RentalCompliancePanel } from '@/components/taxi/RentalCompliancePanel';
+import { RentalCompliancePanel } from '@/components/taxi/rental-compliance-panel';
 import { getCountryConfig, getRequiredComplianceChecks, formatCancellationPolicy } from '@/lib/config/rental-policies';
 import { adminTaxiApi } from '@/lib/api/admin-taxi';
 

@@ -8,9 +8,9 @@ import {
   Calendar, Key, Phone, User, UserCheck, Shield, Timer, Gauge,
   ChevronDown, ChevronUp,
 } from 'lucide-react';
-import { RentalCompliancePanel } from '@/components/taxi/RentalCompliancePanel';
-import { VehicleHandoverPanel } from '@/components/taxi/VehicleHandoverPanel';
-import { RentalDocumentPanel } from '@/components/taxi/RentalDocumentPanel';
+import { RentalCompliancePanel } from '@/components/taxi/rental-compliance-panel';
+import { VehicleHandoverPanel } from '@/components/taxi/vehicle-handover-panel';
+import { RentalDocumentPanel } from '@/components/taxi/rental-document-panel';
 import { getCountryConfig, getRequiredComplianceChecks, formatCancellationPolicy } from '@/lib/config/rental-policies';
 import { vendorTaxiApi } from '@/lib/api/vendor-taxi';
 
