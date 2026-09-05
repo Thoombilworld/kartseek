@@ -69,9 +69,9 @@ for FFI plumbing, it now lives inside `packages/vendor/objective_c`.
 - **App ID**: `com.kartseek.seller`
 - **Version**: `1.0.0+1`
 - **Entry**: `lib/main.dart`; `lib/routing/seller_router.dart` declares 115
-  routes (a different declaration style from the other two apps — `static
-const` without an explicit `String` type — which is why counting them needs
-  a different grep pattern).
+  routes (a different declaration style from the other two apps — using
+  `static const` without explicit `String` typing, which is why counting them
+  needs a different grep pattern).
 - **Feature folders**: `seller_marketplace` (54 screens), `seller_pharmacy`
   (22), `seller_restaurant` (18), `grocery` (17), `seller_hotel` (7),
   `seller_doctor` (5), `seller_grocery` (5), `seller_taxi_vendor` (4),
