@@ -1,7 +1,7 @@
 {
   "name": "kartseek-super-app",
   "version": "2.0.0",
-  "description": "KARTSEEK \u2014 Multi-vertical Super App monorepo (Web \u00b7 API \u00b7 Mobile)",
+  "description": "KARTSEEK — Multi-vertical Super App monorepo (Web · API · Mobile)",
   "private": true,
   "packageManager": "npm@11.17.0",
   "engines": {
@@ -47,7 +47,8 @@
     "db:seed:restaurant": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed/seed-restaurant.ts",
     "db:seed:pharmacy": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed/seed-pharmacy.ts",
     "prepare": "node -e \"try { require('husky').install() } catch(e) {}\"",
-    "kafka:topics": "node apps/api/scripts/create-kafka-topics.js"
+    "kafka:topics": "node apps/api/scripts/create-kafka-topics.js",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\""
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
@@ -75,7 +76,8 @@
     "turbo": "^2.9.18",
     "typeorm": "^0.3.31",
     "vitest": "^4.1.11",
-    "webpack-node-externals": "^3.0.0"
+    "webpack-node-externals": "^3.0.0",
+    "yaml": "^2.9.0"
   },
   "overrides": {
     "axios": "^1.9.0",
@@ -135,5 +137,5 @@
   },
   "_comment_typeorm": "Declared at the root on purpose, alongside the override. @nestjs/typeorm@11 lists typeorm as a peer with range '^0.3.0 || ^1.0.0-dev', so npm auto-installed the highest match (1.1.0) and hoisted it. TypeORM 1.x dropped the array forms of `select` and `relations` that this codebase uses in dozens of places, so every workspace package had to pin ^0.3.31 to get a nested copy. Pinning the hoisted version here means one typeorm for the whole repo and no per-module workaround.",
   "_comment_nest_core_override": "@nestjs/typeorm and @nestjs/mongoose peer on ^10 || ^11 || ^12, and npm satisfied that with a leftover 11.x while every workspace resolved 12. Two copies of @nestjs/core in one tree is the dual-package hazard: an HttpException built against one is not instanceof the other, so the gateway's exception filter would classify a real HttpException as an unknown error and answer 500. Pinned to one version rather than trusting hoisting.",
-  "_comment_nest_root_pin": "Declared at the root on purpose. Nothing here imports Nest \u2014 these exist to pin one version for the whole tree. @nestjs/typeorm and @nestjs/mongoose peer on ^10 || ^11 || ^12, and npm satisfied that by hoisting an 11.x to the root while the workspaces resolved 12. The v12 packages import '@nestjs/common/internal', a subpath that 11.x does not export, so every build that reached the hoisted copy failed with 'Can't resolve @nestjs/common/internal'. `overrides` did not fix this \u2014 npm reported 'up to date' through --force and after clearing the install-state cache. A direct dependency outranks a peer-satisfied hoist, which does. @nestjs/websockets is here for the same reason: @nestjs/core lazily requires '@nestjs/websockets/socket-module.js', webpack resolves that statically, and only apps/api declared it \u2014 so a module backend building against the root core could not find it. Under Nest 11 it happened to be hoisted; that is not something to rely on."
+  "_comment_nest_root_pin": "Declared at the root on purpose. Nothing here imports Nest — these exist to pin one version for the whole tree. @nestjs/typeorm and @nestjs/mongoose peer on ^10 || ^11 || ^12, and npm satisfied that by hoisting an 11.x to the root while the workspaces resolved 12. The v12 packages import '@nestjs/common/internal', a subpath that 11.x does not export, so every build that reached the hoisted copy failed with 'Can't resolve @nestjs/common/internal'. `overrides` did not fix this — npm reported 'up to date' through --force and after clearing the install-state cache. A direct dependency outranks a peer-satisfied hoist, which does. @nestjs/websockets is here for the same reason: @nestjs/core lazily requires '@nestjs/websockets/socket-module.js', webpack resolves that statically, and only apps/api declared it — so a module backend building against the root core could not find it. Under Nest 11 it happened to be hoisted; that is not something to rely on."
 }
