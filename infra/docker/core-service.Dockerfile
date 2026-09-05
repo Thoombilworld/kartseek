@@ -7,7 +7,7 @@
 # Root context because the repository has one lockfile, at the root, and
 # installs through npm workspaces; apps/api has no lockfile of its own, and the
 # rspack builder's dependencies are declared in the root manifest. See
-# Dockerfile.prod for the api-gateway-specific variant and the root
+# api-gateway.Dockerfile for the api-gateway-specific variant and the root
 # .dockerignore for what reaches the daemon.
 
 FROM node:25-alpine AS deps
