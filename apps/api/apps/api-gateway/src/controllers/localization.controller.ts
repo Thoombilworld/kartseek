@@ -11,7 +11,7 @@ import { JwtAuthGuard } from '@app/security';
  * `_language`, `_tax_rule`, `_exchange_rate`, `_translation`,
  * `user_locale_preference`) and a set of admin upsert routes, but those
  * entities were never added to `DatabaseModule.registerPostgres([...])` in
- * `app.module.ts` and no matching table was ever created. The result was worse
+ * `api-gateway.module.ts` and no matching table was ever created. The result was worse
  * than having nothing: every read swallowed `EntityMetadataNotFoundError` in an
  * empty `catch` and silently returned the arrays below anyway, while every
  * admin write 500'd with `No metadata for "LocalizationLanguage"`.

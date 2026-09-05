@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
-import { AuditLogModule } from './audit-log.module';
+import { AuditLogServiceModule } from './audit-log-service.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AuditLogModule);
+  const app = await NestFactory.create(AuditLogServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 

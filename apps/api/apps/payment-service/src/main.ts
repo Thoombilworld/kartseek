@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Transport } from '@nestjs/microservices';
-import { PaymentModule } from './payment.module';
+import { PaymentServiceModule } from './payment-service.module';
 import { createGrpcMicroserviceOptions } from '@app/grpc';
 import { validateDatabaseConfig } from '@app/database';
 
@@ -9,7 +9,7 @@ async function bootstrap() {
   // Fail fast if DB_SYNCHRONIZE=true: these services share one PostgreSQL
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
-  const app = await NestFactory.create(PaymentModule);
+  const app = await NestFactory.create(PaymentServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 

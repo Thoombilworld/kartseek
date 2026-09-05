@@ -80,7 +80,7 @@ const seoOverrides: Map<string, SeoOverride> = new Map();
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 // `api/v1` is the app-wide global prefix set in main.ts. Repeating it here made
 // every route in this controller resolve to /api/v1/api/v1/admin/seo/... — which
-// nothing calls. The controller was also missing from app.module.ts, so the
+// nothing calls. The controller was also missing from api-gateway.module.ts, so the
 // routes did not exist at all; both are fixed, and the paths below are now the
 // /admin/seo/* the web client has always asked for.
 @Controller('admin/seo')

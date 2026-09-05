@@ -29,4 +29,4 @@ import { databaseCredentials } from '@app/database';
   controllers: [PayoutController],
   providers: [PayoutService],
 })
-export class PayoutModule {}
+export class PayoutServiceModule {}

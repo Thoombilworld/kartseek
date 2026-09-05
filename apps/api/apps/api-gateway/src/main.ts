@@ -6,7 +6,7 @@ dotenv.config();
 
 import { NestFactory } from '@nestjs/core';
 import { type NestExpressApplication } from '@nestjs/platform-express';
-import { AppModule } from './app.module';
+import { ApiGatewayModule } from './api-gateway.module';
 import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -27,7 +27,7 @@ async function bootstrap() {
     // ✅ Validate database config FIRST (before NestFactory)
     validateDatabaseConfig();
     logDatabaseConfig();
-    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    const app = await NestFactory.create<NestExpressApplication>(ApiGatewayModule, {
       logger: ['error', 'warn', 'log', 'debug'],
       // Cap maximum header size to 8KB (mitigates header-flood / slow-read attacks)
       rawBody: true,

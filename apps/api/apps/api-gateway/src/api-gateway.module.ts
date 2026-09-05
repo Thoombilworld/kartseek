@@ -363,4 +363,4 @@ const svcHost = (name: string): string =>
     { provide: 'APP_INTERCEPTOR', useClass: ActivityTrackingInterceptor },
   ],
 })
-export class AppModule {}
+export class ApiGatewayModule {}

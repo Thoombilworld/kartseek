@@ -41,4 +41,4 @@ const envSchema = buildEnvSchema({
   controllers: [WalletController],
   providers: [WalletService],
 })
-export class WalletModule {}
+export class WalletServiceModule {}

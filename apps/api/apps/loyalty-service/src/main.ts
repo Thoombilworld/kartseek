@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
-import { LoyaltyModule } from './loyalty.module';
+import { LoyaltyServiceModule } from './loyalty-service.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(LoyaltyModule);
+  const app = await NestFactory.create(LoyaltyServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 

@@ -209,7 +209,7 @@ export class KafkaModule {
       ],
       providers: [KafkaProducerService],
       // Export ClientsModule so all registered tokens are resolvable
-      // in the importing module (AppModule) context.
+      // in the importing root module context.
       exports: [KafkaProducerService, ClientsModule],
     };
   }

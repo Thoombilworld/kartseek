@@ -1,17 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
-// `PayoutModule`, not `PayoutServiceModule` — see the note in wallet-service's
-// main.ts. The other module registers no database, so booting it threw on
-// `SellerWalletRepository` and payout-service never came up.
-import { PayoutModule } from './payout.module';
+// PayoutServiceModule is the only root module — see the note in
+// wallet-service/src/main.ts; the same stub-shadows-the-real-module defect hit
+// payout-service and left `SellerWalletRepository` unresolvable on boot.
+import { PayoutServiceModule } from './payout-service.module';
 import { validateDatabaseConfig } from '@app/database';
 
 async function bootstrap() {
   // Fail fast if DB_SYNCHRONIZE=true: these services share one PostgreSQL
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
-  const app = await NestFactory.create(PayoutModule);
+  const app = await NestFactory.create(PayoutServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 

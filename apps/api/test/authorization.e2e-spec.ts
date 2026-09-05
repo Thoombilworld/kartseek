@@ -8,14 +8,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { AppModule } from '../apps/api-gateway/src/app.module';
+import { ApiGatewayModule } from '../apps/api-gateway/src/api-gateway.module';
 
 describe('Authorization (E2E)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [ApiGatewayModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
@@ -54,8 +54,8 @@ describe('Authorization (E2E)', () => {
 
   describe('RolesGuard registration', () => {
     it('should NOT register RolesGuard globally', () => {
-      // Parse the AppModule and verify no global RolesGuard provider exists
-      const metadata = Reflect.getMetadata('nest:providers', AppModule);
+      // Parse the ApiGatewayModule and verify no global RolesGuard provider exists
+      const metadata = Reflect.getMetadata('nest:providers', ApiGatewayModule);
 
       if (!metadata) {
         // If no metadata, the test passes (no global guard found)

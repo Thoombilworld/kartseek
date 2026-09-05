@@ -32,4 +32,4 @@ const envSchema = buildEnvSchema({
   controllers: [AuthController, HealthController],
   providers: [],
 })
-export class AppModule {}
+export class AuthServiceModule {}

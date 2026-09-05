@@ -14,7 +14,7 @@ import { IndiaPinCodeService } from './india-pincode.service';
  *  - RegionGuard        : route guard for region-scoped endpoints
  *  - IndiaPinCodeService: India PIN code lookup and delivery serviceability
  *
- * Import once in AppModule — all controllers automatically get region
+ * Import once in the root module — all controllers automatically get region
  * resolution via middleware.
  */
 @Global()

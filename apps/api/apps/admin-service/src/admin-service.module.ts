@@ -30,4 +30,4 @@ import { databaseCredentials } from '@app/database';
   controllers: [AdminController],
   providers: [AdminService],
 })
-export class AdminModule {}
+export class AdminServiceModule {}
