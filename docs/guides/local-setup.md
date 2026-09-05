@@ -91,11 +91,13 @@ default profile brings up:
 - MongoDB on 27017
 - Elasticsearch
 
-Two more Compose profiles exist for later, opt-in work: `isolated` starts a
+Three more Compose profiles exist for later, opt-in work: `isolated` starts a
 dedicated Postgres instance per module (see
-[`database-migrations.md`](database-migrations.md)), and `tools` starts
-pgAdmin, RedisInsight, and Kibana. Neither is needed for a first run —
-`npm run infra:tools` starts the `tools` profile if you want them.
+[`database-migrations.md`](database-migrations.md)); `marketplace-isolated`
+is the narrower version of that, bringing up only the marketplace module's
+own Postgres instance; and `tools` starts pgAdmin, RedisInsight, and Kibana.
+None is needed for a first run — `npm run infra:tools` starts the `tools`
+profile if you want them.
 
 ## Run
 

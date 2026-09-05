@@ -122,7 +122,7 @@ npm run smoke -- --only=order-service,marketplace-service
 
 ## Postman
 
-31 collections and 8 environment files under `tests/postman/` cover the whole
+34 collections and 9 environment files under `tests/postman/` cover the whole
 platform's HTTP surface end to end, run either from Postman Desktop or headless
 with Newman. Full instructions — importing, running a single collection,
 running everything, the auth-token bootstrapping order, and CI integration —

@@ -69,16 +69,19 @@ package.json script.
 
 Every port, the environment variable that sets it, and each service's health
 route and database are declared once, in `services.yaml` at the repository
-root. The table below is that registry, rendered — do not hand-edit it; change
-`services.yaml` instead. `npm run registry:generate` keeps
-[`docs/architecture/services.md`](../architecture/services.md) and each
-deployable's own README in sync with the registry today; it does not yet
-regenerate this block (its target list is `docs/architecture/services.md`
-plus each entry's `README.md` — see `scripts/registry/generate.mjs`), so this
-copy was produced by hand from the same `services.yaml` and matches
-`docs/architecture/services.md` exactly as of this writing. If the two ever
-disagree, `docs/architecture/services.md` and `services.yaml` are the ones to
-trust.
+root. The table below is generated from that registry by
+
+```bash
+npm run registry:generate
+```
+
+which also keeps [`docs/architecture/services.md`](../architecture/services.md)
+and each deployable's own README in sync. `npm run registry:check` verifies
+the generated files agree with `services.yaml` without writing anything — run
+it in CI or after editing the registry to confirm nothing drifted. Do not
+hand-edit the table itself between the `registry:start` and `registry:end`
+markers below — a regenerate will overwrite it; add or change a service by
+editing `services.yaml` instead.
 
 <!-- registry:start -->
 _Generated from `services.yaml` by `npm run registry:generate`; edit the registry, not this block._

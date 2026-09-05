@@ -41,16 +41,19 @@ lib/
 ## D2 — Root module naming
 
 A Nest deployable's root module file is `<deployable>.module.ts`, exporting a
-class `<Deployable>Module`. This is exactly what `nest g app <name>` generates
-on its own, and 11 of the 26 deployables already followed it before it became
-a documented rule. Examples: `order-service.module.ts` exports
+class `<Deployable>Module` — the one module `main.ts` passes to
+`NestFactory.create`. This is exactly what `nest g app <name>` generates on
+its own. Before the 2026-09-05 renames, 11 of the 26 deployables already
+followed it; that day's renames brought the other 15 into line, so all 26
+follow it now. Examples: `order-service.module.ts` exports
 `OrderServiceModule`; `api-gateway.module.ts` exports `ApiGatewayModule`;
 `marketplace-service.module.ts` exports `MarketplaceServiceModule`.
 
-Feature modules inside a service keep their domain name instead — an
-`order.module.ts` exporting `OrderModule` is fine as a _feature_ module
-imported by the root, but never as the root module itself. Mixing this up is
-exactly the shape of bug in
+A deployable's _feature_ modules sit beside its root module and keep their own
+domain name instead — `cart-service`'s root is `cart-service.module.ts`
+(`CartServiceModule`), while a feature module inside it such as
+`cart.module.ts` (`CartModule`) is imported by the root but is never the root
+itself. Mixing this up is exactly the shape of bug in
 [`troubleshooting.md`](troubleshooting.md#unknowndependenciesexception-on-boot-after-a-root-module-rename):
 a same-shaped stub module standing in for the real root module, wired
 differently, and shadowing it.
@@ -95,17 +98,40 @@ file names, and the `kartseek_` prefix on package names
 
 ## Commits
 
-Conventional Commits, enforced by `commitlint` on every commit (via `husky`'s
-`commit-msg` hook, installed by the root `prepare` script). The config is in
-the root `package.json`:
+The root `package.json` carries a `commitlint` config:
 
 ```json
 "commitlint": { "extends": ["@commitlint/config-conventional"] }
 ```
 
-`lint-staged` (also wired through `husky`) runs on every staged file at commit
-time: Prettier plus `eslint --fix --max-warnings 0` for `.ts`/`.tsx`/`.js`/`.jsx`,
-and Prettier alone for `.json`/`.md`/`.yml`/`.yaml`.
+It also carries a `lint-staged` config describing the intended per-commit
+checks: Prettier plus `eslint --fix --max-warnings 0` for
+`.ts`/`.tsx`/`.js`/`.jsx`, and Prettier alone for `.json`/`.md`/`.yml`/`.yaml`.
+Both describe _intended_ checks only. **No git hook currently installs or
+runs either one.** There is no `husky`
+directory in the tree, `.git/hooks` holds only Git's own `.sample` files, and
+`core.hooksPath` is unset — confirm any of that yourself with
+`git ls-files | grep -i husky` (empty) or `ls .git/hooks` (only `*.sample`).
+The root `prepare` script that is supposed to install the hook,
+`node -e "try { require('husky').install() } catch(e) {}"`, throws
+`TypeError: require(...).install is not a function` under the installed
+husky 9 (which ships an ES module with a default export, not the `.install`
+static method husky 8's API had) — and the surrounding `try/catch` swallows
+that error silently, so `npm install` reports success either way.
+
+Until phase 4 wires `commitlint` into CI to check pull requests, Conventional
+Commits here is a convention developers follow by hand, not a rule anything
+enforces: `type(scope): subject`, e.g. `fix(gateway): stop dropping the
+X-Region-Code header`. This repository's own history uses `feat`, `fix`,
+`docs`, `chore`, `refactor`, `test`, and `build` as types; scope is the
+affected package or area and is optional. Commits authored with Claude Code
+carry a trailing
+
+```
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+```
+
+trailer, separated from the subject/body by a blank line.
 
 ## Type imports
 
