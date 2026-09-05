@@ -105,7 +105,8 @@ never hand-edited.
 2. The gateway's global prefix (`api`) and default URI version (`1`) — both
    set in `apps/api/apps/api-gateway/src/main.ts` — mean this is
    `MarketplaceGatewayController`'s `GET products` route
-   (`@Controller('marketplace')`, `apps/api/apps/api-gateway/src/controllers/marketplace.controller.ts`).
+   (`@Controller('marketplace')`,
+   `apps/api/apps/api-gateway/src/controllers/marketplace.controller.ts`).
    The controller declares no class-level guard, so this particular route is
    public.
 3. Nest's global pipeline runs regardless of the route: `ValidationPipe`,
@@ -122,11 +123,15 @@ never hand-edited.
    `MARKETPLACE_PATTERNS.GET_PRODUCTS`, declared in
    `apps/api/apps/api-gateway/src/contracts/marketplace.patterns.ts` — with a
    10-second timeout and an `rpcCatch` mapper that forwards a 4xx domain
-   message but collapses anything else to a `503`. Other catalogue reads on
-   the same controller (`home`, `categories`, an unscoped `search`) try gRPC
-   first, through `apps/api/proto/marketplace.proto`, and fall back to this
-   TCP client when gRPC is unavailable — this specific route has no gRPC
-   path.
+   message but collapses anything else to a `503` — this specific route has
+   no gRPC path. Other catalogue reads on the same controller take different
+   paths: `categories`, and `search` when no region is set, call
+   `catalogGrpc.*` first, through `apps/api/proto/marketplace.proto`, and
+   fall back to this TCP client when gRPC returns nothing. `home` is
+   deliberately TCP-only instead — its own comment explains that the proto's
+   `HomeResponse` omits several storefront sections, so preferring gRPC there
+   once left six sections `undefined` and the client silently substituted
+   demo products.
 5. marketplace-service's own `@MessagePattern('get_products')` handler runs
    the query against the database it owns, `kartseek_marketplace` (schema
    `marketplace`) — see
@@ -172,7 +177,7 @@ Four transports, each for a different shape of call:
 - **Socket.IO**, from the gateway only, over 10 distinct namespaces —
   `tracking`, `/chat`, `/doctor-queue`, `/franchise`, `hotel`,
   `/notifications`, `/orders`, `/recommendations`, `/seller`, `/taxi`.
-  <!-- counted with: grep -rn "namespace:" apps/api/apps/api-gateway/src/socket.gateway.ts apps/api/apps/api-gateway/src/gateways/*.gateway.ts | wc -l → 10 -->
+  <!-- counted with: grep -rhoE "^  namespace: '[^']+',$" apps/api/apps/api-gateway/src/socket.gateway.ts apps/api/apps/api-gateway/src/gateways/*.gateway.ts | wc -l → 10 -->
   Order tracking lives on `/orders`; how a client is authorized to join one
   order's room, as opposed to merely connecting to the namespace, is in
   [`docs/architecture/security.md`](docs/architecture/security.md).
@@ -242,7 +247,11 @@ describing an intended design — is
   instance, `kartseek_db`, with **schema-per-service** (`admin`,
   `commission`, `delivery`, `location`, `order`, `payment`, `payout`,
   `refund`, `report`, `user`, `wallet`, plus the gateway's own `public`
-  schema); `cart-service`, `audit-log-service`, `loyalty-service`,
+  schema). `auth-service` is the exception: it also connects to `public`,
+  the gateway's own schema, rather than getting one of its own — the
+  shared-`users`-table question
+  [`docs/architecture/data-ownership.md`](docs/architecture/data-ownership.md#what-phase-5-must-decide)
+  opens with. `cart-service`, `audit-log-service`, `loyalty-service`,
   `notification-service`, and `search-service` own no tables at all
   (`database: null` in `services.yaml`).
 - Each of the 8 module services owns its own named database
