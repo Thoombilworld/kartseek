@@ -27,8 +27,8 @@ Genuinely real and mature. No stubs found (a red-flag scan returned 3 hits, all 
 - **Domain services** (15): decomposed from a 3,036-line monolith into `catalog`, `order`, `seller-domain`,
   `review`, `return`, `marketplace-cart`, `tracking`, `analytics`, `coupon`, `gift-card`, `qa`, `wishlist`,
   `brand-follow` (+ facade `marketplace.service.ts`). Spot-check of
-  [order.service.ts](../../modules/marketplace/backend/src/fulfillment/fulfillment.service.ts) (renamed
-  `fulfillment.service.ts` in the `modules/marketplace/backend` extraction): real TypeORM repositories,
+  [order.service.ts](../../modules/marketplace/backend/src/marketplace.service.ts) (the facade's `// ── Orders ──`
+  section in `modules/marketplace/backend`): real TypeORM repositories,
   `findAndCount`, status transitions, Kafka domain events. ~20 entities.
 - **Tests:** `marketplace.service.spec.ts` passes (part of the now-green API suite).
 
