@@ -16,7 +16,7 @@ handful of pages.
 `@/lib/*` and similar aliases straight to files under `src/`, so imports
 resolve at compile time with no build step of their own and no published
 package. Turning `shared-core` and `shared-ui` into real workspaces is a known
-follow-up, recorded as a follow-up in the spec rather than as an ADR yet — see
+follow-up, recorded in the spec rather than as an ADR yet — see
 section 13 of
 [the platform reorganization design](../../docs/superpowers/specs/2026-09-05-platform-reorganization-design.md).
 

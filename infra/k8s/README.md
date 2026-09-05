@@ -22,7 +22,7 @@ that already runs it.
 
 | File                           | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `namespace.yaml`               | The namespace, RBAC, NetworkPolicies, a `LimitRange` and a `ResourceQuota`, and a `PodDisruptionBudget` for pods labeled `critical`. Apply first — see "Known constraints" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `namespace.yaml`               | The namespace, RBAC, NetworkPolicies, a `LimitRange` and a `ResourceQuota`, and a `PodDisruptionBudget` for pods labeled `critical`. Applied after `config.yaml`; must precede every workload because the `ResourceQuota` rejects pods missing resource requests, and the `LimitRange` supplies defaults.                                                                                                                                                                                                                                                                                                                                                                                 |
 | `config.yaml`                  | The `ConfigMap` and `Secret` every service reads its environment from.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `databases.yaml`               | StatefulSets for the shared Postgres, the dedicated marketplace Postgres, Redis and Kafka.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `storage.yaml`                 | The four cloud StorageClasses (`fast-ssd`, `standard`, `high-performance`, `archive`), backed by the AWS EBS CSI driver.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -57,15 +57,15 @@ that already runs it.
 ./infra/k8s/deploy.sh dev          # or: staging, production
 ```
 
-Applies, in order: the namespace/RBAC/quota, an image-pull secret,
-`config.yaml`, `storage.yaml`, the databases (waiting for each StatefulSet's
-rollout), the microservices and `marketplace-hpa.yaml`, the API gateway, and
-`ingress.yaml` if a `cert-manager` CRD is present. For `production` only, it
-first refuses to continue if `config.yaml` still holds a placeholder secret
-(`CHANGE_IN_PRODUCTION`, an all-`x` value, or an all-zero
-`ENCRYPTION_KEY`) — the gateway's own startup validation would reject the
-same values, and failing here is faster than a `CrashLoopBackOff` that looks
-like a networking problem.
+Applies, in order: the bare namespace, an image-pull secret, `config.yaml`,
+`namespace.yaml` (RBAC, LimitRange, ResourceQuota, PodDisruptionBudget),
+`storage.yaml`, the databases (waiting for each StatefulSet's rollout), the
+microservices and `marketplace-hpa.yaml`, the API gateway, and `ingress.yaml`
+if a `cert-manager` CRD is present. For `production` only, it first refuses to
+continue if `config.yaml` still holds a placeholder secret
+(`CHANGE_IN_PRODUCTION`, an all-`x` value, or an all-zero `ENCRYPTION_KEY`) —
+the gateway's own startup validation would reject the same values, and failing
+here is faster than a `CrashLoopBackOff` that looks like a networking problem.
 
 ## `utils.sh`
 
