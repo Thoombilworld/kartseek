@@ -7,7 +7,7 @@ workspace (`apps/api/scripts/`, `apps/web/scripts/`), not here.
 | --- | --- | --- |
 | `check-type-imports.js` | The type-import gate. `consistent-type-imports` cannot see decorated files under `emitDecoratorMetadata`, so this script checks every backend workspace's imports directly. Every backend `type-check` script calls it. | `node scripts/check-type-imports.js apps/api` (or a module backend path) |
 | `registry/validate.mjs` | Drift check between `services.yaml` and the repository: paths, `main.ts` port defaults, `.env.example`, the k8s ConfigMap, port uniqueness, generated files. Runs in the gate and in CI. | `npm run registry:check` |
-| `registry/generate.mjs` | Renders `docs/architecture/services.md` and the `<!-- registry:start -->` block in every workspace README from `services.yaml`. `--check` exits 1 when stale. | `npm run registry:generate` |
+| `registry/generate.mjs` | Renders `docs/architecture/services.md`, the platform table between `<!-- registry:start -->` markers in the root README, `docs/guides/running-services.md`, `apps/api/README.md` and `apps/api/docs/runbook.md`, and the per-service block in every workspace README from `services.yaml`. `--check` exits 1 when stale. | `npm run registry:generate` |
 
 Tests for these scripts use Node's built-in runner: `npm run test:scripts`.
 
