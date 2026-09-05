@@ -661,7 +661,7 @@ git rm -q infra/k8s/QUICKSTART.md
 
 `tests/README.md`: what lives here — `postman/` (collections, environments, data, newman runners), `smoke/` (`boot-all.mjs`, `logs/` ignored); how they relate to the per-workspace unit/integration/e2e tests (link `docs/guides/testing.md`).
 
-`tests/postman/README.md`: fix the counts (30 collection files — 27 numbered + hotel + pharmacy + payment), the two local environments (`KARTSEEK_Local` for the numbered suite, `local` for the payment runner), `scripts/run-all.js` flags (from its header), `newman/run-payment-tests.sh`, where reports go (`reports/`, git-ignored), the import-into-Postman steps with the new paths (already `sed`-ed in 1A; re-read the whole file and fix anything else stale, such as the "31 collections" figure and any `docs/api` mention).
+`tests/postman/README.md`: fix the counts (34 collection files — 31 numbered + hotel + pharmacy + payment), the two local environments (`KARTSEEK_Local` for the numbered suite, `local` for the payment runner), `scripts/run-all.js` flags (from its header), `newman/run-payment-tests.sh`, where reports go (`reports/`, git-ignored), the import-into-Postman steps with the new paths (already `sed`-ed in 1A; re-read the whole file and fix anything else stale, such as the "31 collections" figure and any `docs/api` mention).
 
 - [ ] **Step 4: Extend `scripts/README.md`; refresh the archive README**
 
