@@ -30,7 +30,7 @@
  */
 
 import { DataSource } from 'typeorm';
-import { Franchise } from '../../../modules/franchise/backend/src/entities/franchise.entity';
+import { Franchise } from '../../../../modules/franchise/backend/src/entities/franchise.entity';
 
 const PG = {
   host: process.env.DB_HOST || 'localhost',

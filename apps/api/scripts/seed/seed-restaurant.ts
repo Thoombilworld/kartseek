@@ -14,15 +14,15 @@
  */
 
 import { DataSource } from 'typeorm';
-import { Restaurant } from '../../../modules/restaurant/backend/src/entities/restaurant.entity';
-import { MenuItem } from '../../../modules/restaurant/backend/src/entities/menu-item.entity';
-import { MenuCategory } from '../../../modules/restaurant/backend/src/entities/menu-category.entity';
-import { RestaurantReview } from '../../../modules/restaurant/backend/src/entities/restaurant-review.entity';
-import { RestaurantPromotion } from '../../../modules/restaurant/backend/src/entities/restaurant-promotion.entity';
-import { RestaurantTable } from '../../../modules/restaurant/backend/src/entities/restaurant-table.entity';
-import { RestaurantStaff } from '../../../modules/restaurant/backend/src/entities/restaurant-staff.entity';
-import { Reservation } from '../../../modules/restaurant/backend/src/entities/reservation.entity';
-import { RestaurantOrder } from '../../../modules/restaurant/backend/src/entities/restaurant-order.entity';
+import { Restaurant } from '../../../../modules/restaurant/backend/src/entities/restaurant.entity';
+import { MenuItem } from '../../../../modules/restaurant/backend/src/entities/menu-item.entity';
+import { MenuCategory } from '../../../../modules/restaurant/backend/src/entities/menu-category.entity';
+import { RestaurantReview } from '../../../../modules/restaurant/backend/src/entities/restaurant-review.entity';
+import { RestaurantPromotion } from '../../../../modules/restaurant/backend/src/entities/restaurant-promotion.entity';
+import { RestaurantTable } from '../../../../modules/restaurant/backend/src/entities/restaurant-table.entity';
+import { RestaurantStaff } from '../../../../modules/restaurant/backend/src/entities/restaurant-staff.entity';
+import { Reservation } from '../../../../modules/restaurant/backend/src/entities/reservation.entity';
+import { RestaurantOrder } from '../../../../modules/restaurant/backend/src/entities/restaurant-order.entity';
 
 import * as path from 'path';
 

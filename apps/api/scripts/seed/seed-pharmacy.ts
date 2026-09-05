@@ -27,19 +27,19 @@ const ds = new DataSource({
   // `public`, while the service reads its own schema -- so seeding "succeeded"
   // and the storefront stayed empty.
   schema: 'pharmacy',
-  entities: [path.join(__dirname, '../../../modules/pharmacy/backend/src/entities/*.entity.{ts,js}')],
+  entities: [path.join(__dirname, '../../../../modules/pharmacy/backend/src/entities/*.entity.{ts,js}')],
   synchronize: true,
   logging: false,
 });
 
-import { PharmacyStore, PharmacyStoreStatus } from '../../../modules/pharmacy/backend/src/entities/pharmacy-store.entity';
-import { PharmacyCategory } from '../../../modules/pharmacy/backend/src/entities/pharmacy-category.entity';
-import { PharmacyItem, DosageForm } from '../../../modules/pharmacy/backend/src/entities/pharmacy-item.entity';
-import { PharmacyOrder, PharmacyOrderStatus, PharmacyOrderType, PharmacyPaymentMethod, PharmacyPaymentStatus } from '../../../modules/pharmacy/backend/src/entities/pharmacy-order.entity';
-import { Prescription, PrescriptionStatus } from '../../../modules/pharmacy/backend/src/entities/prescription.entity';
-import { PharmacyReview } from '../../../modules/pharmacy/backend/src/entities/pharmacy-review.entity';
-import { PharmacyStaff, PharmacyStaffRole } from '../../../modules/pharmacy/backend/src/entities/pharmacy-staff.entity';
-import { PharmacyPromotion, PharmacyPromoType } from '../../../modules/pharmacy/backend/src/entities/pharmacy-promotion.entity';
+import { PharmacyStore, PharmacyStoreStatus } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-store.entity';
+import { PharmacyCategory } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-category.entity';
+import { PharmacyItem, DosageForm } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-item.entity';
+import { PharmacyOrder, PharmacyOrderStatus, PharmacyOrderType, PharmacyPaymentMethod, PharmacyPaymentStatus } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-order.entity';
+import { Prescription, PrescriptionStatus } from '../../../../modules/pharmacy/backend/src/entities/prescription.entity';
+import { PharmacyReview } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-review.entity';
+import { PharmacyStaff, PharmacyStaffRole } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-staff.entity';
+import { PharmacyPromotion, PharmacyPromoType } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-promotion.entity';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Categories

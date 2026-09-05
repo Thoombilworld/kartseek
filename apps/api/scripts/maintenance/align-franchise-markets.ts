@@ -32,9 +32,9 @@
  */
 
 import { DataSource } from 'typeorm';
-import { Franchise } from '../../../modules/franchise/backend/src/entities/franchise.entity';
-import { REGION_CONFIGS } from '../libs/region/src/region.config';
-import type { SupportedCountryCode } from '../libs/region/src/region.types';
+import { Franchise } from '../../../../modules/franchise/backend/src/entities/franchise.entity';
+import { REGION_CONFIGS } from '../../libs/region/src/region.config';
+import type { SupportedCountryCode } from '../../libs/region/src/region.types';
 
 const APPLY = process.argv.includes('--apply');
 

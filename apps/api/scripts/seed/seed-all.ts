@@ -38,7 +38,7 @@ for (const seed of seeds) {
   try {
     const scriptPath = path.join(__dirname, seed.script);
     execSync(`npx ts-node "${scriptPath}"`, {
-      cwd: path.join(__dirname, '..'),
+      cwd: path.join(__dirname, '../..'),
       stdio: 'inherit',
       env: { ...process.env },
     });

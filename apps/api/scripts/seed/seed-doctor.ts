@@ -7,21 +7,21 @@
  *   npx ts-node -r tsconfig-paths/register scripts/seed-doctor.ts
  *
  * Prerequisites:
- *   - PostgreSQL running (npm run docker:infra)
+ *   - PostgreSQL running (npm run infra:up, from the repository root)
  *   - Database `kartseek_db` exists
  *   - Tables created via TypeORM synchronize or migrations
  */
 
 import { DataSource } from 'typeorm';
-import { Specialty } from '../../../modules/doctor/backend/src/entities/specialty.entity';
-import { Hospital } from '../../../modules/doctor/backend/src/entities/hospital.entity';
-import { Clinic } from '../../../modules/doctor/backend/src/entities/clinic.entity';
-import { Department } from '../../../modules/doctor/backend/src/entities/department.entity';
-import { Doctor } from '../../../modules/doctor/backend/src/entities/doctor.entity';
-import { DoctorAvailability } from '../../../modules/doctor/backend/src/entities/doctor-availability.entity';
-import { Appointment } from '../../../modules/doctor/backend/src/entities/appointment.entity';
+import { Specialty } from '../../../../modules/doctor/backend/src/entities/specialty.entity';
+import { Hospital } from '../../../../modules/doctor/backend/src/entities/hospital.entity';
+import { Clinic } from '../../../../modules/doctor/backend/src/entities/clinic.entity';
+import { Department } from '../../../../modules/doctor/backend/src/entities/department.entity';
+import { Doctor } from '../../../../modules/doctor/backend/src/entities/doctor.entity';
+import { DoctorAvailability } from '../../../../modules/doctor/backend/src/entities/doctor-availability.entity';
+import { Appointment } from '../../../../modules/doctor/backend/src/entities/appointment.entity';
 // Note: Review entity excluded — shares 'reviews' table with marketplace module
-import { Document } from '../../../modules/doctor/backend/src/entities/document.entity';
+import { Document } from '../../../../modules/doctor/backend/src/entities/document.entity';
 
 const ENTITIES = [Specialty, Hospital, Clinic, Department, Doctor, DoctorAvailability, Appointment, Document];
 

@@ -218,7 +218,7 @@ async function seed() {
   if (!dbReady) {
     console.log('❌ The service is running but its database is not answering.');
     console.log('   GET /marketplace/categories failed — check Postgres/Redis:');
-    console.log('     npm run docker:infra   (from apps/api)\n');
+    console.log('     npm run infra:up   (from the repository root)\n');
     process.exitCode = 1;
     return;
   }

@@ -9,15 +9,15 @@
  */
 
 import { DataSource } from 'typeorm';
-import { Restaurant } from '../../../modules/restaurant/backend/src/entities/restaurant.entity';
-import { MenuCategory } from '../../../modules/restaurant/backend/src/entities/menu-category.entity';
-import { MenuItem } from '../../../modules/restaurant/backend/src/entities/menu-item.entity';
-import { RestaurantOrder } from '../../../modules/restaurant/backend/src/entities/restaurant-order.entity';
-import { Reservation } from '../../../modules/restaurant/backend/src/entities/reservation.entity';
-import { RestaurantReview } from '../../../modules/restaurant/backend/src/entities/restaurant-review.entity';
-import { RestaurantTable } from '../../../modules/restaurant/backend/src/entities/restaurant-table.entity';
-import { RestaurantPromotion } from '../../../modules/restaurant/backend/src/entities/restaurant-promotion.entity';
-import { RestaurantStaff } from '../../../modules/restaurant/backend/src/entities/restaurant-staff.entity';
+import { Restaurant } from '../../../../modules/restaurant/backend/src/entities/restaurant.entity';
+import { MenuCategory } from '../../../../modules/restaurant/backend/src/entities/menu-category.entity';
+import { MenuItem } from '../../../../modules/restaurant/backend/src/entities/menu-item.entity';
+import { RestaurantOrder } from '../../../../modules/restaurant/backend/src/entities/restaurant-order.entity';
+import { Reservation } from '../../../../modules/restaurant/backend/src/entities/reservation.entity';
+import { RestaurantReview } from '../../../../modules/restaurant/backend/src/entities/restaurant-review.entity';
+import { RestaurantTable } from '../../../../modules/restaurant/backend/src/entities/restaurant-table.entity';
+import { RestaurantPromotion } from '../../../../modules/restaurant/backend/src/entities/restaurant-promotion.entity';
+import { RestaurantStaff } from '../../../../modules/restaurant/backend/src/entities/restaurant-staff.entity';
 
 const ALL_ENTITIES = [
   Restaurant, MenuCategory, MenuItem,

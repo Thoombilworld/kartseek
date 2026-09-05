@@ -12,7 +12,7 @@ import { DataSource } from 'typeorm';
 import {
   DeliveryPartner, DeliveryTask, DeliveryTaskStatusHistory,
   DeliveryPartnerEarning, DeliveryCodCollection, DeliveryReturnTask,
-} from '../apps/api-gateway/src/entities/delivery.entity';
+} from '../../apps/api-gateway/src/entities/delivery.entity';
 
 const ds = new DataSource({
   type: 'postgres',

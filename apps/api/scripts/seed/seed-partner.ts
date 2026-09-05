@@ -13,7 +13,7 @@ import {
   Partner, PartnerUser, PartnerRole, PartnerRoleAssignment,
   PartnerDocument, PartnerComplianceStatus, PartnerOnlineSession,
   PartnerLocationUpdate, PartnerEarning, PartnerPayout, PartnerSosCase,
-} from '../apps/api-gateway/src/entities/partner.entity';
+} from '../../apps/api-gateway/src/entities/partner.entity';
 
 const ENTITIES = [
   Partner, PartnerUser, PartnerRole, PartnerRoleAssignment,

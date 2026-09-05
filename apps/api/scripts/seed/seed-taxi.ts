@@ -24,7 +24,7 @@ import {
   TaxiFareBreakdown, TaxiDriverEarning, TaxiVendorSettlement,
   TaxiCommissionRecord, TaxiPaymentRecord,
   TaxiSosCase, TaxiDispute, TaxiAuditLog,
-} from '../apps/api-gateway/src/entities/taxi.entity';
+} from '../../apps/api-gateway/src/entities/taxi.entity';
 
 const AppDataSource = new DataSource({
   type: 'postgres',
