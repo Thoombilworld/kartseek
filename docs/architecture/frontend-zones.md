@@ -30,22 +30,23 @@ zone — the page routes, and a second rule for the zone's own `/_next/*`
 assets, because a zone's `basePath` prepends itself to every asset URL and a
 single rule would render the page and then 404 on its own JavaScript:
 
-| Path prefix      | Origin variable           | Local default           |
-| ---------------- | ------------------------- | ----------------------- |
-| `/marketplace`   | `MARKETPLACE_ZONE_ORIGIN` | `http://localhost:3002` |
-| `/grocery`       | `GROCERY_ZONE_ORIGIN`     | `http://localhost:3003` |
-| `/restaurant`    | `RESTAURANT_ZONE_ORIGIN`  | `http://localhost:3004` |
-| `/pharmacy`      | `PHARMACY_ZONE_ORIGIN`    | `http://localhost:3005` |
-| `/doctor`        | `DOCTOR_ZONE_ORIGIN`      | `http://localhost:3006` |
-| `/hotel-booking` | `HOTEL_ZONE_ORIGIN`       | `http://localhost:3007` |
-| `/taxi`          | `TAXI_ZONE_ORIGIN`        | `http://localhost:3008` |
-| `/franchise`     | `FRANCHISE_ZONE_ORIGIN`   | `http://localhost:3009` |
+| Path prefix      | Origin variable           |
+| ---------------- | ------------------------- |
+| `/marketplace`   | `MARKETPLACE_ZONE_ORIGIN` |
+| `/grocery`       | `GROCERY_ZONE_ORIGIN`     |
+| `/restaurant`    | `RESTAURANT_ZONE_ORIGIN`  |
+| `/pharmacy`      | `PHARMACY_ZONE_ORIGIN`    |
+| `/doctor`        | `DOCTOR_ZONE_ORIGIN`      |
+| `/hotel-booking` | `HOTEL_ZONE_ORIGIN`       |
+| `/taxi`          | `TAXI_ZONE_ORIGIN`        |
+| `/franchise`     | `FRANCHISE_ZONE_ORIGIN`   |
 
-(Ports are the same local defaults `services.yaml`/`services.md` declare for
-these deployables — see [`services.md`](./services.md) rather than treating
-the table above as a second source of truth for them.) `/api/v1/:path*` and
-`/api/:path*` are rewritten to `API_GATEWAY_ORIGIN` (default
-`http://localhost:3001`) ahead of the zone rules. The hotel zone's own
+(Each variable's local default is the same port `services.yaml`/`services.md`
+declares for that deployable — see [`services.md`](./services.md) rather than
+treating this table as a second source of truth for them.) `/api/v1/:path*`
+and `/api/:path*` are rewritten to the API gateway's own origin
+(`API_GATEWAY_ORIGIN`, read the same way in `apps/web/next.config.mjs` — see
+[`services.md`](./services.md) for its port) ahead of the zone rules. The hotel zone's own
 `basePath` is `/hotel-booking`, not `/hotel` — the rewrite prefix and the
 zone's own `next.config.mjs` agree on that name; `/hotel-owner` is a
 shell route entirely, unrelated to the hotel zone.

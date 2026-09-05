@@ -200,8 +200,8 @@ own comment documents the change directly: "This helper used to take a
 `fallback` and return it as a 200 whenever the service was unreachable... The
 fallback parameter is gone; failures propagate and the client can tell the two
 apart." This is the fix for the fabricated-200 pattern earlier audits
-recorded (see [`../audits/2026-07-25-audit-report.md`](../audits/2026-07-25-audit-report.md)
-and [`../audits/2026-07-27-module-isolation-audit.md`](../audits/2026-07-27-module-isolation-audit.md)
+recorded (see [`../audits/2026-07-25-audit-report.md`](../audits/2026-07-25-audit-report.md) and
+[`../audits/2026-07-27-module-isolation-audit.md`](../audits/2026-07-27-module-isolation-audit.md)
 for the `@MessagePattern` coverage gaps that made an unimplemented handler
 indistinguishable from a slow one) — those documents describe an earlier
 state of the code and should be read as history, not as the current failure

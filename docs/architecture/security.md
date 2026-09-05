@@ -163,8 +163,9 @@ audit-log entry.
 (`apps/api/apps/api-gateway/src/config/cors-origins.ts`) builds the gateway's
 allowed browser origins from `CORS_ORIGINS` (comma-separated) and
 `WEB_APP_URL`, always including a regex that matches `kartseek.com` and any
-subdomain of it, and additionally allowing `localhost:3000`/`3001`/`5173`
-outside production. This is enforced by the browser, not logged by the
+subdomain of it, and additionally allowing the local shell, gateway and
+Vite dev-server origins hardcoded in `cors-origins.ts` outside production.
+This is enforced by the browser, not logged by the
 gateway: a missing origin fails the preflight before the request leaves the
 page, which surfaces to a user as "we could not reach the sign-in service,"
 not as anything visible server-side.
@@ -175,8 +176,8 @@ Separately, the web shell (`apps/web/next.config.mjs`) sets its own
 configured `NEXT_PUBLIC_API_URL`/`API_URL` and `NEXT_PUBLIC_WS_URL` — this is
 the browser-side header the storefront sends, distinct from the gateway's
 CORS allowlist above. The shell deliberately does not send an HSTS header
-from `next.config.mjs` (it would apply to `http://localhost:3000` too, and a
-browser that honours a year-long HSTS entry for `localhost` makes all local
+from `next.config.mjs` (it would apply to the shell's own local origin too,
+and a browser that honours a year-long HSTS entry for `localhost` makes all local
 development on that machine unreachable over plain HTTP); HSTS is instead set
 by `proxy.ts`, gated on the request's host actually being `kartseek.com`.
 

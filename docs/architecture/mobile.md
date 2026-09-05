@@ -135,9 +135,12 @@ cd apps/seller && flutter pub get && flutter run
 Copy `apps/customer/.env.example` to `.env` (and the same for `apps/partner`)
 before running, and fill in a Google Maps API key — required for the taxi and
 grocery map screens. Point the app at a non-local API with
-`--dart-define=API_BASE_URL=...`; the default is
-`http://127.0.0.1:3001`, which on a physical device is the handset's own
-loopback interface, not this machine.
+`--dart-define=API_BASE_URL=...`; the `API_BASE_URL`/`WS_BASE_URL` dart-define
+keys and their dev-only fallback are read by `AppConstants.apiBaseUrl`/
+`wsBaseUrl` in `packages/shared-mobile/lib/core/constants.dart`, which falls
+back to the gateway's local origin (see
+[`docs/architecture/services.md`](./services.md)) — on a physical device that
+loopback address is the handset's own interface, not this machine.
 
 ### Release builds
 
