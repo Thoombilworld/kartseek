@@ -6,7 +6,7 @@
 
 On 2026-09-05 the platform's ports were declared in five places: each
 service's `main.ts` defaults, `apps/api/.env.example`, `infra/k8s/config.yaml`,
-the table inside `k8s/gen-microservices.sh`, and `apps/api/docs/runbook.md`.
+the table inside `infra/k8s/gen-microservices.sh`, and `apps/api/docs/runbook.md`.
 They disagreed, and a mismatch between a gateway default and a service's bind
 port had already caused a silent outage that `.env` masked on every developer
 machine.
