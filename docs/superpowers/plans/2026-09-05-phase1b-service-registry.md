@@ -436,7 +436,7 @@ services:
     build: { workspace: "@kartseek/hotel-frontend" }
     image: kartseek/hotel-frontend
     ports: { http: 3007 }
-    basePath: /hotel
+    basePath: /hotel-booking
 
   - name: taxi-frontend
     kind: web-zone
@@ -511,7 +511,7 @@ test('the real registry loads and splits into 26 nest and 9 web entries', () => 
 
 - [ ] **Step 4: Run to see it fail**
 
-Run: `node --test scripts/registry/`
+Run: `node --test "scripts/registry/*.test.mjs"`
 Expected: FAIL — `Cannot find module './lib.mjs'`.
 
 - [ ] **Step 5: Write `lib.mjs`**
@@ -610,12 +610,12 @@ export function validateShape(doc) {
 
 - [ ] **Step 6: Run the tests**
 
-Run: `node --test scripts/registry/`
+Run: `node --test "scripts/registry/*.test.mjs"`
 Expected: 5 passed. If the last test fails on counts, the registry has a typo — fix `services.yaml`, not the test.
 
 - [ ] **Step 7: Wire the test command and commit**
 
-Add to root `package.json` scripts: `"test:scripts": "node --test scripts/"`.
+Add to root `package.json` scripts: `"test:scripts": "node --test \"scripts/**/*.test.mjs\""`.
 
 ```bash
 npm run test:scripts
@@ -1020,7 +1020,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 - [ ] **Step 4: Run the tests**
 
-Run: `node --test scripts/registry/`
+Run: `node --test "scripts/registry/*.test.mjs"`
 Expected: 11 passed (5 + 2 + 4).
 
 - [ ] **Step 5: Generate, then prove idempotence and the check mode**

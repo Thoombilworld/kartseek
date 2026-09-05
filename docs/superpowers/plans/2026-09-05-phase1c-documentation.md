@@ -742,7 +742,7 @@ test('checkTree reports every broken link with file and line', () => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `node --test scripts/docs/`
+Run: `node --test "scripts/docs/*.test.mjs"`
 Expected: FAIL — `Cannot find module './check-links.mjs'`.
 
 - [ ] **Step 3: Write the checker**
@@ -822,7 +822,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 - [ ] **Step 4: Run the tests**
 
-Run: `node --test scripts/docs/`
+Run: `node --test "scripts/docs/*.test.mjs"`
 Expected: 3 passed.
 
 - [ ] **Step 5: Wire it in and run it on the repository**
@@ -872,7 +872,7 @@ Expected: all green; the smoke table shows 26 rows with `ok` (or `ok (tcp)` for 
 
 - [ ] **Step 4: Manual render check**
 
-With `npm run dev` running, open `http://localhost:3000`, `/marketplace`, `/grocery`, `/restaurant`, `/pharmacy`, `/doctor`, `/hotel`, `/taxi`, `/franchise` and confirm each renders its own zone (not the shell's 404). Record the result in the final commit message.
+With `npm run dev` running, open `http://localhost:3000`, `/marketplace`, `/grocery`, `/restaurant`, `/pharmacy`, `/doctor`, `/hotel-booking`, `/taxi`, `/franchise` and confirm each renders its own zone (not the shell's 404). Record the result in the final commit message.
 
 - [ ] **Step 5: Close the phase**
 
