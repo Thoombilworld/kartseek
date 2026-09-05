@@ -60,6 +60,7 @@ export function renderReadmeBlock(s) {
     lines.push(s.kind === 'web-zone' ? `Mounted by the shell at ${code(s.basePath)}; open it through http://localhost:3000${s.basePath}.` : 'The shell: serves the top-level routes and rewrites each vertical path to its zone.');
     lines.push(`Image: ${code(s.image)}. Workspace: ${code(s.build.workspace)}.`);
   }
+  lines.push(''); // Prettier needs a blank line between the block's last paragraph and the end marker
   return lines.join('\n');
 }
 

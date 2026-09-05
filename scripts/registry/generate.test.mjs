@@ -24,6 +24,8 @@ test('renderReadmeBlock lists every port with its variable, then database and de
   assert.match(block, /<!-- prettier-ignore-end -->/);
   assert.equal((block.match(/prettier-ignore-start/g) || []).length, 1);
   assert.equal((block.match(/prettier-ignore-end/g) || []).length, 1);
+  // Prettier needs a blank line between the block's last paragraph and the end marker
+  assert.ok(block.endsWith('\n'), 'block must end with a newline for prettier compliance');
 });
 
 test('renderReadmeBlock for a zone gives port, base path and image', () => {

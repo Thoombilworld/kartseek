@@ -70,6 +70,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 
 The shell: serves the top-level routes and rewrites each vertical path to its zone.
 Image: `kartseek/web`. Workspace: `kartseek-web`.
+
 <!-- registry:end -->
 
 ## Layout
