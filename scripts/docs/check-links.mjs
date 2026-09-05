@@ -21,9 +21,12 @@ export function extractLinks(markdown) {
   const out = [];
   let inFence = false;
   markdown.split('\n').forEach((raw, i) => {
-    if (/^\s*```/.test(raw)) { inFence = !inFence; return; }
+    if (/^\s*```/.test(raw)) {
+      inFence = !inFence;
+      return;
+    }
     if (inFence) return;
-    const line = raw.replace(/`[^`]*`/g, '');   // drop inline code
+    const line = raw.replace(/`[^`]*`/g, ''); // drop inline code
     for (const m of line.matchAll(LINK)) {
       const target = m[1];
       if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue;
@@ -55,7 +58,9 @@ export function checkTree(root, files) {
 function trackedMarkdown(root, subtree) {
   const args = ['ls-files', '--', ...(subtree ? [subtree] : []), '*.md', '**/*.md'];
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' })
-    .split('\n').filter(Boolean).filter((f) => !f.includes('node_modules/'));
+    .split('\n')
+    .filter(Boolean)
+    .filter((f) => !f.includes('node_modules/'));
 }
 
 const thisFile = path.resolve(fileURLToPath(import.meta.url));

@@ -32,17 +32,26 @@ fs.mkdirSync(logDir, { recursive: true });
 function launchSpec(s) {
   const core = s.kind !== 'module-service';
   const cwd = path.join(root, core ? 'apps/api' : s.path);
-  const script = core ? path.join('dist', 'apps', s.build.nestProject, 'main.js') : path.join('dist', 'main.js');
+  const script = core
+    ? path.join('dist', 'apps', s.build.nestProject, 'main.js')
+    : path.join('dist', 'main.js');
   return { cwd, script };
 }
 
 function launch(s) {
   const { cwd, script } = launchSpec(s);
   if (!fs.existsSync(path.join(cwd, script))) {
-    throw new Error(`${s.name}: ${path.join(cwd, script)} is missing — run \`npm run build\` first`);
+    throw new Error(
+      `${s.name}: ${path.join(cwd, script)} is missing — run \`npm run build\` first`,
+    );
   }
   const log = fs.openSync(path.join(logDir, `${s.name}.log`), 'w');
-  const child = spawn(process.execPath, [script], { cwd, env: process.env, stdio: ['ignore', log, log], windowsHide: true });
+  const child = spawn(process.execPath, [script], {
+    cwd,
+    env: process.env,
+    stdio: ['ignore', log, log],
+    windowsHide: true,
+  });
   child.on('exit', () => fs.closeSync(log));
   return child;
 }
@@ -50,13 +59,20 @@ function launch(s) {
 async function probeOnce(s) {
   if (s.health.live) {
     try {
-      const res = await fetch(`http://127.0.0.1:${s.ports.http}${s.health.live}`, { signal: AbortSignal.timeout(2000) });
+      const res = await fetch(`http://127.0.0.1:${s.ports.http}${s.health.live}`, {
+        signal: AbortSignal.timeout(2000),
+      });
       return res.status === 200 ? 'ok' : `HTTP ${res.status}`;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
   return new Promise((resolve) => {
     const sock = net.connect(s.ports.http, '127.0.0.1');
-    sock.once('connect', () => { sock.destroy(); resolve('ok (tcp)'); });
+    sock.once('connect', () => {
+      sock.destroy();
+      resolve('ok (tcp)');
+    });
     sock.once('error', () => resolve(null));
   });
 }
@@ -76,13 +92,22 @@ async function waitHealthy(s, child) {
 
 function stop(child) {
   if (child.exitCode !== null) return;
-  if (process.platform === 'win32') { try { execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore' }); } catch {} }
-  else { try { child.kill('SIGTERM'); } catch {} }
+  if (process.platform === 'win32') {
+    try {
+      execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore' });
+    } catch {}
+  } else {
+    try {
+      child.kill('SIGTERM');
+    } catch {}
+  }
 }
 
 const entries = nestEntries(loadRegistry(root)).filter((s) => !only || only.includes(s.name));
 if (only && entries.length !== only.length) {
-  console.error(`unknown service in --only: ${only.filter((n) => !entries.some((e) => e.name === n)).join(', ')}`);
+  console.error(
+    `unknown service in --only: ${only.filter((n) => !entries.some((e) => e.name === n)).join(', ')}`,
+  );
   process.exit(2);
 }
 
@@ -104,12 +129,16 @@ for (let i = 0; i < entries.length; i += BATCH) {
 }
 
 const pad = (v, n) => String(v).padEnd(n);
-console.log(`\n${pad('service', 24)} ${pad('port', 6)} ${pad('probe', 26)} ${pad('result', 14)} time`);
+console.log(
+  `\n${pad('service', 24)} ${pad('port', 6)} ${pad('probe', 26)} ${pad('result', 14)} time`,
+);
 let failed = 0;
 for (const [s, r] of results) {
   const ok = r.status.startsWith('ok');
   if (!ok) failed++;
-  console.log(`${pad(s.name, 24)} ${pad(s.ports.http, 6)} ${pad(s.health.live ?? '(tcp connect)', 26)} ${pad(ok ? r.status : `FAIL ${r.status}`, 14)} ${(r.ms / 1000).toFixed(1)}s${ok ? '' : `   → tests/smoke/logs/${s.name}.log`}`);
+  console.log(
+    `${pad(s.name, 24)} ${pad(s.ports.http, 6)} ${pad(s.health.live ?? '(tcp connect)', 26)} ${pad(ok ? r.status : `FAIL ${r.status}`, 14)} ${(r.ms / 1000).toFixed(1)}s${ok ? '' : `   → tests/smoke/logs/${s.name}.log`}`,
+  );
 }
 console.log(`\n${results.length - failed}/${results.length} healthy`);
 process.exit(failed ? 1 : 0);
