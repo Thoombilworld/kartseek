@@ -41,7 +41,7 @@ modules/*/frontend/**
 apps/mcp-server
 packages
 docs
-k8s
+infra/k8s
 skills
 .claude
 .github

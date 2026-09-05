@@ -108,7 +108,7 @@ const skipDb = process.env.SKIP_DB === 'true';
  * single-host dev setup where all 26 services share a machine, and completely
  * wrong anywhere each service is its own container: loopback inside the gateway
  * pod is the gateway, so every marketplace/cart/order/payment call came back
- * ECONNREFUSED and surfaced as a 503. k8s/config.yaml supplies the cluster DNS
+ * ECONNREFUSED and surfaced as a 503. infra/k8s/config.yaml supplies the cluster DNS
  * names; the loopback default keeps `npm run dev:all` working untouched.
  */
 const svcHost = (name: string): string =>

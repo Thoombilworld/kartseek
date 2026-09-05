@@ -19,7 +19,7 @@ show_help() {
   cat << EOF
 KARTSEEK Kubernetes Utilities
 
-Usage: ./k8s/utils.sh [command] [options]
+Usage: ./infra/k8s/utils.sh [command] [options]
 
 Commands:
   logs [service]           Show logs for a service (default: api-gateway)
@@ -42,9 +42,9 @@ Environment:
   NAMESPACE                Kubernetes namespace (default: kartseek)
 
 Examples:
-  ./k8s/utils.sh logs auth-service
-  ./k8s/utils.sh port-forward redis
-  NAMESPACE=staging ./k8s/utils.sh status
+  ./infra/k8s/utils.sh logs auth-service
+  ./infra/k8s/utils.sh port-forward redis
+  NAMESPACE=staging ./infra/k8s/utils.sh status
 EOF
 }
 

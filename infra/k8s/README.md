@@ -87,7 +87,7 @@ kubectl get nodes
 
 ### Step 2: Create Secrets and ConfigMaps
 
-**Update sensitive values in `k8s/config.yaml`:**
+**Update sensitive values in `infra/k8s/config.yaml`:**
 ```bash
 # Edit secrets with your actual values
 kubectl edit secret kartseek-secrets -n kartseek
@@ -103,7 +103,7 @@ helm repo add external-secrets https://external-secrets.io
 helm install external-secrets external-secrets/external-secrets -n external-secrets-system --create-namespace
 
 # Create SecretStore to sync from AWS
-kubectl apply -f k8s/external-secrets-store.yaml
+kubectl apply -f infra/k8s/external-secrets-store.yaml
 ```
 
 ### Step 3: Install Prerequisites
@@ -111,15 +111,15 @@ kubectl apply -f k8s/external-secrets-store.yaml
 **Storage Classes:**
 ```bash
 # Cloud (AWS EBS CSI — the four production classes)
-kubectl apply -f k8s/storage.yaml
+kubectl apply -f infra/k8s/storage.yaml
 
 # Laptop cluster (docker-desktop / kind / minikube) — same class names, backed by
 # the local dynamic provisioner instead. Apply this INSTEAD of storage.yaml;
 # StorageClass fields are immutable, so remove the cloud one first.
 kubectl delete storageclass fast-ssd standard high-performance archive --ignore-not-found
-kubectl apply -f k8s/storage-local-dev.yaml
+kubectl apply -f infra/k8s/storage-local-dev.yaml
 ```
-> The file was `k8s/storage.yaml` all along — `storage-class.yaml` has never
+> The file was `infra/k8s/storage.yaml` all along — `storage-class.yaml` has never
 > existed, so anyone following this literally got "no such file", skipped it, and
 > then watched every database PVC sit Pending against a missing `fast-ssd` class.
 
@@ -145,8 +145,8 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack --
 
 **Automated deployment (using provided script):**
 ```bash
-chmod +x k8s/deploy.sh
-./k8s/deploy.sh production
+chmod +x infra/k8s/deploy.sh
+./infra/k8s/deploy.sh production
 ```
 
 **Manual deployment (step by step):**
@@ -154,16 +154,16 @@ chmod +x k8s/deploy.sh
 # 1. Namespace, RBAC, NetworkPolicies, LimitRange + ResourceQuota.
 #    Must come first: the quota rejects any pod without resource requests, and
 #    the LimitRange in this file is what supplies defaults for the init containers.
-kubectl apply -f k8s/namespace.yaml
+kubectl apply -f infra/k8s/namespace.yaml
 
 # 2. Secrets and config
-kubectl apply -f k8s/config.yaml -n kartseek
+kubectl apply -f infra/k8s/config.yaml -n kartseek
 
 # 3. StorageClasses (see "Prerequisites" above for the local-dev variant)
-kubectl apply -f k8s/storage.yaml
+kubectl apply -f infra/k8s/storage.yaml
 
 # 4. Databases — shared postgres, the dedicated marketplace postgres, redis, kafka
-kubectl apply -f k8s/databases.yaml -n kartseek
+kubectl apply -f infra/k8s/databases.yaml -n kartseek
 for sts in postgres postgres-marketplace redis kafka; do
   kubectl rollout status statefulset/$sts -n kartseek
 done
@@ -171,16 +171,16 @@ done
 # 5. Microservices — BEFORE the gateway, which opens a client to every one of
 #    them at boot. Both files are needed: microservices.yaml covers auth/order/
 #    payment, microservices-generated.yaml the other 22.
-kubectl apply -f k8s/microservices.yaml -n kartseek
-kubectl apply -f k8s/microservices-generated.yaml -n kartseek
-kubectl apply -f k8s/marketplace-hpa.yaml -n kartseek
+kubectl apply -f infra/k8s/microservices.yaml -n kartseek
+kubectl apply -f infra/k8s/microservices-generated.yaml -n kartseek
+kubectl apply -f infra/k8s/marketplace-hpa.yaml -n kartseek
 
 # 6. API Gateway
-kubectl apply -f k8s/api-gateway.yaml -n kartseek
+kubectl apply -f infra/k8s/api-gateway.yaml -n kartseek
 kubectl rollout status deployment/api-gateway -n kartseek
 
 # 7. Ingress (needs cert-manager + an ingress controller)
-kubectl apply -f k8s/ingress.yaml -n kartseek
+kubectl apply -f infra/k8s/ingress.yaml -n kartseek
 ```
 
 **Building the service images**
@@ -331,7 +331,7 @@ kubectl label namespace kartseek pod-security.kubernetes.io/enforce=restricted p
 ### Secret Management (Production)
 ```bash
 # Option 1: AWS Secrets Manager + External Secrets Operator (recommended)
-kubectl apply -f k8s/external-secrets-store.yaml
+kubectl apply -f infra/k8s/external-secrets-store.yaml
 
 # Option 2: HashiCorp Vault
 helm repo add hashicorp https://helm.releases.hashicorp.com
@@ -448,7 +448,7 @@ kubectl top nodes
 kubectl top pods -n kartseek --sort-by=memory
 
 # Increase memory limits in api-gateway.yaml
-# Then: kubectl apply -f k8s/api-gateway.yaml -n kartseek
+# Then: kubectl apply -f infra/k8s/api-gateway.yaml -n kartseek
 ```
 
 ---

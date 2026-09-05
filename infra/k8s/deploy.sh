@@ -1,7 +1,7 @@
 #!/bin/bash
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK Kubernetes Deployment Script
-# Usage: ./k8s/deploy.sh [environment]
+# Usage: ./infra/k8s/deploy.sh [environment]
 # Environments: dev, staging, production
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -10,6 +10,9 @@ set -e
 ENVIRONMENT=${1:-dev}
 NAMESPACE="kartseek"
 KUBECONFIG=${KUBECONFIG:-~/.kube/config}
+
+# Manifests live beside this script; run it from anywhere.
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
 # Colors for output
 RED='\033[0;31m'
@@ -53,8 +56,8 @@ log_success "Image pull secret configured"
 # looks like a networking problem.
 if [ "$ENVIRONMENT" = "production" ]; then
   log_info "Preflighting secrets..."
-  if grep -qE 'CHANGE_IN_PRODUCTION|change-in-production|xxxxxxxx|^\s*ENCRYPTION_KEY: "0{64}"' k8s/config.yaml; then
-    log_error "k8s/config.yaml still holds placeholder secrets. Replace them (or
+  if grep -qE 'CHANGE_IN_PRODUCTION|change-in-production|xxxxxxxx|^\s*ENCRYPTION_KEY: "0{64}"' ./config.yaml; then
+    log_error "infra/k8s/config.yaml still holds placeholder secrets. Replace them (or
   switch to the External Secrets Operator) before deploying to production."
   fi
   log_success "No placeholder secrets found"
@@ -62,14 +65,14 @@ fi
 
 # ── Step 5: Apply ConfigMaps and Secrets ──────────────────────────────────
 log_info "Deploying ConfigMaps and Secrets..."
-kubectl apply -f k8s/config.yaml --namespace=$NAMESPACE
+kubectl apply -f ./config.yaml --namespace=$NAMESPACE
 log_success "ConfigMaps and Secrets deployed"
 
 # ── Step 6: Apply RBAC, Network Policies, LimitRange and Quota ────────────
 # Must precede every workload: the ResourceQuota rejects pods that omit
 # resource requests, and the LimitRange in the same file is what supplies them.
 log_info "Configuring RBAC and Network Policies..."
-kubectl apply -f k8s/namespace.yaml
+kubectl apply -f ./namespace.yaml
 log_success "RBAC and Network Policies configured"
 
 # ── Step 7: Apply StorageClasses and dev PersistentVolumes ────────────────
@@ -77,12 +80,12 @@ log_success "RBAC and Network Policies configured"
 # volumeClaimTemplate names is absent, so all database PVCs sit Pending and no
 # database ever starts.
 log_info "Deploying StorageClasses..."
-kubectl apply -f k8s/storage.yaml
+kubectl apply -f ./storage.yaml
 log_success "StorageClasses deployed"
 
 # ── Step 8: Deploy Databases (PostgreSQL, Redis, Kafka) ───────────────────
 log_info "Deploying databases..."
-kubectl apply -f k8s/databases.yaml --namespace=$NAMESPACE
+kubectl apply -f ./databases.yaml --namespace=$NAMESPACE
 
 for sts in postgres postgres-marketplace redis kafka; do
   log_info "Waiting for $sts to be ready..."
@@ -96,9 +99,9 @@ log_success "Databases deployed"
 # Before the gateway, not after: the gateway opens a TCP client to every service
 # at boot, so bringing it up first guarantees a round of connection errors.
 log_info "Deploying Microservices..."
-kubectl apply -f k8s/microservices.yaml --namespace=$NAMESPACE
-kubectl apply -f k8s/microservices-generated.yaml --namespace=$NAMESPACE
-kubectl apply -f k8s/marketplace-hpa.yaml --namespace=$NAMESPACE
+kubectl apply -f ./microservices.yaml --namespace=$NAMESPACE
+kubectl apply -f ./microservices-generated.yaml --namespace=$NAMESPACE
+kubectl apply -f ./marketplace-hpa.yaml --namespace=$NAMESPACE
 log_info "Waiting for all microservice deployments..."
 kubectl wait --for=condition=Available deployment --all \
   --namespace=$NAMESPACE --timeout=10m || \
@@ -107,14 +110,14 @@ log_success "Microservices deployed"
 
 # ── Step 10: Deploy API Gateway ───────────────────────────────────────────
 log_info "Deploying API Gateway..."
-kubectl apply -f k8s/api-gateway.yaml --namespace=$NAMESPACE
+kubectl apply -f ./api-gateway.yaml --namespace=$NAMESPACE
 kubectl rollout status deployment/api-gateway --namespace=$NAMESPACE --timeout=10m
 log_success "API Gateway deployed"
 
 # ── Step 11: Deploy Ingress (if cert-manager is installed) ──────────────
 if kubectl get crd certificates.cert-manager.io &> /dev/null; then
   log_info "Deploying Ingress..."
-  kubectl apply -f k8s/ingress.yaml --namespace=$NAMESPACE
+  kubectl apply -f ./ingress.yaml --namespace=$NAMESPACE
   log_success "Ingress deployed"
 else
   log_warning "cert-manager not found. Skipping Ingress deployment."

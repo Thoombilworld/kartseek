@@ -2,10 +2,10 @@
 
 ## 📋 What's Included
 
-Your Kubernetes manifests are now ready in the `k8s/` directory:
+Your Kubernetes manifests are now ready in the `infra/k8s/` directory:
 
 ```
-k8s/
+infra/k8s/
 ├── namespace.yaml           # Namespace, RBAC, Network Policies, ResourceQuota
 ├── config.yaml              # ConfigMaps & Secrets for all services
 ├── api-gateway.yaml         # API Gateway Deployment, Service, HPA, PDB
@@ -33,8 +33,8 @@ k8s/
 
 ### Deploy Everything
 ```bash
-chmod +x k8s/deploy.sh
-./k8s/deploy.sh production
+chmod +x infra/k8s/deploy.sh
+./infra/k8s/deploy.sh production
 ```
 
 ### Verify Deployment
@@ -201,7 +201,7 @@ kubectl exec postgres-0 -n kartseek -- \
   pg_dump -U postgres kartseek_db | gzip > backup.sql.gz
 
 # Or use provided utility
-./k8s/utils.sh backup
+./infra/k8s/utils.sh backup
 ```
 
 ### Velero (Cluster-level backup)
@@ -290,7 +290,7 @@ kubectl logs -f -n ingress-nginx deployment/nginx-ingress-controller
 
 ## ✨ Next Steps
 
-1. **Deploy**: `./k8s/deploy.sh production`
+1. **Deploy**: `./infra/k8s/deploy.sh production`
 2. **Verify**: `kubectl get all -n kartseek`
 3. **Monitor**: `kubectl port-forward svc/api-gateway 3001:3001`
 4. **Setup Monitoring**: Install Prometheus + Grafana
