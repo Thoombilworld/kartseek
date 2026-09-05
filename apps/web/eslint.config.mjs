@@ -12,10 +12,6 @@ export default [
       'node_modules/**',
       'next-env.d.ts',
       'public/**',
-      // One-off maintenance scripts, not part of the app build
-      'check_links.js',
-      'fix_broken_links.js',
-      'refactor_taxi.js',
       // Build config. The parser eslint-config-next applies to .mjs produces a
       // scope manager the bundled ESLint 10 rejects ("scopeManager.addGlobals
       // is not a function"), which aborts the whole run. Not app source, so

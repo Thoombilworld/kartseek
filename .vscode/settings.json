@@ -112,9 +112,7 @@
     "**/.metadata/**",
     "**/archetype-resources/**",
     "**/META-INF/maven/**",
-    "**/apps/customer/android/**",
-    "**/apps/partner/android/**",
-    "**/apps/mobile/android/**"
+    "**/apps/{customer,partner,seller}/android/**"
   ],
   "cmake.sourceDirectory": "${workspaceFolder}/apps/customer/windows",
   "java.jdt.ls.aspectjSupport.enabled": true,

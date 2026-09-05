@@ -113,3 +113,9 @@ scratch/
 
 # Git Bash crash dumps (bash.exe.stackdump) — never source.
 *.stackdump
+
+# ── Added 2026-09-05, phase 1 tidy ────────────────────────────────────────────
+# A mirror of the Windows profile directory that a misconfigured tool created
+# at the repo root, and CMake output from the same session. Neither is source.
+/Users/
+/build/
