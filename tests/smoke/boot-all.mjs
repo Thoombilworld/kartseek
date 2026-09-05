@@ -89,7 +89,14 @@ if (only && entries.length !== only.length) {
 const results = [];
 for (let i = 0; i < entries.length; i += BATCH) {
   const batch = entries.slice(i, i + BATCH);
-  const children = batch.map((s) => [s, launch(s)]);
+  const children = [];
+  try {
+    for (const s of batch) children.push([s, launch(s)]);
+  } catch (err) {
+    for (const [, c] of children) stop(c);
+    console.error(`\n${err.message}`);
+    process.exit(1);
+  }
   const settled = await Promise.all(children.map(async ([s, c]) => [s, await waitHealthy(s, c)]));
   for (const [, c] of children) stop(c);
   results.push(...settled);
