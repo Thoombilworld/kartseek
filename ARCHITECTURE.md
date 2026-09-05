@@ -1,818 +1,342 @@
-# KARTSEEK Architecture Documentation
+# KARTSEEK architecture
 
-## Table of Contents
-1. [Project Overview](#project-overview)
-2. [High-Level Architecture](#high-level-architecture)
-3. [Frontend-Backend Interaction](#frontend-backend-interaction)
-4. [File & Directory Structure](#file--directory-structure)
-5. [Backend Technologies & Systems](#backend-technologies--systems)
-6. [Core Features & Functionality](#core-features--functionality)
-7. [Middleware Architecture](#middleware-architecture)
-8. [Microservices Overview](#microservices-overview)
+KARTSEEK is a multi-vertical super-app platform — marketplace, grocery,
+restaurant, pharmacy, doctor bookings, hotel bookings, taxi, and a franchise
+partner console — built as one Nest monorepo behind a single API gateway,
+fronted by a Next.js web shell split into per-vertical zones, and by three
+independent Flutter mobile apps. This document is for anyone who has not seen
+the system before and needs to know what is actually deployed and how a
+request actually travels through it, on the `chore/platform-reorg` branch
+that is carrying out the reorganization described in
+[`docs/superpowers/specs/2026-09-05-platform-reorganization-design.md`](docs/superpowers/specs/2026-09-05-platform-reorganization-design.md).
+Every number below is transcribed from [`services.yaml`](services.yaml) or
+from a counting command recorded next to it — re-run the command rather than
+trusting the prose if the two ever disagree. The linked documents under
+`docs/architecture/` and `docs/adr/` carry the depth this file only
+summarizes; treat this page as the map, not the territory.
 
----
+## 1. System at a glance
 
-## Project Overview
+```mermaid
+graph LR
+  subgraph Clients
+    shell["Web shell"]
+    zones["8 Next.js zones"]
+    mobile["3 Flutter apps"]
+  end
 
-**KARTSEEK** is a scalable multi-country super app combining:
-- **Marketplace** (Electronics, Fashion, Home)
-- **Grocery** (Hyperlocal delivery, 10km radius)
-- **Restaurant** (Food delivery, takeaway, table booking)
-- **Pharmacy** (OTC & prescription medicines)
-- **Doctor Appointments** (Clinic visits & video consultations)
-- **Taxi Booking** (Uber/Ola style ride-hailing)
-- **Delivery Logistics** (Cross-module courier system)
-- **Wallet & Payments** (Unified financial layer)
-- **Loyalty Program** (Points per purchase)
-- **Admin Panel** (Super admin, franchisees, sellers, drivers)
+  gateway["API gateway<br/>REST /api/v1 + Socket.IO"]
 
-**Target Platforms:**
-- Flutter (Android & iOS) — Native mobile apps for customers, drivers, and partners
-- Next.js + React (Web) — Progressive Web App (PWA) for web customers and admin portals
-- Admin Portal, Seller Portal, Franchise Dashboard — Role-based web access
+  subgraph Backend["26 Nest deployables"]
+    core["17 core services"]
+    modules["8 module services"]
+  end
 
----
+  kafka(["Kafka"])
 
-## High-Level Architecture
+  subgraph Data
+    pg[("Postgres<br/>kartseek_db + 8 module DBs")]
+    redis[("Redis")]
+    mongo[("MongoDB<br/>audit logs")]
+    es[("Elasticsearch<br/>search")]
+  end
 
-### Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     CLIENT LAYER (Presentation)                     │
-├──────────────────┬──────────────────┬──────────────────────────────┤
-│  Flutter Mobile  │  Next.js Web     │  Admin Portals              │
-│  (iOS/Android)   │  (PWA + SPA)     │  (Seller, Franchise, Driver)│
-└─────────┬────────┴─────────┬────────┴──────────┬───────────────────┘
-          │                  │                    │
-          └──────────────────┼────────────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  API Gateway    │
-                    │ (Load Balancer) │
-                    └────────┬────────┘
-                             │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-    ┌─────▼──────┐    ┌──────▼───────┐   ┌─────▼──────┐
-    │ Auth Service│   │ Order Service │   │Marketplace │
-    │ User Service│   │Payment Service│   │ Service    │
-    │   (gRPC)   │   │ (Kafka)       │   │ (TCP)      │
-    └────────────┘   └───────────────┘   └────────────┘
-          │                  │                  │
-          └──────────────────┼──────────────────┘
-                             │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-    ┌─────▼──────┐    ┌──────▼───────┐   ┌─────▼──────┐
-    │ PostgreSQL │    │  Redis Cache │   │   Kafka    │
-    │  (Primary) │    │  (Sessions)  │   │(Event Bus) │
-    └────────────┘   └───────────────┘   └────────────┘
-
-    WebSocket Gateways:
-    ├── Taxi Tracking (GPS streaming)
-    ├── Delivery Tracking (Real-time)
-    ├── Notifications (Push alerts)
-    ├── Chat (In-app messaging)
-    └── Order Updates (Lifecycle events)
+  shell --> gateway
+  zones --> gateway
+  mobile --> gateway
+  gateway -->|"TCP / gRPC"| core
+  gateway -->|"TCP / gRPC"| modules
+  core --> pg
+  modules --> pg
+  core --> redis
+  modules --> redis
+  core --> mongo
+  modules --> es
+  core -.->|"events"| kafka
+  modules -.->|"events"| kafka
 ```
 
-### System Interaction Flow
-
-1. **Client requests** originate from Flutter, Next.js, or admin portals
-2. **API Gateway** (port 3000) routes requests via Express + NestJS
-3. **Security middleware** validates JWT, checks rate limits, sanitizes input, detects DDoS
-4. **Microservices** handle business logic (auth, orders, payments, etc.)
-5. **Data persistence** via PostgreSQL (transactional) and Redis (cache/sessions)
-6. **Event streaming** via Kafka for async operations (notifications, reporting)
-7. **Real-time communication** via WebSocket gateways for taxi, delivery, chat, notifications
-
----
-
-## Frontend-Backend Interaction
-
-### REST API Flow
-
-```
-Client Request
-    ↓
-HTTP/HTTPS (port 3000)
-    ↓
-[CORS] → Check origin whitelist (localhost, *.kartseek.com)
-    ↓
-[Headers Timeout] → Max 15 seconds to receive headers
-    ↓
-[Security Headers] → Helmet: CSP, HSTS, X-Frame-Options, etc.
-    ↓
-[Request ID Middleware] → Assign X-Request-ID for distributed tracing
-    ↓
-[Input Sanitizer] → XSS, SQL injection, NoSQL injection, command injection prevention
-    ↓
-[DDoS Protection] → Rate limiting (100 requests/60s per IP)
-    ↓
-[JWT Validation Guard] → Verify access token (if protected route)
-    ↓
-[CSRF Guard] → Double-submit cookie pattern check
-    ↓
-[Route Handler] → Execute controller logic
-    ↓
-[PCI Compliance Interceptor] → Mask card numbers in responses
-    ↓
-[Transform Interceptor] → Standardize response format
-    ↓
-[Audit Interceptor] → Log sensitive operations
-    ↓
-HTTP Response (200, 400, 401, 429, 500, etc.)
-    ↓
-Client receives JSON response
-```
-
-### WebSocket Flow (Real-time tracking)
-
-```
-Client initiates WebSocket connection
-    ↓
-ws://localhost:3000/taxi (or /delivery, /notifications, /chat, /orders)
-    ↓
-[WS DDoS Guard] → Limit message rate per user (10 messages/second)
-    ↓
-[JWT Validation] → Verify user identity
-    ↓
-[Socket Events] → Client can emit/listen to namespace-specific events
-    ↓
-[Kafka Bridge] → If event originates from another service, Kafka → WebSocket
-    ↓
-Real-time data streamed to client
-    ↓
-Client receives: location updates, order status, chat messages, notifications
-```
-
-### Service-to-Service Communication
-
-- **gRPC** (synchronous, low-latency): Auth Service, Order Service
-- **TCP Microservices** (legacy, pending gRPC migration): Marketplace, Cart, Loyalty, Franchise, Doctor
-- **Kafka** (asynchronous, event-driven): Order processing, notifications, loyalty points, audit logs
-
----
-
-## File & Directory Structure
-
-### Monorepo Layout
-
-```
-KARTSEEKAPP/
-├── apps/
-│   ├── api/                    ← NestJS Backend (26 microservices + shared libs)
-│   │   ├── apps/               ← Individual microservices
-│   │   │   ├── api-gateway/    ← Central routing & orchestration
-│   │   │   ├── auth-service/   ← JWT, OAuth, session management
-│   │   │   ├── user-service/   ← User profiles, KYC verification
-│   │   │   ├── order-service/  ← Order lifecycle management
-│   │   │   ├── payment-service/← Payment gateway integration
-│   │   │   ├── delivery-service/← Partner assignment & tracking
-│   │   │   ├── marketplace-service/ ← E-commerce catalog
-│   │   │   ├── grocery-service/← Hyperlocal grocery inventory
-│   │   │   ├── restaurant-service/ ← Restaurant menus & orders
-│   │   │   ├── pharmacy-service/← Medicine inventory & RX verification
-│   │   │   ├── doctor-service/ ← Doctor schedules & consultations
-│   │   │   ├── taxi-service/   ← Ride-hailing, fare calculation, GPS
-│   │   │   ├── location-service/← Geolocation & address mapping
-│   │   │   ├── loyalty-service/← Points accumulation & redemption
-│   │   │   ├── wallet-service/ ← Digital wallet, balance management
-│   │   │   ├── notification-service/ ← FCM, email, SMS, WhatsApp
-│   │   │   ├── admin-service/  ← Super admin controls
-│   │   │   ├── franchise-service/ ← Regional franchisee management
-│   │   │   ├── seller-service/ ← Seller portal & inventory management
-│   │   │   ├── audit-log-service/ ← Compliance & audit logging
-│   │   │   ├── search-service/ ← Global search with Elasticsearch
-│   │   │   ├── commission-service/ ← Commission calculation
-│   │   │   ├── payout-service/ ← Seller/driver payouts
-│   │   │   ├── refund-service/ ← Refund processing
-│   │   │   ├── report-service/ ← Analytics & reporting
-│   │   │   ├── cart-service/   ← Shopping cart management
-│   │   │   └── hotel-service/  ← Hotel booking (future vertical)
-│   │   ├── libs/               ← Shared NestJS libraries
-│   │   │   ├── common/         ← Common utilities, filters, interceptors
-│   │   │   ├── database/       ← PostgreSQL setup & migrations
-│   │   │   ├── security/       ← JWT, DDoS, encryption, PCI compliance
-│   │   │   ├── guards/         ← Auth & authorization guards
-│   │   │   ├── redis/          ← Redis client setup & caching
-│   │   │   ├── kafka/          ← Kafka producer/consumer setup
-│   │   │   ├── grpc/           ← gRPC client configuration
-│   │   │   ├── region/         ← Multi-regional data architecture
-│   │   │   └── gdpr/           ← Data privacy compliance utilities
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── web/                    ← Next.js Frontend
-│   │   ├── src/
-│   │   │   ├── app/            ← App Router (pages & layouts)
-│   │   │   │   ├── (account)/  ← Wallet, Loyalty, Profile
-│   │   │   │   ├── admin/      ← Super Admin Dashboard
-│   │   │   │   ├── seller/     ← Seller Portal
-│   │   │   │   ├── franchise/  ← Franchise Dashboard
-│   │   │   │   ├── marketplace/← E-commerce storefront
-│   │   │   │   ├── grocery/    ← Grocery module
-│   │   │   │   ├── restaurant/ ← Food delivery
-│   │   │   │   ├── pharmacy/   ← Pharmacy storefront
-│   │   │   │   ├── doctor/     ← Doctor appointments
-│   │   │   │   ├── taxi/       ← Taxi booking interface
-│   │   │   │   ├── search/     ← Global search
-│   │   │   │   └── api/        ← Route handlers & API utilities
-│   │   │   ├── components/     ← Reusable UI components
-│   │   │   ├── features/       ← Feature-specific logic (feature folders)
-│   │   │   ├── lib/            ← Utils, API clients, auth context
-│   │   │   ├── hooks/          ← Custom React hooks
-│   │   │   └── styles/         ← Global CSS, Tailwind config
-│   │   └── package.json
-│   └── mobile/                 ← Flutter Application
-│       ├── lib/
-│       │   ├── core/           ← Theme, Network, Routing, Constants
-│       │   ├── features/       ← Feature-driven screens & logic
-│       │   │   ├── auth/
-│       │   │   ├── home/
-│       │   │   ├── marketplace/
-│       │   │   ├── taxi/
-│       │   │   ├── profile/
-│       │   │   └── [other features]
-│       │   ├── shared/         ← Reusable widgets & utilities
-│       │   └── main.dart
-│       └── pubspec.yaml
-├── libs/                       ← Shared code (design tokens, utilities)
-│   └── design-system/          ← Colors, typography, spacing tokens
-├── docs/                       ← Project specification & guides
-├── scripts/                    ← Automation & utility scripts
-├── docker-compose.yml          ← Local infrastructure
-├── nginx/                      ← Nginx reverse proxy config
-├── package.json                ← Monorepo root (npm workspaces)
-├── turbo.json                  ← Turborepo pipeline config
-└── README.md                   ← Project handover document
-```
-
-### Backend Microservice Structure (Each service follows this pattern)
-
-```
-auth-service/
-├── src/
-│   ├── main.ts                 ← NestJS bootstrap
-│   ├── auth.module.ts          ← Module definition
-│   ├── auth.controller.ts      ← HTTP endpoints
-│   ├── auth.service.ts         ← Business logic
-│   ├── dto/                    ← Request/response DTOs
-│   │   ├── login.dto.ts
-│   │   ├── register.dto.ts
-│   │   └── refresh-token.dto.ts
-│   ├── entities/               ← TypeORM database entities
-│   │   └── user.entity.ts
-│   ├── guards/                 ← Authorization guards
-│   │   └── jwt-auth.guard.ts
-│   ├── interceptors/           ← Request/response interceptors
-│   └── strategies/             ← Passport strategies
-│       └── jwt.strategy.ts
-├── test/
-│   ├── auth.controller.spec.ts
-│   └── auth.service.spec.ts
-├── package.json
-└── tsconfig.json
-```
-
----
-
-## Backend Technologies & Systems
-
-### Core Stack
-
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Framework** | NestJS 10+ | Server-side TypeScript framework with dependency injection |
-| **Runtime** | Node.js 24+ | JavaScript runtime |
-| **Language** | TypeScript | Type-safe development |
-| **HTTP** | Express.js 5+ | Web server (integrated into NestJS) |
-
-### Data Layer
-
-| Technology | Purpose | Port | Notes |
-|-----------|---------|------|-------|
-| **PostgreSQL 16** | Primary transactional database | 5432 | With PostGIS for geospatial queries |
-| **Redis 8.8** | Cache & session store | 6379 | 256MB max memory, LRU eviction |
-| **TypeORM** | Object-relational mapping | — | Database migrations, entity definitions |
-
-### Messaging & Events
-
-| Technology | Purpose | Port | Notes |
-|-----------|---------|------|-------|
-| **Apache Kafka 4.3** | Event streaming & async tasks | 9092 | KRaft mode (no Zookeeper) |
-| **Socket.IO** | WebSocket real-time communication | — | Integrated into API Gateway |
-
-### API Communication
-
-| Method | Protocol | Use Case | Example Services |
-|--------|----------|----------|-------------------|
-| **REST/HTTP** | HTTP 1.1 | Standard CRUD operations | All controllers expose REST |
-| **gRPC** | HTTP/2 | Low-latency synchronous calls | Auth Service, Order Service |
-| **TCP Microservices** | Custom binary | Legacy services (migration pending) | Marketplace, Cart, Loyalty, Doctor |
-| **WebSocket** | ws/wss | Real-time streaming | Taxi tracking, delivery, notifications |
-
-### Caching & Performance
-
-- **Redis Cache**: Session tokens, rate-limit buckets, geolocation cache
-- **Query Caching**: Automatic via Redis for frequently accessed data
-- **Response Compression**: gzip compression via helmet middleware
-
-### Security & Compliance
-
-| System | Purpose |
-|--------|---------|
-| **Helmet.js** | HTTP security headers (HSTS, CSP, X-Frame-Options, etc.) |
-| **JWT (Passport.js)** | Authentication via access & refresh tokens |
-| **Bcryptjs** | Password hashing (10 salt rounds) |
-| **CORS** | Cross-origin resource sharing control |
-| **DDoS Protection** | Rate limiting, connection limiting, IP fingerprinting |
-| **Input Sanitization** | XSS, SQL/NoSQL injection, command injection prevention |
-| **PCI-DSS Compliance** | Credit card masking, secure payment token handling |
-| **GDPR Compliance** | Data privacy, right to erasure, audit logs |
-| **CSRF Protection** | Double-submit cookie pattern |
-| **Account Lockout** | Progressive lockout after failed login attempts |
-
-### Monitoring & Logging
-
-- **NestJS Logger**: Error, warn, log, debug levels
-- **Audit Logs**: All admin actions, payment transactions, compliance events
-- **Request ID Tracking**: Distributed tracing via X-Request-ID header
-- **Health Checks**: Liveness & readiness probes at `/health` endpoint
-
----
-
-## Core Features & Functionality
-
-### 1. Marketplace Module
-**Purpose**: Nationwide e-commerce platform  
-**Key Features**:
-- Brand-verified product catalog (Electronics, Fashion, Home)
-- Multi-variant products (sizes, colors, models)
-- Nationwide shipping with tracking
-- Admin brand registry & approval system
-- Seller bulk product CSV upload
-- Inventory management with real-time sync
-
-**API Endpoints**:
-- `GET /api/v1/marketplace/products` — Search & filter
-- `POST /api/v1/marketplace/cart` — Add to cart
-- `POST /api/v1/marketplace/orders` — Place order
-
----
-
-### 2. Grocery Module
-**Purpose**: Hyperlocal delivery (10km GPS radius)  
-**Key Features**:
-- GPS-based location detection
-- Store proximity filtering
-- Category-based browsing (Fresh, Snacks, Dairy)
-- Weight-based variants (fresh produce)
-- Delivery slot selection
-- Live GPS tracking
-
-**API Endpoints**:
-- `GET /api/v1/grocery/stores` — List nearby stores (filtered by GPS radius)
-- `GET /api/v1/grocery/products` — Browse store inventory
-- `POST /api/v1/grocery/orders` — Place order with delivery slot
-
----
-
-### 3. Restaurant Module
-**Purpose**: Food delivery, takeaway, table booking  
-**Key Features**:
-- Location-based restaurant discovery
-- Veg/Non-veg toggle
-- Menu with modifiers (add-ons, extra sauce, etc.)
-- Real-time order prep status
-- Table reservation with queue management
-- Takeaway option
-
-**API Endpoints**:
-- `GET /api/v1/restaurants` — List nearby restaurants
-- `GET /api/v1/restaurants/:id/menu` — Fetch menu with modifiers
-- `POST /api/v1/restaurants/orders` — Place food order
-
----
-
-### 4. Pharmacy Module
-**Purpose**: OTC & prescription medicine delivery  
-**Key Features**:
-- Prescription document upload & AI verification
-- Pharmacist manual approval for RX drugs
-- OTC inventory management
-- Prescription history storage
-- Compliance with regulations (doctor verification)
-
-**API Endpoints**:
-- `POST /api/v1/pharmacy/prescriptions/upload` — Upload prescription document
-- `GET /api/v1/pharmacy/products` — OTC products
-- `POST /api/v1/pharmacy/orders` — Order with prescription validation
-
----
-
-### 5. Doctor Appointments
-**Purpose**: Clinic visits & video consultations  
-**Key Features**:
-- Doctor specialty/symptom search
-- Doctor profile with qualifications
-- Time slot availability
-- Video consultation infrastructure
-- Medical report/past record upload
-- Consultation fee payment
-
-**API Endpoints**:
-- `GET /api/v1/doctors?specialty=cardiology` — Search doctors
-- `GET /api/v1/doctors/:id/slots` — Available time slots
-- `POST /api/v1/doctors/appointments` — Book appointment
-
----
-
-### 6. Taxi Module
-**Purpose**: Ride-hailing (Uber/Ola style)  
-**Key Features**:
-- Pickup & drop location pinning
-- Dynamic fare calculation (distance, surge)
-- Real-time driver matching & GPS streaming
-- OTP-based verification (driver pickup confirmation)
-- SOS alerts for safety
-- Commission deductions per ride
-- Fleet vendor dashboard
-
-**API Endpoints**:
-- `POST /api/v1/taxi/estimate` — Get fare estimate
-- `POST /api/v1/taxi/rides` — Request ride
-- `WS /taxi` — WebSocket for GPS tracking
-
----
-
-### 7. Delivery Logistics
-**Purpose**: Unified courier system across all modules  
-**Key Features**:
-- Cross-service delivery partner assignment (Marketplace, Grocery, Restaurant, Pharmacy)
-- Geolocation-based nearest rider matching
-- Seller QR handover confirmation
-- Live customer tracking
-- OTP delivery confirmation
-- Return order handling
-- COD collection & reconciliation
-
-**API Endpoints**:
-- `POST /api/v1/delivery/tasks` — Create delivery task
-- `PATCH /api/v1/delivery/tasks/:id/status` — Update task status
-- `WS /delivery` — Real-time tracking updates
-
----
-
-### 8. Wallet & Payment
-**Purpose**: Unified financial movement  
-**Key Features**:
-- Digital wallet balance management
-- Payment gateway integration
-- Escrow holds during order fulfillment
-- Instant settlement to seller/driver wallets
-- Transaction history
-- Refund processing
-
-**API Endpoints**:
-- `GET /api/v1/wallet/balance` — Current balance
-- `POST /api/v1/payments/process` — Process payment
-- `GET /api/v1/transactions` — History
-
----
-
-### 9. Loyalty Program
-**Purpose**: Points-based rewards  
-**Key Features**:
-- Points accumulation per purchase
-- Points redemption for discounts
-- Tiered loyalty levels (Silver, Gold, Platinum)
-- Referral bonuses
-- Expiry management
-
-**API Endpoints**:
-- `GET /api/v1/loyalty/points` — Current balance
-- `GET /api/v1/loyalty/history` — Transaction history
-- `POST /api/v1/loyalty/redeem` — Redeem points
-
----
-
-### 10. Global Search
-**Purpose**: Unified search across all modules  
-**Key Features**:
-- "Apple" returns: iPhone (Marketplace), Fresh Apples (Grocery), Apple Pie (Restaurant)
-- GPS-filtered results (relevant to user location)
-- Elasticsearch-backed full-text search
-- Autocomplete suggestions
-- Search analytics
-
-**API Endpoints**:
-- `GET /api/v1/search?q=apple` — Global search
-
----
-
-### 11. Admin Panel
-**Purpose**: Super admin controls  
-**Key Features**:
-- Global commission configuration
-- Country & city taxonomy management
-- Layout theme customization (colors, fonts)
-- Top-level payout approvals
-- KYC document verification queue
-- Compliance reporting
-
-**API Endpoints**:
-- `GET /api/v1/admin/commissions` — View commission settings
-- `PATCH /api/v1/admin/commissions` — Update commission rates
-- `GET /api/v1/admin/kyc/pending` — KYC verification queue
-
----
-
-### 12. Notifications
-**Purpose**: Multi-channel real-time alerts  
-**Key Features**:
-- Push notifications (FCM)
-- Email notifications
-- SMS notifications
-- WhatsApp notifications
-- In-app notification center
-- Notification preferences per user
-
-**API Endpoints**:
-- `POST /api/v1/notifications/send` — Send notification (admin only)
-- `WS /notifications` — Real-time push alerts
-
----
-
-## Middleware Architecture
-
-### Request Processing Pipeline
-
-The API Gateway applies middleware in strict order:
-
-#### 1. **Helmet Security Headers Middleware**
-- Sets CSP, HSTS, X-Frame-Options, nosniff, etc.
-- Prevents clickjacking, MIME-sniffing, and other browser-level attacks
-- Location: `main.ts` (Express global middleware)
-
-#### 2. **Response Compression Middleware**
-- Compresses responses using gzip
-- Reduces bandwidth usage
-- Location: `main.ts`
-
-#### 3. **CORS Middleware**
-- Validates origin against whitelist:
-  - `localhost:3000` (Next.js dev)
-  - `localhost:3001` (API Gateway Swagger)
-  - `localhost:5173` (Vite dev tools)
-  - `*.kartseek.com` (Production subdomains)
-- Allowed headers: `Content-Type`, `Authorization`, `X-Request-ID`, `X-Client-Version`, `X-Region-Code`
-- Location: `main.ts`
-
-#### 4. **Request ID Middleware** (from `security/src/request-id.middleware.ts`)
-**Purpose**: Distributed tracing correlation  
-**Flow**:
-- Checks if `X-Request-ID` header exists
-- If not, generates UUID v4
-- Adds to `request.id` and response header `X-Request-ID`
-- All logs include this ID for traceability
-
-#### 5. **Input Sanitizer Middleware** (from `security/src/input-sanitizer.middleware.ts`)
-**Purpose**: Prevent injection attacks  
-**Threats Prevented**:
-- **SQL Injection**: Detects SQL metacharacters and keywords (DROP, DELETE, UNION, etc.)
-- **NoSQL Injection**: Prevents MongoDB operators like `$ne`, `$gt`, `$regex`
-- **XSS (Cross-Site Scripting)**: Escapes HTML entities and dangerous scripts
-- **Command Injection**: Blocks shell metacharacters (`;`, `|`, `&`, `$()`, backticks)
-**Implementation**:
-- Scans request body, query params, and headers
-- Uses regex patterns for each threat type
-- Returns `400 Bad Request` if threat detected
-- Logs attempt for audit trail
-
-#### 6. **DDoS Protection Middleware** (from `security/src/ddos-protection.middleware.ts`)
-**Purpose**: Prevent distributed denial of service attacks  
-**Mechanisms**:
-- **Rate Limiting**: 100 requests per 60 seconds per IP
-- **Burst Detection**: Flags IPs exceeding rate limit; blocks for 5 minutes
-- **Connection Limiting**: Max 10 concurrent requests per IP
-- **Slowloris Detection**: Monitors header reception time; disconnects if > 15 seconds
-- **IP Fingerprinting**: Tracks repeated offenders
-**Thresholds**:
-- Rate limit: `100 requests / 60s per IP`
-- Burst threshold: `110% of rate limit`
-- Burst cooldown: `5 minutes`
-- Max concurrent connections: `10 per IP`
-**Headers Used**:
-- `X-Forwarded-For` (if behind proxy)
-- `CF-Connecting-IP` (if behind Cloudflare)
-- `X-Real-IP` (if behind reverse proxy)
-**Response**:
-- Returns `429 Too Many Requests` when rate limit exceeded
-- Includes `Retry-After` header with cooldown seconds
-
-#### 7. **JWT Validation Guard** (from `security/src/jwt-auth.guard.ts` & `jwt.strategy.ts`)
-**Purpose**: Authenticate requests using JWT tokens  
-**Flow**:
-- Extracts token from `Authorization: Bearer <token>` header
-- Verifies signature using JWT_SECRET
-- Validates expiration (default 24 hours)
-- Decodes payload to extract `userId`, `email`, `roles`
-- Attaches user context to request object
-- Returns `401 Unauthorized` if token invalid or expired
-**Usage**:
-- Applied to protected routes via `@UseGuards(JwtAuthGuard)` decorator
-
-#### 8. **CSRF Protection Guard** (from `security/src/csrf-protection.guard.ts`)
-**Purpose**: Prevent Cross-Site Request Forgery  
-**Pattern**: Double-submit cookie
-**Flow**:
-- Client receives CSRF token via `Set-Cookie: X-CSRF-Token`
-- Client must include token in request header or body for state-changing requests
-- Server validates token matches cookie
-- Returns `403 Forbidden` if mismatch
-**Protected Methods**: POST, PUT, PATCH, DELETE
-
-#### 9. **Roles Guard** (from `libs/guards/src/roles.guard.ts`)
-**Purpose**: Enforce role-based access control (RBAC)  
-**Roles**:
-- `SUPER_ADMIN` — Full platform control
-- `FRANCHISE_ADMIN` — Regional control
-- `SELLER` — Seller portal access
-- `DRIVER` — Delivery/taxi driver
-- `CUSTOMER` — End user
-**Usage**:
-```typescript
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('SELLER', 'SUPER_ADMIN')
-@Post('inventory')
-createInventory() { ... }
-```
-
-#### 10. **Region Guard** (from `libs/region/src/region.guard.ts`)
-**Purpose**: Enforce region-based data isolation  
-**Flow**:
-- Reads `X-Region-Code` header (e.g., `IN`, `AE`, `BD`)
-- Validates against allowed regions for user
-- Filters database queries by region
-- Prevents cross-region data access
-
-#### 11. **Account Lockout Service** (from `security/src/account-lockout.service.ts`)
-**Purpose**: Prevent brute-force login attacks  
-**Mechanism**:
-- Tracks failed login attempts per email
-- Progressive lockout:
-  - After 3 failures: `5 minute cooldown`
-  - After 5 failures: `30 minute cooldown`
-  - After 10 failures: `24 hour permanent lock` (requires admin unlock)
-- Resets counter on successful login
-- Logs all attempts for audit
-**API**:
-```typescript
-// In auth.controller.ts
-const canLogin = await accountLockoutService.checkLoginAttempt(email);
-if (!canLogin) return 429 Too Many Requests;
-```
-
-#### 12. **PCI Compliance Interceptor** (from `security/src/pci-compliance.interceptor.ts`)
-**Purpose**: Mask sensitive payment data in responses  
-**Masked Fields**:
-- Credit card numbers: `4111 **** **** 1111`
-- CVV: `***`
-- Bank account numbers: `****12345`
-**Implementation**:
-- Intercepts all responses
-- Scans for card/bank data
-- Replaces with masked versions before sending to client
-- Prevents accidental exposure of sensitive data
-
-#### 13. **Logging Interceptor** (from `libs/common/src/interceptors/logging.interceptor.ts`)
-**Purpose**: Structured request/response logging  
-**Logs**:
-- Request method, path, headers
-- Response status, duration
-- User ID (if authenticated)
-- Request ID for tracing
-**Format**: JSON structured logs for ELK/Datadog integration
-
-#### 14. **Transform Interceptor** (from `libs/common/src/interceptors/transform.interceptor.ts`)
-**Purpose**: Standardize API response format  
-**Standard Format**:
-```json
-{
-  "success": true,
-  "data": { ... },
-  "message": "Operation successful",
-  "timestamp": "2026-06-24T10:30:00Z",
-  "requestId": "uuid-here"
-}
-```
-
-#### 15. **Audit Interceptor** (from `apps/api-gateway/src/interceptors/audit.interceptor.ts`)
-**Purpose**: Log sensitive operations for compliance  
-**Logged Operations**:
-- Admin actions (commission changes, user approvals)
-- Financial transactions (payments, payouts, refunds)
-- Permission changes
-- Data deletions
-**Log Entry**:
-```json
-{
-  "action": "UPDATE_COMMISSION",
-  "userId": "admin-123",
-  "timestamp": "2026-06-24T10:30:00Z",
-  "oldValue": { "rate": 15 },
-  "newValue": { "rate": 18 },
-  "ipAddress": "192.168.1.1",
-  "requestId": "uuid"
-}
-```
-
-#### 16. **WebSocket DDoS Guard** (from `security/src/ws-ddos.guard.ts`)
-**Purpose**: Prevent WebSocket connection/message floods  
-**Protections**:
-- Max `10 messages per second` per user
-- Max `100 concurrent connections` per user
-- Disconnects exceeding limits
-- IP-based fingerprinting for non-authenticated connections
-**Gateways Protected**:
-- `/taxi` — Driver GPS streaming
-- `/delivery` — Delivery tracking
-- `/notifications` — Push alerts
-- `/chat` — Messaging
-- `/orders` — Order updates
-
----
-
-## Microservices Overview
-
-### 26 Microservices Architecture
-
-| # | Service | Port | Protocol | Purpose |
-|---|---------|------|----------|---------|
-| 1 | **api-gateway** | 3000 | HTTP/WS | Central routing & orchestration |
-| 2 | **auth-service** | 4000 | gRPC | JWT, OAuth, sessions |
-| 3 | **user-service** | 4001 | TCP | User profiles, KYC |
-| 4 | **marketplace-service** | 4002 | TCP | E-commerce catalog |
-| 5 | **cart-service** | 4003 | TCP | Shopping cart |
-| 6 | **order-service** | 4004 | gRPC | Order lifecycle |
-| 7 | **loyalty-service** | 4005 | TCP | Loyalty points |
-| 8 | **franchise-service** | 4006 | TCP | Regional management |
-| 9 | **doctor-service** | 4007 | TCP | Appointments & consultations |
-| 10 | **grocery-service** | 4008 | TCP | Hyperlocal delivery |
-| 11 | **restaurant-service** | 4009 | TCP | Food delivery |
-| 12 | **pharmacy-service** | 4010 | TCP | Medicine inventory |
-| 13 | **taxi-service** | 4011 | TCP | Ride-hailing |
-| 14 | **delivery-service** | 4012 | TCP | Unified logistics |
-| 15 | **location-service** | 4013 | TCP | Geolocation & maps |
-| 16 | **wallet-service** | 4014 | TCP | Digital wallet |
-| 17 | **payment-service** | 4015 | TCP | Payment gateway |
-| 18 | **notification-service** | 4016 | TCP | FCM, email, SMS, WhatsApp |
-| 19 | **admin-service** | 4017 | TCP | Super admin controls |
-| 20 | **audit-log-service** | 4018 | TCP | Compliance logging |
-| 21 | **seller-service** | 4019 | TCP | Seller portal |
-| 22 | **commission-service** | 4020 | TCP | Commission calculation |
-| 23 | **payout-service** | 4021 | TCP | Seller/driver payouts |
-| 24 | **refund-service** | 4022 | TCP | Refund processing |
-| 25 | **search-service** | 4023 | TCP | Elasticsearch integration |
-| 26 | **report-service** | 4024 | TCP | Analytics & reporting |
-
-### Service Communication Pattern
-
-```
-[Client Request to API Gateway]
-         ↓
-[Route to handler based on path]
-         ↓
-[Check if needs external service]
-         ↓
-┌────────┴─────────────────────────┐
-│  Synchronous? or Async?          │
-├──────────────┬────────────────────┤
-│              │                    │
-│ Sync (gRPC)  │ Async (Kafka)      │
-│ OR HTTP REST │                    │
-│              │                    │
-↓              ↓                    ↓
-[Auth Service] [Order Service]   [Kafka Topic]
-   (JWT)       (Order Logic)    [Notification]
-               [Payment Logic]  [Audit Log]
-                                [Loyalty Pts]
-```
-
----
-
-## Summary
-
-**KARTSEEK** is a production-grade, multi-tenant super app with:
-
-- **27 independently deployable services** (API Gateway + 26 microservices)
-- **Comprehensive security** (JWT, DDoS, rate limiting, PCI-DSS, GDPR)
-- **Real-time capabilities** (WebSocket for tracking, notifications, chat)
-- **Event-driven architecture** (Kafka for async operations)
-- **Multi-region support** (country/city isolation, localization)
-- **Scalable data layer** (PostgreSQL, Redis cache, Elasticsearch)
-- **Role-based access control** (Super Admin, Franchise, Seller, Driver, Customer)
-- **Compliance & audit** (Audit logs, PCI-DSS masking, GDPR utilities)
-
-For detailed feature implementation, refer to individual service documentation and the `README.md`.
+Every client — the web shell, its 8 zones, and the 3 Flutter apps — speaks
+REST (plus Socket.IO for real-time) to one API gateway. The gateway is the
+only thing any client talks to directly; it fans requests out to 17 core
+services and 8 module services over TCP `@MessagePattern`s or gRPC, and those
+services read and write Postgres (one shared database plus one per module),
+Redis, MongoDB, and Elasticsearch, and publish and consume Kafka events among
+themselves. Sections 3 and 4 below walk through the request and messaging
+detail this diagram only outlines.
+
+## 2. Deployables
+
+[`services.yaml`](services.yaml) is the single source of truth for what is
+deployed: every build target, port, health route, owned database, and
+infrastructure dependency is declared there once, and generators and a drift
+check read from it rather than from any hand-maintained list
+([`docs/adr/0005-service-registry.md`](docs/adr/0005-service-registry.md)).
+Counting its `kind:` field directly:
+
+<!-- counted with: grep -c "kind: gateway" services.yaml && grep -c "kind: core-service" services.yaml && grep -c "kind: module-service" services.yaml && grep -c "kind: web-shell" services.yaml && grep -c "kind: web-zone" services.yaml
+     → 1, 17, 8, 1, 8 -->
+
+- **26 Nest deployables**: 1 API gateway, 17 core services
+  (`apps/api/apps/*`), 8 module services (`modules/*/backend`).
+- **9 Next.js deployables**: 1 web shell (`apps/web`) plus 8 zones
+  (`modules/*/frontend`), one per vertical.
+
+That is 35 registry entries in total. Alongside them, 3 independent Flutter
+apps (`apps/customer`, `apps/partner`, `apps/seller` — see
+[`docs/architecture/mobile.md`](docs/architecture/mobile.md)) and one MCP
+server (`apps/mcp-server`) exist in the tree but are not in `services.yaml`,
+because they are not deployed as containers the registry manages.
+
+The generated table with every deployable's path, ports, database, and
+dependencies is [`docs/architecture/services.md`](docs/architecture/services.md);
+it is rebuilt from `services.yaml` by `npm run registry:generate` and is
+never hand-edited.
+
+## 3. Request path: `GET /api/v1/marketplace/products`
+
+1. A page under the web shell or one of the zones requests
+   `GET /api/v1/marketplace/products?...`. In the browser this normally
+   resolves straight to the gateway's own origin via `NEXT_PUBLIC_API_URL`
+   (resolved in one place, `packages/shared-core/src/config/api-base.ts`); a
+   same-origin, relative call made from the shell is instead rewritten to the
+   gateway by the `/api/v1/:path*` rule in `apps/web/next.config.mjs`. Either
+   way the request lands at the same gateway.
+2. The gateway's global prefix (`api`) and default URI version (`1`) — both
+   set in `apps/api/apps/api-gateway/src/main.ts` — mean this is
+   `MarketplaceGatewayController`'s `GET products` route
+   (`@Controller('marketplace')`, `apps/api/apps/api-gateway/src/controllers/marketplace.controller.ts`).
+   The controller declares no class-level guard, so this particular route is
+   public.
+3. Nest's global pipeline runs regardless of the route: `ValidationPipe`,
+   then `AllExceptionsFilter`, then the interceptors registered with
+   `app.useGlobalInterceptors(...)` in `main.ts` — `LoggingInterceptor`,
+   `AuditInterceptor`, `PciComplianceInterceptor`, `TransformInterceptor` —
+   plus two enhancers registered as providers in
+   `apps/api/apps/api-gateway/src/api-gateway.module.ts`: `ThrottlerGuard`
+   (the gateway's only global `APP_GUARD`) and `ActivityTrackingInterceptor`.
+4. The handler forwards the parsed query (`page`, `limit`, `category`,
+   `subcategory`, `brand`, `seller`, price bounds, `sort`, and the caller's
+   resolved region) to marketplace-service over TCP:
+   `this.marketplaceClient.send({ cmd: 'get_products' }, payload)` —
+   `MARKETPLACE_PATTERNS.GET_PRODUCTS`, declared in
+   `apps/api/apps/api-gateway/src/contracts/marketplace.patterns.ts` — with a
+   10-second timeout and an `rpcCatch` mapper that forwards a 4xx domain
+   message but collapses anything else to a `503`. Other catalogue reads on
+   the same controller (`home`, `categories`, an unscoped `search`) try gRPC
+   first, through `apps/api/proto/marketplace.proto`, and fall back to this
+   TCP client when gRPC is unavailable — this specific route has no gRPC
+   path.
+5. marketplace-service's own `@MessagePattern('get_products')` handler runs
+   the query against the database it owns, `kartseek_marketplace` (schema
+   `marketplace`) — see
+   [`docs/architecture/data-ownership.md`](docs/architecture/data-ownership.md).
+6. The response passes back through the same interceptor chain.
+   `TransformInterceptor` wraps whatever the handler returned as
+   `{ success: true, data: <result>, timestamp }`
+   (`apps/api/libs/common/src/interceptors/transform.interceptor.ts`).
+   Because the handler's own result for a list is already shaped like
+   `{ data: [...], total, page, ... }`, the response body nests as
+   `{ success: true, data: { data: [...], total, page, ... }, timestamp }` —
+   **the rows sit at `json.data.data`, not `json.data`.** This trips people
+   reading the payload for the first time; every list endpoint behind
+   `TransformInterceptor` behaves the same way.
+
+## 4. Communication
+
+Four transports, each for a different shape of call:
+
+- **REST**, at the edge only. Every client speaks REST to the gateway under
+  `/api/v1`; nothing downstream of the gateway is exposed as REST.
+- **TCP `@MessagePattern`**, gateway → service, for most core and module
+  services. The gateway registers one `ClientsModule` TCP client per service
+  in `apps/api/apps/api-gateway/src/api-gateway.module.ts`, and command names
+  are declared as constants under
+  `apps/api/apps/api-gateway/src/contracts/` (for example
+  `MARKETPLACE_PATTERNS` in `contracts/marketplace.patterns.ts`). The
+  `send(cmd, payload)` / `send(cmd, payload, fallback)` shape, and what a
+  missing handler on the other end actually returns, is covered in
+  [`docs/architecture/messaging.md`](docs/architecture/messaging.md).
+- **gRPC**, for the 10 services whose `services.yaml` entry declares a `grpc`
+  port — `auth-service`, `delivery-service`, `notification-service`,
+  `order-service`, `payment-service`, `user-service`, `grocery-service`,
+  `marketplace-service`, `restaurant-service`, `taxi-service`. Each has a
+  matching `.proto` file in `apps/api/proto/`, wired through
+  `GrpcClientModule.register([...])` in the same gateway module file.
+  <!-- counted with: git ls-files apps/api/proto | grep -c '\.proto$' → 10 -->
+- **Kafka**, for asynchronous domain events between services — order,
+  payment and wallet lifecycle events, the audit trail, search indexing.
+  Topic ownership, consumer-group scoping per service, and current failure
+  behaviour are in
+  [`docs/architecture/messaging.md`](docs/architecture/messaging.md).
+- **Socket.IO**, from the gateway only, over 10 distinct namespaces —
+  `tracking`, `/chat`, `/doctor-queue`, `/franchise`, `hotel`,
+  `/notifications`, `/orders`, `/recommendations`, `/seller`, `/taxi`.
+  <!-- counted with: grep -rn "namespace:" apps/api/apps/api-gateway/src/socket.gateway.ts apps/api/apps/api-gateway/src/gateways/*.gateway.ts | wc -l → 10 -->
+  Order tracking lives on `/orders`; how a client is authorized to join one
+  order's room, as opposed to merely connecting to the namespace, is in
+  [`docs/architecture/security.md`](docs/architecture/security.md).
+
+## 5. Shared backend libraries
+
+15 libraries under `apps/api/libs/`, each imported as `@app/<name>`:
+
+<!-- counted with: git ls-files apps/api/libs | sed -E 's#(apps/api/libs/[^/]+)/.*#\1#' | sort -u | wc -l → 15 -->
+
+| Library           | What it provides                                                                                                                                                                                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@app/common`     | Shared enums (`status`, `country`, `role`), the paginated-response and base-entity interfaces, the HTTP/RPC exception filters, `LoggingInterceptor` and `TransformInterceptor` (the response envelope), the `rpcCatch` RPC-to-HTTP mapper, and the Joi env-schema builder. |
+| `@app/database`   | The shared `DatabaseModule` (Postgres/TypeORM registration), `validateDatabaseConfig`/`logDatabaseConfig`, and DB credential helpers.                                                                                                                                      |
+| `@app/decorators` | The `@Roles()` decorator and its module.                                                                                                                                                                                                                                   |
+| `@app/dto`        | Shared DTO module.                                                                                                                                                                                                                                                         |
+| `@app/events`     | `KAFKA_TOPICS` — the topic-name constants every service imports instead of hardcoding a string.                                                                                                                                                                            |
+| `@app/gdpr`       | GDPR module, service, controller, and the data-retention service.                                                                                                                                                                                                          |
+| `@app/grpc`       | The gRPC client/server module, client factory, shared interfaces, and server helpers (re-exported as `GrpcClientModule`).                                                                                                                                                  |
+| `@app/guards`     | `RolesGuard` and the `UserRole` enum.                                                                                                                                                                                                                                      |
+| `@app/kafka`      | `KafkaModule`, `KafkaProducerService`, `KafkaConsumerService`, and the topic-constants re-export.                                                                                                                                                                          |
+| `@app/logger`     | The shared logger module and service.                                                                                                                                                                                                                                      |
+| `@app/redis`      | `RedisModule` and `RedisService` (cache and geo store).                                                                                                                                                                                                                    |
+| `@app/region`     | Region detection: module, service, config, decorator, guard, and middleware.                                                                                                                                                                                               |
+| `@app/security`   | JWT strategy and guard, DDoS-protection middleware, PCI-compliance interceptor, CSRF guard, refresh-token and encryption services, and the resource-ownership guard/decorator pair.                                                                                        |
+| `@app/storage`    | Cloud storage module and service (uploads).                                                                                                                                                                                                                                |
+| `@app/validators` | Shared validators module.                                                                                                                                                                                                                                                  |
+
+Adding a new one is not one registration: every shared library must be
+declared in five places for a workspace to resolve `@app/*` the same way
+everywhere, and missing one resolves silently to a different file rather than
+failing the build — see the rule and its history in
+[`docs/adr/0002-nest-monorepo-on-rspack.md`](docs/adr/0002-nest-monorepo-on-rspack.md).
+
+## 6. Frontends
+
+The web frontend is one shell (`apps/web`) plus 8 independent Next.js zones
+(`modules/*/frontend`), each its own build and its own origin, stitched
+together by the shell's `rewrites()` in `apps/web/next.config.mjs`.
+[`docs/architecture/frontend-zones.md`](docs/architecture/frontend-zones.md)
+has the full rewrite table, the three web areas that stayed in the shell
+instead of becoming zones, and the ADR behind the split
+([`docs/adr/0004-next-multi-zone-frontends.md`](docs/adr/0004-next-multi-zone-frontends.md)).
+
+Shared frontend code can only flow through two packages — a zone or the
+shell may not import another zone's source tree directly:
+`packages/shared-core` (i18n, the API client and endpoints, region/config,
+localization data, shared routes) and `packages/shared-ui` (shared
+components: app shell, orders, profile, recommendations, SEO, the
+marketplace product thumbnail, zone-to-zone links).
+
+The shell registers a PWA — `apps/web/public/manifest.json` and
+`apps/web/public/sw.js`, registered from `apps/web/src/app/layout.tsx` — whose
+service worker precaches the shell's own top-level routes (`/`,
+`/marketplace`, `/restaurant`, `/grocery`, `/pharmacy`, `/doctor`, `/taxi`,
+`/offline`) for offline use. The 8 zones and the 3 Flutter apps are outside
+this PWA.
+
+## 7. Data
+
+Two ownership models coexist today; the exhaustive table — built by
+transcribing every deployable's entities and raw-SQL table access, not by
+describing an intended design — is
+[`docs/architecture/data-ownership.md`](docs/architecture/data-ownership.md).
+
+- The gateway and the 17 core services default to one shared Postgres
+  instance, `kartseek_db`, with **schema-per-service** (`admin`,
+  `commission`, `delivery`, `location`, `order`, `payment`, `payout`,
+  `refund`, `report`, `user`, `wallet`, plus the gateway's own `public`
+  schema); `cart-service`, `audit-log-service`, `loyalty-service`,
+  `notification-service`, and `search-service` own no tables at all
+  (`database: null` in `services.yaml`).
+- Each of the 8 module services owns its own named database
+  (`kartseek_marketplace`, `kartseek_grocery`, `kartseek_restaurant`,
+  `kartseek_pharmacy`, `kartseek_doctor`, `kartseek_hotel`,
+  `kartseek_taxi`, `kartseek_franchise`). By default these still live as
+  separate databases inside the one shared Postgres instance; only Compose's
+  `isolated` profile gives each its own dedicated Postgres container (see
+  section 9).
+
+Redis backs the response and query cache, the single refresh-token-per-user
+store, geo queries (nearby stores and drivers), and the Socket.IO adapter
+that lets WebSocket connections fan out across gateway replicas
+(`RedisIoAdapter`, `apps/api/apps/api-gateway/src/adapters/redis-io.adapter.ts`).
+MongoDB holds the durable audit trail written by `audit-log-service`, which
+consumes the Kafka topic the gateway's `AuditInterceptor` publishes to —
+nothing else in the registry depends on MongoDB. Elasticsearch backs
+full-text search and autocomplete, owned solely by `search-service`, which
+indexes from its own `search-indexer` Kafka consumer group.
+
+## 8. Security
+
+The gateway registers no global authentication or authorization guard —
+`ThrottlerGuard` is the only `APP_GUARD` in
+`apps/api/apps/api-gateway/src/api-gateway.module.ts` — so every
+`JwtAuthGuard`/`RolesGuard` pairing is a `@UseGuards(...)` decorator a
+controller author had to add themselves, and `@ApiBearerAuth('JWT')` alone draws a
+padlock icon in Swagger and enforces nothing. Access tokens expire in 15
+minutes and refresh tokens in 7 days by default, with the shared
+`apps/api/libs/security` JWT strategy tolerating a missing `role` claim while
+`auth-service` runs a second, near-identical strategy of its own. Refresh
+tokens are stored one per user in Redis rather than one per device, so a
+second login silently signs the first device out the next time it tries to
+refresh. `trust proxy` is set to a configured hop count specifically so
+per-IP rate limiting and audit logging see the real client address instead of
+the reverse proxy's. Seller access additionally passes through an approval
+workflow (`users.status` plus `sellers.verificationStatus`) and a WebSocket
+client is authorized into a specific room by an HTTP-issued grant rather than
+by the room name alone — the full detail, including the dev auth bypass, CSRF
+and CORS/CSP configuration, is in
+[`docs/architecture/security.md`](docs/architecture/security.md).
+
+## 9. Local and deployed topology
+
+Locally, the root `docker-compose.yml` is an entry point that `include`s
+[`infra/docker/compose.infra.yml`](infra/docker/compose.infra.yml) for the
+infrastructure containers — Postgres, Redis, Kafka, MongoDB, Elasticsearch,
+nginx, and admin tooling — and reads only the repository root's `.env` file.
+Module-specific Postgres containers exist in that same compose file but only
+start under its `isolated` profile; otherwise every module shares the one
+platform Postgres instance, as described in section 7.
+
+Application images are not yet generated per deployable: `infra/docker/`
+today holds 3 hand-written Dockerfiles (`api-gateway.Dockerfile`,
+`core-service.Dockerfile`, `marketplace-service.Dockerfile`), all built from
+the repository root so every image shares the one root lockfile.
+
+<!-- counted with: git ls-files infra/docker | grep -c '\.Dockerfile$' → 3 -->
+
+A Dockerfile and Compose entry for every remaining deployable is Phase 3 of
+the reorganization spec (see below).
+
+Kubernetes manifests for the containers that exist today live under
+[`infra/k8s/`](infra/k8s/) — its own
+[`infra/k8s/README.md`](infra/k8s/README.md) covers what each manifest does
+and how to apply them.
+
+CI/CD on GitHub Actions and an observability baseline
+(`@app/observability`, Prometheus and Grafana) do not exist yet. Both, along
+with Docker images for every deployable and the database-per-service
+cutover, are scoped as Phases 2 through 5 of
+[`docs/superpowers/specs/2026-09-05-platform-reorganization-design.md`](docs/superpowers/specs/2026-09-05-platform-reorganization-design.md),
+which is the place to check what is planned versus what is built.
+
+## 10. Known gaps
+
+This document describes the system as it runs; it does not re-audit it. Nine
+audit and remediation reports live under
+[`docs/audits/`](docs/audits/), spanning 9 June through 30 August 2026.
+
+<!-- counted with: git ls-files docs/audits | grep -c '\.md$' → 9 -->
+
+The most recent,
+[`docs/audits/frontend-data-audit.md`](docs/audits/frontend-data-audit.md)
+(measured 30 August 2026), found that 161 of 206 web route pages render
+hardcoded arrays instead of calling their module's own API, even though the
+underlying APIs were verified working. Earlier reports in the same directory
+cover other layers — unimplemented gateway message patterns, fabricated
+fallback responses, module-isolation boundaries, and marketplace remediation
+work.
+
+Section 13 of
+[`docs/superpowers/specs/2026-09-05-platform-reorganization-design.md`](docs/superpowers/specs/2026-09-05-platform-reorganization-design.md)
+("Out of scope, recorded as follow-ups") is explicit that the platform
+reorganization this branch carries out does not change any of that runtime
+behaviour — it adds health, metrics, logging, and database wiring, and
+leaves the audited gaps for separate work.
