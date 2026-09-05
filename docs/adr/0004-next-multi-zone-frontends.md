@@ -52,8 +52,10 @@ booking UI.
 Each vertical's customer-facing frontend is its own Next.js application with
 `basePath: '/<vertical>'`, built and deployed independently; the shell at
 `apps/web` rewrites `/<vertical>/*` and `/<vertical>/_next/*` to it.
-Cross-zone links go through `zoneHref()` in `packages/shared-ui`, never
-through `next/link` with a raw path.
+Cross-zone links go through `<ZoneLink>` in `packages/shared-ui`, never
+through `next/link` with a raw path; same-zone links built from the shared
+route helpers pass through `zoneHref()` in `packages/shared-core`, which
+strips the zone's own basePath.
 
 ## Consequences
 
