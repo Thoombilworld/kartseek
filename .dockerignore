@@ -1,6 +1,6 @@
 # Build context for the API images is the repository ROOT, not apps/api:
 #
-#   docker build -f apps/api/Dockerfile.prod .
+#   docker build -f infra/docker/api-gateway.Dockerfile .
 #
 # The repository has one lockfile, at the root, and installs through npm
 # workspaces, so an image can only run `npm ci` from here. Keep the upload

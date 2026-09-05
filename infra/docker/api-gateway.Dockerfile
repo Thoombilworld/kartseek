@@ -2,7 +2,7 @@
 #
 # API gateway image. Build from the repository ROOT, not from apps/api:
 #
-#   docker build -f apps/api/Dockerfile.prod -t kartseek/api-gateway:2.0.0 .
+#   docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .
 #
 # The repository has one lockfile, at the root, and installs through npm
 # workspaces. apps/api has no lockfile of its own — it used to carry a stale

@@ -2,7 +2,7 @@
 #
 # Marketplace service image. Build from the repository ROOT:
 #
-#   docker build -f apps/api/Dockerfile.marketplace -t kartseek/marketplace-service:2.0.0 .
+#   docker build -f infra/docker/marketplace-service.Dockerfile -t kartseek/marketplace-service:2.0.0 .
 #
 # The service lives in modules/marketplace/backend and builds against the
 # platform libraries in apps/api/libs through the shared rspack config, so the

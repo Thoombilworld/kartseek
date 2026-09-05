@@ -2,7 +2,7 @@
 #
 # Generic image for any apps/api service. Build from the repository ROOT:
 #
-#   docker build -f apps/api/Dockerfile --build-arg APP=order-service -t kartseek/order-service:2.0.0 .
+#   docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service -t kartseek/order-service:2.0.0 .
 #
 # Root context because the repository has one lockfile, at the root, and
 # installs through npm workspaces; apps/api has no lockfile of its own, and the
