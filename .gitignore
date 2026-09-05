@@ -123,3 +123,6 @@ scratch/
 # Newman output. The 31 reports that used to be committed were generated files.
 tests/postman/reports/*
 !tests/postman/reports/.gitkeep
+
+# Smoke-test output (tests/smoke/boot-all.mjs).
+tests/smoke/logs/

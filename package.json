@@ -50,7 +50,8 @@
     "kafka:topics": "node apps/api/scripts/create-kafka-topics.js",
     "registry:check": "node scripts/registry/validate.mjs",
     "registry:generate": "node scripts/registry/generate.mjs",
-    "test:scripts": "node --test \"scripts/**/*.test.mjs\""
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
+    "smoke": "node tests/smoke/boot-all.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
