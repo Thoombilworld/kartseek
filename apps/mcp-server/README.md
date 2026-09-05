@@ -54,6 +54,8 @@ apps/mcp-server/
 
 `src/tools/` has one registration module per domain — `auth`, `users`,
 `marketplace`, `orders`, `grocery`, `restaurant`, `taxi`, `wallet`,
-`pharmacy`, `loyalty`, `search`, `health` — 12 modules totalling around 35
-tools, each a thin wrapper that calls `KartseekClient.request()` with a
-fixed path and forwards its arguments as the query, body, or both.
+`pharmacy`, `loyalty`, `search`, `health` — 12 modules totalling 45 tools,
+each a thin wrapper that calls `KartseekClient.request()` with a fixed path
+and forwards its arguments as the query, body, or both.
+
+<!-- counted with: grep -c 'server\.tool(' apps/mcp-server/src/tools/*.ts — sum of the per-file counts -->
