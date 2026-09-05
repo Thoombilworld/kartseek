@@ -17,7 +17,7 @@ current documentation:
 For the current picture, prefer:
 
 - `README.md` and `ARCHITECTURE.md` in the repository root
-- the dated audits in `docs/` (for example `MARKETPLACE_REMEDIATION_2026-08-10.md`)
+- the dated audits in `docs/audits/` (for example `2026-08-10-marketplace-remediation.md`)
 - `apps/api/test/gateway-service-contract.spec.ts`, which asserts the
   gateway ↔ service contract on every test run rather than describing it in prose
 
