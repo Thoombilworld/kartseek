@@ -883,3 +883,147 @@ git add docs/superpowers/specs/2026-09-05-platform-reorganization-design.md && g
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 12: Extend the generator to fill platform-wide port tables
+
+**Runs immediately after Task 3 and before Task 5.** Added 2026-09-05 after Task 3 showed that `scripts/registry/generate.mjs` only fills the README at each registry entry's own `path` (plus `docs/architecture/services.md`), so the marker block in `docs/guides/running-services.md` was filled by hand — which the spec forbids. Four documents describe the whole platform and need the whole table between their markers: the root `README.md` (Task 5), `docs/guides/running-services.md` (Task 3), `apps/api/README.md` and `apps/api/docs/runbook.md` (Task 7).
+
+**Files:**
+- Modify: `scripts/registry/generate.mjs`, `scripts/registry/generate.test.mjs`, `scripts/README.md` (one phrase), `docs/guides/running-services.md` (its block, regenerated)
+
+**Interfaces:**
+- Produces: `PLATFORM_TARGETS` (string[]) and `renderPlatformBlock(reg) → string` exported from `generate.mjs`; `generateAll` now also fills the marker block in each `PLATFORM_TARGETS` file that exists and has markers (missing file or no markers → skipped, as for entry READMEs). Tasks 5 and 7 rely on this when they add markers to those files.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `scripts/registry/generate.test.mjs`:
+
+```js
+import { renderPlatformBlock, PLATFORM_TARGETS } from './generate.mjs';
+
+test('renderPlatformBlock leads with the generated notice and renders one row per entry', () => {
+  const block = renderPlatformBlock({ services: [order, zone] });
+  assert.match(block, /^_Generated from `services.yaml` by `npm run registry:generate`/);
+  assert.equal((block.match(/^\| `/gm) || []).length, 2);
+  assert.match(block, /\| `order-service` \| core service \|/);
+  assert.match(block, /\| `grocery-frontend` \| web zone \|/);
+});
+
+test('PLATFORM_TARGETS names the four platform-wide documents', () => {
+  assert.deepEqual(PLATFORM_TARGETS, [
+    'README.md',
+    'docs/guides/running-services.md',
+    'apps/api/README.md',
+    'apps/api/docs/runbook.md',
+  ]);
+});
+```
+
+(Merge the import into the existing import line from `./generate.mjs` rather than adding a second one.)
+
+- [ ] **Step 2: Run to see them fail**
+
+Run: `node --test "scripts/registry/generate.test.mjs"`
+Expected: FAIL — `renderPlatformBlock` / `PLATFORM_TARGETS` not exported.
+
+- [ ] **Step 3: Implement**
+
+In `scripts/registry/generate.mjs`:
+
+1. Add after `KIND_LABEL`:
+
+```js
+/**
+ * Documents that describe the whole platform and carry the full table
+ * between their markers, rather than one entry's block. Root README, the
+ * running-services guide, the API workspace README and its runbook.
+ */
+export const PLATFORM_TARGETS = [
+  'README.md',
+  'docs/guides/running-services.md',
+  'apps/api/README.md',
+  'apps/api/docs/runbook.md',
+];
+
+const TABLE_HEAD = [
+  '| Name | Kind | Path | HTTP | TCP | gRPC | Database / schema | Health or base path | Depends on |',
+  '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+];
+
+function renderRows(reg) {
+  return reg.services.map((s) => {
+    const db = NEST_KINDS.includes(s.kind) ? (s.database ? `${s.database.name} / ${s.database.schema}` : '—') : '—';
+    const health = NEST_KINDS.includes(s.kind) ? (s.health.live ?? '—') : s.basePath ?? '/';
+    return `| ${code(s.name)} | ${KIND_LABEL[s.kind]} | ${code(s.path)} | ${s.ports.http} | ${s.ports.tcp ?? '—'} | ${s.ports.grpc ?? '—'} | ${db} | ${code(health)} | ${(s.dependsOn ?? []).join(', ') || '—'} |`;
+  });
+}
+
+export function renderPlatformBlock(reg) {
+  return [
+    '_Generated from `services.yaml` by `npm run registry:generate`; edit the registry, not this block._',
+    '',
+    ...TABLE_HEAD,
+    ...renderRows(reg),
+  ].join('\n');
+}
+```
+
+2. Rewrite `renderServicesTable` to use the shared pieces (same output as before):
+
+```js
+export function renderServicesTable(reg) {
+  return [
+    HEADER,
+    '',
+    '# Services',
+    '',
+    `${reg.services.length} deployables, declared in [\`services.yaml\`](../../services.yaml). Ports are the local defaults; each is read from the environment variable named in the deployable's README.`,
+    '',
+    ...TABLE_HEAD,
+    ...renderRows(reg),
+    '',
+  ].join('\n');
+}
+```
+
+3. In `generateAll`, extend `targets`:
+
+```js
+  const targets = [
+    { rel: 'docs/architecture/services.md', next: () => renderServicesTable(reg), whole: true },
+    ...PLATFORM_TARGETS.map((rel) => ({ rel, next: (cur) => replaceBlock(cur, renderPlatformBlock(reg)), whole: false })),
+    ...reg.services.map((s) => ({ rel: `${s.path}/README.md`, next: (cur) => replaceBlock(cur, renderReadmeBlock(s)), whole: false })),
+  ];
+```
+
+4. Update the file's header comment: "Outputs: docs/architecture/services.md (whole file), the platform table between markers in README.md, docs/guides/running-services.md, apps/api/README.md and apps/api/docs/runbook.md, and the block between markers in every entry's README.md."
+
+- [ ] **Step 4: Run the tests**
+
+Run: `node --test "scripts/registry/*.test.mjs"`
+Expected: 13 passed (5 + 2 + 6).
+
+- [ ] **Step 5: Regenerate and verify**
+
+```bash
+npm run registry:generate
+node scripts/registry/generate.mjs --check && echo CHECK-OK
+npm run registry:check
+git diff --stat
+```
+Expected: the first command writes `docs/guides/running-services.md` (its hand-filled block replaced by the generated one; if the hand-filled data was identical it reports nothing written for that file — either is fine), `docs/architecture/services.md` unchanged, root `README.md` / `apps/api/README.md` / `apps/api/docs/runbook.md` skipped (no markers yet); `CHECK-OK`; the validator clean; the diff touches only `scripts/registry/generate.mjs`, `generate.test.mjs`, and possibly `docs/guides/running-services.md`.
+
+- [ ] **Step 6: Update the README row and commit**
+
+In `scripts/README.md`, change the `registry/generate.mjs` row's purpose text to: "Renders `docs/architecture/services.md`, the platform table between `<!-- registry:start -->` markers in the root README, `docs/guides/running-services.md`, `apps/api/README.md` and `apps/api/docs/runbook.md`, and the per-service block in every workspace README from `services.yaml`. `--check` exits 1 when stale."
+
+```bash
+git add scripts/registry scripts/README.md docs/guides/running-services.md && git commit -q -m "feat(registry): fill the platform-wide port table in the root README, running-services guide, API README and runbook
+
+The generator only knew each entry's own README, so a whole-platform
+document could not carry a generated table and one was typed by hand.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
