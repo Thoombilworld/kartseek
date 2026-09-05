@@ -122,7 +122,7 @@ keep domain names (`order.module.ts` is fine as a _feature_ module, never as
 the root).
 
 **D3. File names are kebab-case; exported symbols are PascalCase.** Applies to
-TypeScript and TSX. Dart follows Dart: snake*case files, `kartseek*` package
+TypeScript and TSX. Dart follows Dart: `snake_case` files, `kartseek_` package
 prefix.
 
 **D4. One service registry, `services.yaml`, at the repository root.** It is
