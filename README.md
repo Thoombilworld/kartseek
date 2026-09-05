@@ -1,228 +1,133 @@
-# KARTSEEK Super App — Final Production README
+# KARTSEEK
 
-**Project type:** Multi-service super app + responsive website + management ecosystem  
-**Target platforms:** Flutter Android, Flutter iOS, Next.js/React web, PWA, Admin Panel, Seller Portal, Franchise Dashboard, Driver/Delivery apps  
-**Purpose:** This is the official developer handover document. It defines the complete architecture, modules, file structures, and production rules for building the KARTSEEK platform.
+KARTSEEK is a multi-country super app: marketplace, grocery, restaurant,
+pharmacy, doctor appointments, hotel booking, taxi, wallet and loyalty, with
+seller, franchise and admin portals, served to web and to three Flutter apps.
+It detects the customer's country and city and localises storefronts, currency,
+tax and nearby vendors. This repository holds all of it: 26 NestJS services
+behind one API gateway, a Next.js shell with eight independently deployed
+zones, three Flutter apps, and the infrastructure to run them.
 
-> **CRITICAL WARNING:** This project is **not a demo**. Every screen, API, module, category, form, workflow, admin control, and mobile layout must be designed and developed for real-world use, extreme scalability, and strict security compliance.
+## Repository map
 
----
+- `apps/api` — the NestJS monorepo: `api-gateway` plus 17 core services
+  (auth, user, cart, order, payment, wallet, loyalty, delivery, location,
+  search, notification, admin, audit-log, commission, payout, refund,
+  report), and their shared `libs/`
+- `apps/web` — the Next.js shell; see the port table below for each zone
+- `apps/customer`, `apps/partner`, `apps/seller` — the three Flutter apps
+- `apps/mcp-server` — an MCP server exposing the platform to AI tooling
+- `modules/<vertical>/{backend,frontend}` — the eight verticals (`doctor`,
+  `franchise`, `grocery`, `hotel`, `marketplace`, `pharmacy`, `restaurant`,
+  `taxi`), each a backend workspace and a Next.js frontend zone
+- `packages/shared-core`, `packages/shared-ui` — TypeScript shared across web
+  and the module frontends
+- `packages/shared-mobile` — the Dart package (`kartseek_shared_mobile`)
+  shared across the three Flutter apps
+- `packages/vendor/objective_c` — a vendored native dependency
+- `infra/{docker,k8s,nginx,postgres}` — container, cluster, proxy and
+  database configuration
+- `tests/{postman,smoke}` — the Postman collections and the cross-service
+  smoke test
+- `docs/` — guides, architecture, ADRs, and the product specification
+- `scripts/` — the service registry generator and repo-wide checks
+- `services.yaml` — the service registry every port table comes from
+- `docker-compose.yml` — the local infrastructure stack (Postgres, Redis,
+  Kafka, MongoDB, Elasticsearch)
 
-## 1. Project Overview
-KARTSEEK is a scalable, multi-country Super App that combines Marketplace, Grocery, Restaurant, Pharmacy, Doctor Appointments, Taxi Booking, Wallet, Loyalty, Seller Management, Franchise Management, and global Admin Control into a single, unified ecosystem.
+## Prerequisites
 
-The system intelligently uses GPS and IP geolocation to detect the user's country and city, presenting localized storefronts, currencies, tax rules, and nearby vendors. The platform handles end-to-end commerce—from user discovery and secure payment to physical logistics delivery and partner payouts.
+- Node 26.5.0 (see `.nvmrc`), npm ≥ 10
+- Docker Desktop with Compose v2.20+ (the root compose file uses `include:`)
+- Flutter 3.44, only if you're working on `apps/customer`, `apps/partner` or
+  `apps/seller`
 
----
+## Ten-minute local setup
 
-## 2. Monorepo Structure
-
-```
-KARTSEEKAPP/
-├── apps/
-│   ├── api/                ← NestJS Backend (26 microservices + 14 shared libraries)
-│   ├── mobile/             ← Flutter Mobile (Customer + Partner/Driver apps)
-│   └── web/                ← Next.js Web (Customer, Admin, Seller, Franchise portals)
-├── design-system/
-│   └── tokens/             ← Design tokens (colors, typography, spacing, etc.)
-├── docs/                   ← Project specification & setup guides
-├── scripts/                ← Utility & automation scripts (api, mobile, web)
-├── docker-compose.yml      ← Local infrastructure (PostgreSQL, Redis, Kafka, MongoDB)
-├── package.json            ← Monorepo root (npm workspaces + Turborepo)
-└── turbo.json              ← Turborepo pipeline configuration
-```
-
----
-
-## 3. Technology Stack
-
-- **Mobile Apps:** Flutter (Android & iOS)
-- **Web Frontend:** Next.js (App Router), React, TypeScript, Tailwind CSS, PWA support
-- **Backend Microservices:** NestJS
-- **Databases:** PostgreSQL (Transactional), Redis (Cache & Session)
-- **Search Engine:** Elasticsearch / OpenSearch
-- **File Storage:** S3-compatible Object Storage (AWS/Cloudflare)
-- **Infrastructure:** Docker, Kubernetes, API Gateway
-- **Real-time Engine:** WebSocket / Socket.IO (for Taxi & Delivery tracking)
-
----
-
-## 4. Architecture
-
-- **Microservices Architecture:** Independent NestJS services for Auth, Users, Location, Marketplace, Grocery, Restaurant, Taxi, Wallet, etc.
-- **Subdomain Routing & Storefronts:** Dynamic routing maps (e.g., `in.kartseek.com`, `ae.kartseek.com`, `seller.kartseek.com`) to localized configs.
-- **Dynamic Design Tokens:** The backend controls fonts, primary colors, and UI radii, feeding tokens to Flutter and React clients.
-- **Secure API Gateway:** Centralized routing, rate limiting, and JWT validation.
-- **Role-Based Access Control (RBAC):** Strict boundaries between Customers, Sellers, Drivers, Franchisees, and Super Admins.
-
----
-
-## 5. UI/UX Design System
-
-- **Mobile-First Flutter:** Dedicated native screens with touch-friendly targets, bottom navigation, and smooth center-anchored scrolling.
-- **Responsive Web:** Next.js layouts gracefully scale from mobile browsers up to 1440px+ desktop grids.
-- **Typography:** Modern Sans-Serif (Inter/Roboto). Highly readable hierarchy (H1 down to Caption). Minimum mobile size 14px.
-- **Semantic Colors:** Primary accent for actions, Emerald for success, Amber for pending/warnings, Red for errors. No random hardcoded hex values.
-- **Soft UI Cards:** Subtle shadows, rounded corners, clean padding.
-- **State Handling:** Skeleton loaders for fetching, clear empty states ("No nearby stores"), and descriptive error states.
-
----
-
-## 6. Module-by-Module Plan
-
-### 6.1 Marketplace
-- **Scope:** Nationwide e-commerce (Electronics, Fashion, Home). Brand verification required.
-- **Flow:** Search → Filter variants → Add to Cart → Payment → Nationwide Shipping Tracking.
-- **Admin/Seller:** Inventory management, brand registry, bulk product upload, variant control.
-
-### 6.2 Grocery
-- **Scope:** Hyperlocal delivery (Default 10km GPS radius).
-- **Flow:** Detect Location → List Nearby Stores → Category Browse → Cart → Delivery Slot → Live Tracking.
-- **Admin/Seller:** Local inventory sync, fast-moving consumer goods tracking, fresh produce weight variants.
-
-### 6.3 Restaurant
-- **Scope:** Food delivery, takeaway, and table booking.
-- **Flow:** Location → Nearby Restaurants → Veg/Non-Veg toggle → Add-ons/Modifiers → Cart → Live Prep & Delivery ETA.
-- **Admin/Seller:** Menu management, order acceptance toggle, table reservation queue.
-
-### 6.4 Pharmacy
-- **Scope:** OTC medicines and Prescription drugs.
-- **Flow:** Location → Find Pharmacy → Upload Prescription Document → Wait for Admin/Pharmacist Verification → Checkout.
-- **Admin/Seller:** Secure prescription queue, medical license verification, OTC inventory.
-
-### 6.5 Doctor Appointment
-- **Scope:** Clinic/Hospital physical visits and Video consultations.
-- **Flow:** Search Specialty/Symptom → Select Doctor → Pick Time Slot → Upload Past Reports (Optional) → Pay Consultation Fee.
-- **Admin/Seller:** Schedule management, working hours configuration, medical board verification.
-
-### 6.6 Taxi Booking
-- **Scope:** Uber/Ola style ride-hailing.
-- **Flow:** Pickup & Drop Pin → Fare Estimate → Request Ride → Driver Matching → OTP Handshake → Live Trip Tracking.
-- **Admin/Fleet Vendor:** Live fleet map, SOS alerts, commission deductions per ride.
-
-### 6.7 Delivery Logistics
-- **Scope:** Centralized order distribution for Marketplace, Grocery, Restaurant, and Pharmacy.
-- **Flow:** Order Ready → Assign Nearest Rider → Seller QR Handover → Live Customer Tracking → Delivery Confirmation (OTP).
-
-### 6.8 Financials: Wallet, Loyalty, Payments & Payouts
-- **Scope:** Unified money movement.
-- **Flow:** Gateway processes Customer payment → Deduct Platform Commission → Escrow until Delivery → Settle to Seller/Driver Wallet. Users earn Loyalty Points per purchase.
-
-### 6.9 Global Search & Location
-- **Scope:** One search bar mapping to all modules.
-- **Flow:** "Apple" returns iPhone (Marketplace), Fresh Apples (Grocery), and Apple Pie (Restaurant). GPS rigorously controls service visibility.
-
-### 6.10 Notifications & Support
-- **Scope:** Real-time updates via Push (FCM), Email, SMS, WhatsApp, and In-App alerts.
-- **Flow:** Segmented notification center. Integrated support ticketing system (Open, Waiting for Customer, Resolved).
-
----
-
-## 7. File Directory Structure
-
-**Next.js Web (`/apps/web`)**
-```text
-/apps/web/src/
-  ├── app/                  # App Router (Pages & Layouts)
-  │   ├── (account)/        # Wallet, Loyalty, Profile
-  │   ├── admin/            # Super Admin Dashboards
-  │   ├── seller/           # Partner Portals
-  │   ├── franchise/        # Regional Franchise
-  │   ├── marketplace/      # E-Commerce Module
-  │   ├── grocery/          # Hyperlocal Grocery
-  │   ├── restaurant/       # Food Delivery
-  │   ├── pharmacy/         # Medicine
-  │   ├── doctor/           # Appointments
-  │   ├── taxi/             # Ride Hailing
-  │   └── search/           # Global Search
-  ├── components/           # Reusable UI (Buttons, Cards, Inputs)
-  ├── features/             # Module-specific logic
-  └── lib/                  # Utils, API clients, Auth
+```bash
+git clone <url> && cd KARTSEEKAPP
+nvm use            # or: nvm use 26.5.0 (nvm-windows)
+npm ci
+cp .env.example .env && cp apps/api/.env.example apps/api/.env
+npm run infra:up
+npm run dev
 ```
 
-**Flutter Mobile (`/apps/mobile`)**
-```text
-/lib/
-  ├── core/                 # Theme, Network, Routing
-  ├── features/             # Feature-driven structure
-  │   ├── auth/
-  │   ├── home/
-  │   ├── marketplace/
-  │   ├── taxi/
-  │   └── profile/
-  └── shared/               # Reusable widgets
-```
+Open http://localhost:3000. The API answers at
+http://localhost:3001/api/v1/health and documents itself at
+http://localhost:3001/api/docs. Full walkthrough, including mobile:
+[docs/guides/local-setup.md](docs/guides/local-setup.md).
 
-**NestJS Backend (`/apps/api`)**
-```text
-/apps/
-  ├── api-gateway/
-  ├── auth-service/
-  ├── order-service/
-  ├── delivery-service/
-  └── payment-service/
-```
+## Ports
 
----
+<!-- registry:start -->
 
-## 8. Admin, Seller, and Franchise System
+_Generated from `services.yaml` by `npm run registry:generate`; edit the registry, not this block._
 
-- **Super Admin:** Global control. Configures country taxonomies, global commissions (e.g., 15% for Pharmacy, 20% for Food), layout themes, and approves top-level payouts.
-- **Franchise Dashboard:** Regional control. A Franchisee in "Dubai" sees only Dubai's sellers, drivers, and orders, earning a fractional commission on regional volume.
-- **Seller Portals:** Segmented by business type. A Doctor sees a schedule calendar; a Restaurant sees a live kitchen queue; a Marketplace vendor sees a bulk product CSV uploader.
+<!-- prettier-ignore-start -->
+| Name | Kind | Path | HTTP | TCP | gRPC | Database / schema | Health or base path | Depends on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `api-gateway` | API gateway | `apps/api/apps/api-gateway` | 3001 | — | — | kartseek_db / public | `/api/v1/health` | postgres, redis, kafka, mongodb |
+| `admin-service` | core service | `apps/api/apps/admin-service` | 3027 | 4017 | — | kartseek_db / admin | `/admin/health` | postgres, redis, kafka |
+| `audit-log-service` | core service | `apps/api/apps/audit-log-service` | 3028 | — | — | — | `/audit-logs/health` | mongodb, redis, kafka |
+| `auth-service` | core service | `apps/api/apps/auth-service` | 3010 | — | 5001 | kartseek_db / public | `/health` | postgres |
+| `cart-service` | core service | `apps/api/apps/cart-service` | 3013 | 4003 | — | — | `/cart/health` | redis, kafka |
+| `commission-service` | core service | `apps/api/apps/commission-service` | 3030 | 4020 | — | kartseek_db / commission | `/commission/health` | postgres, redis, kafka |
+| `delivery-service` | core service | `apps/api/apps/delivery-service` | 3022 | — | 5008 | kartseek_db / delivery | `/delivery/health` | postgres, redis, kafka |
+| `location-service` | core service | `apps/api/apps/location-service` | 3023 | 4013 | — | kartseek_db / location | `/location/health` | postgres, redis |
+| `loyalty-service` | core service | `apps/api/apps/loyalty-service` | 3015 | 4005 | — | — | `/loyalty/health` | redis, kafka |
+| `notification-service` | core service | `apps/api/apps/notification-service` | 3026 | — | 5004 | — | `/notifications/health` | redis, kafka |
+| `order-service` | core service | `apps/api/apps/order-service` | 3014 | 4004 | 5002 | kartseek_db / order | `/health` | postgres, redis, kafka |
+| `payment-service` | core service | `apps/api/apps/payment-service` | 3025 | 4026 | 5003 | kartseek_db / payment | `/health` | postgres, redis, kafka |
+| `payout-service` | core service | `apps/api/apps/payout-service` | 3031 | 4021 | — | kartseek_db / payout | `/payouts/health` | postgres, redis, kafka |
+| `refund-service` | core service | `apps/api/apps/refund-service` | 3032 | 4022 | — | kartseek_db / refund | `/refunds/health` | postgres, redis, kafka |
+| `report-service` | core service | `apps/api/apps/report-service` | 3034 | 4024 | — | kartseek_db / report | `/reports/health` | postgres, redis, kafka |
+| `search-service` | core service | `apps/api/apps/search-service` | 3033 | 4023 | — | — | `/search/health` | redis, kafka, elasticsearch |
+| `user-service` | core service | `apps/api/apps/user-service` | 3011 | — | 5009 | kartseek_db / user | `—` | postgres, redis |
+| `wallet-service` | core service | `apps/api/apps/wallet-service` | 3024 | 4014 | — | kartseek_db / wallet | `/wallet/health` | postgres, redis, kafka |
+| `doctor-service` | module service | `modules/doctor/backend` | 3017 | 4007 | — | kartseek_doctor / doctor | `/doctors/health` | postgres, redis, kafka |
+| `franchise-service` | module service | `modules/franchise/backend` | 3016 | 4006 | — | kartseek_franchise / franchise | `—` | postgres, redis, kafka |
+| `grocery-service` | module service | `modules/grocery/backend` | 3018 | 4008 | 5010 | kartseek_grocery / grocery | `/grocery/health` | postgres, redis, kafka |
+| `hotel-service` | module service | `modules/hotel/backend` | 3035 | 4025 | — | kartseek_hotel / hotel | `/hotels/health` | postgres, redis, kafka |
+| `marketplace-service` | module service | `modules/marketplace/backend` | 3012 | 4002 | 5006 | kartseek_marketplace / marketplace | `/health` | postgres, redis, kafka |
+| `pharmacy-service` | module service | `modules/pharmacy/backend` | 3020 | 4010 | — | kartseek_pharmacy / pharmacy | `/pharmacy/health` | postgres, redis, kafka |
+| `restaurant-service` | module service | `modules/restaurant/backend` | 3019 | 4018 | 5005 | kartseek_restaurant / restaurant | `/restaurants/health` | postgres, redis, kafka |
+| `taxi-service` | module service | `modules/taxi/backend` | 3021 | 4027 | 5007 | kartseek_taxi / taxi | `/taxi/health` | postgres, redis, kafka |
+| `web` | web shell | `apps/web` | 3000 | — | — | — | `/` | — |
+| `marketplace-frontend` | web zone | `modules/marketplace/frontend` | 3002 | — | — | — | `/marketplace` | — |
+| `grocery-frontend` | web zone | `modules/grocery/frontend` | 3003 | — | — | — | `/grocery` | — |
+| `restaurant-frontend` | web zone | `modules/restaurant/frontend` | 3004 | — | — | — | `/restaurant` | — |
+| `pharmacy-frontend` | web zone | `modules/pharmacy/frontend` | 3005 | — | — | — | `/pharmacy` | — |
+| `doctor-frontend` | web zone | `modules/doctor/frontend` | 3006 | — | — | — | `/doctor` | — |
+| `hotel-frontend` | web zone | `modules/hotel/frontend` | 3007 | — | — | — | `/hotel-booking` | — |
+| `taxi-frontend` | web zone | `modules/taxi/frontend` | 3008 | — | — | — | `/taxi` | — |
+| `franchise-frontend` | web zone | `modules/franchise/frontend` | 3009 | — | — | — | `/franchise` | — |
+<!-- prettier-ignore-end -->
+<!-- registry:end -->
 
----
+## Everyday commands
 
-## 9. Security and Compliance
+| Command                     | What it does                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`               | run every workspace's dev server (via turbo)                                                                          |
+| `npm run dev:api`           | run only the API monorepo                                                                                             |
+| `npm run dev:web`           | run only the Next.js shell                                                                                            |
+| `npm run build`             | build every workspace                                                                                                 |
+| `npm run test`              | run every workspace's test suite                                                                                      |
+| `npm run type-check`        | run `tsc` across every workspace                                                                                      |
+| `npm run lint`              | lint every workspace — currently fails for pre-existing reasons, see [docs/guides/testing.md](docs/guides/testing.md) |
+| `npm run smoke`             | boot every service and check it answers                                                                               |
+| `npm run registry:check`    | fail if code, `.env.example` or k8s config disagree with `services.yaml`                                              |
+| `npm run registry:generate` | rewrite the generated docs and README port tables from `services.yaml`                                                |
+| `npm run test:scripts`      | run the unit tests for the repo's own tooling scripts                                                                 |
+| `npm run infra:up`          | start Postgres, Redis, Kafka, MongoDB, Elasticsearch (Docker Compose)                                                 |
+| `npm run infra:down`        | stop the local infrastructure stack                                                                                   |
+| `npm run db:seed`           | seed grocery, marketplace, restaurant and pharmacy data                                                               |
+| `npm run kafka:topics`      | create the Kafka topics the platform expects                                                                          |
 
-- **Auth:** JWT access tokens with secure refresh token rotation.
-- **KYC Verification:** Vendors and Drivers CANNOT go live until business licenses, tax IDs, and vehicle insurance documents are uploaded and approved by an Admin.
-- **Data Privacy:** Prescription files and Medical reports are heavily restricted. They cannot be placed in public S3 buckets.
-- **Audit Logs:** Every Admin action (changing a commission rate, approving a payout, updating user roles) is permanently logged with IP, Timestamp, and old/new values.
-- **Financial Integrity:** No payment gateway secrets in the frontend. All payout math is strictly handled server-side.
+## Where to go next
 
----
-
-## 10. Production Rules
-
-1. **No Dummy Code:** Placeholder text, broken links, or "Coming Soon" demo pages are strictly prohibited in the `main` branch.
-2. **Dynamic UI:** Do not hardcode specific hex colors into random components. Always use the design system tokens.
-3. **Responsive Everywhere:** The Next.js platform must be perfectly usable on a 320px phone screen and a 1440px desktop monitor.
-4. **Zero Exposed Secrets:** API keys, database passwords, and JWT secrets must remain strictly in environment variables.
-5. **Log Everything:** Failed logins, successful payouts, and permission escalations must be securely audited.
-
----
-
-## 11. Final QA Checklist
-
-Prior to any deployment, QA must verify:
-- [ ] Android & iOS Apps compile and run cleanly.
-- [ ] Next.js PWA installs successfully.
-- [ ] GPS detection accurately triggers the 10km Grocery/Food filters.
-- [ ] Global Search correctly groups cross-module results.
-- [ ] Payment gateway handshakes succeed without exposing keys.
-- [ ] Admin RBAC prevents a "Support Agent" from triggering a financial Payout.
-- [ ] Seller KYC rejection properly pauses a store's visibility.
-- [ ] Taxi/Logistics live map correctly updates coordinates via WebSocket.
-- [ ] SEO Meta Tags and dynamic Sitemaps render correctly on Web.
-
----
-
-## 12. Developer Handover Instructions
-
-**Pre-Development:**
-- Read this `README.md` completely.
-- Map your Jira/Linear tasks directly to the 10 modules defined above.
-- Synchronize your mental model of the Monorepo (Web, Mobile, Backend).
-
-**During Development:**
-- Build one module at a time. Ensure the NestJS API, Flutter UI, and Next.js Web UI for that module are fully aligned before moving on.
-- Construct Reusable UI Components early. Do not rewrite a "Product Card" 5 times.
-- Document all Database Schema migrations thoroughly.
-
-**Post-Development:**
-- Execute the Full QA Checklist.
-- Perform load testing on the Socket.IO delivery tracking infrastructure.
-- Prepare staging environments and finalize CI/CD deployment pipelines.
-
-> **Final Note to Developers:** KARTSEEK is a highly complex, multi-tenant ecosystem. Scalability, security, and clean separation of concerns are your top priorities. Build it right.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the system fits together
+- [docs/](docs/README.md) — guides, architecture, decisions, product spec
+- [services.yaml](services.yaml) — the service registry every port table comes from
+- [docs/guides/conventions.md](docs/guides/conventions.md) — before your first PR
