@@ -40,7 +40,7 @@
     "nginx:logs": "docker compose -f docker-compose.yml logs -f nginx",
     "nginx:reload": "docker compose -f docker-compose.yml exec nginx nginx -s reload",
     "nginx:test": "docker compose -f docker-compose.yml exec nginx nginx -t",
-    "nginx:certs": "mkdir -p nginx/ssl && docker run --rm -v ./nginx/ssl:/ssl alpine/openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /ssl/kartseek.key -out /ssl/kartseek.crt -subj /C=GB/ST=London/L=London/O=KARTSEEK/OU=Engineering/CN=localhost -addext subjectAltName=DNS:localhost,DNS:kartseek.local,IP:127.0.0.1",
+    "nginx:certs": "mkdir -p infra/nginx/ssl && docker run --rm -v ./infra/nginx/ssl:/ssl alpine/openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /ssl/kartseek.key -out /ssl/kartseek.crt -subj /C=GB/ST=London/L=London/O=KARTSEEK/OU=Engineering/CN=localhost -addext subjectAltName=DNS:localhost,DNS:kartseek.local,IP:127.0.0.1",
     "db:seed": "npm run db:seed:grocery && npm run db:seed:marketplace && npm run db:seed:restaurant && npm run db:seed:pharmacy",
     "db:seed:grocery": "npx ts-node -r tsconfig-paths/register apps/api/scripts/seed/seed-grocery.ts",
     "db:seed:marketplace": "npx ts-node -r tsconfig-paths/register apps/api/scripts/seed/seed-marketplace.ts",

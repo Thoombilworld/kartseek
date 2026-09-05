@@ -73,7 +73,7 @@ lerna-debug.log*
 !.env.example
 !.env.*.example
 
-# TLS and signing material. nginx/ssl/kartseek.key — a private key — was exposed.
+# TLS and signing material. infra/nginx/ssl/kartseek.key — a private key — was exposed.
 *.key
 *.pem
 *.crt
