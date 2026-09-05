@@ -182,5 +182,5 @@
    * has no `include`, so it needs the exclusion stated. `node_modules` and
    * `dist` are listed to preserve the defaults an explicit `exclude` replaces.
    */
-  "exclude": ["node_modules", "dist", "vitest.config.mts"]
+  "exclude": ["node_modules", "dist", "vitest.config.mts", "test/vitest.e2e.mts"]
 }
