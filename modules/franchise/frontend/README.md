@@ -1,6 +1,7 @@
 # Franchise zone
 
-Only `opportunity` and `opportunity/apply` are customer-facing (franchise sign-up); every other route is the franchise owner's own cross-vertical management console, not a customer journey.
+Only `opportunity` and `opportunity/apply` are customer-facing (franchise sign-up); every other
+route is the franchise owner's own cross-vertical management console, not a customer journey.
 
 Part of the [franchise vertical](../../README.md). An independently built Next.js application mounted by the shell at `/franchise`; see [frontend zones](../../../docs/architecture/frontend-zones.md).
 
@@ -10,7 +11,8 @@ Part of the [franchise vertical](../../README.md). An independently built Next.j
 npm run dev -w @kartseek/franchise-frontend
 ```
 
-Open it through the shell at http://localhost:3000/franchise, not on its own port — links and assets are emitted under the base path.
+Open it through the shell at http://localhost:3000/franchise, not on its own port — links and
+assets are emitted under the base path.
 
 ## Test
 
@@ -38,4 +40,8 @@ Image: `kartseek/franchise-frontend`. Workspace: `@kartseek/franchise-frontend`.
 
 ## Layout
 
-`opportunity[/apply]` is the public sign-up flow; `login`, `orders`, `payouts`, `staff`, `vendors[/new]`, `zones[/new]`, `commissions[/payout]`, `customers`, `delivery-partners`, `marketing`, `settings`, `support` and `analytics` are the owner console's own screens, plus a `<vertical>/` section for each of doctor, grocery, hotel-booking, marketplace, pharmacy, restaurant and taxi, each with its own `analytics`/`orders`/`settings`-style pages.
+`opportunity[/apply]` is the public sign-up flow; `login`, `orders`, `payouts`, `staff`,
+`vendors[/new]`, `zones[/new]`, `commissions[/payout]`, `customers`, `delivery-partners`,
+`marketing`, `settings`, `support` and `analytics` are the owner console's own screens, plus a
+`<vertical>/` section for each of doctor, grocery, hotel-booking, marketplace, pharmacy,
+restaurant and taxi, each with its own `analytics`/`orders`/`settings`-style pages.

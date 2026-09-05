@@ -1,6 +1,7 @@
 # Pharmacy zone
 
-Pharmacy and product browsing, prescription upload and tracking, cart and checkout, and generic-alternative lookups for pharmacy customers.
+Pharmacy and product browsing, prescription upload and tracking, cart and checkout, and
+generic-alternative lookups for pharmacy customers.
 
 Part of the [pharmacy vertical](../../README.md). An independently built Next.js application mounted by the shell at `/pharmacy`; see [frontend zones](../../../docs/architecture/frontend-zones.md).
 
@@ -10,7 +11,8 @@ Part of the [pharmacy vertical](../../README.md). An independently built Next.js
 npm run dev -w @kartseek/pharmacy-frontend
 ```
 
-Open it through the shell at http://localhost:3000/pharmacy, not on its own port — links and assets are emitted under the base path.
+Open it through the shell at http://localhost:3000/pharmacy, not on its own port — links and
+assets are emitted under the base path.
 
 ## Test
 
@@ -38,4 +40,9 @@ Image: `kartseek/pharmacy-frontend`. Workspace: `@kartseek/pharmacy-frontend`.
 
 ## Layout
 
-`stores[/id]`, `near-me`, `categories`, `brands`, `product/[id]`, `search`, `offers`, `generic-alternatives` and `how-it-works` cover discovery; `prescription[/upload]`, `prescriptions[/[id]]`, `prescription-upload`, `cart` and `checkout[/coupon,delivery-slot]` cover the order and prescription flow; `orders[/id]`, `wallet`, `wishlist`, `favourites`, `addresses`, `profile`, `notifications`, `compliance`, `support` and `sell-on-kartseek` round out the account and seller-signup area.
+`stores[/id]`, `near-me`, `categories`, `brands`, `product/[id]`, `search`, `offers`,
+`generic-alternatives` and `how-it-works` cover discovery; `prescription[/upload]`,
+`prescriptions[/[id]]`, `prescription-upload`, `cart` and `checkout[/coupon,delivery-slot]`
+cover the order and prescription flow; `orders[/id]`, `wallet`, `wishlist`, `favourites`,
+`addresses`, `profile`, `notifications`, `compliance`, `support` and `sell-on-kartseek` round
+out the account and seller-signup area.

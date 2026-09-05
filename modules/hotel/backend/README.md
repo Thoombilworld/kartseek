@@ -1,6 +1,9 @@
 # Hotel service
 
-Owns hotels, rooms, seasonal pricing, bookings, guests, staff and payouts — serving customer search/booking/review flows through `HotelController`, hotel-owner management through `OwnerController`, platform admin oversight through `AdminController`, and payment-provider callbacks through `WebhookController`.
+Owns hotels, rooms, seasonal pricing, bookings, guests, staff and payouts — serving customer
+search/booking/review flows through `HotelController`, hotel-owner management through
+`OwnerController`, platform admin oversight through `AdminController`, and payment-provider
+callbacks through `WebhookController`.
 
 Part of the [hotel vertical](../../README.md). A NestJS service built against `apps/api/libs`; the API gateway reaches it over TCP message patterns.
 
@@ -10,7 +13,8 @@ Part of the [hotel vertical](../../README.md). A NestJS service built against `a
 npm run dev -w @kartseek/hotel-backend
 ```
 
-Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated database instead of the platform one.
+Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated
+database instead of the platform one.
 
 ## Test
 
@@ -42,4 +46,5 @@ Image: `kartseek/hotel-service`. Depends on: postgres, redis, kafka.
 
 ## Layout
 
-`admin/` holds the platform-admin controller, `owner/` the hotel-owner management controller, and `webhooks/` the payment-provider webhook handler.
+`admin/` holds the platform-admin controller, `owner/` the hotel-owner management controller,
+and `webhooks/` the payment-provider webhook handler.

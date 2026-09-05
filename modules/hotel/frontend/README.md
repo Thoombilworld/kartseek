@@ -1,6 +1,7 @@
 # Hotel zone
 
-Destination and hotel search, detail and comparison, the multi-step booking checkout, booking management, reviews and price alerts for hotel guests.
+Destination and hotel search, detail and comparison, the multi-step booking checkout, booking
+management, reviews and price alerts for hotel guests.
 
 Part of the [hotel vertical](../../README.md). An independently built Next.js application mounted by the shell at `/hotel-booking`; see [frontend zones](../../../docs/architecture/frontend-zones.md).
 
@@ -10,7 +11,8 @@ Part of the [hotel vertical](../../README.md). An independently built Next.js ap
 npm run dev -w @kartseek/hotel-frontend
 ```
 
-Open it through the shell at http://localhost:3000/hotel-booking, not on its own port — links and assets are emitted under the base path.
+Open it through the shell at http://localhost:3000/hotel-booking, not on its own port — links
+and assets are emitted under the base path.
 
 ## Test
 
@@ -38,4 +40,11 @@ Image: `kartseek/hotel-frontend`. Workspace: `@kartseek/hotel-frontend`.
 
 ## Layout
 
-`search`, `destinations`, `map`, `deals`, `hotel/[hotelId]`, `[slug]` and `compare[/detail]` cover discovery; `booking/[bookingId]` and `checkout/[hotelId]` with its `guests`, `loyalty`, `offers`, `payment`, `processing`, `summary` and `wallet` steps cover the booking flow; `my-bookings`, `review/[bookingId]`, `price-alerts`, `trip-planner`, `cancellation-policy`, `faq`, `terms`, `profile` and `notifications` round out the account area.
+`search`, `destinations`, `map`, `deals`, `hotel/[hotelId]`, `[slug]` and `compare[/detail]`
+cover discovery; `checkout/[hotelId]` starts the booking checkout, with `checkout/guests`,
+`checkout/loyalty`, `checkout/offers`, `checkout/payment`, `checkout/processing`,
+`checkout/summary` and `checkout/wallet` as sibling steps under `checkout/`, not nested inside
+`[hotelId]`; `booking/[bookingId]` (with `confirmation` and `pending`) and
+`booking/payment-failed` cover the outcome; `my-bookings`, `review/[bookingId]`, `price-alerts`,
+`trip-planner`, `cancellation-policy`, `faq`, `terms`, `profile` and `notifications` round out
+the account area.

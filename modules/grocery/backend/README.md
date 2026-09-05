@@ -1,6 +1,9 @@
 # Grocery service
 
-Owns stores, warehouses and delivery zones, products (with variants and stock movements), categories, orders, flash deals, reviews and wishlists — serving customer catalogue/search/order flows, per-store seller management (`stores/:id/products`, low-stock, promotions, analytics), the flash-deal admin approval workflow, and the franchise portal's read-only view.
+Owns stores, warehouses and delivery zones, products (with variants and stock movements),
+categories, orders, flash deals, reviews and wishlists — serving customer catalogue/search/order
+flows, per-store seller management (`stores/:id/products`, low-stock, promotions, analytics),
+the flash-deal admin approval workflow, and the franchise portal's read-only view.
 
 Part of the [grocery vertical](../../README.md). A NestJS service built against `apps/api/libs`; the API gateway reaches it over TCP message patterns and gRPC.
 
@@ -10,7 +13,8 @@ Part of the [grocery vertical](../../README.md). A NestJS service built against 
 npm run dev -w @kartseek/grocery-backend
 ```
 
-Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated database instead of the platform one.
+Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated
+database instead of the platform one.
 
 ## Test
 
@@ -19,7 +23,9 @@ npm test -w @kartseek/grocery-backend
 npm run type-check -w @kartseek/grocery-backend
 ```
 
-`src/__tests__/controller.integration.spec.ts` drives `GroceryController` through supertest with the service layer mocked; `vitest.config.mts` excludes it from `npm test`, citing the live PostgreSQL a real run would need.
+`src/__tests__/controller.integration.spec.ts` drives `GroceryController` through supertest with
+the service layer mocked; `vitest.config.mts` excludes it from `npm test`, citing the live
+PostgreSQL a real run would need.
 
 ## Configuration
 
@@ -43,4 +49,6 @@ Image: `kartseek/grocery-service`. Depends on: postgres, redis, kafka.
 
 ## Layout
 
-`admin/` holds the platform-admin service, `catalog/` the category-tree builder, `franchise/` the read-only slice the franchise portal's `franchise_grocery_*` patterns call into, and `transport/` the gRPC catalogue controller and its payload types.
+`admin/` holds the platform-admin service, `catalog/` the category-tree builder, `franchise/`
+the read-only slice the franchise portal's `franchise_grocery_*` patterns call into, and
+`transport/` the gRPC catalogue controller and its payload types.

@@ -1,6 +1,7 @@
 # Doctor zone
 
-Searching and booking doctor appointments, tracking prescriptions and medical records, and managing family members and reviews.
+Searching and booking doctor appointments, tracking prescriptions and medical records, and
+managing family members and reviews.
 
 Part of the [doctor vertical](../../README.md). An independently built Next.js application mounted by the shell at `/doctor`; see [frontend zones](../../../docs/architecture/frontend-zones.md).
 
@@ -10,7 +11,8 @@ Part of the [doctor vertical](../../README.md). An independently built Next.js a
 npm run dev -w @kartseek/doctor-frontend
 ```
 
-Open it through the shell at http://localhost:3000/doctor, not on its own port — links and assets are emitted under the base path.
+Open it through the shell at http://localhost:3000/doctor, not on its own port — links and
+assets are emitted under the base path.
 
 ## Test
 
@@ -38,4 +40,7 @@ Image: `kartseek/doctor-frontend`. Workspace: `@kartseek/doctor-frontend`.
 
 ## Layout
 
-`search`, `profile/[slug]`, `hospital/[id]` and `clinic/[id]` cover discovery; `book/[doctorId]`, `my-appointments`, `review/[appointmentId]` and `family-members` cover the booking lifecycle; `prescriptions[/[id]]`, `medical-records`, `my-doctors`, `my-profile` and `wellness-rewards` round out the account area.
+`search`, `profile/[slug]`, `hospital/[id]` and `clinic/[id]` cover discovery;
+`book/[doctorId]`, `my-appointments`, `review/[appointmentId]` and `family-members` cover the
+booking lifecycle; `prescriptions[/[id]]`, `medical-records`, `my-doctors`, `my-profile` and
+`wellness-rewards` round out the account area.

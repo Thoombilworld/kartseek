@@ -1,6 +1,7 @@
 # Grocery zone
 
-Store and category browsing, product search, cart and checkout, order tracking, wishlist and subscriptions, and delivery-zone/address management for grocery shoppers.
+Store and category browsing, product search, cart and checkout, order tracking, wishlist and
+subscriptions, and delivery-zone/address management for grocery shoppers.
 
 Part of the [grocery vertical](../../README.md). An independently built Next.js application mounted by the shell at `/grocery`; see [frontend zones](../../../docs/architecture/frontend-zones.md).
 
@@ -10,7 +11,8 @@ Part of the [grocery vertical](../../README.md). An independently built Next.js 
 npm run dev -w @kartseek/grocery-frontend
 ```
 
-Open it through the shell at http://localhost:3000/grocery, not on its own port — links and assets are emitted under the base path.
+Open it through the shell at http://localhost:3000/grocery, not on its own port — links and
+assets are emitted under the base path.
 
 ## Test
 
@@ -38,4 +40,7 @@ Image: `kartseek/grocery-frontend`. Workspace: `@kartseek/grocery-frontend`.
 
 ## Layout
 
-`store[/slug]`, `category[/slug]`, `brand[/slug]`, `product/[id]`, `search` and `deals` cover discovery; `cart`, `checkout[/payment,success]`, `orders[/id]` and `zone-check` cover the order lifecycle; `subscriptions`, `coupons`, `gift-cards`, `wishlist`, `addresses`, `profile`, `recently-viewed`, `notifications` and `help` round out the account area.
+`store[/slug]`, `category[/slug]`, `brand[/slug]`, `product/[id]`, `search` and `deals` cover
+discovery; `cart`, `checkout[/payment,success]`, `orders[/id]` and `zone-check` cover the order
+lifecycle; `subscriptions`, `coupons`, `gift-cards`, `wishlist`, `addresses`, `profile`,
+`recently-viewed`, `notifications` and `help` round out the account area.

@@ -61,5 +61,5 @@ share the shell's login, OTP, registration and approval-status flows:
   console.
 
 See [frontend zones](../docs/architecture/frontend-zones.md) for how these
-fit together with the storefront and the four areas that stay in the shell
-rather than becoming a zone.
+fit together with the storefront and the three web areas that stay in the
+shell rather than becoming a zone: admin, seller and hotel-owner.

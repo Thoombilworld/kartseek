@@ -1,6 +1,9 @@
 # Pharmacy service
 
-Owns pharmacy stores, items, categories, promotions, orders, reviews, staff and the prescription queue — serving customer catalogue/order and prescription-upload flows, per-store seller order access (`:storeId/seller-orders`), and platform admin approval/suspension and commission management for stores and pending prescriptions.
+Owns pharmacy stores, items, categories, promotions, orders, reviews, staff and the prescription
+queue — serving customer catalogue/order and prescription-upload flows, per-store seller order
+access (`:storeId/seller-orders`), and platform admin approval/suspension and commission
+management for stores and pending prescriptions.
 
 Part of the [pharmacy vertical](../../README.md). A NestJS service built against `apps/api/libs`; the API gateway reaches it over TCP message patterns.
 
@@ -10,7 +13,8 @@ Part of the [pharmacy vertical](../../README.md). A NestJS service built against
 npm run dev -w @kartseek/pharmacy-backend
 ```
 
-Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated database instead of the platform one.
+Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated
+database instead of the platform one.
 
 ## Test
 
@@ -42,4 +46,5 @@ Image: `kartseek/pharmacy-service`. Depends on: postgres, redis, kafka.
 
 ## Layout
 
-`franchise/` holds `franchise-view.service.ts`, the read-only slice the franchise portal's `franchise_pharmacy_*` patterns call into.
+`franchise/` holds `franchise-view.service.ts`, the read-only slice the franchise portal's
+`franchise_pharmacy_*` patterns call into.

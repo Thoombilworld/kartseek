@@ -1,6 +1,8 @@
 # Restaurant service
 
-Owns restaurants, menus, tables, reservations, orders, promotions, reviews and staff — serving customer dine-in/takeaway ordering and table-booking flows, and platform admin oversight of restaurant status (block/suspend) and commission.
+Owns restaurants, menus, tables, reservations, orders, promotions, reviews and staff — serving
+customer dine-in/takeaway ordering and table-booking flows, and platform admin oversight of
+restaurant status (block/suspend) and commission.
 
 Part of the [restaurant vertical](../../README.md). A NestJS service built against `apps/api/libs`; the API gateway reaches it over TCP message patterns and gRPC.
 
@@ -10,7 +12,8 @@ Part of the [restaurant vertical](../../README.md). A NestJS service built again
 npm run dev -w @kartseek/restaurant-backend
 ```
 
-Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated database instead of the platform one.
+Needs `npm run infra:up` first. Copy `.env.example` to `.env` to run against a dedicated
+database instead of the platform one.
 
 ## Test
 
@@ -43,4 +46,5 @@ Image: `kartseek/restaurant-service`. Depends on: postgres, redis, kafka.
 
 ## Layout
 
-`franchise/` holds `franchise-view.service.ts`, the read-only slice the franchise portal's `franchise_restaurant_*` patterns call into.
+`franchise/` holds `franchise-view.service.ts`, the read-only slice the franchise portal's
+`franchise_restaurant_*` patterns call into.

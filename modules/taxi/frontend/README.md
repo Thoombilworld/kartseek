@@ -1,6 +1,7 @@
 # Taxi zone
 
-Ride search and trip tracking for riders, plus the driver-facing sign-up and dashboard under `drive/`.
+Ride search and trip tracking for riders, plus the driver-facing sign-up and dashboard under
+`drive/`.
 
 Part of the [taxi vertical](../../README.md). An independently built Next.js application mounted by the shell at `/taxi`; see [frontend zones](../../../docs/architecture/frontend-zones.md).
 
@@ -10,7 +11,8 @@ Part of the [taxi vertical](../../README.md). An independently built Next.js app
 npm run dev -w @kartseek/taxi-frontend
 ```
 
-Open it through the shell at http://localhost:3000/taxi, not on its own port — links and assets are emitted under the base path.
+Open it through the shell at http://localhost:3000/taxi, not on its own port — links and assets
+are emitted under the base path.
 
 ## Test
 
@@ -38,4 +40,6 @@ Image: `kartseek/taxi-frontend`. Workspace: `@kartseek/taxi-frontend`.
 
 ## Layout
 
-`search`, `rides`, `trip/[id]`, `intercity` and `rentals` cover rider booking and trip tracking; `login`, `register`, `forgot-password` and `profile` cover the rider account; `drive/login` and `drive/dashboard` are the separate driver-facing sign-up and dashboard.
+`search`, `rides`, `trip/[id]`, `intercity` and `rentals` cover rider booking and trip tracking;
+`login`, `register`, `forgot-password` and `profile` cover the rider account; `drive/login` and
+`drive/dashboard` are the separate driver-facing sign-up and dashboard.
