@@ -48,6 +48,7 @@
     "db:seed:pharmacy": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed/seed-pharmacy.ts",
     "prepare": "node -e \"try { require('husky').install() } catch(e) {}\"",
     "kafka:topics": "node apps/api/scripts/create-kafka-topics.js",
+    "registry:check": "node scripts/registry/validate.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\""
   },
   "devDependencies": {
