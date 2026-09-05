@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import '../blocs/booking_bloc.dart';
 import '../widgets/premium_button.dart';
 import '../widgets/bottom_nav_sheet.dart';

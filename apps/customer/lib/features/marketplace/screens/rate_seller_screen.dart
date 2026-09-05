@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Rate Seller Screen — Rate and review a seller after purchase.
 class RateSellerScreen extends StatefulWidget {

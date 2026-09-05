@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:shared_mobile/features/marketplace/models/product_model.dart';
+import 'package:kartseek_shared_mobile/features/marketplace/models/product_model.dart';
 
 /// Status enum shared across all marketplace BLoC states.
 enum MarketplaceStatus {

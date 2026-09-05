@@ -10,7 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../blocs/booking_bloc.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 class EmergencyScreen extends StatefulWidget {
   const EmergencyScreen({super.key});

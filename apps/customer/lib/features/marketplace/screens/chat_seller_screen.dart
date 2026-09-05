@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Chat with Seller Screen — Real-time messaging about a product.
 class ChatSellerScreen extends StatefulWidget {

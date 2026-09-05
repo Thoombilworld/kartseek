@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/services/user_behavior_service.dart';
-import 'package:shared_mobile/features/marketplace/models/product_model.dart';
-import 'package:shared_mobile/features/marketplace/services/marketplace_mock_data.dart';
+import 'package:kartseek_shared_mobile/core/services/user_behavior_service.dart';
+import 'package:kartseek_shared_mobile/features/marketplace/models/product_model.dart';
+import 'package:kartseek_shared_mobile/features/marketplace/services/marketplace_mock_data.dart';
 
 /// KARTSEEK — Personalized Recommendation Engine
 ///

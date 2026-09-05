@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:flutter/services.dart';
 import 'package:kartseek_partner/features/shared/theme/partner_theme.dart';
 import 'package:kartseek_partner/features/shared/services/alert_sound_service.dart';
 import 'package:kartseek_partner/routing/partner_router.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
 
 /// Data model for incoming ride request.
 class RideRequestData {

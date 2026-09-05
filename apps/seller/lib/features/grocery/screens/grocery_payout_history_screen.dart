@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
-import 'package:shared_mobile/core/utils/currency_formatter.dart';
+import 'package:kartseek_shared_mobile/core/utils/currency_formatter.dart';
 
 /// Payout History — Past payouts list.
 class GroceryPayoutHistoryScreen extends StatelessWidget {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Intercity shuttle booking screen — book seats on inter-city routes.
 class IntercityBookingScreen extends StatefulWidget {

@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:shared_mobile/core/constants.dart';
-import 'package:shared_mobile/core/security/ssl_pinning_service.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/security/ssl_pinning_service.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
 
 /// Grocery Seller API Service — Secure client for seller-facing Grocery endpoints.
 /// Uses SSL pinning; `useMock` is an opt-in, default-off offline dev mode.

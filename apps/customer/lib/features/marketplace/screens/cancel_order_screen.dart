@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Cancel Order Screen — lets the user cancel a pending order.
 class CancelOrderScreen extends StatefulWidget {

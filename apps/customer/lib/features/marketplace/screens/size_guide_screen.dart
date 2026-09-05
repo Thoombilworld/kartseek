@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Size Guide Screen — Category-specific size charts for clothing, shoes, electronics.
 class SizeGuideScreen extends StatefulWidget {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kartseek_customer/features/pharmacy/models/pharmacy_models.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Comprehensive mock data for the Pharmacy module.
 /// Provides 15 categories, 12 stores, 60+ products, and utility methods for filtering.

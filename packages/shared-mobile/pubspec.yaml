@@ -1,4 +1,4 @@
-name: shared_mobile
+name: kartseek_shared_mobile
 description: "KARTSEEK shared mobile code — core infrastructure, auth, and common features used by both Customer and Partner apps."
 publish_to: 'none'
 version: 1.0.0

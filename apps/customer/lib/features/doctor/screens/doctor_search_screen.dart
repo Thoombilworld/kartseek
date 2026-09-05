@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/widgets/kartseek_image.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/widgets/kartseek_image.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_bloc.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_event.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_state.dart';
 import 'package:kartseek_customer/routing/customer_router.dart';
-import 'package:shared_mobile/core/widgets/voice_search_sheet.dart';
+import 'package:kartseek_shared_mobile/core/widgets/voice_search_sheet.dart';
 
 /// Doctor Search Screen — Filter by specialty, sort, and search doctors.
 class DoctorSearchScreen extends StatefulWidget {

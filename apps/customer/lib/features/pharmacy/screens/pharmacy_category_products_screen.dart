@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
 import 'package:kartseek_customer/features/pharmacy/blocs/pharmacy_bloc.dart';
 import 'package:kartseek_customer/features/pharmacy/blocs/pharmacy_event.dart';
 import 'package:kartseek_customer/features/pharmacy/blocs/pharmacy_state.dart';

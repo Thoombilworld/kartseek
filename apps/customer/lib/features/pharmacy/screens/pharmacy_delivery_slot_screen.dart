@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 import 'package:kartseek_customer/features/pharmacy/services/pharmacy_mock_data.dart';
 
 /// Delivery slot picker — date row + time slot chips.

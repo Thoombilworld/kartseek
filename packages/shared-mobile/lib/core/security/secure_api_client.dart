@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:shared_mobile/core/constants.dart';
-import 'package:shared_mobile/core/security/ssl_pinning_service.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/security/ssl_pinning_service.dart';
 
 /// KARTSEEK Secure API Client
 ///

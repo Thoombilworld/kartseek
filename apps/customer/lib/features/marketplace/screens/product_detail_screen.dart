@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/services/user_behavior_service.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/user_behavior_service.dart';
 import 'package:kartseek_customer/features/marketplace/models/product_model.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_service.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_exception.dart';
@@ -14,7 +14,7 @@ import 'package:kartseek_customer/features/marketplace/blocs/marketplace_event.d
     hide AddToCart;
 import 'package:kartseek_customer/features/cart/blocs/cart_bloc.dart';
 import 'package:kartseek_customer/features/cart/blocs/cart_event.dart';
-import 'package:shared_mobile/core/widgets/kartseek_image.dart';
+import 'package:kartseek_shared_mobile/core/widgets/kartseek_image.dart';
 
 /// Product Detail — image gallery, pricing, ratings, add-to-cart, buy-now,
 /// specifications, variants and reviews.

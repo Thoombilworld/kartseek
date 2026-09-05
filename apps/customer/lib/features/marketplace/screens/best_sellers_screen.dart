@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Best Sellers Screen — Top selling products ranked by category with badges.
 class BestSellersScreen extends StatelessWidget {

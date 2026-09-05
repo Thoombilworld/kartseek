@@ -16,7 +16,7 @@ import '../../domain/repositories/repositories.dart';
 import '../datasources/taxi_remote_datasource.dart';
 import '../datasources/taxi_local_datasource.dart';
 import '../datasources/taxi_realtime_datasource.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 // ─── Booking Repository ─────────────────────────────────────────────────────
 

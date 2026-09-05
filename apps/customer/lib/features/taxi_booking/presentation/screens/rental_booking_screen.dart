@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Car rental booking screen — rent a car for days/weeks with optional driver.
 class RentalBookingScreen extends StatefulWidget {

@@ -6,7 +6,7 @@ import 'package:kartseek_customer/features/marketplace/blocs/marketplace_event.d
 import 'package:kartseek_customer/features/marketplace/blocs/marketplace_state.dart';
 import 'package:kartseek_customer/features/marketplace/repositories/marketplace_repository.dart';
 import 'package:kartseek_customer/features/marketplace/models/product_model.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Debounce transformer — waits [duration] of inactivity then processes only
 /// the latest event. Cancels any in-flight handler when a new event arrives.

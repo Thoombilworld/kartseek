@@ -4,7 +4,7 @@ import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_blo
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_event.dart';
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_state.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
-import 'package:shared_mobile/core/utils/currency_formatter.dart';
+import 'package:kartseek_shared_mobile/core/utils/currency_formatter.dart';
 
 /// Price Update — Batch or individual price changes.
 class GroceryPriceUpdateScreen extends StatelessWidget {

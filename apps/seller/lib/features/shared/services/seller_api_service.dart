@@ -1,4 +1,4 @@
-import 'package:shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
 import 'package:kartseek_seller/features/shared/models/seller_order_model.dart';
 
 /// Seller REST API Service

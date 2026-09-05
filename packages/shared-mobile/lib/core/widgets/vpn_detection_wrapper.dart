@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/services/geo_security_service.dart';
+import 'package:kartseek_shared_mobile/core/services/geo_security_service.dart';
 
 /// A widget that wraps your app and shows a VPN/proxy detection overlay
 /// when the GeoSecurityService detects a blocked connection.

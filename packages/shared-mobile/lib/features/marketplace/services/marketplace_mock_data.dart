@@ -1,8 +1,8 @@
-import 'package:shared_mobile/features/marketplace/models/product_model.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/features/marketplace/models/product_model.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Mock data service — provides realistic product data until backend is live.
-/// This is the shared_mobile canonical copy used by RecommendationEngine.
+/// This is the kartseek_shared_mobile canonical copy used by RecommendationEngine.
 class MarketplaceMockData {
   static const _img = 'https://images.unsplash.com/photo-';
 

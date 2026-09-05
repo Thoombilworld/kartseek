@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Notifications Screen — Push notification center.
 class GroceryNotificationsScreen extends StatefulWidget {

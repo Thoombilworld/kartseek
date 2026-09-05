@@ -1,4 +1,4 @@
-import 'package:shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
 
 /// KARTSEEK Partner App — API Service
 /// Centralized API endpoint definitions for the partner module.

@@ -5,7 +5,7 @@ import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_eve
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_state.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
 import 'package:kartseek_seller/routing/seller_router.dart';
-import 'package:shared_mobile/core/utils/currency_formatter.dart';
+import 'package:kartseek_shared_mobile/core/utils/currency_formatter.dart';
 
 /// Inventory Management — Browse products, toggle availability, update stock.
 class GroceryInventoryScreen extends StatelessWidget {

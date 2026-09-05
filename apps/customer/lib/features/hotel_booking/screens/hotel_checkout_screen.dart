@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 import 'package:kartseek_customer/routing/customer_router.dart';
 
 /// Hotel Checkout Screen — Guest details, date selection, room summary, payment.

@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/constants.dart';
-import 'package:shared_mobile/core/security/ssl_pinning_service.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/security/ssl_pinning_service.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// KARTSEEK Restaurant API Service — Dio-based client for NestJS API Gateway.
 ///

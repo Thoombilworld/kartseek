@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_bloc.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_event.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_state.dart';
-import 'package:shared_mobile/core/widgets/kartseek_image.dart';
+import 'package:kartseek_shared_mobile/core/widgets/kartseek_image.dart';
 
 /// Doctor Booking — Practo-style doctor profile with slot selection and booking.
 class DoctorBookingScreen extends StatefulWidget {

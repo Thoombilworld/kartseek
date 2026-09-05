@@ -6,7 +6,7 @@ import '../widgets/premium_button.dart';
 
 import '../../domain/entities/entities.dart';
 import '../../data/repositories/taxi_repository_impl.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 class PickupConfirmationScreen extends StatefulWidget {
   const PickupConfirmationScreen({super.key});

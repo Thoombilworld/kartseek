@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
 
 /// Marketplace Address Selection Screen — lets user pick a delivery address.
 class AddressSelectionScreen extends StatefulWidget {

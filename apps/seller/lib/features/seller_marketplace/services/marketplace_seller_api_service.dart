@@ -1,5 +1,5 @@
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
 
 /// Marketplace-specific Seller API Service
 ///

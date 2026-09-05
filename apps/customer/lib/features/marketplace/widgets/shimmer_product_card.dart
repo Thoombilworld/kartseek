@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/utils/responsive.dart';
+import 'package:kartseek_shared_mobile/core/utils/responsive.dart';
 import 'package:shimmer/shimmer.dart';
 
 /// Shimmer loading skeleton for product card grids.

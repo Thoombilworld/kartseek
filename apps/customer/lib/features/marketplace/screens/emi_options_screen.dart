@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// EMI Options Screen — Shows available EMI plans for a product with bank logos and no-cost labels.
 class EmiOptionsScreen extends StatefulWidget {

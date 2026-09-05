@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
 import 'package:kartseek_seller/features/shared/models/country_config.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 class SellerNotificationsScreen extends StatelessWidget {
   const SellerNotificationsScreen({super.key});

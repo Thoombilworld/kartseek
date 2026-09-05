@@ -11,7 +11,7 @@ import 'package:kartseek_partner/features/shared/blocs/partner_event.dart';
 import 'package:kartseek_partner/features/shared/blocs/partner_state.dart';
 import 'package:kartseek_partner/features/shared/models/partner_profile_model.dart';
 import 'package:kartseek_partner/routing/partner_router.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Taxi Driver Dashboard — Main hub for taxi drivers.
 ///

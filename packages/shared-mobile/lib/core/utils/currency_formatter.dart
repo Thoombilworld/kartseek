@@ -7,7 +7,7 @@
 library;
 
 import 'package:intl/intl.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Currency display configuration loaded from the active country.
 class CurrencyConfig {

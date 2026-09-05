@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_mobile/core/providers/locale_provider.dart';
+import 'package:kartseek_shared_mobile/core/providers/locale_provider.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
@@ -30,7 +30,7 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // shared_mobile services initialize lazily on first use.
+  // kartseek_shared_mobile services initialize lazily on first use.
 
   runApp(const SellerApp());
 }

@@ -4,7 +4,7 @@ import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_blo
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_state.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
 import 'package:kartseek_seller/features/shared/widgets/order_status_chip.dart';
-import 'package:shared_mobile/core/utils/currency_formatter.dart';
+import 'package:kartseek_shared_mobile/core/utils/currency_formatter.dart';
 
 /// Active Orders — Orders in progress (preparing, ready, dispatched).
 class GroceryActiveOrdersScreen extends StatelessWidget {

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/security/device_security_service.dart';
-import 'package:shared_mobile/features/auth/blocs/auth_bloc.dart';
-import 'package:shared_mobile/features/auth/blocs/auth_event.dart';
-import 'package:shared_mobile/features/auth/blocs/auth_state.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/security/device_security_service.dart';
+import 'package:kartseek_shared_mobile/features/auth/blocs/auth_bloc.dart';
+import 'package:kartseek_shared_mobile/features/auth/blocs/auth_event.dart';
+import 'package:kartseek_shared_mobile/features/auth/blocs/auth_state.dart';
 
 /// KARTSEEK Login Screen — Premium, production-grade authentication UI.
 /// Wired to AuthBloc for real authentication lifecycle management.

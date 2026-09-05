@@ -6,7 +6,7 @@ library;
 
 import '../entities/entities.dart';
 import '../entities/ride_status.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Manages ride booking lifecycle.
 abstract class TaxiBookingRepository {

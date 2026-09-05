@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_bloc.dart';
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_state.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
-import 'package:shared_mobile/core/utils/currency_formatter.dart';
+import 'package:kartseek_shared_mobile/core/utils/currency_formatter.dart';
 
 /// Seller Earnings overview — Revenue, commissions, tips.
 class GrocerySellerEarningsScreen extends StatelessWidget {

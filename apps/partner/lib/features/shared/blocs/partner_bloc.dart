@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/services/taxi_socket_service.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/taxi_socket_service.dart';
 import 'package:kartseek_partner/features/shared/blocs/partner_event.dart';
 import 'package:kartseek_partner/features/shared/blocs/partner_state.dart';
 import 'package:kartseek_partner/features/shared/models/partner_profile_model.dart';

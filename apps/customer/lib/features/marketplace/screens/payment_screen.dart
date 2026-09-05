@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
 
 /// Payment is a step inside checkout, not a screen of its own.
 ///

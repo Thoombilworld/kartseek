@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 import 'package:kartseek_customer/routing/customer_router.dart';
-import 'package:shared_mobile/core/widgets/voice_search_sheet.dart';
-import 'package:shared_mobile/core/widgets/camera_capture_screen.dart';
+import 'package:kartseek_shared_mobile/core/widgets/voice_search_sheet.dart';
+import 'package:kartseek_shared_mobile/core/widgets/camera_capture_screen.dart';
 
 /// Restaurant Search Screen — Search and filter restaurants.
 class RestaurantSearchScreen extends StatefulWidget {

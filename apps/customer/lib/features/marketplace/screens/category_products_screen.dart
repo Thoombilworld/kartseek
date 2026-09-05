@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'package:shared_mobile/core/utils/responsive.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/widgets/kartseek_image.dart';
+import 'package:kartseek_shared_mobile/core/utils/responsive.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/widgets/kartseek_image.dart';
 import 'package:kartseek_customer/features/marketplace/models/product_model.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_exception.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_service.dart';

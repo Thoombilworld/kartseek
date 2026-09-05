@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
-import 'package:shared_mobile/core/services/socket_service.dart';
+import 'package:kartseek_shared_mobile/core/services/socket_service.dart';
 import 'package:kartseek_seller/features/shared/models/seller_order_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────

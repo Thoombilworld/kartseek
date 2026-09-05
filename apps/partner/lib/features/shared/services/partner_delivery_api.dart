@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
 import 'package:kartseek_partner/features/shared/models/delivery_model.dart';
 
 /// The partner app's delivery endpoints.

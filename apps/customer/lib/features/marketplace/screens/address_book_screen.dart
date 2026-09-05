@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Address Book Screen — Manage delivery addresses with add/edit/delete, labels, and default selection.
 class AddressBookScreen extends StatefulWidget {

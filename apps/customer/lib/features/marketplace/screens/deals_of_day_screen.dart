@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Deals of the Day Screen — Daily curated deals with countdown timer and category filters.
 class DealsOfDayScreen extends StatefulWidget {

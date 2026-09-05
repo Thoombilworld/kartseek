@@ -4,7 +4,7 @@ import 'package:kartseek_seller/features/shared/models/country_config.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
 import 'package:kartseek_seller/features/shared/widgets/seller_module_scaffold.dart';
 import 'package:kartseek_seller/routing/seller_router.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 class TaxiVendorDashboardScreen extends StatelessWidget {
   const TaxiVendorDashboardScreen({super.key});

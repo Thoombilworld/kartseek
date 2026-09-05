@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/security/device_security_service.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/features/auth/services/auth_api_service.dart';
+import 'package:kartseek_shared_mobile/core/security/device_security_service.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/features/auth/services/auth_api_service.dart';
 import 'package:kartseek_seller/features/shared/blocs/seller_bloc.dart';
 import 'package:kartseek_seller/features/shared/blocs/seller_event.dart';
 import 'package:kartseek_seller/features/shared/blocs/seller_state.dart';

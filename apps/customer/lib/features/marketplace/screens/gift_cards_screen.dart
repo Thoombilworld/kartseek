@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Gift Cards Screen — Check balance, redeem gift cards, and view transaction history.
 class GiftCardsScreen extends StatefulWidget {

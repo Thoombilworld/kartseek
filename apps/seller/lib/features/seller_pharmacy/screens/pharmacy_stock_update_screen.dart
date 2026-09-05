@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Quick stock update — toggle availability and update quantities.
 class PharmacyStockUpdateScreen extends StatelessWidget {

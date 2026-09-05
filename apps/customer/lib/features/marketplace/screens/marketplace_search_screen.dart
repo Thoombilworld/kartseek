@@ -1,18 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/utils/responsive.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
-import 'package:shared_mobile/features/marketplace/models/product_model.dart';
+import 'package:kartseek_shared_mobile/core/utils/responsive.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/features/marketplace/models/product_model.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_exception.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_service.dart';
 import 'package:kartseek_customer/features/marketplace/widgets/marketplace_error_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kartseek_customer/features/marketplace/widgets/product_card.dart';
-import 'package:shared_mobile/core/services/user_behavior_service.dart';
-import 'package:shared_mobile/core/widgets/voice_search_sheet.dart';
-import 'package:shared_mobile/core/widgets/camera_capture_screen.dart';
+import 'package:kartseek_shared_mobile/core/services/user_behavior_service.dart';
+import 'package:kartseek_shared_mobile/core/widgets/voice_search_sheet.dart';
+import 'package:kartseek_shared_mobile/core/widgets/camera_capture_screen.dart';
 
 /// Marketplace Search — debounced search with recent/popular suggestions.
 class MarketplaceSearchScreen extends StatefulWidget {

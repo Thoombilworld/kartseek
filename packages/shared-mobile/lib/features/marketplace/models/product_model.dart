@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// KARTSEEK Marketplace — Core Data Models
 /// Canonical source of truth for all marketplace types.
-/// Both customer and partner apps should reference these via shared_mobile.
+/// Both customer and partner apps should reference these via kartseek_shared_mobile.
 
 class ProductModel {
   final String id;

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 /// Store profile — pharmacy details, license, hours, delivery zones.
 class PharmacyStoreProfileScreen extends StatelessWidget {
   const PharmacyStoreProfileScreen({super.key});

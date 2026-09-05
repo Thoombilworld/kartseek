@@ -1,7 +1,7 @@
 /// KARTSEEK Region BLoC — State
 library;
 
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Base class for all region states
 sealed class RegionState {

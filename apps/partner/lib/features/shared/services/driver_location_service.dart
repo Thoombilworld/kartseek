@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/core/services/taxi_socket_service.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/services/taxi_socket_service.dart';
 
 /// DriverLocationService — Persistent background GPS broadcasting.
 ///

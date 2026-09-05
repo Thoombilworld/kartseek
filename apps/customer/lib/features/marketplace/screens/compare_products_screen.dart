@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Compare Products Screen — Side-by-side comparison of products with spec table.
 class CompareProductsScreen extends StatelessWidget {

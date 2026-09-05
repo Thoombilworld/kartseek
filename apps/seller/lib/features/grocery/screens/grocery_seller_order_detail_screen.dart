@@ -5,7 +5,7 @@ import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_eve
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_state.dart';
 import 'package:kartseek_seller/features/shared/models/seller_order_model.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
-import 'package:shared_mobile/core/utils/currency_formatter.dart';
+import 'package:kartseek_shared_mobile/core/utils/currency_formatter.dart';
 
 /// Seller Order Detail Screen
 class GrocerySellerOrderDetailScreen extends StatelessWidget {

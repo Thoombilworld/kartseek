@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/routing/route_helpers.dart';
+import 'package:kartseek_shared_mobile/core/routing/route_helpers.dart';
 // Partner Auth
 import 'package:kartseek_partner/features/auth/screens/partner_login_screen.dart';
 import 'package:kartseek_partner/features/auth/screens/partner_otp_verify_screen.dart';

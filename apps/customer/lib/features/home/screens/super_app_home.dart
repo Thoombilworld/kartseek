@@ -2,16 +2,16 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
-import 'package:shared_mobile/core/utils/responsive.dart';
-import 'package:shared_mobile/core/widgets/kartseek_image.dart';
-import 'package:shared_mobile/core/blocs/region_bloc.dart';
-import 'package:shared_mobile/core/blocs/region_state.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/features/marketplace/models/product_model.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/utils/responsive.dart';
+import 'package:kartseek_shared_mobile/core/widgets/kartseek_image.dart';
+import 'package:kartseek_shared_mobile/core/blocs/region_bloc.dart';
+import 'package:kartseek_shared_mobile/core/blocs/region_state.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/features/marketplace/models/product_model.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_service.dart';
-import 'package:shared_mobile/core/widgets/voice_search_sheet.dart';
+import 'package:kartseek_shared_mobile/core/widgets/voice_search_sheet.dart';
 import 'package:kartseek_customer/features/home/widgets/offline_banner.dart';
 
 /// KARTSEEK Super App — Modern Central Dashboard

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/widgets/kartseek_image.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/widgets/kartseek_image.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_customer/routing/customer_router.dart';
 
 /// Doctor Profile Screen — Full doctor details with booking CTA.

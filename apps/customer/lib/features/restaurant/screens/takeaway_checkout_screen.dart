@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_customer/features/restaurant/blocs/restaurant_bloc.dart';
 import 'package:kartseek_customer/features/restaurant/blocs/restaurant_event.dart';
 import 'package:kartseek_customer/features/restaurant/blocs/restaurant_state.dart';

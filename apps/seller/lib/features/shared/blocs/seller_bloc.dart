@@ -5,7 +5,7 @@ import 'package:kartseek_seller/features/shared/blocs/seller_state.dart';
 import 'package:kartseek_seller/features/shared/models/seller_profile_model.dart';
 import 'package:kartseek_seller/features/shared/services/seller_api_service.dart';
 import 'package:kartseek_seller/features/shared/services/seller_order_socket_service.dart';
-import 'package:shared_mobile/features/auth/services/auth_api_service.dart';
+import 'package:kartseek_shared_mobile/features/auth/services/auth_api_service.dart';
 
 /// Central SellerBloc — manages authentication state, profile, and real-time
 /// event bridging from [SellerOrderSocketService] into the widget tree.

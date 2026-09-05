@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// AR Preview Screen — Simulated augmented reality product preview.
 class ARPreviewScreen extends StatefulWidget {

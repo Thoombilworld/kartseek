@@ -5,8 +5,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
 
-import 'package:shared_mobile/core/services/taxi_socket_service.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/taxi_socket_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_partner/features/shared/services/driver_location_service.dart';
 
 /// Driver Active Ride Screen — Broadcasts driver GPS live to the customer

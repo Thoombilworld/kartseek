@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/widgets/camera_capture_screen.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/widgets/camera_capture_screen.dart';
 
 class PrescriptionUploadScreen extends StatefulWidget {
   const PrescriptionUploadScreen({super.key});

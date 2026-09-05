@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/booking_bloc.dart';
 import '../../domain/entities/entities.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/services/geocoding_service.dart';
-import 'package:shared_mobile/core/widgets/voice_search_sheet.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/geocoding_service.dart';
+import 'package:kartseek_shared_mobile/core/widgets/voice_search_sheet.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 class DestinationSearchScreen extends StatefulWidget {
   final String? initialSearchType;
 

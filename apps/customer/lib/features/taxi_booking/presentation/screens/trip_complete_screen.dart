@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/booking_bloc.dart';
 import '../../domain/entities/entities.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 class TripCompleteScreen extends StatefulWidget {
   const TripCompleteScreen({super.key});

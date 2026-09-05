@@ -3,8 +3,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:kartseek_partner/features/shared/models/ride_model.dart';
 import 'package:kartseek_partner/features/shared/models/delivery_model.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/services/taxi_socket_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/taxi_socket_service.dart';
 import 'package:kartseek_partner/features/shared/services/partner_delivery_api.dart';
 
 /// KARTSEEK Partner App — Real-time Request Stream Service

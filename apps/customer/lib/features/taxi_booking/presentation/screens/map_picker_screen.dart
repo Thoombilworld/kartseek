@@ -9,7 +9,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_mobile/core/services/geocoding_service.dart';
+import 'package:kartseek_shared_mobile/core/services/geocoding_service.dart';
 import '../../domain/entities/entities.dart';
 
 enum MapPickerMode { pickup, destination }

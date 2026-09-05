@@ -8,7 +8,7 @@ library;
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/services/taxi_socket_service.dart' as socket;
+import 'package:kartseek_shared_mobile/core/services/taxi_socket_service.dart' as socket;
 import '../../domain/entities/entities.dart';
 
 class TaxiRealtimeDatasource {

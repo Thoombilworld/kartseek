@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kartseek_partner/features/shared/theme/partner_theme.dart';
 import 'package:kartseek_partner/features/shared/blocs/partner_bloc.dart';
 import 'package:kartseek_partner/features/shared/blocs/partner_event.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_partner/features/shared/blocs/partner_state.dart';
 import 'package:kartseek_partner/features/shared/models/partner_profile_model.dart';
 import 'package:kartseek_partner/features/dashboard/screens/driver_dashboard_screen.dart';

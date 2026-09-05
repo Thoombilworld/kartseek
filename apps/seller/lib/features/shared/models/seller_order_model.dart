@@ -4,7 +4,7 @@
 /// Module-specific fields are carried in [moduleData].
 library;
 
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_seller/features/shared/models/country_config.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────

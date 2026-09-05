@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 import 'package:kartseek_customer/features/hotel_booking/blocs/hotel_bloc.dart';
 import 'package:kartseek_customer/features/hotel_booking/blocs/hotel_event.dart';
 import 'package:kartseek_customer/features/hotel_booking/blocs/hotel_state.dart';

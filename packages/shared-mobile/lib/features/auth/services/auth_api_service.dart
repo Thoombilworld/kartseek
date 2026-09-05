@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:shared_mobile/core/api/api_client.dart';
-import 'package:shared_mobile/core/security/device_security_service.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/features/auth/blocs/auth_state.dart';
+import 'package:kartseek_shared_mobile/core/api/api_client.dart';
+import 'package:kartseek_shared_mobile/core/security/device_security_service.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/features/auth/blocs/auth_state.dart';
 
 /// A signed-in session: the profile plus the token pair that proves it.
 class AuthSession {

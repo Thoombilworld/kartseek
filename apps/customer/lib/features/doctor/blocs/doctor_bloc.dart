@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_event.dart';
 import 'package:kartseek_customer/features/doctor/blocs/doctor_state.dart';
 import 'package:kartseek_customer/features/doctor/services/doctor_api_service.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// BLoC for the Doctor / Health module.
 ///

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// Exchange Offer Screen — Trade in old devices for discount on new purchase.
 class ExchangeOfferScreen extends StatefulWidget {

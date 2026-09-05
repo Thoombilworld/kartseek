@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/route_helpers.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/route_helpers.dart';
 // Legacy TaxiBloc removed — new module uses BookingBloc via generateTaxiRoute()
 import 'package:kartseek_customer/features/taxi_booking/taxi_booking_routes.dart';
 // Auth (shared)
-import 'package:shared_mobile/features/auth/screens/login_screen.dart';
-import 'package:shared_mobile/features/auth/screens/signup_screen.dart';
-import 'package:shared_mobile/features/auth/screens/profile_screen.dart';
-import 'package:shared_mobile/features/auth/screens/profile_feature_screen.dart';
+import 'package:kartseek_shared_mobile/features/auth/screens/login_screen.dart';
+import 'package:kartseek_shared_mobile/features/auth/screens/signup_screen.dart';
+import 'package:kartseek_shared_mobile/features/auth/screens/profile_screen.dart';
+import 'package:kartseek_shared_mobile/features/auth/screens/profile_feature_screen.dart';
 // Central
 import 'package:kartseek_customer/features/home/screens/super_app_home.dart';
 import 'package:kartseek_customer/features/home/screens/notifications_screen.dart';

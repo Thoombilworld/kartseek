@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_mobile/core/services/camera_service.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/services/camera_service.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 
 /// KARTSEEK Camera Capture Screen — reusable camera UI for all modules.
 ///

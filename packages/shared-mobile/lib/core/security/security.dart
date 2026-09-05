@@ -6,6 +6,6 @@
 ///  - Device Security (jailbreak detection, biometrics, secure storage)
 library;
 
-export 'package:shared_mobile/core/security/ssl_pinning_service.dart';
-export 'package:shared_mobile/core/security/secure_api_client.dart';
-export 'package:shared_mobile/core/security/device_security_service.dart';
+export 'package:kartseek_shared_mobile/core/security/ssl_pinning_service.dart';
+export 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+export 'package:kartseek_shared_mobile/core/security/device_security_service.dart';

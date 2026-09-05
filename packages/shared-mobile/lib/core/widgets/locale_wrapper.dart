@@ -5,7 +5,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Languages that require right-to-left layout.
 const Set<String> _rtlLanguages = {'ar', 'he', 'fa', 'ur'};

@@ -4,7 +4,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
-import 'package:shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
 
 /// Connection states for the WebSocket.
 enum SocketStatus { disconnected, connecting, connected, error }

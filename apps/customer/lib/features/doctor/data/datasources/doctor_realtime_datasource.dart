@@ -8,7 +8,7 @@ library;
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/services/doctor_queue_socket_service.dart';
+import 'package:kartseek_shared_mobile/core/services/doctor_queue_socket_service.dart';
 
 class DoctorRealtimeDatasource {
   final _socket = DoctorQueueSocketService();

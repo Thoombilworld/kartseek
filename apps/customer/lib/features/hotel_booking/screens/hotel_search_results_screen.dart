@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
 import 'package:kartseek_customer/features/hotel_booking/blocs/hotel_bloc.dart';
 import 'package:kartseek_customer/features/hotel_booking/blocs/hotel_event.dart';
 import 'package:kartseek_customer/features/hotel_booking/blocs/hotel_state.dart';
 import 'package:kartseek_customer/routing/customer_router.dart';
-import 'package:shared_mobile/core/widgets/voice_search_sheet.dart';
+import 'package:kartseek_shared_mobile/core/widgets/voice_search_sheet.dart';
 
 /// Hotel Search Results — Filter, sort, and browse hotel cards.
 class HotelSearchResultsScreen extends StatefulWidget {

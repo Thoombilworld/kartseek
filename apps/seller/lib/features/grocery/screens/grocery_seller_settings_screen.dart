@@ -4,7 +4,7 @@ import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_blo
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_event.dart';
 import 'package:kartseek_seller/features/seller_grocery/blocs/grocery_seller_state.dart';
 import 'package:kartseek_seller/features/shared/theme/seller_theme.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Seller Settings — Store config, currency, delivery options, etc.
 class GrocerySellerSettingsScreen extends StatelessWidget {

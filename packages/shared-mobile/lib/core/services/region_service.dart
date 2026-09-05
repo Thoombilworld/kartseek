@@ -13,7 +13,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
 /// Supported operational countries
 enum SupportedCountry {
   india('IN', 'India', '🇮🇳', '₹', 'INR', 'en-IN', 'Asia/Kolkata', '+91', 28.6139, 77.2090, 'New Delhi',

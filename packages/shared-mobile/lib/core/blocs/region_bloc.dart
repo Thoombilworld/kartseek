@@ -8,9 +8,9 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/blocs/region_event.dart';
-import 'package:shared_mobile/core/blocs/region_state.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/blocs/region_event.dart';
+import 'package:kartseek_shared_mobile/core/blocs/region_state.dart';
 
 class RegionBloc extends Bloc<RegionEvent, RegionState> {
   final RegionService _regionService = RegionService.instance;

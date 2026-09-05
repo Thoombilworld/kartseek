@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/constants.dart';
+import 'package:kartseek_shared_mobile/core/constants.dart';
 
 /// Pharmacy API repository — all calls to the `/pharmacy` gateway endpoints.
 class PharmacyRepository {

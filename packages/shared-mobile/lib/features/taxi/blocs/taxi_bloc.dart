@@ -2,10 +2,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/core/services/taxi_socket_service.dart' hide NearbyDriver;
-import 'package:shared_mobile/features/taxi/blocs/taxi_event.dart';
-import 'package:shared_mobile/features/taxi/blocs/taxi_state.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/services/taxi_socket_service.dart' hide NearbyDriver;
+import 'package:kartseek_shared_mobile/features/taxi/blocs/taxi_event.dart';
+import 'package:kartseek_shared_mobile/features/taxi/blocs/taxi_state.dart';
 
 // Internal private events for socket data streaming
 class _NearbyDriversUpdated extends TaxiEvent {

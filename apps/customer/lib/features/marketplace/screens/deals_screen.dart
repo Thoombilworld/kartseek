@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_mobile/features/marketplace/models/product_model.dart';
+import 'package:kartseek_shared_mobile/features/marketplace/models/product_model.dart';
 import 'package:kartseek_customer/features/marketplace/services/marketplace_api_service.dart';
 import 'package:kartseek_customer/features/marketplace/widgets/product_feed_screen.dart';
 

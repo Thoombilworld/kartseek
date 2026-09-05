@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/services/taxi_socket_service.dart';
-import 'package:shared_mobile/core/services/order_socket_service.dart';
+import 'package:kartseek_shared_mobile/core/services/taxi_socket_service.dart';
+import 'package:kartseek_shared_mobile/core/services/order_socket_service.dart';
 
 /// KARTSEEK Super App — Platform Synchronization Service
 ///

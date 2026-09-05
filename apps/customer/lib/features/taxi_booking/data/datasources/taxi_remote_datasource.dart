@@ -8,8 +8,8 @@ library;
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:shared_mobile/core/security/secure_api_client.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/security/secure_api_client.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// Lightweight cancellation token for dart:io HttpClient requests.
 /// Each request is tagged; you can cancel by tag or cancel all.

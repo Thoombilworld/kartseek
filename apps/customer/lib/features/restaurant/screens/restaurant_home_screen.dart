@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_mobile/core/theme/app_theme.dart';
-import 'package:shared_mobile/core/routing/app_router.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
-import 'package:shared_mobile/core/widgets/kartseek_image.dart';
-import 'package:shared_mobile/core/widgets/camera_capture_screen.dart';
-import 'package:shared_mobile/core/widgets/voice_search_sheet.dart';
+import 'package:kartseek_shared_mobile/core/theme/app_theme.dart';
+import 'package:kartseek_shared_mobile/core/routing/app_router.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/widgets/kartseek_image.dart';
+import 'package:kartseek_shared_mobile/core/widgets/camera_capture_screen.dart';
+import 'package:kartseek_shared_mobile/core/widgets/voice_search_sheet.dart';
 
 /// Restaurant Home — Swiggy/Zomato inspired food delivery experience.
 /// Features: Location header, cuisine filters, promo banner, nearby restaurants,

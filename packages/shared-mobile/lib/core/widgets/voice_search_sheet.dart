@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_mobile/core/services/microphone_service.dart';
+import 'package:kartseek_shared_mobile/core/services/microphone_service.dart';
 
 /// KARTSEEK Voice Search Bottom Sheet — animated voice input UI.
 ///

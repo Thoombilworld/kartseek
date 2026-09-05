@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 import 'package:kartseek_partner/features/shared/theme/partner_theme.dart';
 
 /// Vendor Info Screen — Shows vendor affiliation details for the driver.

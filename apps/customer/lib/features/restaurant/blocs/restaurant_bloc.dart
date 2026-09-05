@@ -4,7 +4,7 @@ import 'package:kartseek_customer/features/restaurant/blocs/restaurant_event.dar
 import 'package:kartseek_customer/features/restaurant/blocs/restaurant_state.dart';
 import 'package:kartseek_customer/features/restaurant/repositories/restaurant_repository.dart';
 import 'package:kartseek_customer/features/restaurant/services/restaurant_api_service.dart';
-import 'package:shared_mobile/core/services/region_service.dart';
+import 'package:kartseek_shared_mobile/core/services/region_service.dart';
 
 /// RestaurantBloc — Manages restaurant discovery, ordering, and table booking.
 class RestaurantBloc extends Bloc<RestaurantEvent, RestaurantState> {

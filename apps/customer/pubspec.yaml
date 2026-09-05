@@ -17,7 +17,7 @@ dependencies:
     sdk: flutter
 
   # ── Shared infrastructure ──────────────────────────────────────────────
-  shared_mobile:
+  kartseek_shared_mobile:
     path: ../../packages/shared-mobile
 
   # ── Packages used directly in customer Dart code ────────────────────────
