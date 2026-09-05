@@ -188,7 +188,7 @@ Decision text: "Backend suites run under Vitest through the shared factory in `a
 
 - [ ] **Step 3: Write 0004**
 
-Decision text: "Each vertical's customer-facing frontend is its own Next.js application with `basePath: '/<vertical>'`, built and deployed independently; the shell at `apps/web` rewrites `/<vertical>/*` and `/<vertical>/_next/*` to it. Cross-zone links go through `zoneHref()` in `packages/shared-ui`, never through `next/link` with a raw path." Context: the extraction from a single app, the `_next` asset 404 without basePath, the image-config failure. Consequences: nine deployables, shared code only through `packages/`, every zone needs its own image config.
+Decision text: "Each vertical's customer-facing frontend is its own Next.js application with `basePath: '/<vertical>'`, built and deployed independently; the shell at `apps/web` rewrites `/<vertical>/*` and `/<vertical>/_next/*` to it. Cross-zone links go through `<ZoneLink>` in `packages/shared-ui`, never through `next/link` with a raw path; same-zone links built from the shared route helpers pass through `zoneHref()` in `packages/shared-core`, which strips the zone’s own basePath." Context: the extraction from a single app, the `_next` asset 404 without basePath, the image-config failure. Consequences: nine deployables, shared code only through `packages/`, every zone needs its own image config.
 
 - [ ] **Step 4: Write 0005**
 
@@ -329,7 +329,7 @@ From `apps/api/scripts/create-kafka-topics.js` (the topic list, transcribed), `a
 
 - [ ] **Step 3: `frontend-zones.md`**
 
-The shell/zone model (ADR 0004), the rewrite table from `apps/web/next.config.mjs` (`/marketplace`, `/grocery`, … with their `*_ZONE_ORIGIN` variables), what lives in `packages/shared-core` and `packages/shared-ui` (list the top-level folders of each `src/`), how i18n is shared (`packages/shared-core/src/i18n/request.ts` loaded by every `next.config.mjs`), the `zoneHref()` rule, the `components/india/` note from the spec (country-specific implementations pending the localization registry), and the three web route areas with their sizes (admin 250 pages, seller 181, hotel-owner 33 — from `git ls-files apps/web/src/app/<area> | grep -c page.tsx`).
+The shell/zone model (ADR 0004), the rewrite table from `apps/web/next.config.mjs` (`/marketplace`, `/grocery`, … with their `*_ZONE_ORIGIN` variables), what lives in `packages/shared-core` and `packages/shared-ui` (list the top-level folders of each `src/`), how i18n is shared (`packages/shared-core/src/i18n/request.ts` loaded by every `next.config.mjs`), the linking rule (cross-zone links use `<ZoneLink>` from `packages/shared-ui`; same-zone links built from the shared route helpers pass through `zoneHref()` in `packages/shared-core` to strip the zone’s own basePath), the `components/india/` note from the spec (country-specific implementations pending the localization registry), and the three web route areas with their sizes (admin 250 pages, seller 181, hotel-owner 33 — from `git ls-files apps/web/src/app/<area> | grep -c page.tsx`).
 
 - [ ] **Step 4: `security.md`**
 
@@ -641,7 +641,7 @@ Expected: the `git grep -L` prints nothing (every module README has the block).
 
 `packages/shared-core/README.md`: what it is (web-side shared code: API client and endpoints, auth token, i18n and localization registry, routes, hooks, contexts, SEO, socket, sanitize-html, types, demo data), how it is consumed (through `tsconfig` `paths` from the shell and every zone — not an npm workspace; link the follow-up in the spec section 13), the rule that currency, language lists, address fields and payment methods come from the localization registry and are never hard-coded, one line per top-level `src/` folder (list from `ls packages/shared-core/src`).
 
-`packages/shared-ui/README.md`: shared React components (`app-shell`, `kartseek-loader`, `marketplace-product-thumb` — the one `ProductThumb` that owns every product image well, `orders/`, `profile/`, `recommendations/`, `seo/`, `shared/`, `ui-widgets/`, `ui.tsx`, `zone-link.tsx`), consumption through `paths`, `tailwind.config.ts` shared preset, the `zoneHref()` rule.
+`packages/shared-ui/README.md`: shared React components (`app-shell`, `kartseek-loader`, `marketplace-product-thumb` — the one `ProductThumb` that owns every product image well, `orders/`, `profile/`, `recommendations/`, `seo/`, `shared/`, `ui-widgets/`, `ui.tsx`, `zone-link.tsx`), consumption through `paths`, `tailwind.config.ts` shared preset, and the linking rule: `<ZoneLink>` for cross-zone links, `zoneHref()` (in `packages/shared-core`) only for same-zone links built from the shared route helpers.
 
 `packages/shared-mobile/README.md`: `kartseek_shared_mobile` — what it holds (from `lib/`: core infrastructure, auth, region service, common features), consumed by path from the three apps, `flutter analyze` baseline (the one known `deprecated_export_use` warning), the `objective_c` override.
 
