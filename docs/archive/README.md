@@ -3,7 +3,7 @@
 Point-in-time documents from earlier remediation cycles, moved here from the
 repository root on 2026-08-15.
 
-They are kept because they record *why* certain decisions were made, and
+They are kept because they record _why_ certain decisions were made, and
 several contain reproduction steps that are still useful. They are **not**
 current documentation:
 
@@ -17,6 +17,8 @@ current documentation:
 For the current picture, prefer:
 
 - `README.md` and `ARCHITECTURE.md` in the repository root
+- `docs/architecture/`, the as-built architecture notes generated and
+  hand-written from the running system
 - the dated audits in `docs/audits/` (for example `2026-08-10-marketplace-remediation.md`)
 - `apps/api/test/gateway-service-contract.spec.ts`, which asserts the
   gateway ↔ service contract on every test run rather than describing it in prose

@@ -1,499 +1,101 @@
-# ══════════════════════════════════════════════════════════════════════════════
-# KARTSEEK Kubernetes Deployment Guide
-# Complete reference for deploying KARTSEEK on Kubernetes
-# ══════════════════════════════════════════════════════════════════════════════
+# Kubernetes manifests
 
-## Overview
-
-KARTSEEK is a multi-tenant super app architecture with 26+ microservices. This guide shows how to deploy it on Kubernetes using industry best practices:
-
-- **Microservices Architecture**: Independently deployable services (Auth, Order, Payment, etc.)
-- **Stateful Components**: PostgreSQL, Redis, Kafka deployed as StatefulSets
-- **High Availability**: Multi-replica deployments with pod anti-affinity and disruption budgets
-- **Security**: RBAC, Network Policies, Pod Security Standards, secret management
-- **Observability**: Prometheus metrics, structured logging, distributed tracing
-- **Auto-scaling**: Horizontal Pod Autoscaling based on CPU/memory
-
----
+Plain `kubectl`-applied manifests (no Helm, no Kustomize) for running the
+KARTSEEK platform on a real cluster: the namespace and its RBAC/quota, the
+databases, every microservice, the API gateway, ingress and autoscaling. This
+is for anyone deploying the platform to Kubernetes, or debugging a cluster
+that already runs it.
 
 ## Prerequisites
 
-### 1. Kubernetes Cluster
-- **Version**: 1.27+ (tested with 1.28-1.30)
-- **Size**: Minimum 3 worker nodes (2 vCPU, 4GB RAM each)
-- **Storage**: Fast SSD storage class (`fast-ssd`) configured
-- **Networking**: CNI plugin (Calico, Cilium, or Flannel)
+- `kubectl`, configured against the target cluster (`kubectl cluster-info`
+  should succeed).
+- A cluster: Docker Desktop with Kubernetes enabled, or `kind`, for local
+  work; a managed EKS/GKE/AKS cluster otherwise.
+- `metrics-server` installed, only if you apply `marketplace-hpa.yaml`.
+- `cert-manager` and an ingress controller installed, only if you apply
+  `ingress.yaml`.
+- No image named `kartseek/*` is published anywhere — build or load each one
+  yourself first, see [`infra/docker/README.md`](../docker/README.md).
 
-### 2. Local Tools
-```bash
-# Install kubectl
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+## The manifests
 
-# Install Helm (package manager for Kubernetes)
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+| File                           | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `namespace.yaml`               | The namespace, RBAC, NetworkPolicies, a `LimitRange` and a `ResourceQuota`, and a `PodDisruptionBudget` for pods labeled `critical`. Apply first — see "Known constraints" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `config.yaml`                  | The `ConfigMap` and `Secret` every service reads its environment from.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `databases.yaml`               | StatefulSets for the shared Postgres, the dedicated marketplace Postgres, Redis and Kafka.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `storage.yaml`                 | The four cloud StorageClasses (`fast-ssd`, `standard`, `high-performance`, `archive`), backed by the AWS EBS CSI driver.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `storage-local-dev.yaml`       | The same four StorageClass names, backed by the cluster's own dynamic provisioner — for Docker Desktop or `kind`. Apply exactly one of these two files; StorageClass fields are immutable, so switching means deleting the old classes first.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `api-gateway.yaml`             | The gateway's Deployment, Service, HPA and PodDisruptionBudget.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `microservices.yaml`           | Hand-written Deployments and Services for `auth-service`, `order-service` and `payment-service`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `microservices-generated.yaml` | The other 22 services, generated by `gen-microservices.sh` from a table of ports at the top of that script — **do not edit this file by hand**. A service that must differ from the generated defaults (today, only `marketplace-service`: a newer image tag, a dedicated-DB init container, an HTTP liveness probe, larger resources) gets a `case` block in the generator instead, so regenerating stays idempotent. This generator and file are replaced in phase 2 by `scripts/registry/generate.mjs` writing `infra/k8s/generated/services.yaml` — see [the platform reorganization design](../../docs/superpowers/specs/2026-09-05-platform-reorganization-design.md), section 5.4. |
+| `ingress.yaml`                 | The `Ingress`, `ClusterIssuer`s, `ServiceMonitor`s and a `PrometheusRule`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `marketplace-hpa.yaml`         | A `HorizontalPodAutoscaler` for `marketplace-service`; requires `metrics-server`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `deploy.sh`                    | Applies all of the above in dependency order. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `utils.sh`                     | Day-to-day operational commands. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `gen-microservices.sh`         | Regenerates `microservices-generated.yaml`. Re-run it after changing a service's ports or resources; never edit the generated file directly.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
-# Install kustomize (optional, for advanced configuration)
-curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-sudo mv kustomize /usr/local/bin/
+## Quick start (local, Docker Desktop)
 
-# Install kubectx (optional, for easy context switching)
-git clone https://github.com/ahmetb/kubectx /opt/kubectx
-sudo ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx
-sudo ln -s /opt/kubectx/kubens /usr/local/bin/kubens
-```
+1. Docker Desktop → Settings → Kubernetes → Enable Kubernetes (or
+   `kind create cluster`).
+2. `kubectl apply -f infra/k8s/namespace.yaml`
+3. `kubectl apply -f infra/k8s/storage-local-dev.yaml` — `deploy.sh` (next
+   step) applies the cloud `storage.yaml` unconditionally, which does not
+   work on a laptop cluster, so apply the local one yourself first and skip
+   that step when it runs.
+4. Build or load the images you need into the cluster's own Docker daemon
+   (Docker Desktop shares it with `kubectl`) — see
+   [`infra/docker/README.md`](../docker/README.md).
+5. `./infra/k8s/deploy.sh dev`
+6. `kubectl get pods -n kartseek` until everything reports `Running`.
 
-### 3. Managed Kubernetes Services
-
-**AWS EKS:**
-```bash
-eksctl create cluster --name kartseek-prod --version 1.29 --nodegroup-name workers --node-type t3.large --nodes 3 --region ap-south-1
-aws eks update-kubeconfig --name kartseek-prod --region ap-south-1
-```
-
-**Google GKE:**
-```bash
-gcloud container clusters create kartseek-prod --num-nodes 3 --machine-type n2-standard-4 --region asia-south1
-gcloud container clusters get-credentials kartseek-prod --region asia-south1
-```
-
-**Azure AKS:**
-```bash
-az aks create --resource-group kartseek-rg --name kartseek-prod --node-count 3 --vm-set-type VirtualMachineScaleSets --load-balancer-sku standard
-az aks get-credentials --resource-group kartseek-rg --name kartseek-prod
-```
-
-**Local Development (Docker Desktop or kind):**
-```bash
-# Docker Desktop: Settings → Kubernetes → Enable Kubernetes
-# or
-kind create cluster --name kartseek-dev --image kindest/node:v1.29.0
-```
-
----
-
-## Installation
-
-### Step 1: Configure kubectl
+## `deploy.sh`
 
 ```bash
-# Set default namespace
-kubectl config set-context --current --namespace=kartseek
-
-# Verify cluster access
-kubectl cluster-info
-kubectl get nodes
+./infra/k8s/deploy.sh dev          # or: staging, production
 ```
 
-### Step 2: Create Secrets and ConfigMaps
+Applies, in order: the namespace/RBAC/quota, an image-pull secret,
+`config.yaml`, `storage.yaml`, the databases (waiting for each StatefulSet's
+rollout), the microservices and `marketplace-hpa.yaml`, the API gateway, and
+`ingress.yaml` if a `cert-manager` CRD is present. For `production` only, it
+first refuses to continue if `config.yaml` still holds a placeholder secret
+(`CHANGE_IN_PRODUCTION`, an all-`x` value, or an all-zero
+`ENCRYPTION_KEY`) — the gateway's own startup validation would reject the
+same values, and failing here is faster than a `CrashLoopBackOff` that looks
+like a networking problem.
 
-**Update sensitive values in `infra/k8s/config.yaml`:**
+## `utils.sh`
+
 ```bash
-# Edit secrets with your actual values
-kubectl edit secret kartseek-secrets -n kartseek
-
-# Or create from files
-echo -n "your-jwt-secret-min-32-chars" | kubectl create secret generic jwt-secret --from-file=secret=/dev/stdin -n kartseek
+./infra/k8s/utils.sh <command>
 ```
 
-**Using AWS Secrets Manager (recommended for production):**
-```bash
-# Install External Secrets Operator
-helm repo add external-secrets https://external-secrets.io
-helm install external-secrets external-secrets/external-secrets -n external-secrets-system --create-namespace
-
-# Create SecretStore to sync from AWS
-kubectl apply -f infra/k8s/external-secrets-store.yaml
-```
-
-### Step 3: Install Prerequisites
-
-**Storage Classes:**
-```bash
-# Cloud (AWS EBS CSI — the four production classes)
-kubectl apply -f infra/k8s/storage.yaml
-
-# Laptop cluster (docker-desktop / kind / minikube) — same class names, backed by
-# the local dynamic provisioner instead. Apply this INSTEAD of storage.yaml;
-# StorageClass fields are immutable, so remove the cloud one first.
-kubectl delete storageclass fast-ssd standard high-performance archive --ignore-not-found
-kubectl apply -f infra/k8s/storage-local-dev.yaml
-```
-> The file was `infra/k8s/storage.yaml` all along — `storage-class.yaml` has never
-> existed, so anyone following this literally got "no such file", skipped it, and
-> then watched every database PVC sit Pending against a missing `fast-ssd` class.
-
-**Ingress Controller (nginx-ingress recommended):**
-```bash
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm install nginx-ingress ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace --set controller.service.type=LoadBalancer
-```
-
-**Cert-Manager (for automatic TLS certificates):**
-```bash
-helm repo add jetstack https://charts.jetstack.io
-helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set installCRDs=true
-```
-
-**Monitoring Stack (Prometheus + Grafana):**
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace
-```
-
-### Step 4: Deploy KARTSEEK
-
-**Automated deployment (using provided script):**
-```bash
-chmod +x infra/k8s/deploy.sh
-./infra/k8s/deploy.sh production
-```
-
-**Manual deployment (step by step):**
-```bash
-# 1. Namespace, RBAC, NetworkPolicies, LimitRange + ResourceQuota.
-#    Must come first: the quota rejects any pod without resource requests, and
-#    the LimitRange in this file is what supplies defaults for the init containers.
-kubectl apply -f infra/k8s/namespace.yaml
-
-# 2. Secrets and config
-kubectl apply -f infra/k8s/config.yaml -n kartseek
-
-# 3. StorageClasses (see "Prerequisites" above for the local-dev variant)
-kubectl apply -f infra/k8s/storage.yaml
-
-# 4. Databases — shared postgres, the dedicated marketplace postgres, redis, kafka
-kubectl apply -f infra/k8s/databases.yaml -n kartseek
-for sts in postgres postgres-marketplace redis kafka; do
-  kubectl rollout status statefulset/$sts -n kartseek
-done
-
-# 5. Microservices — BEFORE the gateway, which opens a client to every one of
-#    them at boot. Both files are needed: microservices.yaml covers auth/order/
-#    payment, microservices-generated.yaml the other 22.
-kubectl apply -f infra/k8s/microservices.yaml -n kartseek
-kubectl apply -f infra/k8s/microservices-generated.yaml -n kartseek
-kubectl apply -f infra/k8s/marketplace-hpa.yaml -n kartseek
-
-# 6. API Gateway
-kubectl apply -f infra/k8s/api-gateway.yaml -n kartseek
-kubectl rollout status deployment/api-gateway -n kartseek
-
-# 7. Ingress (needs cert-manager + an ingress controller)
-kubectl apply -f infra/k8s/ingress.yaml -n kartseek
-```
-
-**Building the service images**
-
-Nothing in this repo publishes `kartseek/*`, so a fresh cluster stops at
-`ErrImagePull: pull access denied`. One image per service, all from the same
-Dockerfile via the `APP` build arg:
-```bash
-cd apps/api
-for svc in api-gateway auth-service order-service payment-service \
-           admin-service audit-log-service cart-service commission-service \
-           delivery-service doctor-service franchise-service grocery-service \
-           hotel-service location-service loyalty-service notification-service \
-           payout-service pharmacy-service refund-service report-service \
-           restaurant-service search-service taxi-service user-service \
-           wallet-service; do
-  docker build -f Dockerfile --build-arg APP=$svc -t kartseek/$svc:2.0.0 .
-done
-docker build -f Dockerfile --build-arg APP=marketplace-service -t kartseek/marketplace-service:2.1.0 .
-```
-Push them to the registry `regcred` authenticates against, or load them straight
-into a local cluster (`kind load docker-image …`; docker-desktop shares the
-daemon, so `imagePullPolicy: IfNotPresent` already finds them).
-
----
-
-## Verification & Testing
-
-### Check Deployment Status
-```bash
-# All resources
-kubectl get all -n kartseek
-
-# Pod status
-kubectl get pods -n kartseek -o wide
-
-# Services
-kubectl get svc -n kartseek
-
-# Ingress
-kubectl get ingress -n kartseek
-```
-
-### View Logs
-```bash
-# API Gateway logs
-kubectl logs -f -n kartseek deployment/api-gateway
-
-# Microservice logs
-kubectl logs -f -n kartseek deployment/auth-service
-
-# Previous pod logs (if crashed)
-kubectl logs -p -n kartseek deployment/api-gateway
-```
-
-### Port Forwarding (for local testing)
-```bash
-# API Gateway (localhost:3001)
-kubectl port-forward -n kartseek svc/api-gateway 3001:3001
-
-# PostgreSQL (localhost:5432)
-kubectl port-forward -n kartseek svc/postgres 5432:5432
-
-# Redis (localhost:6379)
-kubectl port-forward -n kartseek svc/redis 6379:6379
-
-# Prometheus (localhost:9090)
-kubectl port-forward -n monitoring svc/prometheus 9090:9090
-
-# Grafana (localhost:3000)
-kubectl port-forward -n monitoring svc/grafana 3000:3000
-```
-
-### Test API Endpoint
-```bash
-# Port forward API Gateway
-kubectl port-forward -n kartseek svc/api-gateway 3001:3001 &
-
-# Test health endpoint
-curl -s http://localhost:3001/api/v1/health | jq
-
-# Test with auth (if no token, expect 401)
-curl -s http://localhost:3001/api/v1/protected -H "Authorization: Bearer invalid" | jq
-```
-
----
-
-## Scaling & Performance
-
-### Horizontal Pod Autoscaling (HPA)
-```bash
-# View HPA status
-kubectl get hpa -n kartseek
-
-# Manual scaling
-kubectl scale deployment/api-gateway --replicas=5 -n kartseek
-
-# Watch autoscaler in action
-kubectl get hpa -n kartseek -w
-```
-
-### Pod Disruption Budgets (PDB)
-```bash
-# Ensure at least 2 pods of api-gateway are running during maintenance
-kubectl get pdb -n kartseek
-
-# Drain node gracefully (respects PDB)
-kubectl drain node-1 --ignore-daemonsets --delete-emptydir-data
-```
-
-### Resource Limits & Requests
-- **API Gateway**: 500m CPU / 512Mi memory (request), 1000m / 1Gi (limit)
-- **Microservices**: 250-300m CPU / 256-384Mi memory (request), 500-800m / 512Mi-1Gi (limit)
-- **PostgreSQL**: 500m CPU / 1Gi memory (request), 2000m / 2Gi (limit)
-- **Redis**: 250m CPU / 512Mi memory (request), 1000m / 2Gi (limit)
-
-Adjust based on load testing and monitoring data.
-
----
-
-## Security
-
-### RBAC
-```bash
-# View role bindings
-kubectl get rolebindings -n kartseek
-
-# Create custom role for CI/CD
-kubectl create role ci-deployer --verb=get,list,watch,create,update,patch --resource=deployments,services -n kartseek
-kubectl create rolebinding ci-deployer-binding --clusterrole=ci-deployer --serviceaccount=kartseek:ci-deployer -n kartseek
-```
-
-### Network Policies
-```bash
-# View applied network policies
-kubectl get networkpolicies -n kartseek
-
-# Test connectivity (should be denied by default)
-kubectl exec -it deployment/api-gateway -n kartseek -- curl -s http://unauthorized-service:4000
-```
-
-### Pod Security Standards
-```bash
-# Label namespace for restricted PSS
-kubectl label namespace kartseek pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/audit=restricted pod-security.kubernetes.io/warn=restricted --overwrite
-```
-
-### Secret Management (Production)
-```bash
-# Option 1: AWS Secrets Manager + External Secrets Operator (recommended)
-kubectl apply -f infra/k8s/external-secrets-store.yaml
-
-# Option 2: HashiCorp Vault
-helm repo add hashicorp https://helm.releases.hashicorp.com
-helm install vault hashicorp/vault -n vault --create-namespace
-
-# Option 3: sealed-secrets (encrypt secrets in git)
-kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.18.0/sealed-secrets-0.18.0.yaml
-```
-
----
-
-## Monitoring & Observability
-
-### Prometheus Metrics
-```bash
-# Port forward Prometheus
-kubectl port-forward -n monitoring svc/prometheus 9090:9090
-
-# Query metrics: http://localhost:9090/graph
-# Example: http_requests_total{job="api-gateway"}
-```
-
-### Grafana Dashboards
-```bash
-# Port forward Grafana
-kubectl port-forward -n monitoring svc/grafana 3000:3000
-
-# Login: admin / prom-operator
-# Import dashboard: ID 6417 (Kubernetes Cluster Monitoring)
-```
-
-### Logs (using ELK Stack)
-```bash
-# Install Elasticsearch, Logstash, Kibana
-helm repo add elastic https://helm.elastic.co
-helm install elastic elastic/elasticsearch -n logging --create-namespace
-helm install kibana elastic/kibana -n logging
-```
-
-### Distributed Tracing (Jaeger)
-```bash
-helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
-helm install jaeger jaegertracing/jaeger -n tracing --create-namespace
-```
-
----
-
-## Backup & Disaster Recovery
-
-### Database Backups
-```bash
-# Create automated backup using pg_dump
-kubectl exec -it postgres-0 -n kartseek -- pg_dump -U postgres kartseek_db | gzip > backup.sql.gz
-
-# Or use automated backup tools:
-# - AWS RDS automated backups
-# - Velero: https://velero.io/
-```
-
-### Cluster Backup
-```bash
-# Install Velero
-curl https://raw.githubusercontent.com/vmware-tanzu/velero/main/hack/getting-started.sh | bash
-
-# Create scheduled backup (daily)
-velero schedule create daily-backup --schedule="0 2 * * *"
-
-# Restore from backup
-velero restore create --from-backup daily-backup-20240101
-```
-
----
-
-## Troubleshooting
-
-### Pod in CrashLoopBackOff
-```bash
-# Check events
-kubectl describe pod -n kartseek <pod-name>
-
-# View logs
-kubectl logs -p -n kartseek <pod-name>
-
-# Check resource limits
-kubectl top pod -n kartseek <pod-name>
-```
-
-### Database Connection Issues
-```bash
-# Test PostgreSQL connectivity
-kubectl exec -it deployment/api-gateway -n kartseek -- psql -h postgres -U postgres -d kartseek_db -c "SELECT 1"
-
-# Check port forwarding
-kubectl port-forward svc/postgres 5432:5432 -n kartseek &
-psql -h localhost -U postgres -d kartseek_db
-```
-
-### Ingress Not Routing Traffic
-```bash
-# Check Ingress status
-kubectl describe ingress -n kartseek
-
-# Check Ingress controller logs
-kubectl logs -f -n ingress-nginx deployment/nginx-ingress-controller
-
-# Test DNS resolution
-kubectl run -it busybox --image=busybox --restart=Never -- nslookup api.kartseek.com
-```
-
-### High Memory Usage
-```bash
-# Check resource usage
-kubectl top nodes
-kubectl top pods -n kartseek --sort-by=memory
-
-# Increase memory limits in api-gateway.yaml
-# Then: kubectl apply -f infra/k8s/api-gateway.yaml -n kartseek
-```
-
----
-
-## Production Checklist
-
-- [ ] Use managed Kubernetes (EKS, GKE, AKS)
-- [ ] Use managed databases (RDS, Cloud SQL, Azure Database)
-- [ ] Use managed Redis (ElastiCache, Cloud Memorystore)
-- [ ] Use managed Kafka (MSK, Confluent Cloud)
-- [ ] Enable RBAC and Pod Security Standards
-- [ ] Apply Network Policies
-- [ ] Use External Secrets Manager (AWS Secrets Manager, Vault)
-- [ ] Enable audit logging
-- [ ] Configure SIEM/threat detection
-- [ ] Set up monitoring (Prometheus + Grafana)
-- [ ] Set up logging (ELK, Datadog, New Relic)
-- [ ] Set up tracing (Jaeger, Datadog APM)
-- [ ] Configure auto-scaling (HPA, cluster autoscaling)
-- [ ] Configure backup/DR strategy
-- [ ] Test failover & recovery procedures
-- [ ] Load test before production deployment
-- [ ] Use GitOps (ArgoCD, Flux) for deployment automation
-- [ ] Enable pod disruption budgets for critical services
-- [ ] Use resource quotas and limits
-- [ ] Regular security audits & penetration testing
-
----
-
-## Resources & References
-
-- **Kubernetes Docs**: https://kubernetes.io/docs/
-- **Docker Kubernetes Guide**: https://docs.docker.com/guides/kube-deploy/
-- **Helm Charts**: https://artifacthub.io/
-- **kubectl Cheat Sheet**: https://kubernetes.io/docs/reference/kubectl/cheatsheet/
-- **Best Practices**: https://kubernetes.io/docs/concepts/configuration/overview/
-
----
-
-## Support
-
-For issues or questions:
-1. Check logs: `kubectl logs -f deployment/api-gateway -n kartseek`
-2. Describe resources: `kubectl describe pod -n kartseek <pod-name>`
-3. Check events: `kubectl get events -n kartseek`
-4. Consult Kubernetes docs: https://kubernetes.io/docs/
-
-Good luck! 🚀
+`logs`, `port-forward`, `scale`, `restart`, `status`, `resources`, `events`,
+`shell`, `exec`, `test-db`, `test-redis`, `test-api`, `backup` and `cleanup`,
+each scoped to `$NAMESPACE` (default `kartseek`). Run `./infra/k8s/utils.sh
+help` for each command's arguments.
+
+## Known constraints
+
+Three things about this cluster are invisible until you actually run it,
+found and fixed in an infrastructure audit:
+
+- **A `ResourceQuota` tracking `requests`/`limits` rejects any pod whose
+  containers — including init containers — omit them.** Every generated
+  Deployment carries a resourceless `wait-for-db` init container, so the
+  `LimitRange` in `namespace.yaml` supplies defaults for exactly that case;
+  it must be applied, and applied before the quota takes effect.
+- **`fsGroup` is not applied to `hostPath`-backed volumes**, so a node-local
+  PV stays root-owned and a non-root database container cannot write to it.
+  `storage-local-dev.yaml` uses the cluster's own dynamic provisioner
+  instead, which creates world-writable directories, for exactly this
+  reason.
+- **`kubectl apply --validate=strict` passes manifests that cannot run.**
+  Schema validity does not catch a Kafka `node.id` that isn't an integer, a
+  probe referencing `$(ENV_VAR)` in a context where only `command`/`args`
+  expand it, a container `runAsUser` that doesn't match its image's actual
+  user, or a `NetworkPolicy` selector using the wrong label. Treat a clean
+  `--validate=strict` as "well-formed," not "will start."
