@@ -4,6 +4,7 @@
 
 35 deployables, declared in [`services.yaml`](../../services.yaml). Ports are the local defaults; each is read from the environment variable named in the deployable's README.
 
+<!-- prettier-ignore-start -->
 | Name | Kind | Path | HTTP | TCP | gRPC | Database / schema | Health or base path | Depends on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `api-gateway` | API gateway | `apps/api/apps/api-gateway` | 3001 | — | — | kartseek_db / public | `/api/v1/health` | postgres, redis, kafka, mongodb |
@@ -41,3 +42,4 @@
 | `hotel-frontend` | web zone | `modules/hotel/frontend` | 3007 | — | — | — | `/hotel-booking` | — |
 | `taxi-frontend` | web zone | `modules/taxi/frontend` | 3008 | — | — | — | `/taxi` | — |
 | `franchise-frontend` | web zone | `modules/franchise/frontend` | 3009 | — | — | — | `/franchise` | — |
+<!-- prettier-ignore-end -->

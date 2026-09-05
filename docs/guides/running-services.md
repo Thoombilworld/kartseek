@@ -84,8 +84,10 @@ markers below — a regenerate will overwrite it; add or change a service by
 editing `services.yaml` instead.
 
 <!-- registry:start -->
+
 _Generated from `services.yaml` by `npm run registry:generate`; edit the registry, not this block._
 
+<!-- prettier-ignore-start -->
 | Name | Kind | Path | HTTP | TCP | gRPC | Database / schema | Health or base path | Depends on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `api-gateway` | API gateway | `apps/api/apps/api-gateway` | 3001 | — | — | kartseek_db / public | `/api/v1/health` | postgres, redis, kafka, mongodb |
@@ -123,6 +125,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | `hotel-frontend` | web zone | `modules/hotel/frontend` | 3007 | — | — | — | `/hotel-booking` | — |
 | `taxi-frontend` | web zone | `modules/taxi/frontend` | 3008 | — | — | — | `/taxi` | — |
 | `franchise-frontend` | web zone | `modules/franchise/frontend` | 3009 | — | — | — | `/franchise` | — |
+<!-- prettier-ignore-end -->
 <!-- registry:end -->
 
 ## Zones
