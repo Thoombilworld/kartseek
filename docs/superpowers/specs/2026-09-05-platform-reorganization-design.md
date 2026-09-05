@@ -20,13 +20,13 @@ here. This design keeps what exists and adds what does not.
 
 ### Decisions already taken
 
-| Question | Decision |
-|---|---|
-| Execute or document? | Execute in this repository, in verified commits on one branch. |
-| Restructure depth | Tidy in place. `apps/`, `modules/` and `packages/` stay where they are. |
-| Gaps to close now | CI/CD, Docker images for every deployable, database-per-service, monitoring baseline. |
-| CI host | GitHub Actions. |
-| Approach | Conventions plus a machine-readable service registry that generators and a drift check read from. |
+| Question             | Decision                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| Execute or document? | Execute in this repository, in verified commits on one branch.                                    |
+| Restructure depth    | Tidy in place. `apps/`, `modules/` and `packages/` stay where they are.                           |
+| Gaps to close now    | CI/CD, Docker images for every deployable, database-per-service, monitoring baseline.             |
+| CI host              | GitHub Actions.                                                                                   |
+| Approach             | Conventions plus a machine-readable service registry that generators and a drift check read from. |
 
 ## 2. Current state
 
@@ -73,7 +73,7 @@ Numbers below were measured on 2026-09-05 against the tracked tree
    `apps/api/.env.example`, `k8s/config.yaml`, `apps/api/docs/runbook.md`, and
    the defaults inside each `main.ts`.
 5. **Three Postman homes**: `docs/api/postman` (27 collections, 8 environments,
-   31 committed *reports*), `apps/api/postman` (2 collections),
+   31 committed _reports_), `apps/api/postman` (2 collections),
    `tests/postman` (1 collection, 1 environment, a newman script).
 6. **`scripts/` mixes one-off codemods with the one real gate.** Its README
    lists a file that no longer exists and points Flutter commands at
@@ -118,11 +118,11 @@ This is what `nest g app <name>` generates and what 11 of 26 already use.
 Examples: `order-service.module.ts` / `OrderServiceModule`,
 `api-gateway.module.ts` / `ApiGatewayModule`,
 `marketplace-service.module.ts` / `MarketplaceServiceModule`. Feature modules
-keep domain names (`order.module.ts` is fine as a *feature* module, never as
+keep domain names (`order.module.ts` is fine as a _feature_ module, never as
 the root).
 
 **D3. File names are kebab-case; exported symbols are PascalCase.** Applies to
-TypeScript and TSX. Dart follows Dart: snake_case files, `kartseek_` package
+TypeScript and TSX. Dart follows Dart: snake*case files, `kartseek*` package
 prefix.
 
 **D4. One service registry, `services.yaml`, at the repository root.** It is
@@ -228,25 +228,25 @@ Nothing moves inside `apps/api/apps/*/src`, `modules/*/backend/src` or any
 
 ### 5.1 Moves
 
-| From | To | Also update |
-|---|---|---|
-| `k8s/**` | `infra/k8s/**` | `deploy.sh` and `utils.sh` literal `k8s/` paths become `$(dirname "$0")`-relative; `.dockerignore`; docs |
-| `nginx/**` | `infra/nginx/**` | root `package.json` `nginx:*` scripts; `docker-compose.yml` volume mounts |
-| `apps/api/Dockerfile*` (3) | `infra/docker/` unchanged, renamed `core-service.Dockerfile`, `api-gateway.Dockerfile`, `marketplace-service.Dockerfile` | `.gitattributes`; docs. Phase 3 replaces them with templates |
-| `docker-compose.yml` body | `infra/docker/compose.infra.yml`; root file becomes `include:` | relative volume paths (`./infra/postgres/…` → `../postgres/…`); verify interpolation still reads the root `.env` |
-| `docs/api/postman/{collections,environments,data,scripts,newman.config.js,README.md}` | `tests/postman/` | `.gitattributes`; the README's paths |
-| `apps/api/postman/*.json` (2) | `tests/postman/collections/` | — |
-| `tests/postman/payment-service.postman_collection.json` | `tests/postman/collections/` | `newman/run-payment-tests.sh` |
-| `docs/api/postman/reports/*` (31 reports, `summary.json`, `_working_environment.json`, `test-results.txt`) | deleted; `tests/postman/reports/.gitkeep` kept; `tests/postman/reports/*` gitignored | — |
-| `docs/*AUDIT*.md`, `docs/MARKETPLACE_*.md`, `docs/FRONTEND_DATA_AUDIT.md`, `docs/MODULE_ISOLATION_AUDIT_*.md`, `docs/stabilization/*` | `docs/audits/` | `docs/README.md` index |
-| `docs/PROJECT_SPECIFICATION.md` | `docs/product/project-specification.md` | links |
-| `docs/KARTSEEK_WORKPLAN_PHASE1-4.md` | `docs/archive/` (superseded by this program) | — |
-| `docs/API_SETUP_GUIDE.md` | rewritten as `docs/guides/local-setup.md` | — |
-| `MAPS_API_KEY.md` | folded into `docs/guides/secrets.md` (rotation note kept verbatim) | — |
-| `apps/MOBILE_APPS_README.md` | split into `docs/architecture/mobile.md` and the three app READMEs | — |
-| `apps/api/scripts/seed-*.ts`, `seed-all.ts` | `apps/api/scripts/seed/` | root `package.json` `db:seed*` scripts |
-| `apps/api/scripts/{align-franchise-markets,backfill-seller-owner,sync-restaurant-tables}.ts`, `create-order-table.sql` | `apps/api/scripts/maintenance/` with a README stating what each did and when | — |
-| `packages/native-bindings` | `packages/vendor/objective_c` | `apps/customer/pubspec.yaml`, `apps/partner/pubspec.yaml` path deps; new README explaining the patch |
+| From                                                                                                                                  | To                                                                                                                       | Also update                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `k8s/**`                                                                                                                              | `infra/k8s/**`                                                                                                           | `deploy.sh` and `utils.sh` literal `k8s/` paths become `$(dirname "$0")`-relative; `.dockerignore`; docs         |
+| `nginx/**`                                                                                                                            | `infra/nginx/**`                                                                                                         | root `package.json` `nginx:*` scripts; `docker-compose.yml` volume mounts                                        |
+| `apps/api/Dockerfile*` (3)                                                                                                            | `infra/docker/` unchanged, renamed `core-service.Dockerfile`, `api-gateway.Dockerfile`, `marketplace-service.Dockerfile` | `.gitattributes`; docs. Phase 3 replaces them with templates                                                     |
+| `docker-compose.yml` body                                                                                                             | `infra/docker/compose.infra.yml`; root file becomes `include:`                                                           | relative volume paths (`./infra/postgres/…` → `../postgres/…`); verify interpolation still reads the root `.env` |
+| `docs/api/postman/{collections,environments,data,scripts,newman.config.js,README.md}`                                                 | `tests/postman/`                                                                                                         | `.gitattributes`; the README's paths                                                                             |
+| `apps/api/postman/*.json` (2)                                                                                                         | `tests/postman/collections/`                                                                                             | —                                                                                                                |
+| `tests/postman/payment-service.postman_collection.json`                                                                               | `tests/postman/collections/`                                                                                             | `newman/run-payment-tests.sh`                                                                                    |
+| `docs/api/postman/reports/*` (31 reports, `summary.json`, `_working_environment.json`, `test-results.txt`)                            | deleted; `tests/postman/reports/.gitkeep` kept; `tests/postman/reports/*` gitignored                                     | —                                                                                                                |
+| `docs/*AUDIT*.md`, `docs/MARKETPLACE_*.md`, `docs/FRONTEND_DATA_AUDIT.md`, `docs/MODULE_ISOLATION_AUDIT_*.md`, `docs/stabilization/*` | `docs/audits/`                                                                                                           | `docs/README.md` index                                                                                           |
+| `docs/PROJECT_SPECIFICATION.md`                                                                                                       | `docs/product/project-specification.md`                                                                                  | links                                                                                                            |
+| `docs/KARTSEEK_WORKPLAN_PHASE1-4.md`                                                                                                  | `docs/archive/` (superseded by this program)                                                                             | —                                                                                                                |
+| `docs/API_SETUP_GUIDE.md`                                                                                                             | rewritten as `docs/guides/local-setup.md`                                                                                | —                                                                                                                |
+| `MAPS_API_KEY.md`                                                                                                                     | folded into `docs/guides/secrets.md` (rotation note kept verbatim)                                                       | —                                                                                                                |
+| `apps/MOBILE_APPS_README.md`                                                                                                          | split into `docs/architecture/mobile.md` and the three app READMEs                                                       | —                                                                                                                |
+| `apps/api/scripts/seed-*.ts`, `seed-all.ts`                                                                                           | `apps/api/scripts/seed/`                                                                                                 | root `package.json` `db:seed*` scripts                                                                           |
+| `apps/api/scripts/{align-franchise-markets,backfill-seller-owner,sync-restaurant-tables}.ts`, `create-order-table.sql`                | `apps/api/scripts/maintenance/` with a README stating what each did and when                                             | —                                                                                                                |
+| `packages/native-bindings`                                                                                                            | `packages/vendor/objective_c`                                                                                            | `apps/customer/pubspec.yaml`, `apps/partner/pubspec.yaml` path deps; new README explaining the patch             |
 
 ### 5.2 Deletions (tracked files)
 
@@ -269,7 +269,7 @@ against live infrastructure).
 `docs/archive/validate-fixes.sh` stays; it is archive.
 Dead root-module wrappers: `order-service.module.ts`,
 `payment-service.module.ts`, `audit-log-service.module.ts`,
-`loyalty-service.module.ts` (each referenced by zero files), deleted *before*
+`loyalty-service.module.ts` (each referenced by zero files), deleted _before_
 the renames in 5.3 so the names are free.
 
 `.gitignore` gains `/Users/`, `/build/`, `tests/postman/reports/*` with
@@ -279,23 +279,23 @@ the renames in 5.3 so the names are free.
 
 **Root modules (D2).** 15 files, 15 classes, every importer including specs.
 
-| Deployable | Today | Becomes |
-|---|---|---|
-| admin-service | `admin.module.ts` / `AdminModule` | `admin-service.module.ts` / `AdminServiceModule` |
-| api-gateway | `app.module.ts` / `AppModule` | `api-gateway.module.ts` / `ApiGatewayModule` |
-| audit-log-service | `audit-log.module.ts` / `AuditLogModule` | `audit-log-service.module.ts` / `AuditLogServiceModule` |
-| auth-service | `app.module.ts` / `AppModule` | `auth-service.module.ts` / `AuthServiceModule` |
-| loyalty-service | `loyalty.module.ts` / `LoyaltyModule` | `loyalty-service.module.ts` / `LoyaltyServiceModule` |
-| order-service | `order.module.ts` / `OrderModule` | `order-service.module.ts` / `OrderServiceModule` |
-| payment-service | `payment.module.ts` / `PaymentModule` | `payment-service.module.ts` / `PaymentServiceModule` |
-| payout-service | `payout.module.ts` / `PayoutModule` | `payout-service.module.ts` / `PayoutServiceModule` |
-| user-service | `user.module.ts` / `UserModule` | `user-service.module.ts` / `UserServiceModule` |
-| wallet-service | `wallet.module.ts` / `WalletModule` | `wallet-service.module.ts` / `WalletServiceModule` |
-| franchise | `franchise.module.ts` / `FranchiseModule` | `franchise-service.module.ts` / `FranchiseServiceModule` |
-| grocery | `grocery.module.ts` / `GroceryModule` | `grocery-service.module.ts` / `GroceryServiceModule` |
-| hotel | `hotel.module.ts` / `HotelModule` | `hotel-service.module.ts` / `HotelServiceModule` |
-| marketplace | `marketplace.module.ts` / `MarketplaceModule` | `marketplace-service.module.ts` / `MarketplaceServiceModule` |
-| taxi | `taxi.module.ts` / `TaxiModule` | `taxi-service.module.ts` / `TaxiServiceModule` |
+| Deployable        | Today                                         | Becomes                                                      |
+| ----------------- | --------------------------------------------- | ------------------------------------------------------------ |
+| admin-service     | `admin.module.ts` / `AdminModule`             | `admin-service.module.ts` / `AdminServiceModule`             |
+| api-gateway       | `app.module.ts` / `AppModule`                 | `api-gateway.module.ts` / `ApiGatewayModule`                 |
+| audit-log-service | `audit-log.module.ts` / `AuditLogModule`      | `audit-log-service.module.ts` / `AuditLogServiceModule`      |
+| auth-service      | `app.module.ts` / `AppModule`                 | `auth-service.module.ts` / `AuthServiceModule`               |
+| loyalty-service   | `loyalty.module.ts` / `LoyaltyModule`         | `loyalty-service.module.ts` / `LoyaltyServiceModule`         |
+| order-service     | `order.module.ts` / `OrderModule`             | `order-service.module.ts` / `OrderServiceModule`             |
+| payment-service   | `payment.module.ts` / `PaymentModule`         | `payment-service.module.ts` / `PaymentServiceModule`         |
+| payout-service    | `payout.module.ts` / `PayoutModule`           | `payout-service.module.ts` / `PayoutServiceModule`           |
+| user-service      | `user.module.ts` / `UserModule`               | `user-service.module.ts` / `UserServiceModule`               |
+| wallet-service    | `wallet.module.ts` / `WalletModule`           | `wallet-service.module.ts` / `WalletServiceModule`           |
+| franchise         | `franchise.module.ts` / `FranchiseModule`     | `franchise-service.module.ts` / `FranchiseServiceModule`     |
+| grocery           | `grocery.module.ts` / `GroceryModule`         | `grocery-service.module.ts` / `GroceryServiceModule`         |
+| hotel             | `hotel.module.ts` / `HotelModule`             | `hotel-service.module.ts` / `HotelServiceModule`             |
+| marketplace       | `marketplace.module.ts` / `MarketplaceModule` | `marketplace-service.module.ts` / `MarketplaceServiceModule` |
+| taxi              | `taxi.module.ts` / `TaxiModule`               | `taxi-service.module.ts` / `TaxiServiceModule`               |
 
 Unchanged (already conform): cart, commission, delivery, location,
 notification, refund, report, search, doctor, pharmacy, restaurant.
@@ -327,25 +327,29 @@ is deferred to a follow-up and the READMEs say so.
 ```yaml
 version: 1
 defaults:
-  registry: ghcr.io/<github-owner>/kartseek   # filled in when the GitHub remote exists; --registry overrides
+  registry: ghcr.io/<github-owner>/kartseek # filled in when the GitHub remote exists; --registry overrides
   node: 26.5.0
 services:
   - name: order-service
-    kind: core-service                     # gateway | core-service | module-service | web-shell | web-zone
+    kind: core-service # gateway | core-service | module-service | web-shell | web-zone
     path: apps/api/apps/order-service
     build: { workspace: kartseek-api, nestProject: order-service }
     image: kartseek/order-service
-    ports:  { http: 3014, tcp: 4004, grpc: 5002 }
-    env:    { http: ORDER_SERVICE_PORT, tcp: ORDER_TCP_PORT, grpc: ORDER_GRPC_PORT }
+    ports: { http: 3014, tcp: 4004, grpc: 5002 }
+    env: { http: ORDER_SERVICE_PORT, tcp: ORDER_TCP_PORT, grpc: ORDER_GRPC_PORT }
     health: { live: /health, ready: /health/ready, metrics: /metrics }
-    database: { schema: order }            # null when the service owns no tables
+    database: { schema: order } # null when the service owns no tables
     dependsOn: [postgres, redis, kafka]
     kafka: { groupId: order-service }
-    k8s: { replicas: 2, resources: { requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi} } }
+    k8s:
+      {
+        replicas: 2,
+        resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } },
+      }
   - name: grocery-frontend
     kind: web-zone
     path: modules/grocery/frontend
-    build: { workspace: "@kartseek/grocery-frontend" }
+    build: { workspace: '@kartseek/grocery-frontend' }
     image: kartseek/grocery-frontend
     ports: { http: 3003 }
     basePath: /grocery
@@ -385,7 +389,7 @@ phase 3.
 
 Phase 1 also adds `tests/smoke/boot-all.mjs` (section 10), because the gate in
 section 11 uses it from the first phase on. Until phase 2, `health.live`
-records each service's *current* route (for example `/cart/health`); a service
+records each service's _current_ route (for example `/cart/health`); a service
 with no HTTP health route records `live: null`, and the smoke test falls back
 to a TCP connect on its HTTP port, as the Kubernetes probes do today.
 
@@ -493,7 +497,7 @@ handlers stay: the gateway uses them to probe services over TCP.
 `@app/logger`'s `KartseekLogger` keeps its interface and becomes pino-backed:
 JSON lines with `time, level, service, context, requestId, msg` in production;
 an in-process `pino-pretty` stream when `NODE_ENV !== 'production'` and stdout
-is a TTY. Pino's worker-thread transports are *not* used: a bundled `main.js`
+is a TTY. Pino's worker-thread transports are _not_ used: a bundled `main.js`
 cannot resolve the worker file. `pino` and `pino-pretty` are declared by
 `apps/api` (the platform set every module compiles against) and stay external
 in the rspack bundle.
@@ -714,18 +718,18 @@ and `flutter analyze` for the Dart workspaces when Dart files changed.
 
 ## 12. Risks and known hazards
 
-| Hazard | Mitigation |
-|---|---|
-| New `@app/*` library not resolved in one of the five registration points; builds pass, boot fails | The plan lists all five; the smoke test boots all 26 |
-| Two copies of `@nestjs/core` in the bundle after adding dependencies | New deps are declared in `apps/api` only; root pins stay; `npm ls @nestjs/core` in the gate |
-| Root-module class rename misses an importer in a spec or a barrel | `tsc` per workspace plus a `git grep` for every old class name |
-| Compose `include:` changes how relative paths and `.env` resolve | Verified in phase 1 by `docker compose config` diff before and after |
-| pino transports use worker threads that a bundled `main.js` cannot load | In-process pretty stream; no transports |
-| Next standalone output with `basePath` and a monorepo root | `outputFileTracingRoot` set; verified per zone by running the image |
-| Database split breaks a cross-service read | Inventory and gate in 9.1; cutover of shared-table services last |
-| A Dart rename touches 662 imports | Mechanical substitution, `flutter analyze` before and after, single commit, easy to revert |
-| `DEV_AUTH_BYPASS` masks authorization failures in tests | Never set in CI; `.env.example` asserts `false`; documented in `testing.md` |
-| Historical docs reference old paths | Path checks exclude `docs/audits`, `docs/archive`, `docs/superpowers` |
+| Hazard                                                                                            | Mitigation                                                                                  |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| New `@app/*` library not resolved in one of the five registration points; builds pass, boot fails | The plan lists all five; the smoke test boots all 26                                        |
+| Two copies of `@nestjs/core` in the bundle after adding dependencies                              | New deps are declared in `apps/api` only; root pins stay; `npm ls @nestjs/core` in the gate |
+| Root-module class rename misses an importer in a spec or a barrel                                 | `tsc` per workspace plus a `git grep` for every old class name                              |
+| Compose `include:` changes how relative paths and `.env` resolve                                  | Verified in phase 1 by `docker compose config` diff before and after                        |
+| pino transports use worker threads that a bundled `main.js` cannot load                           | In-process pretty stream; no transports                                                     |
+| Next standalone output with `basePath` and a monorepo root                                        | `outputFileTracingRoot` set; verified per zone by running the image                         |
+| Database split breaks a cross-service read                                                        | Inventory and gate in 9.1; cutover of shared-table services last                            |
+| A Dart rename touches 662 imports                                                                 | Mechanical substitution, `flutter analyze` before and after, single commit, easy to revert  |
+| `DEV_AUTH_BYPASS` masks authorization failures in tests                                           | Never set in CI; `.env.example` asserts `false`; documented in `testing.md`                 |
+| Historical docs reference old paths                                                               | Path checks exclude `docs/audits`, `docs/archive`, `docs/superpowers`                       |
 
 ## 13. Out of scope, recorded as follow-ups
 
