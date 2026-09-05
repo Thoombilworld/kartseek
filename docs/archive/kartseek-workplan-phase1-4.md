@@ -1,7 +1,7 @@
 # KARTSEEK — Developer Work Order: Path to "Verified Functional"
 
 **For:** Engineering (whoever picks up the next stint)
-**From:** Audit 2026-07-24 (see [KARTSEEK_AUDIT_2026-07-24.md](./KARTSEEK_AUDIT_2026-07-24.md))
+**From:** Audit 2026-07-24 (see [KARTSEEK_AUDIT_2026-07-24.md](../audits/2026-07-24-kartseek-audit.md))
 **Prereq (already done):** All 60 production-code type errors + 2 build blockers fixed. `apps/api` production
 code and `apps/web` both type-check clean. Start from a clean `git status` on top of those fixes.
 
@@ -10,10 +10,10 @@ the current one's acceptance check passes.
 
 ---
 
-## Phase 1 — Repair the API test suite  ⟵ **START HERE**
+## Phase 1 — Repair the API test suite ⟵ **START HERE**
 
 **Why first:** the suite currently won't compile (54 `tsc` errors), so `npm test` gives you nothing. Until
-tests run, every later phase is unguarded. These are *test-to-implementation drift* errors — the services are
+tests run, every later phase is unguarded. These are _test-to-implementation drift_ errors — the services are
 correct; the specs call renamed/removed methods and stale shapes.
 
 **How to work:** one service at a time. For each, open the service file to see the real current API, then
@@ -22,19 +22,19 @@ update its `.spec.ts` to match (rename calls, fix arg counts, fix expected shape
 
 **The 54 errors, grouped by file (fix in this order — cheapest first):**
 
-| Service `.spec.ts` | # | What's wrong (fix the test to match the service) |
-|---|---:|---|
-| `admin-service/src/admin.service.spec` | 1 | Result typed `unknown` → assert/narrow before reading `.sections`. |
-| `location-service/src/location.service.spec` | 1 | `getDeliveryZones` no longer exists — use the current method name. |
-| `franchise-service/src/franchise.service.spec` | 2 | Expected `monthlyRevenue`/`kpiScores` not on the returned shape — update expectations. |
-| `pharmacy-service/src/pharmacy.service.spec` | 2 | `searchItems` renamed; `imageUrl` not a valid prescription field. |
-| `delivery-service/src/delivery.service.spec` | 4 | **Mocks `geoSearch`/`geoRemove` — service now uses `georadius`/`geodel`.** Update the RedisService mock + calls. |
-| `restaurant-service/src/restaurant.service.spec` | 5 | `getMenu`/`createReservation` renamed; `menuItemId`→`itemId`; `'CARD'` not in `RestaurantPaymentMethod`; arg count. |
-| `doctor-service/src/doctor.service.spec` | 5 | `listDoctors`→ current name; `getAppointments`→`getAllAppointments`; `'IN_PERSON'`→`'in-clinic'`; `patientId` not in `CreateAppointmentDto`. |
-| `hotel-service/src/hotel.service.spec` | 6 | `getBooking`/`getRooms` renamed; two calls pass wrong arg counts; one result is `unknown`. |
-| `payment-service/src/payment.service.spec` | 8 | `getPaymentByNumber`→`getPaymentByOrder`; `refundPayment`/`getPaymentHistory` gone; `PaymentStatus.PENDING` missing; `VerifyPaymentDto` passed as string; `startMeter` mock. |
-| `marketplace-service/src/marketplace.service.spec` | 8 | Results typed `unknown` → narrow before reading `data`/`sellers`/`products`/`orders`/`revenue`/`country`/`trustBadges`. |
-| `loyalty-service/src/loyalty.service.spec` | 11 | Multiple arg-count mismatches; expected `newPoints`/`remainingPoints`/`reversedPoints` not on shapes; `getTierBenefits`/`getPointsHistory` gone. |
+| Service `.spec.ts`                                 |   # | What's wrong (fix the test to match the service)                                                                                                                             |
+| -------------------------------------------------- | --: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin-service/src/admin.service.spec`             |   1 | Result typed `unknown` → assert/narrow before reading `.sections`.                                                                                                           |
+| `location-service/src/location.service.spec`       |   1 | `getDeliveryZones` no longer exists — use the current method name.                                                                                                           |
+| `franchise-service/src/franchise.service.spec`     |   2 | Expected `monthlyRevenue`/`kpiScores` not on the returned shape — update expectations.                                                                                       |
+| `pharmacy-service/src/pharmacy.service.spec`       |   2 | `searchItems` renamed; `imageUrl` not a valid prescription field.                                                                                                            |
+| `delivery-service/src/delivery.service.spec`       |   4 | **Mocks `geoSearch`/`geoRemove` — service now uses `georadius`/`geodel`.** Update the RedisService mock + calls.                                                             |
+| `restaurant-service/src/restaurant.service.spec`   |   5 | `getMenu`/`createReservation` renamed; `menuItemId`→`itemId`; `'CARD'` not in `RestaurantPaymentMethod`; arg count.                                                          |
+| `doctor-service/src/doctor.service.spec`           |   5 | `listDoctors`→ current name; `getAppointments`→`getAllAppointments`; `'IN_PERSON'`→`'in-clinic'`; `patientId` not in `CreateAppointmentDto`.                                 |
+| `hotel-service/src/hotel.service.spec`             |   6 | `getBooking`/`getRooms` renamed; two calls pass wrong arg counts; one result is `unknown`.                                                                                   |
+| `payment-service/src/payment.service.spec`         |   8 | `getPaymentByNumber`→`getPaymentByOrder`; `refundPayment`/`getPaymentHistory` gone; `PaymentStatus.PENDING` missing; `VerifyPaymentDto` passed as string; `startMeter` mock. |
+| `marketplace-service/src/marketplace.service.spec` |   8 | Results typed `unknown` → narrow before reading `data`/`sellers`/`products`/`orders`/`revenue`/`country`/`trustBadges`.                                                      |
+| `loyalty-service/src/loyalty.service.spec`         |  11 | Multiple arg-count mismatches; expected `newPoints`/`remainingPoints`/`reversedPoints` not on shapes; `getTierBenefits`/`getPointsHistory` gone.                             |
 
 **Done when:** `cd apps/api && npx tsc --noEmit -p tsconfig.json` → **0 errors**, and `npm test` runs green
 (or with only intentional, documented skips).
@@ -48,6 +48,7 @@ update its `.spec.ts` to match (rename calls, fix arg counts, fix expected shape
 routes). It is renamed to `.bak`, so **it does not run** — protected routes are currently unguarded.
 
 **Steps:**
+
 1. Review `middleware.ts.bak` route rules against the current App Router structure; confirm every protected
    prefix and `loginUrl` still exists.
 2. Rename `middleware.ts.bak` → `middleware.ts` and start the app (`npm run dev:web`).
@@ -66,6 +67,7 @@ correct login, no redirect loops, and public paths load.
 and type-checks can't confirm data flows.
 
 **Steps:**
+
 1. Copy env: `apps/api/.env.example` → `.env` (and web env). Set DB/Redis/Kafka hosts to the compose services.
 2. `npm run infra:up` (postgres, redis, kafka, mongodb, elasticsearch, nginx, + UIs). Verify with
    `npm run infra:status`.
@@ -82,7 +84,7 @@ and type-checks can't confirm data flows.
 
 ## Phase 4 — End-to-end smoke test per vertical → **Verified Functional**
 
-**Why:** this is what converts the audit's *code-completeness* estimates into *verified* functionality.
+**Why:** this is what converts the audit's _code-completeness_ estimates into _verified_ functionality.
 
 **For each vertical, exercise the full happy path** (via the web app and/or Swagger), confirming data
 persists and events fire:
@@ -100,7 +102,7 @@ persists and events fire:
 - [ ] **Seller / Franchise / Admin portals** — dashboard loads with real (seeded) data, KYC/approval flows
 
 **Track results** in a checklist; log any flow that fails with the failing service + error. Anything that
-fails here is the *real* remaining work — the type-checks can't surface it.
+fails here is the _real_ remaining work — the type-checks can't surface it.
 
 **Done when:** every vertical's happy path completes end-to-end against live infra. **That is the
 "verified functional" state.**
@@ -108,6 +110,7 @@ fails here is the *real* remaining work — the type-checks can't surface it.
 ---
 
 ### Ordering rationale
+
 Tests first (Phase 1) so later work is guarded → middleware (Phase 2) so the app is safe to run with real
 auth → infra (Phase 3) so flows can execute → smoke tests (Phase 4) to prove it. Do not reorder; each phase
 depends on the previous one's guarantee.

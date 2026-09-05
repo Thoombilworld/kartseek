@@ -27,8 +27,9 @@ Genuinely real and mature. No stubs found (a red-flag scan returned 3 hits, all 
 - **Domain services** (15): decomposed from a 3,036-line monolith into `catalog`, `order`, `seller-domain`,
   `review`, `return`, `marketplace-cart`, `tracking`, `analytics`, `coupon`, `gift-card`, `qa`, `wishlist`,
   `brand-follow` (+ facade `marketplace.service.ts`). Spot-check of
-  [order.service.ts](../apps/api/apps/marketplace-service/src/services/order.service.ts): real TypeORM
-  repositories, `findAndCount`, status transitions, Kafka domain events. ~20 entities.
+  [order.service.ts](../../modules/marketplace/backend/src/fulfillment/fulfillment.service.ts) (renamed
+  `fulfillment.service.ts` in the `modules/marketplace/backend` extraction): real TypeORM repositories,
+  `findAndCount`, status transitions, Kafka domain events. ~20 entities.
 - **Tests:** `marketplace.service.spec.ts` passes (part of the now-green API suite).
 
 **Caveat:** verified as real/complete by structure + spot-checks + type-clean build; not yet exercised
@@ -40,14 +41,14 @@ end-to-end against live Postgres (that's Phase 3/4 of the platform plan).
 
 The web app pulls marketplace data from **three** different places, inconsistently:
 
-| Layer | Source | Reaches real backend? |
-|---|---|---|
+| Layer                                           | Source                                                  | Reaches real backend?      |
+| ----------------------------------------------- | ------------------------------------------------------- | -------------------------- |
 | `@/lib/api/marketplace` → `@/lib/api-endpoints` | NestJS gateway `http://localhost:3001/api/v1`, JWT+CSRF | **Yes** — the correct path |
-| BFF routes `/api/marketplace/*` | `@/lib/product-store` **in-memory singleton** | **No** — resets on restart |
-| Page-level constants | hardcoded arrays (`ALL_PRODUCTS`, `MOCK_*`, `DEMO_*`) | **No** |
+| BFF routes `/api/marketplace/*`                 | `@/lib/product-store` **in-memory singleton**           | **No** — resets on restart |
+| Page-level constants                            | hardcoded arrays (`ALL_PRODUCTS`, `MOCK_*`, `DEMO_*`)   | **No**                     |
 
-`product-store.ts` says so in its own header: *"Replace this with a real database query (TypeORM / Prisma)
-once Docker is up."* The **seller-submit → admin-approve → marketplace-display** flow runs entirely on this
+`product-store.ts` says so in its own header: _"Replace this with a real database query (TypeORM / Prisma)
+once Docker is up."_ The **seller-submit → admin-approve → marketplace-display** flow runs entirely on this
 in-memory store, disconnected from `marketplace-service`.
 
 **Coverage:** ~**7** customer pages import the real API client; ~**27** import demo/mock data (some overlap =
@@ -57,20 +58,20 @@ API-first with mock fallback).
 
 ## 3. Critical path — findings
 
-| Step | Page | Status |
-|---|---|---|
-| Search | `marketplace/search/page.tsx` | ❌ **100% mock** — filters a hardcoded `ALL_PRODUCTS` (12 items) client-side; never calls `/marketplace/search` (which exists). |
-| Product detail | `marketplace/product/[id]/page.tsx` | ✅ API-first (`getProductById`) with mock fallback + curated-image fallback. Robust; includes server-side HTML sanitizer. |
-| Cart | `marketplace/cart/page.tsx` | ✅ API-first (`getCart`) with `DEMO_CART` fallback. But available coupons / bank offers are hardcoded client arrays. |
-| Checkout | `marketplace/checkout/page.tsx` | ❌ **Order is never placed.** "Place Order" is `onClick={() => setPlaced(true)}` (line 419); `placeOrder()` is not imported or called. Cart is read via API; the order is pure local state. |
-| Orders list | `marketplace/orders/page.tsx` | ✅ API-first (`getOrders`) with `DEMO_ORDERS` fallback. |
-| Order detail / tracking | `marketplace/orders/[id]/page.tsx` | ❌ Hardcoded `MOCK` record keyed by id. |
+| Step                    | Page                                | Status                                                                                                                                                                                      |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Search                  | `marketplace/search/page.tsx`       | ❌ **100% mock** — filters a hardcoded `ALL_PRODUCTS` (12 items) client-side; never calls `/marketplace/search` (which exists).                                                             |
+| Product detail          | `marketplace/product/[id]/page.tsx` | ✅ API-first (`getProductById`) with mock fallback + curated-image fallback. Robust; includes server-side HTML sanitizer.                                                                   |
+| Cart                    | `marketplace/cart/page.tsx`         | ✅ API-first (`getCart`) with `DEMO_CART` fallback. But available coupons / bank offers are hardcoded client arrays.                                                                        |
+| Checkout                | `marketplace/checkout/page.tsx`     | ❌ **Order is never placed.** "Place Order" is `onClick={() => setPlaced(true)}` (line 419); `placeOrder()` is not imported or called. Cart is read via API; the order is pure local state. |
+| Orders list             | `marketplace/orders/page.tsx`       | ✅ API-first (`getOrders`) with `DEMO_ORDERS` fallback.                                                                                                                                     |
+| Order detail / tracking | `marketplace/orders/[id]/page.tsx`  | ❌ Hardcoded `MOCK` record keyed by id.                                                                                                                                                     |
 
 **Other mock-only customer pages:** addresses (`MOCK_ADDRESSES`), reviews (`MOCK_REVIEWS`), returns
 (`MOCK_RETURNS`), plus deals / flash-deals / best-sellers / new-arrivals / sellers / brand / subcategory /
 offers.
 
-**Admin dashboard** (`admin/marketplace/page.tsx`): **hybrid** — it *does* fetch real data via
+**Admin dashboard** (`admin/marketplace/page.tsx`): **hybrid** — it _does_ fetch real data via
 `useAdminData(() => adminMarketplaceApi.getDashboard(...))`, but the region KPI breakdowns (`REGION_KPIs`),
 pending-approval tables, country status, and audit log are hardcoded arrays.
 
@@ -78,7 +79,7 @@ pending-approval tables, country status, and audit log are hardcoded arrays.
 
 ## 4. Cross-cutting risk: silent mock fallback
 
-The wired pages use *try-API-then-fall-back-to-mock*. That's good for dev resilience but **dangerous in
+The wired pages use _try-API-then-fall-back-to-mock_. That's good for dev resilience but **dangerous in
 production**: a backend outage renders identically to a healthy system (users see plausible fake data instead
 of an error). Fallbacks should be dev-only or surface a clear degraded state.
 

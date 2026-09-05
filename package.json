@@ -50,6 +50,7 @@
     "kafka:topics": "node apps/api/scripts/create-kafka-topics.js",
     "registry:check": "node scripts/registry/validate.mjs",
     "registry:generate": "node scripts/registry/generate.mjs",
+    "docs:check-links": "node scripts/docs/check-links.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "smoke": "node tests/smoke/boot-all.mjs"
   },
