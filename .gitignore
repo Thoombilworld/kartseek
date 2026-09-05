@@ -119,3 +119,7 @@ scratch/
 # at the repo root, and CMake output from the same session. Neither is source.
 /Users/
 /build/
+
+# Newman output. The 31 reports that used to be committed were generated files.
+tests/postman/reports/*
+!tests/postman/reports/.gitkeep

@@ -18,9 +18,9 @@ Complete end-to-end API testing suite for the **KARTSEEK Super App** platform.
 
 1. Open Postman Desktop
 2. Click **Import** → **Folder**
-3. Select `docs/api/postman/collections/`
+3. Select `tests/postman/collections/`
 4. Import all 31 collection files
-5. Click **Import** again → select environment files from `docs/api/postman/environments/`
+5. Click **Import** again → select environment files from `tests/postman/environments/`
 6. Select **KARTSEEK — Local Development** as your active environment
 
 ### 2. Initial Setup
@@ -52,37 +52,37 @@ npm install -g newman newman-reporter-htmlextra
 ### Run a Single Collection
 
 ```bash
-newman run docs/api/postman/collections/01-auth-user-management.postman_collection.json \
-  -e docs/api/postman/environments/KARTSEEK_Local.postman_environment.json \
+newman run tests/postman/collections/01-auth-user-management.postman_collection.json \
+  -e tests/postman/environments/KARTSEEK_Local.postman_environment.json \
   --reporters cli,json
 ```
 
 ### Run All Collections
 
 ```bash
-node docs/api/postman/scripts/run-all.js
+node tests/postman/scripts/run-all.js
 ```
 
 ### Run with Options
 
 ```bash
 # Against staging
-node docs/api/postman/scripts/run-all.js --env staging
+node tests/postman/scripts/run-all.js --env staging
 
 # Critical paths only (for CI/CD)
-node docs/api/postman/scripts/run-all.js --critical-only
+node tests/postman/scripts/run-all.js --critical-only
 
 # Single collection
-node docs/api/postman/scripts/run-all.js --collection 16
+node tests/postman/scripts/run-all.js --collection 16
 
 # Stop on first failure
-node docs/api/postman/scripts/run-all.js --bail
+node tests/postman/scripts/run-all.js --bail
 ```
 
 ## 📂 Directory Structure
 
 ```
-docs/api/postman/
+tests/postman/
 ├── collections/                          # 31 Postman collection JSON files
 │   ├── 01-auth-user-management.json      # Auth, registration, OTP, tokens
 │   ├── 02-api-gateway.json               # Health, readiness, Swagger
@@ -255,7 +255,7 @@ These must pass for deployment:
 
 ```bash
 # Run what CI runs
-node docs/api/postman/scripts/run-all.js --critical-only --bail
+node tests/postman/scripts/run-all.js --critical-only --bail
 ```
 
 ## 🔄 Regenerating Collections
@@ -264,15 +264,15 @@ If you add new API endpoints, update the generator and regenerate:
 
 ```bash
 # Edit the generator
-code docs/api/postman/scripts/generate-collections.js
+code tests/postman/scripts/generate-collections.js
 
 # Regenerate all 31 collections
-node docs/api/postman/scripts/generate-collections.js
+node tests/postman/scripts/generate-collections.js
 ```
 
 ## 📊 Reports
 
-Newman generates reports in `docs/api/postman/reports/`:
+Newman generates reports in `tests/postman/reports/`:
 - `summary.json` — Aggregated pass/fail summary
 - `*-report.json` — Per-collection detailed results
 

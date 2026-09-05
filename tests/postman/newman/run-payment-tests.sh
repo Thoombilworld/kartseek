@@ -24,7 +24,7 @@ echo "╚═══════════════════════�
 mkdir -p "$REPORT_DIR"
 
 # Run Newman
-npx newman run "$TESTS_DIR/payment-service.postman_collection.json" \
+npx newman run "$TESTS_DIR/collections/payment-service.postman_collection.json" \
   -e "$TESTS_DIR/environments/${ENV}.postman_environment.json" \
   --reporters cli,htmlextra,json \
   --reporter-htmlextra-export "$REPORT_DIR/payment-test-report-${ENV}.html" \

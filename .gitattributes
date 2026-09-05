@@ -50,4 +50,4 @@
 package-lock.json linguist-generated=true -diff
 *.g.dart linguist-generated=true
 *_generated.dart linguist-generated=true
-docs/api/postman/reports/** linguist-generated=true -diff
+tests/postman/reports/** linguist-generated=true -diff
