@@ -487,13 +487,15 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
           )}
 
           {linkable && hasVariants ? (
-            <Link
-              href={zoneHref(productPath(product))}
-              aria-label={`Choose options for ${product.title}`}
-              className="mt-2.5 w-full min-h-[44px] flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold border bg-slate-50 border-slate-200 text-slate-700 hover:bg-blue-600 hover:border-blue-600 hover:text-white transition-all duration-300"
+            // The whole card is already the link to the PDP, so this is a visual
+            // affordance only — a nested <a> (or a button inside an anchor) is
+            // invalid HTML and made React log a hydration error on every listing.
+            <span
+              aria-hidden="true"
+              className="mt-2.5 w-full min-h-[44px] flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold border bg-slate-50 border-slate-200 text-slate-700 group-hover:bg-blue-600 group-hover:border-blue-600 group-hover:text-white transition-all duration-300"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" /> Choose options
-            </Link>
+            </span>
           ) : (
             linkable && (
               <button
