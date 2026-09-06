@@ -1098,3 +1098,12 @@ Acceptance: no invented figures reachable.
 - Spec coverage: every MKT-0xx finding in the audit maps to a task above (MKT-001→T1, 002→T2, 003→T6+B-24, 010→T4, 011/012/034→T5 (+B-03/B-04), 013→T3, 014→B-01, 015→B-02, 016→B-05, 017→T5 step 5.6, 018→B-10, 019→B-06, 020→B-07, 021→B-08, 022/072→B-18, 023→B-20, 024/025/030→B-24/B-16, 026→B-09, 027→B-12, 028→B-26, 029→B-27, 031→B-11, 032/050→B-13, 033→B-23, 040/041→B-14, 042→B-29, 043→B-22, 044→B-15, 045→B-14 (OTP screen: add to B-14 scope — phone OTP via `/auth/otp/send|verify`), 051/052/060→B-19, 070→B-17, 071→B-21, 080→B-25, 081→B-28).
 - Placeholder scan: none of the forbidden phrases; every P0 step has code; backlog cards name files and acceptance.
 - Type consistency: `priceOrderItems` line shape (`variantId`, `variantName`) is used identically in T4 gateway mapping and B-05; `requireSettleable` name is the same in shared-core, shared-ui and checkout; `normaliseSavedAddress` signature matches its test.
+
+### Done in the second pass (2026-09-06, "all region marketplace complete")
+
+- **B-06 delivery rule per market** — landed (registry `delivery` + order-service `MARKETPLACE_RATES`).
+- **S-01, catalogue half** — landed via `apps/api/scripts/maintenance/marketplace-catalog/marketplace-markets-seed.mjs` (sellers, offers, SKUs per active market). Coupons, flash deals, banners, reviews and images remain.
+- **MKT-003 data half** — every active market now has a verified official seller with 115 live offers.
+- Cart lines are tagged with their market and `GET /cart` is scoped to it (part of B-05).
+- Cart Remove/quantity keyed by product + variant (found while verifying; not in the gap report).
+- Zone layouts seed the region from `X-Country-Code` (all eight zones; found while verifying).
