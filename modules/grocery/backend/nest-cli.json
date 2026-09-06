@@ -7,17 +7,27 @@
     "tsConfigPath": "tsconfig.app.json",
     "typeCheck": false,
     "deleteOutDir": true,
-    "assets": [
-      {
-        "include": "../../../apps/api/proto/**/*.proto",
-        "outDir": "./dist/proto",
-        "watchAssets": true
-      }
-    ],
     "builder": {
       "type": "rspack",
       "options": {
         "configPath": "rspack.config.js"
+      }
+    },
+    "includeLibraryAssets": ["proto"]
+  },
+  "projects": {
+    "proto": {
+      "type": "library",
+      "root": "proto",
+      "sourceRoot": "proto",
+      "compilerOptions": {
+        "assets": [
+          {
+            "include": "**/*.proto",
+            "outDir": "./dist/proto",
+            "watchAssets": true
+          }
+        ]
       }
     }
   }
