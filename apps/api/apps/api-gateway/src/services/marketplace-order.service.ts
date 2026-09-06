@@ -3,6 +3,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { rpcCatch } from '@app/common';
 import { getRegionConfig } from '@app/region';
+import { assertSettleablePayment } from './marketplace-payment-policy';
 import { MARKETPLACE_PATTERNS } from '../contracts';
 import { SellerGateway } from '../gateways/seller.gateway';
 
@@ -104,7 +105,13 @@ export class MarketplaceOrderService {
 
     // ── 1. Authoritative prices ────────────────────────────────────────────
     const pricing: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.PRICE_ORDER_ITEMS, {
-      items: requested.map((i: any) => ({ productId: i?.productId, quantity: i?.quantity })),
+      items: requested.map((i: any) => ({
+        productId: i?.productId,
+        quantity: i?.quantity,
+        // The chosen SKU. Without it a variant product was priced at the parent
+        // listing and the SKU's own stock never moved.
+        variantId: i?.variantId || undefined,
+      })),
     }).catch((): null => null);
 
     if (!pricing) {
@@ -127,6 +134,8 @@ export class MarketplaceOrderService {
       // recorded an empty `listingId` and — because the decrement was keyed on
       // it — that no order ever reduced a seller's stock at all.
       listingId: line.listingId,
+      variantId: line.variantId ?? undefined,
+      variantName: line.variantName ?? undefined,
     }));
     const subtotal: number = Number(pricing.subtotal) || 0;
 
@@ -190,6 +199,15 @@ export class MarketplaceOrderService {
     // coupon, an unusable gift card), and holding stock across those lookups
     // would take units off sale for baskets that were never going to complete.
     // Everything below either succeeds or releases.
+    // ── 2c. A payment nothing can collect must not create an order ─────────
+    // The browser hides such methods too, but a request can name any method it
+    // likes; this is the check that keeps an unpaid order out of the system.
+    assertSettleablePayment(
+      payload?.paymentMethod,
+      Math.max(subtotal - discount - giftCardAmount, 0),
+      String(req?.headers?.['x-region-code'] ?? '') || undefined,
+    );
+
     const reservation: any = await this.sendToMarketplace(
       MARKETPLACE_PATTERNS.RESERVE_LISTING_STOCK,
       { items },
