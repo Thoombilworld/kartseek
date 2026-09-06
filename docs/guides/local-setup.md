@@ -41,7 +41,8 @@ directory creates a second, nested `node_modules` that npm's own workspace
 resolution does not see — those copies go stale silently and are a recurring
 source of "it works from the root but not here" bugs. If you ever suspect a
 workspace has a stray nested install, delete it and reinstall from the root;
-never edit `package-lock.json` by hand.
+never edit `package-lock.json` by hand. The install also runs husky, which
+installs the commit hooks described in [`conventions.md`](conventions.md#commits).
 
 ## Environment
 
@@ -123,10 +124,13 @@ yours differ, `services.yaml` is the source of truth — see
 ## Verify
 
 ```bash
-npm run build
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1 API_URL=http://localhost:3001/api/v1 NEXT_PUBLIC_WS_URL=ws://localhost:3001 npm run build
 npm run smoke
 ```
 
+The three variables are what five of the zones read while prerendering; a
+production build without them fails fast on purpose (see
+[`testing.md`](testing.md#build)).
 `npm run smoke` (`tests/smoke/boot-all.mjs`) starts every Nest deployable from
 its **built** output — hence the `npm run build` first, this script does not
 compile anything itself — and polls each one's registry-declared health route
@@ -161,8 +165,11 @@ apps talk to the platform.
 
 ## Untracked clutter
 
-A checkout that has been built and run for a while accumulates files git
-already ignores and that are safe to delete whenever you want the disk space
-back: `*.log` files, a stray `nuget.exe`, `build/` output, and a `Users/`
-directory that a misconfigured tool can create at the repository root. None of
-it is source; removing it changes nothing about the working tree.
+A checkout that has been built and run for a while accumulates output git
+already ignores. `npm run clean` removes the build output and the Turbo cache
+(`.turbo/cache` alone reached 33 GB once); `*.log` files at the root and the
+Flutter `build/` and `.dart_tool/` directories can be deleted by hand whenever
+you want the disk back. None of it is source. One thing not to delete:
+`DockerDesktopWSL/` inside the repository is Docker Desktop's own data disk if
+it was ever pointed there; move it from Docker Desktop → Settings → Resources
+→ Advanced → Disk image location rather than removing it.

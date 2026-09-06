@@ -759,13 +759,21 @@ design round.
 - `apps/api`'s `build` is now `nest build --all` (the spec's §11 gate assumed
   it).
 - The ten PascalCase `.tsx` files listed in `docs/guides/conventions.md` are a
-  recorded exception to D3.
+  recorded exception to D3 — done 2026-09-06: renamed to kebab-case in the
+  repository hygiene pass (`2026-09-06-repo-hygiene-design.md`).
 - `next-env.d.ts` files flip between `next dev` and `next build` output and
-  should be git-ignored before phase 4's CI.
+  should be git-ignored before phase 4's CI — done 2026-09-06: ignored, and
+  every Next workspace's `type-check` runs `next typegen` first.
 - `services.yaml`'s `defaults.node` (26.5.0) disagrees with the Dockerfiles'
   `node:25-alpine` and phase 3 must reconcile them.
 - `runChecks` in `scripts/registry/validate.mjs` needs a fixture-tree test
   before the phase 2 k8s generator lands.
 - `SELLER_TCP_PORT` is read by nothing and should be deleted from
-  `.env.example`, `env.validation.ts` and `infra/k8s/config.yaml` in phase 2.
-- `.env.example` should assert `DEV_AUTH_BYPASS=false` (spec §12) in phase 2.
+  `.env.example`, `env.validation.ts` and `infra/k8s/config.yaml` in phase 2
+  — done 2026-09-06.
+- `.env.example` should assert `DEV_AUTH_BYPASS=false` (spec §12) in phase 2
+  — done 2026-09-06 (`apps/api/.env.example`).
+- §6.3 assumed `@app/logger`'s `KartseekLogger` would become pino-backed. That
+  library was imported by nothing and was removed in the hygiene pass together
+  with `@app/dto`, `@app/events` and `@app/validators`; phase 2 creates its
+  logger inside `@app/observability` rather than reviving `@app/logger`.

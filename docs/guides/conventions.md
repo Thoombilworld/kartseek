@@ -89,40 +89,33 @@ file names, and the `kartseek_` prefix on package names
   `appLibs` array in `apps/api/rspack.config.js`, every
   `modules/*/backend/tsconfig.json` that needs it, and the alias map in
   `apps/api/test/vitest-backend.mts`). Existing libraries —
-  `common`, `database`, `decorators`, `dto`, `events`, `gdpr`, `grpc`,
-  `guards`, `kafka`, `logger`, `redis`, `region`, `security`, `storage`,
-  `validators` — are the pattern to follow.
+  `common`, `database`, `decorators`, `gdpr`, `grpc`, `guards`, `kafka`,
+  `redis`, `region`, `security`, `storage` — are the pattern to follow. A
+  library nothing imports is removed, not kept for later: four scaffolds
+  (`dto`, `events`, `logger`, `validators`) went that way on 2026-09-06.
 - **Shared web code** goes in `packages/shared-core` (the API client, i18n,
   routes, hooks) or `packages/shared-ui` (shared components) — never
   duplicated per zone.
 
 ## Commits
 
-The root `package.json` carries a `commitlint` config:
+Two git hooks run on every commit, installed by husky when `npm install` runs
+the root `prepare` script (`git config core.hooksPath` shows `.husky/_` on a
+working checkout):
 
-```json
-"commitlint": { "extends": ["@commitlint/config-conventional"] }
-```
+- `.husky/pre-commit` runs `lint-staged` — Prettier then `eslint --fix` on the
+  staged `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` files, Prettier alone on staged
+  `.json`/`.md`/`.yml`/`.yaml` — and then the registry check
+  (`node scripts/registry/validate.mjs`). An ESLint error blocks the commit;
+  advisory warnings do not.
+- `.husky/commit-msg` runs commitlint with `@commitlint/config-conventional`.
 
-It also carries a `lint-staged` config describing the intended per-commit
-checks: Prettier plus `eslint --fix --max-warnings 0` for
-`.ts`/`.tsx`/`.js`/`.jsx`, and Prettier alone for `.json`/`.md`/`.yml`/`.yaml`.
-Both describe _intended_ checks only. **No git hook currently installs or
-runs either one.** There is no `husky`
-directory in the tree, `.git/hooks` holds only Git's own `.sample` files, and
-`core.hooksPath` is unset — confirm any of that yourself with
-`git ls-files | grep -i husky` (empty) or `ls .git/hooks` (only `*.sample`).
-The root `prepare` script that is supposed to install the hook,
-`node -e "try { require('husky').install() } catch(e) {}"`, throws
-`TypeError: require(...).install is not a function` under the installed
-husky 9 (which ships an ES module with a default export, not the `.install`
-static method husky 8's API had) — and the surrounding `try/catch` swallows
-that error silently, so `npm install` reports success either way.
+Both configurations live in the root `package.json` (`lint-staged`,
+`commitlint`) and `.husky/`. Phase 4's CI will run the same checks on pull
+requests; until then the hooks are the enforcement.
 
-Until phase 4 wires `commitlint` into CI to check pull requests, Conventional
-Commits here is a convention developers follow by hand, not a rule anything
-enforces: `type(scope): subject`, e.g. `fix(gateway): stop dropping the
-X-Region-Code header`. This repository's own history uses `feat`, `fix`,
+The message format is `type(scope): subject`, e.g. `fix(gateway): stop
+dropping the X-Region-Code header`. This repository's own history uses `feat`, `fix`,
 `docs`, `chore`, `refactor`, `test`, and `build` as types; scope is the
 affected package or area and is optional. Commits authored with Claude Code
 carry a trailing
@@ -164,7 +157,27 @@ Prettier, configured in the root `package.json`:
 }
 ```
 
-`npm run format` writes across every tracked `.ts`/`.tsx`/`.js`/`.jsx`/`.json`/`.md`
-file (respecting `.gitignore`); `npm run format:check` is the same pass in
-check-only mode, for CI. In practice you rarely need either by hand —
-`lint-staged` formats whatever you are about to commit.
+`npm run format` writes across every tracked
+`.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs`/`.json`/`.md`/`.yml`/`.yaml` file
+(respecting `.gitignore` and `.prettierignore`); `npm run format:check` is the
+same pass in check-only mode, for CI. In practice you rarely need either by
+hand — the pre-commit hook formats whatever you are about to commit.
+
+## Linting
+
+One ESLint and one typescript-eslint, declared at the root; no workspace
+declares its own. A backend's `eslint.config.js` is a one-line call into
+`apps/api/eslint.base.js`; a Next app's `eslint.config.mjs` is a one-line
+import of `apps/web/eslint.base.mjs`. Change a rule in the base, never in a
+workspace. The root `eslint.config.mjs` covers only the repository's own
+scripts under `scripts/` and `tests/`. `packages/shared-core` and
+`packages/shared-ui` are formatted by the hooks but have no lint owner yet;
+the root config ignores them deliberately until one is chosen. Warning
+policy and current counts are in [`testing.md`](testing.md#lint).
+
+## Cleaning
+
+`npm run clean` removes every workspace's build output (`dist`, `.next`,
+`out`, `tsconfig.tsbuildinfo`) and the Turbo cache with `rimraf`, so it works
+under npm's `cmd.exe` on Windows as well as under bash. It never touches
+`node_modules`; `npm ci` is the reset for those.

@@ -19,8 +19,14 @@ script. Backends use **Vitest** (`vitest run`) through one shared factory,
 `vitest.config.mts` calls `backendVitestConfig({ workspaceDir })` from it
 rather than declaring its own alias list, so `@app/common`, `@app/database`,
 and the rest resolve identically everywhere and cannot silently drift between
-workspaces. `apps/web` and the eight module frontends use **Jest**
-(`jest --verbose` for `apps/web`, plain `jest` for the zones).
+workspaces. `apps/web` and the eight module frontends use **Jest** through one
+shared preset, `apps/web/jest.base.cjs` — every Next workspace's
+`jest.config.cjs` is one statement, `createNextJestConfig(__dirname)`, and the
+module aliases Jest resolves are derived from that workspace's own tsconfig
+`paths`, so a path added for TypeScript is a path Jest knows without a second
+edit. Every Next workspace also carries `src/__tests__/registry-entry.spec.ts`,
+which asserts its `dev`/`start` port and its `basePath` against
+`services.yaml`; a zone whose port drifts fails its unit run, not its deploy.
 
 Run one workspace's suite directly with `-w`:
 
@@ -101,7 +107,21 @@ Those lists may only shrink — implementing a command and forgetting to remove
 it from its baseline is treated as a failure too, specifically so the baseline
 cannot quietly rot into a permanent excuse list.
 
-## Smoke
+## Build
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1 API_URL=http://localhost:3001/api/v1 NEXT_PUBLIC_WS_URL=ws://localhost:3001 npm run build
+```
+
+`npm run build` is `turbo run build`: `nest build --all` for the 18 API
+projects, `nest build` for each module backend, `next build` for the shell
+and the eight zones. Five of the zones read `NEXT_PUBLIC_API_URL`, `API_URL`
+and `NEXT_PUBLIC_WS_URL` while prerendering, and the shared resolver in
+`packages/shared-core/src/config/api-base.ts` deliberately throws under
+`NODE_ENV=production` when they are missing rather than baking in a
+localhost default — so a production build without them fails fast, by
+design. Set the three variables (the values above for a local build) before
+running it.
 
 ```bash
 npm run build
@@ -122,7 +142,7 @@ npm run smoke -- --only=order-service,marketplace-service
 
 ## Postman
 
-34 collections and 9 environment files under `tests/postman/` cover the whole
+34 collections and 8 environment files under `tests/postman/` cover the whole
 platform's HTTP surface end to end, run either from Postman Desktop or headless
 with Newman. Full instructions — importing, running a single collection,
 running everything, the auth-token bootstrapping order, and CI integration —
@@ -150,6 +170,42 @@ either: it is silent in any file containing a decorator once
 DTO in this codebase. See [`conventions.md`](conventions.md) for why
 `import type` matters day to day.
 
+The nine Next workspaces run `next typegen && tsc --noEmit`: `next-env.d.ts`
+is generated, not tracked, and `next typegen` recreates it together with the
+route types before `tsc` runs. Their `tsconfig.json` declares
+`"types": ["jest", "node"]` so the specs under `src/__tests__` type-check
+with everything else.
+
+## Lint
+
+```bash
+npm run lint
+```
+
+is `turbo run lint`. One ESLint (10.x) and one typescript-eslint are declared
+at the root and shared by all 18 workspaces. Backends delegate to
+`apps/api/eslint.base.js`; the shell and the eight zones delegate to
+`apps/web/eslint.base.mjs`. Errors must be zero everywhere. In the Next
+workspaces the React Compiler's hook rules (everything under `react-hooks/`
+except `rules-of-hooks`) are warnings while the compiler is off — advice,
+not gates. The counts at the time of the 2026-09-06 hygiene pass, to be
+driven down rather than grown:
+
+| Workspace                        | Warnings |
+| -------------------------------- | -------- |
+| `kartseek-web`                   | 132      |
+| `@kartseek/doctor-frontend`      | 9        |
+| `@kartseek/franchise-frontend`   | 4        |
+| `@kartseek/grocery-frontend`     | 3        |
+| `@kartseek/hotel-frontend`       | 9        |
+| `@kartseek/marketplace-frontend` | 36       |
+| `@kartseek/pharmacy-frontend`    | 2        |
+| `@kartseek/restaurant-frontend`  | 11       |
+| `@kartseek/taxi-frontend`        | 4        |
+
+The pre-commit hook runs `eslint --fix` on staged files with the same
+configs, so a new error cannot be committed; warnings can.
+
 ## Authorization tests
 
 **Never set `DEV_AUTH_BYPASS=true` while testing authorization.** With it on,
@@ -160,29 +216,3 @@ the test proves nothing. Always send a real `Authorization: Bearer <token>`
 header when a test is meant to exercise who is or is not allowed to do
 something; CI never sets the flag for exactly this reason (see
 [`running-services.md`](running-services.md#flags)).
-
-## Known, pre-existing gaps
-
-These are real failures on this branch today, unrelated to the platform
-reorganization — recorded here so a run that hits them is not mistaken for
-something this change broke.
-
-- **Lint is broken for `apps/web` and all eight module frontends, but not the
-  same way.** `apps/web` has an `eslint.config.mjs`; its nested ESLint 10.9.1
-  crashes with `scopeManager.addGlobals is not a function`. None of the eight
-  module frontends (`doctor`, `franchise`, `grocery`, `hotel`, `marketplace`,
-  `pharmacy`, `restaurant`, `taxi`) has an `eslint.config.*` at all, so each
-  fails instead with `ESLint couldn't find an eslint.config.* file`.
-  Reproduce with `npm run lint -w kartseek-web` or
-  `npm run lint -w @kartseek/<vertical>-frontend`.
-- **`apps/api` lint reports 35 problems**; `npm run lint -w kartseek-api`.
-- **`@kartseek/marketplace-backend` lint reports 6 problems**;
-  `npm run lint -w @kartseek/marketplace-backend`.
-- **Five of the eight module frontends fail `next build` without three
-  environment variables set** — `NEXT_PUBLIC_API_URL`, `API_URL`, and
-  `NEXT_PUBLIC_WS_URL`. Reproduce with `npm run build -w @kartseek/<vertical>-frontend`
-  in a shell missing those.
-- **`@kartseek/grocery-frontend` has 2 failing Jest tests**;
-  `npm test -w @kartseek/grocery-frontend`.
-- **`@kartseek/marketplace-frontend`'s type-check fails on two specs**;
-  `npm run type-check -w @kartseek/marketplace-frontend`.
