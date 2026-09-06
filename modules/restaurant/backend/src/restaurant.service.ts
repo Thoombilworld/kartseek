@@ -1,17 +1,32 @@
-import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike, In, SelectQueryBuilder, type ObjectLiteral } from 'typeorm';
+import { Repository, ILike, In, SelectQueryBuilder, type ObjectLiteral, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
 import {
-  Restaurant, RestaurantStatus,
-  MenuCategory, MenuItem, DietaryType,
-  RestaurantOrder, RestaurantOrderStatus, RestaurantOrderType, RestaurantPaymentMethod, RestaurantPaymentStatus,
+  Restaurant,
+  RestaurantStatus,
+  MenuCategory,
+  MenuItem,
+  DietaryType,
+  RestaurantOrder,
+  RestaurantOrderStatus,
+  RestaurantOrderType,
+  RestaurantPaymentMethod,
+  RestaurantPaymentStatus,
   ORDER_STATUS_TRANSITIONS,
-  Reservation, ReservationStatus,
+  Reservation,
+  ReservationStatus,
   RestaurantReview,
-  RestaurantTable, TableStatus,
+  RestaurantTable,
+  TableStatus,
   RestaurantPromotion,
   RestaurantStaff,
 } from './entities';
@@ -21,15 +36,16 @@ export class RestaurantService {
   private readonly logger = new Logger(RestaurantService.name);
 
   constructor(
-    @InjectRepository(Restaurant)        private readonly restaurantRepo: Repository<Restaurant>,
-    @InjectRepository(MenuCategory)      private readonly categoryRepo: Repository<MenuCategory>,
-    @InjectRepository(MenuItem)          private readonly menuItemRepo: Repository<MenuItem>,
-    @InjectRepository(RestaurantOrder)   private readonly orderRepo: Repository<RestaurantOrder>,
-    @InjectRepository(Reservation)       private readonly reservationRepo: Repository<Reservation>,
-    @InjectRepository(RestaurantReview)  private readonly reviewRepo: Repository<RestaurantReview>,
-    @InjectRepository(RestaurantTable)   private readonly tableRepo: Repository<RestaurantTable>,
-    @InjectRepository(RestaurantPromotion) private readonly promotionRepo: Repository<RestaurantPromotion>,
-    @InjectRepository(RestaurantStaff)   private readonly staffRepo: Repository<RestaurantStaff>,
+    @InjectRepository(Restaurant) private readonly restaurantRepo: Repository<Restaurant>,
+    @InjectRepository(MenuCategory) private readonly categoryRepo: Repository<MenuCategory>,
+    @InjectRepository(MenuItem) private readonly menuItemRepo: Repository<MenuItem>,
+    @InjectRepository(RestaurantOrder) private readonly orderRepo: Repository<RestaurantOrder>,
+    @InjectRepository(Reservation) private readonly reservationRepo: Repository<Reservation>,
+    @InjectRepository(RestaurantReview) private readonly reviewRepo: Repository<RestaurantReview>,
+    @InjectRepository(RestaurantTable) private readonly tableRepo: Repository<RestaurantTable>,
+    @InjectRepository(RestaurantPromotion)
+    private readonly promotionRepo: Repository<RestaurantPromotion>,
+    @InjectRepository(RestaurantStaff) private readonly staffRepo: Repository<RestaurantStaff>,
     private readonly redis: RedisService,
     private readonly kafka: KafkaProducerService,
   ) {}
@@ -47,24 +63,45 @@ export class RestaurantService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async listRestaurants(opts: {
-    cuisine?: string; minRating?: number; sortBy?: string;
-    isOpen?: boolean; page?: number; limit?: number;
-    regionCode?: string; countryCode?: string;
+    cuisine?: string;
+    minRating?: number;
+    sortBy?: string;
+    isOpen?: boolean;
+    page?: number;
+    limit?: number;
+    regionCode?: string;
+    countryCode?: string;
   }) {
-    const { cuisine, minRating, sortBy, isOpen, page = 1, limit = 20, regionCode, countryCode } = opts;
-    const qb = this.restaurantRepo.createQueryBuilder('r')
+    const {
+      cuisine,
+      minRating,
+      sortBy,
+      isOpen,
+      page = 1,
+      limit = 20,
+      regionCode,
+      countryCode,
+    } = opts;
+    const qb = this.restaurantRepo
+      .createQueryBuilder('r')
       .where('r.status = :status', { status: RestaurantStatus.APPROVED });
 
-    if (countryCode)  qb.andWhere('r.countryCode = :cc', { cc: countryCode });
-    if (regionCode)   qb.andWhere('r.regionCode = :rc', { rc: regionCode });
+    if (countryCode) qb.andWhere('r.countryCode = :cc', { cc: countryCode });
+    if (regionCode) qb.andWhere('r.regionCode = :rc', { rc: regionCode });
     if (isOpen !== undefined) qb.andWhere('r.isOnline = :isOnline', { isOnline: isOpen });
-    if (minRating)    qb.andWhere('r.rating >= :minRating', { minRating });
-    if (cuisine)      qb.andWhere(':cuisine = ANY(string_to_array(r.cuisines, \',\'))', { cuisine });
+    if (minRating) qb.andWhere('r.rating >= :minRating', { minRating });
+    if (cuisine) qb.andWhere(":cuisine = ANY(string_to_array(r.cuisines, ','))", { cuisine });
 
     const orderMap: Record<string, string> = {
-      rating: 'r.rating', distance: 'r.latitude', popularity: 'r.totalOrders', deliveryTime: 'r.avgPrepTime',
+      rating: 'r.rating',
+      distance: 'r.latitude',
+      popularity: 'r.totalOrders',
+      deliveryTime: 'r.avgPrepTime',
     };
-    qb.orderBy(orderMap[sortBy || 'rating'] || 'r.rating', sortBy === 'deliveryTime' ? 'ASC' : 'DESC');
+    qb.orderBy(
+      orderMap[sortBy || 'rating'] || 'r.rating',
+      sortBy === 'deliveryTime' ? 'ASC' : 'DESC',
+    );
     qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
@@ -74,10 +111,9 @@ export class RestaurantService {
   async searchRestaurants(q: string, page = 1, limit = 20) {
     const query = `%${q}%`;
     const restaurants = await this.restaurantRepo.find({
-      where: [
-        { name: ILike(query), status: RestaurantStatus.APPROVED },
-      ],
-      take: limit, skip: (page - 1) * limit,
+      where: [{ name: ILike(query), status: RestaurantStatus.APPROVED }],
+      take: limit,
+      skip: (page - 1) * limit,
     });
     const dishes = await this.menuItemRepo.find({
       where: { name: ILike(query), isAvailable: true },
@@ -102,7 +138,10 @@ export class RestaurantService {
   }
 
   async getRestaurantById(id: string) {
-    const restaurant = await this.restaurantRepo.findOne({ where: { id }, relations: ['menuCategories', 'tables'] });
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id },
+      relations: ['menuCategories', 'tables'],
+    });
     if (!restaurant) throw new NotFoundException(`Restaurant ${id} not found`);
     return restaurant;
   }
@@ -123,19 +162,46 @@ export class RestaurantService {
       relations: ['items'],
       order: { sortOrder: 'ASC' },
     });
-    return {
-      restaurantId,
-      categories: categories.map(cat => ({
-        ...cat,
-        items: (cat.items || []).filter(i => i.isAvailable).sort((a, b) => a.sortOrder - b.sortOrder),
-      })),
-    };
+    const byCategory = categories.map((cat) => ({
+      ...cat,
+      items: (cat.items || [])
+        .filter((i) => i.isAvailable)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    }));
+
+    // Items with no category used to vanish from the menu entirely: this walked
+    // categories only, and `addMenuItem` accepts an item without one. Every
+    // seeded item was in that state, so all twelve restaurants showed empty
+    // menus. They are listed under one trailing "Menu" bucket instead.
+    const uncategorised = await this.menuItemRepo.find({
+      where: { restaurantId, categoryId: IsNull(), isAvailable: true },
+      order: { sortOrder: 'ASC' },
+    });
+    if (uncategorised.length > 0) {
+      byCategory.push({
+        id: 'uncategorised',
+        restaurantId,
+        name: 'Menu',
+        slug: 'menu',
+        description: null,
+        imageUrl: null,
+        sortOrder: Number.MAX_SAFE_INTEGER,
+        isActive: true,
+        availableHours: null,
+        items: uncategorised,
+      } as unknown as (typeof byCategory)[number]);
+    }
+    return { restaurantId, categories: byCategory };
   }
 
   async addMenuItem(restaurantId: string, dto: Partial<MenuItem>) {
     const item = this.menuItemRepo.create({ ...dto, restaurantId });
     const saved = await this.menuItemRepo.save(item);
-    await this.kafka.publish('restaurant.menu_item.created', { id: saved.id, restaurantId, name: saved.name });
+    await this.kafka.publish('restaurant.menu_item.created', {
+      id: saved.id,
+      restaurantId,
+      name: saved.name,
+    });
     this.logger.log(`Menu item added: ${saved.id} to restaurant ${restaurantId}`);
     return { success: true, item: saved };
   }
@@ -185,17 +251,28 @@ export class RestaurantService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async placeOrder(dto: {
-    restaurantId: string; customerId: string; orderType: RestaurantOrderType;
-    items: RestaurantOrder['items']; paymentMethod: RestaurantPaymentMethod;
-    deliveryAddress?: RestaurantOrder['deliveryAddress']; deliveryInstructions?: string;
-    deliverySlot?: RestaurantOrder['deliverySlot']; couponCode?: string;
-    tableId?: string; guestCount?: number; scheduledPickupAt?: Date;
-    customerPhone?: string; orderNotes?: string; idempotencyKey?: string;
+    restaurantId: string;
+    customerId: string;
+    orderType: RestaurantOrderType;
+    items: RestaurantOrder['items'];
+    paymentMethod: RestaurantPaymentMethod;
+    deliveryAddress?: RestaurantOrder['deliveryAddress'];
+    deliveryInstructions?: string;
+    deliverySlot?: RestaurantOrder['deliverySlot'];
+    couponCode?: string;
+    tableId?: string;
+    guestCount?: number;
+    scheduledPickupAt?: Date;
+    customerPhone?: string;
+    orderNotes?: string;
+    idempotencyKey?: string;
     tip?: number;
   }) {
     // Idempotency check
     if (dto.idempotencyKey) {
-      const existing = await this.orderRepo.findOne({ where: { idempotencyKey: dto.idempotencyKey } });
+      const existing = await this.orderRepo.findOne({
+        where: { idempotencyKey: dto.idempotencyKey },
+      });
       if (existing) return { success: true, order: existing, duplicate: true };
     }
 
@@ -218,10 +295,14 @@ export class RestaurantService {
      * and what it is called. This mirrors the same repair in pharmacy-service.
      */
     const requested = Array.isArray(dto.items) ? dto.items : [];
-    if (requested.length === 0) throw new BadRequestException('An order must contain at least one item');
+    if (requested.length === 0)
+      throw new BadRequestException('An order must contain at least one item');
 
     const menuItems = await this.menuItemRepo.find({
-      where: { id: In(requested.map((i) => i.itemId).filter(Boolean)), restaurantId: dto.restaurantId },
+      where: {
+        id: In(requested.map((i) => i.itemId).filter(Boolean)),
+        restaurantId: dto.restaurantId,
+      },
     });
     const menuById = new Map(menuItems.map((m) => [m.id, m]));
 
@@ -230,8 +311,12 @@ export class RestaurantService {
       const menuItem = menuById.get(requestedItem.itemId);
       // An item this restaurant does not serve is refused rather than priced at
       // whatever the caller claimed.
-      if (!menuItem) throw new BadRequestException(`Item ${requestedItem.itemId} is not on this restaurant's menu`);
-      if (!menuItem.isAvailable) throw new BadRequestException(`${menuItem.name} is currently unavailable`);
+      if (!menuItem)
+        throw new BadRequestException(
+          `Item ${requestedItem.itemId} is not on this restaurant's menu`,
+        );
+      if (!menuItem.isAvailable)
+        throw new BadRequestException(`${menuItem.name} is currently unavailable`);
 
       const quantity = Math.max(1, Math.trunc(Number(requestedItem.quantity) || 0));
       const unitPrice = Number(menuItem.price);
@@ -248,8 +333,8 @@ export class RestaurantService {
         return { groupName: chosen.groupName, selected, additionalPrice };
       });
 
-      const lineTotal = (unitPrice * quantity)
-        + customizations.reduce((sum, c) => sum + c.additionalPrice, 0);
+      const lineTotal =
+        unitPrice * quantity + customizations.reduce((sum, c) => sum + c.additionalPrice, 0);
       itemTotal += lineTotal;
 
       return {
@@ -259,22 +344,27 @@ export class RestaurantService {
         price: unitPrice,
         // The order line records a boolean; the menu records a four-way dietary
         // type. VEG and VEGAN are both vegetarian for this purpose.
-        isVeg: menuItem.dietaryType === DietaryType.VEG || menuItem.dietaryType === DietaryType.VEGAN,
+        isVeg:
+          menuItem.dietaryType === DietaryType.VEG || menuItem.dietaryType === DietaryType.VEGAN,
         ...(customizations.length ? { customizations } : {}),
-        ...(requestedItem.specialInstructions ? { specialInstructions: requestedItem.specialInstructions } : {}),
+        ...(requestedItem.specialInstructions
+          ? { specialInstructions: requestedItem.specialInstructions }
+          : {}),
       };
     });
     itemTotal = +itemTotal.toFixed(2);
 
-    const deliveryFee = dto.orderType === RestaurantOrderType.DELIVERY ? Number(restaurant.deliveryFee) : 0;
+    const deliveryFee =
+      dto.orderType === RestaurantOrderType.DELIVERY ? Number(restaurant.deliveryFee) : 0;
     const packagingFee = Number(restaurant.packagingFee);
-    const taxAmount = +(itemTotal * Number(restaurant.taxRate) / 100).toFixed(2);
+    const taxAmount = +((itemTotal * Number(restaurant.taxRate)) / 100).toFixed(2);
     // Bounded and non-negative: a negative tip would reduce `grandTotal`, and an
     // unbounded one is the same open door the line prices were.
     const requestedTip = Number(dto.tip);
-    const tip = Number.isFinite(requestedTip) && requestedTip > 0
-      ? Math.min(+requestedTip.toFixed(2), 10_000)
-      : 0;
+    const tip =
+      Number.isFinite(requestedTip) && requestedTip > 0
+        ? Math.min(+requestedTip.toFixed(2), 10_000)
+        : 0;
     let discount = 0;
 
     // Apply coupon
@@ -284,7 +374,10 @@ export class RestaurantService {
       });
       if (promo && itemTotal >= Number(promo.minOrderAmount)) {
         if (promo.type === 'PERCENTAGE') {
-          discount = Math.min(+(itemTotal * Number(promo.discountValue) / 100).toFixed(2), Number(promo.maxDiscount) || Infinity);
+          discount = Math.min(
+            +((itemTotal * Number(promo.discountValue)) / 100).toFixed(2),
+            Number(promo.maxDiscount) || Infinity,
+          );
         } else if (promo.type === 'FLAT') {
           discount = Number(promo.discountValue);
         } else if (promo.type === 'FREE_DELIVERY') {
@@ -295,26 +388,54 @@ export class RestaurantService {
       }
     }
 
-    const grandTotal = +(itemTotal + deliveryFee + packagingFee + taxAmount + tip - discount).toFixed(2);
+    const grandTotal = +(
+      itemTotal +
+      deliveryFee +
+      packagingFee +
+      taxAmount +
+      tip -
+      discount
+    ).toFixed(2);
     const orderNumber = `RST-${Date.now().toString(36).toUpperCase()}`;
 
     const order = this.orderRepo.create({
-      orderNumber, restaurantId: dto.restaurantId, customerId: dto.customerId,
-      orderType: dto.orderType, items, paymentMethod: dto.paymentMethod,
-      itemTotal, deliveryFee, packagingFee, taxAmount, tip, discount,
-      couponCode: dto.couponCode, grandTotal,
-      deliveryAddress: dto.deliveryAddress, deliveryInstructions: dto.deliveryInstructions,
-      deliverySlot: dto.deliverySlot, tableId: dto.tableId, guestCount: dto.guestCount,
-      scheduledPickupAt: dto.scheduledPickupAt, customerPhone: dto.customerPhone,
-      orderNotes: dto.orderNotes, idempotencyKey: dto.idempotencyKey,
+      orderNumber,
+      restaurantId: dto.restaurantId,
+      customerId: dto.customerId,
+      orderType: dto.orderType,
+      items,
+      paymentMethod: dto.paymentMethod,
+      itemTotal,
+      deliveryFee,
+      packagingFee,
+      taxAmount,
+      tip,
+      discount,
+      couponCode: dto.couponCode,
+      grandTotal,
+      deliveryAddress: dto.deliveryAddress,
+      deliveryInstructions: dto.deliveryInstructions,
+      deliverySlot: dto.deliverySlot,
+      tableId: dto.tableId,
+      guestCount: dto.guestCount,
+      scheduledPickupAt: dto.scheduledPickupAt,
+      customerPhone: dto.customerPhone,
+      orderNotes: dto.orderNotes,
+      idempotencyKey: dto.idempotencyKey,
       deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
       status: RestaurantOrderStatus.PLACED,
-      paymentStatus: dto.paymentMethod === RestaurantPaymentMethod.COD
-        ? RestaurantPaymentStatus.PENDING : RestaurantPaymentStatus.PENDING,
+      paymentStatus:
+        dto.paymentMethod === RestaurantPaymentMethod.COD
+          ? RestaurantPaymentStatus.PENDING
+          : RestaurantPaymentStatus.PENDING,
     });
 
     const saved = await this.orderRepo.save(order);
-    await this.kafka.publish('restaurant.order.placed', { orderId: saved.id, restaurantId: dto.restaurantId, orderType: dto.orderType });
+    await this.kafka.publish('restaurant.order.placed', {
+      orderId: saved.id,
+      restaurantId: dto.restaurantId,
+      orderType: dto.orderType,
+    });
     return { success: true, order: saved };
   }
 
@@ -334,15 +455,21 @@ export class RestaurantService {
    * — identical for every customer, and a real order placed through checkout
    * never appeared anywhere afterwards.
    */
-  async getCustomerOrders(customerId: string, opts: { status?: string; type?: string; page?: number; limit?: number } = {}) {
+  async getCustomerOrders(
+    customerId: string,
+    opts: { status?: string; type?: string; page?: number; limit?: number } = {},
+  ) {
     if (!customerId) throw new BadRequestException('customerId is required');
     const { status, type, page = 1, limit = 20 } = opts;
-    const qb = this.orderRepo.createQueryBuilder('o')
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       .leftJoinAndSelect('o.restaurant', 'r')
       .where('o.customerId = :customerId', { customerId });
     if (status && status !== 'all') qb.andWhere('o.status = :status', { status });
     if (type && type !== 'all') qb.andWhere('o.orderType = :type', { type });
-    qb.orderBy('o.createdAt', 'DESC').skip((page - 1) * limit).take(limit);
+    qb.orderBy('o.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
     const [data, total] = await qb.getManyAndCount();
     return { data, total, page, limit };
   }
@@ -365,7 +492,10 @@ export class RestaurantService {
     // `invalid input syntax for type uuid` before the second branch can match, so
     // the uuid comparison is only included when the value could be one.
     const where = RestaurantService.UUID.test(orderId)
-      ? [{ id: orderId, customerId }, { orderNumber: orderId, customerId }]
+      ? [
+          { id: orderId, customerId },
+          { orderNumber: orderId, customerId },
+        ]
       : [{ orderNumber: orderId, customerId }];
 
     const order = await this.orderRepo.findOne({ where, relations: ['restaurant'] });
@@ -384,29 +514,40 @@ export class RestaurantService {
   async getCustomerOrderTracking(customerId: string, orderId: string) {
     const order = await this.getCustomerOrderById(customerId, orderId);
 
-    const cancelled = order.status === RestaurantOrderStatus.CANCELLED
-      || order.status === RestaurantOrderStatus.RESTAURANT_REJECTED;
+    const cancelled =
+      order.status === RestaurantOrderStatus.CANCELLED ||
+      order.status === RestaurantOrderStatus.RESTAURANT_REJECTED;
 
     // Dine-in and takeaway do not pass through a courier, so their timelines end
     // at the restaurant rather than showing delivery steps that will never come.
-    const deliverySteps = order.orderType === RestaurantOrderType.DELIVERY
-      ? [
-          { key: RestaurantOrderStatus.OUT_FOR_DELIVERY, label: 'Out for delivery', at: order.pickedUpAt },
-          { key: RestaurantOrderStatus.DELIVERED, label: 'Delivered', at: order.deliveredAt },
-        ]
-      : [
-          {
-            key: order.orderType === RestaurantOrderType.TAKEAWAY
-              ? RestaurantOrderStatus.CUSTOMER_PICKED_UP
-              : RestaurantOrderStatus.SERVED,
-            label: order.orderType === RestaurantOrderType.TAKEAWAY ? 'Picked up' : 'Served',
-            at: order.completedAt,
-          },
-        ];
+    const deliverySteps =
+      order.orderType === RestaurantOrderType.DELIVERY
+        ? [
+            {
+              key: RestaurantOrderStatus.OUT_FOR_DELIVERY,
+              label: 'Out for delivery',
+              at: order.pickedUpAt,
+            },
+            { key: RestaurantOrderStatus.DELIVERED, label: 'Delivered', at: order.deliveredAt },
+          ]
+        : [
+            {
+              key:
+                order.orderType === RestaurantOrderType.TAKEAWAY
+                  ? RestaurantOrderStatus.CUSTOMER_PICKED_UP
+                  : RestaurantOrderStatus.SERVED,
+              label: order.orderType === RestaurantOrderType.TAKEAWAY ? 'Picked up' : 'Served',
+              at: order.completedAt,
+            },
+          ];
 
     const steps = [
       { key: RestaurantOrderStatus.PLACED, label: 'Order placed', at: order.createdAt },
-      { key: RestaurantOrderStatus.RESTAURANT_ACCEPTED, label: 'Accepted by restaurant', at: order.acceptedAt },
+      {
+        key: RestaurantOrderStatus.RESTAURANT_ACCEPTED,
+        label: 'Accepted by restaurant',
+        at: order.acceptedAt,
+      },
       { key: RestaurantOrderStatus.PREPARING, label: 'Preparing', at: null as Date | null },
       { key: RestaurantOrderStatus.READY_FOR_PICKUP, label: 'Ready', at: order.preparedAt },
       ...deliverySteps,
@@ -443,7 +584,7 @@ export class RestaurantService {
         at: s.at ?? null,
         // A cancelled order stops where it stopped: nothing beyond the last
         // recorded step should read as completed.
-        done: cancelled ? !!s.at : (!!s.at || (reached >= 0 && i <= reached)),
+        done: cancelled ? !!s.at : !!s.at || (reached >= 0 && i <= reached),
       })),
     };
   }
@@ -527,18 +668,25 @@ export class RestaurantService {
       items: available,
       unavailableItems: unavailable,
       estimatedTotal: available.reduce(
-        (sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0), 0,
+        (sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0),
+        0,
       ),
     };
   }
 
-  async getOrdersByRestaurant(restaurantId: string, opts: { status?: string; type?: string; page?: number; limit?: number }) {
+  async getOrdersByRestaurant(
+    restaurantId: string,
+    opts: { status?: string; type?: string; page?: number; limit?: number },
+  ) {
     const { status, type, page = 1, limit = 20 } = opts;
-    const qb = this.orderRepo.createQueryBuilder('o')
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       .where('o.restaurantId = :restaurantId', { restaurantId });
     if (status && status !== 'all') qb.andWhere('o.status = :status', { status });
     if (type && type !== 'all') qb.andWhere('o.orderType = :type', { type });
-    qb.orderBy('o.createdAt', 'DESC').skip((page - 1) * limit).take(limit);
+    qb.orderBy('o.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
     const [data, total] = await qb.getManyAndCount();
     return { data, total, page, limit };
   }
@@ -549,7 +697,12 @@ export class RestaurantService {
     return order;
   }
 
-  async updateOrderStatus(restaurantId: string, orderId: string, newStatus: RestaurantOrderStatus, meta?: { reason?: string; cancelledBy?: string }) {
+  async updateOrderStatus(
+    restaurantId: string,
+    orderId: string,
+    newStatus: RestaurantOrderStatus,
+    meta?: { reason?: string; cancelledBy?: string },
+  ) {
     const order = await this.getOrderById(restaurantId, orderId);
     const allowed = ORDER_STATUS_TRANSITIONS[order.status];
     if (!allowed?.includes(newStatus)) {
@@ -565,7 +718,11 @@ export class RestaurantService {
       order.cancelledBy = meta?.cancelledBy || null;
     }
     const saved = await this.orderRepo.save(order);
-    await this.kafka.publish('restaurant.order.status_changed', { orderId, newStatus, restaurantId });
+    await this.kafka.publish('restaurant.order.status_changed', {
+      orderId,
+      newStatus,
+      restaurantId,
+    });
     return { success: true, order: saved };
   }
 
@@ -573,26 +730,50 @@ export class RestaurantService {
   //  Reservations
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async bookTable(restaurantId: string, dto: {
-    customerId: string; customerName: string; customerPhone?: string; customerEmail?: string;
-    date: string; time: string; guests: number; tableId?: string;
-    seatingPreference?: string; occasion?: string; specialRequests?: string;
-  }) {
+  async bookTable(
+    restaurantId: string,
+    dto: {
+      customerId: string;
+      customerName: string;
+      customerPhone?: string;
+      customerEmail?: string;
+      date: string;
+      time: string;
+      guests: number;
+      tableId?: string;
+      seatingPreference?: string;
+      occasion?: string;
+      specialRequests?: string;
+    },
+  ) {
     // Check for conflicting reservation
     if (dto.tableId) {
       const existing = await this.reservationRepo.findOne({
-        where: { restaurantId, tableId: dto.tableId, date: dto.date, time: dto.time,
-          status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]) },
+        where: {
+          restaurantId,
+          tableId: dto.tableId,
+          date: dto.date,
+          time: dto.time,
+          status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
+        },
       });
-      if (existing) throw new ConflictException('This table is already booked for the selected time');
+      if (existing)
+        throw new ConflictException('This table is already booked for the selected time');
     }
 
     const bookingRef = `TBK-${Date.now().toString(36).toUpperCase()}`;
     const reservation = this.reservationRepo.create({
-      bookingRef, restaurantId, ...dto, status: ReservationStatus.PENDING,
+      bookingRef,
+      restaurantId,
+      ...dto,
+      status: ReservationStatus.PENDING,
     });
     const saved = await this.reservationRepo.save(reservation);
-    await this.kafka.publish('restaurant.table.booked', { id: saved.id, restaurantId, customerId: dto.customerId });
+    await this.kafka.publish('restaurant.table.booked', {
+      id: saved.id,
+      restaurantId,
+      customerId: dto.customerId,
+    });
     return { success: true, booking: saved };
   }
 
@@ -603,7 +784,11 @@ export class RestaurantService {
     return this.reservationRepo.find({ where, order: { date: 'ASC', time: 'ASC' } });
   }
 
-  async updateReservationStatus(reservationId: string, status: ReservationStatus, meta?: { reason?: string; cancelledBy?: string }) {
+  async updateReservationStatus(
+    reservationId: string,
+    status: ReservationStatus,
+    meta?: { reason?: string; cancelledBy?: string },
+  ) {
     const res = await this.reservationRepo.findOne({ where: { id: reservationId } });
     if (!res) throw new NotFoundException(`Reservation ${reservationId} not found`);
     res.status = status;
@@ -624,19 +809,31 @@ export class RestaurantService {
   async cancelReservation(reservationId: string, customerId: string, reason?: string) {
     const res = await this.reservationRepo.findOne({ where: { id: reservationId, customerId } });
     if (!res) throw new NotFoundException('Reservation not found');
-    return this.updateReservationStatus(reservationId, ReservationStatus.CANCELLED, { reason, cancelledBy: 'customer' });
+    return this.updateReservationStatus(reservationId, ReservationStatus.CANCELLED, {
+      reason,
+      cancelledBy: 'customer',
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  Reviews
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async submitReview(dto: { restaurantId: string; customerId: string; customerName: string; orderId?: string; rating: number; comment?: string; photos?: string[] }) {
+  async submitReview(dto: {
+    restaurantId: string;
+    customerId: string;
+    customerName: string;
+    orderId?: string;
+    rating: number;
+    comment?: string;
+    photos?: string[];
+  }) {
     const review = this.reviewRepo.create(dto);
     const saved = await this.reviewRepo.save(review);
 
     // Update restaurant aggregate rating
-    const { avg, count } = await this.reviewRepo.createQueryBuilder('r')
+    const { avg, count } = await this.reviewRepo
+      .createQueryBuilder('r')
       .select('AVG(r.rating)', 'avg')
       .addSelect('COUNT(r.id)', 'count')
       .where('r.restaurantId = :rid', { rid: dto.restaurantId })
@@ -654,7 +851,10 @@ export class RestaurantService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async getTables(restaurantId: string) {
-    return this.tableRepo.find({ where: { restaurantId }, order: { area: 'ASC', sortOrder: 'ASC' } });
+    return this.tableRepo.find({
+      where: { restaurantId },
+      order: { area: 'ASC', sortOrder: 'ASC' },
+    });
   }
 
   async updateTable(restaurantId: string, tableId: string, dto: Partial<RestaurantTable>) {
@@ -714,24 +914,32 @@ export class RestaurantService {
 
   async getAnalytics(restaurantId: string) {
     const totalOrders = await this.orderRepo.count({ where: { restaurantId } });
-    const completedOrders = await this.orderRepo.count({ where: { restaurantId, status: RestaurantOrderStatus.COMPLETED } });
-    const cancelledOrders = await this.orderRepo.count({ where: { restaurantId, status: RestaurantOrderStatus.CANCELLED } });
+    const completedOrders = await this.orderRepo.count({
+      where: { restaurantId, status: RestaurantOrderStatus.COMPLETED },
+    });
+    const cancelledOrders = await this.orderRepo.count({
+      where: { restaurantId, status: RestaurantOrderStatus.CANCELLED },
+    });
 
-    const revenueResult = await this.orderRepo.createQueryBuilder('o')
+    const revenueResult = await this.orderRepo
+      .createQueryBuilder('o')
       .select('COALESCE(SUM(o.grandTotal), 0)', 'totalRevenue')
       .addSelect('COALESCE(AVG(o.grandTotal), 0)', 'avgOrderValue')
       .where('o.restaurantId = :rid', { rid: restaurantId })
       .andWhere('o.status = :status', { status: RestaurantOrderStatus.COMPLETED })
       .getRawOne();
 
-    const ratingResult = await this.reviewRepo.createQueryBuilder('r')
+    const ratingResult = await this.reviewRepo
+      .createQueryBuilder('r')
       .select('COALESCE(AVG(r.rating), 0)', 'avgRating')
       .addSelect('COUNT(r.id)', 'totalReviews')
       .where('r.restaurantId = :rid', { rid: restaurantId })
       .getRawOne();
 
     return {
-      totalOrders, completedOrders, cancelledOrders,
+      totalOrders,
+      completedOrders,
+      cancelledOrders,
       cancellationRate: totalOrders > 0 ? +((cancelledOrders / totalOrders) * 100).toFixed(1) : 0,
       totalRevenue: parseFloat(revenueResult.totalRevenue),
       avgOrderValue: parseFloat(revenueResult.avgOrderValue),
@@ -752,19 +960,28 @@ export class RestaurantService {
   }
 
   async approveRestaurant(restaurantId: string, adminId: string) {
-    await this.restaurantRepo.update(restaurantId, { status: RestaurantStatus.APPROVED, isOnline: true });
+    await this.restaurantRepo.update(restaurantId, {
+      status: RestaurantStatus.APPROVED,
+      isOnline: true,
+    });
     await this.kafka.publish('restaurant.approved', { id: restaurantId, approvedBy: adminId });
     this.logger.log(`Restaurant ${restaurantId} approved by ${adminId}`);
     return { success: true, restaurantId, message: 'Restaurant approved and activated' };
   }
 
   async rejectRestaurant(restaurantId: string, reason: string) {
-    await this.restaurantRepo.update(restaurantId, { status: RestaurantStatus.PENDING_KYC, rejectionReason: reason });
+    await this.restaurantRepo.update(restaurantId, {
+      status: RestaurantStatus.PENDING_KYC,
+      rejectionReason: reason,
+    });
     return { success: true, restaurantId, message: 'Restaurant rejected' };
   }
 
   async suspendRestaurant(restaurantId: string) {
-    await this.restaurantRepo.update(restaurantId, { status: RestaurantStatus.SUSPENDED, isOnline: false });
+    await this.restaurantRepo.update(restaurantId, {
+      status: RestaurantStatus.SUSPENDED,
+      isOnline: false,
+    });
     return { success: true };
   }
 
@@ -774,7 +991,10 @@ export class RestaurantService {
   }
 
   async blockRestaurant(restaurantId: string) {
-    await this.restaurantRepo.update(restaurantId, { status: RestaurantStatus.BLOCKED, isOnline: false });
+    await this.restaurantRepo.update(restaurantId, {
+      status: RestaurantStatus.BLOCKED,
+      isOnline: false,
+    });
     return { success: true };
   }
 
@@ -788,7 +1008,10 @@ export class RestaurantService {
     const where: any = {};
     if (status && status !== 'all') where.status = status;
     const [data, total] = await this.restaurantRepo.findAndCount({
-      where, order: { createdAt: 'DESC' }, take: limit, skip: (page - 1) * limit,
+      where,
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: (page - 1) * limit,
     });
     return { data, total, page, limit };
   }
@@ -825,17 +1048,22 @@ export class RestaurantService {
     if (cached) return cached;
 
     // Simple Haversine approximation — replace with PostGIS ST_DWithin for production
-    const restaurants = await this.restaurantRepo.createQueryBuilder('r')
+    const restaurants = await this.restaurantRepo
+      .createQueryBuilder('r')
       .where('r.status = :status', { status: RestaurantStatus.APPROVED })
       .andWhere('r.isOnline = true')
       .orderBy('r.rating', 'DESC')
       .take(50)
       .getMany();
 
-    const filtered = restaurants.filter(r => {
-      const dLat = (Number(r.latitude) - lat) * Math.PI / 180;
-      const dLng = (Number(r.longitude) - lng) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat * Math.PI / 180) * Math.cos(Number(r.latitude) * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    const filtered = restaurants.filter((r) => {
+      const dLat = ((Number(r.latitude) - lat) * Math.PI) / 180;
+      const dLng = ((Number(r.longitude) - lng) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat * Math.PI) / 180) *
+          Math.cos((Number(r.latitude) * Math.PI) / 180) *
+          Math.sin(dLng / 2) ** 2;
       const d = 2 * 6371 * Math.asin(Math.sqrt(a));
       return d <= radiusKm;
     });
@@ -864,7 +1092,8 @@ export class RestaurantService {
   }
 
   async getCuisines() {
-    const result = await this.restaurantRepo.createQueryBuilder('r')
+    const result = await this.restaurantRepo
+      .createQueryBuilder('r')
       .select("unnest(string_to_array(r.cuisines, ','))", 'cuisine')
       .addSelect('COUNT(*)', 'count')
       .where('r.status = :status', { status: RestaurantStatus.APPROVED })
@@ -909,7 +1138,11 @@ export class RestaurantService {
     });
   }
 
-  async updateInventoryItem(restaurantId: string, itemId: string, dto: { stockQuantity?: number; isAvailable?: boolean }) {
+  async updateInventoryItem(
+    restaurantId: string,
+    itemId: string,
+    dto: { stockQuantity?: number; isAvailable?: boolean },
+  ) {
     await this.menuItemRepo.update({ id: itemId, restaurantId }, dto);
     return { success: true };
   }
@@ -949,7 +1182,8 @@ export class RestaurantService {
 
   /** Approved and currently open for business — the only rows a customer should see. */
   private liveRestaurants() {
-    return this.restaurantRepo.createQueryBuilder('r')
+    return this.restaurantRepo
+      .createQueryBuilder('r')
       .where('r.status = :status', { status: RestaurantStatus.APPROVED })
       .andWhere('r.isOnline = true')
       .andWhere('r.isTemporarilyClosed = false');
@@ -996,7 +1230,8 @@ export class RestaurantService {
       scope().andWhere('r.ratingCount > 0').orderBy('r.rating', 'DESC').take(12).getMany(),
       scope().orderBy('r.createdAt', 'DESC').take(12).getMany(),
       this.getCuisines(),
-      this.promotionRepo.createQueryBuilder('p')
+      this.promotionRepo
+        .createQueryBuilder('p')
         .innerJoin('p.restaurant', 'r')
         .where('p.isActive = true')
         .andWhere('p.validFrom <= NOW()')
@@ -1011,9 +1246,21 @@ export class RestaurantService {
       // Sections come back even when empty, so the page can tell "nothing here
       // yet" apart from "the request failed".
       sections: [
-        { key: 'featured', title: 'Most ordered', restaurants: featured.map((r) => this.restaurantCard(r)) },
-        { key: 'top-rated', title: 'Top rated', restaurants: topRated.map((r) => this.restaurantCard(r)) },
-        { key: 'new', title: 'New on KARTSEEK', restaurants: newest.map((r) => this.restaurantCard(r)) },
+        {
+          key: 'featured',
+          title: 'Most ordered',
+          restaurants: featured.map((r) => this.restaurantCard(r)),
+        },
+        {
+          key: 'top-rated',
+          title: 'Top rated',
+          restaurants: topRated.map((r) => this.restaurantCard(r)),
+        },
+        {
+          key: 'new',
+          title: 'New on KARTSEEK',
+          restaurants: newest.map((r) => this.restaurantCard(r)),
+        },
       ],
       cuisines,
       promotions: promotions.map((p) => ({
@@ -1046,14 +1293,27 @@ export class RestaurantService {
     };
 
     const defs = [
-      { key: 'quick-bites', title: 'Ready in 30 minutes',
-        apply: (qb: any) => qb.andWhere('r.avgPrepTime <= 30').orderBy('r.avgPrepTime', 'ASC') },
-      { key: 'free-delivery', title: 'Free delivery',
-        apply: (qb: any) => qb.andWhere('(r.deliveryFee IS NULL OR r.deliveryFee = 0)').orderBy('r.rating', 'DESC') },
-      { key: 'highly-rated', title: 'Rated 4.5 and above',
-        apply: (qb: any) => qb.andWhere('r.rating >= 4.5').orderBy('r.rating', 'DESC') },
-      { key: 'dine-in', title: 'Book a table',
-        apply: (qb: any) => qb.andWhere('r.tableBookingEnabled = true').orderBy('r.rating', 'DESC') },
+      {
+        key: 'quick-bites',
+        title: 'Ready in 30 minutes',
+        apply: (qb: any) => qb.andWhere('r.avgPrepTime <= 30').orderBy('r.avgPrepTime', 'ASC'),
+      },
+      {
+        key: 'free-delivery',
+        title: 'Free delivery',
+        apply: (qb: any) =>
+          qb.andWhere('(r.deliveryFee IS NULL OR r.deliveryFee = 0)').orderBy('r.rating', 'DESC'),
+      },
+      {
+        key: 'highly-rated',
+        title: 'Rated 4.5 and above',
+        apply: (qb: any) => qb.andWhere('r.rating >= 4.5').orderBy('r.rating', 'DESC'),
+      },
+      {
+        key: 'dine-in',
+        title: 'Book a table',
+        apply: (qb: any) => qb.andWhere('r.tableBookingEnabled = true').orderBy('r.rating', 'DESC'),
+      },
     ];
 
     const collections = await Promise.all(
@@ -1072,7 +1332,8 @@ export class RestaurantService {
 
   /** Most-ordered available dishes across every approved restaurant. */
   async getPopularDishes(limit = 20, regionCode?: string) {
-    const qb = this.menuItemRepo.createQueryBuilder('m')
+    const qb = this.menuItemRepo
+      .createQueryBuilder('m')
       // menu_items.restaurantId is a denormalised copy declared without an
       // explicit type, so TypeORM made it varchar while restaurants.id is
       // uuid. Postgres will not compare the two without a cast.
@@ -1085,10 +1346,18 @@ export class RestaurantService {
 
     const rows = await qb
       .select([
-        'm.id AS id', 'm.name AS name', 'm.slug AS slug', 'm.price AS price',
-        'm.imageUrl AS "imageUrl"', 'm.dietaryType AS "dietaryType"',
-        'm.rating AS rating', 'm.orderCount AS "orderCount"', 'm.prepTime AS "prepTime"',
-        'r.id AS "restaurantId"', 'r.name AS "restaurantName"', 'r.slug AS "restaurantSlug"',
+        'm.id AS id',
+        'm.name AS name',
+        'm.slug AS slug',
+        'm.price AS price',
+        'm.imageUrl AS "imageUrl"',
+        'm.dietaryType AS "dietaryType"',
+        'm.rating AS rating',
+        'm.orderCount AS "orderCount"',
+        'm.prepTime AS "prepTime"',
+        'r.id AS "restaurantId"',
+        'r.name AS "restaurantName"',
+        'r.slug AS "restaurantSlug"',
       ])
       .orderBy('m.orderCount', 'DESC')
       .addOrderBy('m.rating', 'DESC')
@@ -1117,31 +1386,42 @@ export class RestaurantService {
     const like = '%' + term + '%';
 
     const rQb = this.scopeToRegion(
-      this.liveRestaurants().andWhere('r.name ILIKE :like', { like }), regionCode);
+      this.liveRestaurants().andWhere('r.name ILIKE :like', { like }),
+      regionCode,
+    );
 
     const [restaurants, dishes, cuisines] = await Promise.all([
       rQb.take(6).getMany(),
-      this.menuItemRepo.createQueryBuilder('m')
+      this.menuItemRepo
+        .createQueryBuilder('m')
         // menu_items.restaurantId is a denormalised copy declared without an
-      // explicit type, so TypeORM made it varchar while restaurants.id is
-      // uuid. Postgres will not compare the two without a cast.
-      .innerJoin(Restaurant, 'r', 'r.id::text = m.restaurantId')
+        // explicit type, so TypeORM made it varchar while restaurants.id is
+        // uuid. Postgres will not compare the two without a cast.
+        .innerJoin(Restaurant, 'r', 'r.id::text = m.restaurantId')
         .where('m.name ILIKE :like', { like })
         .andWhere('m.isAvailable = true')
         .andWhere('r.status = :status', { status: RestaurantStatus.APPROVED })
         .select([
-          'm.id AS id', 'm.name AS name', 'm.slug AS slug',
-          'r.id AS "restaurantId"', 'r.name AS "restaurantName"',
+          'm.id AS id',
+          'm.name AS name',
+          'm.slug AS slug',
+          'r.id AS "restaurantId"',
+          'r.name AS "restaurantName"',
         ])
         .limit(6)
         .getRawMany(),
       this.getCuisines().then((cs) =>
-        cs.filter((c) => (c.name ?? '').toLowerCase().includes(term.toLowerCase())).slice(0, 6)),
+        cs.filter((c) => (c.name ?? '').toLowerCase().includes(term.toLowerCase())).slice(0, 6),
+      ),
     ]);
 
     return {
       restaurants: restaurants.map((r) => ({
-        id: r.id, name: r.name, slug: r.slug, cuisines: r.cuisines, logoUrl: r.logoUrl,
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        cuisines: r.cuisines,
+        logoUrl: r.logoUrl,
       })),
       dishes,
       cuisines,
@@ -1165,7 +1445,8 @@ export class RestaurantService {
       take,
     });
 
-    const breakdown = await this.reviewRepo.createQueryBuilder('rv')
+    const breakdown = await this.reviewRepo
+      .createQueryBuilder('rv')
       .select('rv.rating', 'rating')
       .addSelect('COUNT(*)', 'count')
       .where('rv.restaurantId = :restaurantId', { restaurantId })
