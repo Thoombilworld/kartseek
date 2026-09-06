@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import { UtensilsCrossed, Search, Star, Eye, Ban, CheckCircle, Clock, XCircle, DollarSign, AlertTriangle, ChevronDown, ChevronUp, Phone, Bike, ShoppingBag, Utensils, CalendarDays, ClipboardCheck, Wifi, WifiOff } from 'lucide-react';
 import { adminRestaurantApi } from '@/lib/api/admin-restaurant';
@@ -61,7 +62,7 @@ export default function RestauraRTOdminPage(){
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm"><DollarSign className="w-5 h-5 text-emerald-500"/><p className="text-2xl font-black text-slate-900 mt-3">{formatPrice(regionFiltered.reduce((s,r)=>s+r.revenue,0))}</p><p className="text-sm text-slate-500 font-medium mt-1">Total Revenue</p></div>
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm"><Clock className="w-5 h-5 text-blue-500"/><p className="text-2xl font-black text-slate-900 mt-3">31 min</p><p className="text-sm text-slate-500 font-medium mt-1">Avg Delivery</p></div>
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm"><AlertTriangle className="w-5 h-5 text-red-500"/><p className="text-2xl font-black text-slate-900 mt-3">{regionFiltered.filter(r=>r.complaints>10).length}</p><p className="text-sm text-slate-500 font-medium mt-1">Quality Alerts</p></div>
-      <a href="/admin/restaurant/approvals" className="bg-blue-50 border border-blue-200 p-5 rounded-xl shadow-sm hover:bg-blue-100 transition-colors block"><ClipboardCheck className="w-5 h-5 text-blue-600"/><p className="text-2xl font-black text-blue-900 mt-3">{regionFiltered.filter(r=>r.status==='pending').length}</p><p className="text-sm text-blue-600 font-medium mt-1">Pending Approvals</p></a>
+      <Link href="/admin/restaurant/approvals" className="bg-blue-50 border border-blue-200 p-5 rounded-xl shadow-sm hover:bg-blue-100 transition-colors block"><ClipboardCheck className="w-5 h-5 text-blue-600"/><p className="text-2xl font-black text-blue-900 mt-3">{regionFiltered.filter(r=>r.status==='pending').length}</p><p className="text-sm text-blue-600 font-medium mt-1">Pending Approvals</p></Link>
     </div>
     {/* Order Type Breakdown */}
     <div className="grid grid-cols-3 gap-4">
@@ -108,7 +109,7 @@ export default function RestauraRTOdminPage(){
             {r.status!=='pending'&&r.status!=='blocked'&&<button onClick={()=>toggle(r.id,'suspended')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1 ${r.status==='suspended'?'bg-emerald-600 hover:bg-emerald-700 text-white':'bg-amber-100 hover:bg-amber-200 text-amber-700'}`}>{r.status==='suspended'?<><CheckCircle className="w-3.5 h-3.5"/> Unsuspend</>:<><Clock className="w-3.5 h-3.5"/> Suspend</>}</button>}
             <button onClick={()=>toggle(r.id,'blocked')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1 ${r.status==='blocked'?'bg-emerald-600 hover:bg-emerald-700 text-white':'bg-red-600 hover:bg-red-700 text-white'}`}>{r.status==='blocked'?<><CheckCircle className="w-3.5 h-3.5"/> Unblock</>:<><Ban className="w-3.5 h-3.5"/> Block</>}</button>
             <a href="/seller/restaurant/dashboard" target="_blank" className="bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 flex items-center gap-1"><Eye className="w-3.5 h-3.5"/> View Portal</a>
-            <a href="/admin/restaurant/approvals" className="bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 flex items-center gap-1"><Utensils className="w-3.5 h-3.5"/> Menu Audit</a>
+            <Link href="/admin/restaurant/approvals" className="bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 flex items-center gap-1"><Utensils className="w-3.5 h-3.5"/> Menu Audit</Link>
           </div>
         </td></tr>)}
       </React.Fragment>))}</tbody></table></div></div>

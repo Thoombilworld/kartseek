@@ -13,7 +13,7 @@
 - Tidy in place: no directory re-layout; `apps/`, `modules/`, `packages/` stay where they are (spec §2).
 - The registry `services.yaml` is the only source of ports, paths and basePaths; nothing new hard-codes a port (spec §2).
 - File names are kebab-case for TypeScript and TSX; Dart keeps snake_case (spec §2, conventions D3).
-- Exactly one `eslint` and one `typescript-eslint` version in `npm ls`, declared at the root: `eslint@^10.9.1`, `typescript-eslint@^8.69.0`, `@eslint/js@^10.9.1` (spec §6.1).
+- Exactly one `eslint` and one `typescript-eslint` version in `npm ls`, declared at the root: `eslint@^10.9.1`, `typescript-eslint@^8.69.0`, `@eslint/js@^10.0.1` (its own version line; ESLint 10 no longer depends on it) (spec §6.1).
 - `react-hooks/rules-of-hooks` stays an error; every other `react-hooks/*` rule the Next preset enables is a warning; Next-workspace `lint` scripts are `eslint .` with no `--max-warnings` (spec §6.1).
 - Every Next workspace's `type-check` is `next typegen && tsc --noEmit`, and its `tsconfig.json` declares `"types": ["jest", "node"]` (spec §5.3, §6.3).
 - Never delete or reinstall `node_modules` by hand; install only from the repository root; never delete `package-lock.json` (memory: npm workspace install hygiene).
@@ -600,7 +600,7 @@ Write this script to the scratchpad as `align-eslint-deps.js` (Write tool, not a
 const fs = require('fs');
 const write = (p, j) => fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
 const root = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-root.devDependencies['@eslint/js'] = '^10.9.1';
+root.devDependencies['@eslint/js'] = '^10.0.1';
 root.devDependencies['eslint'] = '^10.9.1';
 root.devDependencies['typescript-eslint'] = '^8.69.0';
 root.devDependencies = Object.fromEntries(Object.entries(root.devDependencies).sort(([a], [b]) => a.localeCompare(b)));
@@ -621,7 +621,7 @@ Run:
 ```bash
 npm install 2>&1 | tail -3 && npm ls eslint typescript-eslint @eslint/js 2>/dev/null | grep -E '(eslint|typescript-eslint|@eslint/js)@' | grep -v deduped | sort -u && ls -d apps/web/node_modules/eslint apps/api/node_modules/eslint modules/grocery/frontend/node_modules/eslint 2>&1 | grep -c 'No such file'
 ```
-Expected: exactly three lines — `@eslint/js@10.9.1` (or newer 10.x), `eslint@10.9.1` (or newer 10.x), `typescript-eslint@8.69.0` (or newer) — and `3` (no nested copies). If a nested copy survives, run `npm prune` once and re-check. `git status --short` should show only `package.json`, `package-lock.json` and the ten workspace manifests.
+Expected: exactly three lines — `@eslint/js@10.0.1` (or newer 10.x), `eslint@10.9.1` (or newer 10.x), `typescript-eslint@8.69.0` (or newer) — and `3` (no nested copies). If a nested copy survives, run `npm prune` once and re-check. `git status --short` should show only `package.json`, `package-lock.json` and the ten workspace manifests.
 
 - [ ] **Step 3: Write the shared Next config**
 

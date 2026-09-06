@@ -125,10 +125,7 @@
     "@types/pg": "^8.21.0",
     "@types/supertest": "^7.2.0",
     "@types/uuid": "^11.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.62.0",
-    "@typescript-eslint/parser": "^8.62.0",
     "concurrently": "^10.0.3",
-    "eslint": "^10.5.0",
     "supertest": "^7.2.2",
     "typescript": "^6.0.3"
   },

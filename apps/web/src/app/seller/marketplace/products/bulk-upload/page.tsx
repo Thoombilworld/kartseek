@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileText, Download, AlertCircle, CheckCircle, XCircle, HelpCircle, Loader2, File } from 'lucide-react';
 import { useSeller } from '@/lib/contexts/seller-context';
@@ -328,7 +329,7 @@ export default function BulkUploadPage() {
           )}
           <div className="flex gap-3 justify-center mt-6">
             <button onClick={() => { setStep('upload'); setParsedRows([]); setFileName(''); }} className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold">Upload More</button>
-            <a href="/seller/marketplace/products" className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700">View Products</a>
+            <Link href="/seller/marketplace/products" className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700">View Products</Link>
           </div>
         </div>
       )}

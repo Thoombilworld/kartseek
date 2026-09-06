@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import React from 'react';
 import {
   Users, Car, DollarSign, Star, TrendingUp, Clock, AlertTriangle,
@@ -175,9 +176,9 @@ export default function VendorDashboard() {
           <h3 className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
             <MapPin className="w-4 h-4 text-blue-500" /> Recent Trips
           </h3>
-          <a href="/seller/taxi/trips" className="text-xs text-amber-600 font-bold hover:text-amber-700 flex items-center gap-0.5">
+          <Link href="/seller/taxi/trips" className="text-xs text-amber-600 font-bold hover:text-amber-700 flex items-center gap-0.5">
             View All <ArrowUpRight className="w-3 h-3" />
-          </a>
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">

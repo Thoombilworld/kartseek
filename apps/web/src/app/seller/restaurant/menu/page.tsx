@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import { Search, RefreshCw, Download, Filter, BookOpen, Plus } from 'lucide-react';
 import { vendorRestaurantApi } from '@/lib/api/vendor-restaurant';
@@ -69,7 +70,7 @@ export default function MenuManagementPage() {
           <p className="text-sm text-slate-500 mt-1">Manage your restaurant menu</p>
         </div>
         <div className="flex gap-2">
-          <a href="/seller/restaurant/menu-items/add" className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"><Plus className="w-4 h-4" />Add Menu Item</a>
+          <Link href="/seller/restaurant/menu-items/add" className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"><Plus className="w-4 h-4" />Add Menu Item</Link>
           <button className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition-colors"><Download className="w-4 h-4" />Export</button>
         </div>
       </div>

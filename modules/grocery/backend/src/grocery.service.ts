@@ -278,7 +278,7 @@ export class GroceryService {
     const cached = await this.redis.getJson(cacheKey);
     if (cached) return cached;
 
-    let cat: GroceryCategory | null = null;
+    let cat: GroceryCategory | null;
     try {
       cat = await this.categoryRepo.findOne({
         where: { id },
