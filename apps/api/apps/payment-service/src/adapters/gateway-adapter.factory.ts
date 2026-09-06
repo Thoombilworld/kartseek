@@ -9,6 +9,7 @@ import { UpiAdapter } from './upi.adapter';
 import { MadaAdapter } from './mada.adapter';
 import { WalletAdapter } from './wallet.adapter';
 import { RedisService } from '@app/redis';
+import { getRegionConfig } from '@app/region';
 
 /**
  * GatewayAdapterFactory — Resolves the correct payment gateway adapter
@@ -68,7 +69,9 @@ export class GatewayAdapterFactory {
       const fallbackGateway = this.getDefaultGateway(countryCode, methodType);
       const adapter = this.adapters.get(fallbackGateway);
       if (adapter) {
-        this.logger.warn(`Using fallback gateway '${fallbackGateway}' for ${countryCode}/${methodType}`);
+        this.logger.warn(
+          `Using fallback gateway '${fallbackGateway}' for ${countryCode}/${methodType}`,
+        );
         return adapter;
       }
 
@@ -102,15 +105,13 @@ export class GatewayAdapterFactory {
    * Get all available payment methods for a country.
    * Used by frontend to render the checkout payment method selector.
    */
-  async getAvailableMethods(
-    countryCode: string,
-    module?: string,
-  ): Promise<PaymentMethodInfo[]> {
+  async getAvailableMethods(countryCode: string, module?: string): Promise<PaymentMethodInfo[]> {
     const cacheKey = `payment:methods:${countryCode}:${module || 'all'}`;
     const cached = await this.redis.getJson<PaymentMethodInfo[]>(cacheKey);
     if (cached) return cached;
 
-    let query = this.configRepo.createQueryBuilder('pmc')
+    let query = this.configRepo
+      .createQueryBuilder('pmc')
       .where('pmc.countryCode = :countryCode', { countryCode })
       .andWhere('pmc.isActive = :active', { active: true })
       .orderBy('pmc.sortOrder', 'ASC');
@@ -125,15 +126,32 @@ export class GatewayAdapterFactory {
 
     const configs = await query.getMany();
 
-    const methods: PaymentMethodInfo[] = configs.map(c => ({
-      methodType: c.methodType,
-      gateway: c.gateway,
-      displayName: c.displayName,
-      iconUrl: c.iconUrl,
-      isDefault: c.isDefault,
-      minAmount: Number(c.minAmount),
-      maxAmount: Number(c.maxAmount)
-    }));
+    // `payment_method_configs` is per-market configuration that has to be
+    // seeded, and it never was: the table is empty in every environment, so
+    // this answered "no methods" for every country and a checkout that asked
+    // the API what it could pay with was told nothing. The region registry
+    // already carries each market's methods; it is the answer until rows
+    // exist, and a seeded market overrides it row by row.
+    const methods: PaymentMethodInfo[] =
+      configs.length > 0
+        ? configs.map((c) => ({
+            methodType: c.methodType,
+            gateway: c.gateway,
+            displayName: c.displayName,
+            iconUrl: c.iconUrl,
+            isDefault: c.isDefault,
+            minAmount: Number(c.minAmount),
+            maxAmount: Number(c.maxAmount),
+          }))
+        : (getRegionConfig(countryCode)?.supportedPaymentMethods ?? []).map((m) => ({
+            methodType: m.methodType,
+            gateway: m.gateway,
+            displayName: m.displayName,
+            iconUrl: null,
+            isDefault: Boolean(m.isDefault),
+            minAmount: 0,
+            maxAmount: 999999,
+          }));
 
     // Cache for 5 minutes
     await this.redis.setJson(cacheKey, methods, 300);
@@ -145,18 +163,21 @@ export class GatewayAdapterFactory {
    */
   async getDefaultMethod(countryCode: string): Promise<PaymentMethodInfo | null> {
     const methods = await this.getAvailableMethods(countryCode);
-    return methods.find(m => m.isDefault) || methods[0] || null;
+    return methods.find((m) => m.isDefault) || methods[0] || null;
   }
 
   // ── Private Helpers ─────────────────────────────────────────────────────────
 
-  private async getMethodConfig(countryCode: string, methodType: string): Promise<PaymentMethodConfig | null> {
+  private async getMethodConfig(
+    countryCode: string,
+    methodType: string,
+  ): Promise<PaymentMethodConfig | null> {
     const cacheKey = `payment:config:${countryCode}:${methodType}`;
     const cached = await this.redis.getJson<PaymentMethodConfig>(cacheKey);
     if (cached) return cached;
 
     const config = await this.configRepo.findOne({
-      where: { countryCode, methodType, isActive: true }
+      where: { countryCode, methodType, isActive: true },
     });
 
     if (config) {
@@ -180,7 +201,7 @@ export class GatewayAdapterFactory {
       SA: { card: 'stripe', mada: 'mada', sadad: 'mada', apple_pay: 'stripe' },
       US: { card: 'stripe', apple_pay: 'stripe', google_pay: 'stripe', ach: 'stripe' },
       UK: { card: 'stripe', apple_pay: 'stripe', google_pay: 'stripe' },
-      SG: { card: 'stripe', apple_pay: 'stripe', grabpay: 'stripe', paynow: 'stripe' }
+      SG: { card: 'stripe', apple_pay: 'stripe', grabpay: 'stripe', paynow: 'stripe' },
     };
 
     return countryDefaults[countryCode]?.[methodType] || 'stripe';
