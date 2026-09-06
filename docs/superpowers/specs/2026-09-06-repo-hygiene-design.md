@@ -513,6 +513,15 @@ Follow-ups the review surfaced, deliberately not done in this pass:
 - `libs/storage/src/storage.service.ts` returns a CDN URL even when the
   upload failed ("fallback to simulated URL so the API doesn't crash") — the
   same family.
+- `SKIP_DB=true` is accepted under any `NODE_ENV`
+  (`apps/api/apps/api-gateway/src/config/env.validation.ts`); "dev-only" is
+  a convention, not a rule. Refuse it when `NODE_ENV=production`.
+- Comment-only catch blocks (`catch (err) { // Fallback to defaults }`) in
+  `taxi.controller.ts` and the two "Redis GEO" catches in the gateway are
+  invisible to `no-empty`; they deserve the same logged-fallback treatment
+  the eleven empty ones received.
+- The Docker `deps` stage prints `husky: .git can't be found` on every image
+  build; `ENV HUSKY=0` in the three Dockerfiles silences it (cosmetic).
 
 ## 12. Plan shape
 
