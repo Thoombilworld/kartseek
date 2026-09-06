@@ -1,6 +1,7 @@
 # Repository hygiene and toolchain alignment
 
-**Status:** approved 2026-09-06; implementation pending.
+**Status:** approved 2026-09-06; implemented, reviewed and merged to `main`
+the same day (fast-forward e4bec37 → df49979, 15 commits).
 **Follows:** `2026-09-05-platform-reorganization-design.md` (phase 1, merged at
 `8b672de`). This is a second, narrower pass over the same tree: it removes what
 phase 1 left behind, makes every workspace's lint, type-check and test tasks
@@ -22,14 +23,14 @@ assumption that everything present is used and everything green is real:
 
 Rulings the user gave on 2026-09-06, in answer to the audit:
 
-| Question | Ruling |
-| --- | --- |
-| Regenerable material on disk (caches, build output, logs, tool downloads) | Delete everything regenerable; Docker's data disk is excluded and reported |
-| `skills/` clone and the inert ralph/hookify Claude tooling | Remove both |
-| husky, lint-staged and commitlint (declared, never ran) | Wire them up rather than remove them |
-| Execution | Inline, small commits on one branch, one independent review of the whole branch before merge |
-| The ten PascalCase `.tsx` files phase 1 left as an exception | Rename them now |
-| `.vscode` and `.claude` files | In scope |
+| Question                                                                  | Ruling                                                                                       |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Regenerable material on disk (caches, build output, logs, tool downloads) | Delete everything regenerable; Docker's data disk is excluded and reported                   |
+| `skills/` clone and the inert ralph/hookify Claude tooling                | Remove both                                                                                  |
+| husky, lint-staged and commitlint (declared, never ran)                   | Wire them up rather than remove them                                                         |
+| Execution                                                                 | Inline, small commits on one branch, one independent review of the whole branch before merge |
+| The ten PascalCase `.tsx` files phase 1 left as an exception              | Rename them now                                                                              |
+| `.vscode` and `.claude` files                                             | In scope                                                                                     |
 
 Earlier rulings that still bind: tidy in place (no re-layout), the registry is
 the only source of ports and paths, kebab-case files and `<Deployable>Module`
@@ -39,20 +40,20 @@ naming, merge to `main` locally (no remote exists).
 
 ### 3.1 On disk, git-ignored
 
-| Path | Size | What it is | Action |
-| --- | --- | --- | --- |
-| `.turbo/cache` | 33 GB | 303 Turbo cache entries since 2026-07-12 | delete |
-| `DockerDesktopWSL/` | 31 GB | Docker Desktop's `docker_data.vhdx`, pointed into the repo | leave; user relocates |
-| `apps/web/.next`, `modules/*/frontend/.next` | 9.5 GB | Next build output | delete |
-| `apps/{customer,partner,seller}/build`, `**/.dart_tool`, `apps/*/android/.gradle` | 4.9 GB | Flutter and Gradle output | delete |
-| `apps/api/dist`, `modules/*/backend/dist` | 24 MB | Nest build output | delete |
-| `build/` (root) | 84 MB | CMake output for `apps/customer/windows`, created by the tracked `cmake.sourceDirectory` setting | delete; remove the setting |
-| `Users/HPELIT~1/AppData/Local` (root) | 652 KB | a profile-path mirror some tool created relative to the repo | delete |
-| 28 `*.log` at the root, `tests/smoke/logs` | 13 MB | dev-server and smoke logs | delete |
-| `nuget.exe`, `packages/Newtonsoft.Json.13.0.4/` | 21 MB | a NuGet download and its restore output | delete |
-| `scratch/fix-mock-ids.js` | 2 KB | one-off script from July | delete |
-| `skills/` | 3.7 MB | clone of `mattpocock/skills` with its own `.git` | delete |
-| `**/.turbo` per workspace, `apps/web/tsconfig.tsbuildinfo` | < 1 MB | Turbo run metadata, tsc cache | delete |
+| Path                                                                              | Size   | What it is                                                                                       | Action                     |
+| --------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ | -------------------------- |
+| `.turbo/cache`                                                                    | 33 GB  | 303 Turbo cache entries since 2026-07-12                                                         | delete                     |
+| `DockerDesktopWSL/`                                                               | 31 GB  | Docker Desktop's `docker_data.vhdx`, pointed into the repo                                       | leave; user relocates      |
+| `apps/web/.next`, `modules/*/frontend/.next`                                      | 9.5 GB | Next build output                                                                                | delete                     |
+| `apps/{customer,partner,seller}/build`, `**/.dart_tool`, `apps/*/android/.gradle` | 4.9 GB | Flutter and Gradle output                                                                        | delete                     |
+| `apps/api/dist`, `modules/*/backend/dist`                                         | 24 MB  | Nest build output                                                                                | delete                     |
+| `build/` (root)                                                                   | 84 MB  | CMake output for `apps/customer/windows`, created by the tracked `cmake.sourceDirectory` setting | delete; remove the setting |
+| `Users/HPELIT~1/AppData/Local` (root)                                             | 652 KB | a profile-path mirror some tool created relative to the repo                                     | delete                     |
+| 28 `*.log` at the root, `tests/smoke/logs`                                        | 13 MB  | dev-server and smoke logs                                                                        | delete                     |
+| `nuget.exe`, `packages/Newtonsoft.Json.13.0.4/`                                   | 21 MB  | a NuGet download and its restore output                                                          | delete                     |
+| `scratch/fix-mock-ids.js`                                                         | 2 KB   | one-off script from July                                                                         | delete                     |
+| `skills/`                                                                         | 3.7 MB | clone of `mattpocock/skills` with its own `.git`                                                 | delete                     |
+| `**/.turbo` per workspace, `apps/web/tsconfig.tsbuildinfo`                        | < 1 MB | Turbo run metadata, tsc cache                                                                    | delete                     |
 
 Not touched: every `node_modules`, every local `.env*`, `infra/nginx/ssl/*.key`
 and `.crt`, `.idea/`, `.superpowers/`, `apps/*/.flutter-plugins-dependencies`.
@@ -440,19 +441,19 @@ fact that five zones need three environment variables to build becomes a
 All of these pass on the branch before the review, and again on `main` after
 the merge:
 
-| Check | Command | Required result |
-| --- | --- | --- |
-| Registry | `npm run registry:check` | clean |
-| Script tests | `npm run test:scripts` | all pass |
-| Links | `npm run docs:check-links` | 0 broken |
-| Type-check | `npm run type-check` | 18/18 green, tests included |
-| Lint | `npm run lint` | 18/18 green, 0 errors |
-| Unit tests | `npm run test` | 18/18 green, every workspace has ≥ 1 test |
-| API build | `npm run build -w kartseek-api` | 18 projects |
-| Full build | `NEXT_PUBLIC_API_URL`, `API_URL`, `NEXT_PUBLIC_WS_URL` set; `npm run build` | all workspaces |
-| Smoke | `npm run smoke` | 26/26 |
-| Hooks | a throwaway commit with a bad message and an unformatted file | both rejected |
-| Image deps | `docker build --target prod-deps -f infra/docker/core-service.Dockerfile .` | `npm ci --omit=dev` succeeds with the `prepare` script present (husky absent) |
+| Check        | Command                                                                     | Required result                                                               |
+| ------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Registry     | `npm run registry:check`                                                    | clean                                                                         |
+| Script tests | `npm run test:scripts`                                                      | all pass                                                                      |
+| Links        | `npm run docs:check-links`                                                  | 0 broken                                                                      |
+| Type-check   | `npm run type-check`                                                        | 18/18 green, tests included                                                   |
+| Lint         | `npm run lint`                                                              | 18/18 green, 0 errors                                                         |
+| Unit tests   | `npm run test`                                                              | 18/18 green, every workspace has ≥ 1 test                                     |
+| API build    | `npm run build -w kartseek-api`                                             | 18 projects                                                                   |
+| Full build   | `NEXT_PUBLIC_API_URL`, `API_URL`, `NEXT_PUBLIC_WS_URL` set; `npm run build` | all workspaces                                                                |
+| Smoke        | `npm run smoke`                                                             | 26/26                                                                         |
+| Hooks        | a throwaway commit with a bad message and an unformatted file               | both rejected                                                                 |
+| Image deps   | `docker build --target prod-deps -f infra/docker/core-service.Dockerfile .` | `npm ci --omit=dev` succeeds with the `prepare` script present (husky absent) |
 
 Then the final review (one independent reviewer over the whole branch diff),
 fixes, re-review of the fixes, fast-forward merge to `main`, branch deleted.
