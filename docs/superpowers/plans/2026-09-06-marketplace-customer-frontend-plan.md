@@ -1006,6 +1006,13 @@ Acceptance: filter on a category with > 48 products changes the result count ser
 Files: `product-card.tsx` (read `useWishlist()` from `@/lib/contexts/wishlist-context` instead of local state), `wishlist-context.tsx` (guest list in localStorage `kartseek_guest_wishlist_v1`, merged at sign-in like B-02), wishlist page share link (`/marketplace/wishlist?share=<id>` server-rendered read-only — needs `GET /marketplace/wishlist/:shareId` gateway route).
 Acceptance: heart persists across reload and pages; guest saves survive sign-in; shared link renders items read-only.
 
+**Follow-ups found while executing Phase 1 (not yet done)**
+
+- **Cancelling an order does not release reserved stock.** `PUT /marketplace/orders/:id/cancel` moves the order to CANCELLED but the listing and variant units taken by `reserve_listing_stock` stay taken (verified: variant stock 24 → 23 stayed 23 after cancel). Fold into B-10: the cancel path must call `release_listing_stock` with the order's lines (`listingId`, `variantId`, `quantity`).
+- **Wallet is never debited at placement**, so `WALLET` is not settleable either — B-03 is the prerequisite for offering it.
+- **Probe seller rows cannot be deleted** (FK from `seller_kyc`); they were set `isActive=false` and the directory now hides inactive/suspended sellers. S-01 should delete them with their KYC rows.
+- **Base listing price ≠ default variant price** in the seed (iPhone 5,050 vs 115,900): until S-01 fixes the data, the PDP shows the base price before a variant is chosen (B-12).
+
 ### Phase 3 · Customer experience (P1/P2)
 
 **B-10 Order detail and list presentation (MKT-018) · S**
