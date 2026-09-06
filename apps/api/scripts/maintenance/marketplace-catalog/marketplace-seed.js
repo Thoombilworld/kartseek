@@ -7,7 +7,7 @@
  *  - 1 seller
  *  - 40 products across all categories (with images and listings)
  *
- * Run:  node seeds/marketplace-seed.js
+ * Run:  node scripts/maintenance/marketplace-catalog/marketplace-seed.js
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 const { randomUUID } = require('crypto');

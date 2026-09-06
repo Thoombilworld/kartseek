@@ -4,7 +4,7 @@
  * Replaces placeholder images with high-quality product photography
  * from Unsplash (royalty-free, direct CDN links).
  * 
- * Run:  node seeds/marketplace-update-images.js
+ * Run:  node scripts/maintenance/marketplace-catalog/marketplace-update-images.js
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 const { randomUUID } = require('crypto');

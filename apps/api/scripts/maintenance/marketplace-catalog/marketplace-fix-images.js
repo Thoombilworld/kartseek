@@ -22,7 +22,7 @@
  * Idempotent, and safe to re-run: it only ever replaces placeholders and URLs
  * that fail verification, never a working real photo.
  *
- * Run:  node seeds/marketplace-fix-images.js [--dry-run]
+ * Run:  node scripts/maintenance/marketplace-catalog/marketplace-fix-images.js [--dry-run]
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 

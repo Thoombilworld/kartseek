@@ -132,7 +132,7 @@ and `.crt`, `.idea/`, `.superpowers/`, `apps/*/.flutter-plugins-dependencies`.
 - Six zones (`doctor`, `franchise`, `hotel`, `pharmacy`, `restaurant`, `taxi`)
   run `jest` with no config and no tests, so `test` exits non-zero on "no tests
   found". `grocery` and `marketplace` each carry a hand-copied `jest.config.ts`;
-  grocery's lists 55 `moduleNameMapper` entries mirroring its tsconfig `paths`.
+  grocery's lists 52 `moduleNameMapper` entries mirroring its tsconfig `paths`.
 - `apps/web/tsconfig.json` excludes `src/__tests__` from type-check; the zones
   do not, and marketplace's two specs fail with bare `describe`/`it`/`expect`.
 
@@ -157,8 +157,9 @@ and `.crt`, `.idea/`, `.superpowers/`, `apps/*/.flutter-plugins-dependencies`.
   empty `catch {}` blocks in `geo-security.controller.ts` (nine) and
   `taxi.controller.ts` (two), eight `no-case-declarations` in the same tax
   switch, six `@ts-ignore` on dynamic imports of `@aws-sdk/client-s3` and
-  `@google-cloud/storage` in `libs/storage/src/storage.service.ts` (both
-  packages are installed), a `require('crypto')` in `api-key.guard.ts`, an
+  `@google-cloud/storage` in `libs/storage/src/storage.service.ts`
+  (`@aws-sdk/client-s3` is installed; `@google-cloud/storage` deliberately is
+  not), a `require('crypto')` in `api-key.guard.ts`, an
   empty `EmptyRequest {}` interface in `grpc.interfaces.ts`, a useless catch
   in `search.service.ts`, a useless escape in `input-sanitizer.middleware.ts`,
   an irregular whitespace character inside a log string in
@@ -256,9 +257,13 @@ deleted with `-d` (ancestors). `chore/nest-12-upgrade` and
   each, declared in the root `package.json` (`eslint@^10.9.1`,
   `typescript-eslint@^8.69.0`, the highest already present in the tree). The
   `eslint` and `@typescript-eslint/*` devDependencies are removed from
-  `apps/api`, `apps/web` and the eight zones; `eslint-config-next@16.2.9`
-  stays declared by the Next workspaces that use it. Module backends keep
-  delegating to `apps/api/eslint.base.js`.
+  `apps/api`, `apps/web` and the eight zones; `eslint-config-next` stays
+  declared by the Next workspaces that use it, moved from 16.2.9 to 16.3.3 to
+  match the installed Next. Its own Babel-based parser (applied to
+  `.js/.jsx/.mjs/.mts/.cts`; only `.ts/.tsx` go through typescript-eslint) is
+  incompatible with ESLint 10, so the shared config parses those files with
+  typescript-eslint's parser instead. Module backends keep delegating to
+  `apps/api/eslint.base.js`.
 - `apps/web/eslint.base.mjs` exports a factory (`nextAppConfig({ dir })`)
   holding today's `apps/web/eslint.config.mjs` content: the ignores, the
   `eslint-config-next/core-web-vitals` layers, `settings.react.version`, the
@@ -348,19 +353,36 @@ Each item names the root cause, the fix and how it is verified.
    zero or the country is unknown, and keeps today's arithmetic (tax added on
    top of the commission, rounded to the cent) — the registry's `isInclusive`
    flag describes consumer pricing and is deliberately not applied here. A
-   Vitest spec covers IN, GB, SA, BH, SG, US, the zero-rate markets QA and KW,
-   an unknown country and rounding. Verify: the spec;
+   Vitest spec covers IN, GB, SA, BH, SG, the zero-rate markets QA and KW, an
+   unknown country and rounding. Verify: the spec;
    `npm run lint -w kartseek-api` shows no `no-duplicate-case` or
    `no-case-declarations`.
+   Two rulings recorded after the review: the registry's US entry (`Sales Tax`,
+   8.875 %, one city's consumer rate) is **not** applied to commission
+   invoices — US invoices keep carrying no tax line, through an explicit
+   exemption set in `tax-breakdown.ts`, until finance supplies a rule for
+   platform commission in the US; and the function normalises the code
+   (`trim().toUpperCase()`) because `payment.countryCode` is validated only
+   as a non-empty string at the DTO, so a lowercase code no longer yields no
+   lines silently. Restricting the DTO to the supported codes is an API
+   contract change left for a follow-up (§11).
 3. **Empty catches** (`geo-security.controller.ts` ×9, `taxi.controller.ts`
    ×2). Cause: fallbacks written without a trace. Fix: each catch logs at
    `warn` through the controller's Nest `Logger` with what failed and which
-   fallback is taken; the fallback behaviour itself is unchanged. The
-   irregular character in the line-379 log string is removed. Verify: lint.
+   fallback is taken; the fallback behaviour itself is unchanged. Exception:
+   the two geo-security **write** paths (`updateRule`, `addWhitelist`) log at
+   `error` and rethrow, because answering `success: true` for a row that never
+   persisted is not a fallback; the exception filter renders the rethrow as a
+   generic 500 in production. In the database-less `SKIP_DB` mode both still
+   return success without writing anywhere (pre-existing; §11). The irregular
+   character in the line-379 log string is removed. Verify: lint.
 4. **Optional storage imports** (`storage.service.ts` ×6). Cause:
-   `@ts-ignore` guarding dynamic imports of packages that are in fact
-   installed. Fix: plain typed dynamic imports; the directives go. If a future
-   deployment drops the package, the import fails at call time with a clear
+   `@ts-ignore` guarding dynamic imports, four of a package that is installed
+   (`@aws-sdk/client-s3`) and two of one that deliberately is not
+   (`@google-cloud/storage`). Fix: plain typed dynamic imports for S3; the two
+   GCS imports keep a `@ts-expect-error` carrying the reason, which turns into
+   a loud unused-directive error the day the package is installed. If a
+   deployment drops the S3 package, the import fails at call time with a clear
    module-not-found, which the surrounding try/catch already reports. Verify:
    lint, `tsc`, `nest build --all`.
 5. **`require('crypto')`** → `import { createHmac } from 'crypto'`.
@@ -372,9 +394,27 @@ Each item names the root cause, the fix and how it is verified.
    `npm run type-check -w @kartseek/marketplace-frontend`.
 10. **`verification.spec.ts` requires** → top-level `import * as fs` /
     `import * as path`.
+11. **Double-encoded text** (found during execution, not by the audit):
+    seventeen files whose UTF-8 had once been decoded as Windows-1252 and
+    saved again — Swagger tags (`ðŸ›¡ï¸ Geo Security`), a rendered rupee sign
+    and em dash in the pharmacy zone, hundreds of comment rules, and the
+    irregular whitespace inside the geo-security log string. Repaired line by
+    line with an exact round-trip check (repaired line re-encoded as UTF-8 and
+    decoded as Windows-1252, with Latin-1 for the five bytes Windows-1252
+    leaves undefined, must equal the original line), so a line changes only
+    when the transform is provably the inverse. Verify: no cp1252 signature
+    remains in `git grep`; the review paired every changed line.
+12. **ESLint 10's new `no-useless-assignment`** (surfaced once the toolchain
+    was unified, §6.1): sixteen initialisers that no path ever read, such as
+    `let ride: any = null;` before an if/else that assigns both arms, are
+    dropped; each site was checked by hand because TypeScript verifies none of
+    them (`any`-typed variables and `strictNullChecks: false` both switch the
+    definite-assignment check off).
 
 After D, `docs/guides/testing.md`'s "Known, pre-existing gaps" section is
-deleted rather than shortened: there are none left to record.
+deleted rather than shortened: there are none left to record. The still-true
+fact that five zones need three environment variables to build becomes a
+"Build" section instead.
 
 ## 8. Work package E — documentation
 
@@ -412,6 +452,7 @@ the merge:
 | Full build | `NEXT_PUBLIC_API_URL`, `API_URL`, `NEXT_PUBLIC_WS_URL` set; `npm run build` | all workspaces |
 | Smoke | `npm run smoke` | 26/26 |
 | Hooks | a throwaway commit with a bad message and an unformatted file | both rejected |
+| Image deps | `docker build --target prod-deps -f infra/docker/core-service.Dockerfile .` | `npm ci --omit=dev` succeeds with the `prepare` script present (husky absent) |
 
 Then the final review (one independent reviewer over the whole branch diff),
 fixes, re-review of the fixes, fast-forward merge to `main`, branch deleted.
@@ -453,6 +494,25 @@ fixes, re-review of the fixes, fast-forward merge to `main`, branch deleted.
 - `apps/mcp-server` (standalone, own lockfile, not an npm workspace),
   `packages/vendor/objective_c/example/**` (upstream mirror), and the Flutter
   apps beyond the one orphan file.
+
+Follow-ups the review surfaced, deliberately not done in this pass:
+
+- A one-time `style: format the tree` commit (`npm run format`) recorded in a
+  `.git-blame-ignore-revs`, so the pre-commit hook's Prettier step is a no-op
+  on untouched files instead of rewriting each file the first time it is
+  edited (`prettier --check` reports 132 unformatted files in a small sample;
+  `infra/k8s/microservices-generated.yaml` needs either a `.prettierignore`
+  entry or a Prettier-clean generator first).
+- `payment.countryCode` is validated only as a non-empty string; tightening
+  the DTO to the supported ISO codes is an API contract change to make with
+  the clients in view.
+- The geo-security write paths return `success: true` without writing
+  anywhere when `SKIP_DB=true` (a dev-only mode), and `lookupIp` caches an
+  empty geolocation for an hour after a transient lookup failure — both
+  pre-existing, both of the "fabricated fallback" family already tracked.
+- `libs/storage/src/storage.service.ts` returns a CDN URL even when the
+  upload failed ("fallback to simulated URL so the API doesn't crash") — the
+  same family.
 
 ## 12. Plan shape
 

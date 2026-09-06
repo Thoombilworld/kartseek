@@ -12,7 +12,7 @@
  *
  * Idempotent: re-running updates existing SKUs instead of duplicating them.
  *
- * Run:  node seeds/marketplace-seed-variants.js
+ * Run:  node scripts/maintenance/marketplace-catalog/marketplace-seed-variants.js
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 

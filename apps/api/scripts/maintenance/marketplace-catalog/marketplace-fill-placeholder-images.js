@@ -24,7 +24,7 @@
  * attempt at category-level fallback put a Puma sneaker on Adidas cricket
  * gloves; relevance has to be narrow or it is worse than nothing.
  *
- * Run:  node seeds/marketplace-fill-placeholder-images.js [--dry-run]
+ * Run:  node scripts/maintenance/marketplace-catalog/marketplace-fill-placeholder-images.js [--dry-run]
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 

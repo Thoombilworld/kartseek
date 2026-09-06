@@ -15,12 +15,20 @@ describe('calculateTaxBreakdown', () => {
     expect(calculateTaxBreakdown(1000, 'BH')).toEqual([{ taxType: 'VAT', rate: 0.1, amount: 100 }]);
     expect(calculateTaxBreakdown(1000, 'AE')).toEqual([{ taxType: 'VAT', rate: 0.05, amount: 50 }]);
     expect(calculateTaxBreakdown(1000, 'SG')).toEqual([{ taxType: 'GST', rate: 0.09, amount: 90 }]);
-    expect(calculateTaxBreakdown(1000, 'US')).toEqual([{ taxType: 'Sales Tax', rate: 0.08875, amount: 88.75 }]);
+  });
+
+  it('normalises the country code before the lookup', () => {
+    expect(calculateTaxBreakdown(1000, 'in')).toEqual(calculateTaxBreakdown(1000, 'IN'));
+    expect(calculateTaxBreakdown(1000, ' gb ')).toEqual([{ taxType: 'VAT', rate: 0.2, amount: 200 }]);
   });
 
   it('returns no lines where the market levies no tax', () => {
     expect(calculateTaxBreakdown(1000, 'QA')).toEqual([]);
     expect(calculateTaxBreakdown(1000, 'KW')).toEqual([]);
+  });
+
+  it('returns no lines for the US, whose registry rate models consumer sales tax, not commission', () => {
+    expect(calculateTaxBreakdown(1000, 'US')).toEqual([]);
   });
 
   it('returns no lines for a code the platform does not operate in', () => {

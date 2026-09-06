@@ -6,7 +6,7 @@
  * look identical in the DB but are different problems — one is rot, the other is
  * missing content — so they are counted separately.
  *
- * Read-only. Run:  node seeds/marketplace-audit-images.js
+ * Read-only. Run:  node scripts/maintenance/marketplace-catalog/marketplace-audit-images.js
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 

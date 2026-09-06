@@ -9,7 +9,7 @@ const { pathsToModuleNameMapper } = require('ts-jest');
  * Each workspace's jest.config.cjs is one statement calling
  * createNextJestConfig(__dirname). The module mapper is derived from that
  * workspace's own tsconfig `paths`, so the aliases Jest resolves are the
- * aliases TypeScript and Next resolve — grocery used to carry 55 hand-written
+ * aliases TypeScript and Next resolve — grocery used to carry 52 hand-written
  * mapper lines mirroring its tsconfig, and every edit had to be made twice.
  *
  * Ordering matters: TypeScript picks the longest matching path pattern, Jest
@@ -26,7 +26,9 @@ function readPaths(dir) {
 }
 
 function literalPrefixLength(pattern) {
-  return pattern.replace(/^\^/, '').replace(/\(\.\*\)\$?$/, '').replace(/\$$/, '').length;
+  const body = pattern.replace(/^\^/, '').replace(/\$$/, '');
+  const wildcardAt = body.indexOf('(.*)');
+  return wildcardAt === -1 ? body.length : wildcardAt;
 }
 
 function orderMostSpecificFirst(mapper) {

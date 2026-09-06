@@ -168,7 +168,7 @@ export class TaxiController {
         // Cache for 2 minutes (surge changes more frequently)
         await this.redis.setJson(surgeCacheKey, { multiplier: surgeMultiplier }, 120);
       } catch (err) {
-        this.logger.warn(`Surge-rule lookup for zone ${fareZone} failed; pricing the ride at the default multiplier ${surgeMultiplier}: ${String(err)}`);
+        this.logger.warn(`Surge-rule lookup or caching for zone ${fareZone} failed; pricing the ride at multiplier ${surgeMultiplier}: ${String(err)}`);
       }
     }
 

@@ -123,6 +123,8 @@ localhost default — so a production build without them fails fast, by
 design. Set the three variables (the values above for a local build) before
 running it.
 
+## Smoke
+
 ```bash
 npm run build
 npm run infra:up
@@ -185,8 +187,9 @@ npm run lint
 is `turbo run lint`. One ESLint (10.x) and one typescript-eslint are declared
 at the root and shared by all 18 workspaces. Backends delegate to
 `apps/api/eslint.base.js`; the shell and the eight zones delegate to
-`apps/web/eslint.base.mjs`. Errors must be zero everywhere. In the Next
-workspaces the React Compiler's hook rules (everything under `react-hooks/`
+`apps/web/eslint.base.mjs`. Errors must be zero everywhere, and the backend
+`lint` scripts also pass `--max-warnings 0`, so a backend warning fails too.
+In the Next workspaces the React Compiler's hook rules (everything under `react-hooks/`
 except `rules-of-hooks`) are warnings while the compiler is off — advice,
 not gates. The counts at the time of the 2026-09-06 hygiene pass, to be
 driven down rather than grown:

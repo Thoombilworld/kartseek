@@ -3,9 +3,7 @@
   "editor.formatOnSave": true,
   "editor.tabSize": 2,
   "editor.detectIndentation": false,
-  "editor.rulers": [
-
-    100],
+  "editor.rulers": [100],
   "editor.wordWrap": "off",
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"

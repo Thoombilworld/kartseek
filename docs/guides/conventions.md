@@ -169,7 +169,10 @@ One ESLint and one typescript-eslint, declared at the root; no workspace
 declares its own. A backend's `eslint.config.js` is a one-line call into
 `apps/api/eslint.base.js`; a Next app's `eslint.config.mjs` is a one-line
 import of `apps/web/eslint.base.mjs`. Change a rule in the base, never in a
-workspace. The root `eslint.config.mjs` covers only the repository's own
+workspace. `npm ls eslint` exits with `ELSPROBLEMS` because eslint-config-next's
+transitive plugins still declare a peer range of ESLint 9; exactly one ESLint
+is installed, and nesting an ESLint 9 to silence the message would recreate
+the split this arrangement removed. The root `eslint.config.mjs` covers only the repository's own
 scripts under `scripts/` and `tests/`. `packages/shared-core` and
 `packages/shared-ui` are formatted by the hooks but have no lint owner yet;
 the root config ignores them deliberately until one is chosen. Warning

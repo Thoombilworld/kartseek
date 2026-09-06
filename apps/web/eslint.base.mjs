@@ -22,6 +22,8 @@ const advisoryHookRules = {};
 for (const entry of nextCoreWebVitals) {
   for (const [name, setting] of Object.entries(entry.rules ?? {})) {
     if (name.startsWith('react-hooks/') && name !== 'react-hooks/rules-of-hooks') {
+      const severity = Array.isArray(setting) ? setting[0] : setting;
+      if (severity === 'off' || severity === 0) continue; // a preset disable stays disabled
       const options = Array.isArray(setting) ? setting.slice(1) : [];
       advisoryHookRules[name] = ['warn', ...options];
     }
@@ -51,9 +53,8 @@ export function nextAppConfig({ extraIgnores = [] } = {}) {
         'node_modules/**',
         'next-env.d.ts',
         'public/**',
-        // Build and tooling config, not application source. The parser
-        // eslint-config-next applies to .mjs produces a scope manager older
-        // typescript-eslint releases rejected; keeping these out costs nothing.
+        // Build and tooling config, not application source: anonymous default
+        // exports and CommonJS shapes the application rules are not written for.
         'next.config.mjs',
         'postcss.config.mjs',
         'eslint.config.mjs',

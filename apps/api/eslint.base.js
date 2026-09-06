@@ -17,7 +17,7 @@ module.exports = function backendEslintConfig(rootDir, files) {
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     {
-      ignores: ['.eslintrc.js', 'eslint.config.js', 'eslint.base.js', 'dist', 'node_modules', '*.js', '*.mts'],
+      ignores: ['eslint.config.js', 'eslint.base.js', 'dist', 'node_modules', '*.js', '*.mts'],
     },
     {
       files,

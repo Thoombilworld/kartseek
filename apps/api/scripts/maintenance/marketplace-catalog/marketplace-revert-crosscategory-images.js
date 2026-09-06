@@ -13,7 +13,7 @@
  * type. Those rows are reverted to placeholders, keeping the copy that sits in
  * the subcategory where the URL is most common (its true home).
  *
- * Run:  node seeds/marketplace-revert-crosscategory-images.js [--dry-run]
+ * Run:  node scripts/maintenance/marketplace-catalog/marketplace-revert-crosscategory-images.js [--dry-run]
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 

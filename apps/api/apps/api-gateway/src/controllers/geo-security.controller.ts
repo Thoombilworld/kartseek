@@ -393,8 +393,9 @@ export class GeoSecurityController {
         };
       }
     } catch (e) {
-      // Fallback: use Cloudflare headers if available
-      this.logger.warn(`IP lookup for ${ip} failed; using the Cloudflare geolocation headers if present: ${String(e)}`);
+      // No secondary source exists: the empty geoData below is cached for an
+      // hour and the request proceeds with country unknown.
+      this.logger.warn(`IP lookup for ${ip} failed; caching an empty geolocation for it for one hour, so its country stays unknown: ${String(e)}`);
     }
 
     // Cache for 1 hour
