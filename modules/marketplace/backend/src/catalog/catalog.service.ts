@@ -14,6 +14,7 @@ import {
   ILike,
   In,
   IsNull,
+  Not,
   MoreThanOrEqual,
   SelectQueryBuilder,
 } from 'typeorm';
@@ -1523,9 +1524,18 @@ export class CatalogService {
    * empty the seller directory rather than filter it.
    */
   async getSellers(region?: string) {
+    // The public directory: only sellers who may trade. Deactivated and
+    // suspended stores (and the test rows a probe run leaves behind) used to be
+    // listed under a "verified sellers" heading with zero products.
+    const live = { isActive: true, verificationStatus: Not('SUSPENDED') };
     const [rows, total] = await this.sellerRepo.findAndCount({
       select: CatalogService.PUBLIC_SELLER_FIELDS,
-      where: region ? [{ regionCode: region.toUpperCase() }, { regionCode: IsNull() }] : undefined,
+      where: region
+        ? [
+            { ...live, regionCode: region.toUpperCase() },
+            { ...live, regionCode: IsNull() },
+          ]
+        : live,
     });
     // Sorted after the counters are corrected, not by the stale `seller_rating`
     // column — otherwise the directory is ordered by one rating and displays another.
