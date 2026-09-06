@@ -6,6 +6,7 @@ import { RedisService } from '@app/redis';
 import * as crypto from 'crypto';
 import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
 import { Payment, PaymentModule } from '../entities/payment.entity';
+import { calculateTaxBreakdown } from './tax-breakdown';
 
 /**
  * InvoiceService — End-to-end invoice generation and security.
@@ -53,10 +54,7 @@ export class InvoiceService {
     const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
 
     // Tax breakdown
-    const taxBreakdown = this.calculateTaxBreakdown(
-      Number(payment.platformCommission),
-      payment.countryCode,
-    );
+    const taxBreakdown = calculateTaxBreakdown(Number(payment.platformCommission), payment.countryCode);
     const totalTax = taxBreakdown.reduce((sum, t) => sum + t.amount, 0);
 
     // Create invoice
@@ -227,42 +225,6 @@ export class InvoiceService {
       unitPrice: Number(payment.amount),
       total: Number(payment.amount),
     }];
-  }
-
-  private calculateTaxBreakdown(commissionAmount: number, countryCode: string): Array<{ taxType: string; rate: number; amount: number }> {
-    // Tax rules per region
-    switch (countryCode) {
-      case 'IN':
-        // India: GST split into CGST + SGST
-        const gstRate = 0.18;
-        const halfRate = gstRate / 2;
-        const cgst = Math.round(commissionAmount * halfRate * 100) / 100;
-        const sgst = Math.round(commissionAmount * halfRate * 100) / 100;
-        return [
-          { taxType: 'CGST', rate: halfRate, amount: cgst },
-          { taxType: 'SGST', rate: halfRate, amount: sgst },
-        ];
-      case 'AE':
-      case 'SA':
-      case 'QA':
-        // GCC: 5% VAT
-        const vatAmount = Math.round(commissionAmount * 0.05 * 100) / 100;
-        return [{ taxType: 'VAT', rate: 0.05, amount: vatAmount }];
-      case 'UK':
-        // UK: 20% VAT
-        const ukVat = Math.round(commissionAmount * 0.20 * 100) / 100;
-        return [{ taxType: 'VAT', rate: 0.20, amount: ukVat }];
-      case 'SG':
-        // Singapore: 9% GST
-        const sgGst = Math.round(commissionAmount * 0.09 * 100) / 100;
-        return [{ taxType: 'GST', rate: 0.09, amount: sgGst }];
-      case 'IN':
-        // India: 16% VAT
-        const keVat = Math.round(commissionAmount * 0.16 * 100) / 100;
-        return [{ taxType: 'VAT', rate: 0.16, amount: keVat }];
-      default:
-        return [];
-    }
   }
 
   /**
