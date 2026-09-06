@@ -231,7 +231,7 @@ function CheckoutPageContent() {
   // total that omitted the fee — while order-service charged ₹60 on any basket
   // under the threshold. The customer approved one number and was billed
   // another. Quoted from the same rule the server prices by.
-  const delivery = marketplaceDeliveryFee(subtotal);
+  const delivery = marketplaceDeliveryFee(subtotal, country.code);
   const estimatedPointsEarn = Math.floor((subtotal - couponDiscount) / 100); // 1 pt per 100 units
   // What the gift card will cover. The server recomputes this from the card's
   // balance when the order is placed and debits exactly that — this figure is for
@@ -1140,8 +1140,8 @@ function CheckoutPageContent() {
                 <p className="text-xs text-green-600 font-semibold mt-1">Free delivery included</p>
               ) : (
                 <p className="text-xs text-slate-500 mt-1">
-                  Includes {fmt(delivery)} delivery · add {fmt(amountToFreeDelivery(subtotal))} more
-                  for free delivery
+                  Includes {fmt(delivery)} delivery · add{' '}
+                  {fmt(amountToFreeDelivery(subtotal, country.code))} more for free delivery
                 </p>
               )}
             </div>

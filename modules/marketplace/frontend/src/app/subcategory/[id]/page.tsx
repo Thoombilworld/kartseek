@@ -6,12 +6,12 @@ import { ChevronRight, SlidersHorizontal, ShoppingBasket } from 'lucide-react';
 import { getProducts, getSubcategoryById } from '@/lib/api/marketplace';
 import { ProductCard } from '../../components/product-card';
 import SubcategoryFilters from './subcategory-filters';
-import { buyBoxPrice } from '@/lib/api/map-catalog-product';
+import { buyBoxPrice, buyBoxMrp } from '@/lib/api/map-catalog-product';
 import { productImageList } from '@/lib/product-image';
 import { itemListSchema, breadcrumbSchema } from '@/lib/seo/schema';
 import { JsonLd } from '@/components/seo/json-ld';
 import { productPath } from '@/lib/marketplace/product-url';
-import { requestCurrency } from '@/lib/localization/request-region';
+import { requestCurrency, requestCountry } from '@/lib/localization/request-region';
 
 /** Memoised so `generateMetadata` and the page body share one lookup. */
 const loadSubcategory = cache(async (id: string) => {
@@ -22,7 +22,10 @@ const loadSubcategory = cache(async (id: string) => {
   }
 });
 
-export async function generateMetadata({ params, searchParams }: {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ sort?: string; minPrice?: string; maxPrice?: string }>;
 }): Promise<Metadata> {
@@ -30,8 +33,9 @@ export async function generateMetadata({ params, searchParams }: {
   const filters = await searchParams;
   const decodedId = decodeURIComponent(id);
   const subcategory = await loadSubcategory(decodedId);
-  const name = subcategory?.name
-    ?? decodedId.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  const name =
+    subcategory?.name ??
+    decodedId.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
 
   const meta = categoryMeta({
     name,
@@ -55,7 +59,10 @@ export async function generateMetadata({ params, searchParams }: {
   };
 }
 
-export default async function SubcategoryPage({ params, searchParams }: {
+export default async function SubcategoryPage({
+  params,
+  searchParams,
+}: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ sort?: string; minPrice?: string; maxPrice?: string }>;
 }) {
@@ -66,8 +73,9 @@ export default async function SubcategoryPage({ params, searchParams }: {
   // Memoised above — `generateMetadata` already resolved this for the request.
   const subcategory: any = await loadSubcategory(decodedId);
 
-  const displayName = subcategory?.name
-    ?? decodedId.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  const displayName =
+    subcategory?.name ??
+    decodedId.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
   // Slug first, deliberately. `/marketplace/category/[id]` filters the catalogue
   // on `category.slug`, so a uuid in that segment matches nothing and the parent
   // category renders "No products found" — the same defect the product page's
@@ -93,22 +101,26 @@ export default async function SubcategoryPage({ params, searchParams }: {
       ...(filters.minPrice ? { minPrice: filters.minPrice } : {}),
       ...(filters.maxPrice ? { maxPrice: filters.maxPrice } : {}),
       limit: '48',
+      // Server component: the market must travel explicitly (see category page).
+      country: await requestCountry(),
     });
     const list = res?.data ?? res?.products ?? [];
-    products = Array.isArray(list) ? list.map((p: any) => ({
-      id: p.id,
-      title: p.name ?? p.title ?? 'Product',
-      brand: p.brand?.name ?? (typeof p.brand === 'string' ? p.brand : ''),
-      price: buyBoxPrice(p),
-      mrp: Number(p.mrp ?? p.price ?? 0),
-      rating: Number(p.averageRating ?? p.rating ?? 0),
-      reviews: String(p.reviewCount ?? p.reviews ?? '0'),
-      badge: p.badge || undefined,
-      imageUrl: productImageList(p)[0],
-      images: productImageList(p),
-      delivery: p.delivery ?? undefined,
-      variantAxes: p.variantAxes ?? undefined,
-    })) : [];
+    products = Array.isArray(list)
+      ? list.map((p: any) => ({
+          id: p.id,
+          title: p.name ?? p.title ?? 'Product',
+          brand: p.brand?.name ?? (typeof p.brand === 'string' ? p.brand : ''),
+          price: buyBoxPrice(p),
+          mrp: buyBoxMrp(p),
+          rating: Number(p.averageRating ?? p.rating ?? 0),
+          reviews: String(p.reviewCount ?? p.reviews ?? '0'),
+          badge: p.badge || undefined,
+          imageUrl: productImageList(p)[0],
+          images: productImageList(p),
+          delivery: p.delivery ?? undefined,
+          variantAxes: p.variantAxes ?? undefined,
+        }))
+      : [];
   } catch {
     products = [];
     loadFailed = true;
@@ -142,14 +154,24 @@ export default async function SubcategoryPage({ params, searchParams }: {
       <section className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-8 px-6">
         <div className="max-w-7xl mx-auto">
           <nav className="text-sm text-white/60 mb-3 flex items-center gap-1.5">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <Link href="/" className="hover:text-white transition-colors">
+              Home
+            </Link>
             <ChevronRight className="w-3 h-3" />
-            <Link href="/category-list" className="hover:text-white transition-colors">Categories</Link>
+            <Link href="/category-list" className="hover:text-white transition-colors">
+              Categories
+            </Link>
             {parentCategorySlug && (
               <>
                 <ChevronRight className="w-3 h-3" />
-                <Link href={`/category/${parentCategorySlug}`} className="hover:text-white transition-colors">
-                  {subcategory?.parent?.name ?? parentCategorySlug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                <Link
+                  href={`/category/${parentCategorySlug}`}
+                  className="hover:text-white transition-colors"
+                >
+                  {subcategory?.parent?.name ??
+                    parentCategorySlug
+                      .replace(/-/g, ' ')
+                      .replace(/\b\w/g, (c: string) => c.toUpperCase())}
                 </Link>
               </>
             )}
@@ -170,16 +192,24 @@ export default async function SubcategoryPage({ params, searchParams }: {
         <div className="max-w-7xl mx-auto px-4 pt-4">
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-amber-900">Couldn&apos;t load products for this subcategory</p>
+              <p className="text-sm font-bold text-amber-900">
+                Couldn&apos;t load products for this subcategory
+              </p>
               <p className="text-xs text-amber-800/80 mt-0.5">
                 The catalog service didn&apos;t respond. Try again or browse other categories.
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
-              <Link href={`/subcategory/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
+              <Link
+                href={`/subcategory/${id}`}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+              >
                 Retry
               </Link>
-              <Link href="/category-list" className="border border-amber-300 text-amber-900 text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors">
+              <Link
+                href="/category-list"
+                className="border border-amber-300 text-amber-900 text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors"
+              >
                 Browse categories
               </Link>
             </div>

@@ -12,19 +12,39 @@ import { productMeta } from '@/lib/seo/metadata';
 import { productSchema, breadcrumbSchema } from '@/lib/seo/schema';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getProductById } from '@/lib/api/marketplace';
-import { parseProductParam, productPath, isCanonicalProductParam } from '@/lib/marketplace/product-url';
+import {
+  parseProductParam,
+  productPath,
+  isCanonicalProductParam,
+} from '@/lib/marketplace/product-url';
 import { zoneHref } from '@/lib/routes/zone-href';
 import { buyBoxPrice } from '@/lib/api/map-catalog-product';
 import { productImageList } from '@/lib/product-image';
 import { ReportProductButton } from './report-product';
 import { API_BASE_URL } from '@/lib/config/api-base';
 import { ApiError } from '@/lib/api-endpoints';
-import { Star, Truck, Shield, Info, BadgeCheck, CreditCard, Repeat, RefreshCw, ServerCrash } from 'lucide-react';
+import {
+  Star,
+  Truck,
+  Shield,
+  Info,
+  BadgeCheck,
+  CreditCard,
+  Repeat,
+  RefreshCw,
+  ServerCrash,
+} from 'lucide-react';
 import { ProductPriceDisplay } from './product-price';
 import { ProductActions } from './product-actions';
 import { ProductRecommendations } from './product-recommendations';
 import { ProductClientState } from './product-client-state';
-import { PincodeChecker, EmiCalculator, ProductReviewSection, ProductQASection, FrequentlyBoughtTogether } from './product-enhancements';
+import {
+  PincodeChecker,
+  EmiCalculator,
+  ProductReviewSection,
+  ProductQASection,
+  FrequentlyBoughtTogether,
+} from './product-enhancements';
 import { VariantProvider } from './variant-context';
 import { VariantPicker } from './variant-picker';
 import { BrandFollowButton } from '@/components/shared/brand-follow-button';
@@ -48,20 +68,22 @@ import { sanitizeHtml } from '@/lib/sanitize-html';
  * 400/404 are final answers about the id; everything else (5xx, a dead channel,
  * the API client's 8 s abort) is transient and worth one retry.
  */
-const loadProduct = cache(async (id: string): Promise<{ product: any | null; unavailable: boolean }> => {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const apiProduct = await getProductById(id);
-      const found = apiProduct && !apiProduct.statusCode && !apiProduct.error ? apiProduct : null;
-      return { product: found, unavailable: false };
-    } catch (e) {
-      const status = e instanceof ApiError ? e.status : 0;
-      if (status === 400 || status === 404) return { product: null, unavailable: false };
-      if (attempt === 1) return { product: null, unavailable: true };
+const loadProduct = cache(
+  async (id: string, country?: string): Promise<{ product: any | null; unavailable: boolean }> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const apiProduct = await getProductById(id, country);
+        const found = apiProduct && !apiProduct.statusCode && !apiProduct.error ? apiProduct : null;
+        return { product: found, unavailable: false };
+      } catch (e) {
+        const status = e instanceof ApiError ? e.status : 0;
+        if (status === 400 || status === 404) return { product: null, unavailable: false };
+        if (attempt === 1) return { product: null, unavailable: true };
+      }
     }
-  }
-  return { product: null, unavailable: true };
-});
+    return { product: null, unavailable: true };
+  },
+);
 
 /**
  * Per-product title, description, canonical and social card.
@@ -85,17 +107,25 @@ const loadProduct = cache(async (id: string): Promise<{ product: any | null; una
  * card and the Product markup — a Qatari price roughly forty times the real
  * one. The edge proxy has already resolved the region onto the request.
  */
-async function requestCurrency(): Promise<string> {
+async function requestCountry(): Promise<string> {
   const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
   const raw = headerStore.get('X-Country-Code') ?? cookieStore.get('kartseek_country')?.value;
-  return getCurrencyCode(isCountryCode(raw) ? raw!.toUpperCase() : DEFAULT_COUNTRY);
+  return isCountryCode(raw) ? raw!.toUpperCase() : DEFAULT_COUNTRY;
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+async function requestCurrency(): Promise<string> {
+  return getCurrencyCode(await requestCountry());
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
   const { id: segment } = await params;
   // The route segment is `<slug>-<uuid>`; only the uuid identifies the product.
   const { id } = parseProductParam(segment);
-  const { product } = id ? await loadProduct(id) : { product: null };
+  const { product } = id ? await loadProduct(id, await requestCountry()) : { product: null };
 
   // A product that is missing or momentarily unreachable must not be described
   // as if it existed, and must not be indexed under a guessed title.
@@ -105,7 +135,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const name = product.title ?? product.name ?? 'Product';
   const listings: any[] = Array.isArray(product.listings) ? product.listings : [];
-  const listing = product.listing ?? listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0] ?? null;
+  const listing =
+    product.listing ?? listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0] ?? null;
   // The payable price, not the MRP — the number a shopper sees on the page has
   // to be the number in the snippet and in the Product markup.
   const price = Number(listing?.sellingPrice) || Number(product.mrp) || 0;
@@ -138,11 +169,14 @@ function ProductUnavailable() {
         </div>
         <h1 className="text-3xl font-black text-slate-900 mb-4">Couldn&apos;t load this product</h1>
         <p className="text-slate-500 mb-8 leading-relaxed">
-          The product catalogue isn&apos;t responding right now. This is temporary — the
-          product is still there. Please try again in a moment.
+          The product catalogue isn&apos;t responding right now. This is temporary — the product is
+          still there. Please try again in a moment.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/" className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-8 rounded-xl transition-colors flex items-center justify-center gap-2">
+          <Link
+            href="/"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-8 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
             <RefreshCw className="w-5 h-5" /> Back to Marketplace
           </Link>
         </div>
@@ -165,7 +199,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const { id } = parseProductParam(segment);
   if (!id) notFound();
 
-  const { product: apiProduct, unavailable } = await loadProduct(id);
+  // The market this request browses: it chooses the offer, the SKUs and the
+  // currency, and which delivery helpers make sense (PIN codes are India only).
+  const market = await requestCountry();
+  const { product: apiProduct, unavailable } = await loadProduct(id, market);
   if (unavailable) return <ProductUnavailable />;
   if (!apiProduct) notFound();
 
@@ -217,7 +254,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   // this page as ₹0 — the "product has no price" report. `buyBoxPrice` is the
   // same helper the cards use: it coerces, prefers the buy-box listing, skips
   // inactive ones, and falls back to MRP for a product no seller has listed yet.
-  const listPrice = Number(product.mrp) || 0;
+  const listPrice = Number(product.listing?.mrp ?? product.mrp) || 0;
   const payablePrice = buyBoxPrice(product) || listPrice;
 
   // Category routes are addressed by slug, never by uuid — see the breadcrumb
@@ -294,8 +331,22 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const breadcrumbJsonLd = breadcrumbSchema([
     { name: 'Home', url: '/' },
     { name: 'Marketplace', url: '/marketplace' },
-    ...(categorySlug ? [{ name: product.category?.name || 'Category', url: `/marketplace/category/${categorySlug}` }] : []),
-    ...(subcategorySlug ? [{ name: product.subcategory?.name || 'Subcategory', url: `/marketplace/subcategory/${subcategorySlug}` }] : []),
+    ...(categorySlug
+      ? [
+          {
+            name: product.category?.name || 'Category',
+            url: `/marketplace/category/${categorySlug}`,
+          },
+        ]
+      : []),
+    ...(subcategorySlug
+      ? [
+          {
+            name: product.subcategory?.name || 'Subcategory',
+            url: `/marketplace/subcategory/${subcategorySlug}`,
+          },
+        ]
+      : []),
     { name: product.title, url: productPath(product) },
   ]);
 
@@ -303,7 +354,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     <div className="bg-slate-50 min-h-screen pb-mobile-nav">
       <JsonLd data={[productJsonLd, breadcrumbJsonLd]} />
       <div className="max-w-7xl mx-auto px-3 xs:px-4 pt-4 md:pt-6">
-
         {/* Breadcrumbs.
             The category link addressed the route by **UUID** — `category?.id` —
             but `/category/[id]` forwards its segment straight to
@@ -320,22 +370,35 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             detail response carries it, so there was no way back to
             "Smartphones" from a phone. */}
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link href="/" className="hover:text-blue-600 transition-colors whitespace-nowrap">Home</Link>
+          <Link href="/" className="hover:text-blue-600 transition-colors whitespace-nowrap">
+            Home
+          </Link>
           {categorySlug && (
             <>
               <span>/</span>
-              <Link href={`/category/${categorySlug}`} className="hover:text-blue-600 transition-colors hidden sm:inline">{product.category?.name || 'Category'}</Link>
+              <Link
+                href={`/category/${categorySlug}`}
+                className="hover:text-blue-600 transition-colors hidden sm:inline"
+              >
+                {product.category?.name || 'Category'}
+              </Link>
             </>
           )}
           {subcategorySlug && (
             <>
               <span className="hidden sm:inline">/</span>
-              <Link href={`/subcategory/${subcategorySlug}`} className="hover:text-blue-600 transition-colors hidden md:inline">{product.subcategory?.name}</Link>
+              <Link
+                href={`/subcategory/${subcategorySlug}`}
+                className="hover:text-blue-600 transition-colors hidden md:inline"
+              >
+                {product.subcategory?.name}
+              </Link>
             </>
           )}
           <span className="hidden sm:inline">/</span>
-          <span className="text-slate-900 font-medium truncate max-w-[160px] sm:max-w-none">{product.title}</span>
-
+          <span className="text-slate-900 font-medium truncate max-w-[160px] sm:max-w-none">
+            {product.title}
+          </span>
         </div>
 
         {/* One variant selection for the whole block: the gallery, the price
@@ -349,161 +412,194 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           baseMrp={listPrice}
           baseImages={images}
         >
-        <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 md:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            
-            {/* Image Gallery — interactive (swipe / thumbnails / arrows). The
+          <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              {/* Image Gallery — interactive (swipe / thumbnails / arrows). The
                 markup that used to live here was inert: thumbnails carried no
                 click handler and the hero was pinned to images[0]. */}
-            <ProductGallery
-              images={images}
-              title={product.title}
-              brandInitial={(product.brand?.name || '?')[0]}
-              spinFrames={spinFrames}
-            />
+              <ProductGallery
+                images={images}
+                title={product.title}
+                brandInitial={(product.brand?.name || '?')[0]}
+                spinFrames={spinFrames}
+              />
 
-            {/* Product Info */}
-            <div className="flex flex-col">
-              <div className="mb-6 border-b border-slate-100 pb-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <Link href={`/brand/${product.brand?.id || 'unknown'}`} className="text-blue-600 font-semibold text-sm hover:underline">
-                    {product.brand?.name || 'Unknown Brand'}
-                  </Link>
-                  <BrandFollowButton
-                    brandId={product.brand?.id || 'unknown'}
-                    brandName={product.brand?.name || 'Unknown Brand'}
-                    variant="compact"
-                    showCount={false}
-                  />
-                </div>
-                <h1 className="text-2xl md:text-3xl font-black text-slate-900 mb-3">{product.title}</h1>
-                
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-sm font-bold">
-                    <span>{product.averageRating || '0.0'}</span>
-                    <Star className="w-4 h-4 fill-current" />
+              {/* Product Info */}
+              <div className="flex flex-col">
+                <div className="mb-6 border-b border-slate-100 pb-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Link
+                      href={`/brand/${product.brand?.id || 'unknown'}`}
+                      className="text-blue-600 font-semibold text-sm hover:underline"
+                    >
+                      {product.brand?.name || 'Unknown Brand'}
+                    </Link>
+                    <BrandFollowButton
+                      brandId={product.brand?.id || 'unknown'}
+                      brandName={product.brand?.name || 'Unknown Brand'}
+                      variant="compact"
+                      showCount={false}
+                    />
                   </div>
-                  {/* "Ratings" not "Ratings & Reviews". `reviewCount` on the
+                  <h1 className="text-2xl md:text-3xl font-black text-slate-900 mb-3">
+                    {product.title}
+                  </h1>
+
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-sm font-bold">
+                      <span>{product.averageRating || '0.0'}</span>
+                      <Star className="w-4 h-4 fill-current" />
+                    </div>
+                    {/* "Ratings" not "Ratings & Reviews". `reviewCount` on the
                       product is the aggregate rating tally; written reviews are
                       a subset of it and are counted separately below. Labelling
                       it as both put "12,400 Ratings & Reviews" directly above a
                       panel reading "No reviews yet". */}
-                  <a href="#reviews" className="text-slate-500 text-sm hover:text-blue-600">
-                    {Number(product.reviewCount || 0).toLocaleString()} rating{Number(product.reviewCount) === 1 ? '' : 's'}
-                  </a>
-                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                    <BadgeCheck className="w-3.5 h-3.5" /> Verified Listing
-                  </span>
+                    <a href="#reviews" className="text-slate-500 text-sm hover:text-blue-600">
+                      {Number(product.reviewCount || 0).toLocaleString()} rating
+                      {Number(product.reviewCount) === 1 ? '' : 's'}
+                    </a>
+                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                      <BadgeCheck className="w-3.5 h-3.5" /> Verified Listing
+                    </span>
+                  </div>
+
+                  <ProductPriceDisplay sellingPrice={payablePrice} mrp={listPrice} />
                 </div>
 
-                <ProductPriceDisplay
-                  sellingPrice={payablePrice}
-                  mrp={listPrice}
-                />
-              </div>
-
-              {/* Variant pickers (size / colour / configuration), rendered from
+                {/* Variant pickers (size / colour / configuration), rendered from
                   the variants the product response already carries. */}
-              <VariantPicker />
+                <VariantPicker />
 
-              {/* Delivery & Trust */}
-              <div className="bg-slate-50 rounded-sm p-4 mt-6 mb-6 space-y-4 border border-slate-200">
-                <div className="flex items-start gap-3">
-                  <Truck className="w-5 h-5 text-blue-600 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">Free Delivery Available</h4>
-                    <p className="text-slate-500 text-xs">Enter pincode to check exact delivery dates.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">1 Year Brand Warranty</h4>
-                    <p className="text-slate-500 text-xs">7 Days Replacement Policy</p>
-                  </div>
-                </div>
-
-                {/* Bank Offers */}
-                {bankOffers.length > 0 && (
-                  <div className="border-t border-slate-200 pt-4 mt-2">
-                    <h4 className="font-bold text-slate-900 text-sm mb-2 flex items-center gap-1.5"><CreditCard className="w-4 h-4 text-green-600" /> Bank Offers</h4>
-                    <div className="space-y-1.5">
-                      {bankOffers.map((offer: any, i: number) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <span className="text-green-500 mt-0.5">•</span>
-                          <span>{offer.title} <span className="text-blue-600 font-bold cursor-pointer hover:underline">T&C</span></span>
-                        </div>
-                      ))}
+                {/* Delivery & Trust */}
+                <div className="bg-slate-50 rounded-sm p-4 mt-6 mb-6 space-y-4 border border-slate-200">
+                  <div className="flex items-start gap-3">
+                    <Truck className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-slate-900 text-sm">
+                        Free Delivery Available
+                      </h4>
+                      <p className="text-slate-500 text-xs">
+                        Enter pincode to check exact delivery dates.
+                      </p>
                     </div>
                   </div>
-                )}
+                  <div className="flex items-start gap-3">
+                    <Shield className="w-5 h-5 text-green-600 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-slate-900 text-sm">
+                        1 Year Brand Warranty
+                      </h4>
+                      <p className="text-slate-500 text-xs">7 Days Replacement Policy</p>
+                    </div>
+                  </div>
 
-                {/* Exchange Offer */}
-                {hasExchangeOffers && (
-                  <div className="border-t border-slate-200 pt-4 mt-2">
-                    <div className="flex items-start gap-3">
-                      <Repeat className="w-5 h-5 text-violet-600 mt-0.5" />
-                      <div>
-                        <h4 className="font-semibold text-slate-900 text-sm">Exchange Offer Available</h4>
-                        <p className="text-slate-500 text-xs">{exchangeHeadline}</p>
+                  {/* Bank Offers */}
+                  {bankOffers.length > 0 && (
+                    <div className="border-t border-slate-200 pt-4 mt-2">
+                      <h4 className="font-bold text-slate-900 text-sm mb-2 flex items-center gap-1.5">
+                        <CreditCard className="w-4 h-4 text-green-600" /> Bank Offers
+                      </h4>
+                      <div className="space-y-1.5">
+                        {bankOffers.map((offer: any, i: number) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <span className="text-green-500 mt-0.5">•</span>
+                            <span>
+                              {offer.title}{' '}
+                              <span className="text-blue-600 font-bold cursor-pointer hover:underline">
+                                T&C
+                              </span>
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Pincode Checker */}
-                <PincodeChecker />
+                  {/* Exchange Offer */}
+                  {hasExchangeOffers && (
+                    <div className="border-t border-slate-200 pt-4 mt-2">
+                      <div className="flex items-start gap-3">
+                        <Repeat className="w-5 h-5 text-violet-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-semibold text-slate-900 text-sm">
+                            Exchange Offer Available
+                          </h4>
+                          <p className="text-slate-500 text-xs">{exchangeHeadline}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-                {/* EMI Calculator */}
-                <EmiCalculator productId={product.id} price={payablePrice} />
-              </div>
+                  {/* PIN-code serviceability is an India Post concept; Qatar, the UAE
+                    and Saudi Arabia address by zone/area and have no such lookup. */}
+                  {market === 'IN' && <PincodeChecker />}
 
-              {/* Interactive Variant Selection and Action Buttons */}
-              <ProductActions product={product} />
+                  {/* EMI Calculator */}
+                  <EmiCalculator productId={product.id} price={payablePrice} />
+                </div>
 
-              {/* Records the view for /marketplace/recently-viewed and offers the
+                {/* Interactive Variant Selection and Action Buttons */}
+                <ProductActions product={product} />
+
+                {/* Records the view for /marketplace/recently-viewed and offers the
                   compare toggle that /marketplace/compare reads. Neither store had
                   a writer before, so both pages were empty or faked. */}
-              <ProductClientState
-                product={{
-                  id: product.id,
-                  title: product.title,
-                  brand: product.brand?.name || '',
-                  price: payablePrice,
-                  mrp: listPrice,
-                  rating: Number(product.averageRating || 0),
-                  imageUrl: mainImage || undefined,
-                  viewedAt: 0,
-                }}
-              />
+                <ProductClientState
+                  product={{
+                    id: product.id,
+                    title: product.title,
+                    brand: product.brand?.name || '',
+                    price: payablePrice,
+                    mrp: listPrice,
+                    rating: Number(product.averageRating || 0),
+                    imageUrl: mainImage || undefined,
+                    viewedAt: 0,
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
         </VariantProvider>
 
         {/* Specifications & Description */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 md:p-6">
-              <h2 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">Product Description</h2>
-              <div 
+              <h2 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">
+                Product Description
+              </h2>
+              <div
                 className="prose prose-sm max-w-none prose-img:rounded-sm prose-a:text-blue-600"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(product.metadata?.richDescriptionHtml || product.shortDescription || 'No description provided.') }}
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeHtml(
+                    product.metadata?.richDescriptionHtml ||
+                      product.shortDescription ||
+                      'No description provided.',
+                  ),
+                }}
               />
             </div>
 
             {specs.length > 0 && (
               <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 md:p-6">
-                <h2 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">Specifications</h2>
+                <h2 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">
+                  Specifications
+                </h2>
                 <div className="space-y-6">
                   {specs.map((group: any, idx: number) => (
                     <div key={idx}>
                       <h3 className="font-bold text-slate-800 mb-3 text-sm">{group.groupName}</h3>
                       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                         {group.attributes.map((attr: any, i: number) => (
-                          <div key={i} className="flex flex-col sm:flex-row sm:justify-between py-1.5 border-b border-slate-100 last:border-0">
+                          <div
+                            key={i}
+                            className="flex flex-col sm:flex-row sm:justify-between py-1.5 border-b border-slate-100 last:border-0"
+                          >
                             <dt className="text-slate-500 text-sm w-full sm:w-1/3">{attr.key}</dt>
-                            <dd className="text-slate-900 text-sm font-medium w-full sm:w-2/3">{attr.value}</dd>
+                            <dd className="text-slate-900 text-sm font-medium w-full sm:w-2/3">
+                              {attr.value}
+                            </dd>
                           </div>
                         ))}
                       </dl>
@@ -512,7 +608,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
             )}
-            
+
             <FrequentlyBoughtTogether productId={product.id} />
             <div id="reviews" className="scroll-mt-24">
               <ProductReviewSection
@@ -525,7 +621,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <ProductQASection productId={product.id} />
             <ProductRecommendations categorySlug={categorySlug} excludeProductId={product.id} />
           </div>
-          
+
           {/* Seller Info Sidebar */}
           <div className="space-y-4">
             <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5">
@@ -537,12 +633,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   {product.listing?.seller?.businessName?.[0] || 'S'}
                 </div>
                 <div>
-                  <Link href={`/seller/${product.listing?.seller?.id || 'unknown'}`} className="font-bold text-blue-600 hover:underline">
+                  <Link
+                    href={`/seller/${product.listing?.seller?.id || 'unknown'}`}
+                    className="font-bold text-blue-600 hover:underline"
+                  >
                     {product.listing?.seller?.businessName || 'Verified Seller'}
                   </Link>
                   <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
                     <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                    <span className="font-medium">{product.listing?.seller?.sellerRating || 'New'} Rating</span>
+                    <span className="font-medium">
+                      {product.listing?.seller?.sellerRating || 'New'} Rating
+                    </span>
                   </div>
                 </div>
               </div>
@@ -570,7 +671,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg">
                   <BadgeCheck className="w-4 h-4" />
-                  <span className="font-bold">Authorized {product.brand?.name || 'Brand'} Seller</span>
+                  <span className="font-bold">
+                    Authorized {product.brand?.name || 'Brand'} Seller
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-3 py-2 rounded-lg">
                   <Shield className="w-4 h-4" />
@@ -593,6 +696,5 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       {/* The sticky mobile CTA bar lives inside <ProductActions> so it shares
           the real add-to-cart / buy-now handlers. */}
     </div>
-
   );
 }

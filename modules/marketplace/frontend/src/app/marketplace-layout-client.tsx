@@ -61,7 +61,7 @@ import {
   getEntityLine,
   getLocationSearchPlaceholder,
 } from '@/lib/localization';
-import { MARKETPLACE_FREE_DELIVERY_THRESHOLD } from '@/lib/marketplace/delivery';
+import { getMarketplaceDeliveryRule } from '@/lib/marketplace/delivery';
 
 /**
  * Free-delivery threshold per market, in that market's own currency.
@@ -348,7 +348,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
   // `rateConfig`, so a ₹600 basket promised free delivery here and was charged
   // for it at checkout. `FREE_DELIVERY_THRESHOLDS` is kept below for the day the
   // backend can price per market; until then the promise has to match the bill.
-  const freeDeliveryThreshold = MARKETPLACE_FREE_DELIVERY_THRESHOLD;
+  const freeDeliveryThreshold = getMarketplaceDeliveryRule(country.code).freeAbove;
 
   // The methods this market actually clears, deduplicated to the labels a
   // shopper recognises.

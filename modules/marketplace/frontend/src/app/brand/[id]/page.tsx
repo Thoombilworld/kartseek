@@ -3,12 +3,23 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { brandMeta } from '@/lib/seo/metadata';
-import { Star, Heart, Truck, ShieldCheck, ArrowRight, Store, Sparkles, Megaphone, Tag, Package } from 'lucide-react';
+import {
+  Star,
+  Heart,
+  Truck,
+  ShieldCheck,
+  ArrowRight,
+  Store,
+  Sparkles,
+  Megaphone,
+  Tag,
+  Package,
+} from 'lucide-react';
 import { discountPercent } from '@/lib/marketplace/pricing';
 import { getBrandImage, getProductImage } from '@/lib/demo-data/marketplace-images';
 import { getBrandById, getProducts } from '@/lib/api/marketplace';
 import { getBrandUpdates } from '@/lib/api/brand-follow';
-import { buyBoxPrice } from '@/lib/api/map-catalog-product';
+import { buyBoxPrice, buyBoxMrp } from '@/lib/api/map-catalog-product';
 import { itemListSchema, breadcrumbSchema } from '@/lib/seo/schema';
 import { JsonLd } from '@/components/seo/json-ld';
 import { PriceTag } from '../../components/price-tag';
@@ -17,7 +28,7 @@ import { WishlistButton } from '@/components/shared/wishlist-button';
 import { ProductThumb, THUMB_SIZES } from '@/components/marketplace/product-thumb';
 import { ShareButton } from '@/components/shared/share-button';
 import { productPath } from '@/lib/marketplace/product-url';
-import { requestCurrency } from '@/lib/localization/request-region';
+import { requestCurrency, requestCountry } from '@/lib/localization/request-region';
 import { zoneHref } from '@/lib/routes/zone-href';
 
 /**
@@ -63,7 +74,11 @@ const updateTypeIcons: Record<string, typeof Sparkles> = {
 /** Memoised so `generateMetadata` and the page body share one lookup. */
 const loadBrand = cache((id: string) => getBrandById(id).catch(() => null));
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
   const { id } = await params;
   const brand = await loadBrand(id);
   if (!brand) return { title: 'Brand not found', robots: { index: false, follow: true } };
@@ -98,20 +113,29 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
   // brands on `brand.slug`, the same convention the category routes use.
   let products: BrandProduct[] = [];
   try {
-    const res: any = await getProducts({ brand: brand.slug, limit: '48' });
+    // Server component: the market must travel explicitly (see category page).
+    const res: any = await getProducts({
+      brand: brand.slug,
+      limit: '48',
+      country: await requestCountry(),
+    });
     const rows: any[] = res?.data ?? res?.products ?? [];
-    products = (Array.isArray(rows) ? rows : []).map((p: any): BrandProduct => ({
-      id: p.id,
-      title: p.name ?? p.title ?? 'Product',
-      price: buyBoxPrice(p),
-      // `mrp` is a decimal column, so it arrives as a string.
-      mrp: Number(p.mrp ?? 0) || buyBoxPrice(p),
-      rating: Number(p.averageRating ?? 0),
-      reviews: String(p.reviewCount ?? 0),
-      badge: p.badge || undefined,
-      imageUrl: p.images?.[0]?.url ?? undefined,
-    }));
-  } catch { /* leave empty — the grid renders its own empty state */ }
+    products = (Array.isArray(rows) ? rows : []).map(
+      (p: any): BrandProduct => ({
+        id: p.id,
+        title: p.name ?? p.title ?? 'Product',
+        price: buyBoxPrice(p),
+        // `mrp` is a decimal column, so it arrives as a string.
+        mrp: buyBoxMrp(p) || buyBoxPrice(p),
+        rating: Number(p.averageRating ?? 0),
+        reviews: String(p.reviewCount ?? 0),
+        badge: p.badge || undefined,
+        imageUrl: p.images?.[0]?.url ?? undefined,
+      }),
+    );
+  } catch {
+    /* leave empty — the grid renders its own empty state */
+  }
 
   // Real updates only. The three hand-written announcements this replaces were
   // shown for apple/samsung/nike and a "Welcome to <uuid>" card for everyone
@@ -126,7 +150,9 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
       message: u.message ?? u.body ?? '',
       date: u.createdAt ?? '',
     }));
-  } catch { /* no updates to show */ }
+  } catch {
+    /* no updates to show */
+  }
 
   // See `category/[id]/page.tsx` — a brand page is a product listing and was
   // going to crawlers without any structured data describing it as one.
@@ -160,18 +186,26 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
           is the brand's photograph". A real banner still wins when set.
         */}
         {(brand.bannerUrl || getBrandImage(brand.slug, 'banner')) && (
-          <img src={brand.bannerUrl || getBrandImage(brand.slug, 'banner')} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+          <img
+            src={brand.bannerUrl || getBrandImage(brand.slug, 'banner')}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-20"
+          />
         )}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(59,130,246,0.15),transparent_60%)]"></div>
         <div className="max-w-7xl mx-auto px-4 py-12 md:py-16 relative z-10">
           <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <Link href="/" className="hover:text-white transition-colors">
+              Home
+            </Link>
             <span>/</span>
             {/* Labelled for where it actually goes. There is no brands index
                 route — only /brands/feed and /brands/following — and this has
                 always pointed at the category list, so "Brands" promised a page
                 that does not exist. */}
-            <Link href="/category-list" className="hover:text-white transition-colors">Categories</Link>
+            <Link href="/category-list" className="hover:text-white transition-colors">
+              Categories
+            </Link>
             <span>/</span>
             <span className="text-white font-medium">{brandName}</span>
           </div>
@@ -189,22 +223,36 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
                 something untrue about the brand.
               */}
               {brand.logoUrl ? (
-                <img src={brand.logoUrl} alt={`${brandName} logo`} className="w-full h-full object-cover" />
+                <img
+                  src={brand.logoUrl}
+                  alt={`${brandName} logo`}
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <span className="text-blue-700 font-black text-3xl">{brandName[0]}</span>
               )}
             </div>
             <div className="flex-1">
-              <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">{brandName}</h1>
-              {brand.description && <p className="text-blue-200 mt-1 text-lg">{brand.description}</p>}
+              <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">
+                {brandName}
+              </h1>
+              {brand.description && (
+                <p className="text-blue-200 mt-1 text-lg">{brand.description}</p>
+              )}
               {brand.isVerified && (
                 <p className="text-slate-400 text-sm mt-1 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Verified brand on KARTSEEK
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Verified brand on
+                  KARTSEEK
                 </p>
               )}
             </div>
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <BrandFollowButton brandId={brandId} brandName={brandName} variant="full" showCount={true} />
+              <BrandFollowButton
+                brandId={brandId}
+                brandName={brandName}
+                variant="full"
+                showCount={true}
+              />
               <ShareButton
                 title={brandName}
                 text={`${brandName} on KARTSEEK`}
@@ -235,47 +283,65 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
           something — the header and "View all updates" link used to show above
           a fabricated announcement even for brands with no news at all. */}
       {brandUpdates.length > 0 && (
-      <div className="max-w-7xl mx-auto px-4 pt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <Megaphone className="w-5 h-5 text-blue-600" />
-            Brand Updates
-          </h2>
-          <Link href="/brands/feed" className="text-sm text-blue-600 hover:underline font-semibold flex items-center gap-1">
-            View all updates <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-          {brandUpdates.map((update, i) => {
-            const Icon = updateTypeIcons[update.type] || Megaphone;
-            return (
-              <div key={i} className="bg-white border border-slate-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    update.type === 'LAUNCH' ? 'bg-purple-100 text-purple-600' :
-                    update.type === 'OFFER' ? 'bg-amber-100 text-amber-600' :
-                    update.type === 'NEW_PRODUCT' ? 'bg-emerald-100 text-emerald-600' :
-                    'bg-blue-100 text-blue-600'
-                  }`}>
-                    <Icon className="w-4 h-4" />
+        <div className="max-w-7xl mx-auto px-4 pt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-blue-600" />
+              Brand Updates
+            </h2>
+            <Link
+              href="/brands/feed"
+              className="text-sm text-blue-600 hover:underline font-semibold flex items-center gap-1"
+            >
+              View all updates <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+            {brandUpdates.map((update, i) => {
+              const Icon = updateTypeIcons[update.type] || Megaphone;
+              return (
+                <div
+                  key={i}
+                  className="bg-white border border-slate-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        update.type === 'LAUNCH'
+                          ? 'bg-purple-100 text-purple-600'
+                          : update.type === 'OFFER'
+                            ? 'bg-amber-100 text-amber-600'
+                            : update.type === 'NEW_PRODUCT'
+                              ? 'bg-emerald-100 text-emerald-600'
+                              : 'bg-blue-100 text-blue-600'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        update.type === 'LAUNCH'
+                          ? 'bg-purple-50 text-purple-600'
+                          : update.type === 'OFFER'
+                            ? 'bg-amber-50 text-amber-600'
+                            : update.type === 'NEW_PRODUCT'
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : 'bg-blue-50 text-blue-600'
+                      }`}
+                    >
+                      {update.type.replace('_', ' ')}
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                    update.type === 'LAUNCH' ? 'bg-purple-50 text-purple-600' :
-                    update.type === 'OFFER' ? 'bg-amber-50 text-amber-600' :
-                    update.type === 'NEW_PRODUCT' ? 'bg-emerald-50 text-emerald-600' :
-                    'bg-blue-50 text-blue-600'
-                  }`}>
-                    {update.type.replace('_', ' ')}
-                  </span>
+                  <h3 className="font-bold text-slate-900 mb-1.5 text-sm leading-snug">
+                    {update.title}
+                  </h3>
+                  <p className="text-slate-500 text-xs leading-relaxed mb-2">{update.message}</p>
+                  <p className="text-slate-400 text-[10px]">{update.date}</p>
                 </div>
-                <h3 className="font-bold text-slate-900 mb-1.5 text-sm leading-snug">{update.title}</h3>
-                <p className="text-slate-500 text-xs leading-relaxed mb-2">{update.message}</p>
-                <p className="text-slate-400 text-[10px]">{update.date}</p>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
       )}
 
       {/* Products */}
@@ -289,8 +355,13 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
           <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center">
             <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <h3 className="font-bold text-slate-800 mb-1">No products from {brandName} yet</h3>
-            <p className="text-sm text-slate-500 mb-6">Follow this brand to hear when they list something.</p>
-            <Link href="/" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-colors">
+            <p className="text-sm text-slate-500 mb-6">
+              Follow this brand to hear when they list something.
+            </p>
+            <Link
+              href="/"
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-colors"
+            >
               Browse the marketplace
             </Link>
           </div>
@@ -306,12 +377,16 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
                 className="bg-white border border-slate-100 rounded-2xl p-4 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 group relative flex flex-col"
               >
                 {product.badge && (
-                  <div className={`absolute top-3 left-3 ${product.badge.includes('OFF') ? 'bg-red-500' : product.badge === 'BESTSELLER' ? 'bg-amber-500' : product.badge === 'NEW' ? 'bg-blue-600' : 'bg-emerald-600'} text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10 uppercase tracking-wide`}>
+                  <div
+                    className={`absolute top-3 left-3 ${product.badge.includes('OFF') ? 'bg-red-500' : product.badge === 'BESTSELLER' ? 'bg-amber-500' : product.badge === 'NEW' ? 'bg-blue-600' : 'bg-emerald-600'} text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10 uppercase tracking-wide`}
+                  >
                     {product.badge}
                   </div>
                 )}
                 {discount > 0 && !product.badge && (
-                  <div className="absolute top-3 left-3 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10">{discount}% OFF</div>
+                  <div className="absolute top-3 left-3 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10">
+                    {discount}% OFF
+                  </div>
                 )}
                 {/* This page is a server component, so the heart had no handler
                     at all — eight per grid, none of them clickable. */}
@@ -330,8 +405,12 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
                 />
 
                 <div className="flex-1">
-                  <p className="text-[10px] text-blue-600 font-semibold mb-1 uppercase tracking-wider">{brandName}</p>
-                  <h3 className="font-semibold text-slate-800 text-sm mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors leading-snug">{product.title}</h3>
+                  <p className="text-[10px] text-blue-600 font-semibold mb-1 uppercase tracking-wider">
+                    {brandName}
+                  </p>
+                  <h3 className="font-semibold text-slate-800 text-sm mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors leading-snug">
+                    {product.title}
+                  </h3>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
                       {product.rating} <Star className="w-2.5 h-2.5 fill-white" />
