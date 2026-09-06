@@ -331,7 +331,7 @@ audit and remediation reports live under
 <!-- counted with: git ls-files docs/audits | grep -c '\.md$' → 9 -->
 
 The most recent,
-[`docs/audits/frontend-data-audit.md`](docs/audits/frontend-data-audit.md)
+[`docs/audits/2026-08-30-frontend-data-audit.md`](docs/audits/2026-08-30-frontend-data-audit.md)
 (measured 30 August 2026), found that 161 of 206 web route pages render
 hardcoded arrays instead of calling their module's own API, even though the
 underlying APIs were verified working. Earlier reports in the same directory

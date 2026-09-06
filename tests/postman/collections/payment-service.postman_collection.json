@@ -719,7 +719,7 @@
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/invoices/customer/USER-ATTACKER",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }]
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }]
           },
           "event": [{
             "listen": "test",

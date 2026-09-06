@@ -134,7 +134,6 @@ apps/api/
 ├── libs/<name>/           # shared code, imported as @app/<name>
 ├── proto/                 # gRPC contracts
 ├── migrations/            # hand-written TypeORM migrations
-├── seeds/                 # one-off seed data used by scripts/seed
 ├── scripts/
 │   ├── seed/              # demo-data seed scripts
 │   └── maintenance/       # one-off backfills and repairs

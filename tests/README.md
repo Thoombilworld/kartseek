@@ -8,7 +8,7 @@ the customer-facing end-to-end flows, and the gateway↔service contract spec).
 
 ## `postman/`
 
-The Postman collections, environments, test data and Newman runners used to
+The Postman collections, environments and Newman runners used to
 exercise the API gateway's HTTP surface end to end, independently of the unit
 and integration suites. See [`postman/README.md`](postman/README.md).
 

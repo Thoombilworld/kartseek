@@ -51,16 +51,8 @@ const CRITICAL_COLLECTIONS = [
 
 // ── Resolve environment file ────────────────────────────────────────────────
 
-const envMap = {
-  local: 'KARTSEEK_Local.postman_environment.json',
-  staging: 'KARTSEEK_Staging.postman_environment.json',
-  production: 'KARTSEEK_Production.postman_environment.json',
-  india: 'KARTSEEK_India.postman_environment.json',
-  qatar: 'KARTSEEK_Qatar.postman_environment.json',
-  uae: 'KARTSEEK_UAE.postman_environment.json',
-  uk: 'KARTSEEK_UK.postman_environment.json',
-  usa: 'KARTSEEK_USA.postman_environment.json',
-};
+const ENVIRONMENTS = ['local', 'staging', 'production', 'india', 'qatar', 'uae', 'uk', 'usa'];
+const envMap = Object.fromEntries(ENVIRONMENTS.map((name) => [name, `${name}.postman_environment.json`]));
 
 const envFile = path.join(ENVIRONMENTS_DIR, envMap[envName.toLowerCase()] || envMap.local);
 
