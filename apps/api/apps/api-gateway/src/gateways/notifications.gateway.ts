@@ -26,11 +26,7 @@ import { authenticateWsClient } from './ws-auth.util';
  */
 @WebSocketGateway({
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://*.kartseek.com',
-    ],
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'https://*.kartseek.com'],
     credentials: true,
   },
   namespace: '/notifications',
@@ -77,10 +73,14 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
     // Track online status
     await this.redis.sadd('online:users', userId);
-    await this.redis.hset('ws:notif:sessions', client.id, JSON.stringify({
-      userId,
-      connectedAt: new Date().toISOString(),
-    }));
+    await this.redis.hset(
+      'ws:notif:sessions',
+      client.id,
+      JSON.stringify({
+        userId,
+        connectedAt: new Date().toISOString(),
+      }),
+    );
 
     this.logger.log(`🔔 ${userId} connected to notifications [socket=${client.id}]`);
 
@@ -108,12 +108,18 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
         // This was the last socket — user is now offline
         await this.redis.hset('online:last_seen', session.userId, new Date().toISOString());
         // Keep in online set for 5 minutes (grace period for reconnects)
-        setTimeout(async () => {
-          const stillOnline = await this.server.in(`user:${session.userId}`).fetchSockets();
-          if (stillOnline.length === 0) {
-            await this.redis.del(`online:users`); // Would need srem, simplified here
-          }
-        }, 5 * 60 * 1000);
+        setTimeout(
+          async () => {
+            const stillOnline = await this.server.in(`user:${session.userId}`).fetchSockets();
+            if (stillOnline.length === 0) {
+              // `srem`, not `del`: this used to drop the whole set, so the first
+              // user to go offline marked everybody offline in every presence
+              // query until each of them reconnected.
+              await this.redis.srem('online:users', session.userId);
+            }
+          },
+          5 * 60 * 1000,
+        );
       }
     }
     await this.redis.hdel('ws:notif:sessions', client.id);
@@ -129,10 +135,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   /** Subscribe to a topic (e.g., "flash_sales", "grocery_deals", "system") */
   @SubscribeMessage('subscribe_topic')
-  handleSubscribeTopic(
-    @MessageBody() data: { topic: string },
-    @ConnectedSocket() client: Socket,
-  ) {
+  handleSubscribeTopic(@MessageBody() data: { topic: string }, @ConnectedSocket() client: Socket) {
     client.join(`topic_${data.topic}`);
     this.logger.log(`📡 ${client.id} subscribed to topic: ${data.topic}`);
     client.emit('subscription_confirmed', { topic: data.topic });
@@ -204,14 +207,17 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   // ── Server-Side Push Methods (called by controllers/services) ────────────
 
   /** Send a notification to a specific user */
-  async notifyUser(userId: string, notification: {
-    title: string;
-    body: string;
-    type: 'order' | 'promotion' | 'system' | 'chat' | 'delivery' | 'payment';
-    icon?: string;
-    actionUrl?: string;
-    data?: Record<string, any>;
-  }) {
+  async notifyUser(
+    userId: string,
+    notification: {
+      title: string;
+      body: string;
+      type: 'order' | 'promotion' | 'system' | 'chat' | 'delivery' | 'payment';
+      icon?: string;
+      actionUrl?: string;
+      data?: Record<string, any>;
+    },
+  ) {
     const payload = {
       id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       ...notification,
@@ -237,12 +243,15 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   }
 
   /** Broadcast to a topic (flash sale, system alert, etc.) */
-  async broadcastToTopic(topic: string, notification: {
-    title: string;
-    body: string;
-    type: string;
-    data?: Record<string, any>;
-  }) {
+  async broadcastToTopic(
+    topic: string,
+    notification: {
+      title: string;
+      body: string;
+      type: string;
+      data?: Record<string, any>;
+    },
+  ) {
     const payload = {
       id: `broadcast_${Date.now()}`,
       ...notification,
@@ -310,5 +319,4 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       // ignore
     }
   }
-
 }

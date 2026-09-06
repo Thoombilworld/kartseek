@@ -18,6 +18,12 @@ import { type ServerOptions } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
 
+/**
+ * `error` listeners the shared pub/sub clients may carry: one per Socket.IO
+ * namespace (see connectToRedis), with room to add gateways without a warning.
+ */
+const MAX_ADAPTER_LISTENERS = 64;
+
 export class RedisIoAdapter extends IoAdapter {
   private readonly logger = new Logger('RedisIoAdapter');
   private adapterConstructor: ReturnType<typeof createAdapter> | null = null;
@@ -37,12 +43,19 @@ export class RedisIoAdapter extends IoAdapter {
     const port = parseInt(process.env.REDIS_PORT || '6379', 10);
     const password = process.env.REDIS_PASSWORD || undefined;
 
-    const redisUrl = password
-      ? `redis://:${password}@${host}:${port}`
-      : `redis://${host}:${port}`;
+    const redisUrl = password ? `redis://:${password}@${host}:${port}` : `redis://${host}:${port}`;
 
     this.pubClient = createClient({ url: redisUrl });
     this.subClient = this.pubClient.duplicate();
+
+    // Every Socket.IO namespace builds its own RedisAdapter over these two
+    // shared clients, and each adapter registers an `error` listener on both.
+    // Eleven namespaces (ten gateways plus the default `/`) cross Node's
+    // default ceiling of ten, so every boot printed a MaxListenersExceededWarning
+    // pointing here. One listener per namespace, released with it, is not a
+    // leak; raise the ceiling rather than silence the warning outright.
+    this.pubClient.setMaxListeners(MAX_ADAPTER_LISTENERS);
+    this.subClient.setMaxListeners(MAX_ADAPTER_LISTENERS);
 
     // Error handlers to prevent unhandled rejections
     this.pubClient.on('error', (err) =>
@@ -59,7 +72,7 @@ export class RedisIoAdapter extends IoAdapter {
     } catch (err: any) {
       this.logger.warn(
         `⚠️ Redis adapter connection failed: ${err.message}. ` +
-        `Falling back to in-memory adapter (single-instance mode).`,
+          `Falling back to in-memory adapter (single-instance mode).`,
       );
       this.adapterConstructor = null;
     }

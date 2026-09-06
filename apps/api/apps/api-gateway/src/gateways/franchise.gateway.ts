@@ -9,16 +9,13 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
+import { RedisService } from '@app/redis';
 import { WsDdosGuard } from '@app/security';
 import { authenticateWsClient } from './ws-auth.util';
 
 @WebSocketGateway({
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://*.kartseek.com',
-    ],
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'https://*.kartseek.com'],
     credentials: true,
   },
   namespace: '/franchise',
@@ -33,7 +30,22 @@ export class FranchiseGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   private readonly logger = new Logger(FranchiseGateway.name);
 
-  handleConnection(client: Socket) {
+  constructor(
+    private readonly redis: RedisService,
+    private readonly wsDdosGuard: WsDdosGuard,
+  ) {}
+
+  async handleConnection(client: Socket) {
+    // ── DDoS: rate and concurrency limits per IP, before any other work ──
+    //
+    // `@UseGuards(WsDdosGuard)` on the class only covers @SubscribeMessage
+    // handlers; connections are checked by this explicit call, which every
+    // other gateway in this folder makes and this one did not. Without it the
+    // franchise namespace was the one door the per-IP connection limits and
+    // strike bans did not cover.
+    const allowed = await this.wsDdosGuard.validateConnection(client);
+    if (!allowed) return;
+
     // ── JWT Auth ──
     const user = authenticateWsClient(client, 'FranchiseGateway');
     if (!user) return;
@@ -41,13 +53,16 @@ export class FranchiseGateway implements OnGatewayConnection, OnGatewayDisconnec
     const franchiseId = client.handshake.query.franchiseId as string;
     if (franchiseId) {
       client.join(`franchise:${franchiseId}`);
-      this.logger.debug(`Franchise client connected to room: franchise:${franchiseId} (Socket: ${client.id})`);
+      this.logger.debug(
+        `Franchise client connected to room: franchise:${franchiseId} (Socket: ${client.id})`,
+      );
     } else {
       this.logger.debug(`Franchise client connected without franchiseId (Socket: ${client.id})`);
     }
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
+    await this.wsDdosGuard.handleDisconnection(client);
     this.logger.debug(`Franchise client disconnected (Socket: ${client.id})`);
 
     // Clean up all event listeners to prevent memory leaks
@@ -57,10 +72,7 @@ export class FranchiseGateway implements OnGatewayConnection, OnGatewayDisconnec
   }
 
   @SubscribeMessage('join_franchise_room')
-  handleJoinRoom(
-    @MessageBody() data: { franchiseId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
+  handleJoinRoom(@MessageBody() data: { franchiseId: string }, @ConnectedSocket() client: Socket) {
     if (data && data.franchiseId) {
       const room = `franchise:${data.franchiseId}`;
       client.join(room);
@@ -87,18 +99,18 @@ export class FranchiseGateway implements OnGatewayConnection, OnGatewayDisconnec
     const today = new Date().toISOString().slice(0, 10);
     const latencyKey = `stats:ws:latency:${today}`;
     try {
-      if ((this as any).redis) {
-        const raw = await (this as any).redis.get(latencyKey);
-        const stats = raw ? JSON.parse(raw) : { count: 0, totalMs: 0, minMs: Infinity, maxMs: 0 };
-        stats.count++;
-        stats.totalMs += serverProcessingMs;
-        stats.minMs = Math.min(stats.minMs, serverProcessingMs);
-        stats.maxMs = Math.max(stats.maxMs, serverProcessingMs);
-        await (this as any).redis.set(latencyKey, JSON.stringify(stats), 86400 * 2);
-      }
-    } catch {
-      // ignore
+      // `this.redis` is injected now. This used to read `(this as any).redis`
+      // on a class with no constructor, so the branch never ran and the daily
+      // latency stats were never written.
+      const raw = await this.redis.get(latencyKey);
+      const stats = raw ? JSON.parse(raw) : { count: 0, totalMs: 0, minMs: Infinity, maxMs: 0 };
+      stats.count++;
+      stats.totalMs += serverProcessingMs;
+      stats.minMs = Math.min(stats.minMs, serverProcessingMs);
+      stats.maxMs = Math.max(stats.maxMs, serverProcessingMs);
+      await this.redis.set(latencyKey, JSON.stringify(stats), 86400 * 2);
+    } catch (err) {
+      this.logger.debug(`latency stats not recorded: ${(err as Error).message}`);
     }
   }
-
 }
