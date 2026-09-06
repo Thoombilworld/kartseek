@@ -149,7 +149,9 @@ describe('CatalogService', () => {
         // to exist; a resolved promise keeps the fire-and-forget call quiet.
         {
           provide: MarketplaceFulfillmentService,
-          useValue: { sweepPriceAlerts: jest.fn().mockResolvedValue({ checked: 0, notified: 0, alerts: [] }) },
+          useValue: {
+            sweepPriceAlerts: jest.fn().mockResolvedValue({ checked: 0, notified: 0, alerts: [] }),
+          },
         },
         { provide: getRepositoryToken(Product), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Seller), useFactory: mockRepoFactory },
@@ -212,7 +214,11 @@ describe('CatalogService', () => {
 
     it('looks up by slug when given a non-UUID', async () => {
       const uuid = '3f1b9c42-5d6e-4a8b-9c0d-1e2f3a4b5c6d';
-      categoryRepo.findOne.mockResolvedValue({ id: uuid, name: 'Electronics', slug: 'electronics' });
+      categoryRepo.findOne.mockResolvedValue({
+        id: uuid,
+        name: 'Electronics',
+        slug: 'electronics',
+      });
       categoryRepo.findDescendants.mockResolvedValue([{ id: uuid, name: 'Electronics' }]);
       productRepo.count.mockResolvedValue(7);
 
@@ -242,7 +248,9 @@ describe('CatalogService', () => {
     it('resolves a subcategory by slug and counts against subcategory_id', async () => {
       const subId = '7a1b9c42-5d6e-4a8b-9c0d-1e2f3a4b5c6d';
       categoryRepo.findOne.mockResolvedValue({
-        id: subId, name: 'Laptops', slug: 'laptops',
+        id: subId,
+        name: 'Laptops',
+        slug: 'laptops',
         parent: { id: 'parent-id', name: 'Electronics', slug: 'electronics' },
       });
       productRepo.count.mockResolvedValue(3);
@@ -273,7 +281,11 @@ describe('CatalogService', () => {
 
     it('looks up by id when given a UUID', async () => {
       const uuid = '3f1b9c42-5d6e-4a8b-9c0d-1e2f3a4b5c6d';
-      categoryRepo.findOne.mockResolvedValue({ id: uuid, name: 'Electronics', slug: 'electronics' });
+      categoryRepo.findOne.mockResolvedValue({
+        id: uuid,
+        name: 'Electronics',
+        slug: 'electronics',
+      });
       categoryRepo.findDescendants.mockResolvedValue([{ id: uuid, name: 'Electronics' }]);
 
       await service.getCategoryById(uuid);
@@ -288,7 +300,9 @@ describe('CatalogService', () => {
     it('flags a subcategory and counts it on subcategory_id', async () => {
       const subId = '9a1b9c42-5d6e-4a8b-9c0d-1e2f3a4b5c6d';
       categoryRepo.findOne.mockResolvedValue({
-        id: subId, name: 'Laptops', slug: 'laptops',
+        id: subId,
+        name: 'Laptops',
+        slug: 'laptops',
         parent: { id: 'p1', name: 'Electronics', slug: 'electronics' },
       });
       categoryRepo.findDescendants.mockResolvedValue([{ id: subId, name: 'Laptops' }]);
@@ -333,7 +347,9 @@ describe('CatalogService', () => {
     it('keeps a hand-authored metadata copy when the product has no variant rows', async () => {
       const authored = [{ variantName: 'Length', variantOptions: ['30', '32'] }];
       productRepo.findOne.mockResolvedValue({
-        id: uuid, name: 'Jeans', slug: 'jeans',
+        id: uuid,
+        name: 'Jeans',
+        slug: 'jeans',
         metadata: { variantDimensions: authored },
       });
       variantRepo.find.mockResolvedValue([]);
@@ -449,7 +465,9 @@ describe('CatalogService', () => {
       return productRepo.createQueryBuilder.mock.results.at(-1)!.value;
     }
 
-    beforeEach(() => { redis.getJson.mockResolvedValue(null); });
+    beforeEach(() => {
+      redis.getJson.mockResolvedValue(null);
+    });
 
     it('restricts the catalogue to sellers in the requested region', async () => {
       await service.getProducts(1, 20, { country: 'QA' });
@@ -494,9 +512,11 @@ describe('CatalogService', () => {
     it('normalises the region code to upper case', async () => {
       await service.getProducts(1, 20, { country: 'qa' });
 
-      expect(lastQb().andWhere.mock.calls.some(
-        ([, params]: [string, any]) => params?.regionCode === 'QA',
-      )).toBe(true);
+      expect(
+        lastQb().andWhere.mock.calls.some(
+          ([, params]: [string, any]) => params?.regionCode === 'QA',
+        ),
+      ).toBe(true);
     });
 
     it('ranks local sellers above cross-border ones', async () => {
@@ -505,7 +525,10 @@ describe('CatalogService', () => {
       const qb = lastQb();
       // `is_local` must be the *first* sort key — a later one would let a
       // higher-rated foreign listing outrank every local seller.
-      expect(qb.addSelect).toHaveBeenCalledWith(expect.stringContaining('product_listings'), 'is_local');
+      expect(qb.addSelect).toHaveBeenCalledWith(
+        expect.stringContaining('product_listings'),
+        'is_local',
+      );
       expect(qb.orderBy).toHaveBeenCalledWith('is_local', 'DESC');
     });
 
@@ -531,9 +554,11 @@ describe('CatalogService', () => {
       await service.getProducts(1, 20, { sort: 'price_asc' });
 
       const qb = lastQb();
-      expect(qb.andWhere.mock.calls.some(
-        ([, params]: [string, any]) => params?.regionCode !== undefined,
-      )).toBe(false);
+      expect(
+        qb.andWhere.mock.calls.some(
+          ([, params]: [string, any]) => params?.regionCode !== undefined,
+        ),
+      ).toBe(false);
       // Admin catalogue views want the requested sort as the primary key.
       expect(qb.orderBy).toHaveBeenCalledWith('payable_price', 'ASC');
     });
@@ -541,9 +566,11 @@ describe('CatalogService', () => {
     it('scopes search results to the region', async () => {
       await service.searchProducts('phone', 1, 20, 'QA');
 
-      expect(lastQb().andWhere.mock.calls.some(
-        ([, params]: [string, any]) => params?.regionCode === 'QA',
-      )).toBe(true);
+      expect(
+        lastQb().andWhere.mock.calls.some(
+          ([, params]: [string, any]) => params?.regionCode === 'QA',
+        ),
+      ).toBe(true);
     });
 
     it('caches each region separately', async () => {
@@ -579,7 +606,9 @@ describe('CatalogService', () => {
 
       const qb = lastSellerQb();
       expect(qb.andWhere).toHaveBeenCalledWith('s.region_code = :region', { region: 'QA' });
-      expect(qb.andWhere).toHaveBeenCalledWith('s.verificationStatus = :status', { status: 'PENDING' });
+      expect(qb.andWhere).toHaveBeenCalledWith('s.verificationStatus = :status', {
+        status: 'PENDING',
+      });
     });
 
     it('excludes unassigned sellers when a market is named', async () => {
@@ -587,8 +616,8 @@ describe('CatalogService', () => {
       // requirements — a seller with no market has not been shown to meet them.
       await service.getSellersForAdmin({ region: 'QA' });
 
-      const regionCall = lastSellerQb().andWhere.mock.calls.find(
-        ([sql]: [string]) => sql.includes('region_code'),
+      const regionCall = lastSellerQb().andWhere.mock.calls.find(([sql]: [string]) =>
+        sql.includes('region_code'),
       );
       expect(regionCall![0]).not.toContain('IS NULL');
     });
@@ -676,6 +705,87 @@ describe('CatalogService', () => {
       await expect(
         service.releaseListingStock([{ listingId: 'listing-a', quantity: 1 }]),
       ).resolves.toEqual({ released: 0 });
+    });
+  });
+
+  describe('priceOrderItems with variants', () => {
+    const PID = '2b3c706d-185e-4b7e-86e2-00b29682c552';
+    const VID = '810a6dba-5f4b-4903-8001-47da6e9f1aa8';
+    const product = {
+      id: PID,
+      name: 'iPhone 15 Pro',
+      mrp: '5850.00',
+      is_active: true,
+      approval_status: 'APPROVED',
+    };
+    const listing = {
+      id: 'L1',
+      sellingPrice: '5050.00',
+      stockQuantity: 335,
+      isBuyBoxWinner: true,
+      product: { id: PID },
+      seller: { id: 'S1', verificationStatus: 'VERIFIED', isActive: true },
+    };
+    const variant = {
+      id: VID,
+      productId: PID,
+      variantName: '128GB / Midnight Black',
+      sellingPrice: '115900.00',
+      mrp: '134900.00',
+      stockQuantity: 24,
+      isActive: true,
+    };
+    let listingRepo: any;
+
+    beforeEach(() => {
+      listingRepo = (service as any).listingRepo;
+      productRepo.find.mockResolvedValue([product]);
+      listingRepo.find.mockResolvedValue([listing]);
+    });
+
+    it('charges the variant price and keeps the listing for seller attribution', async () => {
+      variantRepo.find.mockResolvedValue([variant]);
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 1, variantId: VID }]);
+      expect(res.ok).toBe(true);
+      expect(res.items[0]).toMatchObject({
+        unitPrice: 115900,
+        variantId: VID,
+        listingId: 'L1',
+        sellerId: 'S1',
+        name: 'iPhone 15 Pro — 128GB / Midnight Black',
+      });
+      expect(res.subtotal).toBe(115900);
+    });
+
+    it('refuses a variant product ordered without a variant', async () => {
+      variantRepo.find.mockResolvedValue([variant]);
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 1 }]);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/choose an option/i);
+    });
+
+    it('refuses an option that does not belong to the product', async () => {
+      variantRepo.find.mockResolvedValue([variant]);
+      const res = await service.priceOrderItems([
+        { productId: PID, quantity: 1, variantId: '00000000-0000-4000-8000-000000000000' },
+      ]);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/not available/i);
+    });
+
+    it('refuses more units than the variant holds', async () => {
+      variantRepo.find.mockResolvedValue([{ ...variant, stockQuantity: 1 }]);
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 2, variantId: VID }]);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/Only 1 left/);
+    });
+
+    it('still prices a product with no variants from its buy-box listing', async () => {
+      variantRepo.find.mockResolvedValue([]);
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 2 }]);
+      expect(res.ok).toBe(true);
+      expect(res.items[0]).toMatchObject({ unitPrice: 5050, variantId: null });
+      expect(res.subtotal).toBe(10100);
     });
   });
 });

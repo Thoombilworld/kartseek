@@ -443,9 +443,22 @@ export class MarketplaceGatewayController {
       productId,
     );
 
-    const listings: any[] = Array.isArray(product?.listings) ? product.listings : [];
-    const buyBox = listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0];
-    const price = Number(buyBox?.sellingPrice ?? product?.mrp ?? 0);
+    // Price the line through the same authority checkout uses, so the cart
+    // quotes exactly what the order will charge — including the selected SKU.
+    // Reading the buy-box listing here priced every variant at the parent.
+    const quantity = Number((payload as any)?.quantity ?? 1) || 1;
+    const variantId = (payload as any)?.variantId || undefined;
+    const pricing: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.PRICE_ORDER_ITEMS, {
+      items: [{ productId, quantity, variantId }],
+    });
+    const priced = pricing?.items?.[0];
+    if (!pricing?.ok || !priced?.ok) {
+      throw new HttpException(
+        priced?.reason || pricing?.reason || 'Product is not purchasable',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const price = Number(priced.unitPrice);
     if (!Number.isFinite(price) || price <= 0) {
       throw new HttpException('Product is not purchasable', HttpStatus.CONFLICT);
     }
@@ -454,11 +467,11 @@ export class MarketplaceGatewayController {
     const line = {
       userId,
       productId,
-      name: product?.name ?? 'Product',
+      name: priced.name ?? product?.name ?? 'Product',
       price,
-      quantity: Number((payload as any)?.quantity ?? 1) || 1,
+      quantity,
       imageUrl: (images.find((i: any) => i?.isPrimary) ?? images[0])?.url,
-      variantId: (payload as any)?.variantId,
+      variantId,
       serviceType: 'marketplace',
     };
 

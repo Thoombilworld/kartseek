@@ -1,6 +1,22 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { type EntityTarget, Repository, TreeRepository, ILike, In, IsNull, MoreThanOrEqual, SelectQueryBuilder } from 'typeorm';
+import {
+  type EntityTarget,
+  Repository,
+  TreeRepository,
+  ILike,
+  In,
+  IsNull,
+  MoreThanOrEqual,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { RedisService } from '@app/redis';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
@@ -41,8 +57,10 @@ export class CatalogService {
     @InjectRepository(ProductImage) private readonly imageRepo: Repository<ProductImage>,
     @InjectRepository(Review) private readonly reviewRepo: Repository<Review>,
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
-    @InjectRepository(ProductAttribute) private readonly attributeRepo: Repository<ProductAttribute>,
-    @InjectRepository(FlashDealNomination) private readonly nominationRepo: Repository<FlashDealNomination>,
+    @InjectRepository(ProductAttribute)
+    private readonly attributeRepo: Repository<ProductAttribute>,
+    @InjectRepository(FlashDealNomination)
+    private readonly nominationRepo: Repository<FlashDealNomination>,
     /**
      * Price-drop alerts are checked from inside `recomputeBuyBox` — see the note
      * there. Injected lazily because both services live in this module and the
@@ -102,8 +120,11 @@ export class CatalogService {
 
     const rows = await this.attributeRepo.find({
       where: categoryIds.length
-        // `IsNull()` is the global set — attributes that apply everywhere.
-        ? [{ isActive: true, categoryId: In(categoryIds) }, { isActive: true, categoryId: IsNull() }]
+        ? // `IsNull()` is the global set — attributes that apply everywhere.
+          [
+            { isActive: true, categoryId: In(categoryIds) },
+            { isActive: true, categoryId: IsNull() },
+          ]
         : { isActive: true },
       order: { sortOrder: 'ASC', name: 'ASC' },
     });
@@ -112,11 +133,14 @@ export class CatalogService {
     // Footwear should replace, not duplicate, "Size" on Fashion. Sorted
     // most-specific-last so the later write is the more specific one.
     const bySlug = new Map<string, ProductAttribute>();
-    const depth = (a: ProductAttribute) => (a.categoryId ? categoryIds.indexOf(a.categoryId) : Number.MAX_SAFE_INTEGER);
+    const depth = (a: ProductAttribute) =>
+      a.categoryId ? categoryIds.indexOf(a.categoryId) : Number.MAX_SAFE_INTEGER;
     for (const attr of [...rows].sort((a, b) => depth(b) - depth(a))) {
       bySlug.set(attr.slug, attr);
     }
-    const data = [...bySlug.values()].sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name));
+    const data = [...bySlug.values()].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+    );
 
     const result = {
       category: category ? { id: category.id, name: category.name, slug: category.slug } : null,
@@ -200,7 +224,10 @@ export class CatalogService {
   }
 
   /** Restrict a product query to one region. No-op when no region is given. */
-  private scopeToRegion(qb: SelectQueryBuilder<Product>, region?: string): SelectQueryBuilder<Product> {
+  private scopeToRegion(
+    qb: SelectQueryBuilder<Product>,
+    region?: string,
+  ): SelectQueryBuilder<Product> {
     if (!region) return qb;
     return qb.andWhere(this.regionPredicate(), { regionCode: region.toUpperCase() });
   }
@@ -211,7 +238,10 @@ export class CatalogService {
    * Must be called before any other `orderBy`, since the first sort key wins.
    * Returns the caller's builder so ordering reads in priority order.
    */
-  private rankLocalFirst(qb: SelectQueryBuilder<Product>, region?: string): SelectQueryBuilder<Product> {
+  private rankLocalFirst(
+    qb: SelectQueryBuilder<Product>,
+    region?: string,
+  ): SelectQueryBuilder<Product> {
     if (!region) return qb;
     return qb
       .addSelect(this.localSellerExpr(), 'is_local')
@@ -288,7 +318,9 @@ export class CatalogService {
    * one-off correction survives. Two grouped queries cover any number of sellers,
    * so the list endpoints stay a fixed cost rather than N+1.
    */
-  private async sellerStats(sellerIds: string[]): Promise<Map<string, { products: number; reviews: number; rating: number }>> {
+  private async sellerStats(
+    sellerIds: string[],
+  ): Promise<Map<string, { products: number; reviews: number; rating: number }>> {
     const stats = new Map<string, { products: number; reviews: number; rating: number }>();
     if (!sellerIds.length) return stats;
 
@@ -344,7 +376,12 @@ export class CatalogService {
     return sellers.map((s) => {
       const st = stats.get(s.id);
       if (!st) return s;
-      return { ...s, totalProducts: st.products, totalReviews: st.reviews, sellerRating: st.rating };
+      return {
+        ...s,
+        totalProducts: st.products,
+        totalReviews: st.reviews,
+        sellerRating: st.rating,
+      };
     });
   }
 
@@ -393,17 +430,21 @@ export class CatalogService {
   /** Live product count per category id, across both levels of the tree. */
   private async categoryProductCounts(): Promise<Map<string, number>> {
     const products = this.tableOf(Product);
-    const rows: Array<{ id: string; count: string }> = await this.productRepo.query(`
+    const rows: Array<{ id: string; count: string }> = await this.productRepo
+      .query(
+        `
       SELECT id, SUM(count)::bigint AS count FROM (
         SELECT category_id    AS id, COUNT(*) AS count FROM ${products} WHERE category_id    IS NOT NULL GROUP BY category_id
         UNION ALL
         SELECT subcategory_id AS id, COUNT(*) AS count FROM ${products} WHERE subcategory_id IS NOT NULL GROUP BY subcategory_id
       ) t GROUP BY id
-    `).catch((e: unknown) => {
-      // A counting failure must not take the category navigation down with it.
-      this.logger.warn(`Category product counts unavailable: ${(e as Error)?.message}`);
-      return [] as Array<{ id: string; count: string }>;
-    });
+    `,
+      )
+      .catch((e: unknown) => {
+        // A counting failure must not take the category navigation down with it.
+        this.logger.warn(`Category product counts unavailable: ${(e as Error)?.message}`);
+        return [] as Array<{ id: string; count: string }>;
+      });
     return new Map(rows.map((r) => [r.id, Number(r.count) || 0]));
   }
 
@@ -426,7 +467,7 @@ export class CatalogService {
     });
     return {
       ...category,
-      subcategories: children.filter(c => c.id !== category.id),
+      subcategories: children.filter((c) => c.id !== category.id),
       isSubcategory,
       parent: category.parent
         ? { id: category.parent.id, name: category.parent.name, slug: category.parent.slug }
@@ -449,7 +490,7 @@ export class CatalogService {
     const parent = await this.resolveCategory(categoryIdOrSlug);
     if (!parent) return { data: [], total: 0, categoryId: categoryIdOrSlug };
     const children = await this.categoryRepo.findDescendants(parent);
-    const subs = children.filter(c => c.id !== parent.id);
+    const subs = children.filter((c) => c.id !== parent.id);
     return { data: subs, total: subs.length, categoryId: parent.id };
   }
 
@@ -474,7 +515,9 @@ export class CatalogService {
     return {
       ...sub,
       parentCategoryId: sub.parent?.slug || sub.parent?.id || '',
-      parent: sub.parent ? { id: sub.parent.id, name: sub.parent.name, slug: sub.parent.slug } : null,
+      parent: sub.parent
+        ? { id: sub.parent.id, name: sub.parent.name, slug: sub.parent.slug }
+        : null,
       productCount,
     };
   }
@@ -529,37 +572,49 @@ export class CatalogService {
    * must treat a partially-priced result as a failure — never as "price what we
    * can and continue".
    */
-  async priceOrderItems(items: Array<{ productId: string; quantity: number }>) {
+  async priceOrderItems(items: Array<{ productId: string; quantity: number; variantId?: string }>) {
     const lines = Array.isArray(items) ? items : [];
     if (lines.length === 0) {
       return { ok: false, reason: 'No items to price', items: [], subtotal: 0 };
     }
 
-    const ids = [...new Set(lines.map((l) => String(l?.productId ?? '')))].filter(
-      (id) => CatalogService.UUID_RE.test(id),
+    const ids = [...new Set(lines.map((l) => String(l?.productId ?? '')))].filter((id) =>
+      CatalogService.UUID_RE.test(id),
     );
-    const products = ids.length
-      ? await this.productRepo.find({ where: { id: In(ids) } })
-      : [];
+    const products = ids.length ? await this.productRepo.find({ where: { id: In(ids) } }) : [];
     const byId = new Map(products.map((p) => [p.id, p]));
 
     // One query for every line's listings rather than per-line round trips.
     const listings = ids.length
       ? await this.listingRepo.find({
-        where: { product: { id: In(ids) }, ...CatalogService.LIVE_LISTING },
-        // `seller` is a lazy ManyToOne, so without it here `listing.seller` is
-        // undefined and the `sellerId` returned below was always null — which
-        // meant a placed order could not be attributed to the seller who has to
-        // fulfil it. It is the join key for the whole seller order projection.
-        relations: ['product', 'seller'],
-        order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC' },
-      })
+          where: { product: { id: In(ids) }, ...CatalogService.LIVE_LISTING },
+          // `seller` is a lazy ManyToOne, so without it here `listing.seller` is
+          // undefined and the `sellerId` returned below was always null — which
+          // meant a placed order could not be attributed to the seller who has to
+          // fulfil it. It is the join key for the whole seller order projection.
+          relations: ['product', 'seller'],
+          order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC' },
+        })
       : [];
     const buyBox = new Map<string, ProductListing>();
     for (const listing of listings) {
       // Ordered buy-box-first, so the first listing seen for a product wins.
       const pid = (listing as any).product?.id;
       if (pid && !buyBox.has(pid)) buyBox.set(pid, listing);
+    }
+
+    // Every active variant of every product in the basket, one query. A product
+    // that has variants must be ordered *by* variant: the parent listing's price
+    // is not what any SKU sells for — the cart and the order used to charge it
+    // regardless (QR 5,050 for a QR 115,900 iPhone configuration).
+    const variants = ids.length
+      ? await this.variantRepo.find({ where: { productId: In(ids), isActive: true } })
+      : [];
+    const variantsByProduct = new Map<string, ProductVariant[]>();
+    for (const v of variants) {
+      const bucket = variantsByProduct.get(v.productId) ?? [];
+      bucket.push(v);
+      variantsByProduct.set(v.productId, bucket);
     }
 
     let subtotal = 0;
@@ -576,10 +631,21 @@ export class CatalogService {
       if (product.approval_status !== 'APPROVED') return fail('Product is not available');
       if (!listing) return fail('Product has no active seller listing');
 
-      const unitPrice = Number(listing.sellingPrice);
+      const variantId = String(line?.variantId ?? '');
+      const productVariants = variantsByProduct.get(productId) ?? [];
+      let variant: ProductVariant | undefined;
+      if (variantId) {
+        variant = productVariants.find((v) => v.id === variantId);
+        if (!variant) return fail('Selected option is not available');
+      } else if (productVariants.length > 0) {
+        return fail('Please choose an option (size, colour…) for this product');
+      }
+
+      const unitPrice = Number(variant ? variant.sellingPrice : listing.sellingPrice);
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) return fail('Product has no valid price');
-      if (listing.stockQuantity < quantity) {
-        return fail(`Only ${listing.stockQuantity} left in stock`);
+      const available = variant ? Number(variant.stockQuantity) : listing.stockQuantity;
+      if (available < quantity) {
+        return fail(`Only ${available} left in stock`);
       }
 
       const lineTotal = Math.round(unitPrice * quantity * 100) / 100;
@@ -592,8 +658,10 @@ export class CatalogService {
         lineTotal,
         listingId: listing.id,
         sellerId: (listing as any).seller?.id ?? null,
-        name: product.name,
-        mrp: Number(product.mrp) || 0,
+        name: variant?.variantName ? `${product.name} — ${variant.variantName}` : product.name,
+        mrp: Number(variant?.mrp ?? product.mrp) || 0,
+        variantId: variant?.id ?? null,
+        variantName: variant?.variantName ?? null,
       };
     });
 
@@ -634,12 +702,17 @@ export class CatalogService {
    * two listings in opposite orders would otherwise deadlock on the second row.
    */
   async reserveListingStock(
-    lines: Array<{ listingId?: string; productId?: string; quantity: number }>,
-  ): Promise<{ ok: boolean; reason: string | null; reserved: Array<{ listingId: string; quantity: number }> }> {
+    lines: Array<{ listingId?: string; productId?: string; quantity: number; variantId?: string }>,
+  ): Promise<{
+    ok: boolean;
+    reason: string | null;
+    reserved: Array<{ listingId: string; quantity: number; variantId?: string }>;
+  }> {
     const wanted = (Array.isArray(lines) ? lines : [])
       .map((l) => ({
         listingId: String(l?.listingId ?? ''),
         productId: String(l?.productId ?? ''),
+        variantId: String(l?.variantId ?? ''),
         quantity: Math.trunc(Number(l?.quantity ?? 0)),
       }))
       .filter((l) => l.listingId && l.quantity > 0)
@@ -654,7 +727,7 @@ export class CatalogService {
 
     try {
       const result = await this.listingRepo.manager.transaction(async (mgr) => {
-        const reserved: Array<{ listingId: string; quantity: number }> = [];
+        const reserved: Array<{ listingId: string; quantity: number; variantId?: string }> = [];
 
         for (const line of wanted) {
           const result = await mgr
@@ -673,7 +746,29 @@ export class CatalogService {
               `Not enough stock for product ${line.productId || line.listingId}`,
             );
           }
-          reserved.push({ listingId: line.listingId, quantity: line.quantity });
+          // The SKU holds its own count. Taking only the listing's aggregate let
+          // a sold-out colour keep selling while the parent still showed stock.
+          if (line.variantId) {
+            const variantResult = await mgr
+              .createQueryBuilder()
+              .update(ProductVariant)
+              .set({ stockQuantity: () => `"stockQuantity" - :quantity` })
+              .where('id = :vid', { vid: line.variantId })
+              .andWhere('"isActive" = true')
+              .andWhere('"stockQuantity" >= :quantity')
+              .setParameter('quantity', line.quantity)
+              .execute();
+            if (!variantResult.affected) {
+              throw new BadRequestException(
+                `Not enough stock for the selected option of ${line.productId || line.listingId}`,
+              );
+            }
+          }
+          reserved.push({
+            listingId: line.listingId,
+            quantity: line.quantity,
+            ...(line.variantId ? { variantId: line.variantId } : {}),
+          });
         }
 
         return { ok: true, reason: null as string | null, reserved };
@@ -703,9 +798,9 @@ export class CatalogService {
         relations: ['product'],
       });
 
-      const productIds = [...new Set(
-        emptied.map((l) => (l as any).product?.id).filter(Boolean) as string[],
-      )];
+      const productIds = [
+        ...new Set(emptied.map((l) => (l as any).product?.id).filter(Boolean) as string[]),
+      ];
       for (const productId of productIds) await this.recomputeBuyBox(productId);
     } catch (e) {
       this.logger.error(`Post-sale buy-box recompute failed: ${(e as Error)?.message}`);
@@ -740,7 +835,9 @@ export class CatalogService {
    * concurrent recomputes (a price change racing a stock update) would otherwise
    * interleave and leave either two winners or none.
    */
-  async recomputeBuyBox(productId: string): Promise<{ productId: string; winnerId: string | null }> {
+  async recomputeBuyBox(
+    productId: string,
+  ): Promise<{ productId: string; winnerId: string | null }> {
     if (!productId) return { productId, winnerId: null };
 
     const listings = this.tableOf(ProductListing);
@@ -795,9 +892,13 @@ export class CatalogService {
        * Deliberately not awaited into the caller's failure path: a shopper's
        * notification must never be the reason a seller's price edit fails.
        */
-      void this.fulfillment.sweepPriceAlerts(productId).catch((e: unknown) =>
-        this.logger.error(`Price-alert sweep failed for product ${productId}: ${(e as Error)?.message}`),
-      );
+      void this.fulfillment
+        .sweepPriceAlerts(productId)
+        .catch((e: unknown) =>
+          this.logger.error(
+            `Price-alert sweep failed for product ${productId}: ${(e as Error)?.message}`,
+          ),
+        );
 
       return { productId, winnerId };
     } catch (e) {
@@ -826,12 +927,13 @@ export class CatalogService {
    * than over-sells — and is logged loudly so it can be reconciled.
    */
   async releaseListingStock(
-    lines: Array<{ listingId?: string; quantity: number }>,
+    lines: Array<{ listingId?: string; quantity: number; variantId?: string }>,
   ): Promise<{ released: number }> {
     let released = 0;
 
     for (const line of Array.isArray(lines) ? lines : []) {
       const listingId = String(line?.listingId ?? '');
+      const variantId = String(line?.variantId ?? '');
       const quantity = Math.trunc(Number(line?.quantity ?? 0));
       if (!listingId || quantity <= 0) continue;
 
@@ -843,6 +945,15 @@ export class CatalogService {
           .where('id = :id', { id: listingId })
           .setParameter('quantity', quantity)
           .execute();
+        if (variantId) {
+          await this.variantRepo
+            .createQueryBuilder()
+            .update(ProductVariant)
+            .set({ stockQuantity: () => `"stockQuantity" + :quantity` })
+            .where('id = :id', { id: variantId })
+            .setParameter('quantity', quantity)
+            .execute();
+        }
         released += 1;
       } catch (e) {
         this.logger.error(
@@ -861,7 +972,8 @@ export class CatalogService {
     const cached = await this.redis.getJson(cacheKey);
     if (cached) return cached;
 
-    const qb = this.productRepo.createQueryBuilder('p')
+    const qb = this.productRepo
+      .createQueryBuilder('p')
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.images', 'images')
@@ -881,8 +993,9 @@ export class CatalogService {
       // not resolve and breaks the query. Joined only when the filter is
       // actually supplied, so the common listing path is unchanged on schemas
       // missing subcategory_id (see the fallback in getProductById).
-      qb.leftJoin('p.subcategory', 'subcategory')
-        .andWhere('subcategory.slug = :subSlug', { subSlug: filter.subcategory });
+      qb.leftJoin('p.subcategory', 'subcategory').andWhere('subcategory.slug = :subSlug', {
+        subSlug: filter.subcategory,
+      });
     }
     if (filter?.brand) qb.andWhere('brand.slug = :brandSlug', { brandSlug: filter.brand });
     if (filter?.seller) qb.andWhere('p.seller_id = :sellerId', { sellerId: filter.seller });
@@ -916,10 +1029,18 @@ export class CatalogService {
     }
 
     switch (filter?.sort) {
-      case 'price_asc':  addOrder('payable_price', 'ASC'); break;
-      case 'price_desc': addOrder('payable_price', 'DESC'); break;
-      case 'rating':     addOrder('p.averageRating', 'DESC'); break;
-      case 'newest':     addOrder('p.created_at', 'DESC'); break;
+      case 'price_asc':
+        addOrder('payable_price', 'ASC');
+        break;
+      case 'price_desc':
+        addOrder('payable_price', 'DESC');
+        break;
+      case 'rating':
+        addOrder('p.averageRating', 'DESC');
+        break;
+      case 'newest':
+        addOrder('p.created_at', 'DESC');
+        break;
       // Volume-led, for the best-sellers feed. Reviews are only written against
       // verified purchases, so review count is the catalogue's closest standing
       // proxy for units sold; rating breaks the ties. Distinct from the default,
@@ -943,7 +1064,14 @@ export class CatalogService {
     qb.skip((page - 1) * limit).take(limit);
     const [data, total] = await qb.getManyAndCount();
     await this.attachVariantAxes(data);
-    const result = { data, total, page, limit, hasMore: total > page * limit, region: region ?? null };
+    const result = {
+      data,
+      total,
+      page,
+      limit,
+      hasMore: total > page * limit,
+      region: region ?? null,
+    };
     await this.redis.setJson(cacheKey, result, 60);
     return result;
   }
@@ -981,7 +1109,8 @@ export class CatalogService {
   }
 
   /** Route params that can address a product: its UUID or its unique `slug`. */
-  private static readonly UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  private static readonly UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   private static readonly SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
 
   async getProductById(idOrSlug: string) {
@@ -1001,10 +1130,12 @@ export class CatalogService {
     if (cached) return cached;
 
     // Try with subcategory first; fall back without it if the relation doesn't exist
-    let product = await this.productRepo.findOne({
-      where,
-      relations: { brand: true, category: true, subcategory: true },
-    }).catch((): null => null);
+    let product = await this.productRepo
+      .findOne({
+        where,
+        relations: { brand: true, category: true, subcategory: true },
+      })
+      .catch((): null => null);
 
     if (!product) {
       product = await this.productRepo.findOne({
@@ -1028,13 +1159,29 @@ export class CatalogService {
     let variants: any[] = [];
     try {
       [images, listings, reviews, variants] = await Promise.all([
-        this.imageRepo.find({ where: { product: { id: productId } }, order: { sortOrder: 'ASC' } }).catch((): unknown[] => []),
+        this.imageRepo
+          .find({ where: { product: { id: productId } }, order: { sortOrder: 'ASC' } })
+          .catch((): unknown[] => []),
         // Every seller offering this product, buy-box winner first — this is the
         // "Other Sellers on KartSeek" panel's data. Unapproved offers are
         // excluded: a listing awaiting moderation must not be shown, or quoted.
-        this.listingRepo.find({ where: { product: { id: productId }, ...CatalogService.LIVE_LISTING }, relations: ['seller'], order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC' } }).catch((): unknown[] => []),
-        this.reviewRepo.find({ where: { productId, status: 'PUBLISHED' }, order: { createdAt: 'DESC' }, take: 10 }).catch((): unknown[] => []),
-        this.variantRepo.find({ where: { productId, isActive: true }, order: { sellingPrice: 'ASC' } }).catch((): unknown[] => []),
+        this.listingRepo
+          .find({
+            where: { product: { id: productId }, ...CatalogService.LIVE_LISTING },
+            relations: ['seller'],
+            order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC' },
+          })
+          .catch((): unknown[] => []),
+        this.reviewRepo
+          .find({
+            where: { productId, status: 'PUBLISHED' },
+            order: { createdAt: 'DESC' },
+            take: 10,
+          })
+          .catch((): unknown[] => []),
+        this.variantRepo
+          .find({ where: { productId, isActive: true }, order: { sellingPrice: 'ASC' } })
+          .catch((): unknown[] => []),
       ]);
     } catch {
       this.logger.warn(`Failed to fetch related data for product ${productId}`);
@@ -1072,7 +1219,9 @@ export class CatalogService {
    * the UI wants one group per attribute with its distinct options, in first-seen
    * order so a size run stays S/M/L rather than being alphabetised into L/M/S.
    */
-  private static variantDimensions(variants: any[]): { variantName: string; variantOptions: string[] }[] {
+  private static variantDimensions(
+    variants: any[],
+  ): { variantName: string; variantOptions: string[] }[] {
     const axes = new Map<string, string[]>();
     for (const v of variants) {
       const attrs = v?.attributes;
@@ -1085,7 +1234,10 @@ export class CatalogService {
         axes.set(name, options);
       }
     }
-    return [...axes.entries()].map(([variantName, variantOptions]) => ({ variantName, variantOptions }));
+    return [...axes.entries()].map(([variantName, variantOptions]) => ({
+      variantName,
+      variantOptions,
+    }));
   }
 
   async getFeaturedProducts(region?: string) {
@@ -1093,7 +1245,8 @@ export class CatalogService {
     const cached = await this.redis.getJson(cacheKey);
     if (cached) return cached;
 
-    const qb = this.productRepo.createQueryBuilder('p')
+    const qb = this.productRepo
+      .createQueryBuilder('p')
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.images', 'images')
@@ -1124,7 +1277,8 @@ export class CatalogService {
     // but the query did none of it — it returned the top-rated products with
     // `mrp > 0`, so the deals feed was not a deals feed and, with no listing
     // joined, carried no selling price to discount against.
-    const dealsQb = this.productRepo.createQueryBuilder('p')
+    const dealsQb = this.productRepo
+      .createQueryBuilder('p')
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.images', 'images')
@@ -1140,7 +1294,10 @@ export class CatalogService {
 
     this.scopeToRegion(dealsQb, region);
     this.rankLocalFirst(dealsQb, region);
-    (region ? dealsQb.addOrderBy('discount_ratio', 'DESC') : dealsQb.orderBy('discount_ratio', 'DESC'))
+    (region
+      ? dealsQb.addOrderBy('discount_ratio', 'DESC')
+      : dealsQb.orderBy('discount_ratio', 'DESC')
+    )
       // take(), not limit(): limit() caps *raw joined rows*, and the images join
       // multiplies them, so `limit(20)` returned only 9 products.
       .take(20);
@@ -1173,7 +1330,8 @@ export class CatalogService {
     if (cached) return cached;
 
     const now = new Date();
-    const qb = this.nominationRepo.createQueryBuilder('n')
+    const qb = this.nominationRepo
+      .createQueryBuilder('n')
       .innerJoinAndSelect('n.deal', 'deal')
       .innerJoinAndSelect('n.product', 'p')
       .leftJoinAndSelect('p.brand', 'brand')
@@ -1187,7 +1345,9 @@ export class CatalogService {
       .andWhere('p.is_active = true')
       .andWhere('p.approval_status = :s', { s: 'APPROVED' })
       // A campaign scoped to a region is only offered there; an unscoped one runs everywhere.
-      .andWhere(region ? '(deal.region_code IS NULL OR deal.region_code = :region)' : '1=1', { region })
+      .andWhere(region ? '(deal.region_code IS NULL OR deal.region_code = :region)' : '1=1', {
+        region,
+      })
       // Sold-out allocations drop off rather than lingering as a dead tile.
       .andWhere('(n.stock_allocated = 0 OR n.stock_sold < n.stock_allocated)')
       .orderBy('deal.priority', 'ASC')
@@ -1215,7 +1375,10 @@ export class CatalogService {
     await this.attachVariantAxes(data as any);
 
     const soonestEnd = rows.length
-      ? rows.reduce((min, n) => (n.deal.windowEnd < min ? n.deal.windowEnd : min), rows[0].deal.windowEnd)
+      ? rows.reduce(
+          (min, n) => (n.deal.windowEnd < min ? n.deal.windowEnd : min),
+          rows[0].deal.windowEnd,
+        )
       : null;
     const result = {
       data,
@@ -1223,7 +1386,9 @@ export class CatalogService {
       expiresAt: soonestEnd?.toISOString() ?? null,
     };
 
-    const secondsLeft = soonestEnd ? Math.floor((soonestEnd.getTime() - now.getTime()) / 1000) : 300;
+    const secondsLeft = soonestEnd
+      ? Math.floor((soonestEnd.getTime() - now.getTime()) / 1000)
+      : 300;
     await this.redis.setJson(cacheKey, result, Math.max(15, Math.min(300, secondsLeft)));
     return result;
   }
@@ -1254,7 +1419,8 @@ export class CatalogService {
       to_tsvector('english', COALESCE(p.name, '') || ' ' || COALESCE(p.short_description, '')),
       websearch_to_tsquery('english', :tsQuery)
     )`;
-    const qb = this.productRepo.createQueryBuilder('p')
+    const qb = this.productRepo
+      .createQueryBuilder('p')
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       // Search results are product cards like any other: without images and the
@@ -1282,7 +1448,15 @@ export class CatalogService {
       .take(limit);
 
     const [data, total] = await qb.getManyAndCount();
-    const result = { data, total, query, page, limit, hasMore: total > page * limit, region: region ?? null };
+    const result = {
+      data,
+      total,
+      query,
+      page,
+      limit,
+      hasMore: total > page * limit,
+      region: region ?? null,
+    };
     await this.redis.setJson(cacheKey, result, 30);
     return result;
   }
@@ -1300,7 +1474,11 @@ export class CatalogService {
   async getTopBrands() {
     const cached = await this.redis.getJson('marketplace:brands:top');
     if (cached) return cached;
-    const data = await this.brandRepo.find({ where: { isVerified: true }, order: { name: 'ASC' }, take: 20 });
+    const data = await this.brandRepo.find({
+      where: { isVerified: true },
+      order: { name: 'ASC' },
+      take: 20,
+    });
     const result = { data, total: data.length };
     await this.redis.setJson('marketplace:brands:top', result, 300);
     return result;
@@ -1340,9 +1518,7 @@ export class CatalogService {
   async getSellers(region?: string) {
     const [rows, total] = await this.sellerRepo.findAndCount({
       select: CatalogService.PUBLIC_SELLER_FIELDS,
-      where: region
-        ? [{ regionCode: region.toUpperCase() }, { regionCode: IsNull() }]
-        : undefined,
+      where: region ? [{ regionCode: region.toUpperCase() }, { regionCode: IsNull() }] : undefined,
     });
     // Sorted after the counters are corrected, not by the stale `seller_rating`
     // column — otherwise the directory is ordered by one rating and displays another.
@@ -1361,9 +1537,9 @@ export class CatalogService {
       select: CatalogService.PUBLIC_SELLER_FIELDS,
       where: region
         ? [
-          { verificationStatus: 'VERIFIED', regionCode: region.toUpperCase() },
-          { verificationStatus: 'VERIFIED', regionCode: IsNull() },
-        ]
+            { verificationStatus: 'VERIFIED', regionCode: region.toUpperCase() },
+            { verificationStatus: 'VERIFIED', regionCode: IsNull() },
+          ]
         : { verificationStatus: 'VERIFIED' },
       take: 20,
     });
@@ -1428,21 +1604,27 @@ export class CatalogService {
    * meet them. Those rows surface in the unfiltered view instead, where they can
    * be assigned a market.
    */
-  async getSellersForAdmin(opts: { region?: string; status?: string; page?: number; limit?: number } = {}) {
+  async getSellersForAdmin(
+    opts: { region?: string; status?: string; page?: number; limit?: number } = {},
+  ) {
     const page = Math.max(1, opts.page ?? 1);
     const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
 
     const qb = this.sellerRepo.createQueryBuilder('s');
     if (opts.region) qb.andWhere('s.region_code = :region', { region: opts.region.toUpperCase() });
-    if (opts.status) qb.andWhere('s.verificationStatus = :status', { status: opts.status.toUpperCase() });
+    if (opts.status)
+      qb.andWhere('s.verificationStatus = :status', { status: opts.status.toUpperCase() });
 
-    qb.orderBy('s.createdAt', 'ASC')  // oldest application first — it has waited longest
+    qb.orderBy('s.createdAt', 'ASC') // oldest application first — it has waited longest
       .skip((page - 1) * limit)
       .take(limit);
 
     const [data, total] = await qb.getManyAndCount();
     return {
-      data, total, page, limit,
+      data,
+      total,
+      page,
+      limit,
       region: opts.region ?? null,
       status: opts.status ?? null,
       hasMore: total > page * limit,
@@ -1451,11 +1633,12 @@ export class CatalogService {
 
   /** Count of sellers awaiting a decision, per market. Drives the admin badge. */
   async getPendingSellerCounts(): Promise<Record<string, number>> {
-    const rows = await this.sellerRepo.createQueryBuilder('s')
-      .select('COALESCE(s.region_code, \'UNASSIGNED\')', 'region')
+    const rows = await this.sellerRepo
+      .createQueryBuilder('s')
+      .select("COALESCE(s.region_code, 'UNASSIGNED')", 'region')
       .addSelect('COUNT(*)', 'count')
       .where('s.verificationStatus = :status', { status: 'PENDING' })
-      .groupBy('COALESCE(s.region_code, \'UNASSIGNED\')')
+      .groupBy("COALESCE(s.region_code, 'UNASSIGNED')")
       .getRawMany<{ region: string; count: string }>();
 
     return rows.reduce<Record<string, number>>((acc, row) => {

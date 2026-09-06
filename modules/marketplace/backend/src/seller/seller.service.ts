@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, NotImplementedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  NotImplementedException,
+} from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository, In } from 'typeorm';
 import { RedisService } from '@app/redis';
@@ -63,12 +70,15 @@ export class SellerService {
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(ProductQuestion) private readonly questionRepo: Repository<ProductQuestion>,
     @InjectRepository(ProductAnswer) private readonly answerRepo: Repository<ProductAnswer>,
-    @InjectRepository(MarketplaceNotification) private readonly notificationRepo: Repository<MarketplaceNotification>,
-    @InjectRepository(SellerBankAccount) private readonly bankAccountRepo: Repository<SellerBankAccount>,
+    @InjectRepository(MarketplaceNotification)
+    private readonly notificationRepo: Repository<MarketplaceNotification>,
+    @InjectRepository(SellerBankAccount)
+    private readonly bankAccountRepo: Repository<SellerBankAccount>,
     private readonly encryption: EncryptionService,
     @InjectRepository(SellerStaff) private readonly staffRepo: Repository<SellerStaff>,
     @InjectRepository(SellerPromotion) private readonly promotionRepo: Repository<SellerPromotion>,
-    @InjectRepository(SellerSupportTicket) private readonly supportRepo: Repository<SellerSupportTicket>,
+    @InjectRepository(SellerSupportTicket)
+    private readonly supportRepo: Repository<SellerSupportTicket>,
     // Registration writes four tables and must not leave a partial account behind.
     @InjectDataSource() private readonly dataSource: DataSource,
     // Owns the buy box. Every listing mutation here has to hand it back so the
@@ -103,7 +113,16 @@ export class SellerService {
     orderNumber?: string;
     customerId: string;
     customerName?: string;
-    items: Array<{ productId: string; listingId?: string; sellerId?: string; name?: string; quantity: number; price: number }>;
+    items: Array<{
+      productId: string;
+      listingId?: string;
+      sellerId?: string;
+      name?: string;
+      quantity: number;
+      price: number;
+      variantId?: string;
+      variantName?: string;
+    }>;
     shippingAddress?: unknown;
     paymentMethod?: string;
     paymentStatus?: string;
@@ -114,7 +133,11 @@ export class SellerService {
   }) {
     const lines = Array.isArray(dto?.items) ? dto.items : [];
     if (!dto?.orderId || lines.length === 0) {
-      return { success: false, reason: 'An order id and at least one item are required', orders: [] as unknown[] };
+      return {
+        success: false,
+        reason: 'An order id and at least one item are required',
+        orders: [] as unknown[],
+      };
     }
 
     // Lines whose seller could not be resolved cannot be fulfilled by anyone.
@@ -136,9 +159,12 @@ export class SellerService {
 
     // Proportional split of order-level money across sellers, by item value, so
     // the seller rows always sum back to what the customer was charged.
-    const grossTotal = lines.reduce((sum, l) => sum + Number(l.price ?? 0) * Number(l.quantity ?? 0), 0);
+    const grossTotal = lines.reduce(
+      (sum, l) => sum + Number(l.price ?? 0) * Number(l.quantity ?? 0),
+      0,
+    );
     const share = (sellerTotal: number, amount: number) =>
-      grossTotal > 0 ? Math.round((amount * (sellerTotal / grossTotal)) * 100) / 100 : 0;
+      grossTotal > 0 ? Math.round(amount * (sellerTotal / grossTotal) * 100) / 100 : 0;
 
     const created: MarketplaceOrder[] = [];
 
@@ -155,7 +181,10 @@ export class SellerService {
         productId: l.productId,
         listingId: l.listingId ?? '',
         name: l.name ?? '',
-        sellerSku: '',
+        // The SKU the seller has to pick — its label doubles as the sellerSku
+        // slot the portal renders; the id is what stock and returns key on.
+        variantId: l.variantId ?? '',
+        sellerSku: l.variantName ?? '',
         quantity: Number(l.quantity ?? 0),
         unitPrice: Number(l.price ?? 0),
         subtotal: Math.round(Number(l.price ?? 0) * Number(l.quantity ?? 0) * 100) / 100,
@@ -212,7 +241,9 @@ export class SellerService {
         placedAt: new Date().toISOString(),
       });
 
-      this.logger.log(`📦 Seller order ${saved.orderNumber} → seller ${sellerId} (${items.length} line(s))`);
+      this.logger.log(
+        `📦 Seller order ${saved.orderNumber} → seller ${sellerId} (${items.length} line(s))`,
+      );
     }
 
     // Invalidate the cached dashboard so the new order shows immediately.
@@ -220,7 +251,12 @@ export class SellerService {
 
     return {
       success: true,
-      orders: created.map((o) => ({ id: o.id, orderNumber: o.orderNumber, sellerId: o.sellerId, grandTotal: Number(o.grandTotal) })),
+      orders: created.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        sellerId: o.sellerId,
+        grandTotal: Number(o.grandTotal),
+      })),
       orphanedLines: orphaned.length,
     };
   }
@@ -248,7 +284,15 @@ export class SellerService {
     if (!ownerId) return null;
     const seller = await this.sellerRepo.findOne({
       where: { ownerId } as any,
-      select: ['id', 'businessName', 'storeSlug', 'regionCode', 'verificationStatus', 'kycStatus', 'createdAt'],
+      select: [
+        'id',
+        'businessName',
+        'storeSlug',
+        'regionCode',
+        'verificationStatus',
+        'kycStatus',
+        'createdAt',
+      ],
     });
     if (!seller) return null;
     return {
@@ -306,7 +350,11 @@ export class SellerService {
   }
 
   async healthCheck() {
-    return { service: 'marketplace-service:seller', status: 'ok', timestamp: new Date().toISOString() };
+    return {
+      service: 'marketplace-service:seller',
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   // ── Region-Scoped Seller Operations ─────────────────────────────────────
@@ -338,7 +386,11 @@ export class SellerService {
     return profile;
   }
 
-  async updateSellerProfile(sellerId: string, countryCode: string, dto: Partial<Record<string, unknown>>) {
+  async updateSellerProfile(
+    sellerId: string,
+    countryCode: string,
+    dto: Partial<Record<string, unknown>>,
+  ) {
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     if (!seller) throw new NotFoundException(`Seller ${sellerId} not found`);
 
@@ -385,7 +437,11 @@ export class SellerService {
    * headline. The cache key now carries the period too — without that the first
    * period fetched would have been served back for the other two for 120s.
    */
-  async getSellerDashboard(sellerId: string, countryCode: string, period: 'today' | 'week' | 'month' = 'today') {
+  async getSellerDashboard(
+    sellerId: string,
+    countryCode: string,
+    period: 'today' | 'week' | 'month' = 'today',
+  ) {
     const window: 'today' | 'week' | 'month' =
       period === 'week' || period === 'month' ? period : 'today';
     const cacheKey = `seller:dashboard:${sellerId}:${window}`;
@@ -394,21 +450,52 @@ export class SellerService {
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(todayStart); weekStart.setDate(weekStart.getDate() - 7);
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 7);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const periodStart = window === 'month' ? monthStart : window === 'week' ? weekStart : todayStart;
+    const periodStart =
+      window === 'month' ? monthStart : window === 'week' ? weekStart : todayStart;
 
-    const [todayOrders, pendingOrders, weeklyRevResult, monthlyRevResult, totalProducts, lowStockProducts] = await Promise.all([
-      this.orderRepo.createQueryBuilder('o').where('o.sellerId = :sellerId', { sellerId }).andWhere('o.createdAt >= :todayStart', { todayStart }).getCount(),
+    const [
+      todayOrders,
+      pendingOrders,
+      weeklyRevResult,
+      monthlyRevResult,
+      totalProducts,
+      lowStockProducts,
+    ] = await Promise.all([
+      this.orderRepo
+        .createQueryBuilder('o')
+        .where('o.sellerId = :sellerId', { sellerId })
+        .andWhere('o.createdAt >= :todayStart', { todayStart })
+        .getCount(),
       this.orderRepo.count({ where: { sellerId, status: 'PENDING' } }),
-      this.orderRepo.createQueryBuilder('o').select('COALESCE(SUM(o.grandTotal), 0)', 'sum').where('o.sellerId = :sellerId', { sellerId }).andWhere('o.createdAt >= :weekStart', { weekStart }).andWhere('o.paymentStatus = :paid', { paid: 'PAID' }).getRawOne(),
-      this.orderRepo.createQueryBuilder('o').select('COALESCE(SUM(o.grandTotal), 0)', 'sum').where('o.sellerId = :sellerId', { sellerId }).andWhere('o.createdAt >= :monthStart', { monthStart }).andWhere('o.paymentStatus = :paid', { paid: 'PAID' }).getRawOne(),
+      this.orderRepo
+        .createQueryBuilder('o')
+        .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
+        .where('o.sellerId = :sellerId', { sellerId })
+        .andWhere('o.createdAt >= :weekStart', { weekStart })
+        .andWhere('o.paymentStatus = :paid', { paid: 'PAID' })
+        .getRawOne(),
+      this.orderRepo
+        .createQueryBuilder('o')
+        .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
+        .where('o.sellerId = :sellerId', { sellerId })
+        .andWhere('o.createdAt >= :monthStart', { monthStart })
+        .andWhere('o.paymentStatus = :paid', { paid: 'PAID' })
+        .getRawOne(),
       this.listingRepo.count({ where: { seller: { id: sellerId }, isActive: true } }),
-      this.listingRepo.createQueryBuilder('l').where('l.seller_id = :sellerId', { sellerId }).andWhere('l.stockQuantity < 5').andWhere('l.isActive = true').getCount(),
+      this.listingRepo
+        .createQueryBuilder('l')
+        .where('l.seller_id = :sellerId', { sellerId })
+        .andWhere('l.stockQuantity < 5')
+        .andWhere('l.isActive = true')
+        .getCount(),
     ]);
 
     const paidSum = (from?: Date) => {
-      const qb = this.orderRepo.createQueryBuilder('o')
+      const qb = this.orderRepo
+        .createQueryBuilder('o')
         .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
         .addSelect('COUNT(*)', 'count')
         .where('o.sellerId = :sellerId', { sellerId })
@@ -434,7 +521,8 @@ export class SellerService {
     // (Pending → Accepted → Packed → Shipped → Delivered → Cancelled → Returns)
     // had nothing behind it at all: only `pendingOrders` was ever computed, so
     // every other stage read zero however many orders were moving through it.
-    const byStatus = await this.orderRepo.createQueryBuilder('o')
+    const byStatus = await this.orderRepo
+      .createQueryBuilder('o')
       .select('o.status', 'status')
       .addSelect('COUNT(*)', 'count')
       .where('o.sellerId = :sellerId', { sellerId })
@@ -453,9 +541,25 @@ export class SellerService {
 
     // Listings still awaiting moderation, and those the moderators refused.
     const [approvalPending, rejectedProducts, outOfStockProducts] = await Promise.all([
-      this.productRepo.createQueryBuilder('p').where('p.seller_id = :sellerId', { sellerId }).andWhere('p.approval_status = :s', { s: 'PENDING' }).getCount().catch(() => 0),
-      this.productRepo.createQueryBuilder('p').where('p.seller_id = :sellerId', { sellerId }).andWhere('p.approval_status = :s', { s: 'REJECTED' }).getCount().catch(() => 0),
-      this.listingRepo.createQueryBuilder('l').where('l.seller_id = :sellerId', { sellerId }).andWhere('l.stockQuantity = 0').andWhere('l.isActive = true').getCount().catch(() => 0),
+      this.productRepo
+        .createQueryBuilder('p')
+        .where('p.seller_id = :sellerId', { sellerId })
+        .andWhere('p.approval_status = :s', { s: 'PENDING' })
+        .getCount()
+        .catch(() => 0),
+      this.productRepo
+        .createQueryBuilder('p')
+        .where('p.seller_id = :sellerId', { sellerId })
+        .andWhere('p.approval_status = :s', { s: 'REJECTED' })
+        .getCount()
+        .catch(() => 0),
+      this.listingRepo
+        .createQueryBuilder('l')
+        .where('l.seller_id = :sellerId', { sellerId })
+        .andWhere('l.stockQuantity = 0')
+        .andWhere('l.isActive = true')
+        .getCount()
+        .catch(() => 0),
     ]);
 
     /**
@@ -468,15 +572,15 @@ export class SellerService {
      */
     const settled = deliveredOrders + cancelledOrders + returnedOrders;
     const faultRate = settled > 0 ? (cancelledOrders + returnedOrders) / settled : 0;
-    const ratingScore = Number(seller?.sellerRating ?? 0) > 0
-      ? Math.min(Number(seller!.sellerRating) / 5, 1)
-      : 1;
+    const ratingScore =
+      Number(seller?.sellerRating ?? 0) > 0 ? Math.min(Number(seller!.sellerRating) / 5, 1) : 1;
     const healthScore = Math.round(((1 - faultRate) * 0.6 + ratingScore * 0.4) * 100);
 
     const periodRaw = periodRevResult ?? todayRevResult;
 
     const result = {
-      sellerId, countryCode,
+      sellerId,
+      countryCode,
       period: window,
       todayOrders,
       todayRevenue: parseFloat(todayRevResult?.sum || '0'),
@@ -513,17 +617,26 @@ export class SellerService {
   }
 
   async getSellersByRegion(countryCode: string, page = 1, limit = 20) {
-    const qb = this.sellerRepo.createQueryBuilder('s')
+    const qb = this.sellerRepo
+      .createQueryBuilder('s')
       .where('s.regionCode = :countryCode', { countryCode })
       .orderBy('s.sellerRating', 'DESC')
-      .skip((page - 1) * limit).take(limit);
+      .skip((page - 1) * limit)
+      .take(limit);
 
     const [data, total] = await qb.getManyAndCount();
     return { countryCode, data, total, page, limit };
   }
 
-  async getSellerOrders(sellerId: string, countryCode: string, status?: string, page = 1, limit = 20) {
-    const qb = this.orderRepo.createQueryBuilder('o')
+  async getSellerOrders(
+    sellerId: string,
+    countryCode: string,
+    status?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       .where('o.sellerId = :sellerId', { sellerId })
       .orderBy('o.createdAt', 'DESC');
 
@@ -580,7 +693,11 @@ export class SellerService {
     const stock = Math.max(Math.trunc(Number(dto.stock ?? dto.stockQuantity ?? 0)), 0);
 
     // Unique slug. `name.toLowerCase().replace(…)` alone collides across sellers.
-    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'product';
+    const base =
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'product';
     let slug = base;
     for (let n = 2; await this.productRepo.findOne({ where: { slug }, select: ['id'] }); n++) {
       slug = `${base}-${n}`;
@@ -594,10 +711,14 @@ export class SellerService {
      * way a marketplace assigns its own catalogue number to an item that has no
      * manufacturer barcode.
      */
-    const gtin = String(dto.gtin ?? dto.globalTradeItemNumber ?? '').trim()
-      || `KS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const gtin =
+      String(dto.gtin ?? dto.globalTradeItemNumber ?? '').trim() ||
+      `KS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-    const clash = await this.productRepo.findOne({ where: { globalTradeItemNumber: gtin }, select: ['id'] });
+    const clash = await this.productRepo.findOne({
+      where: { globalTradeItemNumber: gtin },
+      select: ['id'],
+    });
     if (clash) throw new BadRequestException(`A product with identifier ${gtin} already exists.`);
 
     // A seller-supplied SKU is checked against this seller's own listings before
@@ -661,7 +782,13 @@ export class SellerService {
 
     await this.invalidateDashboard(sellerId);
     await this.kafka.publish('seller.product.created', {
-      id: saved.id, listingId: savedListing.id, sellerId, countryCode, name, sellingPrice, stock,
+      id: saved.id,
+      listingId: savedListing.id,
+      sellerId,
+      countryCode,
+      name,
+      sellingPrice,
+      stock,
     });
 
     this.logger.log(`🆕 Product listed: ${name} by seller ${sellerId} — awaiting approval`);
@@ -757,22 +884,29 @@ export class SellerService {
       }
     }
 
-    const saved = await this.listingRepo.save(this.listingRepo.create({
-      product: { id: product.id } as any,
-      seller: { id: sellerId } as any,
-      sellerSku: requestedSku || `${product.slug.slice(0, 24)}-${sellerId.slice(0, 6)}`,
-      sellingPrice,
-      stockQuantity: stock,
-      condition,
-      isFulfilledByKartseek: dto?.isFulfilledByKartseek === true,
-      isBuyBoxWinner: false,
-      approvalStatus: 'PENDING',
-      isActive: false,
-    }));
+    const saved = await this.listingRepo.save(
+      this.listingRepo.create({
+        product: { id: product.id } as any,
+        seller: { id: sellerId } as any,
+        sellerSku: requestedSku || `${product.slug.slice(0, 24)}-${sellerId.slice(0, 6)}`,
+        sellingPrice,
+        stockQuantity: stock,
+        condition,
+        isFulfilledByKartseek: dto?.isFulfilledByKartseek === true,
+        isBuyBoxWinner: false,
+        approvalStatus: 'PENDING',
+        isActive: false,
+      }),
+    );
 
     await this.invalidateDashboard(sellerId);
     await this.kafka.publish('seller.listing.created', {
-      listingId: saved.id, productId: product.id, sellerId, sellingPrice, stock, condition,
+      listingId: saved.id,
+      productId: product.id,
+      sellerId,
+      sellingPrice,
+      stock,
+      condition,
     });
 
     this.logger.log(
@@ -864,7 +998,8 @@ export class SellerService {
     const take = Math.min(Math.max(Number(limit) || 20, 1), 100);
     const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
 
-    const qb = this.listingRepo.createQueryBuilder('l')
+    const qb = this.listingRepo
+      .createQueryBuilder('l')
       .leftJoinAndSelect('l.product', 'product')
       .where('l.seller_id = :sellerId', { sellerId })
       .orderBy('l.createdAt', 'DESC')
@@ -918,14 +1053,22 @@ export class SellerService {
     if (listingProductId) await this.catalog.recomputeBuyBox(listingProductId);
 
     await this.kafka.publish('inventory.updated', {
-      sellerId, countryCode, listingId: listing.id,
-      productId: listingProductId ?? productId, stock: quantity,
+      sellerId,
+      countryCode,
+      listingId: listing.id,
+      productId: listingProductId ?? productId,
+      stock: quantity,
     });
 
     // The dashboard's low-stock and out-of-stock counts are derived from this.
     await this.invalidateDashboard(sellerId);
 
-    return { success: true, listingId: listing.id, productId: (listing as any).product?.id ?? productId, stock: quantity };
+    return {
+      success: true,
+      listingId: listing.id,
+      productId: (listing as any).product?.id ?? productId,
+      stock: quantity,
+    };
   }
 
   /**
@@ -970,7 +1113,12 @@ export class SellerService {
       countryCode: str(dto?.countryCode, dto?.country, dto?.regionCode).toUpperCase(),
       taxId: str(dto?.taxId, dto?.gstNumber, dto?.taxRegistrationNumber),
       vatNumber: str(dto?.vatNumber),
-      storeName: str(dto?.storeDisplayName, dto?.storeName, dto?.businessName, dto?.legalBusinessName),
+      storeName: str(
+        dto?.storeDisplayName,
+        dto?.storeName,
+        dto?.businessName,
+        dto?.legalBusinessName,
+      ),
       storeDescription: str(dto?.storeDescription, dto?.description),
       stateRegion: str(dto?.stateRegion, dto?.state),
       registeredAddress: str(dto?.registeredAddress, dto?.address),
@@ -997,8 +1145,11 @@ export class SellerService {
    */
   private static async uniqueStoreSlug(mgr: EntityManager, businessName: string): Promise<string> {
     const base =
-      businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) ||
-      'seller';
+      businessName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60) || 'seller';
 
     const repo = mgr.getRepository(Seller);
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -1026,7 +1177,7 @@ export class SellerService {
     if (!ownerId) {
       throw new BadRequestException(
         'Cannot register a seller without an authenticated owner. ' +
-        'Sign in first — the seller account is bound to your user id.',
+          'Sign in first — the seller account is bound to your user id.',
       );
     }
 
@@ -1036,8 +1187,9 @@ export class SellerService {
     // is NOT NULL, so a missing owner name used to surface as an opaque 500 that
     // the gateway then reported as "registration temporarily unavailable" — an
     // outage message for a form the applicant could have fixed in ten seconds.
-    const missing = (['businessName', 'ownerName', 'email', 'phone'] as const)
-      .filter((field) => !input[field]);
+    const missing = (['businessName', 'ownerName', 'email', 'phone'] as const).filter(
+      (field) => !input[field],
+    );
     if (missing.length) {
       throw new BadRequestException(
         `Missing required registration details: ${missing.join(', ')}.`,
@@ -1063,9 +1215,16 @@ export class SellerService {
     // seller record. The wizard caps these client-side; this is the same limit
     // enforced where it cannot be bypassed.
     const LIMITS: Record<string, number> = {
-      businessName: 200, ownerName: 150, email: 254, phone: 30,
-      storeName: 120, storeDescription: 1000, stateRegion: 120,
-      registeredAddress: 300, taxId: 64, vatNumber: 64,
+      businessName: 200,
+      ownerName: 150,
+      email: 254,
+      phone: 30,
+      storeName: 120,
+      storeDescription: 1000,
+      stateRegion: 120,
+      registeredAddress: 300,
+      taxId: 64,
+      vatNumber: 64,
     };
     for (const [field, max] of Object.entries(LIMITS)) {
       const value = (input as Record<string, unknown>)[field];
@@ -1085,7 +1244,7 @@ export class SellerService {
     if (existing) {
       throw new ConflictException(
         `You already have a seller account (${existing.businessName}). ` +
-        'Contact support if you need to register a second business.',
+          'Contact support if you need to register a second business.',
       );
     }
 
@@ -1196,14 +1355,24 @@ export class SellerService {
 
   // ── Products CRUD ─────────────────────────────────────────────
 
-  async getSellerProducts(sellerId: string, countryCode: string, status?: string, search?: string, page = 1, limit = 20) {
-    const qb = this.productRepo.createQueryBuilder('p')
+  async getSellerProducts(
+    sellerId: string,
+    countryCode: string,
+    status?: string,
+    search?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    const qb = this.productRepo
+      .createQueryBuilder('p')
       .leftJoinAndSelect('p.brand', 'brand')
       .where('p.seller_id = :sellerId', { sellerId });
 
     if (status) qb.andWhere('p.status = :status', { status });
     if (search) qb.andWhere('p.name ILIKE :search', { search: `%${search}%` });
-    qb.orderBy('p.created_at', 'DESC').skip((page - 1) * limit).take(limit);
+    qb.orderBy('p.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
 
     const [data, total] = await qb.getManyAndCount();
     return { sellerId, countryCode, data, total, page, limit };
@@ -1214,7 +1383,8 @@ export class SellerService {
       where: { id: productId, seller_id: sellerId },
       relations: ['brand', 'category'],
     });
-    if (!product) throw new NotFoundException(`Product ${productId} not found for seller ${sellerId}`);
+    if (!product)
+      throw new NotFoundException(`Product ${productId} not found for seller ${sellerId}`);
     return product;
   }
 
@@ -1286,7 +1456,11 @@ export class SellerService {
       // http(s) only. A `javascript:` or `data:` URL here would end up in an
       // <img src> on the storefront.
       let parsed: URL;
-      try { parsed = new URL(value); } catch { throw new BadRequestException(`Not a valid URL: ${value}`); }
+      try {
+        parsed = new URL(value);
+      } catch {
+        throw new BadRequestException(`Not a valid URL: ${value}`);
+      }
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         throw new BadRequestException('360° frames must be http(s) image URLs.');
       }
@@ -1295,7 +1469,9 @@ export class SellerService {
     // A rotation needs enough frames to read as one; the cap keeps a single
     // listing from asking a shopper's browser for hundreds of images.
     if (clean.length > 0 && clean.length < 8) {
-      throw new BadRequestException('A 360° view needs at least 8 frames. Add more, or clear them all.');
+      throw new BadRequestException(
+        'A 360° view needs at least 8 frames. Add more, or clear them all.',
+      );
     }
     if (clean.length > 72) throw new BadRequestException('A 360° view can hold at most 72 frames.');
 
@@ -1307,12 +1483,17 @@ export class SellerService {
 
     // The storefront caches the product detail response by id *and* by slug.
     await this.redis.del(`product:${productId}`).catch((): undefined => undefined);
-    if ((product as any).slug) await this.redis.del(`product:${(product as any).slug}`).catch((): undefined => undefined);
+    if ((product as any).slug)
+      await this.redis.del(`product:${(product as any).slug}`).catch((): undefined => undefined);
 
     return { success: true, productId, total: clean.length };
   }
 
-  async addProductImage(sellerId: string, productId: string, dto: { url: string; altText?: string; isPrimary?: boolean }) {
+  async addProductImage(
+    sellerId: string,
+    productId: string,
+    dto: { url: string; altText?: string; isPrimary?: boolean },
+  ) {
     await this.assertOwnsProduct(sellerId, productId);
 
     const url = String(dto?.url ?? '').trim();
@@ -1328,20 +1509,24 @@ export class SellerService {
       await this.imageRepo.update({ product: { id: productId } }, { isPrimary: false });
     }
 
-    const saved = await this.imageRepo.save(this.imageRepo.create({
-      product: { id: productId } as any,
-      url,
-      altText: dto?.altText ?? '',
-      sortOrder: existing,
-      isPrimary: makePrimary,
-    }));
+    const saved = await this.imageRepo.save(
+      this.imageRepo.create({
+        product: { id: productId } as any,
+        url,
+        altText: dto?.altText ?? '',
+        sortOrder: existing,
+        isPrimary: makePrimary,
+      }),
+    );
 
     return { success: true, image: saved };
   }
 
   async setPrimaryProductImage(sellerId: string, productId: string, imageId: string) {
     await this.assertOwnsProduct(sellerId, productId);
-    const image = await this.imageRepo.findOne({ where: { id: imageId, product: { id: productId } } });
+    const image = await this.imageRepo.findOne({
+      where: { id: imageId, product: { id: productId } },
+    });
     if (!image) throw new NotFoundException('No such image on that listing.');
 
     await this.imageRepo.update({ product: { id: productId } }, { isPrimary: false });
@@ -1354,7 +1539,8 @@ export class SellerService {
   async reorderProductImages(sellerId: string, productId: string, imageIds: string[]) {
     await this.assertOwnsProduct(sellerId, productId);
     const ids = Array.isArray(imageIds) ? imageIds : [];
-    if (ids.length === 0) throw new BadRequestException('An ordered list of image ids is required.');
+    if (ids.length === 0)
+      throw new BadRequestException('An ordered list of image ids is required.');
 
     const owned = await this.imageRepo.find({ where: { product: { id: productId } } });
     const ownedIds = new Set(owned.map((i) => i.id));
@@ -1368,7 +1554,9 @@ export class SellerService {
 
   async deleteProductImage(sellerId: string, productId: string, imageId: string) {
     await this.assertOwnsProduct(sellerId, productId);
-    const image = await this.imageRepo.findOne({ where: { id: imageId, product: { id: productId } } });
+    const image = await this.imageRepo.findOne({
+      where: { id: imageId, product: { id: productId } },
+    });
     if (!image) throw new NotFoundException('No such image on that listing.');
 
     await this.imageRepo.delete({ id: imageId });
@@ -1422,21 +1610,26 @@ export class SellerService {
     // catalogue this one cannot see — had used the same string, and the message
     // ("already in use") named a conflict they had no way to find or resolve.
     const clash = await this.variantRepo.findOne({ where: { productId, sku } });
-    if (clash) throw new BadRequestException(`SKU ${sku} is already used by another variant of this product.`);
+    if (clash)
+      throw new BadRequestException(
+        `SKU ${sku} is already used by another variant of this product.`,
+      );
 
-    const saved = await this.variantRepo.save(this.variantRepo.create({
-      productId,
-      sku,
-      barcode: dto?.barcode ?? null,
-      // e.g. `{ "Colour": "Blue", "Size": "M" }` — what distinguishes this one.
-      attributes: dto?.attributes ?? {},
-      variantName: dto?.variantName ?? Object.values(dto?.attributes ?? {}).join(' / '),
-      mrp: Number(dto?.mrp ?? sellingPrice),
-      sellingPrice,
-      stockQuantity: Math.max(Math.trunc(Number(dto?.stockQuantity ?? 0)), 0),
-      lowStockThreshold: Math.max(Math.trunc(Number(dto?.lowStockThreshold ?? 5)), 0),
-      isActive: dto?.isActive !== false,
-    }));
+    const saved = await this.variantRepo.save(
+      this.variantRepo.create({
+        productId,
+        sku,
+        barcode: dto?.barcode ?? null,
+        // e.g. `{ "Colour": "Blue", "Size": "M" }` — what distinguishes this one.
+        attributes: dto?.attributes ?? {},
+        variantName: dto?.variantName ?? Object.values(dto?.attributes ?? {}).join(' / '),
+        mrp: Number(dto?.mrp ?? sellingPrice),
+        sellingPrice,
+        stockQuantity: Math.max(Math.trunc(Number(dto?.stockQuantity ?? 0)), 0),
+        lowStockThreshold: Math.max(Math.trunc(Number(dto?.lowStockThreshold ?? 5)), 0),
+        isActive: dto?.isActive !== false,
+      }),
+    );
 
     return { success: true, variantId: saved.id, variant: saved };
   }
@@ -1448,8 +1641,10 @@ export class SellerService {
 
     if (dto?.sellingPrice !== undefined) variant.sellingPrice = Number(dto.sellingPrice);
     if (dto?.mrp !== undefined) variant.mrp = Number(dto.mrp);
-    if (dto?.stockQuantity !== undefined) variant.stockQuantity = Math.max(Math.trunc(Number(dto.stockQuantity)), 0);
-    if (dto?.lowStockThreshold !== undefined) variant.lowStockThreshold = Math.max(Math.trunc(Number(dto.lowStockThreshold)), 0);
+    if (dto?.stockQuantity !== undefined)
+      variant.stockQuantity = Math.max(Math.trunc(Number(dto.stockQuantity)), 0);
+    if (dto?.lowStockThreshold !== undefined)
+      variant.lowStockThreshold = Math.max(Math.trunc(Number(dto.lowStockThreshold)), 0);
     if (dto?.attributes !== undefined) variant.attributes = dto.attributes;
     if (dto?.variantName !== undefined) variant.variantName = dto.variantName;
     if (dto?.isActive !== undefined) variant.isActive = !!dto.isActive;
@@ -1492,13 +1687,15 @@ export class SellerService {
     // `product_id` column. Naming the physical column here instead happens to
     // work — unrecognised paths are passed through verbatim — but it silently
     // stops being checked against the entity.
-    const qb = this.questionRepo.createQueryBuilder('q')
+    const qb = this.questionRepo
+      .createQueryBuilder('q')
       .where('q.productId IN (:...productIds)', { productIds });
 
     // Raw subquery, so the table IS named physically and MUST stay
     // schema-qualified: an unqualified `product_answers` resolves against the
     // session search_path and would silently match the empty `public` copy.
-    const hasAnswer = 'EXISTS (SELECT 1 FROM marketplace.product_answers a WHERE a.question_id = q.id)';
+    const hasAnswer =
+      'EXISTS (SELECT 1 FROM marketplace.product_answers a WHERE a.question_id = q.id)';
     if (status === 'unanswered') qb.andWhere(`NOT ${hasAnswer}`);
     else if (status === 'answered') qb.andWhere(hasAnswer);
 
@@ -1515,9 +1712,9 @@ export class SellerService {
     // page looked like it had no questions when it had several.
     const answers = rows.length
       ? await this.answerRepo.find({
-        where: { questionId: In(rows.map((q) => q.id)) },
-        order: { createdAt: 'ASC' },
-      })
+          where: { questionId: In(rows.map((q) => q.id)) },
+          order: { createdAt: 'ASC' },
+        })
       : [];
 
     const byQuestion = new Map<string, typeof answers>();
@@ -1537,8 +1734,11 @@ export class SellerService {
         upvoteCount: q.upvoteCount,
         askedAt: q.createdAt,
         answers: own.map((a) => ({
-          id: a.id, authorName: a.authorName, authorRole: a.authorRole,
-          answerText: a.answerText, answeredAt: a.createdAt,
+          id: a.id,
+          authorName: a.authorName,
+          authorRole: a.authorRole,
+          answerText: a.answerText,
+          answeredAt: a.createdAt,
         })),
         answered: own.length > 0,
       };
@@ -1555,7 +1755,10 @@ export class SellerService {
     if (!question) throw new NotFoundException('No such question.');
 
     // The question has to be on one of this seller's own listings.
-    await this.assertOwnsProduct(sellerId, (question as any).productId ?? (question as any).product_id);
+    await this.assertOwnsProduct(
+      sellerId,
+      (question as any).productId ?? (question as any).product_id,
+    );
 
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     // Built as a single entity rather than passing an object literal straight to
@@ -1572,7 +1775,11 @@ export class SellerService {
     });
     const saved = await this.answerRepo.save(answer);
 
-    await this.kafka.publish('marketplace.qa.answer_posted', { sellerId, questionId, answerId: saved.id });
+    await this.kafka.publish('marketplace.qa.answer_posted', {
+      sellerId,
+      questionId,
+      answerId: saved.id,
+    });
     return { success: true, questionId, answerId: saved.id, answer: saved };
   }
 
@@ -1603,7 +1810,11 @@ export class SellerService {
       where: { sellerId },
       order: { isDefault: 'DESC', createdAt: 'DESC' },
     });
-    return { sellerId, data: accounts.map((a) => this.presentBankAccount(a)), total: accounts.length };
+    return {
+      sellerId,
+      data: accounts.map((a) => this.presentBankAccount(a)),
+      total: accounts.length,
+    };
   }
 
   async addBankAccount(sellerId: string, dto: any) {
@@ -1613,7 +1824,8 @@ export class SellerService {
     const method = dto?.method === 'upi' ? 'upi' : 'bank';
 
     if (method === 'bank') {
-      if (!holder || !bankName) throw new BadRequestException('Account holder name and bank name are required.');
+      if (!holder || !bankName)
+        throw new BadRequestException('Account holder name and bank name are required.');
       if (!/^\d{6,20}$/.test(accountNumber)) {
         throw new BadRequestException('Enter a valid account number (6–20 digits).');
       }
@@ -1639,7 +1851,11 @@ export class SellerService {
     });
 
     const saved = await this.bankAccountRepo.save(account);
-    await this.kafka.publish('seller.bank_account.added', { sellerId, accountId: saved.id, method });
+    await this.kafka.publish('seller.bank_account.added', {
+      sellerId,
+      accountId: saved.id,
+      method,
+    });
     return { success: true, accountId: saved.id, account: this.presentBankAccount(saved) };
   }
 
@@ -1662,7 +1878,10 @@ export class SellerService {
 
     // Don't leave a seller with accounts but no default to pay into.
     if (account.isDefault) {
-      const next = await this.bankAccountRepo.findOne({ where: { sellerId }, order: { createdAt: 'ASC' } });
+      const next = await this.bankAccountRepo.findOne({
+        where: { sellerId },
+        order: { createdAt: 'ASC' },
+      });
       if (next) {
         next.isDefault = true;
         await this.bankAccountRepo.save(next);
@@ -1693,7 +1912,9 @@ export class SellerService {
       take: limit,
     });
 
-    const unread = await this.notificationRepo.count({ where: { userId: sellerId, isRead: false } });
+    const unread = await this.notificationRepo.count({
+      where: { userId: sellerId, isRead: false },
+    });
 
     return {
       sellerId,
@@ -1714,13 +1935,19 @@ export class SellerService {
   }
 
   async markNotifRead(sellerId: string, notifId: string) {
-    const result = await this.notificationRepo.update({ id: notifId, userId: sellerId }, { isRead: true });
+    const result = await this.notificationRepo.update(
+      { id: notifId, userId: sellerId },
+      { isRead: true },
+    );
     if (!result.affected) throw new NotFoundException('No such notification.');
     return { success: true, notifId };
   }
 
   async markAllNotifRead(sellerId: string) {
-    const result = await this.notificationRepo.update({ userId: sellerId, isRead: false }, { isRead: true });
+    const result = await this.notificationRepo.update(
+      { userId: sellerId, isRead: false },
+      { isRead: true },
+    );
     return { success: true, marked: result.affected ?? 0 };
   }
 
@@ -1746,8 +1973,14 @@ export class SellerService {
    * Moderation state moves only through the admin routes, and only for admins.
    */
   private static readonly SELLER_EDITABLE_PRODUCT_FIELDS = [
-    'name', 'short_description', 'long_description', 'mrp',
-    'weight', 'dimensions', 'specifications', 'highlights',
+    'name',
+    'short_description',
+    'long_description',
+    'mrp',
+    'weight',
+    'dimensions',
+    'specifications',
+    'highlights',
   ] as const;
 
   /**
@@ -1801,7 +2034,9 @@ export class SellerService {
   }
 
   async updateProduct(sellerId: string, productId: string, dto: Record<string, unknown>) {
-    const product = await this.productRepo.findOne({ where: { id: productId, seller_id: sellerId } });
+    const product = await this.productRepo.findOne({
+      where: { id: productId, seller_id: sellerId },
+    });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
 
     const applied: Record<string, unknown> = {};
@@ -1830,7 +2065,9 @@ export class SellerService {
   }
 
   async deleteProduct(sellerId: string, productId: string) {
-    const product = await this.productRepo.findOne({ where: { id: productId, seller_id: sellerId } });
+    const product = await this.productRepo.findOne({
+      where: { id: productId, seller_id: sellerId },
+    });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
     product.is_active = false;
     product.status = 'DELETED';
@@ -1844,7 +2081,7 @@ export class SellerService {
     let created = 0;
     let errors = 0;
 
-    for (const p of (products || [])) {
+    for (const p of products || []) {
       try {
         await this.addProduct(sellerId, countryCode, p);
         created++;
@@ -1854,14 +2091,19 @@ export class SellerService {
     }
 
     this.logger.log(`📦 Bulk upload: ${created}/${count} products for seller ${sellerId}`);
-    await this.kafka.publish('seller.products.bulk_created', { sellerId, countryCode, count: created });
+    await this.kafka.publish('seller.products.bulk_created', {
+      sellerId,
+      countryCode,
+      count: created,
+    });
     return { success: true, totalProcessed: count, created, errors };
   }
 
   // ── Inventory Extended ─────────────────────────────────────────────
 
   async getLowStock(sellerId: string, countryCode: string) {
-    const data = await this.listingRepo.createQueryBuilder('l')
+    const data = await this.listingRepo
+      .createQueryBuilder('l')
       .leftJoinAndSelect('l.product', 'product')
       .where('l.seller_id = :sellerId', { sellerId })
       .andWhere('l.stockQuantity < 5')
@@ -1886,7 +2128,8 @@ export class SellerService {
     });
     if (!order) {
       const byNumber = await this.orderRepo.findOne({ where: { orderNumber: orderId, sellerId } });
-      if (!byNumber) throw new NotFoundException(`Order ${orderId} not found for seller ${sellerId}`);
+      if (!byNumber)
+        throw new NotFoundException(`Order ${orderId} not found for seller ${sellerId}`);
       return byNumber;
     }
     return order;
@@ -1954,20 +2197,24 @@ export class SellerService {
 
     await this.invalidateDashboard(sellerId);
     await this.kafka.publish('marketplace.order.delivered', {
-      sellerId, orderId, orderNumber: order.orderNumber, amount: Number(order.grandTotal),
+      sellerId,
+      orderId,
+      orderNumber: order.orderNumber,
+      amount: Number(order.grandTotal),
     });
 
     // The first line's category drives the referral rate — commission-service
     // resolves a category rate card the way Amazon and Flipkart do.
-    const firstProductId = Array.isArray(order.items) && order.items[0]
-      ? (order.items[0] as any).productId
-      : null;
+    const firstProductId =
+      Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).productId : null;
     let category: string | undefined;
     if (firstProductId) {
-      const product = await this.productRepo.findOne({
-        where: { id: firstProductId },
-        relations: ['category'],
-      }).catch((): null => null);
+      const product = await this.productRepo
+        .findOne({
+          where: { id: firstProductId },
+          relations: ['category'],
+        })
+        .catch((): null => null);
       category = (product as any)?.category?.name ?? undefined;
     }
 
@@ -2098,15 +2345,20 @@ export class SellerService {
     const ret = await this.returnRepo.findOne({ where: { id: returnId, sellerId } });
     if (!ret) throw new NotFoundException('No such return request.');
     if (ret.status !== 'REQUESTED') {
-      throw new BadRequestException(`This return is already ${ret.status.toLowerCase().replace(/_/g, ' ')}.`);
+      throw new BadRequestException(
+        `This return is already ${ret.status.toLowerCase().replace(/_/g, ' ')}.`,
+      );
     }
 
     ret.status = 'APPROVED';
     await this.returnRepo.save(ret);
 
     await this.kafka.publish('return.approved', {
-      sellerId, returnId, returnNumber: ret.returnNumber,
-      orderId: ret.orderId, refundAmount: Number(ret.refundAmount ?? 0),
+      sellerId,
+      returnId,
+      returnNumber: ret.returnNumber,
+      orderId: ret.orderId,
+      refundAmount: Number(ret.refundAmount ?? 0),
     });
     await this.invalidateDashboard(sellerId);
 
@@ -2128,7 +2380,9 @@ export class SellerService {
     const ret = await this.returnRepo.findOne({ where: { id: returnId, sellerId } });
     if (!ret) throw new NotFoundException('No such return request.');
     if (ret.status !== 'REQUESTED') {
-      throw new BadRequestException(`This return is already ${ret.status.toLowerCase().replace(/_/g, ' ')}.`);
+      throw new BadRequestException(
+        `This return is already ${ret.status.toLowerCase().replace(/_/g, ' ')}.`,
+      );
     }
 
     ret.status = 'REJECTED';
@@ -2140,11 +2394,21 @@ export class SellerService {
     await this.orderRepo.update({ id: ret.orderId, sellerId }, { status: 'DELIVERED' });
 
     await this.kafka.publish('return.rejected', {
-      sellerId, returnId, returnNumber: ret.returnNumber, orderId: ret.orderId, reason: detail,
+      sellerId,
+      returnId,
+      returnNumber: ret.returnNumber,
+      orderId: ret.orderId,
+      reason: detail,
     });
     await this.invalidateDashboard(sellerId);
 
-    return { success: true, returnId, returnNumber: ret.returnNumber, status: 'REJECTED', reason: detail };
+    return {
+      success: true,
+      returnId,
+      returnNumber: ret.returnNumber,
+      status: 'REJECTED',
+      reason: detail,
+    };
   }
 
   /**
@@ -2156,7 +2420,8 @@ export class SellerService {
    * carried no refund amount, reason or customer.
    */
   async getRefunds(sellerId: string, status?: string, page = 1, limit = 20) {
-    const qb = this.returnRepo.createQueryBuilder('r')
+    const qb = this.returnRepo
+      .createQueryBuilder('r')
       .where('r.seller_id = :sellerId', { sellerId })
       // Everything from "we owe this" through to "paid".
       .andWhere('r.status IN (:...statuses)', {
@@ -2191,12 +2456,15 @@ export class SellerService {
         // reference the seller's Orders page shows.
         orderNumber: orderNumbers.get(r.orderId) ?? null,
         customerName: r.customerName ?? '',
-        productName: Array.isArray(r.items) && r.items[0] ? (r.items[0] as any).name ?? '' : '',
+        productName: Array.isArray(r.items) && r.items[0] ? ((r.items[0] as any).name ?? '') : '',
         amount: Number(r.refundAmount ?? 0),
         reason: r.reasonDetail || r.reason,
-        status: r.status === 'REFUNDED' ? 'completed'
-          : ['PICKED_UP', 'RECEIVED', 'QC_PASSED'].includes(r.status) ? 'processing'
-            : 'pending',
+        status:
+          r.status === 'REFUNDED'
+            ? 'completed'
+            : ['PICKED_UP', 'RECEIVED', 'QC_PASSED'].includes(r.status)
+              ? 'processing'
+              : 'pending',
         requestedAt: r.createdAt,
         processedAt: r.refundedAt ?? null,
       })),
@@ -2232,7 +2500,8 @@ export class SellerService {
   async getWallet(sellerId: string) {
     const sum = async (predicate: (qb: any) => any) => {
       const row = await predicate(
-        this.orderRepo.createQueryBuilder('o')
+        this.orderRepo
+          .createQueryBuilder('o')
           .select('COALESCE(SUM(o.grandTotal), 0)', 'total')
           .where('o.sellerId = :sellerId', { sellerId }),
       ).getRawOne();
@@ -2242,10 +2511,17 @@ export class SellerService {
     const [grossSales, awaitingPayment, delivered, refunded, settings, seller] = await Promise.all([
       sum((qb) => qb.andWhere('o.paymentStatus = :s', { s: 'PAID' })),
       sum((qb) => qb.andWhere('o.paymentStatus = :s', { s: 'PENDING' })),
-      sum((qb) => qb.andWhere('o.paymentStatus = :p', { p: 'PAID' }).andWhere('o.status = :d', { d: 'DELIVERED' })),
+      sum((qb) =>
+        qb
+          .andWhere('o.paymentStatus = :p', { p: 'PAID' })
+          .andWhere('o.status = :d', { d: 'DELIVERED' }),
+      ),
       sum((qb) => qb.andWhere('o.paymentStatus = :s', { s: 'REFUNDED' })),
       this.settingsRepo.findOne({ where: { sellerId } }),
-      this.sellerRepo.findOne({ where: { id: sellerId }, select: ['id', 'regionCode', 'commissionRate'] }),
+      this.sellerRepo.findOne({
+        where: { id: sellerId },
+        select: ['id', 'regionCode', 'commissionRate'],
+      }),
     ]);
 
     const commissionRate = Number(seller?.commissionRate ?? settings?.commissionRate ?? 10);
@@ -2271,11 +2547,13 @@ export class SellerService {
   }
 
   async getWalletTransactions(sellerId: string, type?: string, page = 1) {
-    const qb = this.orderRepo.createQueryBuilder('o')
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       .where('o.sellerId = :sellerId', { sellerId })
       .andWhere('o.paymentStatus IN (:...statuses)', { statuses: ['PAID', 'REFUNDED'] })
       .orderBy('o.updatedAt', 'DESC')
-      .skip((page - 1) * 20).take(20);
+      .skip((page - 1) * 20)
+      .take(20);
 
     const [data, total] = await qb.getManyAndCount();
     return { sellerId, data, total, page };
@@ -2291,7 +2569,14 @@ export class SellerService {
    * settled fact next to a payout it had just claimed to create.
    */
   async getPayouts(sellerId: string, status?: string, page = 1) {
-    return { sellerId, data: [] as unknown[], total: 0, page, dataAvailable: false, owner: 'payout-service' };
+    return {
+      sellerId,
+      data: [] as unknown[],
+      total: 0,
+      page,
+      dataAvailable: false,
+      owner: 'payout-service',
+    };
   }
 
   /**
@@ -2326,10 +2611,12 @@ export class SellerService {
       if (!owned) throw new NotFoundException('No such bank account.');
     }
 
-    this.logger.warn(`Payout requested by ${sellerId} for ${amount} — no payout backend is wired to this route`);
+    this.logger.warn(
+      `Payout requested by ${sellerId} for ${amount} — no payout backend is wired to this route`,
+    );
     throw new NotImplementedException(
       'Payout requests are not yet connected to the payout service. ' +
-      'Your balance and bank details are saved; please contact support to withdraw.',
+        'Your balance and bank details are saved; please contact support to withdraw.',
     );
   }
 
@@ -2372,15 +2659,25 @@ export class SellerService {
     return { sellerId, data: [] as unknown[], total: 0, page, dataAvailable: false };
   }
 
-  async createCampaign(sellerId: string, dto: any) { return SellerService.campaignsUnavailable(); }
+  async createCampaign(sellerId: string, dto: any) {
+    return SellerService.campaignsUnavailable();
+  }
 
-  async updateCampaign(sellerId: string, campaignId: string, dto: any) { return SellerService.campaignsUnavailable(); }
+  async updateCampaign(sellerId: string, campaignId: string, dto: any) {
+    return SellerService.campaignsUnavailable();
+  }
 
-  async pauseCampaign(sellerId: string, campaignId: string) { return SellerService.campaignsUnavailable(); }
+  async pauseCampaign(sellerId: string, campaignId: string) {
+    return SellerService.campaignsUnavailable();
+  }
 
-  async resumeCampaign(sellerId: string, campaignId: string) { return SellerService.campaignsUnavailable(); }
+  async resumeCampaign(sellerId: string, campaignId: string) {
+    return SellerService.campaignsUnavailable();
+  }
 
-  async deleteCampaign(sellerId: string, campaignId: string) { return SellerService.campaignsUnavailable(); }
+  async deleteCampaign(sellerId: string, campaignId: string) {
+    return SellerService.campaignsUnavailable();
+  }
 
   /**
    * Seller promotions.
@@ -2393,7 +2690,8 @@ export class SellerService {
     const where: any = { sellerId };
     if (status && status !== 'all') where.status = status;
     const [data, total] = await this.promotionRepo.findAndCount({
-      where, order: { createdAt: 'DESC' },
+      where,
+      order: { createdAt: 'DESC' },
     });
 
     // `expired` is derived from the end date rather than stored, so a promotion
@@ -2430,23 +2728,29 @@ export class SellerService {
         .where('p.seller_id = :sellerId', { sellerId })
         .andWhere('UPPER(p.code) = :code', { code })
         .getOne();
-      if (clash) throw new BadRequestException(`You already have a promotion with the code ${code}.`);
+      if (clash)
+        throw new BadRequestException(`You already have a promotion with the code ${code}.`);
     }
 
-    const saved = await this.promotionRepo.save(this.promotionRepo.create({
-      sellerId,
-      name,
-      code,
-      type: ['percentage', 'flat', 'bogo', 'freebie'].includes(dto?.type) ? dto.type : 'percentage',
-      value,
-      maxDiscount: dto?.maxDiscount != null ? Number(dto.maxDiscount) : null,
-      minOrderValue: Number(dto?.minOrderValue ?? 0),
-      usageLimit: dto?.usageLimit != null ? Number(dto.usageLimit) : null,
-      status: dto?.startDate && new Date(dto.startDate).getTime() > Date.now() ? 'scheduled' : 'active',
-      startDate: dto?.startDate ? new Date(dto.startDate) : null,
-      endDate: dto?.endDate ? new Date(dto.endDate) : null,
-      applicableProducts: Array.isArray(dto?.applicableProducts) ? dto.applicableProducts : null,
-    }));
+    const saved = await this.promotionRepo.save(
+      this.promotionRepo.create({
+        sellerId,
+        name,
+        code,
+        type: ['percentage', 'flat', 'bogo', 'freebie'].includes(dto?.type)
+          ? dto.type
+          : 'percentage',
+        value,
+        maxDiscount: dto?.maxDiscount != null ? Number(dto.maxDiscount) : null,
+        minOrderValue: Number(dto?.minOrderValue ?? 0),
+        usageLimit: dto?.usageLimit != null ? Number(dto.usageLimit) : null,
+        status:
+          dto?.startDate && new Date(dto.startDate).getTime() > Date.now() ? 'scheduled' : 'active',
+        startDate: dto?.startDate ? new Date(dto.startDate) : null,
+        endDate: dto?.endDate ? new Date(dto.endDate) : null,
+        applicableProducts: Array.isArray(dto?.applicableProducts) ? dto.applicableProducts : null,
+      }),
+    );
 
     await this.kafka.publish('seller.promotion.created', { sellerId, promotionId: saved.id, code });
     return { success: true, promotionId: saved.id, promotion: saved };
@@ -2531,7 +2835,10 @@ export class SellerService {
 
     // The slug lives on the seller record, not on settings.
     if (typeof dto.slug === 'string' && dto.slug.trim()) {
-      const slug = dto.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const slug = dto.slug
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-');
       const clash = await this.sellerRepo.findOne({ where: { storeSlug: slug } });
       if (clash && clash.id !== sellerId) {
         throw new BadRequestException('That store address is already taken.');
@@ -2544,19 +2851,22 @@ export class SellerService {
 
   async getReviews(sellerId: string, page = 1) {
     // Get all product IDs for this seller
-    const productIds = await this.listingRepo.createQueryBuilder('l')
+    const productIds = await this.listingRepo
+      .createQueryBuilder('l')
       .select('l.product_id', 'productId')
       .where('l.seller_id = :sellerId', { sellerId })
       .getRawMany();
 
     if (!productIds.length) return { sellerId, data: [], total: 0, page };
 
-    const ids = productIds.map(p => p.productId);
-    const [data, total] = await this.reviewRepo.createQueryBuilder('r')
+    const ids = productIds.map((p) => p.productId);
+    const [data, total] = await this.reviewRepo
+      .createQueryBuilder('r')
       .where('r.productId IN (:...ids)', { ids })
       .andWhere('r.status = :status', { status: 'PUBLISHED' })
       .orderBy('r.createdAt', 'DESC')
-      .skip((page - 1) * 20).take(20)
+      .skip((page - 1) * 20)
+      .take(20)
       .getManyAndCount();
 
     return { sellerId, data, total, page };
@@ -2582,7 +2892,8 @@ export class SellerService {
 
     const [orderCount, revenueResult, avgRatingResult] = await Promise.all([
       this.orderRepo.count({ where: { sellerId } }),
-      this.orderRepo.createQueryBuilder('o')
+      this.orderRepo
+        .createQueryBuilder('o')
         .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
         .where('o.sellerId = :sellerId', { sellerId })
         .andWhere('o.createdAt >= :since', { since })
@@ -2592,7 +2903,8 @@ export class SellerService {
     ]);
 
     return {
-      sellerId, period,
+      sellerId,
+      period,
       totalOrders: orderCount,
       revenue: parseFloat(revenueResult?.sum || '0'),
       avgRating: avgRatingResult?.sellerRating || 0,
@@ -2606,7 +2918,9 @@ export class SellerService {
   async getPerformance(sellerId: string) {
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     const totalOrders = await this.orderRepo.count({ where: { sellerId } });
-    const cancelledOrders = await this.orderRepo.count({ where: { sellerId, status: 'CANCELLED' } });
+    const cancelledOrders = await this.orderRepo.count({
+      where: { sellerId, status: 'CANCELLED' },
+    });
     const returnedOrders = await this.orderRepo.count({ where: { sellerId, status: 'RETURNED' } });
 
     return {
@@ -2649,7 +2963,13 @@ export class SellerService {
    * "unavailable" rather than as an empty queue a seller might trust.
    */
   async getDisputes(sellerId: string) {
-    return { sellerId, data: [] as unknown[], total: 0, dataAvailable: false, owner: null as unknown };
+    return {
+      sellerId,
+      data: [] as unknown[],
+      total: 0,
+      dataAvailable: false,
+      owner: null as unknown,
+    };
   }
 
   /**
@@ -2694,7 +3014,8 @@ export class SellerService {
     if (dto.fulfillmentMode) settings.fulfillmentMode = dto.fulfillmentMode;
     if (dto.rates) settings.shippingRates = dto.rates;
     if (dto.dispatchSla !== undefined) settings.dispatchSla = dto.dispatchSla;
-    if (dto.freeDeliveryThreshold !== undefined) settings.freeDeliveryThreshold = dto.freeDeliveryThreshold;
+    if (dto.freeDeliveryThreshold !== undefined)
+      settings.freeDeliveryThreshold = dto.freeDeliveryThreshold;
     if (dto.deliveryRadius !== undefined) settings.deliveryRadius = dto.deliveryRadius;
     await this.settingsRepo.save(settings);
     return { success: true };
@@ -2776,9 +3097,10 @@ export class SellerService {
    * preference and avoids a migration for a list of four strings.
    */
   async getCouriers(sellerId: string) {
-    const enabled = (await this.redis.getJson<{ defaultCourier?: string; enabledCouriers?: string[] }>(
-      `seller:${sellerId}:couriers`,
-    )) ?? {};
+    const enabled =
+      (await this.redis.getJson<{ defaultCourier?: string; enabledCouriers?: string[] }>(
+        `seller:${sellerId}:couriers`,
+      )) ?? {};
     const available = ['Delhivery', 'BlueDart', 'Ekart', 'XpressBees', 'India Post'];
     return {
       sellerId,
@@ -2791,7 +3113,10 @@ export class SellerService {
     };
   }
 
-  async updateCouriers(sellerId: string, dto: { defaultCourier?: string; enabledCouriers?: string[] }) {
+  async updateCouriers(
+    sellerId: string,
+    dto: { defaultCourier?: string; enabledCouriers?: string[] },
+  ) {
     const current = (await this.redis.getJson<any>(`seller:${sellerId}:couriers`)) ?? {};
     const next = {
       defaultCourier: dto.defaultCourier ?? current.defaultCourier ?? null,
@@ -2808,9 +3133,12 @@ export class SellerService {
    * disagree with the Orders page about what has shipped.
    */
   async getShipmentTracking(sellerId: string, status?: string, page = 1, limit = 20) {
-    const qb = this.orderRepo.createQueryBuilder('o')
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       .where('o.sellerId = :sellerId', { sellerId })
-      .andWhere('o.status IN (:...shipped)', { shipped: ['SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'] })
+      .andWhere('o.status IN (:...shipped)', {
+        shipped: ['SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+      })
       .orderBy('o.updatedAt', 'DESC');
 
     if (status) qb.andWhere('o.status = :status', { status: status.toUpperCase() });
@@ -2854,10 +3182,15 @@ export class SellerService {
     if (dto?.name !== undefined) promo.name = String(dto.name);
     if (dto?.value !== undefined) promo.value = Number(dto.value);
     if (dto?.minOrderValue !== undefined) promo.minOrderValue = Number(dto.minOrderValue);
-    if (dto?.maxDiscount !== undefined) promo.maxDiscount = dto.maxDiscount == null ? null : Number(dto.maxDiscount);
-    if (dto?.usageLimit !== undefined) promo.usageLimit = dto.usageLimit == null ? null : Number(dto.usageLimit);
+    if (dto?.maxDiscount !== undefined)
+      promo.maxDiscount = dto.maxDiscount == null ? null : Number(dto.maxDiscount);
+    if (dto?.usageLimit !== undefined)
+      promo.usageLimit = dto.usageLimit == null ? null : Number(dto.usageLimit);
     if (dto?.endDate !== undefined) promo.endDate = dto.endDate ? new Date(dto.endDate) : null;
-    if (dto?.status !== undefined && ['active', 'paused', 'scheduled', 'expired'].includes(dto.status)) {
+    if (
+      dto?.status !== undefined &&
+      ['active', 'paused', 'scheduled', 'expired'].includes(dto.status)
+    ) {
       promo.status = dto.status;
     }
 
@@ -2879,7 +3212,6 @@ export class SellerService {
     return { success: true, sponsoredId, status: 'active' };
   }
 
-
   async getReports(sellerId: string, type?: string) {
     const period = 'last_30_days';
     const monthStart = new Date();
@@ -2887,11 +3219,18 @@ export class SellerService {
 
     const [orderCount, revenueResult] = await Promise.all([
       this.orderRepo.count({ where: { sellerId } }),
-      this.orderRepo.createQueryBuilder('o').select('COALESCE(SUM(o.grandTotal), 0)', 'sum').where('o.sellerId = :sellerId', { sellerId }).andWhere('o.createdAt >= :monthStart', { monthStart }).getRawOne(),
+      this.orderRepo
+        .createQueryBuilder('o')
+        .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
+        .where('o.sellerId = :sellerId', { sellerId })
+        .andWhere('o.createdAt >= :monthStart', { monthStart })
+        .getRawOne(),
     ]);
 
     return {
-      sellerId, type: type || 'overview', period,
+      sellerId,
+      type: type || 'overview',
+      period,
       data: { totalOrders: orderCount, revenue: parseFloat(revenueResult?.sum || '0') },
     };
   }
@@ -2921,7 +3260,9 @@ export class SellerService {
   }
 
   async addStaff(sellerId: string, dto: any) {
-    const email = String(dto?.email ?? '').trim().toLowerCase();
+    const email = String(dto?.email ?? '')
+      .trim()
+      .toLowerCase();
     const name = String(dto?.name ?? '').trim();
     if (!name || !email) throw new BadRequestException('A name and an email address are required.');
 
@@ -2934,9 +3275,16 @@ export class SellerService {
       .getOne();
     if (existing) throw new BadRequestException('That email is already on your team.');
 
-    const saved = await this.staffRepo.save(this.staffRepo.create({
-      sellerId, name, email, phone: dto?.phone ?? null, role, status: 'active',
-    }));
+    const saved = await this.staffRepo.save(
+      this.staffRepo.create({
+        sellerId,
+        name,
+        email,
+        phone: dto?.phone ?? null,
+        role,
+        status: 'active',
+      }),
+    );
 
     await this.kafka.publish('seller.staff.invited', { sellerId, staffId: saved.id, email, role });
     return { success: true, staffId: saved.id, staff: saved };
@@ -2949,7 +3297,8 @@ export class SellerService {
 
     if (dto?.name !== undefined) staff.name = String(dto.name);
     if (dto?.phone !== undefined) staff.phone = dto.phone;
-    if (dto?.role !== undefined && SellerService.STAFF_ROLES.includes(dto.role)) staff.role = dto.role;
+    if (dto?.role !== undefined && SellerService.STAFF_ROLES.includes(dto.role))
+      staff.role = dto.role;
     if (dto?.status !== undefined) staff.status = dto.status === 'inactive' ? 'inactive' : 'active';
 
     await this.staffRepo.save(staff);
@@ -2983,13 +3332,21 @@ export class SellerService {
       },
       // Payout destinations come from `seller_bank_accounts`, masked. This
       // returned the plaintext `settings.bankDetails` jsonb in full.
-      bank: await this.getBankAccounts(sellerId).then((r) => r.data).catch((): unknown[] => []),
+      bank: await this.getBankAccounts(sellerId)
+        .then((r) => r.data)
+        .catch((): unknown[] => []),
       shipping: {
         fulfillmentMode: settings?.fulfillmentMode || 'SELF',
         rates: settings?.shippingRates || [],
         dispatchSla: settings?.dispatchSla || 2,
       },
-      notifications: settings?.notifications || { email: true, sms: true, push: true, orderAlerts: true, lowStockAlerts: true },
+      notifications: settings?.notifications || {
+        email: true,
+        sms: true,
+        push: true,
+        orderAlerts: true,
+        lowStockAlerts: true,
+      },
       security: {
         twoFactorEnabled: settings?.twoFactorEnabled ?? false,
       },
@@ -3011,10 +3368,13 @@ export class SellerService {
       if (dto.store.description) settings.storeDescription = dto.store.description;
       if (dto.store.logo) settings.logoUrl = dto.store.logo;
       if (dto.store.isOnline !== undefined) settings.isOnline = dto.store.isOnline;
-      if (dto.store.autoAcceptOrders !== undefined) settings.autoAcceptOrders = dto.store.autoAcceptOrders;
-      if (dto.store.deliveryRadius !== undefined) settings.deliveryRadius = dto.store.deliveryRadius;
+      if (dto.store.autoAcceptOrders !== undefined)
+        settings.autoAcceptOrders = dto.store.autoAcceptOrders;
+      if (dto.store.deliveryRadius !== undefined)
+        settings.deliveryRadius = dto.store.deliveryRadius;
       if (dto.store.minimumOrder !== undefined) settings.minimumOrder = dto.store.minimumOrder;
-      if (dto.store.freeDeliveryThreshold !== undefined) settings.freeDeliveryThreshold = dto.store.freeDeliveryThreshold;
+      if (dto.store.freeDeliveryThreshold !== undefined)
+        settings.freeDeliveryThreshold = dto.store.freeDeliveryThreshold;
       if (dto.store.businessHours) settings.businessHours = dto.store.businessHours;
     }
     // `dto.bank` is deliberately NOT written.
@@ -3031,7 +3391,8 @@ export class SellerService {
       if (dto.shipping.dispatchSla) settings.dispatchSla = dto.shipping.dispatchSla;
     }
     if (dto.notifications) settings.notifications = dto.notifications;
-    if (dto.security?.twoFactorEnabled !== undefined) settings.twoFactorEnabled = dto.security.twoFactorEnabled;
+    if (dto.security?.twoFactorEnabled !== undefined)
+      settings.twoFactorEnabled = dto.security.twoFactorEnabled;
 
     await this.settingsRepo.save(settings);
     return { success: true };
@@ -3071,7 +3432,8 @@ export class SellerService {
     const where: any = { sellerId };
     if (status) where.status = status;
     const [tickets, total] = await this.supportRepo.findAndCount({
-      where, order: { updatedAt: 'DESC' },
+      where,
+      order: { updatedAt: 'DESC' },
     });
     return { sellerId, tickets, total, faq: [] as unknown[] };
   }
@@ -3083,18 +3445,26 @@ export class SellerService {
     const reference = `TKT-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     const now = new Date().toISOString();
 
-    const ticket = await this.supportRepo.save(this.supportRepo.create({
-      reference,
-      sellerId,
-      subject,
-      category: dto?.category ?? 'general',
-      priority: ['low', 'medium', 'high', 'urgent'].includes(dto?.priority) ? dto.priority : 'medium',
-      status: 'open',
-      messages: dto?.message ? [{ sender: 'seller', body: String(dto.message), at: now }] : [],
-    }));
+    const ticket = await this.supportRepo.save(
+      this.supportRepo.create({
+        reference,
+        sellerId,
+        subject,
+        category: dto?.category ?? 'general',
+        priority: ['low', 'medium', 'high', 'urgent'].includes(dto?.priority)
+          ? dto.priority
+          : 'medium',
+        status: 'open',
+        messages: dto?.message ? [{ sender: 'seller', body: String(dto.message), at: now }] : [],
+      }),
+    );
 
     await this.kafka.publish('seller.support.ticket_created', {
-      sellerId, ticketId: ticket.id, reference, subject, priority: ticket.priority,
+      sellerId,
+      ticketId: ticket.id,
+      reference,
+      subject,
+      priority: ticket.priority,
     });
     this.logger.log(`🎫 Support ticket ${reference} opened by seller ${sellerId}`);
     return { success: true, ticketId: ticket.id, reference, status: ticket.status, ticket };
@@ -3107,11 +3477,19 @@ export class SellerService {
     const ticket = await this.supportRepo.findOne({ where: { id: ticketId, sellerId } });
     if (!ticket) throw new NotFoundException('No such ticket.');
 
-    ticket.messages = [...(ticket.messages ?? []), { sender: 'seller', body, at: new Date().toISOString() }];
+    ticket.messages = [
+      ...(ticket.messages ?? []),
+      { sender: 'seller', body, at: new Date().toISOString() },
+    ];
     // A seller replying to a resolved ticket reopens it.
     if (ticket.status === 'resolved' || ticket.status === 'closed') ticket.status = 'open';
     await this.supportRepo.save(ticket);
 
-    return { success: true, ticketId, reference: ticket.reference, messages: ticket.messages.length };
+    return {
+      success: true,
+      ticketId,
+      reference: ticket.reference,
+      messages: ticket.messages.length,
+    };
   }
 }
