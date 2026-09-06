@@ -87,8 +87,8 @@ export function storePath(store: StoreUrlInput | string | null | undefined): str
  * without every call site needing to join the two.
  */
 export function productPath(product: ProductUrlInput | string | null | undefined): string {
-  if (!product) return '/grocery';
-  if (typeof product === 'string') return `/grocery/product/${product}`;
+  if (!product) return '/';
+  if (typeof product === 'string') return `/product/${product}`;
 
   const id = String(product.id ?? '').trim();
   if (!id) return '/';
@@ -137,7 +137,7 @@ export function parseIdParam(param: string | undefined | null): {
  * solves.
  */
 export function isCanonicalStoreParam(param: string, store: StoreUrlInput): boolean {
-  return storePath(store) === `/grocery/store/${String(param ?? '').trim()}`;
+  return storePath(store) === `/store/${String(param ?? '').trim()}`;
 }
 
 export function isCanonicalProductParam(param: string, product: ProductUrlInput): boolean {
