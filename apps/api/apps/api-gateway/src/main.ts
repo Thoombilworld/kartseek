@@ -21,7 +21,6 @@ import compression from 'compression';
 import helmet from 'helmet';
 import { randomBytes } from 'crypto';
 
-
 async function bootstrap() {
   try {
     // ✅ Validate database config FIRST (before NestFactory)
@@ -63,39 +62,44 @@ async function bootstrap() {
 
     // ── Slowloris & Keep-Alive Hardening ─────────────────────────────────────
     const httpServer = app.getHttpServer();
-    httpServer.headersTimeout       = configService.get<number>('app.http.headersTimeout', 15000);
-    httpServer.requestTimeout       = configService.get<number>('app.http.requestTimeout', 120000);
-    httpServer.keepAliveTimeout     = configService.get<number>('app.http.keepAliveTimeout', 65000);
-    httpServer.maxRequestsPerSocket = configService.get<number>('app.http.maxRequestsPerSocket', 100);
+    httpServer.headersTimeout = configService.get<number>('app.http.headersTimeout', 15000);
+    httpServer.requestTimeout = configService.get<number>('app.http.requestTimeout', 120000);
+    httpServer.keepAliveTimeout = configService.get<number>('app.http.keepAliveTimeout', 65000);
+    httpServer.maxRequestsPerSocket = configService.get<number>(
+      'app.http.maxRequestsPerSocket',
+      100,
+    );
 
     // ── Security Headers ──────────────────────────────────────────────────────
     // Generate nonce for CSP to allow inline scripts (required by Swagger UI)
     const scriptNonce = randomBytes(16).toString('hex');
-    
-    app.use(helmet({
-      crossOriginEmbedderPolicy: false,
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", `'nonce-${scriptNonce}'`], // ✅ Use nonce instead of unsafe-inline
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          imgSrc: ["'self'", 'data:', 'https:'],
-          connectSrc: ["'self'", 'wss:', 'ws:'],
+
+    app.use(
+      helmet({
+        crossOriginEmbedderPolicy: false,
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", `'nonce-${scriptNonce}'`], // ✅ Use nonce instead of unsafe-inline
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'https:'],
+            connectSrc: ["'self'", 'wss:', 'ws:'],
+          },
         },
-      },
-      // HSTS: force HTTPS for a year across subdomains, and declare the site
-      // eligible for the browser preload list. Browsers ignore this over plain
-      // HTTP per RFC 6797, so it is inert in development rather than harmful.
-      strictTransportSecurity: {
-        maxAge: 31536000,
-        includeSubDomains: true,
-        preload: true,
-      },
-      // Prevent MIME-type sniffing
-      noSniff: true,
-      // Don't send X-Powered-By (hides NestJS/Express fingerprint)
-      hidePoweredBy: true,
-    }));
+        // HSTS: force HTTPS for a year across subdomains, and declare the site
+        // eligible for the browser preload list. Browsers ignore this over plain
+        // HTTP per RFC 6797, so it is inert in development rather than harmful.
+        strictTransportSecurity: {
+          maxAge: 31536000,
+          includeSubDomains: true,
+          preload: true,
+        },
+        // Prevent MIME-type sniffing
+        noSniff: true,
+        // Don't send X-Powered-By (hides NestJS/Express fingerprint)
+        hidePoweredBy: true,
+      }),
+    );
 
     // ── HSTS & Certificate Pinning Headers ────────────────────────────────────
     // Forces HTTPS and pins certificates on the server side (complement to mobile SSL pinning)
@@ -112,11 +116,12 @@ async function bootstrap() {
       // Expect-CT — enforce Certificate Transparency logs
       res.setHeader('Expect-CT', 'max-age=86400, enforce');
       if (hpkpPrimaryPin && hpkpBackupPin) {
-        res.setHeader('Public-Key-Pins-Report-Only',
+        res.setHeader(
+          'Public-Key-Pins-Report-Only',
           `pin-sha256="${hpkpPrimaryPin}"; ` +
-          `pin-sha256="${hpkpBackupPin}"; ` +
-          `max-age=2592000; includeSubDomains; ` +
-          `report-uri="${hpkpReportUri}"`
+            `pin-sha256="${hpkpBackupPin}"; ` +
+            `max-age=2592000; includeSubDomains; ` +
+            `report-uri="${hpkpReportUri}"`,
         );
       }
       // Prevent clickjacking
@@ -126,8 +131,9 @@ async function bootstrap() {
       // Referrer Policy — don't leak URLs to 3rd parties
       res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
       // Permissions Policy — restrict browser feature access
-      res.setHeader('Permissions-Policy',
-        'camera=(), microphone=(), geolocation=(self), payment=(self)'
+      res.setHeader(
+        'Permissions-Policy',
+        'camera=(), microphone=(), geolocation=(self), payment=(self)',
       );
 
       /**
@@ -176,7 +182,7 @@ async function bootstrap() {
     if (ignoredCorsOrigins.length) {
       Logger.warn(
         `CORS_ORIGINS/WEB_APP_URL entries ignored (not valid origins): ${ignoredCorsOrigins.join(', ')}. ` +
-        'Browser calls from them will be refused with no server-side error.',
+          'Browser calls from them will be refused with no server-side error.',
         'Bootstrap',
       );
     }
@@ -202,15 +208,30 @@ async function bootstrap() {
       // through the Next proxy are same-origin and never preflight, which is why
       // pages still populated while anything the browser issued directly died.
       allowedHeaders: [
-        'Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Request-ID',
-        'X-Client-Version', 'X-Client-Platform', 'X-Device-ID', 'X-Session-ID',
-        'X-Region-Code', 'X-Language-Code', 'X-Timezone',
-        'X-Latitude', 'X-Longitude',
+        'Content-Type',
+        'Authorization',
+        'X-CSRF-Token',
+        'X-Request-ID',
+        'X-Client-Version',
+        'X-Client-Platform',
+        'X-Device-ID',
+        'X-Session-ID',
+        'X-Region-Code',
+        'X-Language-Code',
+        'X-Timezone',
+        'X-Latitude',
+        'X-Longitude',
       ],
     });
 
     // ── Global API Prefix & Versioning ────────────────────────────────────────
-    app.setGlobalPrefix('api');
+    // With a leading slash. Nest mounts its JSON not-found handler under the
+    // prefix exactly as given (app.use(prefix, router)), and Express never
+    // matches a mount path of 'api' against '/api/...', so every unmatched
+    // route fell through to Express's own HTML "Cannot GET" page instead of
+    // the AllExceptionsFilter envelope. Route paths are unaffected: Nest adds
+    // the slash for those itself.
+    app.setGlobalPrefix('/api');
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
     // ── Global Validation Pipe ────────────────────────────────────────────────
@@ -275,18 +296,18 @@ async function bootstrap() {
         .setTitle('KARTSEEK API Gateway')
         .setDescription(
           '## KARTSEEK Super App — Production API\n\n' +
-          'A multi-tenant, event-driven REST API powering the KARTSEEK ecosystem:\n' +
-          '**Marketplace · Grocery · Restaurant · Doctor · Pharmacy · Taxi · Wallet · Loyalty**\n\n' +
-          '### 🔒 Security & PCI Compliance\n' +
-          '- **JWT Authentication**: All protected endpoints require a `Bearer <JWT>` token.\n' +
-          '- **PCI-DSS Compliance**: Automated input/output interceptor masking card details (PAN first 6 / last 4 visible only) and sanitizing CVV/PIN codes to prevent logs exposure.\n' +
-          '- **DDoS Protection**: Automatic IP ban, rate limiting, and request fingerprint analysis.\n\n' +
-          '### ⚡ Resilient Infrastructure\n' +
-          '- **Redis Cache Failover**: Resilient offline fallback using a local in-memory Redis emulator when database or cache is unreachable.\n' +
-          '- **Kafka Event Bus**: Centralized topic registry driving real-time safety, SOS alerts, and ride tracking updates.\n\n' +
-          '### 🚀 Getting Started\n' +
-          '- **Rate Limiting**: Global: **100 req / 60s per IP**. Exceeding returns `429 Too Many Requests`.\n' +
-          '- **Versioning**: URI-based versioning — all endpoints are prefixed with `/api/v1/`.',
+            'A multi-tenant, event-driven REST API powering the KARTSEEK ecosystem:\n' +
+            '**Marketplace · Grocery · Restaurant · Doctor · Pharmacy · Taxi · Wallet · Loyalty**\n\n' +
+            '### 🔒 Security & PCI Compliance\n' +
+            '- **JWT Authentication**: All protected endpoints require a `Bearer <JWT>` token.\n' +
+            '- **PCI-DSS Compliance**: Automated input/output interceptor masking card details (PAN first 6 / last 4 visible only) and sanitizing CVV/PIN codes to prevent logs exposure.\n' +
+            '- **DDoS Protection**: Automatic IP ban, rate limiting, and request fingerprint analysis.\n\n' +
+            '### ⚡ Resilient Infrastructure\n' +
+            '- **Redis Cache Failover**: Resilient offline fallback using a local in-memory Redis emulator when database or cache is unreachable.\n' +
+            '- **Kafka Event Bus**: Centralized topic registry driving real-time safety, SOS alerts, and ride tracking updates.\n\n' +
+            '### 🚀 Getting Started\n' +
+            '- **Rate Limiting**: Global: **100 req / 60s per IP**. Exceeding returns `429 Too Many Requests`.\n' +
+            '- **Versioning**: URI-based versioning — all endpoints are prefixed with `/api/v1/`.',
         )
         .setVersion('1.0.0')
         .setContact('KARTSEEK Engineering', 'https://kartseek.com/docs', 'api@kartseek.com')
@@ -301,38 +322,46 @@ async function bootstrap() {
             description: 'Enter your JWT access token (without the "Bearer " prefix)',
             in: 'header',
           },
-          'JWT',   // ← must match @ApiBearerAuth('JWT') on controllers
+          'JWT', // ← must match @ApiBearerAuth('JWT') on controllers
         )
         .addApiKey(
-          { type: 'apiKey', name: 'X-API-Key', in: 'header', description: 'Service-to-service API key' },
+          {
+            type: 'apiKey',
+            name: 'X-API-Key',
+            in: 'header',
+            description: 'Service-to-service API key',
+          },
           'ApiKey',
         )
         // ── Tags (appear in sidebar, ordered by emoji weight then alpha) ───────────
-        .addTag('🔐 Auth',          'Authentication, registration & token refresh')
-        .addTag('🛍️ Marketplace',   'Products, categories, brands & sellers')
-        .addTag('🥦 Grocery',       'Grocery stores, product catalog & ordering')
-        .addTag('🍽️ Restaurants',   'Restaurant listings, menus, table booking & ordering')
-        .addTag('🩺 Doctor',        'Doctor search, slot booking & appointments')
-        .addTag('💊 Pharmacy',      'Medicine catalog, prescriptions & ordering')
-        .addTag('🚖 Taxi',          'Ride estimation, booking & live tracking')
-        .addTag('📦 Orders',        'Order lifecycle management & real-time tracking')
-        .addTag('🛒 Cart',          'Cart CRUD, coupon application & checkout')
-        .addTag('💳 Payment',       'Payment initiation, verification & refunds')
-        .addTag('👛 Wallet',        'Balance, credit/debit & transaction history')
+        .addTag('🔐 Auth', 'Authentication, registration & token refresh')
+        .addTag('🛍️ Marketplace', 'Products, categories, brands & sellers')
+        .addTag('🥦 Grocery', 'Grocery stores, product catalog & ordering')
+        .addTag('🍽️ Restaurants', 'Restaurant listings, menus, table booking & ordering')
+        .addTag('🩺 Doctor', 'Doctor search, slot booking & appointments')
+        .addTag('💊 Pharmacy', 'Medicine catalog, prescriptions & ordering')
+        .addTag('🚖 Taxi', 'Ride estimation, booking & live tracking')
+        .addTag('📦 Orders', 'Order lifecycle management & real-time tracking')
+        .addTag('🛒 Cart', 'Cart CRUD, coupon application & checkout')
+        .addTag('💳 Payment', 'Payment initiation, verification & refunds')
+        .addTag('👛 Wallet', 'Balance, credit/debit & transaction history')
         .addTag('🔔 Notifications', 'Push, SMS & email notification management')
-        .addTag('🏪 Seller',        'Seller dashboard, inventory & product management')
-        .addTag('🏢 Franchise',     'Multi-store franchise performance & compliance')
-        .addTag('👑 Admin',         'Platform governance, KYC & analytics')
-        .addTag('📁 Uploads',       'File & media upload (KYC docs, profile images)')
-        .addTag('📊 Reports',       'Revenue, order & user acquisition reports')
-        .addTag('🔍 Search',        'Full-text search & autocomplete suggestions')
-        .addTag('🌍 Regions',       'Multi-regional data architecture & detection')
-        .addTag('🛡️ Security',      'DDoS admin dashboard, IP bans & threat monitoring')
+        .addTag('🏪 Seller', 'Seller dashboard, inventory & product management')
+        .addTag('🏢 Franchise', 'Multi-store franchise performance & compliance')
+        .addTag('👑 Admin', 'Platform governance, KYC & analytics')
+        .addTag('📁 Uploads', 'File & media upload (KYC docs, profile images)')
+        .addTag('📊 Reports', 'Revenue, order & user acquisition reports')
+        .addTag('🔍 Search', 'Full-text search & autocomplete suggestions')
+        .addTag('🌍 Regions', 'Multi-regional data architecture & detection')
+        .addTag('🛡️ Security', 'DDoS admin dashboard, IP bans & threat monitoring')
         // ── Servers ───────────────────────────────────────────────────────────────
-        .addServer(`http://localhost:${process.env.API_GATEWAY_PORT || 3001}`, '🖥️  Local Development')
+        .addServer(
+          `http://localhost:${process.env.API_GATEWAY_PORT || 3001}`,
+          '🖥️  Local Development',
+        )
         .addServer('https://api-staging.kartseek.com', '🧪 Staging')
         .build();
-      
+
       const document = SwaggerModule.createDocument(app, swaggerConfig);
       SwaggerModule.setup('docs', app, document, {
         customSiteTitle: 'KARTSEEK API Docs',
@@ -382,11 +411,15 @@ async function bootstrap() {
     if ((error as any)?.code === 'EADDRINUSE') {
       Logger.error(
         `❌ Port ${port} already in use. Kill the process or use a different port:\n` +
-        `   export API_GATEWAY_PORT=3002 && npm run dev:api`,
+          `   export API_GATEWAY_PORT=3002 && npm run dev:api`,
         'Bootstrap',
       );
     } else {
-      Logger.error(`❌ Failed to start API Gateway: ${(error as Error).message}`, 'Bootstrap', error);
+      Logger.error(
+        `❌ Failed to start API Gateway: ${(error as Error).message}`,
+        'Bootstrap',
+        error,
+      );
     }
     process.exit(1);
   }
