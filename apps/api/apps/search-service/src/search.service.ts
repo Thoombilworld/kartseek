@@ -92,7 +92,9 @@ export class SearchService {
         results = esResult.results;
         total = esResult.total;
       } catch (err) {
-        this.logger.warn(`Elasticsearch query failed, falling back to Redis: ${(err as Error).message}`);
+        this.logger.warn(
+          `Elasticsearch query failed, falling back to Redis: ${(err as Error).message}`,
+        );
         this.esAvailable = false;
       }
     }
@@ -188,10 +190,16 @@ export class SearchService {
     await this.redis.setJson(indexKey, doc, 86400 * 7); // 7-day TTL
 
     // Add to module's document set
-    await this.redis.setJson(`search:index:set:${module}`, [
-      ...((await this.redis.getJson<string[]>(`search:index:set:${module}`)) ?? []).filter(d => d !== id),
-      id,
-    ], 86400 * 7);
+    await this.redis.setJson(
+      `search:index:set:${module}`,
+      [
+        ...((await this.redis.getJson<string[]>(`search:index:set:${module}`)) ?? []).filter(
+          (d) => d !== id,
+        ),
+        id,
+      ],
+      86400 * 7,
+    );
 
     // 2. Index in Elasticsearch if available
     if (this.esAvailable) {
@@ -212,7 +220,11 @@ export class SearchService {
 
     // Remove from module's document set
     const set = (await this.redis.getJson<string[]>(`search:index:set:${module}`)) ?? [];
-    await this.redis.setJson(`search:index:set:${module}`, set.filter(d => d !== id), 86400 * 7);
+    await this.redis.setJson(
+      `search:index:set:${module}`,
+      set.filter((d) => d !== id),
+      86400 * 7,
+    );
 
     if (this.esAvailable) {
       try {
@@ -244,7 +256,12 @@ export class SearchService {
   }
 
   // ── Private: Elasticsearch Query ───────────────────────────────────────────
-  private async queryElasticsearch(query: string, filters: SearchFilters, page: number, limit: number) {
+  private async queryElasticsearch(
+    query: string,
+    filters: SearchFilters,
+    page: number,
+    limit: number,
+  ) {
     const index = filters.serviceType
       ? `${this.indexPrefix}${filters.serviceType}`
       : `${this.indexPrefix}*`;
@@ -294,12 +311,14 @@ export class SearchService {
         size: limit,
         _source: true,
       }),
-      signal: AbortSignal.timeout(parseInt(process.env.ELASTICSEARCH_REQUEST_TIMEOUT || '30000', 10)),
+      signal: AbortSignal.timeout(
+        parseInt(process.env.ELASTICSEARCH_REQUEST_TIMEOUT || '30000', 10),
+      ),
     });
 
     if (!response.ok) throw new Error(`ES responded with ${response.status}`);
 
-    const data = await response.json() as any;
+    const data = (await response.json()) as any;
     const results: SearchResult[] = (data.hits?.hits ?? []).map((hit: any) => ({
       ...hit._source,
       _score: hit._score,
@@ -309,7 +328,12 @@ export class SearchService {
   }
 
   // ── Private: Redis-Based Fallback Search ───────────────────────────────────
-  private async redisBasedSearch(query: string, filters: SearchFilters, page: number, limit: number) {
+  private async redisBasedSearch(
+    query: string,
+    filters: SearchFilters,
+    page: number,
+    limit: number,
+  ) {
     const modules = filters.serviceType
       ? [filters.serviceType as SearchableModule]
       : Object.values(SearchableModule);
@@ -340,8 +364,10 @@ export class SearchService {
 
     // Sort
     if (filters.sortBy === 'price_asc') allResults.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-    else if (filters.sortBy === 'price_desc') allResults.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
-    else if (filters.sortBy === 'rating') allResults.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    else if (filters.sortBy === 'price_desc')
+      allResults.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+    else if (filters.sortBy === 'rating')
+      allResults.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     else allResults.sort((a, b) => ((b as any)._score ?? 0) - ((a as any)._score ?? 0));
 
     const start = (page - 1) * limit;
@@ -399,7 +425,11 @@ export class SearchService {
       popular.push({ query, count: 1, lastSearched: new Date().toISOString() });
     }
     // Keep top 200 popular searches
-    await this.redis.setJson(popularKey, popular.sort((a, b) => b.count - a.count).slice(0, 200), 86400 * 30);
+    await this.redis.setJson(
+      popularKey,
+      popular.sort((a, b) => b.count - a.count).slice(0, 200),
+      86400 * 30,
+    );
 
     // Update trending (1-hour window)
     const trendingKey = 'search:trending:queries';
@@ -410,7 +440,11 @@ export class SearchService {
     } else {
       trending.push({ query, count: 1 });
     }
-    await this.redis.setJson(trendingKey, trending.sort((a, b) => b.count - a.count).slice(0, 50), 3600);
+    await this.redis.setJson(
+      trendingKey,
+      trending.sort((a, b) => b.count - a.count).slice(0, 50),
+      3600,
+    );
 
     // Publish analytics event
     await this.kafka.publish('search.performed', {
@@ -437,6 +471,50 @@ export class SearchService {
   }
 
   // ── Private: Check Elasticsearch Connection ────────────────────────────────
+  /**
+   * Replica count for the `kartseek_*` indices, kept as an index template.
+   *
+   * Nothing created these indices on purpose: the first document PUT let
+   * Elasticsearch auto-create each one with its default of one replica. A
+   * single-node cluster (compose, every developer machine) can never place that
+   * replica, so the cluster has been yellow for as long as the platform has had
+   * search, and a real yellow in production (a node lost) would look the same.
+   * Zero replicas below production, ELASTICSEARCH_REPLICAS to override. The
+   * template covers indices created later; the settings call fixes existing ones.
+   */
+  private async ensureIndexTemplate() {
+    const fromEnv = Number(process.env.ELASTICSEARCH_REPLICAS);
+    const replicas =
+      Number.isFinite(fromEnv) && process.env.ELASTICSEARCH_REPLICAS !== undefined
+        ? fromEnv
+        : process.env.NODE_ENV === 'production'
+          ? 1
+          : 0;
+    const headers = { 'Content-Type': 'application/json' };
+    const template = {
+      index_patterns: [`${this.indexPrefix}*`],
+      priority: 10,
+      template: { settings: { number_of_replicas: replicas } },
+    };
+    const created = await fetch(`${this.esNode}/_index_template/${this.indexPrefix}settings`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(template),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!created.ok) throw new Error(`index template: HTTP ${created.status}`);
+    const updated = await fetch(`${this.esNode}/${this.indexPrefix}*/_settings`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ index: { number_of_replicas: replicas } }),
+      signal: AbortSignal.timeout(5000),
+    });
+    // 404 means no index exists yet; the template covers the first one written.
+    if (!updated.ok && updated.status !== 404)
+      throw new Error(`index settings: HTTP ${updated.status}`);
+    this.logger.log(`Elasticsearch ${this.indexPrefix}* indices set to ${replicas} replica(s)`);
+  }
+
   private async checkElasticsearchConnection() {
     try {
       const response = await fetch(`${this.esNode}/_cluster/health`, {
@@ -444,6 +522,9 @@ export class SearchService {
       });
       this.esAvailable = response.ok;
       if (this.esAvailable) {
+        await this.ensureIndexTemplate().catch((err: Error) =>
+          this.logger.warn(`Elasticsearch index template not applied: ${err.message}`),
+        );
         this.logger.log(`✅ Elasticsearch connected at ${this.esNode}`);
       }
     } catch {
@@ -500,7 +581,7 @@ export class SearchService {
       if (target.incomplete) {
         this.logger.warn(
           `${module}/${target.id}: index event carried only an id, so the document ` +
-          'would have no title to match on. Publish the indexable fields with the event.',
+            'would have no title to match on. Publish the indexable fields with the event.',
         );
         return;
       }

@@ -400,7 +400,42 @@ async function bootstrap() {
 
     // API_GATEWAY_PORT → PORT → 3001 (default; 3000 is reserved for Next.js web portal)
     const port = configService.get<number>('app.port', 3001);
-    await app.listen(port, '0.0.0.0');
+
+    // Bind address. In a container 0.0.0.0 is the only address that works. On a
+    // developer machine with DEV_AUTH_BYPASS=true every anonymous request is
+    // treated as the bypass role (SUPER_ADMIN in the local .env), so an
+    // all-interfaces bind hands that role to anyone on the same network. The
+    // bypass therefore implies loopback unless API_GATEWAY_HOST says otherwise.
+    // The nginx edge in compose still reaches the gateway: Docker Desktop
+    // forwards host.docker.internal to the host's loopback interface.
+    const devBypass =
+      process.env.DEV_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production';
+    const host = process.env.API_GATEWAY_HOST || (devBypass ? '127.0.0.1' : '0.0.0.0');
+    if (devBypass && host !== '127.0.0.1') {
+      Logger.warn(
+        `DEV_AUTH_BYPASS is on and the gateway is bound to ${host}: anonymous callers on the network get the bypass role`,
+        'Bootstrap',
+      );
+    }
+
+    // Nest mounts its JSON not-found handler under the global prefix only, so a
+    // request outside /api (a typo such as /apu/v1/...) still got Express's HTML
+    // "Cannot GET" page. Initialise first so this lands after every route, then
+    // answer with the envelope AllExceptionsFilter uses.
+    await app.init();
+    app.use((req: any, res: any) => {
+      res.status(404).json({
+        success: false,
+        statusCode: 404,
+        message: `Cannot ${req.method} ${req.originalUrl}`,
+        errorCode: 'HTTP_404',
+        timestamp: new Date().toISOString(),
+        requestId: req.headers['x-request-id'] ?? 'unknown',
+        path: req.originalUrl,
+      });
+    });
+
+    await app.listen(port, host);
 
     Logger.log(`🚀 API Gateway running on:       http://localhost:${port}/api/v1`, 'Bootstrap');
     Logger.log(`📚 Swagger docs available at:    http://localhost:${port}/docs`, 'Bootstrap');

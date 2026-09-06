@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # KARTSEEK — Local Infrastructure Stack
-# 
+#
 # ⚠️  SECURITY: Use environment variables for all credentials
 # Create a .env file in the root (not in version control) with:
 #   POSTGRES_PASSWORD=<strong-password>
@@ -34,7 +34,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
-
   # ── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
     image: postgis/postgis:16-3.4-alpine
@@ -300,7 +299,8 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
-      test: ['CMD', '/opt/kafka/bin/kafka-topics.sh', '--bootstrap-server', 'localhost:9092', '--list']
+      test:
+        ['CMD', '/opt/kafka/bin/kafka-topics.sh', '--bootstrap-server', 'localhost:9092', '--list']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -383,7 +383,8 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ['CMD-SHELL', 'curl -fsSL http://localhost:9200/_cluster/health | grep -qE "green|yellow"']
+      test:
+        ['CMD-SHELL', 'curl -fsSL http://localhost:9200/_cluster/health | grep -qE "green|yellow"']
       interval: 15s
       timeout: 10s
       retries: 5
@@ -412,9 +413,13 @@ services:
     image: nginx:1.30.3-alpine
     container_name: kartseek-nginx
     restart: unless-stopped
+    # Bound to loopback by default: this edge fronts a development gateway whose
+    # DEV_AUTH_BYPASS treats anonymous callers as SUPER_ADMIN, so it must not be
+    # reachable from the LAN by accident. Testing from a phone on the same
+    # network is an explicit choice: set NGINX_BIND=0.0.0.0 in the root .env.
     ports:
-      - '80:80'
-      - '443:443'
+      - '${NGINX_BIND:-127.0.0.1}:80:80'
+      - '${NGINX_BIND:-127.0.0.1}:443:443'
     volumes:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/conf.d:/etc/nginx/conf.d:ro
