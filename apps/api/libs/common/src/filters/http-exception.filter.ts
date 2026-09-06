@@ -37,7 +37,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const { statusCode, message, errorCode, stack } = this.resolveException(exception);
 
     const requestId = (request.headers['x-request-id'] as string) ?? 'unknown';
-    const path = request?.url ?? 'unknown';
+    // `originalUrl`, not `url`: Nest mounts its not-found handler on a router
+    // under the global prefix, and inside a mounted router `url` is relative to
+    // the mount, so a 404 for /api/v1/nope reported its path as /v1/nope.
+    const path = request?.originalUrl ?? request?.url ?? 'unknown';
     const method = request?.method ?? 'unknown';
 
     const errorBody = {
@@ -92,9 +95,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
       const message =
-        typeof response === 'string'
-          ? response
-          : (response as any).message ?? exception.message;
+        typeof response === 'string' ? response : ((response as any).message ?? exception.message);
 
       return {
         statusCode: exception.getStatus(),
@@ -150,10 +151,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return {
         statusCode: HttpStatus.BAD_REQUEST,
         message: this.isProd
-          ? (pgCode === '23502'
+          ? pgCode === '23502'
             ? 'A required field is missing.'
-            : 'A referenced record does not exist.')
-          : String((exception as any)?.detail ?? (exception as Error).message).replace(/\s+/g, ' ').trim(),
+            : 'A referenced record does not exist.'
+          : String((exception as any)?.detail ?? (exception as Error).message)
+              .replace(/\s+/g, ' ')
+              .trim(),
         errorCode: pgCode === '23502' ? 'MISSING_REQUIRED_FIELD' : 'REFERENCED_RECORD_NOT_FOUND',
         stack: (exception as Error).stack,
       };
@@ -184,10 +187,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
    * re-created from a plain object on the other side, losing its prototype and
    * sometimes its non-enumerable fields.
    */
-  private isInvalidTextRepresentation(exception: unknown): boolean {
+  protected isInvalidTextRepresentation(exception: unknown): boolean {
     if (!exception || typeof exception !== 'object') return false;
     const err = exception as { code?: unknown; message?: unknown };
     if (err.code === '22P02') return true;
-    return typeof err.message === 'string' && /invalid input syntax for type uuid/i.test(err.message);
+    return (
+      typeof err.message === 'string' && /invalid input syntax for type uuid/i.test(err.message)
+    );
   }
 }

@@ -1,6 +1,19 @@
 import {
-  Controller, Get, Post, Param, Body, Query, Headers,
-  Inject, HttpCode, HttpStatus, HttpException, Logger, Optional, UseGuards
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Query,
+  Headers,
+  Inject,
+  HttpCode,
+  HttpStatus,
+  HttpException,
+  Logger,
+  Optional,
+  UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -13,9 +26,17 @@ import { RolesGuard } from '../guards/roles.guard';
 import { UserRole, rpcCatch } from '@app/common';
 
 // Inline payment methods by country (avoids @app/region JS build cache issues)
-const REGION_PAYMENT_METHODS: Record<string, Array<{ methodType: string; gateway: string; displayName: string; isDefault?: boolean }>> = {
+const REGION_PAYMENT_METHODS: Record<
+  string,
+  Array<{ methodType: string; gateway: string; displayName: string; isDefault?: boolean }>
+> = {
   IN: [
-    { methodType: 'upi', gateway: 'upi', displayName: 'UPI (GPay / PhonePe / Paytm)', isDefault: true },
+    {
+      methodType: 'upi',
+      gateway: 'upi',
+      displayName: 'UPI (GPay / PhonePe / Paytm)',
+      isDefault: true,
+    },
     { methodType: 'card', gateway: 'razorpay', displayName: 'Credit / Debit Card' },
     { methodType: 'netbanking', gateway: 'razorpay', displayName: 'Net Banking' },
     { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
@@ -33,7 +54,7 @@ const REGION_PAYMENT_METHODS: Record<string, Array<{ methodType: string; gateway
   DEFAULT: [
     { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
     { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-  ]
+  ],
 };
 
 /**
@@ -59,9 +80,7 @@ export class PaymentGatewayController {
   private readonly logger = new Logger(PaymentGatewayController.name);
   private paymentClient: ClientProxy | null = null;
 
-  constructor(
-    @Optional() @Inject('PAYMENT_SERVICE') paymentClient?: ClientProxy,
-  ) {
+  constructor(@Optional() @Inject('PAYMENT_SERVICE') paymentClient?: ClientProxy) {
     this.paymentClient = paymentClient || null;
   }
 
@@ -86,10 +105,9 @@ export class PaymentGatewayController {
     }
     try {
       return await lastValueFrom(
-        this.paymentClient.send<T>({ cmd }, data).pipe(
-          timeout(5000),
-          catchError(rpcCatch('Payment service unavailable')),
-        ),
+        this.paymentClient
+          .send<T>({ cmd }, data)
+          .pipe(timeout(5000), catchError(rpcCatch('Payment service unavailable'))),
       );
     } catch (error) {
       if (error instanceof HttpException) throw error;
@@ -211,7 +229,9 @@ export class PaymentGatewayController {
     @Query('limit') limit?: string,
   ) {
     return this.send('get_customer_payments', {
-      customerId, page: Number(page) || 1, limit: Number(limit) || 20
+      customerId,
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
     });
   }
 
@@ -300,7 +320,9 @@ export class PaymentGatewayController {
     @Query('limit') limit?: string,
   ) {
     return this.send('get_customer_invoices', {
-      customerId, page: Number(page) || 1, limit: Number(limit) || 20
+      customerId,
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
     });
   }
 
@@ -362,6 +384,12 @@ export class PaymentGatewayController {
   @Get('admin/reconciliation/:date')
   @ApiOperation({ summary: 'Super Admin: Daily reconciliation report' })
   async getReconciliation(@Param('date') date: string) {
+    // A calendar date, or a 400. Anything else reached payment-service, threw
+    // inside the report query, and came back to the caller as a 500
+    // "Payment service unavailable" for what was a typo in the URL.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) {
+      throw new BadRequestException('date must be a calendar date in YYYY-MM-DD form.');
+    }
     return this.send('get_reconciliation', { date });
   }
 }

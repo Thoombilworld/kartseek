@@ -41,7 +41,11 @@ export class RpcAwareExceptionsFilter extends AllExceptionsFilter {
     return throwError(() => ({ statusCode, message, errorCode })) as Observable<never>;
   }
 
-  private toRpcError(exception: unknown): { statusCode: number; message: string; errorCode: string } {
+  private toRpcError(exception: unknown): {
+    statusCode: number;
+    message: string;
+    errorCode: string;
+  } {
     if (exception instanceof BusinessException) {
       return {
         statusCode: exception.getStatus(),
@@ -52,7 +56,8 @@ export class RpcAwareExceptionsFilter extends AllExceptionsFilter {
 
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
-      const raw = typeof response === 'string' ? response : (response as any)?.message ?? exception.message;
+      const raw =
+        typeof response === 'string' ? response : ((response as any)?.message ?? exception.message);
       return {
         statusCode: exception.getStatus(),
         message: Array.isArray(raw) ? raw.join('; ') : String(raw),
@@ -75,6 +80,20 @@ export class RpcAwareExceptionsFilter extends AllExceptionsFilter {
       };
     }
 
+    // SQLSTATE 22P02, "invalid input syntax for type uuid": a malformed id in the
+    // request reached a uuid column. The HTTP filter has answered this with a 400
+    // since the brands audit, but a message handler's copy of the same error
+    // arrived here, fell through to the 500 branch below, and the gateway then
+    // reported "<service> unavailable" for a typo in the URL. Same 400, same
+    // wording, and the driver's text stays out of the response.
+    if (this.isInvalidTextRepresentation(exception)) {
+      return {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Malformed identifier in request.',
+        errorCode: 'INVALID_IDENTIFIER',
+      };
+    }
+
     // Postgres not-null / foreign-key violations mean the request was missing or
     // referenced something that does not exist — a client error, not a server
     // fault. Surfacing them as 500 hid every missing-field bug behind "an
@@ -84,7 +103,9 @@ export class RpcAwareExceptionsFilter extends AllExceptionsFilter {
       const detail = (exception as any)?.detail ?? (exception as Error)?.message ?? '';
       return {
         statusCode: HttpStatus.BAD_REQUEST,
-        message: String(detail).replace(/\s+/g, ' ').trim() || 'Required field missing or referenced record not found.',
+        message:
+          String(detail).replace(/\s+/g, ' ').trim() ||
+          'Required field missing or referenced record not found.',
         errorCode: pgCode === '23502' ? 'MISSING_REQUIRED_FIELD' : 'REFERENCED_RECORD_NOT_FOUND',
       };
     }

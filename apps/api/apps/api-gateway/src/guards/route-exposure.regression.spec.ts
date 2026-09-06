@@ -202,9 +202,9 @@ describe('gateway route exposure', () => {
       "@Post('erasure/:userId')",
     ]) {
       const at = src.indexOf(route);
-      expect(at, route).toBeGreaterThan(-1);
+      expect(at).toBeGreaterThan(-1);
       // On the handler itself, directly below the verb.
-      expect(src.slice(at, at + 120), route).toContain('@ResourceOwner(SUBJECT_ONLY)');
+      expect(src.slice(at, at + 120)).toContain('@ResourceOwner(SUBJECT_ONLY)');
     }
     for (const route of [
       "@Post('export/:requestId/process')",
@@ -212,10 +212,8 @@ describe('gateway route exposure', () => {
       "@Get('compliance/dashboard')",
     ]) {
       const at = src.indexOf(route);
-      expect(at, route).toBeGreaterThan(-1);
-      expect(src.slice(at, at + 120), route).toContain(
-        '@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)',
-      );
+      expect(at).toBeGreaterThan(-1);
+      expect(src.slice(at, at + 120)).toContain('@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)');
     }
     // The request-scoped routes carry no user id in the URL; each must ask.
     for (const route of [
@@ -224,8 +222,8 @@ describe('gateway route exposure', () => {
       "@Get('erasure/:requestId/status')",
     ]) {
       const at = src.indexOf(route);
-      expect(at, route).toBeGreaterThan(-1);
-      expect(src.slice(at, at + 700), route).toContain('this.assertMayAccess(');
+      expect(at).toBeGreaterThan(-1);
+      expect(src.slice(at, at + 700)).toContain('this.assertMayAccess(');
     }
   });
 
