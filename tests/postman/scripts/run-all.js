@@ -198,7 +198,7 @@ for (const collectionFile of collections) {
       totalRequests += detail.requests.total;
       collectionDetails.push(detail);
     }
-  } catch (e) {
+  } catch {
     collectionDetails.push({ collection: baseName, status: 'ERROR', assertions: { total: 0, passed: 0, failed: 0 }, requests: { total: 0, failed: 0 } });
   }
 }

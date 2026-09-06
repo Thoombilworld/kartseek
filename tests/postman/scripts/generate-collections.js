@@ -240,22 +240,6 @@ function makeCollection(name, description, folders, authConfig) {
   };
 }
 
-function errorTests(expectedStatus, message) {
-  return `
-pm.test("Status code is ${expectedStatus}", function () {
-    pm.response.to.have.status(${expectedStatus});
-});
-
-pm.test("Response time is acceptable", function () {
-    pm.expect(pm.response.responseTime).to.be.below(2000);
-});
-
-pm.test("Error message is correct", function () {
-    const jsonData = pm.response.json();
-    pm.expect(jsonData.message || jsonData.error).to.exist;
-});`;
-}
-
 function unauthorizedTests() {
   return `
 pm.test("Status code is 401 or 403", function () {

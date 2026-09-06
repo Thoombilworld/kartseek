@@ -106,11 +106,11 @@ function stop(child) {
   if (process.platform === 'win32') {
     try {
       execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore' });
-    } catch {}
+    } catch { /* the process tree is already gone */ }
   } else {
     try {
       child.kill('SIGTERM');
-    } catch {}
+    } catch { /* the process is already gone */ }
   }
 }
 

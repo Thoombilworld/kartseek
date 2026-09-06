@@ -2,7 +2,7 @@
   "name": "@kartseek/marketplace-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "KARTSEEK Marketplace \u2014 independent backend microservice (HTTP 3012 \u00b7 TCP 4002 \u00b7 gRPC 5006)",
+  "description": "KARTSEEK Marketplace — independent backend microservice (HTTP 3012 · TCP 4002 · gRPC 5006)",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
@@ -14,7 +14,8 @@
     "type-check": "tsc --noEmit -p tsconfig.json && npm run check:type-imports",
     "check:type-imports": "node ../../../scripts/check-type-imports.js .",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
-    "test:integration": "vitest run --config vitest.integration.mts"
+    "test:integration": "vitest run --config vitest.integration.mts",
+    "clean": "rimraf dist"
   },
   "jest": {
     "moduleFileExtensions": [

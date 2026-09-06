@@ -2,7 +2,7 @@
   "name": "@kartseek/restaurant-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "KARTSEEK Restaurant \u2014 independent backend microservice (HTTP 3019 \u00b7 TCP 4018 \u00b7 gRPC 5005)",
+  "description": "KARTSEEK Restaurant — independent backend microservice (HTTP 3019 · TCP 4018 · gRPC 5005)",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "type-check": "tsc --noEmit -p tsconfig.json && npm run check:type-imports",
     "check:type-imports": "node ../../../scripts/check-type-imports.js .",
-    "lint": "eslint \"src/**/*.ts\" --max-warnings 0"
+    "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
+    "clean": "rimraf dist"
   },
   "jest": {
     "moduleFileExtensions": [

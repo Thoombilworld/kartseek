@@ -1,0 +1,14 @@
+# Generated, vendored, or too large to format on every commit. Kept in step
+# with the `format` scripts in package.json, which pass both this file and
+# .gitignore as ignore paths.
+node_modules
+dist
+.next
+.turbo
+coverage
+package-lock.json
+**/next-env.d.ts
+apps/api/schema.gql
+tests/postman/collections
+tests/postman/environments
+**/*.g.dart
