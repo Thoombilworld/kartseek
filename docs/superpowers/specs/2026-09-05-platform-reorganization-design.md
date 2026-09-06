@@ -1,7 +1,7 @@
 # KARTSEEK platform reorganization — design
 
 **Date:** 2026-09-05
-**Status:** approved in discussion, awaiting written review
+**Status:** phase 1 complete (2026-09-06); phases 2–5 pending
 **Branch:** `chore/platform-reorg` (stacked on `chore/rspack-builder`, eight commits ahead of `main`)
 
 ## 1. Purpose
