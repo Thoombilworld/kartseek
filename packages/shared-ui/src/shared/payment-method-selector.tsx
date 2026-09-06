@@ -2,7 +2,14 @@
 
 import React from 'react';
 import {
-  CreditCard, Wallet, Banknote, Smartphone, Landmark, QrCode, Apple, BadgeCheck,
+  CreditCard,
+  Wallet,
+  Banknote,
+  Smartphone,
+  Landmark,
+  QrCode,
+  Apple,
+  BadgeCheck,
 } from 'lucide-react';
 import { useRegion } from '@/lib/contexts/region-context';
 import { getPaymentLabel, getPaymentRestriction } from '@/lib/localization';
@@ -30,6 +37,8 @@ interface PaymentMethodSelectorProps {
   /** Module placing the order — COD is not offered for consultations or rides. */
   module?: string;
   walletBalance?: number;
+  /** Disable methods the platform cannot settle yet (see SETTLEABLE_METHODS). */
+  requireSettleable?: boolean;
   className?: string;
 }
 
@@ -43,18 +52,28 @@ interface PaymentMethodSelectorProps {
  * Qatar, UPI in India, KNET in Kuwait — is marked and shown first.
  */
 export function PaymentMethodSelector({
-  value, onChange, amount, module, walletBalance, className = '',
+  value,
+  onChange,
+  amount,
+  module,
+  walletBalance,
+  requireSettleable,
+  className = '',
 }: PaymentMethodSelectorProps) {
   const { getPaymentMethodsFor, currentLanguage, country, formatCurrencyValue } = useRegion();
 
-  const methods = getPaymentMethodsFor({ amount, module, walletBalance });
+  const methods = getPaymentMethodsFor({ amount, module, walletBalance, requireSettleable });
 
   return (
     <div className={`space-y-3 ${className}`} role="radiogroup" aria-label="Payment method">
       {methods.map((method: PaymentMethodSpec) => {
         const Icon = ICONS[method.icon ?? 'card'] ?? CreditCard;
         const restriction = getPaymentRestriction(method, {
-          country: country.code, language: currentLanguage, amount, walletBalance,
+          country: country.code,
+          language: currentLanguage,
+          amount,
+          walletBalance,
+          requireSettleable,
         });
         const disabled = !!restriction;
         const selected = value === method.type;
@@ -79,9 +98,11 @@ export function PaymentMethodSelector({
               onChange={() => onChange(method.type)}
               className="accent-blue-600"
             />
-            <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-              selected ? 'bg-blue-100' : 'bg-slate-100'
-            }`}>
+            <span
+              className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                selected ? 'bg-blue-100' : 'bg-slate-100'
+              }`}
+            >
               <Icon className={`w-5 h-5 ${selected ? 'text-blue-600' : 'text-slate-500'}`} />
             </span>
 
@@ -94,9 +115,7 @@ export function PaymentMethodSelector({
                   </span>
                 )}
               </p>
-              <p className="text-xs text-slate-500">
-                {restriction ?? method.description ?? ''}
-              </p>
+              <p className="text-xs text-slate-500">{restriction ?? method.description ?? ''}</p>
             </div>
 
             {method.type === 'wallet' && walletBalance !== undefined && (

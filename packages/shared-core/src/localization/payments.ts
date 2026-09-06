@@ -18,6 +18,12 @@ export interface PaymentContext {
   module?: string;
   /** Available balance, so the wallet option can be hidden when empty. */
   walletBalance?: number;
+  /**
+   * Only offer methods the platform can actually settle today (see
+   * SETTLEABLE_METHODS). The marketplace checkout sets this; a method that
+   * nothing collects must not be able to place an order.
+   */
+  requireSettleable?: boolean;
 }
 
 /**
@@ -39,7 +45,8 @@ export function getPaymentMethods(ctx: PaymentContext = {}): PaymentMethodSpec[]
 
   const methods = country.payments.filter((m) => {
     if (m.type === 'cod' && ctx.module && NO_COD_MODULES.has(ctx.module)) return false;
-    if (m.type === 'wallet' && ctx.walletBalance !== undefined && ctx.walletBalance <= 0) return false;
+    if (m.type === 'wallet' && ctx.walletBalance !== undefined && ctx.walletBalance <= 0)
+      return false;
     if (ctx.amount !== undefined) {
       if (m.minAmount !== undefined && ctx.amount < m.minAmount) return false;
       if (m.maxAmount !== undefined && ctx.amount > m.maxAmount) return false;
@@ -56,7 +63,10 @@ export function getDefaultPaymentMethod(ctx: PaymentContext = {}): PaymentMethod
   return methods.find((m) => m.isDefault) ?? methods[0];
 }
 
-export function getPaymentMethod(type: PaymentMethodType, country?: string): PaymentMethodSpec | undefined {
+export function getPaymentMethod(
+  type: PaymentMethodType,
+  country?: string,
+): PaymentMethodSpec | undefined {
   return getCountry(country).payments.find((m) => m.type === type);
 }
 
@@ -106,6 +116,23 @@ export function toWirePaymentMethod(type: string): string {
   return WIRE_METHOD[type as PaymentMethodType] ?? 'ONLINE';
 }
 
+/**
+ * Methods that actually settle an order today.
+ *
+ * Nothing on the platform calls `POST /payments/initiate`, order-service does
+ * not debit the customer wallet, and no PSP is configured — so a card, Apple
+ * Pay or bank-transfer "payment" placed an order that nobody ever paid for and
+ * that the customer had no way to pay afterwards. Grow this list only when the
+ * corresponding settlement path exists (wallet debit at placement → `wallet`;
+ * a PSP → `card` and the wallet brands). The gateway mirrors it in
+ * `marketplace-payment-policy.ts`.
+ */
+export const SETTLEABLE_METHODS: readonly PaymentMethodType[] = ['cod'] as const;
+
+export function isSettleable(type: string): boolean {
+  return (SETTLEABLE_METHODS as readonly string[]).includes(type);
+}
+
 /** Gateway that settles a method in a region — used to route the charge. */
 export function getGatewayFor(type: string, country?: string): string {
   return getPaymentMethod(type as PaymentMethodType, country)?.gateway ?? 'stripe';
@@ -118,7 +145,13 @@ export function getGatewayFor(type: string, country?: string): string {
  * regulatory one. Expressed in the region's own currency.
  */
 const COD_LIMITS: Record<string, number> = {
-  QA: 5000, AE: 5000, SA: 5000, BH: 500, KW: 400, OM: 500, IN: 50000,
+  QA: 5000,
+  AE: 5000,
+  SA: 5000,
+  BH: 500,
+  KW: 400,
+  OM: 500,
+  IN: 50000,
 };
 
 export function getCodLimit(country?: string): number | null {
@@ -132,13 +165,21 @@ export function getPaymentRestriction(
 ): string | null {
   const country = getCountry(ctx.country);
 
+  if (ctx.requireSettleable && !isSettleable(method.type)) {
+    return 'Not available yet — online payments are not connected';
+  }
   if (method.type === 'cod' && ctx.amount !== undefined) {
     const limit = getCodLimit(country.code);
     if (limit !== null && ctx.amount > limit) {
       return `Cash on delivery is available on orders up to ${formatMoney(limit, { country: country.code, language: ctx.language })}`;
     }
   }
-  if (method.type === 'wallet' && ctx.walletBalance !== undefined && ctx.amount !== undefined && ctx.walletBalance < ctx.amount) {
+  if (
+    method.type === 'wallet' &&
+    ctx.walletBalance !== undefined &&
+    ctx.amount !== undefined &&
+    ctx.walletBalance < ctx.amount
+  ) {
     return `Wallet balance ${formatMoney(ctx.walletBalance, { country: country.code, language: ctx.language })} does not cover this order`;
   }
   if (method.minAmount !== undefined && ctx.amount !== undefined && ctx.amount < method.minAmount) {
