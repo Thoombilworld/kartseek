@@ -11,15 +11,15 @@
  *   npx ts-node --transpile-only -r tsconfig-paths/register scripts/seed-pharmacy.ts
  */
 
-import { DataSource } from 'typeorm';
+import { DataSource, type DeepPartial } from 'typeorm';
 import * as path from 'path';
 
 const ds = new DataSource({
   type: 'postgres',
-  host: process.env.DB_HOST ?? 'localhost',
-  port: +(process.env.DB_PORT ?? 5432),
-  username: process.env.DB_USER ?? 'postgres',
-  password: process.env.DB_PASSWORD ?? 'kartseek123',
+  host: process.env.PHARMACY_DB_HOST || process.env.DB_HOST || 'localhost',
+  port: +(process.env.PHARMACY_DB_PORT || process.env.DB_PORT || 5432),
+  username: process.env.PHARMACY_DB_USER || process.env.DB_USER || 'postgres',
+  password: process.env.PHARMACY_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
   // This vertical owns its own database now. Seeding kartseek_db would write
   // rows the service never reads, and leave the module looking empty.
   database: process.env.PHARMACY_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_pharmacy',
@@ -27,41 +27,136 @@ const ds = new DataSource({
   // `public`, while the service reads its own schema -- so seeding "succeeded"
   // and the storefront stayed empty.
   schema: 'pharmacy',
-  entities: [path.join(__dirname, '../../../../modules/pharmacy/backend/src/entities/*.entity.{ts,js}')],
+  entities: [
+    path.join(__dirname, '../../../../modules/pharmacy/backend/src/entities/*.entity.{ts,js}'),
+  ],
   synchronize: true,
   logging: false,
 });
 
-import { PharmacyStore, PharmacyStoreStatus } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-store.entity';
+import {
+  PharmacyStore,
+  PharmacyStoreStatus,
+} from '../../../../modules/pharmacy/backend/src/entities/pharmacy-store.entity';
 import { PharmacyCategory } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-category.entity';
-import { PharmacyItem, DosageForm } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-item.entity';
-import { PharmacyOrder, PharmacyOrderStatus, PharmacyOrderType, PharmacyPaymentMethod, PharmacyPaymentStatus } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-order.entity';
-import { Prescription, PrescriptionStatus } from '../../../../modules/pharmacy/backend/src/entities/prescription.entity';
+import {
+  PharmacyItem,
+  DosageForm,
+} from '../../../../modules/pharmacy/backend/src/entities/pharmacy-item.entity';
+import {
+  PharmacyOrder,
+  PharmacyOrderStatus,
+  PharmacyOrderType,
+  PharmacyPaymentMethod,
+  PharmacyPaymentStatus,
+} from '../../../../modules/pharmacy/backend/src/entities/pharmacy-order.entity';
+import {
+  Prescription,
+  PrescriptionStatus,
+} from '../../../../modules/pharmacy/backend/src/entities/prescription.entity';
 import { PharmacyReview } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-review.entity';
-import { PharmacyStaff, PharmacyStaffRole } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-staff.entity';
-import { PharmacyPromotion, PharmacyPromoType } from '../../../../modules/pharmacy/backend/src/entities/pharmacy-promotion.entity';
+import {
+  PharmacyStaff,
+  PharmacyStaffRole,
+} from '../../../../modules/pharmacy/backend/src/entities/pharmacy-staff.entity';
+import {
+  PharmacyPromotion,
+  PharmacyPromoType,
+} from '../../../../modules/pharmacy/backend/src/entities/pharmacy-promotion.entity';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Categories
 // ═════════════════════════════════════════════════════════════════════════════
 
 const CATEGORIES = [
-  { name: 'Pain Relief', slug: 'pain-relief', emoji: '💊', requiresPrescription: false, sortOrder: 1 },
-  { name: 'Antibiotics', slug: 'antibiotics', emoji: '🧪', requiresPrescription: true, sortOrder: 2 },
-  { name: 'Vitamins & Supplements', slug: 'vitamins-supplements', emoji: '🧬', requiresPrescription: false, sortOrder: 3 },
+  {
+    name: 'Pain Relief',
+    slug: 'pain-relief',
+    emoji: '💊',
+    requiresPrescription: false,
+    sortOrder: 1,
+  },
+  {
+    name: 'Antibiotics',
+    slug: 'antibiotics',
+    emoji: '🧪',
+    requiresPrescription: true,
+    sortOrder: 2,
+  },
+  {
+    name: 'Vitamins & Supplements',
+    slug: 'vitamins-supplements',
+    emoji: '🧬',
+    requiresPrescription: false,
+    sortOrder: 3,
+  },
   { name: 'Baby Care', slug: 'baby-care', emoji: '🍼', requiresPrescription: false, sortOrder: 4 },
-  { name: 'Personal Care', slug: 'personal-care', emoji: '🧴', requiresPrescription: false, sortOrder: 5 },
+  {
+    name: 'Personal Care',
+    slug: 'personal-care',
+    emoji: '🧴',
+    requiresPrescription: false,
+    sortOrder: 5,
+  },
   { name: 'Skin Care', slug: 'skin-care', emoji: '🧖', requiresPrescription: false, sortOrder: 6 },
-  { name: 'Diabetic Care', slug: 'diabetic-care', emoji: '🩸', requiresPrescription: true, sortOrder: 7 },
+  {
+    name: 'Diabetic Care',
+    slug: 'diabetic-care',
+    emoji: '🩸',
+    requiresPrescription: true,
+    sortOrder: 7,
+  },
   { name: 'Heart & BP', slug: 'heart-bp', emoji: '❤️', requiresPrescription: true, sortOrder: 8 },
-  { name: 'Respiratory', slug: 'respiratory', emoji: '🫁', requiresPrescription: false, sortOrder: 9 },
-  { name: 'Digestive Health', slug: 'digestive-health', emoji: '🍏', requiresPrescription: false, sortOrder: 10 },
+  {
+    name: 'Respiratory',
+    slug: 'respiratory',
+    emoji: '🫁',
+    requiresPrescription: false,
+    sortOrder: 9,
+  },
+  {
+    name: 'Digestive Health',
+    slug: 'digestive-health',
+    emoji: '🍏',
+    requiresPrescription: false,
+    sortOrder: 10,
+  },
   { name: 'First Aid', slug: 'first-aid', emoji: '🩹', requiresPrescription: false, sortOrder: 11 },
-  { name: 'Women\'s Health', slug: 'womens-health', emoji: '♀️', requiresPrescription: false, sortOrder: 12 },
-  { name: 'Eye & Ear Care', slug: 'eye-ear-care', emoji: '👁️', requiresPrescription: false, sortOrder: 13 },
-  { name: 'Health Devices', slug: 'health-devices', emoji: '🩺', requiresPrescription: false, sortOrder: 14 },
-  { name: 'Ayurvedic & Herbal', slug: 'ayurvedic-herbal', emoji: '🌿', requiresPrescription: false, sortOrder: 15 },
-  { name: 'Prescription Drugs', slug: 'prescription-drugs', emoji: '📋', requiresPrescription: true, sortOrder: 16 },
+  {
+    name: "Women's Health",
+    slug: 'womens-health',
+    emoji: '♀️',
+    requiresPrescription: false,
+    sortOrder: 12,
+  },
+  {
+    name: 'Eye & Ear Care',
+    slug: 'eye-ear-care',
+    emoji: '👁️',
+    requiresPrescription: false,
+    sortOrder: 13,
+  },
+  {
+    name: 'Health Devices',
+    slug: 'health-devices',
+    emoji: '🩺',
+    requiresPrescription: false,
+    sortOrder: 14,
+  },
+  {
+    name: 'Ayurvedic & Herbal',
+    slug: 'ayurvedic-herbal',
+    emoji: '🌿',
+    requiresPrescription: false,
+    sortOrder: 15,
+  },
+  {
+    name: 'Prescription Drugs',
+    slug: 'prescription-drugs',
+    emoji: '📋',
+    requiresPrescription: true,
+    sortOrder: 16,
+  },
 ];
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -70,64 +165,190 @@ const CATEGORIES = [
 
 const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
   {
-    name: 'HealthPlus Pharmacy', slug: 'healthplus-pharmacy',
-    description: 'Mumbai\'s most trusted 24-hour pharmacy chain. Fast delivery, genuine medicines, licensed pharmacists on duty.',
-    ownerId: 'user-pharm-001', address: 'MG Road, Mumbai Central', city: 'Mumbai', state: 'Mumbai County',
-    pincode: '00100', latitude: 19.0760, longitude: 72.8777, regionCode: 'MUM-CBD', countryCode: 'IND',
-    phone: '+91-700-111-001', email: 'cbd@healthplus.co.in', is24hr: true, deliveryRadius: 8,
-    drugLicenseNumber: 'DL-20B-KEN-10001', pharmacistName: 'Dr. Amina Ochieng', pharmacistRegNumber: 'PPB-KEN-2019-4501',
-    canDispenseScheduleH: true, rating: 4.8, ratingCount: 342, totalOrders: 5820, commissionRate: 10, taxRate: 18,
-    deliveryFee: 0, minOrderAmount: 300, status: PharmacyStoreStatus.APPROVED,
+    name: 'HealthPlus Pharmacy',
+    slug: 'healthplus-pharmacy',
+    description:
+      "Mumbai's most trusted 24-hour pharmacy chain. Fast delivery, genuine medicines, licensed pharmacists on duty.",
+    ownerId: 'user-pharm-001',
+    address: 'MG Road, Mumbai Central',
+    city: 'Mumbai',
+    state: 'Mumbai County',
+    pincode: '00100',
+    latitude: 19.076,
+    longitude: 72.8777,
+    regionCode: 'MUM-CBD',
+    countryCode: 'IND',
+    phone: '+91-700-111-001',
+    email: 'cbd@healthplus.co.in',
+    is24hr: true,
+    deliveryRadius: 8,
+    drugLicenseNumber: 'DL-20B-KEN-10001',
+    pharmacistName: 'Dr. Amina Ochieng',
+    pharmacistRegNumber: 'PPB-KEN-2019-4501',
+    canDispenseScheduleH: true,
+    rating: 4.8,
+    ratingCount: 342,
+    totalOrders: 5820,
+    commissionRate: 10,
+    taxRate: 18,
+    deliveryFee: 0,
+    minOrderAmount: 300,
+    status: PharmacyStoreStatus.APPROVED,
   },
   {
-    name: 'MedPlus Chemist', slug: 'medplus-chemist',
-    description: 'Your neighbourhood chemist with affordable generics, baby care essentials, and free health consultations.',
-    ownerId: 'user-pharm-002', address: 'FC Road, Mumbai', city: 'Mumbai', state: 'Mumbai County',
-    pincode: '00100', latitude: 19.0544, longitude: 72.8403, regionCode: 'MUM-CBD', countryCode: 'IND',
-    phone: '+91-700-111-002', email: 'info@medpluschemist.co.in', is24hr: false, deliveryRadius: 5,
-    drugLicenseNumber: 'DL-20B-KEN-10002', pharmacistName: 'Dr. Peter Mwangi', pharmacistRegNumber: 'PPB-KEN-2020-5102',
-    canDispenseScheduleH: true, rating: 4.5, ratingCount: 198, totalOrders: 3240, commissionRate: 12, taxRate: 18,
-    deliveryFee: 50, minOrderAmount: 200, status: PharmacyStoreStatus.APPROVED,
+    name: 'MedPlus Chemist',
+    slug: 'medplus-chemist',
+    description:
+      'Your neighbourhood chemist with affordable generics, baby care essentials, and free health consultations.',
+    ownerId: 'user-pharm-002',
+    address: 'FC Road, Mumbai',
+    city: 'Mumbai',
+    state: 'Mumbai County',
+    pincode: '00100',
+    latitude: 19.0544,
+    longitude: 72.8403,
+    regionCode: 'MUM-CBD',
+    countryCode: 'IND',
+    phone: '+91-700-111-002',
+    email: 'info@medpluschemist.co.in',
+    is24hr: false,
+    deliveryRadius: 5,
+    drugLicenseNumber: 'DL-20B-KEN-10002',
+    pharmacistName: 'Dr. Peter Mwangi',
+    pharmacistRegNumber: 'PPB-KEN-2020-5102',
+    canDispenseScheduleH: true,
+    rating: 4.5,
+    ratingCount: 198,
+    totalOrders: 3240,
+    commissionRate: 12,
+    taxRate: 18,
+    deliveryFee: 50,
+    minOrderAmount: 200,
+    status: PharmacyStoreStatus.APPROVED,
   },
   {
-    name: 'Andheri West Pharmacy', slug: 'Andheri West-pharmacy',
-    description: 'Premium pharmacy serving Andheri West with imported medicines, cosmeceuticals, and wellness products.',
-    ownerId: 'user-pharm-003', address: 'SV Road, Andheri West', city: 'Mumbai', state: 'Mumbai County',
-    pincode: '400053', latitude: 19.1176, longitude: 72.8271, regionCode: 'MUM-WST', countryCode: 'IND',
-    phone: '+91-700-111-003', email: 'Andheri West@rxMumbai.co.in', is24hr: false, deliveryRadius: 6,
-    drugLicenseNumber: 'DL-20B-KEN-10003', pharmacistName: 'Dr. Sarah Njeri', pharmacistRegNumber: 'PPB-KEN-2018-3890',
-    canDispenseScheduleH: true, rating: 4.7, ratingCount: 156, totalOrders: 2890, commissionRate: 10, taxRate: 18,
-    deliveryFee: 0, minOrderAmount: 500, status: PharmacyStoreStatus.APPROVED,
+    name: 'Andheri West Pharmacy',
+    slug: 'Andheri West-pharmacy',
+    description:
+      'Premium pharmacy serving Andheri West with imported medicines, cosmeceuticals, and wellness products.',
+    ownerId: 'user-pharm-003',
+    address: 'SV Road, Andheri West',
+    city: 'Mumbai',
+    state: 'Mumbai County',
+    pincode: '400053',
+    latitude: 19.1176,
+    longitude: 72.8271,
+    regionCode: 'MUM-WST',
+    countryCode: 'IND',
+    phone: '+91-700-111-003',
+    email: 'Andheri West@rxMumbai.co.in',
+    is24hr: false,
+    deliveryRadius: 6,
+    drugLicenseNumber: 'DL-20B-KEN-10003',
+    pharmacistName: 'Dr. Sarah Njeri',
+    pharmacistRegNumber: 'PPB-KEN-2018-3890',
+    canDispenseScheduleH: true,
+    rating: 4.7,
+    ratingCount: 156,
+    totalOrders: 2890,
+    commissionRate: 10,
+    taxRate: 18,
+    deliveryFee: 0,
+    minOrderAmount: 500,
+    status: PharmacyStoreStatus.APPROVED,
   },
   {
-    name: 'Dawa Pharmacy Juhu', slug: 'dawa-pharmacy-Juhu',
-    description: 'Family pharmacy in Juhu with pediatric medicines, diabetic care, and home delivery across Lang\'ata.',
-    ownerId: 'user-pharm-004', address: 'Bandra West Road, Juhu', city: 'Mumbai', state: 'Mumbai County',
-    pincode: '400049', latitude: 19.1075, longitude: 72.8263, regionCode: 'MUM-JHU', countryCode: 'IND',
-    phone: '+91-700-111-004', email: 'Juhu@dawapharmacy.co.in', is24hr: false, deliveryRadius: 7,
-    drugLicenseNumber: 'DL-20B-KEN-10004', pharmacistName: 'Dr. Rahul Sharma', pharmacistRegNumber: 'PPB-KEN-2021-6234',
-    canDispenseScheduleH: false, rating: 4.6, ratingCount: 102, totalOrders: 1820, commissionRate: 12, taxRate: 18,
-    deliveryFee: 100, minOrderAmount: 400, status: PharmacyStoreStatus.APPROVED,
+    name: 'Dawa Pharmacy Juhu',
+    slug: 'dawa-pharmacy-Juhu',
+    description:
+      "Family pharmacy in Juhu with pediatric medicines, diabetic care, and home delivery across Lang'ata.",
+    ownerId: 'user-pharm-004',
+    address: 'Bandra West Road, Juhu',
+    city: 'Mumbai',
+    state: 'Mumbai County',
+    pincode: '400049',
+    latitude: 19.1075,
+    longitude: 72.8263,
+    regionCode: 'MUM-JHU',
+    countryCode: 'IND',
+    phone: '+91-700-111-004',
+    email: 'Juhu@dawapharmacy.co.in',
+    is24hr: false,
+    deliveryRadius: 7,
+    drugLicenseNumber: 'DL-20B-KEN-10004',
+    pharmacistName: 'Dr. Rahul Sharma',
+    pharmacistRegNumber: 'PPB-KEN-2021-6234',
+    canDispenseScheduleH: false,
+    rating: 4.6,
+    ratingCount: 102,
+    totalOrders: 1820,
+    commissionRate: 12,
+    taxRate: 18,
+    deliveryFee: 100,
+    minOrderAmount: 400,
+    status: PharmacyStoreStatus.APPROVED,
   },
   {
-    name: 'QuickMeds Express', slug: 'quickmeds-express',
-    description: 'Fastest pharmacy delivery in Mumbai — average 18 minutes. 24/7 service for emergencies.',
-    ownerId: 'user-pharm-005', address: 'SB Road, Mumbai Central', city: 'Mumbai', state: 'Mumbai County',
-    pincode: '00100', latitude: 19.0178, longitude: 72.8478, regionCode: 'MUM-CBD', countryCode: 'IND',
-    phone: '+91-700-111-005', email: 'support@quickmeds.co.in', is24hr: true, deliveryRadius: 10,
-    drugLicenseNumber: 'DL-20B-KEN-10005', pharmacistName: 'Dr. Faith Wanjiku', pharmacistRegNumber: 'PPB-KEN-2022-7890',
-    canDispenseScheduleH: true, rating: 4.4, ratingCount: 289, totalOrders: 7200, commissionRate: 8, taxRate: 18,
-    deliveryFee: 0, minOrderAmount: 150, status: PharmacyStoreStatus.APPROVED,
+    name: 'QuickMeds Express',
+    slug: 'quickmeds-express',
+    description:
+      'Fastest pharmacy delivery in Mumbai — average 18 minutes. 24/7 service for emergencies.',
+    ownerId: 'user-pharm-005',
+    address: 'SB Road, Mumbai Central',
+    city: 'Mumbai',
+    state: 'Mumbai County',
+    pincode: '00100',
+    latitude: 19.0178,
+    longitude: 72.8478,
+    regionCode: 'MUM-CBD',
+    countryCode: 'IND',
+    phone: '+91-700-111-005',
+    email: 'support@quickmeds.co.in',
+    is24hr: true,
+    deliveryRadius: 10,
+    drugLicenseNumber: 'DL-20B-KEN-10005',
+    pharmacistName: 'Dr. Faith Wanjiku',
+    pharmacistRegNumber: 'PPB-KEN-2022-7890',
+    canDispenseScheduleH: true,
+    rating: 4.4,
+    ratingCount: 289,
+    totalOrders: 7200,
+    commissionRate: 8,
+    taxRate: 18,
+    deliveryFee: 0,
+    minOrderAmount: 150,
+    status: PharmacyStoreStatus.APPROVED,
   },
   {
-    name: 'NatureCare Wellness', slug: 'naturecare-wellness',
-    description: 'Holistic health pharmacy specializing in Ayurvedic, herbal remedies, and organic wellness products.',
-    ownerId: 'user-pharm-006', address: 'Powai Mall, James Gichuru Rd', city: 'Mumbai', state: 'Mumbai County',
-    pincode: '400076', latitude: 19.1197, longitude: 72.9051, regionCode: 'MUM-PWI', countryCode: 'IND',
-    phone: '+91-700-111-006', email: 'hello@naturecarewellness.co.in', is24hr: false, deliveryRadius: 5,
-    drugLicenseNumber: 'DL-20B-KEN-10006', pharmacistName: 'Dr. Grace Akinyi', pharmacistRegNumber: 'PPB-KEN-2020-5500',
-    canDispenseScheduleH: false, rating: 4.9, ratingCount: 87, totalOrders: 1350, commissionRate: 15, taxRate: 18,
-    deliveryFee: 80, minOrderAmount: 350, status: PharmacyStoreStatus.APPROVED,
+    name: 'NatureCare Wellness',
+    slug: 'naturecare-wellness',
+    description:
+      'Holistic health pharmacy specializing in Ayurvedic, herbal remedies, and organic wellness products.',
+    ownerId: 'user-pharm-006',
+    address: 'Powai Mall, James Gichuru Rd',
+    city: 'Mumbai',
+    state: 'Mumbai County',
+    pincode: '400076',
+    latitude: 19.1197,
+    longitude: 72.9051,
+    regionCode: 'MUM-PWI',
+    countryCode: 'IND',
+    phone: '+91-700-111-006',
+    email: 'hello@naturecarewellness.co.in',
+    is24hr: false,
+    deliveryRadius: 5,
+    drugLicenseNumber: 'DL-20B-KEN-10006',
+    pharmacistName: 'Dr. Grace Akinyi',
+    pharmacistRegNumber: 'PPB-KEN-2020-5500',
+    canDispenseScheduleH: false,
+    rating: 4.9,
+    ratingCount: 87,
+    totalOrders: 1350,
+    commissionRate: 15,
+    taxRate: 18,
+    deliveryFee: 80,
+    minOrderAmount: 350,
+    status: PharmacyStoreStatus.APPROVED,
   },
 ];
 
@@ -137,44 +358,397 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
 
 const MEDICINES = [
   // ── Pain Relief ─────────────────────────────────────────────────────────────
-  { name: 'Panadol Extra', genericName: 'Paracetamol', composition: 'Paracetamol 500mg + Caffeine 65mg', manufacturer: 'GSK', categorySlug: 'pain-relief', dosageForm: DosageForm.TABLET, strength: '500mg', packSize: 'Strip of 10', price: 120, mrp: 150, requiresPrescription: false, stockLevel: 500 },
-  { name: 'Ibuprofen 400mg', genericName: 'Ibuprofen', composition: 'Ibuprofen 400mg', manufacturer: 'Cosmos Pharma', categorySlug: 'pain-relief', dosageForm: DosageForm.TABLET, strength: '400mg', packSize: 'Strip of 10', price: 80, mrp: 100, requiresPrescription: false, stockLevel: 350 },
-  { name: 'Diclofenac Gel', genericName: 'Diclofenac', composition: 'Diclofenac Diethylamine 1.16% w/w', manufacturer: 'Novartis', categorySlug: 'pain-relief', dosageForm: DosageForm.GEL, strength: '30g', packSize: 'Tube of 30g', price: 250, mrp: 300, requiresPrescription: false, stockLevel: 120 },
+  {
+    name: 'Panadol Extra',
+    genericName: 'Paracetamol',
+    composition: 'Paracetamol 500mg + Caffeine 65mg',
+    manufacturer: 'GSK',
+    categorySlug: 'pain-relief',
+    dosageForm: DosageForm.TABLET,
+    strength: '500mg',
+    packSize: 'Strip of 10',
+    price: 120,
+    mrp: 150,
+    requiresPrescription: false,
+    stockLevel: 500,
+  },
+  {
+    name: 'Ibuprofen 400mg',
+    genericName: 'Ibuprofen',
+    composition: 'Ibuprofen 400mg',
+    manufacturer: 'Cosmos Pharma',
+    categorySlug: 'pain-relief',
+    dosageForm: DosageForm.TABLET,
+    strength: '400mg',
+    packSize: 'Strip of 10',
+    price: 80,
+    mrp: 100,
+    requiresPrescription: false,
+    stockLevel: 350,
+  },
+  {
+    name: 'Diclofenac Gel',
+    genericName: 'Diclofenac',
+    composition: 'Diclofenac Diethylamine 1.16% w/w',
+    manufacturer: 'Novartis',
+    categorySlug: 'pain-relief',
+    dosageForm: DosageForm.GEL,
+    strength: '30g',
+    packSize: 'Tube of 30g',
+    price: 250,
+    mrp: 300,
+    requiresPrescription: false,
+    stockLevel: 120,
+  },
   // ── Antibiotics ─────────────────────────────────────────────────────────────
-  { name: 'Amoxicillin 500mg', genericName: 'Amoxicillin', composition: 'Amoxicillin Trihydrate 500mg', manufacturer: 'Dawa Ltd', categorySlug: 'antibiotics', dosageForm: DosageForm.CAPSULE, strength: '500mg', packSize: 'Strip of 10', price: 320, mrp: 400, requiresPrescription: true, isScheduleHDrug: true, stockLevel: 200 },
-  { name: 'Azithromycin 500mg', genericName: 'Azithromycin', composition: 'Azithromycin Dihydrate 500mg', manufacturer: 'Cipla', categorySlug: 'antibiotics', dosageForm: DosageForm.TABLET, strength: '500mg', packSize: 'Strip of 3', price: 480, mrp: 550, requiresPrescription: true, isScheduleHDrug: true, stockLevel: 150 },
-  { name: 'Metronidazole 400mg', genericName: 'Metronidazole', composition: 'Metronidazole 400mg', manufacturer: 'Universal Corporation', categorySlug: 'antibiotics', dosageForm: DosageForm.TABLET, strength: '400mg', packSize: 'Strip of 10', price: 150, mrp: 180, requiresPrescription: true, stockLevel: 280 },
+  {
+    name: 'Amoxicillin 500mg',
+    genericName: 'Amoxicillin',
+    composition: 'Amoxicillin Trihydrate 500mg',
+    manufacturer: 'Dawa Ltd',
+    categorySlug: 'antibiotics',
+    dosageForm: DosageForm.CAPSULE,
+    strength: '500mg',
+    packSize: 'Strip of 10',
+    price: 320,
+    mrp: 400,
+    requiresPrescription: true,
+    isScheduleHDrug: true,
+    stockLevel: 200,
+  },
+  {
+    name: 'Azithromycin 500mg',
+    genericName: 'Azithromycin',
+    composition: 'Azithromycin Dihydrate 500mg',
+    manufacturer: 'Cipla',
+    categorySlug: 'antibiotics',
+    dosageForm: DosageForm.TABLET,
+    strength: '500mg',
+    packSize: 'Strip of 3',
+    price: 480,
+    mrp: 550,
+    requiresPrescription: true,
+    isScheduleHDrug: true,
+    stockLevel: 150,
+  },
+  {
+    name: 'Metronidazole 400mg',
+    genericName: 'Metronidazole',
+    composition: 'Metronidazole 400mg',
+    manufacturer: 'Universal Corporation',
+    categorySlug: 'antibiotics',
+    dosageForm: DosageForm.TABLET,
+    strength: '400mg',
+    packSize: 'Strip of 10',
+    price: 150,
+    mrp: 180,
+    requiresPrescription: true,
+    stockLevel: 280,
+  },
   // ── Vitamins ────────────────────────────────────────────────────────────────
-  { name: 'Vitamin C 1000mg', genericName: 'Ascorbic Acid', composition: 'Ascorbic Acid 1000mg + Zinc 10mg', manufacturer: 'Bayer', categorySlug: 'vitamins-supplements', dosageForm: DosageForm.TABLET, strength: '1000mg', packSize: 'Bottle of 30', price: 650, mrp: 800, requiresPrescription: false, stockLevel: 400 },
-  { name: 'Multivitamin Gold', genericName: 'Multivitamin', composition: 'Vitamins A, B Complex, C, D3, E, Zinc, Iron', manufacturer: 'Nature\'s Bounty', categorySlug: 'vitamins-supplements', dosageForm: DosageForm.CAPSULE, strength: 'Multi', packSize: 'Bottle of 60', price: 1200, mrp: 1500, requiresPrescription: false, stockLevel: 180 },
-  { name: 'Calcium + Vitamin D3', genericName: 'Calcium Carbonate', composition: 'Calcium 500mg + Vitamin D3 250 IU', manufacturer: 'Shelys Pharmaceuticals', categorySlug: 'vitamins-supplements', dosageForm: DosageForm.TABLET, strength: '500mg', packSize: 'Bottle of 30', price: 450, mrp: 520, requiresPrescription: false, stockLevel: 220 },
+  {
+    name: 'Vitamin C 1000mg',
+    genericName: 'Ascorbic Acid',
+    composition: 'Ascorbic Acid 1000mg + Zinc 10mg',
+    manufacturer: 'Bayer',
+    categorySlug: 'vitamins-supplements',
+    dosageForm: DosageForm.TABLET,
+    strength: '1000mg',
+    packSize: 'Bottle of 30',
+    price: 650,
+    mrp: 800,
+    requiresPrescription: false,
+    stockLevel: 400,
+  },
+  {
+    name: 'Multivitamin Gold',
+    genericName: 'Multivitamin',
+    composition: 'Vitamins A, B Complex, C, D3, E, Zinc, Iron',
+    manufacturer: "Nature's Bounty",
+    categorySlug: 'vitamins-supplements',
+    dosageForm: DosageForm.CAPSULE,
+    strength: 'Multi',
+    packSize: 'Bottle of 60',
+    price: 1200,
+    mrp: 1500,
+    requiresPrescription: false,
+    stockLevel: 180,
+  },
+  {
+    name: 'Calcium + Vitamin D3',
+    genericName: 'Calcium Carbonate',
+    composition: 'Calcium 500mg + Vitamin D3 250 IU',
+    manufacturer: 'Shelys Pharmaceuticals',
+    categorySlug: 'vitamins-supplements',
+    dosageForm: DosageForm.TABLET,
+    strength: '500mg',
+    packSize: 'Bottle of 30',
+    price: 450,
+    mrp: 520,
+    requiresPrescription: false,
+    stockLevel: 220,
+  },
   // ── Baby Care ───────────────────────────────────────────────────────────────
-  { name: 'Gripe Water', genericName: 'Dill Oil', composition: 'Dill Oil, Sodium Bicarbonate', manufacturer: 'Woodward\'s', categorySlug: 'baby-care', dosageForm: DosageForm.SYRUP, strength: '150ml', packSize: 'Bottle of 150ml', price: 180, mrp: 220, requiresPrescription: false, stockLevel: 300 },
-  { name: 'Paediatric Paracetamol', genericName: 'Paracetamol', composition: 'Paracetamol 120mg/5ml', manufacturer: 'GSK', categorySlug: 'baby-care', dosageForm: DosageForm.SYRUP, strength: '60ml', packSize: 'Bottle of 60ml', price: 150, mrp: 180, requiresPrescription: false, stockLevel: 250 },
+  {
+    name: 'Gripe Water',
+    genericName: 'Dill Oil',
+    composition: 'Dill Oil, Sodium Bicarbonate',
+    manufacturer: "Woodward's",
+    categorySlug: 'baby-care',
+    dosageForm: DosageForm.SYRUP,
+    strength: '150ml',
+    packSize: 'Bottle of 150ml',
+    price: 180,
+    mrp: 220,
+    requiresPrescription: false,
+    stockLevel: 300,
+  },
+  {
+    name: 'Paediatric Paracetamol',
+    genericName: 'Paracetamol',
+    composition: 'Paracetamol 120mg/5ml',
+    manufacturer: 'GSK',
+    categorySlug: 'baby-care',
+    dosageForm: DosageForm.SYRUP,
+    strength: '60ml',
+    packSize: 'Bottle of 60ml',
+    price: 150,
+    mrp: 180,
+    requiresPrescription: false,
+    stockLevel: 250,
+  },
   // ── Diabetic Care ───────────────────────────────────────────────────────────
-  { name: 'Metformin 500mg', genericName: 'Metformin', composition: 'Metformin Hydrochloride 500mg', manufacturer: 'Dawa Ltd', categorySlug: 'diabetic-care', dosageForm: DosageForm.TABLET, strength: '500mg', packSize: 'Strip of 10', price: 90, mrp: 120, requiresPrescription: true, stockLevel: 400 },
-  { name: 'Glibenclamide 5mg', genericName: 'Glibenclamide', composition: 'Glibenclamide 5mg', manufacturer: 'Universal Corporation', categorySlug: 'diabetic-care', dosageForm: DosageForm.TABLET, strength: '5mg', packSize: 'Strip of 10', price: 70, mrp: 90, requiresPrescription: true, stockLevel: 180 },
-  { name: 'Insulin Syringe 1ml', genericName: 'Syringe', composition: 'Disposable Insulin Syringe', manufacturer: 'BD', categorySlug: 'diabetic-care', dosageForm: DosageForm.OTHER, strength: '1ml', packSize: 'Pack of 10', price: 350, mrp: 400, requiresPrescription: false, stockLevel: 500 },
+  {
+    name: 'Metformin 500mg',
+    genericName: 'Metformin',
+    composition: 'Metformin Hydrochloride 500mg',
+    manufacturer: 'Dawa Ltd',
+    categorySlug: 'diabetic-care',
+    dosageForm: DosageForm.TABLET,
+    strength: '500mg',
+    packSize: 'Strip of 10',
+    price: 90,
+    mrp: 120,
+    requiresPrescription: true,
+    stockLevel: 400,
+  },
+  {
+    name: 'Glibenclamide 5mg',
+    genericName: 'Glibenclamide',
+    composition: 'Glibenclamide 5mg',
+    manufacturer: 'Universal Corporation',
+    categorySlug: 'diabetic-care',
+    dosageForm: DosageForm.TABLET,
+    strength: '5mg',
+    packSize: 'Strip of 10',
+    price: 70,
+    mrp: 90,
+    requiresPrescription: true,
+    stockLevel: 180,
+  },
+  {
+    name: 'Insulin Syringe 1ml',
+    genericName: 'Syringe',
+    composition: 'Disposable Insulin Syringe',
+    manufacturer: 'BD',
+    categorySlug: 'diabetic-care',
+    dosageForm: DosageForm.OTHER,
+    strength: '1ml',
+    packSize: 'Pack of 10',
+    price: 350,
+    mrp: 400,
+    requiresPrescription: false,
+    stockLevel: 500,
+  },
   // ── Heart & BP ──────────────────────────────────────────────────────────────
-  { name: 'Amlodipine 5mg', genericName: 'Amlodipine', composition: 'Amlodipine Besylate 5mg', manufacturer: 'Pfizer', categorySlug: 'heart-bp', dosageForm: DosageForm.TABLET, strength: '5mg', packSize: 'Strip of 10', price: 180, mrp: 220, requiresPrescription: true, stockLevel: 300 },
-  { name: 'Atenolol 50mg', genericName: 'Atenolol', composition: 'Atenolol 50mg', manufacturer: 'AstraZeneca', categorySlug: 'heart-bp', dosageForm: DosageForm.TABLET, strength: '50mg', packSize: 'Strip of 14', price: 200, mrp: 250, requiresPrescription: true, stockLevel: 250 },
+  {
+    name: 'Amlodipine 5mg',
+    genericName: 'Amlodipine',
+    composition: 'Amlodipine Besylate 5mg',
+    manufacturer: 'Pfizer',
+    categorySlug: 'heart-bp',
+    dosageForm: DosageForm.TABLET,
+    strength: '5mg',
+    packSize: 'Strip of 10',
+    price: 180,
+    mrp: 220,
+    requiresPrescription: true,
+    stockLevel: 300,
+  },
+  {
+    name: 'Atenolol 50mg',
+    genericName: 'Atenolol',
+    composition: 'Atenolol 50mg',
+    manufacturer: 'AstraZeneca',
+    categorySlug: 'heart-bp',
+    dosageForm: DosageForm.TABLET,
+    strength: '50mg',
+    packSize: 'Strip of 14',
+    price: 200,
+    mrp: 250,
+    requiresPrescription: true,
+    stockLevel: 250,
+  },
   // ── Respiratory ─────────────────────────────────────────────────────────────
-  { name: 'Salbutamol Inhaler', genericName: 'Salbutamol', composition: 'Salbutamol 100mcg/dose', manufacturer: 'Cipla', categorySlug: 'respiratory', dosageForm: DosageForm.INHALER, strength: '100mcg', packSize: '200 doses', price: 450, mrp: 550, requiresPrescription: false, stockLevel: 80 },
-  { name: 'Cetirizine 10mg', genericName: 'Cetirizine', composition: 'Cetirizine Dihydrochloride 10mg', manufacturer: 'Cosmos Pharma', categorySlug: 'respiratory', dosageForm: DosageForm.TABLET, strength: '10mg', packSize: 'Strip of 10', price: 60, mrp: 80, requiresPrescription: false, stockLevel: 600 },
+  {
+    name: 'Salbutamol Inhaler',
+    genericName: 'Salbutamol',
+    composition: 'Salbutamol 100mcg/dose',
+    manufacturer: 'Cipla',
+    categorySlug: 'respiratory',
+    dosageForm: DosageForm.INHALER,
+    strength: '100mcg',
+    packSize: '200 doses',
+    price: 450,
+    mrp: 550,
+    requiresPrescription: false,
+    stockLevel: 80,
+  },
+  {
+    name: 'Cetirizine 10mg',
+    genericName: 'Cetirizine',
+    composition: 'Cetirizine Dihydrochloride 10mg',
+    manufacturer: 'Cosmos Pharma',
+    categorySlug: 'respiratory',
+    dosageForm: DosageForm.TABLET,
+    strength: '10mg',
+    packSize: 'Strip of 10',
+    price: 60,
+    mrp: 80,
+    requiresPrescription: false,
+    stockLevel: 600,
+  },
   // ── Digestive ───────────────────────────────────────────────────────────────
-  { name: 'Omeprazole 20mg', genericName: 'Omeprazole', composition: 'Omeprazole 20mg', manufacturer: 'Dawa Ltd', categorySlug: 'digestive-health', dosageForm: DosageForm.CAPSULE, strength: '20mg', packSize: 'Strip of 14', price: 180, mrp: 220, requiresPrescription: false, stockLevel: 350 },
-  { name: 'ORS Sachets', genericName: 'ORS', composition: 'Sodium Chloride, Potassium Chloride, Glucose', manufacturer: 'WHO Standard', categorySlug: 'digestive-health', dosageForm: DosageForm.POWDER, strength: '20.5g', packSize: 'Pack of 10', price: 100, mrp: 120, requiresPrescription: false, stockLevel: 800 },
+  {
+    name: 'Omeprazole 20mg',
+    genericName: 'Omeprazole',
+    composition: 'Omeprazole 20mg',
+    manufacturer: 'Dawa Ltd',
+    categorySlug: 'digestive-health',
+    dosageForm: DosageForm.CAPSULE,
+    strength: '20mg',
+    packSize: 'Strip of 14',
+    price: 180,
+    mrp: 220,
+    requiresPrescription: false,
+    stockLevel: 350,
+  },
+  {
+    name: 'ORS Sachets',
+    genericName: 'ORS',
+    composition: 'Sodium Chloride, Potassium Chloride, Glucose',
+    manufacturer: 'WHO Standard',
+    categorySlug: 'digestive-health',
+    dosageForm: DosageForm.POWDER,
+    strength: '20.5g',
+    packSize: 'Pack of 10',
+    price: 100,
+    mrp: 120,
+    requiresPrescription: false,
+    stockLevel: 800,
+  },
   // ── First Aid ───────────────────────────────────────────────────────────────
-  { name: 'Betadine Solution', genericName: 'Povidone-Iodine', composition: 'Povidone-Iodine 10% w/v', manufacturer: 'Win-Medicare', categorySlug: 'first-aid', dosageForm: DosageForm.OTHER, strength: '100ml', packSize: 'Bottle of 100ml', price: 280, mrp: 350, requiresPrescription: false, stockLevel: 150 },
-  { name: 'Band-Aid Flexible Fabric', genericName: 'Adhesive Bandage', composition: 'Fabric adhesive bandage', manufacturer: 'Johnson & Johnson', categorySlug: 'first-aid', dosageForm: DosageForm.OTHER, strength: 'Assorted', packSize: 'Box of 30', price: 220, mrp: 280, requiresPrescription: false, stockLevel: 200 },
+  {
+    name: 'Betadine Solution',
+    genericName: 'Povidone-Iodine',
+    composition: 'Povidone-Iodine 10% w/v',
+    manufacturer: 'Win-Medicare',
+    categorySlug: 'first-aid',
+    dosageForm: DosageForm.OTHER,
+    strength: '100ml',
+    packSize: 'Bottle of 100ml',
+    price: 280,
+    mrp: 350,
+    requiresPrescription: false,
+    stockLevel: 150,
+  },
+  {
+    name: 'Band-Aid Flexible Fabric',
+    genericName: 'Adhesive Bandage',
+    composition: 'Fabric adhesive bandage',
+    manufacturer: 'Johnson & Johnson',
+    categorySlug: 'first-aid',
+    dosageForm: DosageForm.OTHER,
+    strength: 'Assorted',
+    packSize: 'Box of 30',
+    price: 220,
+    mrp: 280,
+    requiresPrescription: false,
+    stockLevel: 200,
+  },
   // ── Skin Care ───────────────────────────────────────────────────────────────
-  { name: 'Sunscreen SPF 50', genericName: 'Sunscreen', composition: 'Titanium Dioxide, Zinc Oxide', manufacturer: 'Neutrogena', categorySlug: 'skin-care', dosageForm: DosageForm.CREAM, strength: 'SPF50', packSize: 'Tube of 50ml', price: 850, mrp: 1000, requiresPrescription: false, stockLevel: 90 },
-  { name: 'Clotrimazole Cream', genericName: 'Clotrimazole', composition: 'Clotrimazole 1% w/w', manufacturer: 'Bayer', categorySlug: 'skin-care', dosageForm: DosageForm.CREAM, strength: '1%', packSize: 'Tube of 20g', price: 120, mrp: 150, requiresPrescription: false, stockLevel: 200 },
+  {
+    name: 'Sunscreen SPF 50',
+    genericName: 'Sunscreen',
+    composition: 'Titanium Dioxide, Zinc Oxide',
+    manufacturer: 'Neutrogena',
+    categorySlug: 'skin-care',
+    dosageForm: DosageForm.CREAM,
+    strength: 'SPF50',
+    packSize: 'Tube of 50ml',
+    price: 850,
+    mrp: 1000,
+    requiresPrescription: false,
+    stockLevel: 90,
+  },
+  {
+    name: 'Clotrimazole Cream',
+    genericName: 'Clotrimazole',
+    composition: 'Clotrimazole 1% w/w',
+    manufacturer: 'Bayer',
+    categorySlug: 'skin-care',
+    dosageForm: DosageForm.CREAM,
+    strength: '1%',
+    packSize: 'Tube of 20g',
+    price: 120,
+    mrp: 150,
+    requiresPrescription: false,
+    stockLevel: 200,
+  },
   // ── Eye & Ear Care ──────────────────────────────────────────────────────────
-  { name: 'Gentamicin Eye Drops', genericName: 'Gentamicin', composition: 'Gentamicin Sulphate 0.3% w/v', manufacturer: 'Allergan', categorySlug: 'eye-ear-care', dosageForm: DosageForm.DROPS, strength: '10ml', packSize: 'Bottle of 10ml', price: 180, mrp: 220, requiresPrescription: true, stockLevel: 130 },
+  {
+    name: 'Gentamicin Eye Drops',
+    genericName: 'Gentamicin',
+    composition: 'Gentamicin Sulphate 0.3% w/v',
+    manufacturer: 'Allergan',
+    categorySlug: 'eye-ear-care',
+    dosageForm: DosageForm.DROPS,
+    strength: '10ml',
+    packSize: 'Bottle of 10ml',
+    price: 180,
+    mrp: 220,
+    requiresPrescription: true,
+    stockLevel: 130,
+  },
   // ── Herbal ──────────────────────────────────────────────────────────────────
-  { name: 'Ashwagandha Capsules', genericName: 'Ashwagandha', composition: 'Withania Somnifera Extract 500mg', manufacturer: 'Himalaya', categorySlug: 'ayurvedic-herbal', dosageForm: DosageForm.CAPSULE, strength: '500mg', packSize: 'Bottle of 60', price: 550, mrp: 700, requiresPrescription: false, stockLevel: 150 },
-  { name: 'Tulsi Drops', genericName: 'Holy Basil', composition: 'Ocimum Sanctum Extract', manufacturer: 'Organic India', categorySlug: 'ayurvedic-herbal', dosageForm: DosageForm.DROPS, strength: '30ml', packSize: 'Bottle of 30ml', price: 280, mrp: 350, requiresPrescription: false, stockLevel: 100 },
+  {
+    name: 'Ashwagandha Capsules',
+    genericName: 'Ashwagandha',
+    composition: 'Withania Somnifera Extract 500mg',
+    manufacturer: 'Himalaya',
+    categorySlug: 'ayurvedic-herbal',
+    dosageForm: DosageForm.CAPSULE,
+    strength: '500mg',
+    packSize: 'Bottle of 60',
+    price: 550,
+    mrp: 700,
+    requiresPrescription: false,
+    stockLevel: 150,
+  },
+  {
+    name: 'Tulsi Drops',
+    genericName: 'Holy Basil',
+    composition: 'Ocimum Sanctum Extract',
+    manufacturer: 'Organic India',
+    categorySlug: 'ayurvedic-herbal',
+    dosageForm: DosageForm.DROPS,
+    strength: '30ml',
+    packSize: 'Bottle of 30ml',
+    price: 280,
+    mrp: 350,
+    requiresPrescription: false,
+    stockLevel: 100,
+  },
 ];
 
 const REVIEW_COMMENTS = [
@@ -201,8 +775,14 @@ async function seed() {
   const staffRepo = ds.getRepository(PharmacyStaff);
   const promoRepo = ds.getRepository(PharmacyPromotion);
 
-  let totalStores = 0, totalCats = 0, totalItems = 0, totalOrders = 0;
-  let totalPrescs = 0, totalReviews = 0, totalStaff = 0, totalPromos = 0;
+  let totalStores = 0,
+    totalCats = 0,
+    totalItems = 0,
+    totalOrders = 0;
+  let totalPrescs = 0,
+    totalReviews = 0,
+    totalStaff = 0,
+    totalPromos = 0;
 
   // ── Categories ────────────────────────────────────────────────────────────
   console.log('📂 Seeding categories...');
@@ -210,7 +790,7 @@ async function seed() {
   for (const c of CATEGORIES) {
     let cat = await catRepo.findOneBy({ slug: c.slug });
     if (!cat) {
-      cat = catRepo.create({ ...c, isActive: true } as any) as unknown as PharmacyCategory;
+      cat = catRepo.create({ ...c, isActive: true } as DeepPartial<PharmacyCategory>);
       cat = await catRepo.save(cat);
     }
     catMap[c.slug] = cat.id;
@@ -224,7 +804,7 @@ async function seed() {
     let store = await storeRepo.findOneBy({ slug: data.slug });
     if (!store) {
       store = storeRepo.create({
-        ...data as any,
+        ...(data as DeepPartial<PharmacyStore>),
         openingHours: {
           mon: { open: '08:00', close: '22:00' },
           tue: { open: '08:00', close: '22:00' },
@@ -238,7 +818,7 @@ async function seed() {
         isTemporarilyClosed: false,
         deliveryEnabled: true,
         pickupEnabled: true,
-      } as any) as unknown as PharmacyStore;
+      } as DeepPartial<PharmacyStore>);
       store = await storeRepo.save(store);
       console.log(`   ✅ Created (id: ${store.id})`);
     } else {
@@ -251,7 +831,7 @@ async function seed() {
       const exists = await itemRepo.findOneBy({ storeId: store.id, name: med.name });
       if (!exists) {
         const item = itemRepo.create({
-          ...med as any,
+          ...(med as DeepPartial<PharmacyItem>),
           storeId: store.id,
           slug: med.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
           categoryId: catMap[med.categorySlug] ?? null,
@@ -259,7 +839,7 @@ async function seed() {
           reorderLevel: 10,
           maxQuantityPerOrder: 10,
           tags: med.requiresPrescription ? ['Rx'] : ['OTC'],
-        } as any);
+        } as DeepPartial<PharmacyItem>);
         await itemRepo.save(item);
         totalItems++;
       }
@@ -268,14 +848,32 @@ async function seed() {
 
     // ── Staff (3 per store) ───────────────────────────────────────────────
     const STAFF_TEMPLATES = [
-      { name: `Pharmacist - ${store.name}`, role: PharmacyStaffRole.PHARMACIST, phone: `+91-7${String(totalStores).padStart(2,'0')}-001` },
-      { name: `Manager - ${store.name}`, role: PharmacyStaffRole.MANAGER, phone: `+91-7${String(totalStores).padStart(2,'0')}-002` },
-      { name: `Cashier - ${store.name}`, role: PharmacyStaffRole.CASHIER, phone: `+91-7${String(totalStores).padStart(2,'0')}-003` },
+      {
+        name: `Pharmacist - ${store.name}`,
+        role: PharmacyStaffRole.PHARMACIST,
+        phone: `+91-7${String(totalStores).padStart(2, '0')}-001`,
+      },
+      {
+        name: `Manager - ${store.name}`,
+        role: PharmacyStaffRole.MANAGER,
+        phone: `+91-7${String(totalStores).padStart(2, '0')}-002`,
+      },
+      {
+        name: `Cashier - ${store.name}`,
+        role: PharmacyStaffRole.CASHIER,
+        phone: `+91-7${String(totalStores).padStart(2, '0')}-003`,
+      },
     ];
     for (const s of STAFF_TEMPLATES) {
       const ex = await staffRepo.findOneBy({ storeId: store.id, role: s.role });
       if (!ex) {
-        await staffRepo.save(staffRepo.create({ ...s, storeId: store.id, isActive: true } as any));
+        await staffRepo.save(
+          staffRepo.create({
+            ...s,
+            storeId: store.id,
+            isActive: true,
+          } as DeepPartial<PharmacyStaff>),
+        );
         totalStaff++;
       }
     }
@@ -283,16 +881,38 @@ async function seed() {
 
     // ── Promotions (2 per store) ──────────────────────────────────────────
     const PROMOS = [
-      { title: 'First Order 20% OFF', code: `FIRST20-${store.slug.toUpperCase().slice(0, 6)}`, type: PharmacyPromoType.PERCENTAGE, value: 20, minOrderAmount: 200, maxDiscountAmount: 500, maxUses: 0, usesPerCustomer: 1 },
-      { title: 'Free Delivery Weekend', code: `FREEDEL-${store.slug.toUpperCase().slice(0, 6)}`, type: PharmacyPromoType.FREE_DELIVERY, value: 0, minOrderAmount: 300, maxUses: 0, usesPerCustomer: 3 },
+      {
+        title: 'First Order 20% OFF',
+        code: `FIRST20-${store.slug.toUpperCase().slice(0, 6)}`,
+        type: PharmacyPromoType.PERCENTAGE,
+        value: 20,
+        minOrderAmount: 200,
+        maxDiscountAmount: 500,
+        maxUses: 0,
+        usesPerCustomer: 1,
+      },
+      {
+        title: 'Free Delivery Weekend',
+        code: `FREEDEL-${store.slug.toUpperCase().slice(0, 6)}`,
+        type: PharmacyPromoType.FREE_DELIVERY,
+        value: 0,
+        minOrderAmount: 300,
+        maxUses: 0,
+        usesPerCustomer: 3,
+      },
     ];
     for (const p of PROMOS) {
       const ex = await promoRepo.findOneBy({ code: p.code });
       if (!ex) {
-        await promoRepo.save(promoRepo.create({
-          ...p, storeId: store.id, isActive: true,
-          startsAt: new Date(), expiresAt: new Date(Date.now() + 90 * 86400000),
-        } as any));
+        await promoRepo.save(
+          promoRepo.create({
+            ...p,
+            storeId: store.id,
+            isActive: true,
+            startsAt: new Date(),
+            expiresAt: new Date(Date.now() + 90 * 86400000),
+          } as DeepPartial<PharmacyPromotion>),
+        );
         totalPromos++;
       }
     }
@@ -302,34 +922,75 @@ async function seed() {
     for (let r = 0; r < 5; r++) {
       const ex = await reviewRepo.count({ where: { storeId: store.id } });
       if (ex < 5) {
-        await reviewRepo.save(reviewRepo.create({
-          storeId: store.id, customerId: `cust-${r + 1}`,
-          customerName: ['John Odhiambo', 'Mary Wanjiru', 'David Meenakshi', 'Grace Atieno', 'Kevin Kibet'][r],
-          rating: [5, 4, 5, 4, 5][r],
-          comment: REVIEW_COMMENTS[r],
-        } as any));
+        await reviewRepo.save(
+          reviewRepo.create({
+            storeId: store.id,
+            customerId: `cust-${r + 1}`,
+            customerName: [
+              'John Odhiambo',
+              'Mary Wanjiru',
+              'David Meenakshi',
+              'Grace Atieno',
+              'Kevin Kibet',
+            ][r],
+            rating: [5, 4, 5, 4, 5][r],
+            comment: REVIEW_COMMENTS[r],
+          } as DeepPartial<PharmacyReview>),
+        );
         totalReviews++;
       }
     }
     console.log(`   ⭐ 5 reviews`);
 
     // ── Orders (3 per store) ──────────────────────────────────────────────
-    const ORDER_STATUSES = [PharmacyOrderStatus.COMPLETED, PharmacyOrderStatus.DELIVERED, PharmacyOrderStatus.PREPARING];
+    const ORDER_STATUSES = [
+      PharmacyOrderStatus.COMPLETED,
+      PharmacyOrderStatus.DELIVERED,
+      PharmacyOrderStatus.PREPARING,
+    ];
     for (let o = 0; o < 3; o++) {
       const orderNum = `PHM-${store.slug.slice(0, 4).toUpperCase()}-${1000 + o}`;
       const ex = await orderRepo.findOneBy({ orderNumber: orderNum });
       if (!ex) {
-        await orderRepo.save(orderRepo.create({
-          orderNumber: orderNum, storeId: store.id, customerId: `cust-order-${o + 1}`,
-          orderType: PharmacyOrderType.DELIVERY,
-          items: [{ itemId: 'demo', name: MEDICINES[o].name, quantity: 2, price: MEDICINES[o].price, requiresPrescription: false, dosageForm: MEDICINES[o].dosageForm }],
-          requiresPrescription: false, containsScheduleHDrugs: false, coldChainRequired: false,
-          itemTotal: MEDICINES[o].price * 2, deliveryFee: 50, packagingFee: 0, platformFee: 15, taxAmount: Math.round(MEDICINES[o].price * 2 * 0.16),
-          discount: 0, grandTotal: MEDICINES[o].price * 2 + 50 + 15 + Math.round(MEDICINES[o].price * 2 * 0.16),
-          paymentMethod: PharmacyPaymentMethod.ONLINE, paymentStatus: PharmacyPaymentStatus.PAID,
-          deliveryAddress: { line1: 'MG Road', city: 'Mumbai', pincode: '00100', lat: -1.287, lng: 36.820 },
-          status: ORDER_STATUSES[o],
-        } as any));
+        await orderRepo.save(
+          orderRepo.create({
+            orderNumber: orderNum,
+            storeId: store.id,
+            customerId: `cust-order-${o + 1}`,
+            orderType: PharmacyOrderType.DELIVERY,
+            items: [
+              {
+                itemId: 'demo',
+                name: MEDICINES[o].name,
+                quantity: 2,
+                price: MEDICINES[o].price,
+                requiresPrescription: false,
+                dosageForm: MEDICINES[o].dosageForm,
+              },
+            ],
+            requiresPrescription: false,
+            containsScheduleHDrugs: false,
+            coldChainRequired: false,
+            itemTotal: MEDICINES[o].price * 2,
+            deliveryFee: 50,
+            packagingFee: 0,
+            platformFee: 15,
+            taxAmount: Math.round(MEDICINES[o].price * 2 * 0.16),
+            discount: 0,
+            grandTotal:
+              MEDICINES[o].price * 2 + 50 + 15 + Math.round(MEDICINES[o].price * 2 * 0.16),
+            paymentMethod: PharmacyPaymentMethod.ONLINE,
+            paymentStatus: PharmacyPaymentStatus.PAID,
+            deliveryAddress: {
+              line1: 'MG Road',
+              city: 'Mumbai',
+              pincode: '00100',
+              lat: -1.287,
+              lng: 36.82,
+            },
+            status: ORDER_STATUSES[o],
+          } as DeepPartial<PharmacyOrder>),
+        );
         totalOrders++;
       }
     }
@@ -339,17 +1000,24 @@ async function seed() {
     for (let p = 0; p < 2; p++) {
       const ex = await prescRepo.count({ where: { storeId: store.id } });
       if (ex < 2) {
-        await prescRepo.save(prescRepo.create({
-          customerId: `cust-rx-${p + 1}`, storeId: store.id,
-          patientName: ['Alice Mwende', 'Robert Njoroge'][p],
-          patientAge: [34, 56][p],
-          fileUrl: `https://cdn.kartseek.com/prescriptions/rx-${store.slug}-${p + 1}.jpg`,
-          extractedMedicines: p === 0 ? ['Amoxicillin 500mg', 'Metformin 500mg'] : ['Amlodipine 5mg'],
-          containsScheduleHDrugs: p === 0,
-          status: p === 0 ? PrescriptionStatus.VERIFIED_APPROVED : PrescriptionStatus.PENDING_VERIFICATION,
-          verifiedByAdminId: p === 0 ? 'admin-1' : undefined,
-          verifiedAt: p === 0 ? new Date() : undefined,
-        } as any));
+        await prescRepo.save(
+          prescRepo.create({
+            customerId: `cust-rx-${p + 1}`,
+            storeId: store.id,
+            patientName: ['Alice Mwende', 'Robert Njoroge'][p],
+            patientAge: [34, 56][p],
+            fileUrl: `https://cdn.kartseek.com/prescriptions/rx-${store.slug}-${p + 1}.jpg`,
+            extractedMedicines:
+              p === 0 ? ['Amoxicillin 500mg', 'Metformin 500mg'] : ['Amlodipine 5mg'],
+            containsScheduleHDrugs: p === 0,
+            status:
+              p === 0
+                ? PrescriptionStatus.VERIFIED_APPROVED
+                : PrescriptionStatus.PENDING_VERIFICATION,
+            verifiedByAdminId: p === 0 ? 'admin-1' : undefined,
+            verifiedAt: p === 0 ? new Date() : undefined,
+          } as DeepPartial<Prescription>),
+        );
         totalPrescs++;
       }
     }

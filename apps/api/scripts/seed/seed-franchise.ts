@@ -33,10 +33,10 @@ import { DataSource } from 'typeorm';
 import { Franchise } from '../../../../modules/franchise/backend/src/entities/franchise.entity';
 
 const PG = {
-  host: process.env.DB_HOST || 'localhost',
-  port: +(process.env.DB_PORT || 5432),
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'kartseek123',
+  host: process.env.FRANCHISE_DB_HOST || process.env.DB_HOST || 'localhost',
+  port: +(process.env.FRANCHISE_DB_PORT || process.env.DB_PORT || 5432),
+  username: process.env.FRANCHISE_DB_USER || process.env.DB_USER || 'postgres',
+  password: process.env.FRANCHISE_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
 };
 
 /**
@@ -62,7 +62,15 @@ const FRANCHISES = [
     businessName: 'Mumbai Metro Franchise',
     countryCode: 'IN',
     operationalZones: ['Andheri', 'Bandra', 'Juhu', 'Versova', 'Goregaon'],
-    commissionRates: { marketplace: 8, grocery: 12, restaurant: 18, pharmacy: 10, doctor: 12, taxi: 20, 'hotel-booking': 15 },
+    commissionRates: {
+      marketplace: 8,
+      grocery: 12,
+      restaurant: 18,
+      pharmacy: 10,
+      doctor: 12,
+      taxi: 20,
+      'hotel-booking': 15,
+    },
     status: 'active',
   },
   {
@@ -71,7 +79,15 @@ const FRANCHISES = [
     businessName: 'Bandra West Franchise',
     countryCode: 'IN',
     operationalZones: ['Bandra West', 'Khar', 'Santacruz'],
-    commissionRates: { marketplace: 8, grocery: 12, restaurant: 18, pharmacy: 10, doctor: 12, taxi: 20, 'hotel-booking': 15 },
+    commissionRates: {
+      marketplace: 8,
+      grocery: 12,
+      restaurant: 18,
+      pharmacy: 10,
+      doctor: 12,
+      taxi: 20,
+      'hotel-booking': 15,
+    },
     status: 'active',
   },
   {
@@ -80,7 +96,15 @@ const FRANCHISES = [
     businessName: 'Powai Franchise',
     countryCode: 'IN',
     operationalZones: ['Powai', 'Chandivali', 'Saki Naka'],
-    commissionRates: { marketplace: 8, grocery: 11, restaurant: 16, pharmacy: 10, doctor: 11, taxi: 18, 'hotel-booking': 14 },
+    commissionRates: {
+      marketplace: 8,
+      grocery: 11,
+      restaurant: 16,
+      pharmacy: 10,
+      doctor: 11,
+      taxi: 18,
+      'hotel-booking': 14,
+    },
     status: 'active',
   },
   {
@@ -90,7 +114,14 @@ const FRANCHISES = [
     countryCode: 'QA',
     operationalZones: ['West Bay', 'The Pearl', 'Al Sadd', 'Msheireb'],
     // No doctor rate: Qatar does not enable the module.
-    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
+    commissionRates: {
+      marketplace: 7,
+      grocery: 10,
+      restaurant: 15,
+      pharmacy: 9,
+      taxi: 18,
+      'hotel-booking': 12,
+    },
     status: 'active',
   },
   {
@@ -99,7 +130,15 @@ const FRANCHISES = [
     businessName: 'Bengaluru South Franchise',
     countryCode: 'IN',
     operationalZones: ['Koramangala', 'Indiranagar', 'HSR Layout', 'BTM Layout'],
-    commissionRates: { marketplace: 8, grocery: 12, restaurant: 17, pharmacy: 10, doctor: 12, taxi: 19, 'hotel-booking': 14 },
+    commissionRates: {
+      marketplace: 8,
+      grocery: 12,
+      restaurant: 17,
+      pharmacy: 10,
+      doctor: 12,
+      taxi: 19,
+      'hotel-booking': 14,
+    },
     status: 'active',
   },
   {
@@ -108,7 +147,15 @@ const FRANCHISES = [
     businessName: 'Pune Central Franchise',
     countryCode: 'IN',
     operationalZones: ['Koregaon Park', 'Kalyani Nagar', 'Viman Nagar', 'Baner', 'Hinjewadi'],
-    commissionRates: { marketplace: 8, grocery: 10, restaurant: 15, pharmacy: 10, doctor: 10, taxi: 20, 'hotel-booking': 12 },
+    commissionRates: {
+      marketplace: 8,
+      grocery: 10,
+      restaurant: 15,
+      pharmacy: 10,
+      doctor: 10,
+      taxi: 20,
+      'hotel-booking': 12,
+    },
     status: 'pending',
   },
   {
@@ -117,7 +164,15 @@ const FRANCHISES = [
     businessName: 'Dubai Marina Franchise',
     countryCode: 'AE',
     operationalZones: ['Dubai Marina', 'JBR', 'Business Bay', 'Downtown'],
-    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, doctor: 11, taxi: 18, 'hotel-booking': 12 },
+    commissionRates: {
+      marketplace: 7,
+      grocery: 10,
+      restaurant: 15,
+      pharmacy: 9,
+      doctor: 11,
+      taxi: 18,
+      'hotel-booking': 12,
+    },
     status: 'active',
   },
   {
@@ -126,7 +181,15 @@ const FRANCHISES = [
     businessName: 'Riyadh North Franchise',
     countryCode: 'SA',
     operationalZones: ['Olaya', 'Al Malqa', 'Hittin', 'Al Nakheel'],
-    commissionRates: { marketplace: 7, grocery: 11, restaurant: 16, pharmacy: 9, doctor: 11, taxi: 19, 'hotel-booking': 13 },
+    commissionRates: {
+      marketplace: 7,
+      grocery: 11,
+      restaurant: 16,
+      pharmacy: 9,
+      doctor: 11,
+      taxi: 19,
+      'hotel-booking': 13,
+    },
     status: 'active',
   },
   {
@@ -136,7 +199,14 @@ const FRANCHISES = [
     countryCode: 'BH',
     // Bahraini dinar — three decimal places.
     operationalZones: ['Manama', 'Seef', 'Juffair', 'Amwaj'],
-    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
+    commissionRates: {
+      marketplace: 7,
+      grocery: 10,
+      restaurant: 15,
+      pharmacy: 9,
+      taxi: 18,
+      'hotel-booking': 12,
+    },
     status: 'active',
   },
   {
@@ -146,7 +216,14 @@ const FRANCHISES = [
     countryCode: 'KW',
     // Kuwaiti dinar — three decimal places, and the highest-value unit here.
     operationalZones: ['Salmiya', 'Hawally', 'Kuwait City', 'Farwaniya'],
-    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
+    commissionRates: {
+      marketplace: 7,
+      grocery: 10,
+      restaurant: 15,
+      pharmacy: 9,
+      taxi: 18,
+      'hotel-booking': 12,
+    },
     status: 'active',
   },
   {
@@ -156,7 +233,14 @@ const FRANCHISES = [
     countryCode: 'OM',
     // Omani rial — three decimal places.
     operationalZones: ['Muscat', 'Seeb', 'Bawshar', 'Qurum'],
-    commissionRates: { marketplace: 7, grocery: 10, restaurant: 15, pharmacy: 9, taxi: 18, 'hotel-booking': 12 },
+    commissionRates: {
+      marketplace: 7,
+      grocery: 10,
+      restaurant: 15,
+      pharmacy: 9,
+      taxi: 18,
+      'hotel-booking': 12,
+    },
     status: 'active',
   },
   {
@@ -193,11 +277,56 @@ const FR3 = FRANCHISES[2].id;
  * a quoted identifier is required for the camelCase pair.
  */
 const LINKS = [
-  { module: 'marketplace', database: 'kartseek_marketplace', schema: 'marketplace', table: 'sellers',         column: 'franchise_id', assign: [[FR1, 10], [FR2, 3], [FR3, 2]] },
-  { module: 'grocery',     database: 'kartseek_grocery',     schema: 'grocery',     table: 'grocery_stores',  column: 'franchise_id', assign: [[FR1, 3], [FR2, 2]] },
-  { module: 'restaurant',  database: 'kartseek_restaurant',  schema: 'restaurant',  table: 'restaurants',     column: 'franchiseId',  assign: [[FR1, 4], [FR3, 2]] },
-  { module: 'pharmacy',    database: 'kartseek_pharmacy',    schema: 'pharmacy',    table: 'pharmacy_stores', column: 'franchiseId',  assign: [[FR1, 3]] },
-  { module: 'doctor',      database: 'kartseek_doctor',      schema: 'doctor',      table: 'clinics',         column: 'franchise_id', assign: [[FR1, 3]] },
+  {
+    module: 'marketplace',
+    database: 'kartseek_marketplace',
+    schema: 'marketplace',
+    table: 'sellers',
+    column: 'franchise_id',
+    assign: [
+      [FR1, 10],
+      [FR2, 3],
+      [FR3, 2],
+    ],
+  },
+  {
+    module: 'grocery',
+    database: 'kartseek_grocery',
+    schema: 'grocery',
+    table: 'grocery_stores',
+    column: 'franchise_id',
+    assign: [
+      [FR1, 3],
+      [FR2, 2],
+    ],
+  },
+  {
+    module: 'restaurant',
+    database: 'kartseek_restaurant',
+    schema: 'restaurant',
+    table: 'restaurants',
+    column: 'franchiseId',
+    assign: [
+      [FR1, 4],
+      [FR3, 2],
+    ],
+  },
+  {
+    module: 'pharmacy',
+    database: 'kartseek_pharmacy',
+    schema: 'pharmacy',
+    table: 'pharmacy_stores',
+    column: 'franchiseId',
+    assign: [[FR1, 3]],
+  },
+  {
+    module: 'doctor',
+    database: 'kartseek_doctor',
+    schema: 'doctor',
+    table: 'clinics',
+    column: 'franchise_id',
+    assign: [[FR1, 3]],
+  },
 ] as const;
 
 async function seedFranchises() {
@@ -237,7 +366,9 @@ async function link(spec: (typeof LINKS)[number]) {
     const path = `"${spec.schema}"."${spec.table}"`;
     // Clear first, so a re-run redistributes rather than only ever adding. Only
     // the demo franchises are cleared — a link set by anything else survives.
-    await ds.query(`UPDATE ${path} SET ${col} = NULL WHERE ${col} = ANY($1)`, [FRANCHISES.map((f) => f.id)]);
+    await ds.query(`UPDATE ${path} SET ${col} = NULL WHERE ${col} = ANY($1)`, [
+      FRANCHISES.map((f) => f.id),
+    ]);
 
     let assigned = 0;
     for (const [franchiseId, count] of spec.assign) {
@@ -249,12 +380,14 @@ async function link(spec: (typeof LINKS)[number]) {
           WHERE id IN (SELECT id FROM ${path} WHERE ${col} IS NULL ORDER BY id LIMIT $2)`,
         [franchiseId, count],
       );
-      assigned += Array.isArray(res) ? res[1] ?? 0 : 0;
+      assigned += Array.isArray(res) ? (res[1] ?? 0) : 0;
     }
     const totalRows = Number((await ds.query(`SELECT count(*) AS c FROM ${path}`))[0].c);
     const want = spec.assign.reduce((s, [, n]) => s + n, 0);
     const short = assigned < want ? `  (wanted ${want}; the table holds ${totalRows})` : '';
-    console.log(`  ${spec.module.padEnd(12)} ${String(assigned).padStart(2)}/${totalRows} ${spec.table} linked${short}`);
+    console.log(
+      `  ${spec.module.padEnd(12)} ${String(assigned).padStart(2)}/${totalRows} ${spec.table} linked${short}`,
+    );
   } finally {
     await ds.destroy();
   }
@@ -265,7 +398,9 @@ async function main() {
   await seedFranchises();
   console.log('\nLinking vertical rows to a franchise (one connection per module database)\n');
   for (const spec of LINKS) await link(spec);
-  console.log('\nDone. Franchise dashboards aggregate these over TCP — the verticals must be running.');
+  console.log(
+    '\nDone. Franchise dashboards aggregate these over TCP — the verticals must be running.',
+  );
 }
 
 main().catch((err) => {
