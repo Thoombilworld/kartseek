@@ -30,7 +30,7 @@ import { usePincodeSearchLog } from '@/lib/contexts/pincode-search-log';
 import { useRegion } from '@/lib/contexts/region-context';
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { useToast } from '@/lib/contexts/toast-context';
-import NotifyMeModal from '@/components/shared/NotifyMeModal';
+import NotifyMeModal from '@/components/shared/notify-me-modal';
 import { productPath } from '@/lib/marketplace/product-url';
 import { zoneHref } from '@/lib/routes/zone-href';
 

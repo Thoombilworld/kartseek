@@ -1,2 +1,2 @@
-export { RecommendationCarousel } from './RecommendationCarousel';
-export { CrossModulePicks } from './CrossModulePicks';
+export { RecommendationCarousel } from './recommendation-carousel';
+export { CrossModulePicks } from './cross-module-picks';

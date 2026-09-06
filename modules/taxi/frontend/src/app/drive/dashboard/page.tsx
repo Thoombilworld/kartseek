@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useMemo } from 'react';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   TrendingUp, Clock, Star, Car, ToggleLeft, ToggleRight, MapPin, Bell,
   DollarSign, Percent, CheckCircle, XCircle, Wallet, Gift, Trophy,

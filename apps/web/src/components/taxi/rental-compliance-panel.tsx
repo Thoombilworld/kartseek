@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   CheckCircle, XCircle, Clock, AlertTriangle, Shield, Upload,
   ChevronDown, ChevronUp, FileText, Camera, CreditCard, User,

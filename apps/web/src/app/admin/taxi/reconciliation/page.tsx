@@ -6,7 +6,7 @@ import {
   DollarSign, CheckCircle, AlertTriangle, Clock, XCircle, CreditCard,
   ArrowUpDown, Eye, Filter, Search, TrendingUp, Wallet, RefreshCw, Download, FileText, Smartphone, Banknote,
 } from 'lucide-react';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { adminTaxiApi } from '@/lib/api/admin-taxi';
 
 // ── Types ────────────────────────────────────────────────────────────────────

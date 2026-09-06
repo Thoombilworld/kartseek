@@ -26,9 +26,9 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { useGroceryLayout, saveGroceryLayout } from '@/hooks/useGroceryLayout';
-import { SectionTypeMenu, SECTION_TYPES } from './components/SectionTypeMenu';
-import { GrocerySectionEditor } from './components/GrocerySectionEditor';
-import type { SectionTypeOption } from './components/SectionTypeMenu';
+import { SectionTypeMenu, SECTION_TYPES } from './components/section-type-menu';
+import { GrocerySectionEditor } from './components/grocery-section-editor';
+import type { SectionTypeOption } from './components/section-type-menu';
 
 // ── Pages available for editing ──────────────────────────────────────────
 

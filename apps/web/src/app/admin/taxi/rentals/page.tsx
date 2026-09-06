@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTaxiRegionFilter } from '@/hooks/useTaxiRegionFilter';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   Car, Clock, MapPin, CheckCircle, XCircle, AlertTriangle, Search,
   Download, User, Calendar, DollarSign, Key, Timer, UserCheck,

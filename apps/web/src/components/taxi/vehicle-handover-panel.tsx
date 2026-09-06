@@ -6,7 +6,7 @@ import {
   ClipboardCheck, Car, Shield, FileText, XCircle, ChevronDown,
   ChevronUp, ArrowRight, Wrench, Eye, Upload, Battery,
 } from 'lucide-react';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

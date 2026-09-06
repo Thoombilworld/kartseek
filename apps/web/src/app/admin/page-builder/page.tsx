@@ -17,8 +17,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { SortableSection } from './components/SortableSection';
-import { SectionEditorModal } from './components/SectionEditorModal';
+import { SortableSection } from './components/sortable-section';
+import { SectionEditorModal } from './components/section-editor-modal';
 import { Plus, Save, LayoutTemplate, Loader2, AlertCircle } from 'lucide-react';
 import apiFetch from '@/lib/api-client';
 

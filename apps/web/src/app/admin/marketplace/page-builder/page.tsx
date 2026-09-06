@@ -24,9 +24,9 @@ import {
   HelpCircle, FileText, Code, Crown, TrendingUp, Award, CheckCircle,
   EyeOff, Zap, ShieldCheck, MapPin, Star, ShoppingBag,
 } from 'lucide-react';
-import { MarketplaceSectionTypeMenu } from './components/MarketplaceSectionTypeMenu';
-import { MarketplaceSectionEditor } from './components/MarketplaceSectionEditor';
-import type { MarketplaceSectionTypeOption } from './components/MarketplaceSectionTypeMenu';
+import { MarketplaceSectionTypeMenu } from './components/marketplace-section-type-menu';
+import { MarketplaceSectionEditor } from './components/marketplace-section-editor';
+import type { MarketplaceSectionTypeOption } from './components/marketplace-section-type-menu';
 import { useMarketplaceRegionFilter } from '@/hooks/useMarketplaceRegionFilter';
 import { adminMarketplaceApi } from '@/lib/modules/admin-marketplace-api';
 import { useAdminData, useAdminAction, AdminToast, AdminLoadingSkeleton, AdminErrorBanner } from '@/hooks/useAdminData';

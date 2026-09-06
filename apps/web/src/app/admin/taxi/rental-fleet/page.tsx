@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTaxiRegionFilter } from '@/hooks/useTaxiRegionFilter';
 import { CountryFlag } from '@/components/shared/country-flag';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   Car, CheckCircle, XCircle, Wrench, Shield, Calendar, DollarSign,
   Search, Clock, AlertTriangle, Eye, Plus, BarChart3, Users,

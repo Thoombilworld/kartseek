@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useRegion } from '@/lib/contexts/region-context';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   Car, CheckCircle, XCircle, Clock, DollarSign, AlertTriangle,
   Calendar, Key, Phone, User, UserCheck, Shield, Timer, Gauge,
