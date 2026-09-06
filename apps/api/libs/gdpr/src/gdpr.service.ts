@@ -87,11 +87,14 @@ export class GdprService {
     await this.redis.setJson(`gdpr:consent:${userId}:${consentType}`, record, 0);
 
     // Audit trail — immutable consent log
-    await this.redis.lpush(`gdpr:consent:log:${userId}`, JSON.stringify({
-      action: 'granted',
-      ...record,
-      timestamp: new Date().toISOString(),
-    }));
+    await this.redis.lpush(
+      `gdpr:consent:log:${userId}`,
+      JSON.stringify({
+        action: 'granted',
+        ...record,
+        timestamp: new Date().toISOString(),
+      }),
+    );
 
     await this.kafka.publish('gdpr.consent.granted', { userId, consentType });
     this.logger.log(`Consent granted: ${userId} → ${consentType}`);
@@ -102,7 +105,9 @@ export class GdprService {
    * Revoke user consent for a specific data processing purpose.
    */
   async revokeConsent(userId: string, consentType: ConsentType): Promise<ConsentRecord> {
-    const existing = await this.redis.getJson<ConsentRecord>(`gdpr:consent:${userId}:${consentType}`);
+    const existing = await this.redis.getJson<ConsentRecord>(
+      `gdpr:consent:${userId}:${consentType}`,
+    );
     const record: ConsentRecord = {
       ...existing,
       userId,
@@ -114,11 +119,14 @@ export class GdprService {
 
     await this.redis.setJson(`gdpr:consent:${userId}:${consentType}`, record, 0);
 
-    await this.redis.lpush(`gdpr:consent:log:${userId}`, JSON.stringify({
-      action: 'revoked',
-      ...record,
-      timestamp: new Date().toISOString(),
-    }));
+    await this.redis.lpush(
+      `gdpr:consent:log:${userId}`,
+      JSON.stringify({
+        action: 'revoked',
+        ...record,
+        timestamp: new Date().toISOString(),
+      }),
+    );
 
     await this.kafka.publish('gdpr.consent.revoked', { userId, consentType });
     this.logger.log(`Consent revoked: ${userId} → ${consentType}`);
@@ -130,20 +138,27 @@ export class GdprService {
    */
   async getUserConsents(userId: string): Promise<ConsentRecord[]> {
     const consentTypes: ConsentType[] = [
-      'marketing_email', 'marketing_sms', 'marketing_push',
-      'analytics', 'location_tracking', 'data_sharing_partners',
-      'personalized_ads', 'order_notifications',
+      'marketing_email',
+      'marketing_sms',
+      'marketing_push',
+      'analytics',
+      'location_tracking',
+      'data_sharing_partners',
+      'personalized_ads',
+      'order_notifications',
     ];
 
     const records: ConsentRecord[] = [];
     for (const type of consentTypes) {
       const record = await this.redis.getJson<ConsentRecord>(`gdpr:consent:${userId}:${type}`);
-      records.push(record ?? {
-        userId,
-        consentType: type,
-        granted: false,
-        version: '1.0',
-      });
+      records.push(
+        record ?? {
+          userId,
+          consentType: type,
+          granted: false,
+          version: '1.0',
+        },
+      );
     }
     return records;
   }
@@ -162,7 +177,10 @@ export class GdprService {
    * Request a full data export for a user.
    * Returns immediately with a request ID — processing happens asynchronously.
    */
-  async requestDataExport(userId: string, format: 'json' | 'csv' = 'json'): Promise<DataExportRequest> {
+  async requestDataExport(
+    userId: string,
+    format: 'json' | 'csv' = 'json',
+  ): Promise<DataExportRequest> {
     const requestId = `GDPR-EXPORT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const request: DataExportRequest = {
       id: requestId,
@@ -197,14 +215,14 @@ export class GdprService {
       exportedAt: new Date().toISOString(),
       format: request.format,
       user: {
-        profile: await this.redis.getJson(`user:${userId}`) ?? {},
+        profile: (await this.redis.getJson(`user:${userId}`)) ?? {},
         consents: await this.getUserConsents(userId),
       },
       orders: await this.getListData(`orders:user:${userId}`),
       rides: await this.getListData(`rides:user:${userId}`),
       deliveries: await this.getListData(`deliveries:user:${userId}`),
-      wallet: await this.redis.getJson(`wallet:${userId}`) ?? {},
-      loyalty: await this.redis.getJson(`loyalty:${userId}`) ?? {},
+      wallet: (await this.redis.getJson(`wallet:${userId}`)) ?? {},
+      loyalty: (await this.redis.getJson(`loyalty:${userId}`)) ?? {},
       addresses: await this.getListData(`addresses:${userId}`),
       searchHistory: await this.getListData(`search:history:${userId}`),
       supportTickets: await this.getListData(`support:user:${userId}`),
@@ -218,7 +236,7 @@ export class GdprService {
 
     request.status = 'completed';
     request.completedAt = new Date().toISOString();
-    request.downloadUrl = `/api/v1/gdpr/exports/${requestId}/download`;
+    request.downloadUrl = `/api/v1/gdpr/export/${requestId}/download`;
     request.expiresAt = new Date(Date.now() + 7 * 86400 * 1000).toISOString();
     await this.redis.setJson(`gdpr:export:${requestId}`, request, 86400 * 30);
 
@@ -290,9 +308,14 @@ export class GdprService {
 
     // Delete consent data (except the audit trail — required for legal compliance)
     const consentTypes: ConsentType[] = [
-      'marketing_email', 'marketing_sms', 'marketing_push',
-      'analytics', 'location_tracking', 'data_sharing_partners',
-      'personalized_ads', 'order_notifications',
+      'marketing_email',
+      'marketing_sms',
+      'marketing_push',
+      'analytics',
+      'location_tracking',
+      'data_sharing_partners',
+      'personalized_ads',
+      'order_notifications',
     ];
     for (const type of consentTypes) {
       keysToDelete.push(`gdpr:consent:${userId}:${type}`);
@@ -323,7 +346,9 @@ export class GdprService {
     await this.redis.setJson(`gdpr:erasure:${requestId}`, request, 86400 * 90);
 
     await this.kafka.publish('gdpr.data.erasure.completed', {
-      requestId, userId, deletedKeys: deletedCount,
+      requestId,
+      userId,
+      deletedKeys: deletedCount,
     });
 
     this.logger.log(`Data erasure completed: ${requestId} (${deletedCount} keys deleted)`);
@@ -349,9 +374,14 @@ export class GdprService {
         currentVersion: '1.0',
         lastUpdated: '2026-01-15T00:00:00Z',
         types: [
-          'marketing_email', 'marketing_sms', 'marketing_push',
-          'analytics', 'location_tracking', 'data_sharing_partners',
-          'personalized_ads', 'order_notifications',
+          'marketing_email',
+          'marketing_sms',
+          'marketing_push',
+          'analytics',
+          'location_tracking',
+          'data_sharing_partners',
+          'personalized_ads',
+          'order_notifications',
         ],
       },
       dataRetention: {
@@ -378,8 +408,12 @@ export class GdprService {
   private async getListData(key: string): Promise<unknown[]> {
     try {
       const items = await this.redis.lrange(key, 0, -1);
-      return items.map(item => {
-        try { return JSON.parse(item); } catch { return item; }
+      return items.map((item) => {
+        try {
+          return JSON.parse(item);
+        } catch {
+          return item;
+        }
       });
     } catch {
       return [];

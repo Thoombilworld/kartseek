@@ -22,7 +22,30 @@ import * as path from 'path';
  */
 
 const CONTROLLERS = path.join(__dirname, '..', 'controllers');
+/**
+ * Shared libraries whose controllers the gateway mounts as well: GdprModule is
+ * imported by `api-gateway.module.ts`, so its routes ship under the same
+ * open-by-default rule. That is how this scan came to include them. The GDPR
+ * controller answered anonymous requests for another person's consents, data
+ * export and erasure until 2026-09-06, and this file never looked at it.
+ */
+const LIBS = path.join(__dirname, '..', '..', '..', '..', 'libs');
 const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)?\s*\)/;
+
+/** Every `*.controller.ts` under `dir`, recursively, skipping build output. */
+function controllerFiles(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== 'node_modules' && entry.name !== 'dist')
+        found.push(...controllerFiles(full));
+    } else if (entry.name.endsWith('.controller.ts')) {
+      found.push(full);
+    }
+  }
+  return found;
+}
 
 /**
  * Prefixes that may serve anonymous traffic, with the reason. Anything matching
@@ -33,7 +56,10 @@ const PUBLIC_PREFIXES: Array<[RegExp, string]> = [
   [/^\/auth\//, 'the sign-in surface itself — cannot require a token to get one'],
   [/^\/api\/partner\/auth\//, 'partner OTP sign-in'],
   [/^\/localization\//, 'currency, language and tax config — same for every visitor'],
-  [/^\/regions(?!\/stats|\/india\/stats)/, 'region detection and PIN lookup; the stats routes are admin and excluded here'],
+  [
+    /^\/regions(?!\/stats|\/india\/stats)/,
+    'region detection and PIN lookup; the stats routes are admin and excluded here',
+  ],
   [/^\/geo\//, 'pre-login geo/VPN check'],
   [/^\/marketplace\//, 'storefront catalogue browsing'],
   [/^\/pharmacy\/(home|stores|search|scan|categories)/, 'pharmacy storefront browsing'],
@@ -41,7 +67,10 @@ const PUBLIC_PREFIXES: Array<[RegExp, string]> = [
   [/^\/grocery\//, 'grocery storefront browsing — this controller declares @Public() per route'],
   [/^\/restaurant\//, 'restaurant storefront browsing'],
   [/^\/hotel\//, 'hotel storefront browsing'],
-  [/^\/taxi\/(health|config|vehicle-categories|estimate)/, 'fare config and estimates, pre-booking'],
+  [
+    /^\/taxi\/(health|config|vehicle-categories|estimate)/,
+    'fare config and estimates, pre-booking',
+  ],
   [/^\/franchise\/(health|register)/, 'franchise enquiry form'],
   [/^\/sellers?\//, 'public seller storefronts'],
   [/^\/static-pages/, 'CMS marketing pages'],
@@ -49,7 +78,13 @@ const PUBLIC_PREFIXES: Array<[RegExp, string]> = [
   [/^\/users\/partner\/register/, 'partner sign-up'],
 ];
 
-interface Route { file: string; verb: string; path: string; guarded: boolean; declaredPublic: boolean }
+interface Route {
+  file: string;
+  verb: string;
+  path: string;
+  guarded: boolean;
+  declaredPublic: boolean;
+}
 
 /**
  * Source with comments removed.
@@ -59,19 +94,20 @@ interface Route { file: string; verb: string; path: string; guarded: boolean; de
  * `toContain` matches the very prose describing the fix. Strip comments first so
  * these test what executes, not what is documented.
  */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
 function codeOf(file: string): string {
-  return fs
-    .readFileSync(path.join(CONTROLLERS, file), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+  return stripComments(fs.readFileSync(path.join(CONTROLLERS, file), 'utf8'));
 }
 
 function collectRoutes(): Route[] {
   const routes: Route[] = [];
 
-  for (const file of fs.readdirSync(CONTROLLERS)) {
-    if (!file.endsWith('.controller.ts') || file.endsWith('.spec.ts')) continue;
-    const src = fs.readFileSync(path.join(CONTROLLERS, file), 'utf8').split('\n');
+  for (const full of [...controllerFiles(CONTROLLERS), ...controllerFiles(LIBS)]) {
+    const file = path.relative(path.join(LIBS, '..'), full).split(path.sep).join('/');
+    const src = fs.readFileSync(full, 'utf8').split('\n');
 
     const classLine = src.findIndex((l) => /^export class \w+/.test(l));
     if (classLine === -1) continue;
@@ -130,7 +166,9 @@ describe('gateway route exposure', () => {
   it('keeps user profile and address routes owner-scoped', () => {
     // The specific regression: these were readable and writable by anyone.
     const src = codeOf('user.controller.ts');
-    expect(src).toMatch(/@UseGuards\(JwtAuthGuard, ResourceOwnershipGuard\)\s*\n@Controller\('users'\)/);
+    expect(src).toMatch(
+      /@UseGuards\(JwtAuthGuard, ResourceOwnershipGuard\)\s*\n@Controller\('users'\)/,
+    );
     for (const route of [
       "@Get(':userId/profile')",
       "@Put(':userId/profile')",
@@ -143,6 +181,51 @@ describe('gateway route exposure', () => {
       expect(at).toBeGreaterThan(-1);
       // The ownership decorator must sit on the handler, not merely in the file.
       expect(src.slice(at, at + 200)).toContain("@ResourceOwner({ paramKey: 'userId' })");
+    }
+  });
+
+  it('keeps the GDPR routes subject-scoped, with processing admin-only', () => {
+    // The specific regression: twelve routes over another person's consents,
+    // data export and erasure, reachable by anyone.
+    const src = stripComments(
+      fs.readFileSync(path.join(LIBS, 'gdpr', 'src', 'gdpr.controller.ts'), 'utf8'),
+    );
+    expect(src).toMatch(
+      /@UseGuards\(JwtAuthGuard, RolesGuard, ResourceOwnershipGuard\)\s*\n@Controller\('gdpr'\)/,
+    );
+    for (const route of [
+      "@Get('consent/:userId')",
+      "@Post('consent/:userId/grant')",
+      "@Post('consent/:userId/revoke')",
+      "@Get('consent/:userId/check/:consentType')",
+      "@Post('export/:userId')",
+      "@Post('erasure/:userId')",
+    ]) {
+      const at = src.indexOf(route);
+      expect(at, route).toBeGreaterThan(-1);
+      // On the handler itself, directly below the verb.
+      expect(src.slice(at, at + 120), route).toContain('@ResourceOwner(SUBJECT_ONLY)');
+    }
+    for (const route of [
+      "@Post('export/:requestId/process')",
+      "@Post('erasure/:requestId/process')",
+      "@Get('compliance/dashboard')",
+    ]) {
+      const at = src.indexOf(route);
+      expect(at, route).toBeGreaterThan(-1);
+      expect(src.slice(at, at + 120), route).toContain(
+        '@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)',
+      );
+    }
+    // The request-scoped routes carry no user id in the URL; each must ask.
+    for (const route of [
+      "@Get('export/:requestId/status')",
+      "@Get('export/:requestId/download')",
+      "@Get('erasure/:requestId/status')",
+    ]) {
+      const at = src.indexOf(route);
+      expect(at, route).toBeGreaterThan(-1);
+      expect(src.slice(at, at + 700), route).toContain('this.assertMayAccess(');
     }
   });
 
