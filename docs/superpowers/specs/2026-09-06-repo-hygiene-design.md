@@ -14,7 +14,7 @@ assumption that everything present is used and everything green is real:
 - nothing on disk or in git that is generated, foreign or dead;
 - one ESLint, one Jest preset, one clean command, one hook setup, used by every
   workspace the same way;
-- `lint`, `type-check`, `test` and `build` green in all 19 npm workspaces, with
+- `lint`, `type-check`, `test` and `build` green in all 18 npm workspaces, with
   no "known failing" list in the docs;
 - the code behind today's failures reviewed and corrected, not silenced.
 
@@ -59,9 +59,12 @@ and `.crt`, `.idea/`, `.superpowers/`, `apps/*/.flutter-plugins-dependencies`.
 
 ### 3.2 Tracked but dead, misplaced or misnamed
 
-- `apps/api/libs/{dto,events,logger,validators}` — four Nest CLI scaffolds
-  (module + index each), imported by nothing, registered in `nest-cli.json`,
-  `apps/api/tsconfig.json` and all eight `modules/*/backend/tsconfig.json`.
+- `apps/api/libs/{dto,events,logger,validators}` — four libraries imported by
+  nothing. `dto` and `validators` are bare Nest CLI scaffolds (module + index);
+  `events` holds a second copy of the Kafka topic constants that every service
+  actually takes from `@app/kafka`, and `logger` a `KartseekLogger` no module
+  provides. All four are registered in `nest-cli.json`, `apps/api/tsconfig.json`
+  and all eight `modules/*/backend/tsconfig.json`.
 - `apps/seller/lib/features/hotel_owner/screens/hotel_quick_pricing_screen.dart`
   — byte-identical to the `seller_hotel` copy; the router imports only
   `seller_hotel`.
@@ -141,10 +144,16 @@ and `.crt`, `.idea/`, `.superpowers/`, `apps/*/.flutter-plugins-dependencies`.
   while the object branch returns `/product/…`; `isCanonicalStoreParam`
   compares against `/grocery/store/…` while `storePath` builds `/store/…`.
   Two of its 17 tests fail. Every page in the zone calls the object forms.
-- `apps/api` lint: 35 findings in 12 files. The one that matters most is
-  `apps/payment-service/src/services/invoice.service.ts:259`, a second
-  `case 'IN'` whose body computes Kenya's 16 % VAT (`keVat`); the first
-  `case 'IN'` wins, so Kenyan invoices get no tax lines. The rest: eleven
+- `apps/api` lint: 35 findings in 12 files. The ones that matter most are in
+  `apps/payment-service/src/services/invoice.service.ts`: its hand-written tax
+  switch keys on `'UK'` although `payment.countryCode` is the ISO code `'GB'`
+  from `RegionService` (so UK invoices get no tax lines), carries a second,
+  unreachable `case 'IN'` whose body is a 16 % VAT labelled for Kenya (not a
+  market), and disagrees with the region registry for Saudi Arabia (5 %
+  against the registered 15 %) while omitting Bahrain, Kuwait, Oman and the
+  US entirely. `REGION_CONFIGS[code].tax` in `@app/region` already records the
+  name and rate for all ten markets and exists precisely so services stop
+  keeping private tax tables. The rest: eleven
   empty `catch {}` blocks in `geo-security.controller.ts` (nine) and
   `taxi.controller.ts` (two), eight `no-case-declarations` in the same tax
   switch, six `@ts-ignore` on dynamic imports of `@aws-sdk/client-s3` and
@@ -199,9 +208,10 @@ and `.crt`, `.idea/`, `.superpowers/`, `apps/*/.flutter-plugins-dependencies`.
   `usa`, `staging`, `production`, `local` (`*.postman_environment.json`).
   `KARTSEEK_Local` becomes `local`; the three-key `local` file is deleted.
   `run-all.js`'s `envMap`, `newman/run-payment-tests.sh` and both Postman
-  READMEs follow. If the payment collection depends on the thin file's bare
-  `base_url`, its requests are corrected to the `/api/v1` form the other 33
-  collections use rather than keeping a second local file.
+  READMEs follow. The payment collection carries its own `baseUrl` collection
+  variable and reads only `{{userToken}}` from the thin file; that one
+  reference becomes `{{user_token}}`, the variable the numbered suite's login
+  requests populate, so a single `local` environment serves both runners.
 - Audits → `2026-06-09-final-stabilization-report.md`,
   `2026-06-09-full-system-scan-report.md`,
   `2026-07-25-marketplace-module-review.md`,
@@ -276,7 +286,7 @@ deleted with `-d` (ancestors). `chore/nest-12-upgrade` and
   the hand-written `jest.config.ts` files in `apps/web`, `grocery` and
   `marketplace` are deleted. Grocery's 65 tests are the regression check for
   the derived mapper.
-- Each of the eight zones gets `src/__tests__/zone-config.spec.ts`: it loads
+- Each of the eight zones gets `src/__tests__/registry-entry.spec.ts`: it loads
   `services.yaml` (root `yaml` dependency), finds its own entry by
   `path`, and asserts that `package.json`'s `dev` and `start` scripts bind
   `ports.http` and that `next.config.mjs` declares `basePath: '<basePath>'`
@@ -288,12 +298,14 @@ deleted with `-d` (ancestors). `chore/nest-12-upgrade` and
 
 ### 6.3 Type-check
 
-- `apps/web/tsconfig.json` stops excluding `src/__tests__`; any errors it
-  surfaces are fixed. Jest globals resolve through the root
-  `@types/jest` (already hoisted); if a workspace still cannot see them, it
-  declares `"types": ["jest", "node"]` rather than importing from
-  `@jest/globals` file by file. Result: `type-check` green in all 19
-  workspaces with test files included.
+- `apps/web/tsconfig.json` stops excluding `src/__tests__`. TypeScript does
+  not pull `@types/jest` into these programs on its own (grocery only sees it
+  through a stray `/// <reference types="jest" />` in one spec; marketplace has
+  none, hence its two failures), so every Next workspace's `tsconfig.json`
+  declares `"types": ["jest", "node"]`. Measured before implementation: with
+  that setting and its tests included, `apps/web` type-checks with zero errors,
+  and so does marketplace. Result: `type-check` green in all 18 workspaces
+  with test files included.
 
 ### 6.4 Git hooks
 
@@ -326,12 +338,20 @@ Each item names the root cause, the fix and how it is verified.
    `basePath`. Fix: `productPath(null | undefined)` → `/`; string form →
    `/product/<id>`; `isCanonicalStoreParam` compares against `/store/…`.
    Verify: 65/65 grocery tests; `git grep` confirms no caller passes a string.
-2. **Kenya VAT** (`invoice.service.ts`). Cause: `case 'KE'` typed as `'IN'`.
-   Fix: extract `calculateTaxBreakdown` into a pure
-   `tax-breakdown.ts` beside the service, correct the label, block-scope each
-   case, and add a spec covering IN, AE/SA/QA, UK, SG, KE and an unknown
-   country. Verify: the spec; `npm run lint -w kartseek-api` shows no
-   `no-duplicate-case` or `no-case-declarations`.
+2. **Invoice tax lines** (`invoice.service.ts`). Cause: a private tax table
+   that drifted from the region registry (`'UK'` for `'GB'`, a dead duplicate
+   `case 'IN'`, Saudi Arabia at 5 % instead of 15 %, four markets missing).
+   Fix: a pure `tax-breakdown.ts` beside the service whose
+   `calculateTaxBreakdown(commissionAmount, countryCode)` reads
+   `getRegionConfig(countryCode)?.tax` from `@app/region`, keeps India's
+   CGST/SGST split of the registered rate, returns no lines where the rate is
+   zero or the country is unknown, and keeps today's arithmetic (tax added on
+   top of the commission, rounded to the cent) — the registry's `isInclusive`
+   flag describes consumer pricing and is deliberately not applied here. A
+   Vitest spec covers IN, GB, SA, BH, SG, US, the zero-rate markets QA and KW,
+   an unknown country and rounding. Verify: the spec;
+   `npm run lint -w kartseek-api` shows no `no-duplicate-case` or
+   `no-case-declarations`.
 3. **Empty catches** (`geo-security.controller.ts` ×9, `taxi.controller.ts`
    ×2). Cause: fallbacks written without a trace. Fix: each catch logs at
    `warn` through the controller's Nest `Logger` with what failed and which
@@ -385,9 +405,9 @@ the merge:
 | Registry | `npm run registry:check` | clean |
 | Script tests | `npm run test:scripts` | all pass |
 | Links | `npm run docs:check-links` | 0 broken |
-| Type-check | `npm run type-check` | 19/19 green, tests included |
-| Lint | `npm run lint` | 19/19 green, 0 errors |
-| Unit tests | `npm run test` | 19/19 green, every workspace has ≥ 1 test |
+| Type-check | `npm run type-check` | 18/18 green, tests included |
+| Lint | `npm run lint` | 18/18 green, 0 errors |
+| Unit tests | `npm run test` | 18/18 green, every workspace has ≥ 1 test |
 | API build | `npm run build -w kartseek-api` | 18 projects |
 | Full build | `NEXT_PUBLIC_API_URL`, `API_URL`, `NEXT_PUBLIC_WS_URL` set; `npm run build` | all workspaces |
 | Smoke | `npm run smoke` | 26/26 |
@@ -438,11 +458,15 @@ fixes, re-review of the fixes, fast-forward merge to `main`, branch deleted.
 
 One branch `chore/repo-hygiene` from `main`. Tasks in dependency order, one
 commit each unless noted: (1) branch and the disk cleanup with the preview
-pause; (2) tracked deletions; (3) moves, renames and ignores; (4) config
-hygiene and branches; (5) ESLint alignment and the shared Next config;
-(6) Jest preset and zone specs; (7) type-check with `next typegen`;
-(8) hooks, lint-staged, `.prettierignore`, clean scripts; (9) grocery URL
-fix; (10) API lint findings, in the order of §7; (11) marketplace-backend
-spec; (12) documentation; (13) gates; (14) review, fixes, merge. Tasks 9–11
-are independent of 5–8 and may be interleaved, but every commit leaves the
-gates it touched green.
+pause; (2) the dead libraries and tracked leftovers; (3) the catalogue
+scripts, Postman environments and audit dates; (4) the PascalCase renames;
+(5) ignores, `next typegen`, config hygiene and branches; (6) one ESLint and
+the shared Next config; (7) the grocery URL fix; (8) the Jest preset and
+per-workspace registry spec; (9) type-check with tests included; (10) hooks,
+lint-staged, `.prettierignore`, clean scripts and a root ESLint config for the
+repository's own scripts; (11) invoice tax lines from the region registry;
+(12) the remaining API lint findings and the marketplace-backend spec;
+(13) documentation; (14) gates; (15) review, fixes, merge. Tasks 7, 11 and 12
+are independent of 6, 8, 9 and 10 and may be interleaved, but every commit
+leaves the gates it touched green. The plan is
+`docs/superpowers/plans/2026-09-06-repo-hygiene.md`.
