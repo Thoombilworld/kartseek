@@ -141,6 +141,9 @@ export class MarketplaceOrderService {
       listingId: line.listingId,
       variantId: line.variantId ?? undefined,
       variantName: line.variantName ?? undefined,
+      // The live flash deal that set `price`, if one did: the reservation
+      // counts the units against that deal's allocation.
+      dealNominationId: line.dealNominationId ?? undefined,
     }));
     const subtotal: number = Number(pricing.subtotal) || 0;
 
@@ -155,6 +158,7 @@ export class MarketplaceOrderService {
         orderTotal: subtotal,
         paymentMethod: payload?.paymentMethod,
         productIds: items.map((i) => i.productId),
+        region,
       }).catch((): null => null);
 
       // An invalid coupon fails the order rather than silently dropping the

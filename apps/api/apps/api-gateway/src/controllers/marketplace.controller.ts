@@ -775,6 +775,7 @@ export class MarketplaceGatewayController {
   @Get('coupons')
   @ApiOperation({ summary: 'List coupons' })
   async getCoupons(
+    @Req() req: any,
     @Query('sellerId') sellerId?: string,
     @Query('isActive') isActive?: string,
     @Query('page', ParsePagePipe) page = 1,
@@ -785,6 +786,7 @@ export class MarketplaceGatewayController {
     // returned deactivated, expired and not-yet-started campaigns too, which
     // handed visitors the codes for launches that had not happened.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_COUPONS, {
+      region: this.region(req),
       sellerId,
       isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
       page: +page,
@@ -848,6 +850,7 @@ export class MarketplaceGatewayController {
       orderTotal: payload.cartTotal || payload.orderTotal || 0,
       paymentMethod: payload.paymentMethod,
       productIds: payload.productIds,
+      region: this.region(req),
     });
   }
 
@@ -1224,12 +1227,14 @@ export class MarketplaceGatewayController {
 
   @Get('flash-deals/active')
   @ApiOperation({ summary: 'Get active flash deals with countdown timers' })
-  async getFlashDealsActive() {
+  async getFlashDealsActive(@Req() req: any) {
     // Was GET_FEATURED_PRODUCTS, which answers with the featured list: no
     // `dealStartedAt`, no `dealEndsAt`, so every client rendering this route
     // had nothing to run a countdown from and showed a plain product grid
     // under a "Flash Deals" heading.
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_AVAILABLE_FLASH_DEALS);
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_AVAILABLE_FLASH_DEALS, {
+      country: this.region(req),
+    });
   }
 
   @Get('deals-of-the-day')

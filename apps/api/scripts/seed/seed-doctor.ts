@@ -407,16 +407,14 @@ async function seed() {
   console.log('👨‍⚕️ Seeding doctors...');
   const doctorEntities = doctorRepo.create(
     DOCTORS_DATA.map((d) => {
-      const hospitalId =
-        d.hospitalIndex !== undefined ? savedHospitals[d.hospitalIndex].id : undefined;
-      const clinicId =
-        (d as { clinicIndex?: number }).clinicIndex !== undefined
-          ? savedClinics[(d as { clinicIndex?: number }).clinicIndex].id
-          : undefined;
-      const hospital = hospitalId ? savedHospitals[d.hospitalIndex!] : undefined;
-      const clinic = clinicId
-        ? savedClinics[(d as { clinicIndex?: number }).clinicIndex]
-        : undefined;
+      // Narrow once: a cast repeated inside the index expression is re-typed as
+      // `number | undefined` each time, which `tsc` refuses as an index.
+      const hospitalIndex = d.hospitalIndex;
+      const clinicIndex = (d as { clinicIndex?: number }).clinicIndex;
+      const hospital = hospitalIndex !== undefined ? savedHospitals[hospitalIndex] : undefined;
+      const clinic = clinicIndex !== undefined ? savedClinics[clinicIndex] : undefined;
+      const hospitalId = hospital?.id;
+      const clinicId = clinic?.id;
       return {
         name: d.name,
         slug: slug(d.name),
