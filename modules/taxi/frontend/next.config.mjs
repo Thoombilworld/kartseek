@@ -20,6 +20,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Same i18n request config the shell and the marketplace zone load, so all
 // three resolve locale and messages identically. Literal path, not a tsconfig
 // alias — the plugin reads it at config-load time.
+// Every market outside the home market is refused by isActiveCountry() when
+// this is unset — RegionProvider then ignores the market the shell resolved and
+// the zone describes Qatar (currency, delivery copy, consent notice) to a
+// shopper in India. Loud rather than silent: the fallback renders a perfectly
+// healthy-looking page.
+if (!process.env.NEXT_PUBLIC_ACTIVE_REGIONS) {
+  console.warn(
+    '[taxi-frontend] NEXT_PUBLIC_ACTIVE_REGIONS is not set — only the home market will be active. Copy .env.example to .env.local.',
+  );
+}
+
 const withNextIntl = createNextIntlPlugin('../../../packages/shared-core/src/i18n/request.ts');
 
 const nextConfig = {
@@ -43,7 +54,7 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
-      { protocol: 'http',  hostname: 'localhost' },
+      { protocol: 'http', hostname: 'localhost' },
     ],
     minimumCacheTTL: 3600,
     deviceSizes: [360, 640, 750, 828, 1080, 1200, 1920],
