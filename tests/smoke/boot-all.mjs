@@ -29,6 +29,8 @@ const only = onlyArg ? onlyArg.slice('--only='.length).split(',').filter(Boolean
 const logDir = path.join(root, 'tests/smoke/logs');
 fs.mkdirSync(logDir, { recursive: true });
 
+const running = new Set();
+
 function launchSpec(s) {
   const core = s.kind !== 'module-service';
   const cwd = path.join(root, core ? 'apps/api' : s.path);
@@ -53,6 +55,7 @@ function launch(s) {
     windowsHide: true,
   });
   child.on('exit', () => fs.closeSync(log));
+  running.add(child);
   return child;
 }
 
@@ -73,7 +76,14 @@ async function probeOnce(s) {
       sock.destroy();
       resolve('ok (tcp)');
     });
-    sock.once('error', () => resolve(null));
+    sock.setTimeout(2000, () => {
+      sock.destroy();
+      resolve(null);
+    });
+    sock.once('error', () => {
+      sock.destroy();
+      resolve(null);
+    });
   });
 }
 
@@ -91,6 +101,7 @@ async function waitHealthy(s, child) {
 }
 
 function stop(child) {
+  running.delete(child);
   if (child.exitCode !== null) return;
   if (process.platform === 'win32') {
     try {
@@ -101,6 +112,13 @@ function stop(child) {
       child.kill('SIGTERM');
     } catch {}
   }
+}
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    for (const c of running) stop(c);
+    process.exit(130);
+  });
 }
 
 const entries = nestEntries(loadRegistry(root)).filter((s) => !only || only.includes(s.name));

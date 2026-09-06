@@ -55,12 +55,19 @@ export function checkTree(root, files) {
   return broken;
 }
 
+export function markdownPathspec(subtree) {
+  if (!subtree) return ['*.md', '**/*.md'];
+  const clean = subtree.replace(/\/+$/, '');
+  return [path.posix.join(clean, '*.md'), path.posix.join(clean, '**/*.md')];
+}
+
 function trackedMarkdown(root, subtree) {
-  const args = ['ls-files', '--', ...(subtree ? [subtree] : []), '*.md', '**/*.md'];
+  const args = ['ls-files', '--', ...markdownPathspec(subtree)];
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' })
     .split('\n')
     .filter(Boolean)
-    .filter((f) => !f.includes('node_modules/'));
+    .filter((f) => !f.includes('node_modules/'))
+    .filter((f) => f.endsWith('.md'));
 }
 
 const thisFile = path.resolve(fileURLToPath(import.meta.url));

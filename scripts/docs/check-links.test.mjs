@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { extractLinks, resolveTarget, checkTree } from './check-links.mjs';
+import { extractLinks, resolveTarget, checkTree, markdownPathspec } from './check-links.mjs';
 
 test('extractLinks finds inline links and skips URLs, anchors and mailto', () => {
   const md = [
@@ -35,4 +35,12 @@ test('checkTree reports every broken link with file and line', () => {
   fs.writeFileSync(path.join(root, 'index.md'), '[a](ok.md)\n\n[b](nope.md)\n');
   const broken = checkTree(root, ['index.md', 'ok.md']);
   assert.deepEqual(broken, [{ file: 'index.md', line: 3, target: 'nope.md' }]);
+});
+
+test('markdownPathspec scopes a subtree to its own *.md and **/*.md', () => {
+  assert.deepEqual(markdownPathspec('docs/'), ['docs/*.md', 'docs/**/*.md']);
+});
+
+test('markdownPathspec covers the whole repo when no subtree is given', () => {
+  assert.deepEqual(markdownPathspec(undefined), ['*.md', '**/*.md']);
 });
