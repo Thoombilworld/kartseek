@@ -788,4 +788,53 @@ describe('CatalogService', () => {
       expect(res.subtotal).toBe(10100);
     });
   });
+
+  describe('suspended sellers', () => {
+    const SP = '11111111-2222-4333-8444-555555555555';
+    it('refuses to price a line whose only listing belongs to a suspended seller', async () => {
+      productRepo.find.mockResolvedValue([
+        { id: SP, name: 'X', mrp: '10', is_active: true, approval_status: 'APPROVED' },
+      ]);
+      (service as any).listingRepo.find.mockResolvedValue([
+        {
+          id: 'L',
+          sellingPrice: '10',
+          stockQuantity: 5,
+          product: { id: SP },
+          seller: { id: 'S', verificationStatus: 'SUSPENDED', isActive: true },
+        },
+      ]);
+      variantRepo.find.mockResolvedValue([]);
+      const res = await service.priceOrderItems([{ productId: SP, quantity: 1 }]);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/seller/i);
+    });
+
+    it('prices from the next live listing when the buy box belongs to a suspended seller', async () => {
+      productRepo.find.mockResolvedValue([
+        { id: SP, name: 'X', mrp: '10', is_active: true, approval_status: 'APPROVED' },
+      ]);
+      (service as any).listingRepo.find.mockResolvedValue([
+        {
+          id: 'L1',
+          sellingPrice: '8',
+          stockQuantity: 5,
+          isBuyBoxWinner: true,
+          product: { id: SP },
+          seller: { id: 'S1', verificationStatus: 'SUSPENDED', isActive: true },
+        },
+        {
+          id: 'L2',
+          sellingPrice: '9',
+          stockQuantity: 5,
+          product: { id: SP },
+          seller: { id: 'S2', verificationStatus: 'VERIFIED', isActive: true },
+        },
+      ]);
+      variantRepo.find.mockResolvedValue([]);
+      const res = await service.priceOrderItems([{ productId: SP, quantity: 1 }]);
+      expect(res.ok).toBe(true);
+      expect(res.items[0]).toMatchObject({ unitPrice: 9, listingId: 'L2', sellerId: 'S2' });
+    });
+  });
 });

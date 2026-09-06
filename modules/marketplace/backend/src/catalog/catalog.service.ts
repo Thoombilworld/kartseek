@@ -218,7 +218,9 @@ export class CatalogService {
     EXISTS (
       SELECT 1 FROM ${this.tableOf(ProductListing)} pll
       JOIN ${this.tableOf(Seller)} sll ON sll.id = pll.seller_id
-      WHERE pll.product_id = p.id AND pll."isActive" = true AND pll."approvalStatus" = 'APPROVED' AND sll.region_code = :regionCode
+      WHERE pll.product_id = p.id AND pll."isActive" = true AND pll."approvalStatus" = 'APPROVED'
+        AND sll."isActive" = true AND sll."verificationStatus" <> 'SUSPENDED'
+        AND sll.region_code = :regionCode
     )
   )`;
   }
@@ -598,6 +600,11 @@ export class CatalogService {
       : [];
     const buyBox = new Map<string, ProductListing>();
     for (const listing of listings) {
+      // A suspended or deactivated seller keeps its rows but may not trade:
+      // the storefront hides them and checkout must not price them either.
+      const seller = (listing as any).seller;
+      if (seller && (seller.verificationStatus === 'SUSPENDED' || seller.isActive === false))
+        continue;
       // Ordered buy-box-first, so the first listing seen for a product wins.
       const pid = (listing as any).product?.id;
       if (pid && !buyBox.has(pid)) buyBox.set(pid, listing);
@@ -629,7 +636,7 @@ export class CatalogService {
       if (!product) return fail('Product not found');
       if (product.is_active === false) return fail('Product is not available');
       if (product.approval_status !== 'APPROVED') return fail('Product is not available');
-      if (!listing) return fail('Product has no active seller listing');
+      if (!listing) return fail('This seller is not accepting orders right now');
 
       const variantId = String(line?.variantId ?? '');
       const productVariants = variantsByProduct.get(productId) ?? [];
