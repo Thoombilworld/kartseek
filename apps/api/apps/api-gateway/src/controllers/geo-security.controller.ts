@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Body, Query, Req, UseGuards, Optional, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, UseGuards, Optional, Inject, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RedisService } from '@app/redis';
 import { JwtAuthGuard } from '@app/security';
 import { EntityManager } from 'typeorm';
 import { GeoSecurityEvent, GeoSecurityRule, GeoWhitelistedIp } from '../entities/geo-security.entities';
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface GeoCheckResult {
   ip: string;
@@ -35,7 +35,7 @@ interface LocationVerifyRequest {
   platform?: string;
 }
 
-// â”€â”€â”€ Known Datacenter / VPN IP Ranges (sample heuristic) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Known Datacenter / VPN IP Ranges (sample heuristic) ─────────────────────
 
 const DATACENTER_ASNS = new Set([
   'AS14061',  // DigitalOcean
@@ -58,11 +58,13 @@ const VPN_HOSTNAME_PATTERNS = [
   'tunnelbear', 'hotspotshield', 'hola-', 'zenmate', 'vyprvpn',
 ];
 
-// â”€â”€â”€ Controller â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Controller ──────────────────────────────────────────────────────────────
 
-@ApiTags('ðŸ›¡ï¸ Geo Security')
+@ApiTags('🛡️ Geo Security')
 @Controller('geo')
 export class GeoSecurityController {
+  private readonly logger = new Logger(GeoSecurityController.name);
+
   constructor(
     private readonly redis: RedisService,
     @Optional() @Inject(EntityManager) private readonly em: EntityManager | null,
@@ -72,7 +74,7 @@ export class GeoSecurityController {
     return process.env.SKIP_DB !== 'true' && this.em !== null;
   }
 
-  // â”€â”€â”€ PUBLIC: IP Geo Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── PUBLIC: IP Geo Check ─────────────────────────────────────────────────
 
   @Get('check')
   @ApiOperation({ summary: 'Check IP geolocation and VPN/proxy status' })
@@ -148,7 +150,7 @@ export class GeoSecurityController {
     return result;
   }
 
-  // â”€â”€â”€ PUBLIC: Verify Location (GPS vs IP) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── PUBLIC: Verify Location (GPS vs IP) ──────────────────────────────────
 
   @Post('verify-location')
   @ApiOperation({ summary: 'Compare GPS location with IP geolocation' })
@@ -190,7 +192,7 @@ export class GeoSecurityController {
     };
   }
 
-  // â”€â”€â”€ ADMIN: Security Events Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── ADMIN: Security Events Log ───────────────────────────────────────────
 
   @Get('admin/events')
   @UseGuards(JwtAuthGuard)
@@ -217,7 +219,9 @@ export class GeoSecurityController {
 
         const [events, total] = await qb.getManyAndCount();
         return { events, total, page: pageNum, pageSize };
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Reading geo-security events from the database failed; serving the recent events kept in Redis instead: ${String(err)}`);
+      }
     }
 
     // Fallback: return from Redis recent events
@@ -225,7 +229,7 @@ export class GeoSecurityController {
     return { events: events.slice(0, pageSize), total: events.length, page: 1, pageSize };
   }
 
-  // â”€â”€â”€ ADMIN: Get/Update Security Rules â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── ADMIN: Get/Update Security Rules ─────────────────────────────────────
 
   @Get('admin/rules')
   @UseGuards(JwtAuthGuard)
@@ -235,7 +239,9 @@ export class GeoSecurityController {
     if (this.isDb()) {
       try {
         return await this.em!.find(GeoSecurityRule, { where: { isActive: true } });
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Reading geo-security rules from the database failed; answering with the built-in default rules: ${String(err)}`);
+      }
     }
     return this.defaultRules;
   }
@@ -253,14 +259,18 @@ export class GeoSecurityController {
         } else {
           await this.em!.save(GeoSecurityRule, this.em!.create(GeoSecurityRule, { ...dto, isActive: true }));
         }
-      } catch {}
+      } catch (err) {
+        // A rule that did not persist must not be reported as saved.
+        this.logger.error(`Saving geo-security rule ${dto.ruleKey} failed: ${String(err)}`);
+        throw err;
+      }
     }
     // Invalidate cached policy
     await this.redis.del('geo:policy:global');
     return { success: true };
   }
 
-  // â”€â”€â”€ ADMIN: Whitelist Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── ADMIN: Whitelist Management ──────────────────────────────────────────
 
   @Get('admin/whitelist')
   @UseGuards(JwtAuthGuard)
@@ -270,7 +280,9 @@ export class GeoSecurityController {
     if (this.isDb()) {
       try {
         return await this.em!.find(GeoWhitelistedIp, { where: { isActive: true } });
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Reading the IP whitelist from the database failed; answering with the Redis whitelist instead: ${String(err)}`);
+      }
     }
     const ips = await this.redis.getJson<string[]>('geo:whitelist') || [];
     return ips.map(ip => ({ ip, reason: 'Redis whitelist' }));
@@ -286,13 +298,17 @@ export class GeoSecurityController {
         await this.em!.save(GeoWhitelistedIp, this.em!.create(GeoWhitelistedIp, {
           ip: dto.ip, reason: dto.reason, addedBy: req.user?.userId, isActive: true,
         }));
-      } catch {}
+      } catch (err) {
+        // A whitelist entry that did not persist must not be reported as added.
+        this.logger.error(`Saving whitelisted IP ${dto.ip} failed: ${String(err)}`);
+        throw err;
+      }
     }
     await this.redis.del(`geo:check:${dto.ip}`);
     return { success: true, message: `IP ${dto.ip} whitelisted.` };
   }
 
-  // â”€â”€â”€ ADMIN: Dashboard Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── ADMIN: Dashboard Stats ───────────────────────────────────────────────
 
   @Get('admin/stats')
   @UseGuards(JwtAuthGuard)
@@ -312,7 +328,7 @@ export class GeoSecurityController {
     };
   }
 
-  // â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
 
   private readonly defaultRules = [
     { ruleKey: 'vpn_policy', ruleValue: 'block', description: 'Action when VPN is detected: block | warn | allow' },
@@ -341,7 +357,9 @@ export class GeoSecurityController {
           await this.redis.set(`geo:wl:${ip}`, '1', 3600);
           return true;
         }
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Whitelist lookup for ${ip} failed in the database; treating the IP as not whitelisted: ${String(err)}`);
+      }
     }
     return false;
   }
@@ -376,7 +394,7 @@ export class GeoSecurityController {
       }
     } catch (e) {
       // Fallback: use Cloudflare headers if available
-      console.log(`[GeoSecurity] âš ï¸ IP lookup failed for ${ip}: ${e}`);
+      this.logger.warn(`IP lookup for ${ip} failed; using the Cloudflare geolocation headers if present: ${String(e)}`);
     }
 
     // Cache for 1 hour
@@ -447,7 +465,9 @@ export class GeoSecurityController {
           await this.redis.set(cacheKey, rule.ruleValue, 3600);
           return rule.ruleValue as any;
         }
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Reading the vpn_policy rule from the database failed; applying the default policy "block": ${String(err)}`);
+      }
     }
 
     await this.redis.set(cacheKey, 'block', 3600);
@@ -464,7 +484,9 @@ export class GeoSecurityController {
           where: { ruleKey: 'mismatch_threshold_km', isActive: true },
         });
         if (rule) return parseInt(rule.ruleValue) || 500;
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Reading the mismatch_threshold_km rule from the database failed; using the default 500 km: ${String(err)}`);
+      }
     }
     return 500;
   }
@@ -482,7 +504,10 @@ export class GeoSecurityController {
     if (this.isDb()) {
       try {
         await this.em!.save(GeoSecurityEvent, this.em!.create(GeoSecurityEvent, data));
-      } catch {}
+      } catch (err) {
+        // The event still reaches the Redis recent-events list below; only the durable copy is lost.
+        this.logger.error(`Persisting geo-security event ${data.eventType} for ${data.ip} failed: ${String(err)}`);
+      }
     }
 
     // Also keep in Redis recent events list (max 200)
@@ -492,7 +517,7 @@ export class GeoSecurityController {
     await this.redis.setJson('geo:events:recent', recent, 86400);
   }
 
-  /** Haversine formula â€” distance in km between two lat/lng points */
+  /** Haversine formula — distance in km between two lat/lng points */
   private haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;

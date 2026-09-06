@@ -57,7 +57,7 @@ const DEALS: FlashDeal[] = [
   { id: 'FD-004', name: 'Home & Kitchen Deals', products: 18, discount: 'Up to 60%', stockLimit: 300, sold: 156, revenue: 980000, orders: 156, views: 34500, start: '2026-06-21 00:00', end: '2026-06-21 12:00', status: 'active', priority: 3, createdBy: 'Admin', country: 'India' },
   { id: 'FD-005', name: 'Beauty Box Sale', products: 15, discount: '30% Off', stockLimit: 200, sold: 200, revenue: 540000, orders: 200, views: 45200, start: '2026-06-19 12:00', end: '2026-06-19 23:59', status: 'ended', priority: 4, createdBy: 'Admin', country: 'UAE' },
   { id: 'FD-006', name: 'Sports Gear Rush', products: 22, discount: 'Up to 55%', stockLimit: 400, sold: 0, revenue: 0, orders: 0, views: 0, start: '2026-06-23 08:00', end: '2026-06-23 20:00', status: 'scheduled', priority: 2, createdBy: 'Admin', country: 'India' },
-  { id: 'FD-007', name: 'Weekend Laptop Deals', products: 8, discount: 'Flat â‚¹8,000 Off', stockLimit: 100, sold: 42, revenue: 3360000, orders: 42, views: 28900, start: '2026-06-21 06:00', end: '2026-06-22 06:00', status: 'active', priority: 1, createdBy: 'Seller Nom.', country: 'India' },
+  { id: 'FD-007', name: 'Weekend Laptop Deals', products: 8, discount: 'Flat ₹8,000 Off', stockLimit: 100, sold: 42, revenue: 3360000, orders: 42, views: 28900, start: '2026-06-21 06:00', end: '2026-06-22 06:00', status: 'active', priority: 1, createdBy: 'Seller Nom.', country: 'India' },
   { id: 'FD-008', name: 'Toy Clearance', products: 30, discount: 'Up to 80%', stockLimit: 600, sold: 580, revenue: 290000, orders: 580, views: 67800, start: '2026-06-18 00:00', end: '2026-06-19 00:00', status: 'ended', priority: 5, createdBy: 'Admin', country: 'UAE' },
 ];
 
@@ -79,7 +79,7 @@ const HOURLY_DATA = [
   { hour: '3PM', sales: 112000 }, { hour: '4PM', sales: 145000 }, { hour: '5PM', sales: 167000 },
 ];
 
-// â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Styles ───────────────────────────────────────────────────────────────
 
 const DEAL_STATUS: Record<DealStatus, { bg: string; text: string; label: string }> = {
   active: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Active' },
@@ -133,7 +133,7 @@ export default function FlashDealsPage() {
   // Region filtering
   const { filtered: regionFilteredDeals, regionLabel, isFiltered: isRegionFiltered, formatCurrencyValue } = useMarketplaceRegionFilter(deals);
 
-  // â”€â”€ KPIs (region-aware) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── KPIs (region-aware) ─────────────────────────────────────────────
   const activeDeals = regionFilteredDeals.filter(d => d.status === 'active');
   const totalRevenue = regionFilteredDeals.reduce((s, d) => s + d.revenue, 0);
   const totalOrders = regionFilteredDeals.reduce((s, d) => s + d.orders, 0);
@@ -155,7 +155,7 @@ export default function FlashDealsPage() {
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
             <Zap className="w-6 h-6 text-red-500 fill-red-500" /> Flash Deals Command Center
           </h1>
-          <p className="text-sm text-slate-500 mt-1">{isRegionFiltered ? `${regionLabel} â€” ` : ''}Create, schedule, monitor flash deals and approve seller nominations</p>
+          <p className="text-sm text-slate-500 mt-1">{isRegionFiltered ? `${regionLabel} — ` : ''}Create, schedule, monitor flash deals and approve seller nominations</p>
         </div>
         <button onClick={() => setActiveTab('create')} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors">
           <Plus className="w-4 h-4" /> Create Flash Deal
@@ -202,7 +202,7 @@ export default function FlashDealsPage() {
         ))}
       </div>
 
-      {/* â”€â”€ TAB 1: Active & Scheduled Deals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── TAB 1: Active & Scheduled Deals ─────────────────────────────── */}
       {activeTab === 'deals' && (
         <div className="space-y-4">
           <div className="flex gap-3">
@@ -244,7 +244,7 @@ export default function FlashDealsPage() {
                       <tr key={deal.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-5 py-4">
                           <p className="font-bold text-slate-900">{deal.name}</p>
-                          <p className="text-xs text-slate-400">{deal.id} Â· {deal.createdBy}</p>
+                          <p className="text-xs text-slate-400">{deal.id} · {deal.createdBy}</p>
                         </td>
                         <td className="px-4 py-4 text-center font-bold text-slate-700">{deal.products}</td>
                         <td className="px-4 py-4 text-center">
@@ -287,7 +287,7 @@ export default function FlashDealsPage() {
         </div>
       )}
 
-      {/* â”€â”€ TAB 2: Create Flash Deal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── TAB 2: Create Flash Deal ─────────────────────────────────────── */}
       {activeTab === 'create' && (
         <div className="max-w-3xl">
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -305,9 +305,9 @@ export default function FlashDealsPage() {
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block" htmlFor="priority">Priority</label>
                   <select id="priority" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none bg-white" aria-label="Priority">
-                    <option value="1">ðŸ”´ High â€” Top placement</option>
-                    <option value="2">ðŸŸ¡ Medium â€” Standard</option>
-                    <option value="3">ðŸŸ¢ Low â€” Below others</option>
+                    <option value="1">🔴 High — Top placement</option>
+                    <option value="2">🟡 Medium — Standard</option>
+                    <option value="3">🟢 Low — Below others</option>
                   </select>
                 </div>
               </div>
@@ -344,7 +344,7 @@ export default function FlashDealsPage() {
                     <input id="value" type="number" placeholder="e.g. 50" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 mb-1 block" htmlFor="max-discount-cap">Max Discount Cap (â‚¹)</label>
+                    <label className="text-[10px] text-slate-400 mb-1 block" htmlFor="max-discount-cap">Max Discount Cap (₹)</label>
                     <input id="max-discount-cap" type="number" placeholder="e.g. 5000" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" />
                   </div>
                 </div>
@@ -418,7 +418,7 @@ export default function FlashDealsPage() {
         </div>
       )}
 
-      {/* â”€â”€ TAB 3: Seller Nominations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── TAB 3: Seller Nominations ────────────────────────────────────── */}
       {activeTab === 'nominations' && (
         <div className="space-y-4">
           {/* Pending Alert */}
@@ -452,7 +452,7 @@ export default function FlashDealsPage() {
                     <tr key={nom.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-5 py-4">
                         <p className="font-bold text-slate-900">{nom.product}</p>
-                        <p className="text-xs text-slate-400">{nom.id} Â· {nom.category}</p>
+                        <p className="text-xs text-slate-400">{nom.id} · {nom.category}</p>
                         {nom.note && <p className="text-[10px] text-slate-400 mt-1 italic">"{nom.note}"</p>}
                       </td>
                       <td className="px-4 py-4">
@@ -462,7 +462,7 @@ export default function FlashDealsPage() {
                           <span className="text-xs font-bold text-slate-600">{nom.sellerRating}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-right font-bold text-slate-900">â‚¹{nom.originalPrice.toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right font-bold text-slate-900">₹{nom.originalPrice.toLocaleString()}</td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-xs font-bold bg-red-50 text-red-700 px-2 py-1 rounded-lg">{nom.proposedDiscount}</span>
                       </td>
@@ -498,7 +498,7 @@ export default function FlashDealsPage() {
         </div>
       )}
 
-      {/* â”€â”€ TAB 4: Analytics Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── TAB 4: Analytics Dashboard ───────────────────────────────────── */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
           {/* Analytics KPIs */}
@@ -506,7 +506,7 @@ export default function FlashDealsPage() {
             {[
               { label: 'Avg Discount Given', value: '38%', change: '+5%', up: true, icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-50' },
               { label: 'Conversion Rate', value: '4.2%', change: '+0.8%', up: true, icon: Activity, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-              { label: 'Avg Order Value', value: 'â‚¹8,450', change: '-â‚¹320', up: false, icon: DollarSign, color: 'text-purple-500', bg: 'bg-purple-50' },
+              { label: 'Avg Order Value', value: '₹8,450', change: '-₹320', up: false, icon: DollarSign, color: 'text-purple-500', bg: 'bg-purple-50' },
               { label: 'Stock Depletion Rate', value: '72%', change: '+12%', up: true, icon: Package, color: 'text-red-500', bg: 'bg-red-50' },
             ].map(kpi => (
               <div key={kpi.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
@@ -534,7 +534,7 @@ export default function FlashDealsPage() {
                 const pct = (d.sales / max) * 100;
                 return (
                   <div key={d.hour} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-[9px] font-bold text-slate-500">â‚¹{(d.sales / 1000).toFixed(0)}K</span>
+                    <span className="text-[9px] font-bold text-slate-500">₹{(d.sales / 1000).toFixed(0)}K</span>
                     <div className="w-full bg-slate-100 rounded-t-md relative h-[140px]">
                       <div
                         className="absolute bottom-0 w-full bg-linear-to-t from-blue-600 to-blue-400 rounded-t-md transition-all h-[--bar-h]" 
@@ -583,7 +583,7 @@ export default function FlashDealsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 text-right font-black text-emerald-700">â‚¹{(deal.revenue / 100000).toFixed(1)}L</td>
+                        <td className="px-4 py-3.5 text-right font-black text-emerald-700">₹{(deal.revenue / 100000).toFixed(1)}L</td>
                         <td className="px-4 py-3.5 text-center font-bold text-slate-700">{deal.orders}</td>
                         <td className="px-4 py-3.5 text-center text-slate-600">{(deal.views / 1000).toFixed(1)}K</td>
                         <td className="px-4 py-3.5 min-w-[120px]">
@@ -604,14 +604,14 @@ export default function FlashDealsPage() {
         </div>
       )}
 
-      {/* â”€â”€ Reject Nomination Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Reject Nomination Modal ──────────────────────────────────────── */}
       {showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-lg font-black text-slate-900 mb-2">Reject Nomination</h3>
             <p className="text-sm text-slate-500 mb-4">Select a reason for rejecting this product nomination.</p>
             <select className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm mb-3 focus:outline-none" aria-label="Rejection reason">
-              <option>Discount too aggressive â€” may affect brand value</option>
+              <option>Discount too aggressive — may affect brand value</option>
               <option>Product quality concerns</option>
               <option>Seller rating below minimum threshold</option>
               <option>Insufficient stock allocation</option>

@@ -24,9 +24,9 @@ import { apiFetch } from '@/lib/api-fetch';
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
 const COUNTRY_TO_CODE: Record<string, string> = { India: 'IN', UAE: 'AE', UK: 'GB', Qatar: 'QA', 'Saudi Arabia': 'SA' };
 
-// â”€â”€ Build comprehensive product list from all customer homepage sections â”€â”€â”€â”€â”€â”€
+// ── Build comprehensive product list from all customer homepage sections ──────
 
-/** Deterministic hash from string â†’ number (avoids Math.random hydration mismatch) */
+/** Deterministic hash from string → number (avoids Math.random hydration mismatch) */
 function hashCode(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
@@ -174,7 +174,7 @@ export default function AllProductsPage() {
         }),
       });
     } catch {
-      // Silently handle â€” local state is already updated
+      // Silently handle — local state is already updated
     }
   };
 
@@ -190,11 +190,11 @@ export default function AllProductsPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900">All Products</h1>
-          <p className="text-slate-500 text-sm mt-1">{isRegionFiltered ? `${regionLabel} â€” ` : ''}Approve, publish, feature, or suspend marketplace products. Only approved + published products are visible to customers.</p>
+          <p className="text-slate-500 text-sm mt-1">{isRegionFiltered ? `${regionLabel} — ` : ''}Approve, publish, feature, or suspend marketplace products. Only approved + published products are visible to customers.</p>
         </div>
         <div className="flex gap-2">
           <Link href={AdminMarketplaceRoutes.productApprovals()} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors">
-            <AlertTriangle className="w-4 h-4" /> {counts.pending} Pending â†’
+            <AlertTriangle className="w-4 h-4" /> {counts.pending} Pending →
           </Link>
           <button className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold"><Download className="w-4 h-4" /> Export</button>
         </div>
@@ -259,8 +259,8 @@ export default function AllProductsPage() {
                 <tr key={p.id} className={`hover:bg-slate-50/50 transition-colors ${p.approval === 'rejected' ? 'opacity-60' : ''}`}>
                   <td className="px-5 py-3.5">
                     <p className="font-bold text-slate-900 line-clamp-1 max-w-[200px]">{p.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{p.id} Â· SKU: {p.sku}</p>
-                    <p className="text-xs text-slate-400">{p.images} images Â· {p.variants} variants</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{p.id} · SKU: {p.sku}</p>
+                    <p className="text-xs text-slate-400">{p.images} images · {p.variants} variants</p>
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="font-medium text-slate-800 text-xs">{p.seller}</p>
@@ -278,18 +278,18 @@ export default function AllProductsPage() {
                         </span>
                         {pReviews !== null && <span className="text-[9px] text-slate-400">{pReviews > 999 ? `${(pReviews / 1000).toFixed(1)}k` : pReviews}</span>}
                       </div>
-                    ) : <span className="text-[10px] text-slate-300">â€”</span>}
+                    ) : <span className="text-[10px] text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-3.5 text-right">
-                    <p className="font-bold text-slate-900">â‚¹{p.price.toLocaleString('en-IN')}</p>
-                    {p.mrp > p.price && <p className="text-[10px] text-slate-400 line-through">â‚¹{p.mrp.toLocaleString('en-IN')}</p>}
+                    <p className="font-bold text-slate-900">₹{p.price.toLocaleString('en-IN')}</p>
+                    {p.mrp > p.price && <p className="text-[10px] text-slate-400 line-through">₹{p.mrp.toLocaleString('en-IN')}</p>}
                   </td>
                   <td className="px-4 py-3.5 text-center">
                     {pDiscount > 0 ? (
                       <span className="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-100">
                         {pDiscount}% OFF
                       </span>
-                    ) : <span className="text-[10px] text-slate-300">â€”</span>}
+                    ) : <span className="text-[10px] text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-3.5 text-center">
                     {pDelivery ? (
@@ -297,7 +297,7 @@ export default function AllProductsPage() {
                         <Truck className="w-3 h-3 text-blue-500" />
                         <span className={`text-[10px] font-medium ${pDelivery === 'Tomorrow' ? 'text-blue-600' : 'text-slate-500'}`}>{pDelivery}</span>
                       </div>
-                    ) : <span className="text-[10px] text-slate-300">â€”</span>}
+                    ) : <span className="text-[10px] text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-3.5 text-right">
                     <span className={`font-bold text-sm ${p.stock < 20 ? 'text-red-600' : 'text-slate-800'}`}>{p.stock.toLocaleString('en-IN')}</span>
@@ -340,7 +340,7 @@ export default function AllProductsPage() {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-            <p className="text-xs text-slate-500">Showing {(page-1)*PAGE_SIZE+1}â€“{Math.min(page*PAGE_SIZE, filtered.length)} of {filtered.length} products</p>
+            <p className="text-xs text-slate-500">Showing {(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE, filtered.length)} of {filtered.length} products</p>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage(p => p-1)} disabled={page===1} className="p-1.5 rounded-lg hover:bg-slate-200 disabled:opacity-40" title="Previous page"><ChevronLeft className="w-4 h-4" /></button>
               <span className="text-xs font-bold">{page}/{totalPages}</span>
@@ -381,7 +381,7 @@ export default function AllProductsPage() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-base font-black text-slate-900">{viewProduct.name}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{viewProduct.id} Â· SKU: {viewProduct.sku}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{viewProduct.id} · SKU: {viewProduct.sku}</p>
                   <div className="flex items-center gap-2 mt-2">
                     <MarketplaceStatusBadge status={viewProduct.approval === 'correction' ? 'correction' : viewProduct.approval as any} />
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${viewProduct.visibility === 'published' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{viewProduct.visibility}</span>
@@ -393,9 +393,9 @@ export default function AllProductsPage() {
               <div className="bg-slate-50 rounded-xl p-4 space-y-3">
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pricing</h4>
                 <div className="grid grid-cols-3 gap-4">
-                  <div><p className="text-[10px] text-slate-400 uppercase font-bold">Price</p><p className="text-lg font-black text-slate-900">â‚¹{viewProduct.price.toLocaleString('en-IN')}</p></div>
-                  <div><p className="text-[10px] text-slate-400 uppercase font-bold">MRP</p><p className="text-lg font-bold text-slate-500 line-through">â‚¹{viewProduct.mrp.toLocaleString('en-IN')}</p></div>
-                  <div><p className="text-[10px] text-slate-400 uppercase font-bold">Discount</p>{viewProduct.discount > 0 ? <span className="inline-block mt-1 bg-red-50 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full border border-red-100">{viewProduct.discount}% OFF</span> : <p className="text-sm text-slate-400 mt-1">â€”</p>}</div>
+                  <div><p className="text-[10px] text-slate-400 uppercase font-bold">Price</p><p className="text-lg font-black text-slate-900">₹{viewProduct.price.toLocaleString('en-IN')}</p></div>
+                  <div><p className="text-[10px] text-slate-400 uppercase font-bold">MRP</p><p className="text-lg font-bold text-slate-500 line-through">₹{viewProduct.mrp.toLocaleString('en-IN')}</p></div>
+                  <div><p className="text-[10px] text-slate-400 uppercase font-bold">Discount</p>{viewProduct.discount > 0 ? <span className="inline-block mt-1 bg-red-50 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full border border-red-100">{viewProduct.discount}% OFF</span> : <p className="text-sm text-slate-400 mt-1">—</p>}</div>
                 </div>
               </div>
 
@@ -425,7 +425,7 @@ export default function AllProductsPage() {
                   <p className="text-[10px] text-slate-400 mt-0.5">Stock</p>
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3 text-center">
-                  {viewProduct.delivery ? <div className="flex items-center justify-center gap-1"><Truck className="w-3 h-3 text-blue-500" /><span className="text-xs font-medium text-slate-700">{viewProduct.delivery}</span></div> : <span className="text-xs text-slate-400">â€”</span>}
+                  {viewProduct.delivery ? <div className="flex items-center justify-center gap-1"><Truck className="w-3 h-3 text-blue-500" /><span className="text-xs font-medium text-slate-700">{viewProduct.delivery}</span></div> : <span className="text-xs text-slate-400">—</span>}
                   <p className="text-[10px] text-slate-400 mt-0.5">Delivery</p>
                 </div>
               </div>
@@ -434,15 +434,15 @@ export default function AllProductsPage() {
               <div className="bg-blue-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2"><Tag className="w-4 h-4 text-blue-600" /><h4 className="text-xs font-bold text-blue-700 uppercase tracking-wider">Tax Information</h4></div>
                 <div className="flex items-center gap-4">
-                  <div><p className="text-[10px] text-blue-500 uppercase font-bold">HSN Code</p><p className="font-mono text-lg font-black text-blue-800">{viewProduct.hsn || 'â€”'}</p></div>
-                  <div><p className="text-[10px] text-blue-500 uppercase font-bold">GST Rate</p><p className="text-lg font-black text-blue-800">{viewProduct.gst || 'â€”'}</p></div>
+                  <div><p className="text-[10px] text-blue-500 uppercase font-bold">HSN Code</p><p className="font-mono text-lg font-black text-blue-800">{viewProduct.hsn || '—'}</p></div>
+                  <div><p className="text-[10px] text-blue-500 uppercase font-bold">GST Rate</p><p className="text-lg font-black text-blue-800">{viewProduct.gst || '—'}</p></div>
                 </div>
               </div>
 
               {/* Meta */}
               <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 space-y-1">
                 <p><span className="font-bold">Created:</span> {viewProduct.created}</p>
-                <p><span className="font-bold">Images:</span> {viewProduct.images} Â· <span className="font-bold">Variants:</span> {viewProduct.variants}</p>
+                <p><span className="font-bold">Images:</span> {viewProduct.images} · <span className="font-bold">Variants:</span> {viewProduct.variants}</p>
                 {viewProduct.featured && <p className="text-amber-600 font-bold">â­ Featured Product</p>}
               </div>
 

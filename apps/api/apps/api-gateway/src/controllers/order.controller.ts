@@ -305,7 +305,7 @@ export class OrderController {
     summary: 'Update order status (Seller)',
     description:
       'Allows a seller to move an order through its lifecycle: ' +
-      'ACCEPTED â†’ PREPARING â†’ READY â†’ HANDED_OVER.',
+      'ACCEPTED → PREPARING → READY → HANDED_OVER.',
   })
   @ApiParam({ name: 'id', example: 'ORD-1685451234-4291', description: 'Order ID' })
   @ApiBody({ type: UpdateOrderStatusDto })
@@ -316,7 +316,7 @@ export class OrderController {
     return { success: true, message: `Order #${id} status updated to ${dto.status}` };
   }
 
-  // â”€â”€ Driver / Delivery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Driver / Delivery ────────────────────────────────────────────────────────
 
   @Put(':id/delivery-status')
   @Roles(UserRole.DRIVER)
@@ -324,7 +324,7 @@ export class OrderController {
     summary: 'Update delivery status (Driver)',
     description:
       'Allows a delivery partner to update pickup/delivery milestones: ' +
-      'PICKED_UP â†’ ON_THE_WAY â†’ DELIVERED.',
+      'PICKED_UP → ON_THE_WAY → DELIVERED.',
   })
   @ApiParam({ name: 'id', example: 'ORD-1685451234-4291', description: 'Order ID' })
   @ApiBody({

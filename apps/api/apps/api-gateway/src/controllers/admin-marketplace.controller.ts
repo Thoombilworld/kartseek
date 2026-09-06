@@ -194,7 +194,7 @@ export class AdminMarketplaceController {
     }
   }
 
-  // â”€â”€ Sellers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Sellers ────────────────────────────────────────────────────────────────
   @Get('sellers')
   @ApiOperation({ summary: 'List all sellers with filters' })
   @ApiQuery({ name: 'page', required: false })
@@ -300,7 +300,7 @@ export class AdminMarketplaceController {
     }
   }
 
-  // â”€â”€ Products â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Products ───────────────────────────────────────────────────────────────
   @Get('products')
   @ApiOperation({ summary: 'List all products across sellers' })
   async getProducts(@Query('page', ParsePagePipe) page = 1, @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE, @Query('status') status?: string) {
@@ -443,7 +443,7 @@ export class AdminMarketplaceController {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UNFEATURE_PRODUCT, { id });
   }
 
-  // â”€â”€ Categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Categories ─────────────────────────────────────────────────────────────
   @Get('categories')
   @ApiOperation({ summary: 'List admin-managed categories' })
   async getCategories() {
@@ -556,7 +556,7 @@ export class AdminMarketplaceController {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_ATTRIBUTE, { id });
   }
 
-  // â”€â”€ Brands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Brands ─────────────────────────────────────────────────────────────────
   @Get('brands')
   @ApiOperation({ summary: 'List brands' })
   async getBrands() {
@@ -628,7 +628,7 @@ export class AdminMarketplaceController {
     { id, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
   }
 
-  // â”€â”€ Campaigns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Campaigns ──────────────────────────────────────────────────────────────
   @Get('campaigns')
   @ApiOperation({ summary: 'List marketing campaigns' })
   async getCampaigns() {
@@ -686,7 +686,7 @@ export class AdminMarketplaceController {
     return this.campaignStatus(id, 'ACTIVE', req);
   }
 
-  // â”€â”€ Orders / Returns / Refunds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Orders / Returns / Refunds ─────────────────────────────────────────────
   @Get('orders')
   @ApiOperation({ summary: 'List all marketplace orders (admin view)' })
   async getOrders(@Query('page', ParsePagePipe) page = 1) {
@@ -779,7 +779,7 @@ export class AdminMarketplaceController {
     });
   }
 
-  // â”€â”€ Finance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Finance ────────────────────────────────────────────────────────────────
   /**
    * Platform commission earnings.
    *
@@ -910,7 +910,7 @@ export class AdminMarketplaceController {
     return result;
   }
 
-  // â”€â”€ Reports / Audit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Reports / Audit ────────────────────────────────────────────────────────
   @Get('reports')
   @ApiOperation({ summary: 'Get marketplace reports' })
   async getReports() {
@@ -923,7 +923,7 @@ export class AdminMarketplaceController {
     return { data: [] as unknown[], total: 0 };
   }
 
-  // â”€â”€ Banner Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Banner Management ─────────────────────────────────────────────────────
   /**
    * Every region whose home feed caches banners, plus the unscoped feed.
    *
@@ -1020,7 +1020,7 @@ export class AdminMarketplaceController {
     return { data: { success: true, id } };
   }
 
-  // â”€â”€ Home Cache Invalidation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Home Cache Invalidation ───────────────────────────────────────────────
   @Post('invalidate-home-cache')
   @ApiOperation({ summary: 'Force invalidate marketplace home cache for all regions' })
   async invalidateHomeCache() {

@@ -31,7 +31,7 @@ import { useMarketplaceRegionFilter } from '@/hooks/useMarketplaceRegionFilter';
 import { adminMarketplaceApi } from '@/lib/modules/admin-marketplace-api';
 import { useAdminData, useAdminAction, AdminToast, AdminLoadingSkeleton, AdminErrorBanner } from '@/hooks/useAdminData';
 
-// â”€â”€ Pages available for editing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Pages available for editing ──────────────────────────────────────────
 
 const PAGES = [
   { id: 'homepage', label: 'Homepage', icon: LayoutTemplate },
@@ -40,7 +40,7 @@ const PAGES = [
   { id: 'checkout', label: 'Checkout', icon: ShoppingBag },
 ];
 
-// â”€â”€ Default sections for Marketplace Homepage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Default sections for Marketplace Homepage ────────────────────────────
 
 const DEFAULT_HOMEPAGE_SECTIONS = [
   { id: 'sec-hero', type: 'hero_slider', title: 'Hero Banner Slider', visible: true, banners: [
@@ -52,10 +52,10 @@ const DEFAULT_HOMEPAGE_SECTIONS = [
   { id: 'sec-categories', type: 'category_grid', title: 'Shop by Category', subtitle: 'Explore 20+ categories', viewAllHref: '/marketplace/category-list', visible: true },
   { id: 'sec-flash', type: 'flash_deals', title: 'Flash Deals', viewAllHref: '/marketplace/offers', visible: true },
   { id: 'sec-electronics', type: 'product_section', title: 'Best of Electronics', subtitle: 'Top-rated tech products', categoryKey: 'electronics', viewAllHref: '/marketplace/category/electronics', iconName: 'Laptop', showBrandCards: true, brandCategory: 'electronics', visible: true },
-  { id: 'sec-campaign1', type: 'campaign_banner', title: 'Summer Sale', tag: 'SUMMER SALE', headline: 'Beat the Heat', subheadline: 'ACs, Coolers, Summer Wear â€” Up to 60% Off', cta: 'Shop Summer', ctaHref: '/marketplace/offers', gradient: 'from-orange-500 via-amber-500 to-yellow-500', icon: 'Sun', visible: true },
+  { id: 'sec-campaign1', type: 'campaign_banner', title: 'Summer Sale', tag: 'SUMMER SALE', headline: 'Beat the Heat', subheadline: 'ACs, Coolers, Summer Wear — Up to 60% Off', cta: 'Shop Summer', ctaHref: '/marketplace/offers', gradient: 'from-orange-500 via-amber-500 to-yellow-500', icon: 'Sun', visible: true },
   { id: 'sec-fashion', type: 'product_section', title: 'Fashion Store', subtitle: 'Latest trends & styles', categoryKey: 'fashion', viewAllHref: '/marketplace/category/fashion', iconName: 'Shirt', showBrandCards: true, brandCategory: 'fashion', visible: true },
   { id: 'sec-home', type: 'product_section', title: 'Home & Kitchen', subtitle: 'Everything for your home', categoryKey: 'home-kitchen', viewAllHref: '/marketplace/category/home-kitchen', iconName: 'Sofa', showBrandCards: true, brandCategory: 'home', visible: true },
-  { id: 'sec-campaign2', type: 'campaign_banner', title: 'Back to School', tag: 'BACK TO SCHOOL', headline: 'Gear Up for Success', subheadline: 'Stationery, Bags, Laptops â€” Starting â‚¹99', cta: 'Shop Now', ctaHref: '/marketplace/category/books-stationery', gradient: 'from-purple-600 via-violet-600 to-indigo-600', icon: 'GraduationCap', visible: true },
+  { id: 'sec-campaign2', type: 'campaign_banner', title: 'Back to School', tag: 'BACK TO SCHOOL', headline: 'Gear Up for Success', subheadline: 'Stationery, Bags, Laptops — Starting ₹99', cta: 'Shop Now', ctaHref: '/marketplace/category/books-stationery', gradient: 'from-purple-600 via-violet-600 to-indigo-600', icon: 'GraduationCap', visible: true },
   { id: 'sec-beauty', type: 'product_section', title: 'Beauty & Personal Care', subtitle: 'Skincare, makeup & grooming', categoryKey: 'beauty', viewAllHref: '/marketplace/category/beauty', iconName: 'Sparkles', showBrandCards: true, brandCategory: 'beauty', visible: true },
   { id: 'sec-sports', type: 'product_section', title: 'Sports & Fitness', subtitle: 'Gear up for performance', categoryKey: 'sports', viewAllHref: '/marketplace/category/sports', iconName: 'Dumbbell', showBrandCards: true, brandCategory: 'sports', visible: true },
   { id: 'sec-toys', type: 'product_section', title: 'Toys & Baby Products', subtitle: 'Fun for all ages', categoryKey: 'toys-baby', viewAllHref: '/marketplace/category/toys-baby', iconName: 'Baby', showBrandCards: true, brandCategory: 'toys', visible: true },
@@ -74,10 +74,10 @@ const DEFAULT_HOMEPAGE_SECTIONS = [
     { q: 'Are all products genuine?', a: 'Yes. Every seller on KARTSEEK is verified, and we guarantee 100% authentic products.' },
     { q: 'How do I become a seller?', a: 'Visit our Seller Portal to register. Our team will review your application within 24-48 hours.' },
   ]},
-  { id: 'sec-seo', type: 'seo_footer', title: 'KARTSEEK Marketplace â€” Shop Online', visible: true, description: 'KARTSEEK Marketplace is your one-stop online shopping destination. Shop electronics, fashion, home & kitchen, beauty, sports, toys and more from verified sellers with fast delivery and secure payment.', tags: ['Online Shopping', 'Electronics', 'Fashion', 'Home & Kitchen', 'Beauty', 'Sports', 'Free Delivery', 'Genuine Products'] },
+  { id: 'sec-seo', type: 'seo_footer', title: 'KARTSEEK Marketplace — Shop Online', visible: true, description: 'KARTSEEK Marketplace is your one-stop online shopping destination. Shop electronics, fashion, home & kitchen, beauty, sports, toys and more from verified sellers with fast delivery and secure payment.', tags: ['Online Shopping', 'Electronics', 'Fashion', 'Home & Kitchen', 'Beauty', 'Sports', 'Free Delivery', 'Genuine Products'] },
 ];
 
-// â”€â”€ Sortable Section Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Sortable Section Row ─────────────────────────────────────────────────
 
 function SortableRow({ id, section, onEdit, onDelete, onToggle }: {
   id: string; section: any; onEdit: () => void; onDelete: () => void; onToggle: () => void;
@@ -123,7 +123,7 @@ function SortableRow({ id, section, onEdit, onDelete, onToggle }: {
 
       <div className="flex-1 min-w-0">
         <h3 className="font-bold text-slate-800 text-xs truncate">{section.title}</h3>
-        <p className="text-[10px] text-slate-400 capitalize">{section.type?.replace(/_/g, ' ')}{section.categoryKey ? ` Â· ${section.categoryKey}` : ''}</p>
+        <p className="text-[10px] text-slate-400 capitalize">{section.type?.replace(/_/g, ' ')}{section.categoryKey ? ` · ${section.categoryKey}` : ''}</p>
       </div>
 
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -141,7 +141,7 @@ function SortableRow({ id, section, onEdit, onDelete, onToggle }: {
   );
 }
 
-// â”€â”€ Phone Preview Colors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Phone Preview Colors ─────────────────────────────────────────────────
 
 const PREVIEW_COLORS: Record<string, string> = {
   hero_slider: 'bg-indigo-100 border-indigo-200 text-indigo-500',
@@ -174,7 +174,7 @@ const PREVIEW_HEIGHTS: Record<string, string> = {
 };
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// MARKETPLACE PAGE BUILDER â€” MAIN PAGE
+// MARKETPLACE PAGE BUILDER — MAIN PAGE
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 export default function MarketplacePageBuilder() {
@@ -275,7 +275,7 @@ export default function MarketplacePageBuilder() {
       {/* Main Layout: Sidebar + Canvas + Preview */}
       <div className="flex gap-5 items-start">
 
-        {/* â”€â”€ Left Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Left Sidebar ────────────────────────────────────────────── */}
         <div className="w-56 shrink-0 space-y-5">
           {/* Page Selector */}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -349,7 +349,7 @@ export default function MarketplacePageBuilder() {
           </div>
         </div>
 
-        {/* â”€â”€ Center Canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Center Canvas ───────────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
           <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 min-h-[700px] relative">
             {/* Canvas Header */}
@@ -360,9 +360,9 @@ export default function MarketplacePageBuilder() {
                 </div>
                 <div>
                   <h2 className="font-bold text-slate-900 text-sm">
-                    {PAGES.find(p => p.id === selectedPage)?.label || 'Homepage'} â€” {platform === 'web' ? 'Website' : 'Mobile App'}
+                    {PAGES.find(p => p.id === selectedPage)?.label || 'Homepage'} — {platform === 'web' ? 'Website' : 'Mobile App'}
                   </h2>
-                  <p className="text-[10px] text-slate-500">{sections.length} sections Â· Drag to reorder</p>
+                  <p className="text-[10px] text-slate-500">{sections.length} sections · Drag to reorder</p>
                 </div>
               </div>
               <button onClick={() => setShowTypeMenu(true)} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold" title="Add Section">
@@ -407,7 +407,7 @@ export default function MarketplacePageBuilder() {
           </div>
         </div>
 
-        {/* â”€â”€ Right Preview (Phone Mockup) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Right Preview (Phone Mockup) ─────────────────────────────── */}
         <div className="hidden xl:block w-[280px] shrink-0">
           <div className="sticky top-20">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Live Preview</label>
@@ -431,7 +431,7 @@ export default function MarketplacePageBuilder() {
                     key={s.id}
                     className={`rounded-lg w-full flex items-center justify-center font-bold text-[9px] border-2 px-2 text-center ${PREVIEW_HEIGHTS[s.type] || 'h-[40px]'} ${PREVIEW_COLORS[s.type] || 'bg-slate-50 border-slate-200 text-slate-400'}`}
                   >
-                    {s.title.length > 20 ? s.title.substring(0, 18) + 'â€¦' : s.title}
+                    {s.title.length > 20 ? s.title.substring(0, 18) + '…' : s.title}
                   </div>
                 ))}
               </div>

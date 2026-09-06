@@ -12,7 +12,7 @@ import { adminMarketplaceApi } from '@/lib/modules/admin-marketplace-api';
 import { useAdminData, useAdminAction, AdminToast, AdminLoadingSkeleton, AdminErrorBanner } from '@/hooks/useAdminData';
 
 
-// â”€â”€ Demo Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Demo Data ──────────────────────────────────────────────────────────────
 
 const REVENUE_DATA = [
   { month: 'Jan', revenue: 42, orders: 8420, gmv: 68 },
@@ -24,47 +24,47 @@ const REVENUE_DATA = [
 ];
 
 const TOP_SELLERS = [
-  { name: 'Apple India Store', revenue: 'â‚¹8.2Cr', orders: 4200, growth: 12.5, rating: 4.9 },
-  { name: 'Samsung Official', revenue: 'â‚¹5.8Cr', orders: 3100, growth: 8.3, rating: 4.7 },
-  { name: 'Nike India', revenue: 'â‚¹3.4Cr', orders: 5600, growth: 22.1, rating: 4.8 },
-  { name: 'Lakme Beauty', revenue: 'â‚¹2.1Cr', orders: 8400, growth: 15.7, rating: 4.6 },
-  { name: 'Lenovo India', revenue: 'â‚¹1.9Cr', orders: 2800, growth: -3.2, rating: 4.5 },
+  { name: 'Apple India Store', revenue: '₹8.2Cr', orders: 4200, growth: 12.5, rating: 4.9 },
+  { name: 'Samsung Official', revenue: '₹5.8Cr', orders: 3100, growth: 8.3, rating: 4.7 },
+  { name: 'Nike India', revenue: '₹3.4Cr', orders: 5600, growth: 22.1, rating: 4.8 },
+  { name: 'Lakme Beauty', revenue: '₹2.1Cr', orders: 8400, growth: 15.7, rating: 4.6 },
+  { name: 'Lenovo India', revenue: '₹1.9Cr', orders: 2800, growth: -3.2, rating: 4.5 },
 ];
 
 const TOP_CATEGORIES = [
-  { name: 'Mobiles & Tablets', revenue: 'â‚¹12.4Cr', orders: 18200, share: 28, growth: 15.2 },
-  { name: 'Electronics', revenue: 'â‚¹8.6Cr', orders: 12400, share: 19, growth: 8.1 },
-  { name: 'Fashion', revenue: 'â‚¹6.2Cr', orders: 24600, share: 14, growth: 22.5 },
-  { name: 'Beauty & Personal Care', revenue: 'â‚¹4.8Cr', orders: 16800, share: 11, growth: 18.3 },
-  { name: 'Home & Kitchen', revenue: 'â‚¹3.9Cr', orders: 9200, share: 9, growth: 5.7 },
-  { name: 'Appliances', revenue: 'â‚¹2.8Cr', orders: 4100, share: 6, growth: -1.2 },
-  { name: 'Furniture', revenue: 'â‚¹2.1Cr', orders: 3200, share: 5, growth: 12.4 },
-  { name: 'Others', revenue: 'â‚¹3.6Cr', orders: 11500, share: 8, growth: 9.8 },
+  { name: 'Mobiles & Tablets', revenue: '₹12.4Cr', orders: 18200, share: 28, growth: 15.2 },
+  { name: 'Electronics', revenue: '₹8.6Cr', orders: 12400, share: 19, growth: 8.1 },
+  { name: 'Fashion', revenue: '₹6.2Cr', orders: 24600, share: 14, growth: 22.5 },
+  { name: 'Beauty & Personal Care', revenue: '₹4.8Cr', orders: 16800, share: 11, growth: 18.3 },
+  { name: 'Home & Kitchen', revenue: '₹3.9Cr', orders: 9200, share: 9, growth: 5.7 },
+  { name: 'Appliances', revenue: '₹2.8Cr', orders: 4100, share: 6, growth: -1.2 },
+  { name: 'Furniture', revenue: '₹2.1Cr', orders: 3200, share: 5, growth: 12.4 },
+  { name: 'Others', revenue: '₹3.6Cr', orders: 11500, share: 8, growth: 9.8 },
 ];
 
 const COUNTRY_DATA = [
-  { country: 'India', code: 'IN', flag: 'ðŸ‡®ðŸ‡³', revenue: 'â‚¹28.4Cr', orders: 68400, sellers: 1840, growth: 18.2 },
-  { country: 'UAE', code: 'AE', flag: 'ðŸ‡¦ðŸ‡ª', revenue: 'AED 12.1M', orders: 22100, sellers: 620, growth: 24.5 },
-  { country: 'Saudi Arabia', code: 'SA', flag: 'ðŸ‡¸ðŸ‡¦', revenue: 'SAR 8.4M', orders: 15200, sellers: 380, growth: 31.2 },
-  { country: 'United Kingdom', code: 'GB', flag: 'ðŸ‡¬ðŸ‡§', revenue: 'Â£4.2M', orders: 9800, sellers: 290, growth: 12.8 },
-  { country: 'Qatar', code: 'QA', flag: 'ðŸ‡¶ðŸ‡¦', revenue: 'QAR 3.8M', orders: 5100, sellers: 110, growth: 42.1 },
+  { country: 'India', code: 'IN', flag: '🇮🇳', revenue: '₹28.4Cr', orders: 68400, sellers: 1840, growth: 18.2 },
+  { country: 'UAE', code: 'AE', flag: '🇦🇪', revenue: 'AED 12.1M', orders: 22100, sellers: 620, growth: 24.5 },
+  { country: 'Saudi Arabia', code: 'SA', flag: '🇸🇦', revenue: 'SAR 8.4M', orders: 15200, sellers: 380, growth: 31.2 },
+  { country: 'United Kingdom', code: 'GB', flag: '🇬🇧', revenue: '£4.2M', orders: 9800, sellers: 290, growth: 12.8 },
+  { country: 'Qatar', code: 'QA', flag: '🇶🇦', revenue: 'QAR 3.8M', orders: 5100, sellers: 110, growth: 42.1 },
 ];
 
 const TAX_SUMMARY = [
-  { type: 'GST (India)', collected: 'â‚¹4.28Cr', pending: 'â‚¹1.2Cr', filed: 'Q1 2026', status: 'filed' },
+  { type: 'GST (India)', collected: '₹4.28Cr', pending: '₹1.2Cr', filed: 'Q1 2026', status: 'filed' },
   { type: 'VAT (UAE)', collected: 'AED 604K', pending: 'AED 180K', filed: 'May 2026', status: 'filed' },
   { type: 'VAT (SA)', collected: 'SAR 1.26M', pending: 'SAR 420K', filed: 'Q1 2026', status: 'pending' },
-  { type: 'VAT (UK)', collected: 'Â£840K', pending: 'Â£210K', filed: 'Q1 2026', status: 'filed' },
+  { type: 'VAT (UK)', collected: '£840K', pending: '£210K', filed: 'Q1 2026', status: 'filed' },
 ];
 
 const CAMPAIGNS = [
-  { name: 'Summer Sale 2026', impressions: '2.4M', clicks: '180K', revenue: 'â‚¹4.8Cr', roas: 8.2, status: 'active' },
-  { name: 'Flash Friday', impressions: '1.1M', clicks: '92K', revenue: 'â‚¹2.1Cr', roas: 6.5, status: 'completed' },
-  { name: 'New User Coupon', impressions: '800K', clicks: '45K', revenue: 'â‚¹89L', roas: 4.8, status: 'active' },
-  { name: 'Festive Bonanza', impressions: '3.2M', clicks: '240K', revenue: 'â‚¹6.2Cr', roas: 9.1, status: 'completed' },
+  { name: 'Summer Sale 2026', impressions: '2.4M', clicks: '180K', revenue: '₹4.8Cr', roas: 8.2, status: 'active' },
+  { name: 'Flash Friday', impressions: '1.1M', clicks: '92K', revenue: '₹2.1Cr', roas: 6.5, status: 'completed' },
+  { name: 'New User Coupon', impressions: '800K', clicks: '45K', revenue: '₹89L', roas: 4.8, status: 'active' },
+  { name: 'Festive Bonanza', impressions: '3.2M', clicks: '240K', revenue: '₹6.2Cr', roas: 9.1, status: 'completed' },
 ];
 
-// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const { regionLabel, isFiltered } = useMarketplaceRegionFilter([]);
@@ -92,7 +92,7 @@ export default function ReportsPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Marketplace Reports</h1>
-          <p className="text-slate-500 text-sm mt-1">{isFiltered ? `${regionLabel} â€” ` : ""}Revenue, seller growth, category, tax, and campaign performance reports.</p>
+          <p className="text-slate-500 text-sm mt-1">{isFiltered ? `${regionLabel} — ` : ""}Revenue, seller growth, category, tax, and campaign performance reports.</p>
         </div>
         <div className="flex items-center gap-3">
           <select value={period} onChange={e => setPeriod(e.target.value)} className="bg-white border border-slate-200 text-sm px-4 py-2.5 rounded-xl outline-none" aria-label="Time period">
@@ -110,10 +110,10 @@ export default function ReportsPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Revenue', value: 'â‚¹44.4Cr', change: '+18.2%', up: true, icon: DollarSign, color: 'text-emerald-500' },
+          { label: 'Total Revenue', value: '₹44.4Cr', change: '+18.2%', up: true, icon: DollarSign, color: 'text-emerald-500' },
           { label: 'Total Orders', value: '120.8K', change: '+12.5%', up: true, icon: ShoppingCart, color: 'text-blue-500' },
           { label: 'Active Sellers', value: '3,240', change: '+8.7%', up: true, icon: Store, color: 'text-purple-500' },
-          { label: 'Avg Order Value', value: 'â‚¹3,678', change: '-2.1%', up: false, icon: TrendingUp, color: 'text-amber-500' },
+          { label: 'Avg Order Value', value: '₹3,678', change: '-2.1%', up: false, icon: TrendingUp, color: 'text-amber-500' },
         ].map(kpi => (
           <div key={kpi.label} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
@@ -145,18 +145,18 @@ export default function ReportsPage() {
           <div>
             <div className="p-5 border-b border-slate-100">
               <h3 className="font-bold text-slate-900">Monthly Revenue & GMV Trend</h3>
-              <p className="text-xs text-slate-500 mt-1">Revenue in â‚¹ Lakhs | GMV includes pre-discount values</p>
+              <p className="text-xs text-slate-500 mt-1">Revenue in ₹ Lakhs | GMV includes pre-discount values</p>
             </div>
             <div className="p-5">
               <div className="grid grid-cols-6 gap-3 mb-6">
                 {REVENUE_DATA.map(d => (
                   <div key={d.month} className="text-center">
                     <div className="flex items-end justify-center gap-1 h-32 mb-2">
-                      <div className="w-5 bg-blue-500 rounded-t" style={{ height: `${(d.revenue / 80) * 100}%` }} title={`Revenue: â‚¹${d.revenue}L`} />
-                      <div className="w-5 bg-blue-200 rounded-t" style={{ height: `${(d.gmv / 120) * 100}%` }} title={`GMV: â‚¹${d.gmv}L`} />
+                      <div className="w-5 bg-blue-500 rounded-t" style={{ height: `${(d.revenue / 80) * 100}%` }} title={`Revenue: ₹${d.revenue}L`} />
+                      <div className="w-5 bg-blue-200 rounded-t" style={{ height: `${(d.gmv / 120) * 100}%` }} title={`GMV: ₹${d.gmv}L`} />
                     </div>
                     <p className="text-xs font-bold text-slate-600">{d.month}</p>
-                    <p className="text-[10px] text-slate-400">â‚¹{d.revenue}L</p>
+                    <p className="text-[10px] text-slate-400">₹{d.revenue}L</p>
                   </div>
                 ))}
               </div>

@@ -197,7 +197,7 @@ export class CommissionService {
     let referralRate: number;
     let closingFee = 0;
     let minCommission = 1;
-    let tier = 'category-rate';
+    let tier: string;
 
     if (sellerOverride) {
       // Seller has a custom negotiated rate

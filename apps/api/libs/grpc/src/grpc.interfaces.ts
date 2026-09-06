@@ -8,7 +8,7 @@ import { type Observable } from 'rxjs';
 // ── Shared ────────────────────────────────────────────────────────────────────
 
 export interface StatusResponse  { success: boolean; message: string; }
-export interface EmptyRequest    {}
+export type EmptyRequest = Record<string, never>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH

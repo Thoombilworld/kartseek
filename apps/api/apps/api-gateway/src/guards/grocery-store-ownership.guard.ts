@@ -98,7 +98,7 @@ export class GroceryStoreOwnershipGuard implements CanActivate {
       // Cache miss or Redis down — fall through to the authoritative lookup.
     }
 
-    let ownerId: string | null = null;
+    let ownerId: string | null;
     try {
       const res = await firstValueFrom(
         this.groceryClient

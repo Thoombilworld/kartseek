@@ -3,14 +3,14 @@ import React, { useState } from 'react';
 import { Tag, Clock, Copy, Check, Gift, Truck, Percent, Flame } from 'lucide-react';
 
 const OFFERS = [
-  { id:'o1', title:'25% OFF on First Order', code:'FIRST25', type:'percentage', value:25, minOrder:299, maxDiscount:200, expiresIn:'3 days', uses:1245, gradient:'from-violet-600 to-purple-500', icon:'ðŸŽ‰' },
-  { id:'o2', title:'Free Delivery on â‚¹500+', code:'FREEDEL', type:'free_delivery', value:0, minOrder:500, maxDiscount:null, expiresIn:'5 days', uses:3200, gradient:'from-blue-600 to-cyan-500', icon:'ðŸšš' },
-  { id:'o3', title:'Flat â‚¹100 OFF on Rx Orders', code:'RX100', type:'flat', value:100, minOrder:499, maxDiscount:100, expiresIn:'7 days', uses:890, gradient:'from-emerald-600 to-green-500', icon:'ðŸ’Š' },
-  { id:'o4', title:'Buy 2 Get 1 FREE â€” Vitamins', code:'VIT321', type:'bogo', value:0, minOrder:0, maxDiscount:null, expiresIn:'2 days', uses:456, gradient:'from-amber-500 to-orange-500', icon:'ðŸ§ª' },
-  { id:'o5', title:'30% OFF Baby Care Products', code:'BABY30', type:'percentage', value:30, minOrder:399, maxDiscount:300, expiresIn:'10 days', uses:678, gradient:'from-pink-500 to-rose-500', icon:'ðŸ¼' },
-  { id:'o6', title:'â‚¹75 OFF on Health Devices', code:'DEVICE75', type:'flat', value:75, minOrder:999, maxDiscount:75, expiresIn:'14 days', uses:234, gradient:'from-teal-600 to-emerald-500', icon:'ðŸ©º' },
-  { id:'o7', title:'20% OFF Skin Care Range', code:'SKIN20', type:'percentage', value:20, minOrder:349, maxDiscount:250, expiresIn:'6 days', uses:567, gradient:'from-fuchsia-500 to-purple-500', icon:'ðŸ§–' },
-  { id:'o8', title:'Flash Deal: Extra 15% OFF', code:'FLASH15', type:'percentage', value:15, minOrder:199, maxDiscount:150, expiresIn:'1 day', uses:2100, gradient:'from-red-500 to-orange-500', icon:'âš¡' },
+  { id:'o1', title:'25% OFF on First Order', code:'FIRST25', type:'percentage', value:25, minOrder:299, maxDiscount:200, expiresIn:'3 days', uses:1245, gradient:'from-violet-600 to-purple-500', icon:'🎉' },
+  { id:'o2', title:'Free Delivery on ₹500+', code:'FREEDEL', type:'free_delivery', value:0, minOrder:500, maxDiscount:null, expiresIn:'5 days', uses:3200, gradient:'from-blue-600 to-cyan-500', icon:'🚚' },
+  { id:'o3', title:'Flat ₹100 OFF on Rx Orders', code:'RX100', type:'flat', value:100, minOrder:499, maxDiscount:100, expiresIn:'7 days', uses:890, gradient:'from-emerald-600 to-green-500', icon:'💊' },
+  { id:'o4', title:'Buy 2 Get 1 FREE — Vitamins', code:'VIT321', type:'bogo', value:0, minOrder:0, maxDiscount:null, expiresIn:'2 days', uses:456, gradient:'from-amber-500 to-orange-500', icon:'🧪' },
+  { id:'o5', title:'30% OFF Baby Care Products', code:'BABY30', type:'percentage', value:30, minOrder:399, maxDiscount:300, expiresIn:'10 days', uses:678, gradient:'from-pink-500 to-rose-500', icon:'🍼' },
+  { id:'o6', title:'₹75 OFF on Health Devices', code:'DEVICE75', type:'flat', value:75, minOrder:999, maxDiscount:75, expiresIn:'14 days', uses:234, gradient:'from-teal-600 to-emerald-500', icon:'🩺' },
+  { id:'o7', title:'20% OFF Skin Care Range', code:'SKIN20', type:'percentage', value:20, minOrder:349, maxDiscount:250, expiresIn:'6 days', uses:567, gradient:'from-fuchsia-500 to-purple-500', icon:'🧖' },
+  { id:'o8', title:'Flash Deal: Extra 15% OFF', code:'FLASH15', type:'percentage', value:15, minOrder:199, maxDiscount:150, expiresIn:'1 day', uses:2100, gradient:'from-red-500 to-orange-500', icon:'⚡' },
 ];
 
 export default function PharmacyOffersPage() {
@@ -33,8 +33,8 @@ export default function PharmacyOffersPage() {
       <div className="bg-linear-to-r from-red-600 to-orange-500 rounded-2xl p-6 mb-8 text-white flex flex-col md:flex-row items-center gap-4">
         <Flame className="w-10 h-10 animate-pulse" />
         <div className="flex-1 text-center md:text-left">
-          <h2 className="text-xl font-black">Flash Sale Live! âš¡</h2>
-          <p className="text-sm text-white/80">Extra 15% OFF on all medicines â€” Ends in 23:45:12</p>
+          <h2 className="text-xl font-black">Flash Sale Live! ⚡</h2>
+          <p className="text-sm text-white/80">Extra 15% OFF on all medicines — Ends in 23:45:12</p>
         </div>
         <button onClick={()=>handleCopy('FLASH15')}
           className="px-6 py-3 bg-white text-red-600 font-bold rounded-xl hover:bg-white/90 transition-colors">
@@ -55,8 +55,8 @@ export default function PharmacyOffersPage() {
                 </span>
               </div>
               <h3 className="text-lg font-black mb-1">{offer.title}</h3>
-              {offer.minOrder > 0 && <p className="text-sm text-white/70">Min. order: â‚¹{offer.minOrder}</p>}
-              {offer.maxDiscount && <p className="text-sm text-white/70">Max discount: â‚¹{offer.maxDiscount}</p>}
+              {offer.minOrder > 0 && <p className="text-sm text-white/70">Min. order: ₹{offer.minOrder}</p>}
+              {offer.maxDiscount && <p className="text-sm text-white/70">Max discount: ₹{offer.maxDiscount}</p>}
               <div className="flex items-center justify-between mt-5">
                 <div className="flex items-center gap-2 px-4 py-2 bg-white/15 backdrop-blur-sm border border-white/30 rounded-xl">
                   <span className="font-black tracking-widest">{offer.code}</span>

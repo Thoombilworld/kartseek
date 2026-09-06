@@ -20,7 +20,7 @@ export class AdminLayoutController {
   @Get(':moduleName/:pageName')
   @ApiOperation({ summary: 'Get page layout configuration' })
   async getLayout(@Param('moduleName') moduleName: string, @Param('pageName') pageName: string) {
-    let layout = await this.layoutRepo.findOne({ where: { moduleName, pageName } });
+    const layout = await this.layoutRepo.findOne({ where: { moduleName, pageName } });
     if (!layout) {
       const mod = moduleName.toLowerCase();
       let sections : unknown[] = [];

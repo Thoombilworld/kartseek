@@ -40,8 +40,8 @@ export default function FranchisePharmacyEarningsPage() {
       {/* Hero cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label:'Total Revenue', value:'â‚¹9,00,000', change:'+12%', up:true, icon:DollarSign, gradient:'from-green-600 to-emerald-500' },
-          { label:'Commission Earned', value:'â‚¹90,000', change:'+15%', up:true, icon:TrendingUp, gradient:'from-blue-600 to-cyan-500' },
+          { label:'Total Revenue', value:'₹9,00,000', change:'+12%', up:true, icon:DollarSign, gradient:'from-green-600 to-emerald-500' },
+          { label:'Commission Earned', value:'₹90,000', change:'+15%', up:true, icon:TrendingUp, gradient:'from-blue-600 to-cyan-500' },
           { label:'Total Orders', value:'1,860', change:'+8%', up:true, icon:ShoppingBag, gradient:'from-purple-600 to-violet-500' },
           { label:'Active Stores', value:'6', change:'+1', up:true, icon:Users, gradient:'from-amber-500 to-orange-500' },
         ].map(c => (
@@ -63,7 +63,7 @@ export default function FranchisePharmacyEarningsPage() {
         <div className="flex items-end gap-3 h-48">
           {REVENUE_DATA.map(d => (
             <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-[10px] font-bold text-slate-500">â‚¹{(d.value/1000).toFixed(1)}K</span>
+              <span className="text-[10px] font-bold text-slate-500">₹{(d.value/1000).toFixed(1)}K</span>
               <div className="w-full bg-linear-to-t from-teal-500 to-emerald-400 rounded-t-lg transition-all"
                 style={{height:`${(d.value/maxRevenue)*100}%`}} />
               <span className="text-[10px] font-medium text-slate-400">{d.label}</span>
@@ -91,9 +91,9 @@ export default function FranchisePharmacyEarningsPage() {
             {STORE_EARNINGS.map(s => (
               <tr key={s.name} className="hover:bg-slate-50">
                 <td className="px-6 py-3 font-semibold text-slate-900">{s.name}</td>
-                <td className="px-6 py-3 text-right font-bold">â‚¹{(s.revenue/1000).toFixed(0)}K</td>
+                <td className="px-6 py-3 text-right font-bold">₹{(s.revenue/1000).toFixed(0)}K</td>
                 <td className="px-6 py-3 text-center text-slate-500">{s.orders}</td>
-                <td className="px-6 py-3 text-right font-bold text-green-700">â‚¹{(s.commission/1000).toFixed(0)}K</td>
+                <td className="px-6 py-3 text-right font-bold text-green-700">₹{(s.commission/1000).toFixed(0)}K</td>
                 <td className="px-6 py-3 text-center">
                   <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${s.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {s.growth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}

@@ -14,7 +14,7 @@ const BANK_OFFERS = [
     startsAt: '01 Jun 2026', expiresAt: '30 Jun 2026', priority: 1, status: 'Active', isFeatured: true, country: 'India',
   },
   {
-    id: 'BO-1002', title: 'â‚¹500 Cashback on SBI Debit Card', bankName: 'SBI',
+    id: 'BO-1002', title: '₹500 Cashback on SBI Debit Card', bankName: 'SBI',
     cardType: 'DEBIT', cardNetwork: 'RUPAY', discountType: 'FLAT', discountValue: 500,
     maxDiscount: 500, minOrderValue: 3000, logoUrl: '', applicableCategories: ['All'],
     applicableCountries: ['India'], totalUsageLimit: 20000, perUserLimit: 1, usageCount: 8720,
@@ -28,7 +28,7 @@ const BANK_OFFERS = [
     startsAt: '01 Jun 2026', expiresAt: '31 Jul 2026', priority: 3, status: 'Active', isFeatured: true, country: 'India',
   },
   {
-    id: 'BO-1004', title: 'Flat â‚¹200 Off on Paytm Wallet', bankName: 'Paytm',
+    id: 'BO-1004', title: 'Flat ₹200 Off on Paytm Wallet', bankName: 'Paytm',
     cardType: 'WALLET', cardNetwork: 'ALL', discountType: 'FLAT', discountValue: 200,
     maxDiscount: 200, minOrderValue: 1000, logoUrl: '', applicableCategories: ['Grocery', 'Pharmacy'],
     applicableCountries: ['India'], totalUsageLimit: 100000, perUserLimit: 5, usageCount: 45000,
@@ -42,7 +42,7 @@ const BANK_OFFERS = [
     startsAt: '01 Jul 2026', expiresAt: '31 Jul 2026', priority: 5, status: 'Draft', isFeatured: false, country: 'India',
   },
   {
-    id: 'BO-1006', title: 'â‚¹1000 Off on Axis Bank Credit Card', bankName: 'Axis Bank',
+    id: 'BO-1006', title: '₹1000 Off on Axis Bank Credit Card', bankName: 'Axis Bank',
     cardType: 'CREDIT', cardNetwork: 'VISA', discountType: 'FLAT', discountValue: 1000,
     maxDiscount: 1000, minOrderValue: 8000, logoUrl: '', applicableCategories: ['Electronics', 'Home & Kitchen'],
     applicableCountries: ['India'], totalUsageLimit: 15000, perUserLimit: 1, usageCount: 7500,
@@ -69,7 +69,7 @@ const CARD_TYPE_STYLES: Record<string, string> = {
 
 const DISCOUNT_TYPE_ICON: Record<string, string> = {
   'PERCENTAGE': '%',
-  'FLAT': 'â‚¹',
+  'FLAT': '₹',
 };
 
 export default function BankOffersPage() {
@@ -98,7 +98,7 @@ export default function BankOffersPage() {
             Bank & Card Offers
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {isRegionFiltered ? `${regionLabel} â€” ` : ''}Manage bank partnerships, card discounts, EMI offers, and wallet cashback displayed across the customer app & website.
+            {isRegionFiltered ? `${regionLabel} — ` : ''}Manage bank partnerships, card discounts, EMI offers, and wallet cashback displayed across the customer app & website.
           </p>
         </div>
         <button
@@ -180,12 +180,12 @@ export default function BankOffersPage() {
                     </td>
                     <td className="px-5 py-4 text-center">
                       <span className="text-lg font-black text-emerald-700">
-                        {o.discountType === 'PERCENTAGE' ? `${o.discountValue}%` : `â‚¹${o.discountValue.toLocaleString('en-IN')}`}
+                        {o.discountType === 'PERCENTAGE' ? `${o.discountValue}%` : `₹${o.discountValue.toLocaleString('en-IN')}`}
                       </span>
                       <p className="text-[10px] text-slate-400">{o.discountType === 'PERCENTAGE' ? 'Percentage' : 'Flat'}</p>
                     </td>
-                    <td className="px-5 py-4 text-center font-bold text-slate-700">â‚¹{o.minOrderValue.toLocaleString('en-IN')}</td>
-                    <td className="px-5 py-4 text-center font-bold text-slate-700">â‚¹{o.maxDiscount.toLocaleString('en-IN')}</td>
+                    <td className="px-5 py-4 text-center font-bold text-slate-700">₹{o.minOrderValue.toLocaleString('en-IN')}</td>
+                    <td className="px-5 py-4 text-center font-bold text-slate-700">₹{o.maxDiscount.toLocaleString('en-IN')}</td>
                     <td className="px-5 py-4 text-xs text-slate-500">
                       <p>{o.startsAt}</p>
                       <p>to {o.expiresAt}</p>

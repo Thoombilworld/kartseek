@@ -7,7 +7,7 @@ import { useMarketplaceRegionFilter } from '@/hooks/useMarketplaceRegionFilter';
 
 const EXCHANGE_OFFERS = [
   {
-    id: 'EX-2001', title: 'Exchange your old phone â€” get up to â‚¹15,000 off', description: 'Trade in your old smartphone and get instant discount on a new one',
+    id: 'EX-2001', title: 'Exchange your old phone — get up to ₹15,000 off', description: 'Trade in your old smartphone and get instant discount on a new one',
     exchangeCategory: 'Smartphones', targetCategory: 'Smartphones', maxExchangeValue: 15000, minExchangeValue: 1000, bonusAmount: 2000,
     eligibilityCriteria: { conditions: ['Screen must be intact', 'Device must power on', 'No water damage'], brands: ['Apple', 'Samsung', 'OnePlus', 'Xiaomi', 'Vivo'] },
     applicableBrandIds: ['Apple', 'Samsung', 'OnePlus', 'Google'], applicableCountries: ['India'],
@@ -15,7 +15,7 @@ const EXCHANGE_OFFERS = [
     status: 'Active', isFeatured: true, totalExchanges: 4820, country: 'India',
   },
   {
-    id: 'EX-2002', title: 'Laptop Exchange â€” up to â‚¹25,000 off on new laptops', description: 'Exchange your old laptop and upgrade to the latest models',
+    id: 'EX-2002', title: 'Laptop Exchange — up to ₹25,000 off on new laptops', description: 'Exchange your old laptop and upgrade to the latest models',
     exchangeCategory: 'Laptops', targetCategory: 'Laptops', maxExchangeValue: 25000, minExchangeValue: 3000, bonusAmount: 3000,
     eligibilityCriteria: { conditions: ['Must power on', 'Screen intact', 'Keyboard functional'], brands: ['Apple', 'Dell', 'HP', 'Lenovo', 'Asus'] },
     applicableBrandIds: ['Apple', 'Dell', 'HP', 'Lenovo'], applicableCountries: ['India'],
@@ -23,7 +23,7 @@ const EXCHANGE_OFFERS = [
     status: 'Active', isFeatured: true, totalExchanges: 1240, country: 'India',
   },
   {
-    id: 'EX-2003', title: 'TV Exchange â€” get â‚¹10,000 off on Smart TVs', description: 'Exchange your old TV regardless of brand or condition',
+    id: 'EX-2003', title: 'TV Exchange — get ₹10,000 off on Smart TVs', description: 'Exchange your old TV regardless of brand or condition',
     exchangeCategory: 'Televisions', targetCategory: 'Smart TVs', maxExchangeValue: 10000, minExchangeValue: 2000, bonusAmount: 1500,
     eligibilityCriteria: { conditions: ['Any working condition accepted', 'Minimum 24 inch screen'], brands: ['Any'] },
     applicableBrandIds: ['Samsung', 'LG', 'Sony', 'TCL'], applicableCountries: ['India'],
@@ -31,7 +31,7 @@ const EXCHANGE_OFFERS = [
     status: 'Draft', isFeatured: false, totalExchanges: 0, country: 'India',
   },
   {
-    id: 'EX-2004', title: 'Old Washing Machine Exchange â€” â‚¹5,000 off', description: 'Upgrade to a new washing machine with exchange discount',
+    id: 'EX-2004', title: 'Old Washing Machine Exchange — ₹5,000 off', description: 'Upgrade to a new washing machine with exchange discount',
     exchangeCategory: 'Washing Machines', targetCategory: 'Washing Machines', maxExchangeValue: 5000, minExchangeValue: 500, bonusAmount: 500,
     eligibilityCriteria: { conditions: ['Must be complete unit', 'Any condition accepted'], brands: ['Any'] },
     applicableBrandIds: ['LG', 'Samsung', 'Bosch', 'IFB'], applicableCountries: ['India'],
@@ -39,7 +39,7 @@ const EXCHANGE_OFFERS = [
     status: 'Expired', isFeatured: false, totalExchanges: 2100, country: 'India',
   },
   {
-    id: 'EX-2005', title: 'Tablet Exchange â€” up to â‚¹8,000 off on iPads', description: 'Trade in your old tablet for a new iPad',
+    id: 'EX-2005', title: 'Tablet Exchange — up to ₹8,000 off on iPads', description: 'Trade in your old tablet for a new iPad',
     exchangeCategory: 'Tablets', targetCategory: 'Tablets', maxExchangeValue: 8000, minExchangeValue: 1000, bonusAmount: 1000,
     eligibilityCriteria: { conditions: ['Screen must be intact', 'Device must power on'], brands: ['Apple', 'Samsung', 'Lenovo'] },
     applicableBrandIds: ['Apple'], applicableCountries: ['India', 'UAE'],
@@ -88,7 +88,7 @@ export default function ExchangeOffersPage() {
             Exchange & Trade-in Offers
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {isRegionFiltered ? `${regionLabel} â€” ` : ''}Manage product exchange programs. Customers trade in old products for discount on new purchases.
+            {isRegionFiltered ? `${regionLabel} — ` : ''}Manage product exchange programs. Customers trade in old products for discount on new purchases.
           </p>
         </div>
         <button
@@ -131,7 +131,7 @@ export default function ExchangeOffersPage() {
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
               <tr>
                 <th className="px-5 py-3.5 text-left font-semibold">Offer</th>
-                <th className="px-5 py-3.5 text-left font-semibold">Exchange â†’ Target</th>
+                <th className="px-5 py-3.5 text-left font-semibold">Exchange → Target</th>
                 <th className="px-5 py-3.5 text-center font-semibold">Max Value</th>
                 <th className="px-5 py-3.5 text-center font-semibold">Bonus</th>
                 <th className="px-5 py-3.5 text-center font-semibold">Fulfillment</th>
@@ -164,14 +164,14 @@ export default function ExchangeOffersPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-center">
-                      <span className="text-lg font-black text-emerald-700">â‚¹{o.maxExchangeValue.toLocaleString('en-IN')}</span>
-                      <p className="text-[10px] text-slate-400">min â‚¹{o.minExchangeValue.toLocaleString('en-IN')}</p>
+                      <span className="text-lg font-black text-emerald-700">₹{o.maxExchangeValue.toLocaleString('en-IN')}</span>
+                      <p className="text-[10px] text-slate-400">min ₹{o.minExchangeValue.toLocaleString('en-IN')}</p>
                     </td>
                     <td className="px-5 py-4 text-center">
                       {o.bonusAmount > 0 ? (
-                        <span className="text-sm font-black text-blue-700">+â‚¹{o.bonusAmount.toLocaleString('en-IN')}</span>
+                        <span className="text-sm font-black text-blue-700">+₹{o.bonusAmount.toLocaleString('en-IN')}</span>
                       ) : (
-                        <span className="text-xs text-slate-400">â€”</span>
+                        <span className="text-xs text-slate-400">—</span>
                       )}
                     </td>
                     <td className="px-5 py-4 text-center">
@@ -252,7 +252,7 @@ export default function ExchangeOffersPage() {
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-bold text-slate-600 mb-1 block" htmlFor="offer-title">Offer Title *</label>
-                <input id="offer-title" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., Exchange your old phone â€” get up to â‚¹15,000 off" />
+                <input id="offer-title" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., Exchange your old phone — get up to ₹15,000 off" />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-600 mb-1 block" htmlFor="description">Description *</label>
@@ -278,7 +278,7 @@ export default function ExchangeOffersPage() {
                   <input id="min-value" type="number" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="1000" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1 block" htmlFor="bonus">Bonus â‚¹</label>
+                  <label className="text-xs font-bold text-slate-600 mb-1 block" htmlFor="bonus">Bonus ₹</label>
                   <input id="bonus" type="number" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="2000" />
                 </div>
               </div>

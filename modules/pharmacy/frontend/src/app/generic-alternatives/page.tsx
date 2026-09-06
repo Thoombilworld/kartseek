@@ -35,8 +35,8 @@ export default function GenericAlternativesPage() {
       <div className="bg-linear-to-r from-green-600 to-emerald-500 rounded-2xl p-6 mb-8 text-white flex flex-col md:flex-row items-center gap-4">
         <DollarSign className="w-12 h-12" />
         <div className="flex-1 text-center md:text-left">
-          <h2 className="text-xl font-black">Save â‚¹{totalSavings} on your medicines!</h2>
-          <p className="text-sm text-white/80">Same composition, same efficacy â€” certified bioequivalent</p>
+          <h2 className="text-xl font-black">Save ₹{totalSavings} on your medicines!</h2>
+          <p className="text-sm text-white/80">Same composition, same efficacy — certified bioequivalent</p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl">
           <ShieldCheck className="w-5 h-5" /> <span className="text-sm font-bold">All CDSCO Approved</span>
@@ -59,7 +59,7 @@ export default function GenericAlternativesPage() {
               <div className="bg-red-50/50 p-4 rounded-xl">
                 <span className="text-[10px] font-bold text-red-500 uppercase">Brand</span>
                 <p className="text-sm font-bold text-slate-900 mt-1">{m.brand}</p>
-                <p className="text-lg font-black text-slate-900 mt-1">â‚¹{m.brandPrice}</p>
+                <p className="text-lg font-black text-slate-900 mt-1">₹{m.brandPrice}</p>
               </div>
 
               {/* Arrow */}
@@ -74,7 +74,7 @@ export default function GenericAlternativesPage() {
               <div className="bg-green-50/50 p-4 rounded-xl">
                 <span className="text-[10px] font-bold text-green-600 uppercase">Generic</span>
                 <p className="text-sm font-bold text-slate-900 mt-1">{m.generic}</p>
-                <p className="text-lg font-black text-green-700 mt-1">â‚¹{m.genericPrice}</p>
+                <p className="text-lg font-black text-green-700 mt-1">₹{m.genericPrice}</p>
                 <p className="text-[10px] text-slate-400 mt-1">by {m.manufacturer}</p>
               </div>
             </div>
@@ -101,7 +101,7 @@ export default function GenericAlternativesPage() {
         <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
         <div>
           <h3 className="text-sm font-bold text-blue-900 mb-1">What are Generic Medicines?</h3>
-          <p className="text-xs text-blue-800 leading-relaxed">Generic medicines contain the same active ingredients, dosage, and form as branded equivalents. They are approved by regulatory bodies (CDSCO/FDA) and are clinically bioequivalent â€” meaning they work identically in the body. The price difference exists because generic manufacturers don&apos;t bear the original R&D costs.</p>
+          <p className="text-xs text-blue-800 leading-relaxed">Generic medicines contain the same active ingredients, dosage, and form as branded equivalents. They are approved by regulatory bodies (CDSCO/FDA) and are clinically bioequivalent — meaning they work identically in the body. The price difference exists because generic manufacturers don&apos;t bear the original R&D costs.</p>
         </div>
       </div>
     </div>

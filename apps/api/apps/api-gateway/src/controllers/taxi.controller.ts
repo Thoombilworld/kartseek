@@ -1,5 +1,5 @@
 /* cSpell:words geosearch FROMLONLAT BYRADIUS WITHDIST WITHCOORD Meenakshi Mishra Axio Demio upi */
-import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Req, HttpCode, HttpStatus, ForbiddenException, NotFoundException, BadRequestException, Optional, Inject, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Req, HttpCode, HttpStatus, ForbiddenException, NotFoundException, BadRequestException, Optional, Inject, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
@@ -19,9 +19,11 @@ import {
   TaxiSosCase, TaxiDispute, TaxiAuditLog
 } from '../entities';
 
-@ApiTags('ðŸš• Taxi')
+@ApiTags('🚕 Taxi')
 @Controller('taxi')
 export class TaxiController {
+  private readonly logger = new Logger(TaxiController.name);
+
   constructor(
     private readonly redis: RedisService,
     private readonly kafka: KafkaProducerService,
@@ -74,14 +76,14 @@ export class TaxiController {
     return this.em;
   }
 
-  // â”€â”€â”€ HEALTH CHECK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── HEALTH CHECK ──────────────────────────────────────────────────────────
   @Get('health')
   @ApiOperation({ summary: 'Taxi service health check' })
   healthCheck() {
     return { service: 'taxi', status: 'ok', dbActive: this.isDbActive(), timestamp: new Date().toISOString() };
   }
 
-  // â”€â”€â”€ CUSTOMER ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── CUSTOMER ENDPOINTS ─────────────────────────────────────────────────────
 
   @Post('estimate')
   @UseGuards(ThrottlerGuard)
@@ -165,7 +167,9 @@ export class TaxiController {
         }
         // Cache for 2 minutes (surge changes more frequently)
         await this.redis.setJson(surgeCacheKey, { multiplier: surgeMultiplier }, 120);
-      } catch (err) {}
+      } catch (err) {
+        this.logger.warn(`Surge-rule lookup for zone ${fareZone} failed; pricing the ride at the default multiplier ${surgeMultiplier}: ${String(err)}`);
+      }
     }
 
     // 4. Calculate Total
@@ -425,7 +429,7 @@ export class TaxiController {
     const userId = req.user?.userId;
     const role = req.user?.role;
 
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -458,7 +462,7 @@ export class TaxiController {
     const userId = req.user?.userId;
     const role = req.user?.role;
 
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -485,7 +489,9 @@ export class TaxiController {
           if (rule) {
             cancellationFee = Number(rule.amount);
           }
-        } catch (e) {}
+        } catch (err) {
+          this.logger.warn(`Cancellation-rule lookup for vehicle type ${ride.vehicleType} failed; charging the default fee ${cancellationFee}: ${String(err)}`);
+        }
       }
     }
 
@@ -622,7 +628,7 @@ export class TaxiController {
       return { success: true, lat: driverLoc.lat, lng: driverLoc.lng, lastUpdated: driverLoc.timestamp };
     }
     // Fallback to ride pickup coordinates
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -632,14 +638,14 @@ export class TaxiController {
     return { success: true, lat: ride.pickupLat, lng: ride.pickupLng, lastUpdated: ride.createdAt };
   }
 
-  // â”€â”€â”€ OTP ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── OTP ENDPOINTS ──────────────────────────────────────────────────────────
 
   @Post('ride/:rideId/otp/generate')
   @ApiBearerAuth('JWT')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Generate ride OTP for verification' })
   async generateOtp(@Param('rideId') rideId: string) {
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -704,7 +710,7 @@ export class TaxiController {
       return { success: false, message: 'Invalid OTP', remainingAttempts: otpData.maxAttempts - otpData.attempts };
     }
 
-    // OTP verified â€” start the trip
+    // OTP verified — start the trip
     await this.redis.del(`ride:${rideId}:otp`);
 
     const ride: any = await this.redis.getJson(`ride:${rideId}`);
@@ -732,7 +738,7 @@ export class TaxiController {
     return { success: true, message: 'OTP verified. Trip started.' };
   }
 
-  // â”€â”€â”€ CONFIGURATION ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── CONFIGURATION ENDPOINTS ────────────────────────────────────────────────
 
   @Get('config/:countryCode')
   @ApiOperation({ summary: 'Get taxi configuration for a country/region' })
@@ -777,7 +783,7 @@ export class TaxiController {
   async getRideReceipt(@Req() req: any, @Param('rideId') rideId: string) {
     const userId = req.user?.userId;
 
-    let ride: any = null;
+    let ride: any;
     let breakdown: any = null;
 
     if (this.isDbActive()) {
@@ -905,7 +911,7 @@ export class TaxiController {
     return { success: true, message: 'SOS Alert triggered successfully. Emergency dispatchers notified.' };
   }
 
-  // â”€â”€â”€ DRIVER ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── DRIVER ENDPOINTS ───────────────────────────────────────────────────────
 
   @Post('driver/online')
   @ApiBearerAuth('JWT')
@@ -915,7 +921,7 @@ export class TaxiController {
   async driverOnline(@Req() req: any, @Body() body?: { firstName?: string; vehicleType?: string; vehiclePlate?: string; rating?: number }) {
     const userId = req.user.userId;
 
-    let driverProfile: any = {};
+    let driverProfile: any;
 
     if (this.isDbActive()) {
       const driver = await this.db.findOne(TaxiDriver, { where: { userId } });
@@ -1030,7 +1036,7 @@ export class TaxiController {
       if (vehicle) vehicleId = vehicle.id;
     }
 
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -1083,7 +1089,7 @@ export class TaxiController {
   @Roles(UserRole.TAXI_DRIVER, UserRole.SELLER)
   @ApiOperation({ summary: 'Mark arrival at pickup' })
   async driverArrived(@Req() req: any, @Param('rideId') rideId: string) {
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -1111,7 +1117,7 @@ export class TaxiController {
   @Roles(UserRole.TAXI_DRIVER, UserRole.SELLER)
   @ApiOperation({ summary: 'Start the taxi ride' })
   async startRide(@Param('rideId') rideId: string) {
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -1139,7 +1145,7 @@ export class TaxiController {
   @Roles(UserRole.TAXI_DRIVER, UserRole.SELLER)
   @ApiOperation({ summary: 'Complete ride and process settlements' })
   async completeRide(@Param('rideId') rideId: string, @Body() body: { finalDistanceKm?: number; finalDurationMin?: number }) {
-    let ride: any = null;
+    let ride: any;
     if (this.isDbActive()) {
       ride = await this.db.findOne(TaxiRide, { where: { id: rideId } });
     } else {
@@ -1305,7 +1311,7 @@ export class TaxiController {
       }
     }
 
-    // Graceful fallback â€” return basic profile from JWT claims
+    // Graceful fallback — return basic profile from JWT claims
     return {
       partnerId: userId,
       name: req.user.name || 'KARTSEEK Driver',
@@ -1337,7 +1343,7 @@ export class TaxiController {
     return { success: true, message: 'Profile updated (cached)' };
   }
 
-  // â”€â”€ Delivery Driver Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Delivery Driver Endpoints ──────────────────────────────────────────────
 
   @Post('driver/delivery/:deliveryId/accept')
   @ApiBearerAuth('JWT')
@@ -1382,7 +1388,7 @@ export class TaxiController {
     return { success: true, message: `Delivery ${deliveryId} completed` };
   }
 
-  // â”€â”€â”€ VENDOR ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── VENDOR ENDPOINTS ───────────────────────────────────────────────────────
 
   @Get('vendor/dashboard')
   @ApiBearerAuth('JWT')
@@ -1495,7 +1501,7 @@ export class TaxiController {
     return { success: true };
   }
 
-  // â”€â”€â”€ ADMIN ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── ADMIN ENDPOINTS ────────────────────────────────────────────────────────
 
   @Get('admin/dashboard')
   @ApiBearerAuth('JWT')
@@ -1714,7 +1720,7 @@ export class TaxiController {
     return [];
   }
 
-  // â”€â”€â”€ PAYMENTS COMPLIANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── PAYMENTS COMPLIANCE ────────────────────────────────────────────────────
   @Post('payment/webhook')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)

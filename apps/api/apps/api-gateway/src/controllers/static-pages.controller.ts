@@ -60,7 +60,7 @@ export class AdminStaticPagesController {
   @Get(':slug')
   @ApiOperation({ summary: 'Get static page by slug' })
   async getPage(@Param('slug') slug: string) {
-    let page = await this.repo.findOne({ where: { slug } });
+    const page = await this.repo.findOne({ where: { slug } });
     if (!page) {
       const seed = PAGE_SEEDS[slug];
       if (!seed) throw new NotFoundException(`Page "${slug}" not found`);
@@ -105,7 +105,7 @@ export class AdminStaticPagesController {
   @Put(':slug/publish')
   @ApiOperation({ summary: 'Toggle publish status' })
   async togglePublish(@Param('slug') slug: string) {
-    let page = await this.repo.findOne({ where: { slug } });
+    const page = await this.repo.findOne({ where: { slug } });
     if (!page) throw new NotFoundException(`Page "${slug}" not found`);
     page.isPublished = !page.isPublished;
     await this.repo.save(page);

@@ -10,6 +10,8 @@
  * running they failed 13 times on every unit run — which trained people to
  * ignore a red suite, and would have hidden a real failure among the noise.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Entity table definitions — 22 entities mapped to the marketplace schema
@@ -52,8 +54,6 @@ describe('Marketplace entity registration', () => {
 
   describe('Entity/Table Registration', () => {
     it(`should have all ${EXPECTED_ENTITIES.length} entities registered in marketplace-service.module.ts`, () => {
-      const fs = require('fs');
-      const path = require('path');
       const moduleSource = fs.readFileSync(
         path.resolve(__dirname, '..', 'marketplace-service.module.ts'),
         'utf-8',
@@ -74,8 +74,6 @@ describe('Marketplace entity registration', () => {
     });
 
     it('should have entity files on disk for every expected entity', () => {
-      const fs = require('fs');
-      const path = require('path');
       const entitiesDir = path.resolve(__dirname, '..', 'entities');
       const entityFiles = fs.readdirSync(entitiesDir).filter((f: string) => f.endsWith('.entity.ts'));
 
@@ -85,8 +83,6 @@ describe('Marketplace entity registration', () => {
     });
 
     it('TypeORM config should target the "marketplace" schema', () => {
-      const fs = require('fs');
-      const path = require('path');
       const moduleSource = fs.readFileSync(
         path.resolve(__dirname, '..', 'marketplace-service.module.ts'),
         'utf-8',

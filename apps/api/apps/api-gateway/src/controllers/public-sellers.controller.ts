@@ -160,7 +160,7 @@ export class PublicSellersController {
       // Ownership is checked against the same `owner_id` every other seller
       // route authorises on, so this cannot be used to read someone else's
       // application by naming its id.
-      let ownerId: string | null = null;
+      let ownerId: string | null;
       try {
         const res: any = await firstValueFrom(
           this.sellerClient.send({ cmd: 'get_seller_owner' }, { sellerId })

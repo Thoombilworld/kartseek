@@ -85,7 +85,7 @@ export class UploadController {
     summary: 'Upload profile image',
     description:
       'Accepts PNG or JPEG images up to 2 MB. ' +
-      'Image is resized to 400Ã—400, compressed, and stored on CDN. ' +
+      'Image is resized to 400×400, compressed, and stored on CDN. ' +
       'Returns the public CDN URL.',
   })
   @ApiConsumes('multipart/form-data')

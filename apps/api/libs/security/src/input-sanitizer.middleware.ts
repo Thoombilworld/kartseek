@@ -71,7 +71,7 @@ export class InputSanitizerMiddleware implements NestMiddleware {
   ];
 
   // ── Path Traversal ────────────────────────────────────────────────────────
-  private readonly PATH_TRAVERSAL: RegExp = /\.\.[\/\\]/;
+  private readonly PATH_TRAVERSAL: RegExp = /\.\.[/\\]/;
 
   use(req: Request, _res: Response, next: NextFunction): void {
     const threats: string[] = [];

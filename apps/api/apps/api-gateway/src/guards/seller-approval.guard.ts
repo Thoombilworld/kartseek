@@ -166,7 +166,7 @@ export class SellerApprovalGuard implements CanActivate {
       // Cache miss or Redis down — fall through to the authoritative lookup.
     }
 
-    let sellerId: string | null = null;
+    let sellerId: string | null;
     try {
       const seller = await firstValueFrom(
         this.sellerClient

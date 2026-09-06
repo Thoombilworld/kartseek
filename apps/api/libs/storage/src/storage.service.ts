@@ -88,7 +88,6 @@ export class StorageService {
 
   private async uploadToS3(key: string, body: Buffer, contentType: string): Promise<string> {
     try {
-      // @ts-ignore — optional runtime dependency
       const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
 
       const client = new S3Client({
@@ -118,7 +117,6 @@ export class StorageService {
 
   private async deleteFromS3(key: string): Promise<void> {
     try {
-      // @ts-ignore — optional runtime dependency
       const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
       const client = new S3Client({
         region: process.env.AWS_REGION || 'ap-south-1',
@@ -138,7 +136,7 @@ export class StorageService {
 
   private async uploadToGCS(key: string, body: Buffer, contentType: string): Promise<string> {
     try {
-      // @ts-ignore — optional runtime dependency
+      // @ts-expect-error -- @google-cloud/storage is an optional dependency, installed only where GCS is the configured provider
       const { Storage } = await import('@google-cloud/storage');
       const storage = new Storage({
         projectId: process.env.GCLOUD_PROJECT,
@@ -162,7 +160,7 @@ export class StorageService {
 
   private async deleteFromGCS(key: string): Promise<void> {
     try {
-      // @ts-ignore — optional runtime dependency
+      // @ts-expect-error -- @google-cloud/storage is an optional dependency, installed only where GCS is the configured provider
       const { Storage } = await import('@google-cloud/storage');
       const storage = new Storage({
         projectId: process.env.GCLOUD_PROJECT,
@@ -179,7 +177,6 @@ export class StorageService {
 
   private async uploadToR2(key: string, body: Buffer, contentType: string): Promise<string> {
     try {
-      // @ts-ignore — optional runtime dependency
       const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
       const client = new S3Client({
         region: 'auto',
@@ -208,7 +205,6 @@ export class StorageService {
 
   private async deleteFromR2(key: string): Promise<void> {
     try {
-      // @ts-ignore — optional runtime dependency
       const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
       const client = new S3Client({
         region: 'auto',

@@ -26,7 +26,7 @@ const SECTION_META: Record<string, { icon: React.ElementType; color: string; acc
 };
 
 
-// â”€â”€ Product Picker Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Product Picker Modal ────────────────────────────────────────────────────
 
 function ProductPickerModal({ section, existingIds, onAdd, onClose }: {
   section: string;
@@ -148,7 +148,7 @@ function ProductPickerModal({ section, existingIds, onAdd, onClose }: {
   );
 }
 
-// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Page ───────────────────────────────────────────────────────────────
 
 export default function FeaturedProductsPage() {
   const { regionLabel, isFiltered } = useMarketplaceRegionFilter([]);
@@ -181,7 +181,7 @@ export default function FeaturedProductsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-black text-slate-900">Featured Products</h1>
-        <p className="text-slate-500 text-sm mt-1">{isFiltered ? `${regionLabel} â€” ` : ""}Curate products for each homepage section. Add, remove, or reorder products. Changes reflect on the marketplace homepage.</p>
+        <p className="text-slate-500 text-sm mt-1">{isFiltered ? `${regionLabel} — ` : ""}Curate products for each homepage section. Add, remove, or reorder products. Changes reflect on the marketplace homepage.</p>
       </div>
 
       {/* Summary grid */}
@@ -217,7 +217,7 @@ export default function FeaturedProductsPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900">{section.label}</h3>
-                  <p className="text-xs text-slate-400">{meta?.description} Â· {section.products.length}/{section.maxItems} items</p>
+                  <p className="text-xs text-slate-400">{meta?.description} · {section.products.length}/{section.maxItems} items</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -256,7 +256,7 @@ export default function FeaturedProductsPage() {
                             <span className="text-[10px] text-slate-400">{product.brand}</span>
                             <span className="text-xs font-bold text-slate-900">{formatPrice(product.price)}</span>
                             {discount > 0 && <span className="text-[10px] text-green-600 font-bold">{discount}% off</span>}
-                            <span className="bg-green-600 text-white text-[8px] font-bold px-1 py-0.5 rounded">{product.rating} â˜…</span>
+                            <span className="bg-green-600 text-white text-[8px] font-bold px-1 py-0.5 rounded">{product.rating} ★</span>
                             <span className="text-[10px] text-slate-400">({product.reviews})</span>
                           </div>
                         </div>

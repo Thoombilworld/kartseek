@@ -23,7 +23,7 @@ import { UserRole } from '@app/common';
 import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagination.pipe';
 
 /**
- * Seller Controller â€” Seller Portal API
+ * Seller Controller — Seller Portal API
  *
  * Endpoints consumed by the Seller Portal web dashboard (/seller/*).
  * Covers dashboard stats, inventory, orders, payouts, and settings.
@@ -45,7 +45,7 @@ function rpcStatus(err: any): number {
   return HttpStatus.SERVICE_UNAVAILABLE;
 }
 
-@ApiTags('ðŸª Seller')
+@ApiTags('🏪 Seller')
 @ApiBearerAuth('JWT')
 @Controller('seller')
 // SellerOwnershipGuard covers the `:id/wallet` route, which takes a seller id from

@@ -1,3 +1,4 @@
+import { createHmac } from 'crypto';
 import { Injectable, type CanActivate, type ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
 import { type Request } from 'express';
 
@@ -60,7 +61,6 @@ export class ApiKeyGuard implements CanActivate {
    * Both strings are hashed to equal-length buffers before comparison.
    */
   private constantTimeCompare(a: string, b: string): boolean {
-    const { createHmac } = require('crypto');
     const secret = process.env.INTERNAL_API_KEY ?? 'fallback';
     const hashA = createHmac('sha256', secret).update(a).digest();
     const hashB = createHmac('sha256', secret).update(b).digest();

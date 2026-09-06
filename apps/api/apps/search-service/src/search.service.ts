@@ -284,32 +284,28 @@ export class SearchService {
     else if (filters.sortBy === 'newest') sort.push({ 'metadata.createdAt': 'desc' });
     else sort.push({ _score: 'desc' });
 
-    try {
-      const response = await fetch(`${this.esNode}/${index}/_search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: { bool: { must, filter } },
-          sort,
-          from: (page - 1) * limit,
-          size: limit,
-          _source: true,
-        }),
-        signal: AbortSignal.timeout(parseInt(process.env.ELASTICSEARCH_REQUEST_TIMEOUT || '30000', 10)),
-      });
+    const response = await fetch(`${this.esNode}/${index}/_search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: { bool: { must, filter } },
+        sort,
+        from: (page - 1) * limit,
+        size: limit,
+        _source: true,
+      }),
+      signal: AbortSignal.timeout(parseInt(process.env.ELASTICSEARCH_REQUEST_TIMEOUT || '30000', 10)),
+    });
 
-      if (!response.ok) throw new Error(`ES responded with ${response.status}`);
+    if (!response.ok) throw new Error(`ES responded with ${response.status}`);
 
-      const data = await response.json() as any;
-      const results: SearchResult[] = (data.hits?.hits ?? []).map((hit: any) => ({
-        ...hit._source,
-        _score: hit._score,
-      }));
+    const data = await response.json() as any;
+    const results: SearchResult[] = (data.hits?.hits ?? []).map((hit: any) => ({
+      ...hit._source,
+      _score: hit._score,
+    }));
 
-      return { results, total: data.hits?.total?.value ?? 0 };
-    } catch (err) {
-      throw err;
-    }
+    return { results, total: data.hits?.total?.value ?? 0 };
   }
 
   // ── Private: Redis-Based Fallback Search ───────────────────────────────────

@@ -1078,7 +1078,7 @@ export class MarketplaceService {
     const styles = MarketplaceService.BRAND_PROMO_STYLES;
     const wanted = [...new Set(Object.values(styles).flat().map((s) => s.name))];
 
-    let rows: Brand[] = [];
+    let rows: Brand[];
     try {
       rows = await this.brandRepo.find({ where: { name: In(wanted) } });
     } catch (e) {

@@ -29,7 +29,7 @@ const GRADIENT_PRESETS = [
 
 const COUNTRIES = ['India', 'UAE', 'Saudi Arabia', 'Qatar', 'UK', 'Kuwait', 'Oman', 'USA'];
 
-// â”€â”€ Hero Banner Editor Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Hero Banner Editor Modal ────────────────────────────────────────────────
 
 function HeroBannerModal({ banner, onSave, onClose }: {
   banner?: HeroBanner;
@@ -156,7 +156,7 @@ function HeroBannerModal({ banner, onSave, onClose }: {
   );
 }
 
-// â”€â”€ Main Banner Management Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Banner Management Page ─────────────────────────────────────────────
 
 export default function BannersPage() {
   const {
@@ -230,7 +230,7 @@ export default function BannersPage() {
         })}
       </div>
 
-      {/* â”€â”€ Hero Banners Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Hero Banners Tab ──────────────────────────────────────────── */}
       {activeTab === 'hero' && (
         <div className="space-y-3">
           {heroBanners.sort((a, b) => a.sortOrder - b.sortOrder).map((b, idx) => (
@@ -240,7 +240,7 @@ export default function BannersPage() {
                 <div className={`w-72 bg-linear-to-r ${b.gradient} p-5 shrink-0 flex flex-col justify-center relative overflow-hidden`}>
                   {b.tag && <span className="bg-white/20 text-white text-[8px] font-bold px-2 py-1 uppercase tracking-widest rounded-full self-start mb-2">{b.tag}</span>}
                   <h3 className="text-white font-bold text-sm leading-tight whitespace-pre-line line-clamp-2">{b.headline}</h3>
-                  <span className="bg-white text-slate-900 text-[9px] font-bold px-3 py-1 rounded mt-2 self-start">{b.cta} â†’</span>
+                  <span className="bg-white text-slate-900 text-[9px] font-bold px-3 py-1 rounded mt-2 self-start">{b.cta} →</span>
                 </div>
 
                 {/* Details */}
@@ -249,7 +249,7 @@ export default function BannersPage() {
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-xs font-bold text-slate-900">#{b.sortOrder}</span>
                       <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${b.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>{b.status.toUpperCase()}</span>
-                      {b.startDate && <span className="text-[9px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3" />{b.startDate}{b.endDate ? ` â†’ ${b.endDate}` : ''}</span>}
+                      {b.startDate && <span className="text-[9px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3" />{b.startDate}{b.endDate ? ` → ${b.endDate}` : ''}</span>}
                     </div>
                     <p className="text-xs text-slate-500 truncate">CTA: <span className="font-mono text-blue-600">{b.ctaHref}</span></p>
                     {b.countries && <div className="flex gap-1 mt-1.5">{b.countries.slice(0, 5).map(c => <span key={c} className="text-[8px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded">{c}</span>)}{b.countries.length > 5 && <span className="text-[8px] text-slate-400">+{b.countries.length - 5}</span>}</div>}
@@ -279,7 +279,7 @@ export default function BannersPage() {
         </div>
       )}
 
-      {/* â”€â”€ Campaign Banners Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Campaign Banners Tab ──────────────────────────────────────── */}
       {activeTab === 'campaign' && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <table className="w-full text-sm">
@@ -318,7 +318,7 @@ export default function BannersPage() {
         </div>
       )}
 
-      {/* â”€â”€ Country Banners Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Country Banners Tab ──────────────────────────────────────── */}
       {activeTab === 'country' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {countryBanners.map(b => (

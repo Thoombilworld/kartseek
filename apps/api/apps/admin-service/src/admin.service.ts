@@ -30,7 +30,7 @@ export class AdminService {
     const cached = await this.redis.getJson<PageLayout>(cacheKey);
     if (cached) return cached;
 
-    let layout = await this.layoutRepo.findOne({ where: { moduleName, pageName } });
+    const layout = await this.layoutRepo.findOne({ where: { moduleName, pageName } });
     if (!layout) {
       return { moduleName, pageName, sections: [] as unknown[] };
     }
