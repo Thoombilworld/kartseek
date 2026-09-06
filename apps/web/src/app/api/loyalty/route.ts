@@ -3,7 +3,7 @@ import { API_BASE_URL } from '@/lib/config/api-base';
 
 /**
  * Next.js BFF Proxy — Loyalty & Rewards Module
- * Forwards to the NestJS API Gateway's /api/loyalty endpoints.
+ * Forwards to the NestJS API Gateway's /loyalty endpoints.
  * GET  /api/loyalty?type=points|history|tiers&...
  * POST /api/loyalty?type=redeem&...
  */
@@ -75,9 +75,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(await res.json());
   } catch {
-    return NextResponse.json(
-      { success: false, message: 'Gateway unreachable' },
-      { status: 503 },
-    );
+    return NextResponse.json({ success: false, message: 'Gateway unreachable' }, { status: 503 });
   }
 }

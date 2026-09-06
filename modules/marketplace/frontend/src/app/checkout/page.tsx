@@ -2,7 +2,25 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { MapPin, CreditCard, ShieldCheck, ChevronRight, Package, CheckCircle2, ChevronDown, FileText, Sparkles, Calendar, Truck, Tag, X, Loader2, Wallet, Star, Gift } from 'lucide-react';
+import {
+  MapPin,
+  CreditCard,
+  ShieldCheck,
+  ChevronRight,
+  Package,
+  CheckCircle2,
+  ChevronDown,
+  FileText,
+  Sparkles,
+  Calendar,
+  Truck,
+  Tag,
+  X,
+  Loader2,
+  Wallet,
+  Star,
+  Gift,
+} from 'lucide-react';
 import { useRegion } from '@/lib/contexts/region-context';
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { usePincodeSearchLog } from '@/lib/contexts/pincode-search-log';
@@ -12,10 +30,21 @@ import { api } from '@/lib/api-endpoints';
 import { marketplaceDeliveryFee, amountToFreeDelivery } from '@/lib/marketplace/delivery';
 import { AddressForm } from '@/components/shared/address-form';
 import { PaymentMethodSelector } from '@/components/shared/payment-method-selector';
-import { toWirePaymentMethod, hasPostalCode, type AddressValue, type AddressFieldKey } from '@/lib/localization';
+import {
+  toWirePaymentMethod,
+  hasPostalCode,
+  type AddressValue,
+  type AddressFieldKey,
+} from '@/lib/localization';
 import { AuthGate } from '@/components/shared/auth-gate';
 
-interface CheckoutItem { productId: string; title: string; brand: string; price: number; qty: number }
+interface CheckoutItem {
+  productId: string;
+  title: string;
+  brand: string;
+  price: number;
+  qty: number;
+}
 
 type Step = 'address' | 'payment' | 'review';
 
@@ -38,9 +67,14 @@ export default function CheckoutPage() {
 
 function CheckoutPageContent() {
   const {
-    formatCurrencyValue: fmt, country,
-    validateAddressValue, toWireAddressValue, calculateTaxValue,
-    defaultPaymentMethod, getDeliveryWindow, timezoneLabel,
+    formatCurrencyValue: fmt,
+    country,
+    validateAddressValue,
+    toWireAddressValue,
+    calculateTaxValue,
+    defaultPaymentMethod,
+    getDeliveryWindow,
+    timezoneLabel,
   } = useRegion();
   const { logPincodeSearch } = usePincodeSearchLog();
   const cart = useCartContext();
@@ -61,9 +95,10 @@ function CheckoutPageContent() {
   // switching from India to Qatar briefly saw `upi` selected against a gateway
   // that would decline it.
   const [pickedMethod, setPickedMethod] = useState<{ region: string; method: string } | null>(null);
-  const payMethod = pickedMethod?.region === country.code
-    ? pickedMethod.method
-    : (defaultPaymentMethod?.type ?? 'card');
+  const payMethod =
+    pickedMethod?.region === country.code
+      ? pickedMethod.method
+      : (defaultPaymentMethod?.type ?? 'card');
   const setPayMethod = (method: string) => setPickedMethod({ region: country.code, method });
   const [showGst, setShowGst] = useState(false);
   const [gstin, setGstin] = useState('');
@@ -79,13 +114,14 @@ function CheckoutPageContent() {
   // badge showed the real count. The provider reconciles with the server
   // whenever a session exists, so reading it is correct in both states.
   const orderItems: CheckoutItem[] = useMemo(
-    () => cart.items.map((i) => ({
-      productId: i.id,
-      title: i.name || 'Product',
-      brand: i.brand || '',
-      price: Number(i.price) || 0,
-      qty: Number(i.quantity) || 1,
-    })),
+    () =>
+      cart.items.map((i) => ({
+        productId: i.id,
+        title: i.name || 'Product',
+        brand: i.brand || '',
+        price: Number(i.price) || 0,
+        qty: Number(i.quantity) || 1,
+      })),
     [cart.items],
   );
 
@@ -144,19 +180,29 @@ function CheckoutPageContent() {
     if (!user?.id) return;
     let cancelled = false;
 
-    api.get<any>(`/wallet/${user.id}/balance`)
-      .then((res) => { if (!cancelled) setWalletBalance(Number(res?.balance ?? 0) || 0); })
-      .catch(() => { /* no credit shown — the shopper pays in full */ });
+    api
+      .get<any>(`/wallet/${user.id}/balance`)
+      .then((res) => {
+        if (!cancelled) setWalletBalance(Number(res?.balance ?? 0) || 0);
+      })
+      .catch(() => {
+        /* no credit shown — the shopper pays in full */
+      });
 
-    api.get<any>('/api/loyalty/points')
+    api
+      .get<any>('/loyalty/points')
       .then((res) => {
         if (cancelled) return;
         setLoyaltyPoints(Number(res?.points ?? 0) || 0);
         setLoyaltyTier(String(res?.tier ?? ''));
       })
-      .catch(() => { /* no points shown */ });
+      .catch(() => {
+        /* no points shown */
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   // A balance that drops below what is already staged (refetch, or credit spent
@@ -172,7 +218,10 @@ function CheckoutPageContent() {
   }, [loyaltyPoints]);
 
   const subtotal = orderItems.reduce((s, i) => s + i.price * i.qty, 0);
-  const savedMRP = orderItems.reduce((s, i) => s + ((i as any).mrp ? ((i as any).mrp - i.price) * i.qty : 0), 0);
+  const savedMRP = orderItems.reduce(
+    (s, i) => s + ((i as any).mrp ? ((i as any).mrp - i.price) * i.qty : 0),
+    0,
+  );
   // Was a hard-coded `0`, so this page always displayed "Delivery FREE" and a
   // total that omitted the fee — while order-service charged ₹60 on any basket
   // under the threshold. The customer approved one number and was billed
@@ -185,7 +234,8 @@ function CheckoutPageContent() {
   const giftCardAmount = giftCardApplied
     ? Math.min(giftCardBalance, Math.max(subtotal - couponDiscount, 0))
     : 0;
-  const total = subtotal + delivery - couponDiscount - giftCardAmount - walletAmount - loyaltyDiscount;
+  const total =
+    subtotal + delivery - couponDiscount - giftCardAmount - walletAmount - loyaltyDiscount;
 
   // Qatar levies no VAT, so `applies` is false there and the tax row is omitted
   // rather than printed as a misleading zero.
@@ -199,7 +249,10 @@ function CheckoutPageContent() {
     setGstin(val.toUpperCase());
     if (val.length > 0 && val.length !== 15) {
       setGstError('GSTIN must be 15 characters');
-    } else if (val.length === 15 && !/^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/.test(val.toUpperCase())) {
+    } else if (
+      val.length === 15 &&
+      !/^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/.test(val.toUpperCase())
+    ) {
       setGstError('Invalid GSTIN format');
     } else {
       setGstError('');
@@ -217,8 +270,11 @@ function CheckoutPageContent() {
     if (hasPostalCode(country.code) && address.postalCode && address.postalCode.length >= 5) {
       try {
         logPincodeSearch({
-          pincode: address.postalCode, source: 'checkout', serviceable: true,
-          regionCode: country.code, module: 'marketplace',
+          pincode: address.postalCode,
+          source: 'checkout',
+          serviceable: true,
+          regionCode: country.code,
+          module: 'marketplace',
         });
       } catch {}
     }
@@ -227,9 +283,18 @@ function CheckoutPageContent() {
 
   async function handlePlaceOrder() {
     setOrderError('');
-    if (!user?.id) { setOrderError('Please sign in to place your order.'); return; }
-    if (orderItems.length === 0) { setOrderError('Your cart is empty.'); return; }
-    if (orderItems.some((i) => !i.productId)) { setOrderError('Some items are missing product references — please revisit your cart.'); return; }
+    if (!user?.id) {
+      setOrderError('Please sign in to place your order.');
+      return;
+    }
+    if (orderItems.length === 0) {
+      setOrderError('Your cart is empty.');
+      return;
+    }
+    if (orderItems.some((i) => !i.productId)) {
+      setOrderError('Some items are missing product references — please revisit your cart.');
+      return;
+    }
 
     const addressCheck = validateAddressValue(address);
     if (!addressCheck.valid) {
@@ -284,13 +349,25 @@ function CheckoutPageContent() {
             <CheckCircle2 className="w-10 h-10 text-green-500" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 mb-2">Order Placed! 🎉</h1>
-          <p className="text-slate-500 mb-2">Your order {orderNumber && <span className="font-bold text-slate-800">#{orderNumber}</span>} has been confirmed.</p>
-          <p className="text-slate-500 text-sm mb-8">We&apos;ve emailed your confirmation and will notify you as it ships.</p>
+          <p className="text-slate-500 mb-2">
+            Your order{' '}
+            {orderNumber && <span className="font-bold text-slate-800">#{orderNumber}</span>} has
+            been confirmed.
+          </p>
+          <p className="text-slate-500 text-sm mb-8">
+            We&apos;ve emailed your confirmation and will notify you as it ships.
+          </p>
           <div className="space-y-3">
-            <Link href="/" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
+            <Link
+              href="/"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors"
+            >
               Continue Shopping
             </Link>
-            <Link href="/orders" className="w-full border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl hover:bg-slate-50 transition-colors text-sm flex items-center justify-center">
+            <Link
+              href="/orders"
+              className="w-full border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl hover:bg-slate-50 transition-colors text-sm flex items-center justify-center"
+            >
               Track Your Order
             </Link>
           </div>
@@ -304,9 +381,13 @@ function CheckoutPageContent() {
       <div className="max-w-6xl mx-auto px-3 xs:px-4 pt-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link href="/" className="hover:text-blue-600">Home</Link>
+          <Link href="/" className="hover:text-blue-600">
+            Home
+          </Link>
           <span>/</span>
-          <Link href="/cart" className="hover:text-blue-600">Cart</Link>
+          <Link href="/cart" className="hover:text-blue-600">
+            Cart
+          </Link>
           <span>/</span>
           <span className="text-slate-900 font-medium">Checkout</span>
         </div>
@@ -321,14 +402,20 @@ function CheckoutPageContent() {
                 <button
                   onClick={() => done && setStep(s.id)}
                   className={`flex items-center gap-2.5 flex-1 justify-center py-2 rounded-xl text-sm font-semibold transition-all ${
-                    active ? 'bg-blue-600 text-white shadow-md' : done ? 'text-blue-600 hover:bg-blue-50' : 'text-slate-400 cursor-default'
+                    active
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : done
+                        ? 'text-blue-600 hover:bg-blue-50'
+                        : 'text-slate-400 cursor-default'
                   }`}
                 >
                   <s.icon className="w-4 h-4" />
                   <span className="hidden sm:inline">{s.label}</span>
                   {done && <CheckCircle2 className="w-4 h-4" />}
                 </button>
-                {i < STEPS.length - 1 && <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />}
+                {i < STEPS.length - 1 && (
+                  <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                )}
               </React.Fragment>
             );
           })}
@@ -337,7 +424,6 @@ function CheckoutPageContent() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Form Area */}
           <div className="lg:col-span-2">
-
             {/* STEP 1: Address */}
             {step === 'address' && (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
@@ -356,7 +442,10 @@ function CheckoutPageContent() {
 
                 <div className="flex gap-3">
                   {['Home', 'Work', 'Other'].map((t) => (
-                    <button key={t} className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
+                    <button
+                      key={t}
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                    >
                       {t}
                     </button>
                   ))}
@@ -403,20 +492,36 @@ function CheckoutPageContent() {
                       <div>
                         <p className="font-bold text-slate-900 text-sm">Use KARTSEEK Wallet</p>
                         <p className="text-xs text-slate-500">
-                          {walletBalance > 0
-                            ? <>Available: <span className="font-bold text-blue-600">{fmt(walletBalance)}</span></>
-                            : 'No wallet balance available'}
+                          {walletBalance > 0 ? (
+                            <>
+                              Available:{' '}
+                              <span className="font-bold text-blue-600">{fmt(walletBalance)}</span>
+                            </>
+                          ) : (
+                            'No wallet balance available'
+                          )}
                         </p>
                       </div>
                     </div>
                     <div className="relative">
-                      <input type="checkbox" checked={useWallet} disabled={walletBalance <= 0} onChange={(e) => {
-                        setUseWallet(e.target.checked);
-                        if (e.target.checked) {
-                          const maxApplicable = Math.min(walletBalance, subtotal - couponDiscount - loyaltyDiscount);
-                          setWalletAmount(Math.max(0, maxApplicable));
-                        } else { setWalletAmount(0); }
-                      }} className="sr-only peer" />
+                      <input
+                        type="checkbox"
+                        checked={useWallet}
+                        disabled={walletBalance <= 0}
+                        onChange={(e) => {
+                          setUseWallet(e.target.checked);
+                          if (e.target.checked) {
+                            const maxApplicable = Math.min(
+                              walletBalance,
+                              subtotal - couponDiscount - loyaltyDiscount,
+                            );
+                            setWalletAmount(Math.max(0, maxApplicable));
+                          } else {
+                            setWalletAmount(0);
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
                       <div className="w-11 h-6 bg-slate-200 peer-checked:bg-blue-600 peer-disabled:opacity-40 rounded-full transition-colors" />
                       <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-5 transition-transform" />
                     </div>
@@ -424,7 +529,9 @@ function CheckoutPageContent() {
                   {useWallet && walletAmount > 0 && (
                     <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-blue-200">
                       <span className="text-xs text-slate-600">Wallet deduction</span>
-                      <span className="text-sm font-black text-blue-600">− {fmt(walletAmount)}</span>
+                      <span className="text-sm font-black text-blue-600">
+                        − {fmt(walletAmount)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -439,37 +546,74 @@ function CheckoutPageContent() {
                       <div>
                         <p className="font-bold text-slate-900 text-sm">Redeem Loyalty Points</p>
                         <p className="text-xs text-slate-500">
-                          {loyaltyPoints > 0 ? `${loyaltyPoints} pts available` : 'No points available'}
-                          {loyaltyTier && <> · <span className="font-bold text-amber-600">{loyaltyTier}</span> tier</>}
+                          {loyaltyPoints > 0
+                            ? `${loyaltyPoints} pts available`
+                            : 'No points available'}
+                          {loyaltyTier && (
+                            <>
+                              {' '}
+                              · <span className="font-bold text-amber-600">{loyaltyTier}</span> tier
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
                     <div className="relative">
-                      <input type="checkbox" checked={useLoyalty} disabled={loyaltyPoints <= 0} onChange={(e) => {
-                        setUseLoyalty(e.target.checked);
-                        if (e.target.checked) {
-                          setLoyaltyPointsToRedeem(Math.min(loyaltyPoints, (subtotal - couponDiscount - walletAmount) * 10));
-                        } else { setLoyaltyPointsToRedeem(0); }
-                      }} className="sr-only peer" />
+                      <input
+                        type="checkbox"
+                        checked={useLoyalty}
+                        disabled={loyaltyPoints <= 0}
+                        onChange={(e) => {
+                          setUseLoyalty(e.target.checked);
+                          if (e.target.checked) {
+                            setLoyaltyPointsToRedeem(
+                              Math.min(
+                                loyaltyPoints,
+                                (subtotal - couponDiscount - walletAmount) * 10,
+                              ),
+                            );
+                          } else {
+                            setLoyaltyPointsToRedeem(0);
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
                       <div className="w-11 h-6 bg-slate-200 peer-checked:bg-amber-500 peer-disabled:opacity-40 rounded-full transition-colors" />
                       <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-5 transition-transform" />
                     </div>
                   </label>
                   {useLoyalty && loyaltyDiscount > 0 && (
                     <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-200">
-                      <span className="text-xs text-slate-600">{loyaltyPointsToRedeem} pts redeemed</span>
-                      <span className="text-sm font-black text-amber-600">− {fmt(loyaltyDiscount)}</span>
+                      <span className="text-xs text-slate-600">
+                        {loyaltyPointsToRedeem} pts redeemed
+                      </span>
+                      <span className="text-sm font-black text-amber-600">
+                        − {fmt(loyaltyDiscount)}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {payMethod === 'upi' && (
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5" htmlFor="upi-id">UPI ID</label>
-                    <input id="upi-id" placeholder="e.g. name@paytm" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-blue-400 outline-none font-mono" />
+                    <label
+                      className="block text-sm font-bold text-slate-700 mb-1.5"
+                      htmlFor="upi-id"
+                    >
+                      UPI ID
+                    </label>
+                    <input
+                      id="upi-id"
+                      placeholder="e.g. name@paytm"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-blue-400 outline-none font-mono"
+                    />
                   </div>
                 )}
-                {(payMethod === 'card' || payMethod === 'debit_national' || payMethod === 'mada' || payMethod === 'knet' || payMethod === 'benefit') && (
+                {(payMethod === 'card' ||
+                  payMethod === 'debit_national' ||
+                  payMethod === 'mada' ||
+                  payMethod === 'knet' ||
+                  payMethod === 'benefit') && (
                   /**
                    * Card capture is NOT implemented. These inputs hold no state, are
                    * wired to no gateway, and nothing they contain is ever submitted.
@@ -498,7 +642,12 @@ function CheckoutPageContent() {
                       </p>
                     </div>
                     <div>
-                      <label htmlFor="cc-number" className="block text-sm font-bold text-slate-400 mb-1.5">Card Number</label>
+                      <label
+                        htmlFor="cc-number"
+                        className="block text-sm font-bold text-slate-400 mb-1.5"
+                      >
+                        Card Number
+                      </label>
                       <input
                         id="cc-number"
                         name="cardNumber"
@@ -512,7 +661,12 @@ function CheckoutPageContent() {
                     {/* Name on card — required by every card network for
                         authorisation, and simply absent from this form before. */}
                     <div>
-                      <label htmlFor="cc-name" className="block text-sm font-bold text-slate-400 mb-1.5">Name on Card</label>
+                      <label
+                        htmlFor="cc-name"
+                        className="block text-sm font-bold text-slate-400 mb-1.5"
+                      >
+                        Name on Card
+                      </label>
                       <input
                         id="cc-name"
                         name="cardholderName"
@@ -523,7 +677,12 @@ function CheckoutPageContent() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label htmlFor="cc-exp" className="block text-sm font-bold text-slate-400 mb-1.5">Expiry</label>
+                        <label
+                          htmlFor="cc-exp"
+                          className="block text-sm font-bold text-slate-400 mb-1.5"
+                        >
+                          Expiry
+                        </label>
                         <input
                           id="cc-exp"
                           name="cardExpiry"
@@ -535,7 +694,12 @@ function CheckoutPageContent() {
                         />
                       </div>
                       <div>
-                        <label htmlFor="cc-csc" className="block text-sm font-bold text-slate-400 mb-1.5">CVV</label>
+                        <label
+                          htmlFor="cc-csc"
+                          className="block text-sm font-bold text-slate-400 mb-1.5"
+                        >
+                          CVV
+                        </label>
                         <input
                           id="cc-csc"
                           name="cardCvv"
@@ -551,10 +715,18 @@ function CheckoutPageContent() {
                   </fieldset>
                 )}
 
-                <button onClick={() => setStep('review')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md">
+                <button
+                  onClick={() => setStep('review')}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md"
+                >
                   Review Order <ChevronRight className="w-5 h-5" />
                 </button>
-                <button onClick={() => setStep('address')} className="w-full text-sm text-slate-500 hover:text-slate-700 transition-colors">← Back to Address</button>
+                <button
+                  onClick={() => setStep('address')}
+                  className="w-full text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  ← Back to Address
+                </button>
               </div>
             )}
 
@@ -571,7 +743,8 @@ function CheckoutPageContent() {
                   <div className="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
                     <Truck className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span className="text-emerald-800 font-bold">
-                      Arriving {deliveryWindow.dayLabel} · all times {timezoneLabel} ({country.timezone})
+                      Arriving {deliveryWindow.dayLabel} · all times {timezoneLabel} (
+                      {country.timezone})
                     </span>
                   </div>
 
@@ -585,33 +758,73 @@ function CheckoutPageContent() {
                             <Package className="w-6 h-6 text-blue-300" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-900 text-sm truncate">{item.title}</p>
-                            <p className="text-xs text-blue-600 font-medium">{item.brand} · Qty: {item.qty}</p>
+                            <p className="font-semibold text-slate-900 text-sm truncate">
+                              {item.title}
+                            </p>
+                            <p className="text-xs text-blue-600 font-medium">
+                              {item.brand} · Qty: {item.qty}
+                            </p>
                             <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
                               <Calendar className="w-3 h-3" /> Est. delivery: {deliveryStr}
                             </p>
                           </div>
-                          <p className="font-bold text-slate-900 shrink-0">{fmt(item.price * item.qty)}</p>
+                          <p className="font-bold text-slate-900 shrink-0">
+                            {fmt(item.price * item.qty)}
+                          </p>
                         </div>
                       );
                     })}
                   </div>
 
                   <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
-                    <div className="flex justify-between text-slate-600"><span>Subtotal</span><span className="font-semibold">{fmt(subtotal)}</span></div>
-                    {savedMRP > 0 && <div className="flex justify-between text-green-600 font-semibold"><span>Product Discount</span><span>− {fmt(savedMRP)}</span></div>}
-                    <div className={`flex justify-between font-semibold ${delivery === 0 ? 'text-green-600' : 'text-slate-600'}`}>
-                      <span>Delivery</span><span>{delivery === 0 ? 'FREE' : fmt(delivery)}</span>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Subtotal</span>
+                      <span className="font-semibold">{fmt(subtotal)}</span>
                     </div>
-                    {couponDiscount > 0 && <div className="flex justify-between text-green-600 font-semibold"><span>Coupon</span><span>− {fmt(couponDiscount)}</span></div>}
-                    {giftCardAmount > 0 && <div className="flex justify-between text-purple-600 font-semibold"><span>Gift Card</span><span>− {fmt(giftCardAmount)}</span></div>}
-                    {walletAmount > 0 && <div className="flex justify-between text-blue-600 font-semibold"><span>Wallet</span><span>− {fmt(walletAmount)}</span></div>}
-                    {loyaltyDiscount > 0 && <div className="flex justify-between text-amber-600 font-semibold"><span>Loyalty Points</span><span>− {fmt(loyaltyDiscount)}</span></div>}
+                    {savedMRP > 0 && (
+                      <div className="flex justify-between text-green-600 font-semibold">
+                        <span>Product Discount</span>
+                        <span>− {fmt(savedMRP)}</span>
+                      </div>
+                    )}
+                    <div
+                      className={`flex justify-between font-semibold ${delivery === 0 ? 'text-green-600' : 'text-slate-600'}`}
+                    >
+                      <span>Delivery</span>
+                      <span>{delivery === 0 ? 'FREE' : fmt(delivery)}</span>
+                    </div>
+                    {couponDiscount > 0 && (
+                      <div className="flex justify-between text-green-600 font-semibold">
+                        <span>Coupon</span>
+                        <span>− {fmt(couponDiscount)}</span>
+                      </div>
+                    )}
+                    {giftCardAmount > 0 && (
+                      <div className="flex justify-between text-purple-600 font-semibold">
+                        <span>Gift Card</span>
+                        <span>− {fmt(giftCardAmount)}</span>
+                      </div>
+                    )}
+                    {walletAmount > 0 && (
+                      <div className="flex justify-between text-blue-600 font-semibold">
+                        <span>Wallet</span>
+                        <span>− {fmt(walletAmount)}</span>
+                      </div>
+                    )}
+                    {loyaltyDiscount > 0 && (
+                      <div className="flex justify-between text-amber-600 font-semibold">
+                        <span>Loyalty Points</span>
+                        <span>− {fmt(loyaltyDiscount)}</span>
+                      </div>
+                    )}
                     {/* Only where a consumption tax actually applies. Qatar has no
                         VAT, so printing "VAT 0.00" there would be misleading. */}
                     {tax.applies && (
                       <div className="flex justify-between text-slate-600">
-                        <span>{tax.label}{tax.inclusive ? ' (included)' : ''}</span>
+                        <span>
+                          {tax.label}
+                          {tax.inclusive ? ' (included)' : ''}
+                        </span>
                         <span className="font-semibold">{fmt(tax.taxAmount)}</span>
                       </div>
                     )}
@@ -624,7 +837,9 @@ function CheckoutPageContent() {
                   {savedMRP > 0 && (
                     <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-green-600 shrink-0" />
-                      <p className="text-xs text-green-700 font-bold">You&apos;re saving {fmt(savedMRP)} on this order!</p>
+                      <p className="text-xs text-green-700 font-bold">
+                        You&apos;re saving {fmt(savedMRP)} on this order!
+                      </p>
                     </div>
                   )}
 
@@ -636,7 +851,9 @@ function CheckoutPageContent() {
                   {/* Points to earn preview */}
                   <div className="flex items-center gap-2 text-xs bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
                     <Gift className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span className="text-amber-700 font-bold">🎁 You&apos;ll earn ~{estimatedPointsEarn} loyalty points with this order!</span>
+                    <span className="text-amber-700 font-bold">
+                      🎁 You&apos;ll earn ~{estimatedPointsEarn} loyalty points with this order!
+                    </span>
                   </div>
                 </div>
 
@@ -645,43 +862,95 @@ function CheckoutPageContent() {
                     collect and the whole section is omitted rather than asking a
                     Doha customer for an Indian tax number. */}
                 {country.code === 'IN' && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-                  <button onClick={() => setShowGst(!showGst)} className="w-full flex items-center justify-between">
-                    <span className="flex items-center gap-2 font-bold text-slate-900 text-sm">
-                      <FileText className="w-4 h-4 text-blue-600" /> Need a GST Invoice?
-                    </span>
-                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showGst ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showGst && (
-                    <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-                      <p className="text-xs text-slate-500">Enter your GSTIN to receive a GST-compliant invoice for this order.</p>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1.5" htmlFor="gstin">GSTIN</label>
-                        <input id="gstin" value={gstin} onChange={e => validateGstin(e.target.value)} placeholder="e.g. 22AAAAA0000A1Z5" maxLength={15} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:border-blue-400 outline-none uppercase" />
-                        {gstError && <p className="text-xs text-red-500 mt-1">{gstError}</p>}
-                        {gstin.length === 15 && !gstError && <p className="text-xs text-green-600 font-semibold mt-1">✓ Valid GSTIN format</p>}
+                  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                    <button
+                      onClick={() => setShowGst(!showGst)}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+                        <FileText className="w-4 h-4 text-blue-600" /> Need a GST Invoice?
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-slate-400 transition-transform ${showGst ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {showGst && (
+                      <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                        <p className="text-xs text-slate-500">
+                          Enter your GSTIN to receive a GST-compliant invoice for this order.
+                        </p>
+                        <div>
+                          <label
+                            className="block text-sm font-bold text-slate-700 mb-1.5"
+                            htmlFor="gstin"
+                          >
+                            GSTIN
+                          </label>
+                          <input
+                            id="gstin"
+                            value={gstin}
+                            onChange={(e) => validateGstin(e.target.value)}
+                            placeholder="e.g. 22AAAAA0000A1Z5"
+                            maxLength={15}
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:border-blue-400 outline-none uppercase"
+                          />
+                          {gstError && <p className="text-xs text-red-500 mt-1">{gstError}</p>}
+                          {gstin.length === 15 && !gstError && (
+                            <p className="text-xs text-green-600 font-semibold mt-1">
+                              ✓ Valid GSTIN format
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-bold text-slate-700 mb-1.5"
+                            htmlFor="company-business-name"
+                          >
+                            Company / Business Name
+                          </label>
+                          <input
+                            id="company-business-name"
+                            value={companyName}
+                            onChange={(e) => setCompanyName(e.target.value)}
+                            placeholder="e.g. Acme Pvt. Ltd."
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-blue-400 outline-none"
+                          />
+                        </div>
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
+                          <p className="text-xs text-blue-700">
+                            GST invoice with input tax credit details will be emailed after
+                            delivery.
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1.5" htmlFor="company-business-name">Company / Business Name</label>
-                        <input id="company-business-name" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Pvt. Ltd." className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-blue-400 outline-none" />
-                      </div>
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
-                        <p className="text-xs text-blue-700">GST invoice with input tax credit details will be emailed after delivery.</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
                 )}
 
-                {orderError && <p className="text-sm text-red-600 font-semibold text-center bg-red-50 border border-red-100 rounded-lg py-2 px-3">{orderError}</p>}
+                {orderError && (
+                  <p className="text-sm text-red-600 font-semibold text-center bg-red-50 border border-red-100 rounded-lg py-2 px-3">
+                    {orderError}
+                  </p>
+                )}
                 <button
                   onClick={handlePlaceOrder}
                   disabled={placing}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md text-lg"
                 >
-                  {placing ? <><Loader2 className="w-5 h-5 animate-spin" /> Placing Order…</> : <>Place Order — {fmt(total)}</>}
+                  {placing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" /> Placing Order…
+                    </>
+                  ) : (
+                    <>Place Order — {fmt(total)}</>
+                  )}
                 </button>
-                <button onClick={() => setStep('payment')} className="w-full text-sm text-slate-500 hover:text-slate-700 transition-colors">← Back to Payment</button>
+                <button
+                  onClick={() => setStep('payment')}
+                  className="w-full text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  ← Back to Payment
+                </button>
               </div>
             )}
           </div>
@@ -690,13 +959,18 @@ function CheckoutPageContent() {
           <div>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 lg:sticky lg:top-[calc(var(--mp-header-h)+1rem)]">
               <h2 className="font-bold text-slate-900 mb-4 pb-3 border-b border-slate-100">
-                Order ({orderItems.reduce((s, i) => s + i.qty, 0)} {orderItems.reduce((s, i) => s + i.qty, 0) === 1 ? 'item' : 'items'})
+                Order ({orderItems.reduce((s, i) => s + i.qty, 0)}{' '}
+                {orderItems.reduce((s, i) => s + i.qty, 0) === 1 ? 'item' : 'items'})
               </h2>
               <div className="space-y-3">
                 {orderItems.map((item, i) => (
                   <div key={i} className="flex justify-between text-sm">
-                    <span className="text-slate-600 truncate pr-2">{item.title.slice(0, 28)}… ×{item.qty}</span>
-                    <span className="font-semibold text-slate-900 shrink-0">{fmt(item.price * item.qty)}</span>
+                    <span className="text-slate-600 truncate pr-2">
+                      {item.title.slice(0, 28)}… ×{item.qty}
+                    </span>
+                    <span className="font-semibold text-slate-900 shrink-0">
+                      {fmt(item.price * item.qty)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -713,15 +987,27 @@ function CheckoutPageContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-green-700">-{fmt(couponDiscount)}</span>
-                      <button onClick={() => { setCouponApplied(''); setCouponDiscount(0); setCouponCode(''); }} className="text-slate-400 hover:text-red-500">
+                      <span className="text-xs font-black text-green-700">
+                        -{fmt(couponDiscount)}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setCouponApplied('');
+                          setCouponDiscount(0);
+                          setCouponCode('');
+                        }}
+                        className="text-slate-400 hover:text-red-500"
+                      >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <button onClick={() => setShowCoupon(!showCoupon)} className="flex items-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors w-full">
+                    <button
+                      onClick={() => setShowCoupon(!showCoupon)}
+                      className="flex items-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors w-full"
+                    >
                       <Tag className="w-4 h-4" /> Apply Coupon / Promo Code
                     </button>
                     {showCoupon && (
@@ -729,7 +1015,10 @@ function CheckoutPageContent() {
                         <div className="flex gap-2">
                           <input
                             value={couponCode}
-                            onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError(''); }}
+                            onChange={(e) => {
+                              setCouponCode(e.target.value.toUpperCase());
+                              setCouponError('');
+                            }}
                             placeholder="Enter code"
                             className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono uppercase outline-none focus:border-blue-400"
                           />
@@ -739,7 +1028,10 @@ function CheckoutPageContent() {
                               setCouponLoading(true);
                               setCouponError('');
                               try {
-                                const res = await validateCoupon({ code: couponCode.trim(), cartTotal: subtotal });
+                                const res = await validateCoupon({
+                                  code: couponCode.trim(),
+                                  cartTotal: subtotal,
+                                });
                                 if (res?.valid) {
                                   setCouponDiscount(res.discount || 0);
                                   setCouponApplied(couponCode.trim());
@@ -758,7 +1050,9 @@ function CheckoutPageContent() {
                             {couponLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply'}
                           </button>
                         </div>
-                        {couponError && <p className="text-xs text-red-500 mt-1.5">{couponError}</p>}
+                        {couponError && (
+                          <p className="text-xs text-red-500 mt-1.5">{couponError}</p>
+                        )}
                       </div>
                     )}
                   </>
@@ -773,13 +1067,21 @@ function CheckoutPageContent() {
                       <Gift className="w-4 h-4 text-purple-600" />
                       <div>
                         <span className="text-xs font-bold text-purple-700">{giftCardApplied}</span>
-                        <span className="text-xs text-purple-600 ml-1">· balance {fmt(giftCardBalance)}</span>
+                        <span className="text-xs text-purple-600 ml-1">
+                          · balance {fmt(giftCardBalance)}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-purple-700">-{fmt(giftCardAmount)}</span>
+                      <span className="text-xs font-black text-purple-700">
+                        -{fmt(giftCardAmount)}
+                      </span>
                       <button
-                        onClick={() => { setGiftCardApplied(''); setGiftCardBalance(0); setGiftCardCode(''); }}
+                        onClick={() => {
+                          setGiftCardApplied('');
+                          setGiftCardBalance(0);
+                          setGiftCardCode('');
+                        }}
                         className="text-slate-400 hover:text-red-500"
                         aria-label="Remove gift card"
                       >
@@ -792,7 +1094,10 @@ function CheckoutPageContent() {
                     <div className="flex gap-2">
                       <input
                         value={giftCardCode}
-                        onChange={e => { setGiftCardCode(e.target.value.toUpperCase()); setGiftCardError(''); }}
+                        onChange={(e) => {
+                          setGiftCardCode(e.target.value.toUpperCase());
+                          setGiftCardError('');
+                        }}
                         placeholder="Gift card code"
                         className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono uppercase outline-none focus:border-purple-400"
                       />
@@ -824,19 +1129,23 @@ function CheckoutPageContent() {
                         {giftCardChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply'}
                       </button>
                     </div>
-                    {giftCardError && <p className="text-xs text-red-500 mt-1.5">{giftCardError}</p>}
+                    {giftCardError && (
+                      <p className="text-xs text-red-500 mt-1.5">{giftCardError}</p>
+                    )}
                   </div>
                 )}
               </div>
 
               <div className="border-t border-slate-100 mt-4 pt-4 flex justify-between font-black text-slate-900">
-                <span>Total</span><span>{fmt(total)}</span>
+                <span>Total</span>
+                <span>{fmt(total)}</span>
               </div>
               {delivery === 0 ? (
                 <p className="text-xs text-green-600 font-semibold mt-1">Free delivery included</p>
               ) : (
                 <p className="text-xs text-slate-500 mt-1">
-                  Includes {fmt(delivery)} delivery · add {fmt(amountToFreeDelivery(subtotal))} more for free delivery
+                  Includes {fmt(delivery)} delivery · add {fmt(amountToFreeDelivery(subtotal))} more
+                  for free delivery
                 </p>
               )}
             </div>

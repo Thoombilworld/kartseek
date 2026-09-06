@@ -1,13 +1,12 @@
 import { api } from '@/lib/api-endpoints';
 
 /**
- * Note the doubled segment. The gateway declares this surface as
- * `@Controller('api/loyalty')` while its global prefix is already `api/v1`, so
- * the route really is `/api/v1/api/loyalty/...`. `'/loyalty'` here produced a
- * 404 on every call, which is why nothing on the site had ever shown a points
- * balance. `apps/mcp-server/src/tools/loyalty.ts` carries the same workaround.
+ * The gateway mounts the loyalty surface at `loyalty` (canonical) and, for
+ * clients that learned it, at the doubled `api/loyalty` it used to be alone on.
+ * Under the `api/v1` global prefix that is `/api/v1/loyalty/...`, the same path
+ * the mobile customer app uses.
  */
-const BASE = '/api/loyalty';
+const BASE = '/loyalty';
 
 export interface LoyaltyPointsData {
   userId: string;
@@ -41,15 +40,22 @@ export const loyaltyApi = {
    * as a thrown `ApiError` rather than a 200 the caller has to inspect.
    */
   redeem: async (points: number) => {
-    return api.post<{ success: boolean; pointsRedeemed: number; discountAmount: number; newTotal: number }>(
-      `${BASE}/redeem`, { points },
-    );
+    return api.post<{
+      success: boolean;
+      pointsRedeemed: number;
+      discountAmount: number;
+      newTotal: number;
+    }>(`${BASE}/redeem`, { points });
   },
 
   /** What an order of this size would earn, at the customer's current tier. */
   preview: async (orderTotal: number) => {
-    return api.get<{ basePoints: number; tierMultiplier: number; tier: string; totalPoints: number; estimatedValue: number }>(
-      `${BASE}/preview`, { orderTotal },
-    );
+    return api.get<{
+      basePoints: number;
+      tierMultiplier: number;
+      tier: string;
+      totalPoints: number;
+      estimatedValue: number;
+    }>(`${BASE}/preview`, { orderTotal });
   },
 };

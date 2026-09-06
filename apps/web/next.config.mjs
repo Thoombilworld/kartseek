@@ -32,7 +32,7 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
-      { protocol: 'http',  hostname: 'localhost' },
+      { protocol: 'http', hostname: 'localhost' },
     ],
     minimumCacheTTL: 3600,
     deviceSizes: [360, 640, 750, 828, 1080, 1200, 1920],
@@ -41,9 +41,7 @@ const nextConfig = {
 
   // ── Compiler Options ──────────────────────────────────────────────────────
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production'
-      ? { exclude: ['error', 'warn'] }
-      : false,
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   },
 
   // ── Security HTTP Headers ─────────────────────────────────────────────────
@@ -52,11 +50,15 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: [
-          { key: 'X-Frame-Options',           value: 'DENY' },
-          { key: 'X-Content-Type-Options',     value: 'nosniff' },
-          { key: 'X-XSS-Protection',           value: '0' }, // Deprecated — CSP handles this
-          { key: 'Referrer-Policy',            value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy',         value: 'camera=(), microphone=(), geolocation=(self), payment=(self), usb=(), bluetooth=()' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-XSS-Protection', value: '0' }, // Deprecated — CSP handles this
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value:
+              'camera=(), microphone=(), geolocation=(self), payment=(self), usb=(), bluetooth=()',
+          },
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
           { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
           {
@@ -86,9 +88,7 @@ const nextConfig = {
       // Cache static assets aggressively
       {
         source: '/static/(.*)',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
-        ],
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
       },
     ];
   },
@@ -96,16 +96,37 @@ const nextConfig = {
   // ── Redirects ─────────────────────────────────────────────────────────────
   async redirects() {
     return [
-      { source: '/home',  destination: '/',         permanent: true },
-      { source: '/shop',  destination: '/marketplace', permanent: true },
-      { source: '/rides', destination: '/taxi',      permanent: true },
+      // The sign-in surface lives under /auth; the bare names are what people type.
+      { source: '/login', destination: '/auth/login', permanent: false },
+      { source: '/register', destination: '/auth/signup', permanent: false },
+      { source: '/signup', destination: '/auth/signup', permanent: false },
+      { source: '/forgot-password', destination: '/auth/forgot-password', permanent: false },
+      { source: '/home', destination: '/', permanent: true },
+      { source: '/shop', destination: '/marketplace', permanent: true },
+      { source: '/rides', destination: '/taxi', permanent: true },
       // Renamed route redirects (directory reorganization)
-      { source: '/franchise-opportunity',      destination: '/franchise/opportunity',      permanent: true },
-      { source: '/franchise-opportunity/:path*', destination: '/franchise/opportunity/:path*', permanent: true },
-      { source: '/admin/restaurants',          destination: '/admin/restaurant',           permanent: true },
-      { source: '/admin/restaurants/:path*',   destination: '/admin/restaurant/:path*',    permanent: true },
-      { source: '/marketplace/categories',     destination: '/marketplace/category-list',  permanent: true },
-      { source: '/marketplace/categories/:path*', destination: '/marketplace/category-list/:path*', permanent: true },
+      { source: '/franchise-opportunity', destination: '/franchise/opportunity', permanent: true },
+      {
+        source: '/franchise-opportunity/:path*',
+        destination: '/franchise/opportunity/:path*',
+        permanent: true,
+      },
+      { source: '/admin/restaurants', destination: '/admin/restaurant', permanent: true },
+      {
+        source: '/admin/restaurants/:path*',
+        destination: '/admin/restaurant/:path*',
+        permanent: true,
+      },
+      {
+        source: '/marketplace/categories',
+        destination: '/marketplace/category-list',
+        permanent: true,
+      },
+      {
+        source: '/marketplace/categories/:path*',
+        destination: '/marketplace/category-list/:path*',
+        permanent: true,
+      },
     ];
   },
 
@@ -122,14 +143,31 @@ const nextConfig = {
     // the pages themselves, and the zone's own /_next/* assets — those are
     // requested from this origin, so without the second rule the page renders
     // and then fails to hydrate on a 404 for its own JavaScript.
-    const marketplaceZone = (process.env.MARKETPLACE_ZONE_ORIGIN ?? 'http://localhost:3002').replace(/\/$/, '');
-    const groceryZone = (process.env.GROCERY_ZONE_ORIGIN ?? 'http://localhost:3003').replace(/\/$/, '');
-    const restaurantZone = (process.env.RESTAURANT_ZONE_ORIGIN ?? 'http://localhost:3004').replace(/\/$/, '');
-    const pharmacyZone = (process.env.PHARMACY_ZONE_ORIGIN ?? 'http://localhost:3005').replace(/\/$/, '');
-    const doctorZone = (process.env.DOCTOR_ZONE_ORIGIN ?? 'http://localhost:3006').replace(/\/$/, '');
+    const marketplaceZone = (
+      process.env.MARKETPLACE_ZONE_ORIGIN ?? 'http://localhost:3002'
+    ).replace(/\/$/, '');
+    const groceryZone = (process.env.GROCERY_ZONE_ORIGIN ?? 'http://localhost:3003').replace(
+      /\/$/,
+      '',
+    );
+    const restaurantZone = (process.env.RESTAURANT_ZONE_ORIGIN ?? 'http://localhost:3004').replace(
+      /\/$/,
+      '',
+    );
+    const pharmacyZone = (process.env.PHARMACY_ZONE_ORIGIN ?? 'http://localhost:3005').replace(
+      /\/$/,
+      '',
+    );
+    const doctorZone = (process.env.DOCTOR_ZONE_ORIGIN ?? 'http://localhost:3006').replace(
+      /\/$/,
+      '',
+    );
     const hotelZone = (process.env.HOTEL_ZONE_ORIGIN ?? 'http://localhost:3007').replace(/\/$/, '');
     const taxiZone = (process.env.TAXI_ZONE_ORIGIN ?? 'http://localhost:3008').replace(/\/$/, '');
-    const franchiseZone = (process.env.FRANCHISE_ZONE_ORIGIN ?? 'http://localhost:3009').replace(/\/$/, '');
+    const franchiseZone = (process.env.FRANCHISE_ZONE_ORIGIN ?? 'http://localhost:3009').replace(
+      /\/$/,
+      '',
+    );
 
     return [
       {

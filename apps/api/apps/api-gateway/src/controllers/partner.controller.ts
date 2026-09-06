@@ -1,4 +1,23 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Req, HttpCode, HttpStatus, ForbiddenException, NotFoundException, BadRequestException, Optional, Inject , ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  Req,
+  HttpCode,
+  HttpStatus,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+  Optional,
+  Inject,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
@@ -8,11 +27,30 @@ import * as crypto from 'crypto';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
-import { 
-  Partner, PartnerUser, PartnerRole, PartnerRoleAssignment, PartnerDocument, PartnerComplianceStatus,
-  PartnerOnlineSession, PartnerLocationUpdate, PartnerEarning, PartnerPayout, PartnerSosCase,
-  DeliveryPartner, DeliveryTask, DeliveryTaskStatusHistory, DeliveryPartnerEarning, DeliveryCodCollection, DeliveryReturnTask,
-  TaxiDriver, TaxiVehicle, TaxiRide, TaxiRideStatusHistory, TaxiDriverEarning, TaxiAuditLog
+import {
+  Partner,
+  PartnerUser,
+  PartnerRole,
+  PartnerRoleAssignment,
+  PartnerDocument,
+  PartnerComplianceStatus,
+  PartnerOnlineSession,
+  PartnerLocationUpdate,
+  PartnerEarning,
+  PartnerPayout,
+  PartnerSosCase,
+  DeliveryPartner,
+  DeliveryTask,
+  DeliveryTaskStatusHistory,
+  DeliveryPartnerEarning,
+  DeliveryCodCollection,
+  DeliveryReturnTask,
+  TaxiDriver,
+  TaxiVehicle,
+  TaxiRide,
+  TaxiRideStatusHistory,
+  TaxiDriverEarning,
+  TaxiAuditLog,
 } from '../entities';
 
 const skipDb = process.env.SKIP_DB === 'true';
@@ -34,7 +72,11 @@ const devOtpEnabled = () =>
 
 @ApiTags('🤝 Partner')
 @ApiBearerAuth('JWT')
-@Controller('api/partner')
+// Two mounts, same reason as LoyaltyGatewayController: `api/partner` under
+// the global `api` prefix is /api/v1/api/partner/*, which is what the partner
+// mobile app calls today. `partner` is canonical; the doubled path stays so
+// the app keeps working until it is repointed.
+@Controller(['partner', 'api/partner'])
 export class PartnerController {
   /** Mirrors AuthController so partner sessions age out on the same schedule. */
   private static readonly ACCESS_TTL_SECONDS = 3600;
@@ -148,14 +190,16 @@ export class PartnerController {
       partnerId: partner.id,
       // `userId` is the JWT subject. A partner-user row without one cannot be
       // signed into a token that any ownership guard could check against.
-      userId: pUser.userId ?? (() => {
-        throw new UnauthorizedException(
-          'This partner account is not linked to a user profile. Please contact support.',
-        );
-      })(),
+      userId:
+        pUser.userId ??
+        (() => {
+          throw new UnauthorizedException(
+            'This partner account is not linked to a user profile. Please contact support.',
+          );
+        })(),
       // `allowedRoles` is a nullable array column; an empty list is the honest
       // reading of "no roles granted yet", not a reason to grant both.
-      allowedRoles: (pUser.allowedRoles ?? []).filter(role =>
+      allowedRoles: (pUser.allowedRoles ?? []).filter((role) =>
         (PartnerController.PARTNER_ROLES as readonly string[]).includes(role),
       ),
       activeRole: pUser.activeRole ?? 'TAXI_DRIVER',
@@ -280,7 +324,8 @@ export class PartnerController {
       name: 'John Doe Partner',
       phone: '+91700000000',
       email: 'partner@kartseek.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+      avatarUrl:
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
       vehicle: {
         plateNumber: 'KCD 123X',
         model: 'Toyota Fielder 2018',
@@ -316,7 +361,10 @@ export class PartnerController {
   @UseGuards(JwtAuthGuard)
   @Post('documents/upload')
   @ApiOperation({ summary: 'Upload partner document' })
-  async uploadDocument(@Req() req: any, @Body() body: { docType: string; docUrl: string; roleType: string }) {
+  async uploadDocument(
+    @Req() req: any,
+    @Body() body: { docType: string; docUrl: string; roleType: string },
+  ) {
     const pId = req.user?.partnerId || 'partner-12345';
     if (!skipDb) {
       const doc = this.db.create(PartnerDocument, {
@@ -359,10 +407,14 @@ export class PartnerController {
   async goOffline(@Req() req: any) {
     const pId = req.user?.partnerId || 'partner-12345';
     if (!skipDb) {
-      await this.db.update(PartnerOnlineSession, { partnerId: pId, status: 'ONLINE' }, {
-        status: 'OFFLINE',
-        logoutTime: new Date(),
-      });
+      await this.db.update(
+        PartnerOnlineSession,
+        { partnerId: pId, status: 'ONLINE' },
+        {
+          status: 'OFFLINE',
+          logoutTime: new Date(),
+        },
+      );
     }
     return { success: true, status: 'OFFLINE' };
   }
@@ -373,8 +425,18 @@ export class PartnerController {
   async getNotifications(@Req() req: any) {
     return {
       notifications: [
-        { id: 1, title: 'Welcome to KARTSEEK', body: 'Complete your documents to start receiving orders.', createdAt: new Date().toISOString() },
-        { id: 2, title: 'Weekly Bonus!', body: 'Complete 15 rides to unlock INR 1,500 bonus.', createdAt: new Date().toISOString() },
+        {
+          id: 1,
+          title: 'Welcome to KARTSEEK',
+          body: 'Complete your documents to start receiving orders.',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          title: 'Weekly Bonus!',
+          body: 'Complete 15 rides to unlock INR 1,500 bonus.',
+          createdAt: new Date().toISOString(),
+        },
       ],
     };
   }
@@ -434,8 +496,17 @@ export class PartnerController {
       await this.db.save(sos);
     }
     // Publish SOS alert to Kafka for emergency responders dispatch
-    await this.kafka.publish(KAFKA_TOPICS.EMERGENCY_SOS_TRIGGERED, { partnerId: pId, lat: body.lat, lng: body.lng, rideId: body.rideId });
-    return { success: true, status: 'DISPATCHED', message: 'SOS signal sent. Emergency services notified.' };
+    await this.kafka.publish(KAFKA_TOPICS.EMERGENCY_SOS_TRIGGERED, {
+      partnerId: pId,
+      lat: body.lat,
+      lng: body.lng,
+      rideId: body.rideId,
+    });
+    return {
+      success: true,
+      status: 'DISPATCHED',
+      message: 'SOS signal sent. Emergency services notified.',
+    };
   }
 
   // ── TAXI DRIVER MODE APIS ─────────────────────────────────────────────────
@@ -464,8 +535,10 @@ export class PartnerController {
           customerName: 'Mary W.',
           pickupAddress: 'Andheri West Mall, Mumbai',
           dropAddress: 'Mumbai Central, Indiatta Ave',
-          pickupLat: 19.1176, pickupLng: 36.8041,
-          dropLat: -1.2833, dropLng: 36.8219,
+          pickupLat: 19.1176,
+          pickupLng: 36.8041,
+          dropLat: -1.2833,
+          dropLng: 36.8219,
           distance: '4.8 km',
           formattedDistance: '4.8 km',
           formattedFare: 'INR 450',
@@ -530,7 +603,10 @@ export class PartnerController {
   @UseGuards(JwtAuthGuard)
   @Post('taxi/location')
   @ApiOperation({ summary: 'Post taxi driver location' })
-  async updateTaxiLocation(@Req() req: any, @Body() body: { lat: number; lng: number; heading: number }) {
+  async updateTaxiLocation(
+    @Req() req: any,
+    @Body() body: { lat: number; lng: number; heading: number },
+  ) {
     const pId = req.user?.partnerId || 'partner-12345';
     await this.redis.geoadd('drivers:locations', body.lng, body.lat, pId);
     return { success: true };
@@ -578,8 +654,10 @@ export class PartnerController {
           customerName: 'Jane K.',
           pickupAddress: 'QuickMart Supermarket, Andheri West',
           dropAddress: 'Pride Apartments, Apt B4, Andheri West',
-          pickupLat: -1.2641, pickupLng: 36.8049,
-          dropLat: -1.2690, dropLng: 36.8120,
+          pickupLat: -1.2641,
+          pickupLng: 36.8049,
+          dropLat: -1.269,
+          dropLng: 36.812,
           distance: 1.8,
           deliveryFee: 150,
           isCod: true,
@@ -601,8 +679,10 @@ export class PartnerController {
       sellerName: 'QuickMart Andheri West',
       pickupAddress: 'QuickMart Supermarket, Andheri West',
       dropAddress: 'Pride Apartments, Apt B4, Andheri West',
-      pickupLat: -1.2641, pickupLng: 36.8049,
-      dropLat: -1.2690, dropLng: 36.8120,
+      pickupLat: -1.2641,
+      pickupLng: 36.8049,
+      dropLat: -1.269,
+      dropLng: 36.812,
       distance: 1.8,
       deliveryFee: 150,
       isCod: true,
@@ -650,7 +730,8 @@ export class PartnerController {
   @Post('delivery/tasks/:id/verify-otp')
   @ApiOperation({ summary: 'Verify dropoff OTP from customer' })
   async verifyDeliveryOtp(@Param('id') taskId: string, @Body() body: { otp: string }) {
-    if (body.otp !== '4321') { // Mock verification
+    if (body.otp !== '4321') {
+      // Mock verification
       throw new BadRequestException('Incorrect delivery OTP');
     }
     return { success: true, message: 'OTP verified successfully' };

@@ -54,7 +54,8 @@ function controllerFiles(dir: string): string[] {
 const PUBLIC_PREFIXES: Array<[RegExp, string]> = [
   [/^\/$|^\/health/, 'liveness and readiness probes'],
   [/^\/auth\//, 'the sign-in surface itself — cannot require a token to get one'],
-  [/^\/api\/partner\/auth\//, 'partner OTP sign-in'],
+  [/^\/api\/partner\/auth\//, 'partner OTP sign-in (legacy doubled mount)'],
+  [/^\/partner\/auth\//, 'partner OTP sign-in'],
   [/^\/localization\//, 'currency, language and tax config — same for every visitor'],
   [
     /^\/regions(?!\/stats|\/india\/stats)/,
@@ -113,7 +114,9 @@ function collectRoutes(): Route[] {
     if (classLine === -1) continue;
 
     const head = src.slice(0, classLine).join('\n');
-    const base = (head.match(/@Controller\(\s*['"`]([^'"`]*)['"`]/) || [])[1] ?? '';
+    // A controller may declare several prefixes (`@Controller(['loyalty', 'api/loyalty'])`);
+    // the first one is canonical and is the path checked here.
+    const base = (head.match(/@Controller\(\s*(?:\[\s*)?['"`]([^'"`]*)['"`]/) || [])[1] ?? '';
 
     // Only the contiguous decorator block directly above `export class`.
     let top = classLine;
