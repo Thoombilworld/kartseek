@@ -37,7 +37,7 @@ module.exports = function (options) {
   // Resolve @app/* explicitly; see the note above on why these stay alongside
   // the tsconfig `paths`. `baseUrl` is deliberately absent: TypeScript 6
   // deprecates it and `tsc --noEmit` rejects it.
-  const appLibs = ['common', 'database', 'guards', 'decorators', 'validators', 'dto', 'events', 'logger', 'security', 'grpc', 'kafka', 'redis', 'gdpr', 'region', 'storage'];
+  const appLibs = ['common', 'database', 'guards', 'decorators', 'security', 'grpc', 'kafka', 'redis', 'gdpr', 'region', 'storage'];
   const appAliases = Object.fromEntries(appLibs.map((l) => [`@app/${l}`, path.resolve(__dirname, `libs/${l}/src`)]));
   return {
     ...options,

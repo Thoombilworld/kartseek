@@ -11,7 +11,7 @@ links to.
 ## What's here
 
 `apps/api` is the Nest monorepo: the API gateway, the 17 core services under
-`apps/api/apps`, and the 15 shared libraries under `apps/api/libs` they
+`apps/api/apps`, and the 11 shared libraries under `apps/api/libs` they
 import as `@app/<name>`. The full, generated list of every deployable — this
 workspace's and the eight module backends under `modules/*/backend` — is
 [`../../../docs/architecture/services.md`](../../../docs/architecture/services.md).

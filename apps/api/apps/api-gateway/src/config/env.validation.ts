@@ -132,7 +132,6 @@ export const envValidationSchema = Joi.object({
   WALLET_TCP_PORT: Joi.number().port().default(4014),
   ADMIN_TCP_PORT: Joi.number().port().default(4017),
   RESTAURANT_TCP_PORT: Joi.number().port().default(4018),
-  SELLER_TCP_PORT: Joi.number().port().default(4019),
   COMMISSION_TCP_PORT: Joi.number().port().default(4020),
   PAYOUT_TCP_PORT: Joi.number().port().default(4021),
   REFUND_TCP_PORT: Joi.number().port().default(4022),

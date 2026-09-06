@@ -106,30 +106,6 @@
       "@app/decorators/*": [
         "./libs/decorators/src/*"
       ],
-      "@app/validators": [
-        "./libs/validators/src"
-      ],
-      "@app/validators/*": [
-        "./libs/validators/src/*"
-      ],
-      "@app/dto": [
-        "./libs/dto/src"
-      ],
-      "@app/dto/*": [
-        "./libs/dto/src/*"
-      ],
-      "@app/events": [
-        "./libs/events/src"
-      ],
-      "@app/events/*": [
-        "./libs/events/src/*"
-      ],
-      "@app/logger": [
-        "./libs/logger/src"
-      ],
-      "@app/logger/*": [
-        "./libs/logger/src/*"
-      ],
       "@app/security": [
         "./libs/security/src"
       ],

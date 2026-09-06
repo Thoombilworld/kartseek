@@ -79,10 +79,9 @@
   },
 
   // ── ESLint ───────────────────────────────────────────────────────────────────
-  "eslint.workingDirectories": [
-    { "directory": "apps/web", "changeProcessCWD": true },
-    { "directory": "apps/api", "changeProcessCWD": true }
-  ],
+  // Every workspace carries its own eslint.config.*; "auto" makes the extension
+  // run ESLint from the directory that owns the file being edited.
+  "eslint.workingDirectories": [{ "mode": "auto" }],
   "eslint.validate": [
     "javascript",
     "javascriptreact",
@@ -96,27 +95,6 @@
   "terminal.integrated.cwd": "${workspaceFolder}",
   "terminal.integrated.shellIntegration.enabled": true,
   "terminal.integrated.shellIntegration.showWelcome": false,
-
-  // ── Python ───────────────────────────────────────────────────────────────
-  "python.defaultInterpreterPath": "C:\\Python314\\python.exe",
-
-  // ── Java ─────────────────────────────────────────────────────────────────
-  "java.jdt.ls.java.home": "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.3.9-hotspot",
-
-  // ── Git ──────────────────────────────────────────────────────────────────
-  "git.path": "C:\\Program Files\\Git\\cmd\\git.exe",
-  "java.configuration.updateBuildConfiguration": "automatic",
-  "java.import.gradle.enabled": false,
-  "java.import.exclusions": [
-    "**/node_modules/**",
-    "**/.metadata/**",
-    "**/archetype-resources/**",
-    "**/META-INF/maven/**",
-    "**/apps/{customer,partner,seller}/android/**"
-  ],
-  "cmake.sourceDirectory": "${workspaceFolder}/apps/customer/windows",
-  "java.jdt.ls.aspectjSupport.enabled": true,
-  "java.jdt.ls.javac.enabled": "on",
 
   // ── Accessibility Linter ────────────────────────────────────────────────────
   // Suppress false positives on dynamic IDs inside .map() loops
@@ -134,10 +112,6 @@
   "claudeCode.useTerminal": true,
 
   // ── Todo Tree ────────────────────────────────────────────────────────────
-  // Todo Tree looks for VS Code's old bundled `vscode-ripgrep`, which newer
-  // VS Code builds no longer ship (it moved to @vscode/ripgrep-universal, under
-  // a per-build folder that changes on every update). Point it at a stable copy.
-  "todo-tree.ripgrep.ripgrep": "C:\\Users\\Hp EliteBook\\AppData\\Local\\Programs\\ripgrep\\rg.exe",
   "todo-tree.filtering.excludeGlobs": [
     "**/node_modules/**",
     "**/.next/**",

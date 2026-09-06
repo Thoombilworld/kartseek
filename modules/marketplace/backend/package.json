@@ -14,8 +14,6 @@
     "type-check": "tsc --noEmit -p tsconfig.json && npm run check:type-imports",
     "check:type-imports": "node ../../../scripts/check-type-imports.js .",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
-    "db:create": "node scripts/create-database.js",
-    "db:schema": "node scripts/apply-schema.js",
     "test:integration": "vitest run --config vitest.integration.mts"
   },
   "jest": {

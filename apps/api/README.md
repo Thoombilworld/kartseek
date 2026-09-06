@@ -5,7 +5,7 @@
 The NestJS monorepo behind KARTSEEK: `apps/api-gateway` plus the 17 core
 services under `apps/api/apps` (auth, user, cart, order, payment, wallet,
 loyalty, delivery, location, search, notification, admin, audit-log,
-commission, payout, refund, report), the 15 shared libraries under
+commission, payout, refund, report), the 11 shared libraries under
 `apps/api/libs` that they import as `@app/<name>`, the platform's protobuf
 contracts (`apps/api/proto`), its migrations and seed scripts, and the
 `data-source.ts` the migration CLI runs against. The eight module backends
@@ -150,7 +150,7 @@ as decision D1/D2 in
 module, alongside `order.controller.ts`, `order.service.ts`, `dto/` and
 `entities/`.
 
-The 15 shared libraries and what each provides are listed in
+The 11 shared libraries and what each provides are listed in
 [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md#5-shared-backend-libraries) —
 adding a new one means registering it in five places, not one; see the same
 section and [ADR 0002](../../docs/adr/0002-nest-monorepo-on-rspack.md).

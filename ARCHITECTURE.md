@@ -184,27 +184,23 @@ Four transports, each for a different shape of call:
 
 ## 5. Shared backend libraries
 
-15 libraries under `apps/api/libs/`, each imported as `@app/<name>`:
+11 libraries under `apps/api/libs/`, each imported as `@app/<name>`:
 
-<!-- counted with: git ls-files apps/api/libs | sed -E 's#(apps/api/libs/[^/]+)/.*#\1#' | sort -u | wc -l → 15 -->
+<!-- counted with: git ls-files apps/api/libs | sed -E 's#(apps/api/libs/[^/]+)/.*#\1#' | sort -u | wc -l → 11 -->
 
 | Library           | What it provides                                                                                                                                                                                                                                                           |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@app/common`     | Shared enums (`status`, `country`, `role`), the paginated-response and base-entity interfaces, the HTTP/RPC exception filters, `LoggingInterceptor` and `TransformInterceptor` (the response envelope), the `rpcCatch` RPC-to-HTTP mapper, and the Joi env-schema builder. |
 | `@app/database`   | The shared `DatabaseModule` (Postgres/TypeORM registration), `validateDatabaseConfig`/`logDatabaseConfig`, and DB credential helpers.                                                                                                                                      |
 | `@app/decorators` | The `@Roles()` decorator and its module.                                                                                                                                                                                                                                   |
-| `@app/dto`        | Shared DTO module.                                                                                                                                                                                                                                                         |
-| `@app/events`     | `KAFKA_TOPICS` — the topic-name constants every service imports instead of hardcoding a string.                                                                                                                                                                            |
 | `@app/gdpr`       | GDPR module, service, controller, and the data-retention service.                                                                                                                                                                                                          |
 | `@app/grpc`       | The gRPC client/server module, client factory, shared interfaces, and server helpers (re-exported as `GrpcClientModule`).                                                                                                                                                  |
 | `@app/guards`     | `RolesGuard` and the `UserRole` enum.                                                                                                                                                                                                                                      |
 | `@app/kafka`      | `KafkaModule`, `KafkaProducerService`, `KafkaConsumerService`, and the topic-constants re-export.                                                                                                                                                                          |
-| `@app/logger`     | The shared logger module and service.                                                                                                                                                                                                                                      |
 | `@app/redis`      | `RedisModule` and `RedisService` (cache and geo store).                                                                                                                                                                                                                    |
 | `@app/region`     | Region detection: module, service, config, decorator, guard, and middleware.                                                                                                                                                                                               |
 | `@app/security`   | JWT strategy and guard, DDoS-protection middleware, PCI-compliance interceptor, CSRF guard, refresh-token and encryption services, and the resource-ownership guard/decorator pair.                                                                                        |
 | `@app/storage`    | Cloud storage module and service (uploads).                                                                                                                                                                                                                                |
-| `@app/validators` | Shared validators module.                                                                                                                                                                                                                                                  |
 
 Adding a new one is not one registration: every shared library must be
 declared in five places for a workspace to resolve `@app/*` the same way

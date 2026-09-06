@@ -9,10 +9,7 @@
       "restart": true,
       "stopOnEntry": false,
       "sourceMaps": true,
-      "outFiles": [
-        "${workspaceFolder}/apps/api/dist/**/*.js"
-      ],
-      "preLaunchTask": "nest:debug",
+      "outFiles": ["${workspaceFolder}/apps/api/dist/**/*.js"],
       "remoteRoot": "${workspaceFolder}/apps/api"
     },
     {
@@ -48,15 +45,11 @@
       "skipFiles": ["<node_internals>/**"]
     },
     {
-      "name": "🧪 Jest — API Unit Tests",
+      "name": "🧪 Vitest — API Unit Tests",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "${workspaceFolder}/apps/api/node_modules/.bin/jest",
-        "--runInBand",
-        "--watchAll=false"
-      ],
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["test", "--", "--no-file-parallelism"],
       "cwd": "${workspaceFolder}/apps/api",
       "env": {
         "NODE_ENV": "test"
