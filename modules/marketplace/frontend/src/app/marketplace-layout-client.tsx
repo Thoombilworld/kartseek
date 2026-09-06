@@ -1,9 +1,30 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  ShoppingBag, Search, User, Heart, ShoppingCart, X, MapPin,
-  Menu, ChevronDown, Store, Globe, Gift, Tag, Crosshair,
-  ExternalLink, MessageCircle, Camera, Play, Mail, Phone, Shield, CreditCard, Truck, RotateCcw,
+  ShoppingBag,
+  Search,
+  User,
+  Heart,
+  ShoppingCart,
+  X,
+  MapPin,
+  Menu,
+  ChevronDown,
+  Store,
+  Globe,
+  Gift,
+  Tag,
+  Crosshair,
+  ExternalLink,
+  MessageCircle,
+  Camera,
+  Play,
+  Mail,
+  Phone,
+  Shield,
+  CreditCard,
+  Truck,
+  RotateCcw,
   Link2,
 } from 'lucide-react';
 import { SOCIAL_LINKS } from '@/lib/config/social-links';
@@ -14,19 +35,19 @@ import { SOCIAL_LINKS } from '@/lib/config/social-links';
  * SEO schema, which runs where lucide components are not wanted.
  */
 const SOCIAL_ICONS = {
-  facebook:  ExternalLink,
-  twitter:   MessageCircle,
+  facebook: ExternalLink,
+  twitter: MessageCircle,
   instagram: Camera,
-  linkedin:  Link2,
-  youtube:   Play,
+  linkedin: Link2,
+  youtube: Play,
 } as const;
 
 const SOCIAL_HOVER = {
-  facebook:  'hover:bg-blue-600',
-  twitter:   'hover:bg-sky-500',
+  facebook: 'hover:bg-blue-600',
+  twitter: 'hover:bg-sky-500',
   instagram: 'hover:bg-pink-600',
-  linkedin:  'hover:bg-blue-700',
-  youtube:   'hover:bg-red-600',
+  linkedin: 'hover:bg-blue-700',
+  youtube: 'hover:bg-red-600',
 } as const;
 import Link from 'next/link';
 import { ZoneLink } from '@/components/zone-link';
@@ -34,7 +55,12 @@ import { useRouter, usePathname } from 'next/navigation';
 
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { useRegion, REGIONS } from '@/lib/contexts/region-context';
-import { LANGUAGES, getDirection, getEntityLine, getLocationSearchPlaceholder } from '@/lib/localization';
+import {
+  LANGUAGES,
+  getDirection,
+  getEntityLine,
+  getLocationSearchPlaceholder,
+} from '@/lib/localization';
 import { MARKETPLACE_FREE_DELIVERY_THRESHOLD } from '@/lib/marketplace/delivery';
 
 /**
@@ -45,16 +71,38 @@ import { MARKETPLACE_FREE_DELIVERY_THRESHOLD } from '@/lib/marketplace/delivery'
  * honour. Kept for when the backend can price per market.
  */
 const FREE_DELIVERY_THRESHOLDS: Record<string, number> = {
-  QA: 100, IN: 499, AE: 100, SA: 100, BH: 10, KW: 10, OM: 10, GB: 35, US: 35, SG: 40,
+  QA: 100,
+  IN: 499,
+  AE: 100,
+  SA: 100,
+  BH: 10,
+  KW: 10,
+  OM: 10,
+  GB: 35,
+  US: 35,
+  SG: 40,
 };
 
 /** Short labels for the footer's payment summary. */
 const PAYMENT_SUMMARY_LABEL: Record<string, string> = {
-  card: 'Cards', debit_national: 'Debit', mada: 'mada', knet: 'KNET', benefit: 'BenefitPay',
-  apple_pay: 'Apple Pay', google_pay: 'Google Pay', samsung_pay: 'Samsung Pay',
-  telecom_wallet: 'Ooredoo Money', wallet: 'Wallet', cod: 'COD',
-  bank_transfer: 'Bank Transfer', upi: 'UPI', netbanking: 'Net Banking',
-  paynow: 'PayNow', grabpay: 'GrabPay', ach: 'ACH', sadad: 'SADAD',
+  card: 'Cards',
+  debit_national: 'Debit',
+  mada: 'mada',
+  knet: 'KNET',
+  benefit: 'BenefitPay',
+  apple_pay: 'Apple Pay',
+  google_pay: 'Google Pay',
+  samsung_pay: 'Samsung Pay',
+  telecom_wallet: 'Ooredoo Money',
+  wallet: 'Wallet',
+  cod: 'COD',
+  bank_transfer: 'Bank Transfer',
+  upi: 'UPI',
+  netbanking: 'Net Banking',
+  paynow: 'PayNow',
+  grabpay: 'GrabPay',
+  ach: 'ACH',
+  sadad: 'SADAD',
 };
 import type { SupportedCountryCode } from '@/lib/contexts/region-context';
 import { CountryFlag } from '@/components/shared/country-flag';
@@ -85,11 +133,11 @@ const NAV_LINKS = [
 
 // ── Mobile bottom-nav items (active state derived from the current route) ────
 const BOTTOM_NAV = [
-  { href: '/',               label: 'Shop',       Icon: ShoppingBag,  exact: true  },
-  { href: '/category-list', label: 'Categories', Icon: Menu,         exact: false },
-  { href: '/cart',          label: 'Cart',       Icon: ShoppingCart, exact: false },
-  { href: '/wishlist',      label: 'Wishlist',   Icon: Heart,        exact: false },
-  { href: '/profile', label: 'Account',   Icon: User,         exact: false },
+  { href: '/', label: 'Shop', Icon: ShoppingBag, exact: true },
+  { href: '/category-list', label: 'Categories', Icon: Menu, exact: false },
+  { href: '/cart', label: 'Cart', Icon: ShoppingCart, exact: false },
+  { href: '/wishlist', label: 'Wishlist', Icon: Heart, exact: false },
+  { href: '/profile', label: 'Account', Icon: User, exact: false },
 ];
 
 /**
@@ -104,7 +152,9 @@ function useDismissOnOutside(open: boolean, close: () => void) {
     const onPointer = (e: Event) => {
       if (ref.current && !ref.current.contains(e.target as Node)) close();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
     document.addEventListener('mousedown', onPointer);
     document.addEventListener('touchstart', onPointer);
     document.addEventListener('keydown', onKey);
@@ -125,7 +175,7 @@ function CountryPicker({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const ref = useDismissOnOutside(open, close);
-  const { currentRegionConfig, country, setSelectedRegion } = useRegion();
+  const { currentRegionConfig, country, setSelectedRegion, allRegions } = useRegion();
   // `currentRegionConfig` is null only under the admin-only `ALL` pseudo-region.
   // Falling back to India there showed a Qatari shopper an Indian flag in the
   // header; `country` already resolves `ALL` to the platform's home market.
@@ -134,7 +184,7 @@ function CountryPicker({ compact = false }: { compact?: boolean }) {
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         className={`flex items-center gap-1.5 font-medium text-white transition-colors border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 ${compact ? 'px-2 py-1.5 min-h-[44px]' : 'px-2.5 py-1.5 min-h-[44px]'}`}
         aria-label={`Select country, currently ${region.name}`}
         aria-expanded={open}
@@ -143,17 +193,27 @@ function CountryPicker({ compact = false }: { compact?: boolean }) {
         {!compact && <Globe className="w-3.5 h-3.5 text-blue-100" />}
         <CountryFlag code={region.code} size="md" />
         <span className="text-xs font-bold">{region.name}</span>
-        <ChevronDown className={`w-3 h-3 text-blue-200 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`w-3 h-3 text-blue-200 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
       {open && (
-        <div role="listbox" className="absolute left-0 top-full mt-2 bg-white border border-slate-200 shadow-xl rounded-xl p-2 w-56 max-w-[calc(100vw-1.5rem)] z-50 max-h-80 overflow-y-auto animate-scale-in">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-1">Select Country</p>
-          {Object.values(REGIONS).map(r => (
+        <div
+          role="listbox"
+          className="absolute left-0 top-full mt-2 bg-white border border-slate-200 shadow-xl rounded-xl p-2 w-56 max-w-[calc(100vw-1.5rem)] z-50 max-h-80 overflow-y-auto animate-scale-in"
+        >
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-1">
+            Select Country
+          </p>
+          {allRegions.map((r) => (
             <button
               key={r.code}
               role="option"
               aria-selected={region.code === r.code}
-              onClick={() => { setSelectedRegion(r.code); setOpen(false); }}
+              onClick={() => {
+                setSelectedRegion(r.code);
+                setOpen(false);
+              }}
               className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition-colors flex items-center gap-2 ${region.code === r.code ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}
             >
               <CountryFlag code={r.code} size="md" />
@@ -168,7 +228,11 @@ function CountryPicker({ compact = false }: { compact?: boolean }) {
 
 // ── Language picker ───────────────────────────────────────────────────────
 
-function LanguagePicker({ lang, onChange, align = 'right' }: {
+function LanguagePicker({
+  lang,
+  onChange,
+  align = 'right',
+}: {
   lang: string;
   onChange: (code: string) => void;
   align?: 'left' | 'right';
@@ -191,7 +255,7 @@ function LanguagePicker({ lang, onChange, align = 'right' }: {
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1 text-sm font-medium text-white transition-colors border border-white/30 rounded-lg px-2.5 py-1.5 min-h-[44px] hover:border-white/60 hover:bg-white/10"
         aria-label={`Select language, currently ${active.name}`}
         aria-expanded={open}
@@ -199,11 +263,16 @@ function LanguagePicker({ lang, onChange, align = 'right' }: {
       >
         <Globe className="w-3.5 h-3.5" />
         <span className="text-xs font-bold">{currentLanguage.toUpperCase()}</span>
-        <ChevronDown className={`w-3 h-3 text-blue-200 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`w-3 h-3 text-blue-200 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
       {open && (
-        <div role="listbox" className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl py-1 w-40 z-50`}>
-          {options.map(code => {
+        <div
+          role="listbox"
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl py-1 w-40 z-50`}
+        >
+          {options.map((code) => {
             const meta = LANGUAGES[code];
             const isActive = code === currentLanguage;
             return (
@@ -213,7 +282,11 @@ function LanguagePicker({ lang, onChange, align = 'right' }: {
                 aria-selected={isActive}
                 lang={code}
                 dir={getDirection(code)}
-                onClick={() => { setCurrentLanguage(code); onChange(code.toUpperCase()); setOpen(false); }}
+                onClick={() => {
+                  setCurrentLanguage(code);
+                  onChange(code.toUpperCase());
+                  setOpen(false);
+                }}
                 className={`w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between ${isActive ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700'}`}
               >
                 <span>{meta.nativeName}</span>
@@ -235,18 +308,20 @@ function FooterColumn({ title, children }: { title: string; children: React.Reac
     <div className="border-b border-slate-800 md:border-0 py-1 md:py-0">
       {/* md+ : plain heading. Below md: a toggle, so the footer fits on a phone
           without burying the links behind `hidden md:block` as it used to. */}
-      <h4 className="hidden md:block text-white font-bold text-sm mb-4 uppercase tracking-wider">{title}</h4>
+      <h4 className="hidden md:block text-white font-bold text-sm mb-4 uppercase tracking-wider">
+        {title}
+      </h4>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className="md:hidden w-full flex items-center justify-between text-left py-3"
       >
         <span className="text-white font-bold text-sm uppercase tracking-wider">{title}</span>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
-      <div className={`${open ? 'block' : 'hidden'} md:block pb-3 md:pb-0`}>
-        {children}
-      </div>
+      <div className={`${open ? 'block' : 'hidden'} md:block pb-3 md:pb-0`}>{children}</div>
     </div>
   );
 }
@@ -277,7 +352,9 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
 
   // The methods this market actually clears, deduplicated to the labels a
   // shopper recognises.
-  const paymentSummary = [...new Set(paymentMethods.map((m) => PAYMENT_SUMMARY_LABEL[m.type] ?? m.label))]
+  const paymentSummary = [
+    ...new Set(paymentMethods.map((m) => PAYMENT_SUMMARY_LABEL[m.type] ?? m.label)),
+  ]
     .slice(0, 4)
     .join(', ');
 
@@ -295,7 +372,9 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
   // from the one the terms bind the customer to.
   const legalEntity = getEntityLine(country.code);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // ── Publish the live header height so page-level sticky bars can offset ──
   // by it. The header grows and shrinks (mobile search panel, category nav),
@@ -339,7 +418,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
-          { headers: { 'Accept-Language': 'en' }, signal: AbortSignal.timeout(5000) }
+          { headers: { 'Accept-Language': 'en' }, signal: AbortSignal.timeout(5000) },
         );
         if (res.ok) {
           const data = await res.json();
@@ -348,7 +427,10 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
           const country = addr.country || '';
 
           // Auto-detect and set region
-          const cc = (addr.country_code || '').toUpperCase() as Exclude<SupportedCountryCode, 'ALL'>;
+          const cc = (addr.country_code || '').toUpperCase() as Exclude<
+            SupportedCountryCode,
+            'ALL'
+          >;
           if (cc && REGIONS[cc]) {
             setSelectedRegion(cc);
           }
@@ -385,7 +467,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
           // GPS denied/failed → fall back to the server-resolved region
           setLocation(detectViaRegion() || 'Select Location');
         },
-        { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
       );
     } else {
       // No geolocation API → same region fallback
@@ -393,7 +475,9 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
     }
   }, [setSelectedRegion, country]);
 
-  useEffect(() => { detectLocation(); }, [detectLocation]);
+  useEffect(() => {
+    detectLocation();
+  }, [detectLocation]);
 
   function openLocationModal() {
     setLocationDraft(location === 'Detecting...' || location === 'Select Location' ? '' : location);
@@ -420,7 +504,10 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen mp-surface flex flex-col overflow-x-clip">
       {/* ── Marketplace Header ──────────────────────────────────── */}
-      <header ref={headerRef} className="bg-blue-600 border-b border-blue-700 shadow-md sticky top-0 z-50">
+      <header
+        ref={headerRef}
+        className="bg-blue-600 border-b border-blue-700 shadow-md sticky top-0 z-50"
+      >
         {/* Top bar */}
         <div className="max-w-[1400px] 3xl:max-w-app-wide 4xl:max-w-app-full mx-auto px-3 xs:px-4 h-16 flex items-center justify-between gap-2 sm:gap-3">
           {/* Logo + Location */}
@@ -428,7 +515,11 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
               identically on every breakpoint. Anything that needs to give way
               (location text, search field) shrinks instead. */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Link href="/" className="flex items-center gap-1.5 shrink-0 min-h-[44px]" aria-label="KARTSEEK Marketplace home">
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 shrink-0 min-h-[44px]"
+              aria-label="KARTSEEK Marketplace home"
+            >
               <ShoppingBag className="w-6 h-6 text-white shrink-0" />
               {/* Wordmark matches the rest of the site — never hidden or clipped */}
               <h1 className="text-sm xs:text-base sm:text-lg font-bold text-white tracking-tight whitespace-nowrap">
@@ -455,7 +546,10 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
           </div>
 
           {/* Search bar (desktop) */}
-          <form onSubmit={handleSearch} className="flex-1 min-w-0 max-w-2xl hidden md:flex items-center">
+          <form
+            onSubmit={handleSearch}
+            className="flex-1 min-w-0 max-w-2xl hidden md:flex items-center"
+          >
             <div className="relative w-full">
               {/* `id` distinct from the mobile field below: that one renders
                   while this one is still in the DOM (hidden by CSS, not
@@ -468,18 +562,26 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
                 type="text"
                 aria-label="Search products, brands and categories"
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search for products, brands, categories..."
                 className="w-full pl-10 pr-10 py-2.5 bg-white border border-transparent rounded-lg focus:ring-2 focus:ring-amber-300/60 focus:border-white outline-none transition-all text-sm"
               />
               <Search className="w-4.5 h-4.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
               {query && (
-                <button type="button" title="Clear search" onClick={() => setQuery('')} className="absolute right-3 top-2.5">
+                <button
+                  type="button"
+                  title="Clear search"
+                  onClick={() => setQuery('')}
+                  className="absolute right-3 top-2.5"
+                >
                   <X className="w-4 h-4 text-slate-400 hover:text-slate-600" />
                 </button>
               )}
             </div>
-            <button type="submit" className="ml-2 bg-amber-400 text-slate-900 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-amber-300 transition-colors shrink-0 shadow-sm">
+            <button
+              type="submit"
+              className="ml-2 bg-amber-400 text-slate-900 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-amber-300 transition-colors shrink-0 shadow-sm"
+            >
               Search
             </button>
           </form>
@@ -513,18 +615,32 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
 
             {/* Carries the only storefront sign-out control — see AccountMenu. */}
             <AccountMenu className="hover:text-amber-300 hidden md:flex" />
-            <Link href="/orders" className="hover:text-amber-300 transition-colors hidden md:flex flex-col items-center p-1.5" title="Orders">
+            <Link
+              href="/orders"
+              className="hover:text-amber-300 transition-colors hidden md:flex flex-col items-center p-1.5"
+              title="Orders"
+            >
               <ShoppingBag className="w-5 h-5" />
               <span className="text-[9px] mt-0.5 font-medium">Orders</span>
             </Link>
-            <Link href="/wishlist" className="hover:text-red-300 transition-colors flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center" title="Wishlist">
+            <Link
+              href="/wishlist"
+              className="hover:text-red-300 transition-colors flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center"
+              title="Wishlist"
+            >
               <Heart className="w-5 h-5" />
               <span className="text-[9px] mt-0.5 font-medium hidden md:block">Wishlist</span>
             </Link>
-            <Link href="/cart" className="hover:text-amber-300 transition-colors relative flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center" title="Cart">
+            <Link
+              href="/cart"
+              className="hover:text-amber-300 transition-colors relative flex flex-col items-center p-1.5 min-w-[44px] min-h-[44px] justify-center"
+              title="Cart"
+            >
               <ShoppingCart className="w-5 h-5" />
               {mounted && cart.count > 0 && (
-                <span className="absolute -top-0.5 right-0 bg-amber-400 text-slate-900 text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{cart.count}</span>
+                <span className="absolute -top-0.5 right-0 bg-amber-400 text-slate-900 text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {cart.count}
+                </span>
               )}
               <span className="text-[9px] mt-0.5 font-medium hidden md:block">Cart</span>
             </Link>
@@ -542,19 +658,27 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
                   type="text"
                   aria-label="Search products, brands and categories"
                   value={query}
-                  onChange={e => setQuery(e.target.value)}
+                  onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search products, brands..."
                   className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none text-sm"
                   autoFocus
                 />
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
                 {query && (
-                  <button type="button" title="Clear search" onClick={() => setQuery('')} className="absolute right-3 top-3">
+                  <button
+                    type="button"
+                    title="Clear search"
+                    onClick={() => setQuery('')}
+                    className="absolute right-3 top-3"
+                  >
                     <X className="w-4 h-4 text-slate-400" />
                   </button>
                 )}
               </div>
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shrink-0">
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shrink-0"
+              >
                 Go
               </button>
             </form>
@@ -594,11 +718,22 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
                 </Link>
               ))}
               <div className="w-px h-4 bg-white/20 mx-1" />
-              <Link href="/offers" className="text-[13px] font-bold text-amber-300 hover:text-amber-200 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1">
+              <Link
+                href="/offers"
+                className="text-[13px] font-bold text-amber-300 hover:text-amber-200 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1"
+              >
                 <Tag className="w-3 h-3" /> Offers
               </Link>
-              <Link href="/coupons" className="text-[13px] font-medium text-amber-200 hover:text-amber-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md">Coupons</Link>
-              <Link href="/gift-cards" className="text-[13px] font-medium text-violet-200 hover:text-violet-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1">
+              <Link
+                href="/coupons"
+                className="text-[13px] font-medium text-amber-200 hover:text-amber-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md"
+              >
+                Coupons
+              </Link>
+              <Link
+                href="/gift-cards"
+                className="text-[13px] font-medium text-violet-200 hover:text-violet-100 px-3 py-2 whitespace-nowrap transition-colors hover:bg-white/10 rounded-md flex items-center gap-1"
+              >
                 <Gift className="w-3 h-3" /> Gift Cards
               </Link>
             </div>
@@ -609,9 +744,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
       {/* Main Content */}
       {/* Bottom-nav clearance belongs to the footer (the last thing on the
           page), not here — on <main> it opened an 80px gap above the footer. */}
-      <main className="flex-1 w-full">
-        {children}
-      </main>
+      <main className="flex-1 w-full">{children}</main>
 
       {/* ── Footer ─────────────────────────────────────────────── */}
       {/* Shown on every breakpoint — mobile collapses each column into an
@@ -624,11 +757,15 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
                 active market — this footer used to quote a rupee threshold and
                 advertise UPI to every region, including ones with neither. */}
             {[
-              { icon: Truck, title: 'Free Delivery', desc: `On orders above ${formatCurrencyValue(freeDeliveryThreshold, { decimals: 0 })}` },
+              {
+                icon: Truck,
+                title: 'Free Delivery',
+                desc: `On orders above ${formatCurrencyValue(freeDeliveryThreshold, { decimals: 0 })}`,
+              },
               { icon: RotateCcw, title: 'Easy Returns', desc: '7-30 day return policy' },
               { icon: Shield, title: 'Secure Payments', desc: 'SSL encrypted checkout' },
               { icon: CreditCard, title: 'Multiple Payment Options', desc: paymentSummary },
-            ].map(b => (
+            ].map((b) => (
               <div key={b.title} className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
                   <b.icon className="w-5 h-5 text-blue-400" />
@@ -647,48 +784,132 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
           {/* Column 1 — About */}
           <FooterColumn title="About KARTSEEK">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><ZoneLink href="/about" className="hover:text-white transition-colors">About Us</ZoneLink></li>
-              <li><ZoneLink href="/careers" className="hover:text-white transition-colors">Careers</ZoneLink></li>
-              <li><ZoneLink href="/press" className="hover:text-white transition-colors">Press & Media</ZoneLink></li>
-              <li><Link href="/sellers" className="hover:text-white transition-colors">Sell on KARTSEEK</Link></li>
-              <li><ZoneLink href="/investors" className="hover:text-white transition-colors">Investor Relations</ZoneLink></li>
+              <li>
+                <ZoneLink href="/about" className="hover:text-white transition-colors">
+                  About Us
+                </ZoneLink>
+              </li>
+              <li>
+                <ZoneLink href="/careers" className="hover:text-white transition-colors">
+                  Careers
+                </ZoneLink>
+              </li>
+              <li>
+                <ZoneLink href="/press" className="hover:text-white transition-colors">
+                  Press & Media
+                </ZoneLink>
+              </li>
+              <li>
+                <Link href="/sellers" className="hover:text-white transition-colors">
+                  Sell on KARTSEEK
+                </Link>
+              </li>
+              <li>
+                <ZoneLink href="/investors" className="hover:text-white transition-colors">
+                  Investor Relations
+                </ZoneLink>
+              </li>
             </ul>
           </FooterColumn>
 
           {/* Column 2 — Customer Service */}
           <FooterColumn title="Customer Service">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><Link href="/help" className="hover:text-white transition-colors">Help Center</Link></li>
-              <li><Link href="/returns" className="hover:text-white transition-colors">Returns & Refunds</Link></li>
-              <li><Link href="/orders" className="hover:text-white transition-colors">Track Order</Link></li>
-              <li><Link href="/payments" className="hover:text-white transition-colors">Payment Methods</Link></li>
-              <li><ZoneLink href="/contact" className="hover:text-white transition-colors">Contact Us</ZoneLink></li>
+              <li>
+                <Link href="/help" className="hover:text-white transition-colors">
+                  Help Center
+                </Link>
+              </li>
+              <li>
+                <Link href="/returns" className="hover:text-white transition-colors">
+                  Returns & Refunds
+                </Link>
+              </li>
+              <li>
+                <Link href="/orders" className="hover:text-white transition-colors">
+                  Track Order
+                </Link>
+              </li>
+              <li>
+                <Link href="/payments" className="hover:text-white transition-colors">
+                  Payment Methods
+                </Link>
+              </li>
+              <li>
+                <ZoneLink href="/contact" className="hover:text-white transition-colors">
+                  Contact Us
+                </ZoneLink>
+              </li>
             </ul>
           </FooterColumn>
 
           {/* Column 3 — Explore */}
           <FooterColumn title="Explore">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><Link href="/offers" className="hover:text-white transition-colors">Offers & Deals</Link></li>
-              <li><Link href="/best-sellers" className="hover:text-white transition-colors">Best Sellers</Link></li>
-              <li><Link href="/new-arrivals" className="hover:text-white transition-colors">New Arrivals</Link></li>
-              <li><Link href="/gift-cards" className="hover:text-white transition-colors">Gift Cards</Link></li>
-              <li><Link href="/coupons" className="hover:text-white transition-colors">Coupons</Link></li>
+              <li>
+                <Link href="/offers" className="hover:text-white transition-colors">
+                  Offers & Deals
+                </Link>
+              </li>
+              <li>
+                <Link href="/best-sellers" className="hover:text-white transition-colors">
+                  Best Sellers
+                </Link>
+              </li>
+              <li>
+                <Link href="/new-arrivals" className="hover:text-white transition-colors">
+                  New Arrivals
+                </Link>
+              </li>
+              <li>
+                <Link href="/gift-cards" className="hover:text-white transition-colors">
+                  Gift Cards
+                </Link>
+              </li>
+              <li>
+                <Link href="/coupons" className="hover:text-white transition-colors">
+                  Coupons
+                </Link>
+              </li>
               {/* `/exchange` had no inbound link anywhere in the app —
                   reachable only by typing the URL — despite being backed by a
                   live, unguarded offers endpoint. */}
-              <li><Link href="/exchange" className="hover:text-white transition-colors">Exchange &amp; Trade-In</Link></li>
+              <li>
+                <Link href="/exchange" className="hover:text-white transition-colors">
+                  Exchange &amp; Trade-In
+                </Link>
+              </li>
             </ul>
           </FooterColumn>
 
           {/* Column 4 — Legal */}
           <FooterColumn title="Legal">
             <ul className="space-y-2.5 md:space-y-2 text-sm">
-              <li><ZoneLink href="/privacy" className="hover:text-white transition-colors">Privacy Policy</ZoneLink></li>
-              <li><ZoneLink href="/terms" className="hover:text-white transition-colors">Terms of Service</ZoneLink></li>
-              <li><ZoneLink href="/cookies" className="hover:text-white transition-colors">Cookie Policy</ZoneLink></li>
-              <li><ZoneLink href="/security" className="hover:text-white transition-colors">Security</ZoneLink></li>
-              <li><ZoneLink href="/grievance" className="hover:text-white transition-colors">Grievance Officer</ZoneLink></li>
+              <li>
+                <ZoneLink href="/privacy" className="hover:text-white transition-colors">
+                  Privacy Policy
+                </ZoneLink>
+              </li>
+              <li>
+                <ZoneLink href="/terms" className="hover:text-white transition-colors">
+                  Terms of Service
+                </ZoneLink>
+              </li>
+              <li>
+                <ZoneLink href="/cookies" className="hover:text-white transition-colors">
+                  Cookie Policy
+                </ZoneLink>
+              </li>
+              <li>
+                <ZoneLink href="/security" className="hover:text-white transition-colors">
+                  Security
+                </ZoneLink>
+              </li>
+              <li>
+                <ZoneLink href="/grievance" className="hover:text-white transition-colors">
+                  Grievance Officer
+                </ZoneLink>
+              </li>
             </ul>
           </FooterColumn>
 
@@ -715,10 +936,16 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
               })}
             </div>
             <div className="space-y-2.5 text-sm">
-              <a href="mailto:support@kartseek.com" className="flex items-center gap-2 hover:text-white transition-colors break-all">
+              <a
+                href="mailto:support@kartseek.com"
+                className="flex items-center gap-2 hover:text-white transition-colors break-all"
+              >
                 <Mail className="w-4 h-4 text-blue-400 shrink-0" /> support@kartseek.com
               </a>
-              <a href="tel:+911800123456" className="flex items-center gap-2 hover:text-white transition-colors">
+              <a
+                href="tel:+911800123456"
+                className="flex items-center gap-2 hover:text-white transition-colors"
+              >
                 <Phone className="w-4 h-4 text-blue-400 shrink-0" /> 1800-123-456 (Toll Free)
               </a>
             </div>
@@ -729,23 +956,35 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
         <div className="border-t border-slate-800">
           <div className="max-w-[1400px] mx-auto px-4 py-4 grid gap-4 md:grid-cols-2">
             <div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">We accept</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">
+                We accept
+              </p>
               {/* Only what actually clears in this market. Advertising UPI or
                   RuPay in Doha promises a payment route that does not exist. */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                {paymentMethods.map(method => (
-                  <span key={method.type} className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded font-medium">
+                {paymentMethods.map((method) => (
+                  <span
+                    key={method.type}
+                    className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded font-medium"
+                  >
                     {PAYMENT_SUMMARY_LABEL[method.type] ?? method.label}
                   </span>
                 ))}
               </div>
             </div>
             <div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Compliance</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">
+                Compliance
+              </p>
               {/* The regulators this market is actually answerable to. */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                {complianceBadges.map(badge => (
-                  <span key={badge} className="text-[10px] bg-slate-800 text-emerald-400 border border-emerald-900/50 px-2 py-1 rounded font-bold">✓ {badge}</span>
+                {complianceBadges.map((badge) => (
+                  <span
+                    key={badge}
+                    className="text-[10px] bg-slate-800 text-emerald-400 border border-emerald-900/50 px-2 py-1 rounded font-bold"
+                  >
+                    ✓ {badge}
+                  </span>
                 ))}
               </div>
             </div>
@@ -786,9 +1025,13 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
                 active ? 'text-blue-600' : 'text-slate-500 hover:text-blue-600'
               }`}
             >
-              <Icon className={`w-5 h-5 mb-0.5 ${active && href === '/wishlist' ? 'fill-red-500 text-red-500' : ''}`} />
+              <Icon
+                className={`w-5 h-5 mb-0.5 ${active && href === '/wishlist' ? 'fill-red-500 text-red-500' : ''}`}
+              />
               {isCart && mounted && cart.count > 0 && (
-                <span className="absolute top-0 right-2 bg-blue-600 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">{cart.count}</span>
+                <span className="absolute top-0 right-2 bg-blue-600 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                  {cart.count}
+                </span>
               )}
               <span className="text-[10px] font-medium">{label}</span>
             </Link>
@@ -805,7 +1048,9 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
             className="fixed inset-0 bg-black/40 z-[200]"
             onClick={() => setLocationModalOpen(false)}
             aria-hidden="true"
-          ><DismissOnEscape onDismiss={() => setLocationModalOpen(false)} /></div>
+          >
+            <DismissOnEscape onDismiss={() => setLocationModalOpen(false)} />
+          </div>
           <div
             role="dialog"
             aria-modal="true"
@@ -816,21 +1061,33 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
               <h2 className="font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-blue-600" /> Delivery Location
               </h2>
-              <button onClick={() => setLocationModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100" aria-label="Close">
+              <button
+                onClick={() => setLocationModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100"
+                aria-label="Close"
+              >
                 <X className="w-5 h-5 text-slate-500" />
               </button>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); saveLocation(); }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveLocation();
+              }}
+            >
               <input
                 value={locationDraft}
-                onChange={e => setLocationDraft(e.target.value)}
+                onChange={(e) => setLocationDraft(e.target.value)}
                 placeholder={getLocationSearchPlaceholder(country.code)}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
                 autoFocus
               />
               <button
                 type="button"
-                onClick={() => { detectLocation(); setLocationModalOpen(false); }}
+                onClick={() => {
+                  detectLocation();
+                  setLocationModalOpen(false);
+                }}
                 className="mt-3 w-full flex items-center justify-center gap-2 text-sm font-semibold text-blue-600 border border-blue-200 bg-blue-50 py-3 rounded-xl hover:bg-blue-100 transition-colors"
               >
                 <Crosshair className="w-4 h-4" /> Use my current location

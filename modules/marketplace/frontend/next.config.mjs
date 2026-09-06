@@ -17,6 +17,15 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Every market outside the home market is refused by isActiveCountry() when
+// this is unset — the country picker then snaps back to Qatar on every choice.
+// Loud rather than silent: the fallback renders a perfectly healthy-looking page.
+if (!process.env.NEXT_PUBLIC_ACTIVE_REGIONS) {
+  console.warn(
+    '[marketplace-frontend] NEXT_PUBLIC_ACTIVE_REGIONS is not set — only the home market will be active. Copy .env.example to .env.local.',
+  );
+}
+
 // Same i18n request config the shell loads, so both resolve locale and
 // messages identically. Literal path, not a tsconfig alias — the plugin reads
 // it at config-load time.
@@ -43,7 +52,7 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
-      { protocol: 'http',  hostname: 'localhost' },
+      { protocol: 'http', hostname: 'localhost' },
     ],
     minimumCacheTTL: 3600,
     deviceSizes: [360, 640, 750, 828, 1080, 1200, 1920],
