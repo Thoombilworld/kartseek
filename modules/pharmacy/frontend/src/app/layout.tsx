@@ -42,19 +42,14 @@ export const viewport: Viewport = {
   themeColor: '#1a56db',
 };
 
-export default async function PharmacyZoneLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function PharmacyZoneLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const headerStore = await headers();
 
   // Same resolution the shell performs, so a customer crossing from / into
   // /pharmacy keeps their market and language rather than snapping back to the
   // default on the first zone request.
-  const detected =
-    headerStore.get('X-Detected-Country') ?? cookieStore.get('kartseek_country')?.value;
+  const detected = headerStore.get('X-Country-Code') ?? cookieStore.get('kartseek_country')?.value;
   const country = isCountryCode(detected) ? detected : DEFAULT_COUNTRY;
 
   const language = resolveLocaleForCountry(
@@ -101,7 +96,11 @@ export default async function PharmacyZoneLayout({
           Skip to main content
         </a>
 
-        <AppShell messages={messages as Record<string, unknown>} language={language} country={country}>
+        <AppShell
+          messages={messages as Record<string, unknown>}
+          language={language}
+          country={country}
+        >
           <PharmacyClientLayout>{children}</PharmacyClientLayout>
         </AppShell>
       </body>
