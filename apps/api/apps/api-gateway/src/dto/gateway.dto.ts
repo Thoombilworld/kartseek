@@ -9,7 +9,24 @@
  *  Delivery · Upload · Partner · Search · Region · Security
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsNumber, IsInt, Min, Max, IsNotEmpty, IsEmail, MinLength, MaxLength, Matches, IsIn, IsPositive, IsUUID, IsArray } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsInt,
+  Min,
+  Max,
+  IsNotEmpty,
+  IsEmail,
+  MinLength,
+  MaxLength,
+  Matches,
+  IsIn,
+  IsPositive,
+  IsUUID,
+  IsArray,
+} from 'class-validator';
+import { ForwardedBody } from '../decorators/forwarded-body.decorator';
 import { SELLER_TYPES } from '@app/common';
 
 /**
@@ -19,7 +36,8 @@ import { SELLER_TYPES } from '@app/common';
  *  - At least 1 digit
  *  - At least 1 special character (@$!%*?&^#)
  */
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#])[A-Za-z\d@$!%*?&^#]{8,128}$/;
+const PASSWORD_REGEX =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#])[A-Za-z\d@$!%*?&^#]{8,128}$/;
 
 // ─── Shared / Primitives ──────────────────────────────────────────────────────
 
@@ -82,7 +100,11 @@ export class LoginDto {
   @IsEmail({}, { message: 'Must be a valid email address' })
   email: string;
 
-  @ApiProperty({ example: 'P@ssw0rd!', description: 'Account password (min 8 chars, requires uppercase, lowercase, digit, special char)' })
+  @ApiProperty({
+    example: 'P@ssw0rd!',
+    description:
+      'Account password (min 8 chars, requires uppercase, lowercase, digit, special char)',
+  })
   @IsNotEmpty({ message: 'Password is required' })
   @IsString()
   password: string;
@@ -104,16 +126,23 @@ export class RegisterDto {
   @IsString()
   phone: string;
 
-  @ApiProperty({ example: 'P@ssw0rd!', description: 'Min 8 chars, must include uppercase, lowercase, digit, and special character' })
+  @ApiProperty({
+    example: 'P@ssw0rd!',
+    description: 'Min 8 chars, must include uppercase, lowercase, digit, and special character',
+  })
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
   @Matches(PASSWORD_REGEX, {
-    message: 'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)'
+    message:
+      'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)',
   })
   password: string;
 
-  @ApiPropertyOptional({ example: 'CUSTOMER', enum: ['CUSTOMER', 'SELLER', 'DRIVER', 'SUPER_ADMIN'] })
+  @ApiPropertyOptional({
+    example: 'CUSTOMER',
+    enum: ['CUSTOMER', 'SELLER', 'DRIVER', 'SUPER_ADMIN'],
+  })
   @IsOptional()
   role?: string;
 }
@@ -124,12 +153,16 @@ export class ResetPasswordDto {
   @IsString()
   token: string;
 
-  @ApiProperty({ example: 'N3wP@ssw0rd!', description: 'New password (same complexity requirements as registration)' })
+  @ApiProperty({
+    example: 'N3wP@ssw0rd!',
+    description: 'New password (same complexity requirements as registration)',
+  })
   @IsNotEmpty({ message: 'New password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
   @Matches(PASSWORD_REGEX, {
-    message: 'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)'
+    message:
+      'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)',
   })
   newPassword: string;
 }
@@ -158,8 +191,6 @@ export class ForgotPasswordDto {
   @IsEmail({}, { message: 'Must be a valid email address' })
   email: string;
 }
-
-
 
 export class SellerRegisterDto {
   @ApiProperty({ example: 'Amara Okonkwo' })
@@ -196,7 +227,8 @@ export class SellerRegisterDto {
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
   @Matches(PASSWORD_REGEX, {
-    message: 'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)'
+    message:
+      'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)',
   })
   password: string;
 }
@@ -233,13 +265,14 @@ export class OrderItemDto {
   @ApiProperty({ example: 2 })
   quantity: number;
 
-  @ApiProperty({ example: 499.00 })
+  @ApiProperty({ example: 499.0 })
   price: number;
 
   @ApiPropertyOptional({ example: 'VAR-RED-L', description: 'Product variant ID' })
   variantId?: string;
 }
 
+@ForwardedBody()
 export class PlaceOrderDto {
   @ApiProperty({ type: [OrderItemDto] })
   items: OrderItemDto[];
@@ -247,7 +280,10 @@ export class PlaceOrderDto {
   @ApiProperty({ example: '14 MG Road, Mumbai Central, India' })
   deliveryAddress: string;
 
-  @ApiProperty({ example: 'marketplace', enum: ['marketplace', 'grocery', 'restaurant', 'pharmacy'] })
+  @ApiProperty({
+    example: 'marketplace',
+    enum: ['marketplace', 'grocery', 'restaurant', 'pharmacy'],
+  })
   serviceType: string;
 
   @ApiProperty({ example: 'razorpay', enum: ['razorpay', 'stripe', 'wallet', 'cash_on_delivery'] })
@@ -261,6 +297,22 @@ export class PlaceOrderDto {
 
   @ApiPropertyOptional({ example: 'Leave at reception' })
   notes?: string;
+
+  @ApiPropertyOptional({ description: 'Alias for couponCode, as the mobile client sends it' })
+  promoCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'Structured delivery address; deliveryAddress may carry it as a string instead',
+  })
+  shippingAddress?: unknown;
+
+  @ApiPropertyOptional()
+  giftCardCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'Present on restaurant orders, which are placed by restaurant-service',
+  })
+  restaurantId?: string;
 }
 
 export class PlaceOrderResponseDto {
@@ -275,8 +327,8 @@ export class PlaceOrderResponseDto {
       deliveryFee: 50,
       discount: 99.8,
       totalAmount: 948.2,
-      estimatedDeliveryAt: '2026-05-31T14:30:00.000Z'
-    }
+      estimatedDeliveryAt: '2026-05-31T14:30:00.000Z',
+    },
   })
   order: Record<string, unknown>;
 }
@@ -284,7 +336,16 @@ export class PlaceOrderResponseDto {
 export class UpdateOrderStatusDto {
   @ApiProperty({
     example: 'CONFIRMED',
-    enum: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']
+    enum: [
+      'PENDING',
+      'CONFIRMED',
+      'PREPARING',
+      'READY',
+      'PICKED_UP',
+      'OUT_FOR_DELIVERY',
+      'DELIVERED',
+      'CANCELLED',
+    ],
   })
   status: string;
 
@@ -302,7 +363,16 @@ export class OrderTrackingResponseDto {
   @ApiProperty({ example: '2026-05-31T14:30:00.000Z' })
   estimatedDeliveryAt: string;
 
-  @ApiPropertyOptional({ example: { name: 'Rahul Kumar', phone: '+91 700 000 001', lat: -1.286, lng: 36.817, heading: 90, speed: 42 } })
+  @ApiPropertyOptional({
+    example: {
+      name: 'Rahul Kumar',
+      phone: '+91 700 000 001',
+      lat: -1.286,
+      lng: 36.817,
+      heading: 90,
+      speed: 42,
+    },
+  })
   driver?: Record<string, unknown>;
 
   @ApiProperty({
@@ -311,7 +381,7 @@ export class OrderTrackingResponseDto {
       { status: 'PREPARING', done: true },
       { status: 'OUT_FOR_DELIVERY', done: true },
       { status: 'DELIVERED', done: false },
-    ]
+    ],
   })
   timeline: Record<string, unknown>[];
 }
@@ -363,7 +433,10 @@ export class ProductFilterDto extends PaginationDto {
   @IsNumber()
   maxPrice?: number;
 
-  @ApiPropertyOptional({ example: 'price_asc', enum: ['price_asc', 'price_desc', 'rating', 'newest', 'popular'] })
+  @ApiPropertyOptional({
+    example: 'price_asc',
+    enum: ['price_asc', 'price_desc', 'rating', 'newest', 'popular'],
+  })
   @IsOptional()
   @IsString()
   sortBy?: string;
@@ -431,7 +504,7 @@ export class WalletBalanceResponseDto {
   @ApiProperty({ example: 'USR-001' })
   userId: string;
 
-  @ApiProperty({ example: 2450.50, description: 'Wallet balance in local currency' })
+  @ApiProperty({ example: 2450.5, description: 'Wallet balance in local currency' })
   balance: number;
 
   @ApiProperty({ example: 'INR' })
@@ -459,7 +532,7 @@ export class WalletTransactionDto {
   @ApiProperty({ example: 'credit', enum: ['credit', 'debit'] })
   type: string;
 
-  @ApiProperty({ example: 500.00 })
+  @ApiProperty({ example: 500.0 })
   amount: number;
 
   @ApiProperty({ example: 'INR' })
@@ -516,7 +589,10 @@ export class AssignDeliveryDto {
 }
 
 export class UpdateDeliveryStatusDto {
-  @ApiProperty({ example: 'IN_TRANSIT', enum: ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED', 'FAILED'] })
+  @ApiProperty({
+    example: 'IN_TRANSIT',
+    enum: ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED', 'FAILED'],
+  })
   status: string;
 
   @ApiProperty({ example: 'DP-0001' })
@@ -560,7 +636,10 @@ export class SearchQueryDto extends PaginationDto {
   @ApiProperty({ example: 'biryani', description: 'Search keyword or phrase' })
   q: string;
 
-  @ApiPropertyOptional({ example: 'restaurant', enum: ['all', 'marketplace', 'restaurant', 'grocery', 'pharmacy', 'doctor'] })
+  @ApiPropertyOptional({
+    example: 'restaurant',
+    enum: ['all', 'marketplace', 'restaurant', 'grocery', 'pharmacy', 'doctor'],
+  })
   category?: string;
 
   @ApiPropertyOptional({ example: -1.2869 })
@@ -577,7 +656,10 @@ export class SearchResultDto {
   @ApiProperty({ example: 'Biryani House' })
   name: string;
 
-  @ApiProperty({ example: 'restaurant', enum: ['marketplace', 'restaurant', 'grocery', 'pharmacy', 'doctor'] })
+  @ApiProperty({
+    example: 'restaurant',
+    enum: ['marketplace', 'restaurant', 'grocery', 'pharmacy', 'doctor'],
+  })
   type: string;
 
   @ApiPropertyOptional({ example: 4.7 })
@@ -646,7 +728,10 @@ export class PartnerRegisterDto {
 }
 
 export class KycSubmitDto {
-  @ApiProperty({ example: 'national_id', enum: ['national_id', 'drivers_license', 'vehicle_registration', 'insurance'] })
+  @ApiProperty({
+    example: 'national_id',
+    enum: ['national_id', 'drivers_license', 'vehicle_registration', 'insurance'],
+  })
   documentType: string;
 
   @ApiProperty({ example: 'https://cdn.kartseek.com/kyc/doc.pdf' })
@@ -659,7 +744,12 @@ export class BanIpRequestDto {
   @ApiProperty({ example: '192.168.1.100', description: 'IPv4 or IPv6 address to ban' })
   ip: string;
 
-  @ApiProperty({ example: 3600, minimum: 60, maximum: 2592000, description: 'Ban duration in seconds' })
+  @ApiProperty({
+    example: 3600,
+    minimum: 60,
+    maximum: 2592000,
+    description: 'Ban duration in seconds',
+  })
   durationSeconds: number;
 
   @ApiProperty({ example: 'Manual ban — repeated credential stuffing' })
@@ -787,14 +877,20 @@ export class AssignPartnerDto {
   @IsString()
   orderId: string;
 
-  @ApiProperty({ example: 'marketplace', enum: ['marketplace', 'grocery', 'restaurant', 'pharmacy'] })
+  @ApiProperty({
+    example: 'marketplace',
+    enum: ['marketplace', 'grocery', 'restaurant', 'pharmacy'],
+  })
   @IsNotEmpty()
   @IsString()
   serviceType: string;
 }
 
 export class DeliveryPartnerUpdateStatusDto {
-  @ApiProperty({ example: 'picked_up', enum: ['assigned', 'picked_up', 'in_transit', 'delivered', 'failed'] })
+  @ApiProperty({
+    example: 'picked_up',
+    enum: ['assigned', 'picked_up', 'in_transit', 'delivered', 'failed'],
+  })
   @IsNotEmpty()
   @IsString()
   status: string;
@@ -826,7 +922,10 @@ export class EstimateDeliveryFeeDto {
   @IsNumber()
   weight?: number;
 
-  @ApiPropertyOptional({ example: 'grocery', enum: ['marketplace', 'grocery', 'restaurant', 'pharmacy'] })
+  @ApiPropertyOptional({
+    example: 'grocery',
+    enum: ['marketplace', 'grocery', 'restaurant', 'pharmacy'],
+  })
   @IsOptional()
   @IsString()
   serviceType?: string;
@@ -968,7 +1067,10 @@ export class RaiseDisputeDto {
   @IsString()
   reason: string;
 
-  @ApiPropertyOptional({ example: 'fare_dispute', enum: ['fare_dispute', 'safety', 'service', 'other'] })
+  @ApiPropertyOptional({
+    example: 'fare_dispute',
+    enum: ['fare_dispute', 'safety', 'service', 'other'],
+  })
   @IsOptional()
   @IsString()
   category?: string;
@@ -1040,7 +1142,10 @@ export class PartnerLoginDto {
 }
 
 export class PartnerDocumentDto {
-  @ApiProperty({ example: 'driving_license', enum: ['driving_license', 'vehicle_registration', 'insurance', 'id_card'] })
+  @ApiProperty({
+    example: 'driving_license',
+    enum: ['driving_license', 'vehicle_registration', 'insurance', 'id_card'],
+  })
   @IsNotEmpty()
   @IsString()
   docType: string;
@@ -1078,7 +1183,7 @@ export class CancelReasonDto {
 }
 
 export class CollectCodDto {
-  @ApiProperty({ example: 150.00, description: 'Amount collected in local currency' })
+  @ApiProperty({ example: 150.0, description: 'Amount collected in local currency' })
   @IsNotEmpty()
   @IsNumber()
   amountCollected: number;
@@ -1095,14 +1200,17 @@ export class UpdateStockDto {
 }
 
 export class SellerUpdateOrderStatusDto {
-  @ApiProperty({ example: 'shipped', enum: ['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'] })
+  @ApiProperty({
+    example: 'shipped',
+    enum: ['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'],
+  })
   @IsNotEmpty()
   @IsString()
   status: string;
 }
 
 export class RequestPayoutDto {
-  @ApiProperty({ example: 5000.00, description: 'Payout amount in local currency' })
+  @ApiProperty({ example: 5000.0, description: 'Payout amount in local currency' })
   @IsNotEmpty()
   @IsNumber()
   @Min(1)
@@ -1144,17 +1252,17 @@ export class UpdateShippingZoneDto {
   @IsOptional()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ example: 50.00, description: 'Base shipping rate' })
+  @ApiPropertyOptional({ example: 50.0, description: 'Base shipping rate' })
   @IsOptional()
   @IsNumber()
   baseRate?: number;
 
-  @ApiPropertyOptional({ example: 10.00, description: 'Rate per kg above base weight' })
+  @ApiPropertyOptional({ example: 10.0, description: 'Rate per kg above base weight' })
   @IsOptional()
   @IsNumber()
   perKgRate?: number;
 
-  @ApiPropertyOptional({ example: 500.00, description: 'Free shipping above this order value' })
+  @ApiPropertyOptional({ example: 500.0, description: 'Free shipping above this order value' })
   @IsOptional()
   @IsNumber()
   freeAbove?: number;
@@ -1220,7 +1328,7 @@ export class RedeemPointsDto {
 // ─── Wallet ───────────────────────────────────────────────────────────────────
 
 export class WalletTopUpRequestDto {
-  @ApiProperty({ example: 500.00, description: 'Amount to add' })
+  @ApiProperty({ example: 500.0, description: 'Amount to add' })
   @IsNotEmpty()
   @IsNumber()
   @Min(1)
@@ -1299,14 +1407,17 @@ export class RedeemGiftCardDto {
   @IsString()
   orderId: string;
 
-  @ApiProperty({ example: 100.00, description: 'Amount to redeem, in the card currency' })
+  @ApiProperty({ example: 100.0, description: 'Amount to redeem, in the card currency' })
   @IsNotEmpty()
   // `@IsNumber()` alone accepted a negative amount. The controller took an inline
   // `{ amount: number }` type rather than this class, so nothing validated it at
   // all — and the service computed `balance - (-1000)`, which INCREASED the
   // card's balance. Both halves are fixed: the route now binds to this DTO, and
   // the amount must be positive.
-  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'Amount must be a number with at most 2 decimal places' })
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'Amount must be a number with at most 2 decimal places' },
+  )
   @IsPositive({ message: 'Amount must be greater than zero' })
   amount: number;
 
@@ -1422,7 +1533,10 @@ export class SuspendReasonDto {
 }
 
 export class UploadDocumentDto {
-  @ApiProperty({ example: 'id_card', enum: ['id_card', 'driving_license', 'address_proof', 'bank_statement'] })
+  @ApiProperty({
+    example: 'id_card',
+    enum: ['id_card', 'driving_license', 'address_proof', 'bank_statement'],
+  })
   @IsNotEmpty()
   @IsString()
   documentType: string;
@@ -1432,7 +1546,6 @@ export class UploadDocumentDto {
   @IsString()
   documentUrl: string;
 }
-
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Marketplace request bodies
@@ -1449,35 +1562,52 @@ export class UploadDocumentDto {
 // the body before the owning service ever saw it. Those are validated by the
 // service's own DTOs one hop downstream.
 
+@ForwardedBody()
 export class CreateCheckoutDto {
   @ApiPropertyOptional({ description: 'Server uses the token subject when omitted.' })
-  @IsOptional() @IsString() userId?: string;
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }
 
 export class CreatePriceAlertDto {
   @ApiProperty({ example: 4999 })
-  @IsNumber() @Min(0) targetPrice: number;
+  @IsNumber()
+  @Min(0)
+  targetPrice: number;
 }
 
 export class ReportProductDto {
   @ApiProperty({ example: 'COUNTERFEIT' })
-  @IsString() @MaxLength(120) reason: string;
+  @IsString()
+  @MaxLength(120)
+  reason: string;
 
   @ApiPropertyOptional()
-  @IsOptional() @IsString() @MaxLength(2000) details?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  details?: string;
 }
 
 export class ResolveProductReportDto {
   @ApiProperty({ example: 'RESOLVED' })
-  @IsString() @MaxLength(60) status: string;
+  @IsString()
+  @MaxLength(60)
+  status: string;
 
   @ApiPropertyOptional()
-  @IsOptional() @IsString() @MaxLength(2000) resolutionNote?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  resolutionNote?: string;
 }
 
 export class ValidateCouponDto {
   @ApiProperty()
-  @IsString() @MaxLength(120) code: string;
+  @IsString()
+  @MaxLength(120)
+  code: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString() customerId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() userId?: string;
@@ -1486,44 +1616,66 @@ export class ValidateCouponDto {
   @ApiPropertyOptional() @IsOptional() @IsString() paymentMethod?: string;
 
   @ApiPropertyOptional({ type: [String] })
-  @IsOptional() @IsArray() @IsString({ each: true }) productIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  productIds?: string[];
 }
 
 export class RedeemCouponRequestDto {
   @ApiProperty()
-  @IsString() couponId: string;
+  @IsString()
+  couponId: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString() orderId?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) cartTotal?: number;
 
   @ApiPropertyOptional({ description: 'Amount taken off this order.' })
-  @IsOptional() @IsNumber() @Min(0) discountApplied?: number;
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountApplied?: number;
 }
 
 export class CreateQuestionDto {
   @ApiPropertyOptional({ description: 'Either spelling is accepted by the handler.' })
-  @IsOptional() @IsString() @MaxLength(2000) questionText?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  questionText?: string;
 
   @ApiPropertyOptional()
-  @IsOptional() @IsString() @MaxLength(2000) text?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  text?: string;
 }
 
 export class CreateAnswerDto {
   @ApiPropertyOptional({ description: 'Either spelling is accepted by the handler.' })
-  @IsOptional() @IsString() @MaxLength(4000) answerText?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  answerText?: string;
 
   @ApiPropertyOptional()
-  @IsOptional() @IsString() @MaxLength(4000) text?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  text?: string;
 }
 
 export class VerifyDeliveryOtpDto {
   @ApiProperty({ example: '4821' })
-  @IsString() @MaxLength(12) otp: string;
+  @IsString()
+  @MaxLength(12)
+  otp: string;
 }
 
 export class WishlistProductDto {
   @ApiProperty()
-  @IsUUID() productId: string;
+  @IsUUID()
+  productId: string;
 
   /**
    * Accepted but ignored — the handler takes the owner from the token.
@@ -1535,12 +1687,16 @@ export class WishlistProductDto {
    * `400 property userId should not exist`.
    */
   @ApiPropertyOptional({ description: 'Ignored; the session owns the wishlist.' })
-  @IsOptional() @IsString() userId?: string;
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }
 
 export class RemoveCartItemDto {
   @ApiPropertyOptional({ description: 'Removes only this variant when given.' })
-  @IsOptional() @IsString() variantId?: string;
+  @IsOptional()
+  @IsString()
+  variantId?: string;
 }
 
 // ── Forwarded bodies ─────────────────────────────────────────────────────────
@@ -1552,67 +1708,86 @@ export class RemoveCartItemDto {
 // Each class names the fields the *gateway* reads or requires.
 
 /** Body is forwarded whole; the id comes from the path. */
+@ForwardedBody()
 export class ForwardedBodyDto {}
 
+@ForwardedBody()
 export class ForwardedReturnRequestDto {
   @ApiPropertyOptional() @IsOptional() @IsString() orderId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
 }
 
+@ForwardedBody()
 export class ForwardedReturnStatusDto {
   @ApiPropertyOptional({ description: 'Validated in full by marketplace-service.' })
-  @IsOptional() @IsString() status?: string;
+  @IsOptional()
+  @IsString()
+  status?: string;
 }
 
+@ForwardedBody()
 export class ForwardedPickupDto {
   @ApiPropertyOptional() @IsOptional() @IsString() pickupPartnerId?: string;
 }
 
+@ForwardedBody()
 export class ForwardedCouponDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) code?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) discountValue?: number;
 }
 
+@ForwardedBody()
 export class ForwardedTrackingEventDto {
   @ApiPropertyOptional() @IsOptional() @IsString() trackingId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
 }
 
+@ForwardedBody()
 export class ForwardedVariantDto {
   @ApiPropertyOptional() @IsOptional() @IsString() sku?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) sellingPrice?: number;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) stockQuantity?: number;
 }
 
+@ForwardedBody()
 export class ForwardedVariantStockDto {
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) stockQuantity?: number;
 }
 
+@ForwardedBody()
 export class ForwardedDeliveryAssignmentDto {
   @ApiPropertyOptional() @IsOptional() @IsString() orderId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() partnerId?: string;
 }
 
+@ForwardedBody()
 export class ForwardedDeliveryStatusDto {
   @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
 }
 
+@ForwardedBody()
 export class ForwardedDeliveryProofDto {
   @ApiPropertyOptional({ type: [String] })
-  @IsOptional() @IsArray() @IsString({ each: true }) proofPhotos?: string[];
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  proofPhotos?: string[];
 
   @ApiPropertyOptional() @IsOptional() @IsString() deliveryMode?: string;
 }
 
+@ForwardedBody()
 export class ForwardedCartItemDto {
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) quantity?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() variantId?: string;
 }
 
+@ForwardedBody()
 export class ForwardedOrderDto {
   @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
 }
 
+@ForwardedBody()
 export class ForwardedBrandUpdateDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) type?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(300) title?: string;

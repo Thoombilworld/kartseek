@@ -21,12 +21,23 @@ import { ValidationPipe } from '@nestjs/common';
  *   * the body must be an object of the declared shape, so a string, an array
  *     or a null no longer reaches the RPC call.
  *
- * `transform` and `enableImplicitConversion` match the global pipe so a route
- * does not silently behave differently depending on which pipe applied.
+ * No `transform`, deliberately. Transformation rebuilds the body from the DTO
+ * class, and for a forwarded body that corrupts what it cannot describe:
+ * `PlaceOrderDto.items` is typed `OrderItemDto[]` with no `@Type()`, so with
+ * implicit conversion every element came back as an empty Array instance and
+ * order-service was asked to price `[[]]` — "Invalid quantity ()". The named
+ * fields are still validated; the body itself travels on exactly as sent.
+ *
+ * On its own this pipe could never deliver that: Nest runs every applicable
+ * pipe, so the strict global one had already rejected the unknown fields by
+ * the time this ran, and the web checkout's own payload was answered with
+ * "property items should not exist". The decision is now made in one place —
+ * `GatewayValidationPipe` applies these rules for DTOs marked
+ * `@ForwardedBody()` — and this instance is what it applies. The route-level
+ * `@UsePipes` declarations stay as documentation of intent.
  */
 export const ForwardingValidationPipe = new ValidationPipe({
   whitelist: false,
   forbidNonWhitelisted: false,
-  transform: true,
-  transformOptions: { enableImplicitConversion: true },
+  transform: false,
 });

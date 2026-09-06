@@ -7,7 +7,8 @@ dotenv.config();
 import { NestFactory } from '@nestjs/core';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 import { ApiGatewayModule } from './api-gateway.module';
-import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
+import { Logger, VersioningType } from '@nestjs/common';
+import { GatewayValidationPipe } from './pipes/gateway-validation.pipe';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AuditInterceptor } from './interceptors/audit.interceptor';
@@ -235,14 +236,10 @@ async function bootstrap() {
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
     // ── Global Validation Pipe ────────────────────────────────────────────────
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        transformOptions: { enableImplicitConversion: true },
-      }),
-    );
+    // Strict for bodies the gateway owns; forwarding for DTOs marked
+    // @ForwardedBody(). One global pipe decides, because a route-level pipe
+    // runs in addition to the global one and cannot loosen what it rejected.
+    app.useGlobalPipes(new GatewayValidationPipe());
 
     // ── Global Exception Filter (must come before interceptors) ─────────────
     app.useGlobalFilters(new AllExceptionsFilter());
