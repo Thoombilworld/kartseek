@@ -1,13 +1,34 @@
 import {
-  Controller, Get, Post, Put, Delete, Inject, Req,
-  Param, Query, Body, UseGuards, DefaultValuePipe, ParseIntPipe, Logger, HttpException, HttpStatus } from '@nestjs/common';
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Inject,
+  Req,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  DefaultValuePipe,
+  ParseIntPipe,
+  Logger,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiBody, ApiParam, ApiQuery,
-  ApiOkResponse, ApiCreatedResponse,
-  ApiForbiddenResponse, ApiUnauthorizedResponse,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiParam,
+  ApiQuery,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiUnauthorizedResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { RolesGuard } from '../guards/roles.guard';
@@ -15,8 +36,14 @@ import { SellerModuleGuard, SellerModule } from '../guards/seller-module.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
 import {
-  AddMenuItemDto, BookTableDto, RestaurantStatusDto, SuccessResponseDto,
-  SubmitReviewDto, UpdateMenuItemDto, UpdateRestaurantProfileDto, ReservationStatusDto,
+  AddMenuItemDto,
+  BookTableDto,
+  RestaurantStatusDto,
+  SuccessResponseDto,
+  SubmitReviewDto,
+  UpdateMenuItemDto,
+  UpdateRestaurantProfileDto,
+  ReservationStatusDto,
 } from '../dto/gateway.dto';
 
 import { JwtAuthGuard } from '@app/security';
@@ -79,7 +106,7 @@ export class RestaurantController {
   }
 
   /** Helper � sends TCP message with 5s timeout and graceful fallback. */
-    /**
+  /**
    * Forward to restaurant-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -94,10 +121,7 @@ export class RestaurantController {
       return await lastValueFrom(
         this.restaurantClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Restaurant service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Restaurant service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -121,7 +145,12 @@ export class RestaurantController {
   @ApiQuery({ name: 'cuisine', example: 'biryani', required: false })
   @ApiQuery({ name: 'minRating', example: 4.0, required: false })
   @ApiQuery({ name: 'isOpen', example: true, required: false })
-  @ApiQuery({ name: 'sortBy', example: 'rating', enum: ['rating', 'distance', 'popularity', 'deliveryTime'], required: false })
+  @ApiQuery({
+    name: 'sortBy',
+    example: 'rating',
+    enum: ['rating', 'distance', 'popularity', 'deliveryTime'],
+    required: false,
+  })
   @ApiQuery({ name: 'page', example: 1, required: false })
   @ApiQuery({ name: 'limit', example: 20, required: false })
   @ApiOkResponse({ description: 'Paginated list of restaurants' })
@@ -131,7 +160,8 @@ export class RestaurantController {
     @Query('sortBy') sortBy?: string,
     @Query('isOpen') isOpen?: boolean,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('list_restaurants', { cuisine, minRating, sortBy, isOpen, page, limit });
   }
 
@@ -148,14 +178,16 @@ export class RestaurantController {
   searchRestaurants(
     @Query('q') q: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('search_restaurants', { q, page, limit });
   }
 
   @Get('cuisines')
   @ApiOperation({
     summary: 'List cuisine categories',
-    description: 'Returns all cuisine categories with restaurant counts. Used for browse-by-cuisine UI.',
+    description:
+      'Returns all cuisine categories with restaurant counts. Used for browse-by-cuisine UI.',
   })
   @ApiOkResponse({ description: 'List of cuisine categories' })
   listCuisines() {
@@ -178,7 +210,7 @@ export class RestaurantController {
   @ApiOperation({
     summary: 'Get nearby restaurants',
     description:
-      'Uses the caller\'s coordinates to return restaurants within the given radius, ordered by distance.',
+      "Uses the caller's coordinates to return restaurants within the given radius, ordered by distance.",
   })
   @ApiQuery({ name: 'lat', example: -1.286389, required: true })
   @ApiQuery({ name: 'lng', example: 72.877723, required: true })
@@ -189,12 +221,21 @@ export class RestaurantController {
     @Query('lat') lat: string,
     @Query('lng') lng: string,
     @Query('radius', new DefaultValuePipe(5), ParseIntPipe) radius?: number,
-    @Query('cuisine') cuisine?: string) {
-    return this.send('get_nearby_restaurants', { lat: parseFloat(lat), lng: parseFloat(lng), radiusKm: radius, cuisine });
+    @Query('cuisine') cuisine?: string,
+  ) {
+    return this.send('get_nearby_restaurants', {
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      radiusKm: radius,
+      cuisine,
+    });
   }
 
   @Get('home-feed')
-  @ApiOperation({ summary: 'Restaurant home feed', description: 'Aggregated sections for the restaurant homepage.' })
+  @ApiOperation({
+    summary: 'Restaurant home feed',
+    description: 'Aggregated sections for the restaurant homepage.',
+  })
   @ApiOkResponse({ description: 'Home feed sections' })
   getHomeFeed(@Req() req: any) {
     // Region-scoped: a customer in Qatar should not be offered restaurants that
@@ -211,7 +252,10 @@ export class RestaurantController {
 
   @Get('popular-dishes')
   @ApiOperation({ summary: 'Popular dishes across restaurants' })
-  getPopularDishes(@Req() req: any, @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+  getPopularDishes(
+    @Req() req: any,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('get_popular_dishes', { limit, regionCode: requestRegion(req) });
   }
 
@@ -280,7 +324,8 @@ export class RestaurantController {
   @Get(':slug')
   @ApiOperation({
     summary: 'Get restaurant details',
-    description: 'Returns full restaurant profile: info, opening hours, photos, delivery settings, active offers, and aggregate ratings.',
+    description:
+      'Returns full restaurant profile: info, opening hours, photos, delivery settings, active offers, and aggregate ratings.',
   })
   @ApiParam({ name: 'slug', example: 'the-grand-biryani-house' })
   @ApiOkResponse({ description: 'Restaurant detail page data' })
@@ -293,7 +338,8 @@ export class RestaurantController {
   @Get(':id/menu')
   @ApiOperation({
     summary: 'Get restaurant menu',
-    description: 'Returns the full menu organised by category, including items, prices, customisation options, allergens, and bestseller badges.',
+    description:
+      'Returns the full menu organised by category, including items, prices, customisation options, allergens, and bestseller badges.',
   })
   @ApiParam({ name: 'id', example: 'RST-001' })
   @ApiOkResponse({ description: 'Structured menu by category' })
@@ -304,7 +350,10 @@ export class RestaurantController {
 
   @Public()
   @Get(':id/reviews')
-  @ApiOperation({ summary: 'Get restaurant reviews', description: 'Returns paginated customer reviews and ratings.' })
+  @ApiOperation({
+    summary: 'Get restaurant reviews',
+    description: 'Returns paginated customer reviews and ratings.',
+  })
   @ApiParam({ name: 'id', example: 'RST-001' })
   @ApiQuery({ name: 'page', example: 1, required: false })
   @ApiQuery({ name: 'limit', example: 10, required: false })
@@ -312,7 +361,8 @@ export class RestaurantController {
   getRestaurantReviews(
     @Param('id') id: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+  ) {
     return this.send('get_reviews', { restaurantId: id, page, limit });
   }
 
@@ -346,7 +396,10 @@ export class RestaurantController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Post(':restaurantId/book-table')
-  @ApiOperation({ summary: 'Book a dine-in table', description: 'Creates a dine-in reservation for the restaurant.' })
+  @ApiOperation({
+    summary: 'Book a dine-in table',
+    description: 'Creates a dine-in reservation for the restaurant.',
+  })
   @ApiParam({ name: 'restaurantId', example: 'RST-001' })
   @ApiBody({ type: BookTableDto })
   @ApiCreatedResponse({ description: 'Table reservation confirmed' })
@@ -359,11 +412,18 @@ export class RestaurantController {
   }
 
   @Post(':restaurantId/order')
-  @ApiOperation({ summary: 'Place an order', description: 'Places a delivery, takeaway, or dine-in order.' })
+  @ApiOperation({
+    summary: 'Place an order',
+    description: 'Places a delivery, takeaway, or dine-in order.',
+  })
   @ApiParam({ name: 'restaurantId', example: 'RST-001' })
   @ApiCreatedResponse({ description: 'Order placed successfully' })
-  placeOrder(@Param('restaurantId') restaurantId: string, @Body() payload: any) {
-    return this.send('place_restaurant_order', { ...payload, restaurantId });
+  placeOrder(@Req() req: any, @Param('restaurantId') restaurantId: string, @Body() payload: any) {
+    // The customer is the token subject. This forwarded `payload.customerId`
+    // as sent, so any signed-in account could place an order in another
+    // customer's name — restaurant-service stores whatever id it is given.
+    const customerId = req?.user?.userId ?? req?.user?.id ?? req?.user?.sub;
+    return this.send('place_restaurant_order', { ...payload, restaurantId, customerId });
   }
 
   @Post(':id/favorite')
@@ -431,7 +491,11 @@ export class RestaurantController {
 
   @Delete('cart/item/:itemId')
   @ApiOperation({ summary: 'Remove item from cart' })
-  removeCartItem(@Req() req: any, @Param('itemId') itemId: string, @Query('variantId') variantId?: string) {
+  removeCartItem(
+    @Req() req: any,
+    @Param('itemId') itemId: string,
+    @Query('variantId') variantId?: string,
+  ) {
     return this.sendTo(this.cartClient, 'Cart service', 'remove_cart_item', {
       itemId,
       variantId,
@@ -497,7 +561,10 @@ export class RestaurantController {
   @UseGuards(RolesGuard, SellerModuleGuard)
   @Roles(UserRole.SELLER)
   @SellerModule('restaurant')
-  @ApiOperation({ summary: 'Add menu item (Seller)', description: 'Creates a new menu item under the seller\'s restaurant.' })
+  @ApiOperation({
+    summary: 'Add menu item (Seller)',
+    description: "Creates a new menu item under the seller's restaurant.",
+  })
   @ApiBody({ type: AddMenuItemDto })
   @ApiCreatedResponse({ description: 'Menu item created (pending approval)' })
   @ApiForbiddenResponse({ description: 'Role SELLER required' })
@@ -540,11 +607,18 @@ export class RestaurantController {
   }
 
   @Get(':id/reservations')
-  @ApiOperation({ summary: 'List reservations', description: 'Returns table reservations for a restaurant.' })
+  @ApiOperation({
+    summary: 'List reservations',
+    description: 'Returns table reservations for a restaurant.',
+  })
   @ApiParam({ name: 'id', example: 'RST-001' })
   @ApiQuery({ name: 'status', example: 'PENDING', required: false })
   @ApiQuery({ name: 'date', example: '2026-07-05', required: false })
-  getReservations(@Param('id') id: string, @Query('status') status?: string, @Query('date') date?: string) {
+  getReservations(
+    @Param('id') id: string,
+    @Query('status') status?: string,
+    @Query('date') date?: string,
+  ) {
     return this.send('get_reservations', { restaurantId: id, status, date });
   }
 
@@ -555,7 +629,10 @@ export class RestaurantController {
   @ApiOperation({ summary: 'Accept/reject reservation (Seller)' })
   @ApiParam({ name: 'reservationId', example: 'RES-001' })
   @ApiBody({ type: ReservationStatusDto })
-  updateReservationStatus(@Param('reservationId') reservationId: string, @Body() dto: ReservationStatusDto) {
+  updateReservationStatus(
+    @Param('reservationId') reservationId: string,
+    @Body() dto: ReservationStatusDto,
+  ) {
     return this.send('update_reservation_status', { ...dto, reservationId });
   }
 
@@ -596,13 +673,18 @@ export class RestaurantController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('get_orders_by_restaurant', { restaurantId: id, status, type, page, limit });
   }
 
   @Get(':restaurantId/orders/:orderId')
   @ApiOperation({ summary: 'Get order detail' })
-  getOrderDetail(@Req() req: any, @Param('restaurantId') restaurantId: string, @Param('orderId') orderId: string) {
+  getOrderDetail(
+    @Req() req: any,
+    @Param('restaurantId') restaurantId: string,
+    @Param('orderId') orderId: string,
+  ) {
     // order-service owns the order record; it scopes the read by the requester.
     return this.sendTo(this.orderClient, 'Order service', 'get_order_by_id', {
       orderId,
@@ -613,35 +695,63 @@ export class RestaurantController {
   }
 
   @Post(':restaurantId/orders/:orderId/accept')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Accept order (Seller)' })
   acceptOrder(@Req() req: any, @Param('restaurantId') rid: string, @Param('orderId') oid: string) {
     return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
-      orderId: oid, restaurantId: rid, status: 'RESTAURANT_ACCEPTED', updatedBy: this.userId(req),
+      orderId: oid,
+      restaurantId: rid,
+      status: 'RESTAURANT_ACCEPTED',
+      updatedBy: this.userId(req),
     });
   }
 
   @Post(':restaurantId/orders/:orderId/reject')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Reject order (Seller)' })
-  rejectOrder(@Req() req: any, @Param('restaurantId') rid: string, @Param('orderId') oid: string, @Body('reason') reason: string) {
+  rejectOrder(
+    @Req() req: any,
+    @Param('restaurantId') rid: string,
+    @Param('orderId') oid: string,
+    @Body('reason') reason: string,
+  ) {
     return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
-      orderId: oid, restaurantId: rid, status: 'RESTAURANT_REJECTED', reason,
-      cancelledBy: 'restaurant', updatedBy: this.userId(req),
+      orderId: oid,
+      restaurantId: rid,
+      status: 'RESTAURANT_REJECTED',
+      reason,
+      cancelledBy: 'restaurant',
+      updatedBy: this.userId(req),
     });
   }
 
   @Put(':restaurantId/orders/:orderId/status')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update order status (Seller)' })
-  updateOrderStatus(@Req() req: any, @Param('restaurantId') rid: string, @Param('orderId') oid: string, @Body() body: any) {
+  updateOrderStatus(
+    @Req() req: any,
+    @Param('restaurantId') rid: string,
+    @Param('orderId') oid: string,
+    @Body() body: any,
+  ) {
     return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
-      ...body, orderId: oid, restaurantId: rid, updatedBy: this.userId(req),
+      ...body,
+      orderId: oid,
+      restaurantId: rid,
+      updatedBy: this.userId(req),
     });
   }
 
   @Post(':restaurantId/orders/:orderId/request-rider')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Request delivery rider for order' })
   requestRider(@Param('restaurantId') rid: string, @Param('orderId') oid: string) {
     return this.send('request_rider', { restaurantId: rid, orderId: oid });
@@ -662,7 +772,9 @@ export class RestaurantController {
   }
 
   @Put(':id/tables/:tableId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update table status/details' })
   updateTable(@Param('id') id: string, @Param('tableId') tableId: string, @Body() body: any) {
     return this.send('update_table', { restaurantId: id, tableId, ...body });
@@ -671,26 +783,34 @@ export class RestaurantController {
   // ── Seller — Payouts & Earnings ─────────────────────────────────────────
 
   @Get(':id/payouts')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER, UserRole.ADMIN) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER, UserRole.ADMIN)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Payout history' })
   getPayouts(@Param('id') id: string) {
     return this.send('get_payouts', { id });
   }
 
   @Get(':id/payouts/current')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Current payout cycle' })
   getCurrentPayout(@Param('id') id: string) {
     return this.send('get_current_payout', { id });
   }
 
   @Post(':id/payouts/request')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Request payout' })
   requestPayout(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     // payout-service owns payouts for every vertical, restaurants included.
     return this.sendTo(this.payoutClient, 'Payout service', 'request_payout', {
-      ...body, restaurantId: id, requestedBy: this.userId(req),
+      ...body,
+      restaurantId: id,
+      requestedBy: this.userId(req),
     });
   }
 
@@ -707,10 +827,12 @@ export class RestaurantController {
   @ApiOperation({ summary: 'Delivery partner restaurant earnings' })
   deliveryEarnings(@Query('period') period?: string, @Query('driverId') driverId?: string) {
     return this.send('delivery_earnings', { period, driverId });
-}
+  }
 
   @Get(':id/earnings')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Earnings summary' })
   getEarnings(@Param('id') id: string) {
     return this.send('get_earnings', { id });
@@ -725,21 +847,27 @@ export class RestaurantController {
   }
 
   @Post(':id/promotions')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Create promotion' })
   createPromotion(@Param('id') id: string, @Body() body: any) {
     return this.send('create_promotion', { restaurantId: id, ...body });
   }
 
   @Put(':id/promotions/:promoId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update promotion' })
   updatePromotion(@Param('promoId') promoId: string, @Body() body: any) {
     return this.send('update_promotion', { promoId, ...body });
   }
 
   @Delete(':id/promotions/:promoId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Delete promotion' })
   deletePromotion(@Param('promoId') promoId: string) {
     return this.send('delete_promotion', { promoId });
@@ -748,28 +876,36 @@ export class RestaurantController {
   // ── Seller — Staff ──────────────────────────────────────────────────────
 
   @Get(':id/staff')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'List restaurant staff' })
   getStaff(@Param('id') id: string) {
     return this.send('get_staff', { id });
   }
 
   @Post(':id/staff')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Add staff member' })
   addStaff(@Param('id') id: string, @Body() body: any) {
     return this.send('add_staff', { restaurantId: id, ...body });
   }
 
   @Put(':id/staff/:staffId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update staff member' })
   updateStaff(@Param('staffId') staffId: string, @Body() body: any) {
     return this.send('update_staff', { staffId, ...body });
   }
 
   @Delete(':id/staff/:staffId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Remove staff member' })
   removeStaff(@Param('staffId') staffId: string) {
     return this.send('remove_staff', { staffId });
@@ -778,21 +914,27 @@ export class RestaurantController {
   // ── Seller — Services & Settings ────────────────────────────────────────
 
   @Put(':id/services')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update service modes (delivery/takeaway/dine-in)' })
   updateServices(@Param('id') id: string, @Body() body: any) {
     return this.send('update_services', { restaurantId: id, ...body });
   }
 
   @Put(':id/prep-time')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update average preparation time' })
   updatePrepTime(@Param('id') id: string, @Body() body: any) {
     return this.send('update_prep_time', { restaurantId: id, ...body });
   }
 
   @Post(':id/banner')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Upload restaurant banner image' })
   uploadBanner(@Param('id') id: string, @Body() body: any) {
     return this.send('upload_banner', { restaurantId: id, ...body });
@@ -801,35 +943,45 @@ export class RestaurantController {
   // ── Seller — Menu Categories ────────────────────────────────────────────
 
   @Post('menu-category')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Create menu category' })
   createMenuCategory(@Body() body: any) {
     return this.send('add_menu_category', body);
   }
 
   @Put('menu-category/:categoryId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update menu category' })
   updateMenuCategory(@Param('categoryId') categoryId: string, @Body() body: any) {
     return this.send('update_menu_category', { categoryId, ...body });
   }
 
   @Delete('menu-category/:categoryId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Delete menu category' })
   deleteMenuCategory(@Param('categoryId') categoryId: string) {
     return this.send('delete_menu_category', { categoryId });
   }
 
   @Put('menu-items/bulk-availability')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Bulk update menu item availability' })
   bulkUpdateAvailability(@Body() body: any) {
     return this.send('bulk_update_availability', body);
   }
 
   @Post('menu-item/:itemId/customization')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Add/update item customization options' })
   updateCustomization(@Param('itemId') itemId: string, @Body() body: any) {
     return this.send('update_customization', { itemId, ...body });
@@ -838,14 +990,18 @@ export class RestaurantController {
   // ── Seller — Inventory ──────────────────────────────────────────────────
 
   @Get(':id/inventory')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Get restaurant inventory' })
   getInventory(@Param('id') id: string) {
     return this.send('get_inventory', { id });
   }
 
   @Put(':id/inventory/:itemId')
-  @UseGuards(RolesGuard, SellerModuleGuard) @Roles(UserRole.SELLER) @SellerModule('restaurant')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('restaurant')
   @ApiOperation({ summary: 'Update inventory item' })
   updateInventory(@Param('id') id: string, @Param('itemId') itemId: string, @Body() body: any) {
     return this.send('update_inventory_item', { restaurantId: id, itemId, ...body });
@@ -856,14 +1012,16 @@ export class RestaurantController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Get('approvals/pending')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get pending restaurant approvals (Admin)' })
   getPendingApprovals() {
     return this.send('get_pending_approvals', {});
   }
 
   @Post(':id/approve')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Approve restaurant registration (Admin)' })
   @ApiParam({ name: 'id', example: 'REQ-77821' })
   approveRestaurant(@Param('id') id: string, @Body('adminId') adminId: string) {
@@ -871,20 +1029,24 @@ export class RestaurantController {
   }
 
   @Post(':id/reject')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Reject restaurant registration (Admin)' })
   rejectRestaurant(@Param('id') id: string, @Body('reason') reason: string) {
     return this.send('reject_restaurant', { restaurantId: id, reason });
   }
 
   @Get('admin/list')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'List all restaurants (Admin)' })
-  @ApiQuery({ name: 'page', required: false }) @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'status', required: false })
   adminListRestaurants(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('status') status?: string,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
+  ) {
     return this.send('admin_list_restaurants', { page, status, limit });
   }
 
@@ -898,56 +1060,64 @@ export class RestaurantController {
   // gateway fallback. Keep literal paths above parameterised ones.
 
   @Get('admin/menu-approvals')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'List menu items pending moderation (Admin)' })
   adminMenuApprovals(@Query('status') status?: string) {
     return this.send('get_menu_approvals', { status });
   }
 
   @Get('admin/complaints')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'List restaurant complaints (Admin)' })
   adminListComplaints(@Query('status') status?: string, @Query('priority') priority?: string) {
     return this.send('list_complaints', { status, priority });
   }
 
   @Get('admin/:id')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Restaurant detail (Admin)' })
   adminRestaurantDetail(@Param('id') id: string) {
     return this.send('get_restaurant_by_id', { id });
   }
 
   @Post('admin/:id/suspend')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Suspend restaurant (Admin)' })
   adminSuspendRestaurant(@Param('id') id: string) {
     return this.send('suspend_restaurant', { id });
   }
 
   @Post('admin/:id/unsuspend')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Unsuspend restaurant (Admin)' })
   adminUnsuspendRestaurant(@Param('id') id: string) {
     return this.send('unsuspend_restaurant', { id });
   }
 
   @Post('admin/:id/block')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Block restaurant (Admin)' })
   adminBlockRestaurant(@Param('id') id: string) {
     return this.send('block_restaurant', { id });
   }
 
   @Post('admin/:id/unblock')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Unblock restaurant (Admin)' })
   adminUnblockRestaurant(@Param('id') id: string) {
     return this.send('unblock_restaurant', { id });
   }
 
   @Put('admin/:id/commission')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update restaurant commission rate (Admin)' })
   adminUpdateCommission(@Param('id') id: string, @Body('rate') rate: number) {
     return this.send('set_commission', { restaurantId: id, rate });
@@ -956,21 +1126,24 @@ export class RestaurantController {
   // ── Admin — Menu Moderation ─────────────────────────────────────────────
 
   @Post('admin/menu-approvals/:changeId/approve')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Approve menu change (Admin)' })
   adminApproveMenuChange(@Param('changeId') changeId: string) {
     return this.send('approve_menu_change', { changeId });
   }
 
   @Post('admin/menu-approvals/:changeId/reject')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Reject menu change (Admin)' })
   adminRejectMenuChange(@Param('changeId') changeId: string, @Body('reason') reason: string) {
     return this.send('reject_menu_change', { changeId, reason });
   }
 
   @Get('admin/:id/menu-audit')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Audit restaurant menu (Admin)' })
   adminMenuAudit(@Param('id') id: string) {
     return this.send('get_menu_audit', { id });
@@ -979,28 +1152,32 @@ export class RestaurantController {
   // ── Admin — Complaints ──────────────────────────────────────────────────
 
   @Get('admin/complaints/:complaintId')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Complaint detail (Admin)' })
   adminComplaintDetail(@Param('complaintId') complaintId: string) {
     return this.send('get_complaint', { complaintId });
   }
 
   @Post('admin/complaints/:complaintId/resolve')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Resolve complaint (Admin)' })
   adminResolveComplaint(@Param('complaintId') complaintId: string, @Body() body: any) {
     return this.send('resolve_complaint', { complaintId, ...body });
   }
 
   @Post('admin/complaints/:complaintId/escalate')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Escalate complaint (Admin)' })
   adminEscalateComplaint(@Param('complaintId') complaintId: string, @Body() body: any) {
     return this.send('escalate_complaint', { complaintId, ...body });
   }
 
   @Get('admin/:id/quality-score')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Restaurant quality score (Admin)' })
   adminQualityScore(@Param('id') id: string) {
     return this.send('get_quality_score', { id });
@@ -1009,56 +1186,64 @@ export class RestaurantController {
   // ── Admin — Analytics ───────────────────────────────────────────────────
 
   @Get('admin/analytics/overview')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Platform restaurant overview (Admin)' })
   adminAnalyticsOverview() {
     return this.send('admin_analytics_overview', {});
   }
 
   @Get('admin/analytics/revenue')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Revenue analytics by region (Admin)' })
   adminAnalyticsRevenue(@Query('period') period?: string, @Query('groupBy') groupBy?: string) {
     return this.send('admin_analytics_revenue', { period, groupBy });
   }
 
   @Get('admin/analytics/orders')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Order volume analytics (Admin)' })
   adminAnalyticsOrders(@Query('period') period?: string, @Query('groupBy') groupBy?: string) {
     return this.send('admin_analytics_orders', { period, groupBy });
   }
 
   @Get('admin/analytics/cuisines')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Cuisine popularity analytics (Admin)' })
   adminAnalyticsCuisines(@Query('period') period?: string) {
     return this.send('admin_analytics_cuisines', { period });
   }
 
   @Get('admin/analytics/top-restaurants')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Top performing restaurants (Admin)' })
   adminTopRestaurants(@Query('metric') metric?: string, @Query('limit') limit?: string) {
     return this.send('admin_top_restaurants', { metric, limit: Number(limit) || 10 });
   }
 
   @Get('admin/analytics/bottom-restaurants')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Bottom performing restaurants (Admin)' })
   adminBottomRestaurants(@Query('metric') metric?: string, @Query('limit') limit?: string) {
     return this.send('admin_bottom_restaurants', { metric, limit: Number(limit) || 10 });
   }
 
   @Get('admin/reports/compliance')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Restaurant compliance report (Admin)' })
   adminComplianceReport() {
     return this.send('admin_compliance_report', {});
   }
 
   @Get('admin/reports/payouts')
-  @UseGuards(RolesGuard) @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Restaurant payout summary (Admin)' })
   adminPayoutReport(@Query('period') period?: string) {
     return this.send('admin_payout_report', { period });
@@ -1071,7 +1256,10 @@ export class RestaurantController {
   @Get('delivery/available-tasks')
   @ApiOperation({ summary: 'Available restaurant pickup tasks for delivery partners' })
   deliveryAvailableTasks(@Query('lat') lat?: string, @Query('lng') lng?: string) {
-    return this.send('delivery_available_tasks', { lat: lat ? +lat : undefined, lng: lng ? +lng : undefined });
+    return this.send('delivery_available_tasks', {
+      lat: lat ? +lat : undefined,
+      lng: lng ? +lng : undefined,
+    });
   }
 
   @Post('delivery/tasks/:taskId/accept')

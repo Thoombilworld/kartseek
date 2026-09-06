@@ -1,23 +1,46 @@
 import {
-  Controller, Post, Get, Param, Body, Query, Req, Logger,
-  UseGuards, Put, Inject, HttpCode, HttpStatus,
-  HttpException, UnauthorizedException,
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  Query,
+  Req,
+  Logger,
+  UseGuards,
+  Put,
+  Inject,
+  HttpCode,
+  HttpStatus,
+  HttpException,
+  UnauthorizedException,
+  UsePipes,
 } from '@nestjs/common';
-import { ClientKafka, ClientProxy } from '@nestjs/microservices';
+import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiBody, ApiParam, ApiOkResponse,
-  ApiCreatedResponse, ApiForbiddenResponse,
-  ApiUnauthorizedResponse, ApiBadRequestResponse,
-  ApiNotFoundResponse, ApiResponse,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiParam,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiUnauthorizedResponse,
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
+  ApiResponse,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
 import { WsTrackingGrantService } from '../services/ws-tracking-grant.service';
-import { KAFKA_TOPICS } from '@app/kafka';
+import { MarketplaceOrderService } from '../services/marketplace-order.service';
+import { ForwardingValidationPipe } from '../pipes/forwarding-validation.pipe';
+import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagination.pipe';
 import {
   PlaceOrderDto,
   PlaceOrderResponseDto,
@@ -32,11 +55,10 @@ import {
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OrderController {
-
   private readonly logger = new Logger(OrderController.name);
 
   constructor(
-    @Inject('ORDER_SERVICE') private readonly kafkaClient: ClientKafka,
+    private readonly orders: MarketplaceOrderService,
     private readonly trackingGrants: WsTrackingGrantService,
     // Restaurant orders live in restaurant-service, not order-service: they are
     // written by `place_restaurant_order` into `restaurant_orders`. The handlers
@@ -52,59 +74,113 @@ export class OrderController {
   @ApiOperation({
     summary: 'Place a new order',
     description:
-      'Validates cart, applies coupon/wallet deductions, calculates final total, ' +
-      'emits `order.created` to Kafka for async inventory/notification processing, ' +
-      'and returns the order ID with a payment token to initiate the payment gateway flow.',
+      'Places the order for the signed-in customer. Marketplace baskets are priced ' +
+      "server-side from each product's buy-box listing, coupons and gift cards are " +
+      'verified, stock is reserved, and the order is written by order-service and ' +
+      'projected to the sellers who fulfil it — the same path as `POST /marketplace/orders`. ' +
+      'A payload carrying `restaurantId` is a restaurant order and goes to restaurant-service.',
   })
   @ApiBody({ type: PlaceOrderDto })
-  @ApiCreatedResponse({ type: PlaceOrderResponseDto, description: 'Order placed; proceed to payment' })
+  @ApiCreatedResponse({ type: PlaceOrderResponseDto, description: 'Order placed' })
   @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid payload or cart empty' })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
   @ApiForbiddenResponse({ description: 'Role CUSTOMER required' })
-  placeOrder(@Body() payload: PlaceOrderDto) {
-    const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const payableAmount = (payload as any).totalAmount || 1052;
+  @UsePipes(ForwardingValidationPipe)
+  async placeOrder(@Req() req: any, @Body() payload: PlaceOrderDto) {
+    // This handler used to generate `ORD-<timestamp>-<random>`, emit an
+    // `order.created` event for it, and answer "Order placed successfully" —
+    // without calling any service or writing a row. The mobile customer app
+    // posts its checkouts here, so every order it "placed" never existed: no
+    // payment, no seller, no delivery, and an id that no other route could find.
+    const customerId = this.orders.userId(req);
+    if (!customerId) throw new UnauthorizedException('Not authenticated');
 
-    this.kafkaClient.emit(KAFKA_TOPICS.ORDER_CREATED, {
-      orderId,
-      amount: payableAmount,
-      items: (payload as any).items || [],
-      timestamp: new Date().toISOString(),
+    if (payload?.restaurantId) {
+      // Restaurant orders are owned by restaurant-service. The customer is the
+      // token subject, never a body field.
+      const placed: any = await this.sendToRestaurants('place_restaurant_order', {
+        ...payload,
+        customerId,
+        orderType: (payload as any).orderType ?? (payload as any).type,
+      });
+      const order = placed?.order ?? placed;
+      return {
+        success: true,
+        message: 'Order placed successfully.',
+        orderId: order?.id ?? null,
+        orderNumber: order?.orderNumber ?? null,
+        payableAmount: order?.totalAmount ?? order?.grandTotal ?? order?.total ?? null,
+        order,
+      };
+    }
+
+    const result: any = await this.orders.place(req, {
+      ...payload,
+      // The mobile client's name for the coupon field.
+      couponCode: payload.couponCode ?? payload.promoCode,
     });
-
+    const order = result?.order ?? result;
     return {
       success: true,
-      message: 'Order placed successfully. Proceed to payment.',
-      orderId,
-      payableAmount,
-      paymentToken: `txn_${Date.now()}`,
+      message: 'Order placed successfully.',
+      orderId: order?.id ?? null,
+      orderNumber: order?.orderNumber ?? null,
+      payableAmount: order?.totalAmount ?? order?.grandTotal ?? order?.total ?? null,
+      order,
     };
+  }
+
+  @Get('history')
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({
+    summary: "The caller's order history",
+    description:
+      'Marketplace orders placed by the signed-in customer, newest first, from order-service.',
+  })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async getOrderHistory(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+  ) {
+    // Declared before `:id` on purpose: a literal segment registered after a
+    // parameter route is captured by it, and "history" would have been looked
+    // up as an order id.
+    return this.orders.listForCustomer(req, { status, page, limit });
+  }
+
+  @Get(':id')
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({ summary: 'One of my orders, by order number or uuid' })
+  @ApiParam({
+    name: 'id',
+    description: 'Order number or order UUID, as listed by GET /orders/history',
+  })
+  @ApiNotFoundResponse({ description: 'Order not found' })
+  async getOrder(@Req() req: any, @Param('id') id: string) {
+    return this.orders.getById(req, id);
   }
 
   @Get(':id/tracking')
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({
-    summary: 'Generic order tracking',
+    summary: 'Track one of my orders',
     description:
-      'Not implemented. Tracking is per-module — use `/orders/restaurant/:orderId/tracking`, '
-      + '`/marketplace/orders/:id/track` or `/grocery/orders/:id/tracking`, each of which resolves '
-      + 'the order against the service that owns it and scopes it to the customer who placed it.',
+      'Courier events for a marketplace order the caller placed, resolved by order number or uuid, ' +
+      'plus the order status so an order with no scans yet still renders a timeline. ' +
+      'Restaurant orders track at `/orders/restaurant/:orderId/tracking`.',
   })
-  @ApiParam({ name: 'id', description: 'Order ID' })
-  @ApiResponse({ status: 501, description: 'Generic order tracking is not available' })
-  getOrderTracking() {
-    // This answered every request with the same invented delivery: a driver
-    // named "Rahul Kumar", the phone number +91 980 000 0001, coordinates in
-    // Mumbai, and a four-step timeline with three steps ticked — for any order
-    // id, from any customer, with no lookup of any kind. A customer watching it
-    // would have seen a stranger's name and a location unrelated to their order.
-    //
-    // There is nothing to wire it to: order-service has no tracking message
-    // pattern, and orders live across four services that each track their own.
-    throw new HttpException(
-      'Use the module tracking route for this order.',
-      HttpStatus.NOT_IMPLEMENTED,
-    );
+  @ApiParam({ name: 'id', description: 'Order number or order UUID' })
+  @ApiOkResponse({ type: OrderTrackingResponseDto })
+  @ApiNotFoundResponse({ description: 'Order not found' })
+  getOrderTracking(@Req() req: any, @Param('id') id: string) {
+    // Before this answered 501, it answered every request with the same
+    // invented delivery: a driver named "Rahul Kumar", a Mumbai location and a
+    // four-step timeline with three steps ticked — for any id, from anyone.
+    return this.orders.track(req, id);
   }
 
   /**
@@ -125,10 +201,9 @@ export class OrderController {
   private async sendToRestaurants<T>(cmd: string, payload: object): Promise<T> {
     try {
       return await lastValueFrom(
-        this.restaurantClient.send<T>({ cmd }, payload).pipe(
-          timeout(5000),
-          catchError(rpcCatch('Restaurant service unavailable')),
-        ),
+        this.restaurantClient
+          .send<T>({ cmd }, payload)
+          .pipe(timeout(5000), catchError(rpcCatch('Restaurant service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -148,7 +223,8 @@ export class OrderController {
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({
     summary: 'Restaurant order history',
-    description: 'All past restaurant orders (delivery, takeaway, dine-in) for the authenticated customer.',
+    description:
+      'All past restaurant orders (delivery, takeaway, dine-in) for the authenticated customer.',
   })
   @ApiOkResponse({ description: 'List of past restaurant orders' })
   getRestaurantOrderHistory(
@@ -160,7 +236,8 @@ export class OrderController {
   ) {
     return this.sendToRestaurants('get_customer_restaurant_orders', {
       customerId: this.customerId(req),
-      type, status,
+      type,
+      status,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });
@@ -177,7 +254,8 @@ export class OrderController {
   @ApiNotFoundResponse({ description: 'No such order for this customer' })
   getRestaurantOrderDetail(@Req() req: any, @Param('orderId') orderId: string) {
     return this.sendToRestaurants('get_customer_restaurant_order', {
-      customerId: this.customerId(req), orderId,
+      customerId: this.customerId(req),
+      orderId,
     });
   }
 
@@ -194,7 +272,8 @@ export class OrderController {
   async getRestaurantOrderTracking(@Req() req: any, @Param('orderId') orderId: string) {
     const customerId = this.customerId(req);
     const tracking = await this.sendToRestaurants<{ orderId?: string; orderNumber?: string }>(
-      'get_customer_restaurant_order_tracking', { customerId, orderId },
+      'get_customer_restaurant_order_tracking',
+      { customerId, orderId },
     );
 
     // Reaching here means restaurant-service resolved the order *for this
@@ -203,8 +282,12 @@ export class OrderController {
     // Both identifiers are granted because the customer may hold either.
     await Promise.all([
       this.trackingGrants.grant(orderId, customerId),
-      tracking?.orderId ? this.trackingGrants.grant(tracking.orderId, customerId) : Promise.resolve(),
-      tracking?.orderNumber ? this.trackingGrants.grant(tracking.orderNumber, customerId) : Promise.resolve(),
+      tracking?.orderId
+        ? this.trackingGrants.grant(tracking.orderId, customerId)
+        : Promise.resolve(),
+      tracking?.orderNumber
+        ? this.trackingGrants.grant(tracking.orderNumber, customerId)
+        : Promise.resolve(),
     ]);
 
     return tracking;
@@ -242,7 +325,8 @@ export class OrderController {
   @ApiCreatedResponse({ description: 'Items resolved from the previous order' })
   reorderRestaurant(@Req() req: any, @Param('orderId') orderId: string) {
     return this.sendToRestaurants('reorder_customer_restaurant_order', {
-      customerId: this.customerId(req), orderId,
+      customerId: this.customerId(req),
+      orderId,
     });
   }
 
@@ -258,7 +342,9 @@ export class OrderController {
   @ApiBadRequestResponse({ description: 'Order has progressed too far to cancel' })
   cancelRestaurantOrder(@Req() req: any, @Param('orderId') orderId: string, @Body() body: any) {
     return this.sendToRestaurants('cancel_customer_restaurant_order', {
-      customerId: this.customerId(req), orderId, reason: body?.reason,
+      customerId: this.customerId(req),
+      orderId,
+      reason: body?.reason,
     });
   }
 
@@ -266,7 +352,8 @@ export class OrderController {
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({
     summary: 'Rate delivery partner',
-    description: 'Not implemented. A delivery rating has nowhere to be stored — no delivery-partner rating record exists.',
+    description:
+      'Not implemented. A delivery rating has nowhere to be stored — no delivery-partner rating record exists.',
   })
   @ApiParam({ name: 'orderId' })
   @ApiResponse({ status: 501, description: 'Delivery ratings are not available' })
@@ -284,7 +371,8 @@ export class OrderController {
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({
     summary: 'Tip delivery partner',
-    description: 'Not implemented. A tip moves money and needs a wallet debit and a payout leg; this route has neither.',
+    description:
+      'Not implemented. A tip moves money and needs a wallet debit and a payout leg; this route has neither.',
   })
   @ApiParam({ name: 'orderId' })
   @ApiResponse({ status: 501, description: 'Tipping is not available' })
@@ -313,7 +401,21 @@ export class OrderController {
   @ApiForbiddenResponse({ description: 'Role SELLER required' })
   @ApiNotFoundResponse({ description: 'Order not found' })
   updateOrderStatus(@Param('id') id: string, @Body() dto: UpdateOrderStatusDto) {
-    return { success: true, message: `Order #${id} status updated to ${dto.status}` };
+    void id;
+    void dto;
+    // This answered `{ success: true }` for any order id from any seller without
+    // looking anything up or changing anything: a status update that never
+    // happened, reported as done. There is no generic order store to update —
+    // marketplace orders change status through the seller routes, which check
+    // that the seller owns the order, and deliveries through delivery-service.
+    throw new HttpException(
+      {
+        success: false,
+        message:
+          'Not available on the generic orders surface. Use `/marketplace/seller/orders/:id/status`, which verifies the seller owns the order.',
+      },
+      HttpStatus.NOT_IMPLEMENTED,
+    );
   }
 
   // ── Driver / Delivery ────────────────────────────────────────────────────────
@@ -344,6 +446,20 @@ export class OrderController {
   @ApiForbiddenResponse({ description: 'Role DRIVER required' })
   @ApiNotFoundResponse({ description: 'Order not found' })
   updateDeliveryStatus(@Param('id') id: string, @Body('status') status: string) {
-    return { success: true, message: `Delivery #${id} status updated to ${status}` };
+    void id;
+    void status;
+    // This answered `{ success: true }` for any order id from any driver without
+    // looking anything up or changing anything: a status update that never
+    // happened, reported as done. There is no generic order store to update —
+    // marketplace orders change status through the seller routes, which check
+    // that the seller owns the order, and deliveries through delivery-service.
+    throw new HttpException(
+      {
+        success: false,
+        message:
+          'Not available on the generic orders surface. Use `/delivery/tasks/:id/status`, which verifies the assignment.',
+      },
+      HttpStatus.NOT_IMPLEMENTED,
+    );
   }
 }

@@ -1,17 +1,39 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body,
-  Query, Inject, HttpException, HttpStatus, Optional, UseGuards, Req, ParseUUIDPipe, Logger,
-  HttpCode, UsePipes, ValidationPipe,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Body,
+  Query,
+  Inject,
+  HttpException,
+  HttpStatus,
+  Optional,
+  UseGuards,
+  Req,
+  ParseUUIDPipe,
+  Logger,
+  HttpCode,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiBody, ApiParam, ApiQuery,
-  ApiOkResponse, ApiCreatedResponse,
-  ApiBadRequestResponse, ApiNotFoundResponse,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiParam,
+  ApiQuery,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
   ApiServiceUnavailableResponse,
 } from '@nestjs/swagger';
 import {
@@ -21,19 +43,35 @@ import {
   ErrorResponseDto,
   GiftCardBalanceDto,
   RedeemGiftCardDto,
-  CreateCheckoutDto, CreatePriceAlertDto, ReportProductDto,
-  ResolveProductReportDto, ValidateCouponDto, RedeemCouponRequestDto,
-  CreateQuestionDto, CreateAnswerDto, VerifyDeliveryOtpDto,
-  WishlistProductDto, RemoveCartItemDto,
-  ForwardedReturnRequestDto, ForwardedReturnStatusDto, ForwardedPickupDto,
-  ForwardedCouponDto, ForwardedTrackingEventDto, ForwardedVariantDto,
-  ForwardedVariantStockDto, ForwardedDeliveryAssignmentDto,
-  ForwardedDeliveryStatusDto, ForwardedDeliveryProofDto,
-  ForwardedCartItemDto, ForwardedOrderDto, ForwardedBrandUpdateDto,
+  CreateCheckoutDto,
+  CreatePriceAlertDto,
+  ReportProductDto,
+  ResolveProductReportDto,
+  ValidateCouponDto,
+  RedeemCouponRequestDto,
+  CreateQuestionDto,
+  CreateAnswerDto,
+  VerifyDeliveryOtpDto,
+  WishlistProductDto,
+  RemoveCartItemDto,
+  ForwardedReturnRequestDto,
+  ForwardedReturnStatusDto,
+  ForwardedPickupDto,
+  ForwardedCouponDto,
+  ForwardedTrackingEventDto,
+  ForwardedVariantDto,
+  ForwardedVariantStockDto,
+  ForwardedDeliveryAssignmentDto,
+  ForwardedDeliveryStatusDto,
+  ForwardedDeliveryProofDto,
+  ForwardedCartItemDto,
+  ForwardedOrderDto,
+  ForwardedBrandUpdateDto,
 } from '../dto/gateway.dto';
 import { MARKETPLACE_PATTERNS } from '../contracts';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
+import { MarketplaceOrderService } from '../services/marketplace-order.service';
 import { RolesGuard } from '@app/guards';
 import { Roles } from '@app/decorators';
 import { UserRole, rpcCatch } from '@app/common';
@@ -60,7 +98,15 @@ export class MarketplaceGatewayController {
     // Optional so a checkout can never fail because the socket layer is absent
     // (tests construct this controller without it).
     @Optional() private readonly sellerGateway?: SellerGateway,
-  ) {}
+    // The shared order logic. Optional for the same reason: a hand-constructed
+    // controller gets one built over the same clients it was given.
+    @Optional() orders?: MarketplaceOrderService,
+  ) {
+    this.orders =
+      orders ?? new MarketplaceOrderService(marketplaceClient, orderClient, sellerGateway);
+  }
+
+  private readonly orders: MarketplaceOrderService;
 
   /** Extract the authenticated user id from the request (populated by JwtAuthGuard). */
   private userId(req: any): string | undefined {
@@ -98,30 +144,9 @@ export class MarketplaceGatewayController {
     return typeof raw === 'string' && raw.trim() ? raw.trim().toUpperCase() : undefined;
   }
 
-  /**
-   * Load one of the caller's own orders from order-service.
-   *
-   * Accepts either identifier the customer is given — the order number
-   * (`ORD-…`, which is what `GET /marketplace/orders` puts in `id`) or the
-   * order uuid — because routes below are reached from links built out of that
-   * list. order-service enforces ownership, so this is also the ownership check:
-   * another customer's order comes back as a rejection, not a row.
-   */
+  /** One of the caller's own orders, by number or uuid — see MarketplaceOrderService.fetchOwned. */
   private async fetchOwnedOrder(req: any, orderId: string): Promise<any> {
-    const order = await lastValueFrom(
-      this.orderClient.send({ cmd: 'get_order_by_id' }, {
-        orderId,
-        userId: this.userId(req),
-        role: req?.user?.role,
-      }),
-    ).catch((err: any) => {
-      const rawStatus = err?.statusCode ?? err?.status;
-      const status = typeof rawStatus === 'number' && rawStatus >= 100 && rawStatus < 600
-        ? rawStatus : HttpStatus.SERVICE_UNAVAILABLE;
-      throw new HttpException(err?.message || 'Order service unavailable', status);
-    });
-    if (!order) throw new HttpException(`Order ${orderId} not found`, HttpStatus.NOT_FOUND);
-    return order;
+    return this.orders.fetchOwned(req, orderId);
   }
 
   /**
@@ -154,26 +179,26 @@ export class MarketplaceGatewayController {
     const secret = process.env.INTERNAL_SERVICE_SECRET;
     const body =
       secret && payload && typeof payload === 'object' && !Array.isArray(payload)
-      ? { ...payload, _internalSecret: secret }
-      : payload ?? {};
+        ? { ...payload, _internalSecret: secret }
+        : (payload ?? {});
     try {
       return await lastValueFrom(
-      this.marketplaceClient.send<T>({ cmd }, body).pipe(
-        timeout(10000),
-        // Through the shared helper, not a local copy.
-        //
-        // This controller carried its own inline version of the rule, and it
-        // treated any status from 100 to 599 as a domain error whose message
-        // could be forwarded. marketplace-service reports unhandled failures as
-        // `{ statusCode: 500, message: <driver text> }`, so a non-uuid sent to
-        // the wishlist route answered
-        //   500 invalid input syntax for type uuid: "12345"
-        // naming the datastore and column type to the caller. `rpcCatch` keeps
-        // the original reason for the local copy — read `statusCode` so a
-        // missing product is 404 rather than 503 — while forwarding a message
-        // only for 4xx, which is the half that was written for the caller.
-        catchError(rpcCatch('Marketplace service unavailable')),
-      ),
+        this.marketplaceClient.send<T>({ cmd }, body).pipe(
+          timeout(10000),
+          // Through the shared helper, not a local copy.
+          //
+          // This controller carried its own inline version of the rule, and it
+          // treated any status from 100 to 599 as a domain error whose message
+          // could be forwarded. marketplace-service reports unhandled failures as
+          // `{ statusCode: 500, message: <driver text> }`, so a non-uuid sent to
+          // the wishlist route answered
+          //   500 invalid input syntax for type uuid: "12345"
+          // naming the datastore and column type to the caller. `rpcCatch` keeps
+          // the original reason for the local copy — read `statusCode` so a
+          // missing product is 404 rather than 503 — while forwarding a message
+          // only for 4xx, which is the half that was written for the caller.
+          catchError(rpcCatch('Marketplace service unavailable')),
+        ),
       );
     } catch (error) {
       if (error instanceof HttpException) throw error;
@@ -194,7 +219,12 @@ export class MarketplaceGatewayController {
   })
   @ApiOkResponse({ description: 'Full home feed payload' })
   @ApiNotFoundResponse({ description: 'Home data unavailable' })
-  @ApiQuery({ name: 'country', required: false, example: 'QA', description: 'Override the detected market' })
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    example: 'QA',
+    description: 'Override the detected market',
+  })
   async getMarketplaceHome(@Req() req: any, @Query('country') country?: string) {
     // Deliberately TCP-only, unlike the other catalogue reads below.
     //
@@ -310,8 +340,18 @@ export class MarketplaceGatewayController {
   // catalogue listing
   @PublicCache(60)
   @ApiOperation({ summary: 'List all products' })
-  @ApiQuery({ name: 'category', example: 'electronics', required: false, description: 'Category slug' })
-  @ApiQuery({ name: 'subcategory', example: 'electronics-laptops', required: false, description: 'Subcategory slug' })
+  @ApiQuery({
+    name: 'category',
+    example: 'electronics',
+    required: false,
+    description: 'Category slug',
+  })
+  @ApiQuery({
+    name: 'subcategory',
+    example: 'electronics-laptops',
+    required: false,
+    description: 'Subcategory slug',
+  })
   @ApiQuery({ name: 'brand', example: 'apple', required: false, description: 'Brand slug' })
   @ApiQuery({ name: 'sort', example: 'price_asc', required: false })
   async getProducts(
@@ -355,7 +395,11 @@ export class MarketplaceGatewayController {
   @ApiQuery({ name: 'page', example: 1, required: false })
   @ApiQuery({ name: 'limit', example: 20, required: false })
   @ApiServiceUnavailableResponse({ description: 'Search service unavailable' })
-  async searchMarketplace(@Req() req: any, @Query('q') query: string, @Query() filters: ProductFilterDto) {
+  async searchMarketplace(
+    @Req() req: any,
+    @Query('q') query: string,
+    @Query() filters: ProductFilterDto,
+  ) {
     const page = Number((filters as any)?.page) || 1;
     const limit = Math.min(Number((filters as any)?.limit) || 20, 100);
     const country = this.region(req, (filters as any)?.country);
@@ -394,7 +438,10 @@ export class MarketplaceGatewayController {
 
     // Throws 404 through sendToMarketplace when the product does not exist, which
     // is right: a cart line for a product that cannot be priced is not orderable.
-    const product: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCT_BY_ID, productId);
+    const product: any = await this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.GET_PRODUCT_BY_ID,
+      productId,
+    );
 
     const listings: any[] = Array.isArray(product?.listings) ? product.listings : [];
     const buyBox = listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0];
@@ -451,7 +498,9 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Get current cart' })
   @ApiOkResponse({ description: 'Cart contents' })
   async getCart(@Req() req: any) {
-    return lastValueFrom(this.cartClient.send({ cmd: 'get_cart' }, { userId: this.userId(req) })).catch(() => {
+    return lastValueFrom(
+      this.cartClient.send({ cmd: 'get_cart' }, { userId: this.userId(req) }),
+    ).catch(() => {
       throw new HttpException('Cart service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     });
   }
@@ -467,298 +516,12 @@ export class MarketplaceGatewayController {
   }
 
   /**
-   * Place an order, pricing it server-side.
-   *
-   * Shared by `POST /orders/checkout` and the `POST /orders` alias, which were
-   * both sending `{ cmd: 'create_checkout' }` — a pattern *no service in the
-   * monorepo implements*, so every checkout answered 503 and nothing could be
-   * bought. The real handler is `place_order`, and it takes `customerId` /
-   * `deliveryAddress` / `serviceType`, none of which the old payload supplied.
-   *
-   * Three things are deliberately not taken from the request body:
-   *
-   *  - **the customer** — always the JWT subject, never `payload.userId`.
-   *  - **prices** — resolved from each product's buy-box listing via
-   *    `PRICE_ORDER_ITEMS`. The order service used to compute `subtotal` from
-   *    `items[].price` as sent by the caller, so a hand-rolled client could name
-   *    its own price; the web client sends no price at all, which made `subtotal`
-   *    `NaN`.
-   *  - **the discount** — resolved through `VALIDATE_COUPON` against the real
-   *    coupon record and this customer's usage. The order service used to apply a
-   *    flat `subtotal * 0.1` for *any* non-empty coupon string.
+   * Place an order, pricing it server-side. The implementation lives in
+   * MarketplaceOrderService so the generic `POST /orders/checkout` shares it;
+   * see that class for the design notes.
    */
   private async placeMarketplaceOrder(req: any, payload: any) {
-    const customerId = this.userId(req);
-    if (!customerId) {
-      throw new HttpException('Not authenticated', HttpStatus.UNAUTHORIZED);
-    }
-
-    const requested = Array.isArray(payload?.items) ? payload.items : [];
-    if (requested.length === 0) {
-      throw new HttpException('Cart is empty', HttpStatus.BAD_REQUEST);
-    }
-
-    // ── 1. Authoritative prices ────────────────────────────────────────────
-    const pricing: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.PRICE_ORDER_ITEMS, {
-      items: requested.map((i: any) => ({ productId: i?.productId, quantity: i?.quantity })),
-    }).catch((): null => null);
-
-    if (!pricing) {
-      throw new HttpException('Could not price this order', HttpStatus.SERVICE_UNAVAILABLE);
-    }
-    // A partially-priced basket is refused outright rather than charged for the
-    // lines that happened to resolve.
-    if (!pricing.ok) {
-      throw new HttpException(pricing.reason || 'Item unavailable', HttpStatus.BAD_REQUEST);
-    }
-
-    const items = (pricing.items as any[]).map((line) => ({
-      productId: line.productId,
-      quantity: line.quantity,
-      price: line.unitPrice,
-      sellerId: line.sellerId,
-      name: line.name,
-      // The listing is which seller's offer was actually bought, and it is the
-      // row that holds the stock. Dropping it here meant the seller order rows
-      // recorded an empty `listingId` and — because the decrement was keyed on
-      // it — that no order ever reduced a seller's stock at all.
-      listingId: line.listingId,
-    }));
-    const subtotal: number = Number(pricing.subtotal) || 0;
-
-    // ── 2. Real coupon discount ────────────────────────────────────────────
-    let discount = 0;
-    let couponId: string | null = null;
-    const couponCode = typeof payload?.couponCode === 'string' ? payload.couponCode.trim() : '';
-    if (couponCode) {
-      const result: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.VALIDATE_COUPON, {
-      code: couponCode,
-      customerId,
-      orderTotal: subtotal,
-      paymentMethod: payload?.paymentMethod,
-      productIds: items.map((i) => i.productId),
-      }).catch((): null => null);
-
-      // An invalid coupon fails the order rather than silently dropping the
-      // discount the customer was shown at checkout.
-      if (!result?.valid) {
-      throw new HttpException(result?.reason || 'Coupon is not valid', HttpStatus.BAD_REQUEST);
-      }
-      discount = Math.min(Number(result.discount) || 0, subtotal);
-      couponId = result.couponId ?? null;
-    }
-
-    // ── 2b. Gift card ──────────────────────────────────────────────────────
-    // The amount is decided here, from the card's real balance, never from the
-    // browser: the cart used to subtract a gift card from the total it displayed
-    // while checkout sent no code at all, so the customer saw one price and was
-    // charged another with the card left untouched.
-    //
-    // Looked up before placing so an unusable card fails the order outright,
-    // rather than the customer discovering it after payment.
-    let giftCardAmount = 0;
-    const giftCardCode = typeof payload?.giftCardCode === 'string' ? payload.giftCardCode.trim() : '';
-    if (giftCardCode) {
-      const card: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.GIFT_CARD_BALANCE, {
-      code: giftCardCode,
-      }).catch((): null => null);
-
-      if (!card) {
-      throw new HttpException('Gift card could not be verified', HttpStatus.BAD_REQUEST);
-      }
-      const balance = Number(card.currentBalance) || 0;
-      if (balance <= 0) {
-      throw new HttpException('This gift card has no remaining balance', HttpStatus.BAD_REQUEST);
-      }
-      // Never more than what is still owed after the coupon.
-      giftCardAmount = Math.round(Math.min(balance, subtotal - discount) * 100) / 100;
-    }
-
-    // ── 2c. Take the stock ─────────────────────────────────────────────────
-    //
-    // Immediately before placing, and conditionally: `reserveListingStock` only
-    // succeeds where `stockQuantity >= quantity` still holds, so two customers
-    // racing for the last unit produce one order and one 409 rather than two
-    // orders and a seller who cannot ship.
-    //
-    // Late on purpose. Everything above can still refuse the order (an invalid
-    // coupon, an unusable gift card), and holding stock across those lookups
-    // would take units off sale for baskets that were never going to complete.
-    // Everything below either succeeds or releases.
-    const reservation: any = await this.sendToMarketplace(
-      MARKETPLACE_PATTERNS.RESERVE_LISTING_STOCK, { items },
-    ).catch((): null => null);
-
-    if (!reservation?.ok) {
-      throw new HttpException(
-      reservation?.reason || 'Some items are no longer in stock',
-      HttpStatus.CONFLICT,
-      );
-    }
-    const reserved: Array<{ listingId: string; quantity: number }> = reservation.reserved ?? [];
-
-    /** Put the held units back. Every failure path below has to call this. */
-    const releaseStock = async (why: string) => {
-      if (reserved.length === 0) return;
-      this.logger.warn(`Releasing ${reserved.length} stock reservation(s): ${why}`);
-      await this.sendToMarketplace(
-      MARKETPLACE_PATTERNS.RELEASE_LISTING_STOCK, { items: reserved },
-      ).catch((err) => {
-      this.logger.error(
-        `Stock release failed after "${why}" — listings are understated until reconciled: ${err?.message}`,
-      );
-      });
-    };
-
-    // ── 3. Place it ────────────────────────────────────────────────────────
-    const order: any = await lastValueFrom(
-      this.orderClient.send({ cmd: 'place_order' }, {
-      customerId,
-      items,
-      subtotal,
-      // The gift card reduces what is charged, so it belongs in the order's
-      // discount — otherwise the card is debited and the customer pays the full
-      // amount anyway.
-      discount: discount + giftCardAmount,
-      couponId,
-      couponCode: couponCode || undefined,
-      giftCardCode: giftCardCode || undefined,
-      giftCardAmount: giftCardAmount || undefined,
-      deliveryAddress: payload?.shippingAddress ?? payload?.deliveryAddress ?? '',
-      serviceType: 'marketplace',
-      paymentMethod: payload?.paymentMethod,
-      walletAmount: Number(payload?.walletAmount) || 0,
-      notes: payload?.notes,
-      }),
-    ).catch(async () => {
-      // The units are held against an order that does not exist. Hand them back
-      // before answering, or they are lost until someone reconciles by hand.
-      await releaseStock('order-service did not accept the order');
-      throw new HttpException('Order service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
-    });
-
-    // ── 4. Record the redemption ───────────────────────────────────────────
-    // After the order exists, so a failed order cannot burn the customer's one
-    // use of a coupon. `redeemCoupon` re-checks the per-user limit under a row
-    // lock, so a racing double-submit still cannot exceed it.
-    const placedId = order?.order?.id ?? order?.id;
-    if (couponId && placedId) {
-      await this.sendToMarketplace(MARKETPLACE_PATTERNS.REDEEM_COUPON, {
-      couponId, customerId, orderId: placedId, discountApplied: discount,
-      }).catch((): undefined => undefined);
-    }
-
-    // ── 4b. Debit the gift card ────────────────────────────────────────────
-    // Also after the order exists, so a failed order cannot burn balance. But
-    // unlike the coupon above this is NOT fail-soft: the order's total has
-    // already been reduced by `giftCardAmount`, so letting a failed debit pass
-    // silently would hand out that money on every attempt, repeatably.
-    //
-    // The redemption re-reads the balance under a row lock and caps at what is
-    // actually there, so two checkouts racing the same card cannot both take it.
-    // If the debit comes up short — or fails outright — the order is cancelled
-    // rather than left standing at a price the customer did not pay for.
-    if (giftCardAmount > 0 && placedId) {
-      const redemption: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.GIFT_CARD_REDEEM, {
-      code: giftCardCode, orderId: placedId, amount: giftCardAmount, userId: customerId,
-      }).catch((): null => null);
-
-      const redeemed = Number(redemption?.redeemed) || 0;
-      if (redeemed < giftCardAmount) {
-      // Cancelled through order-service, which owns the row this route created.
-      await lastValueFrom(
-        this.orderClient.send({ cmd: 'cancel_order' }, {
-          orderId: placedId,
-          userId: customerId,
-          reason: 'Gift card could not be redeemed for the full amount',
-        }),
-      ).catch((): undefined => undefined);
-
-      // The order is being unwound, so the units it held go back on sale.
-      // Without this an unusable gift card would quietly retire stock on every
-      // attempt — the customer retries, and each retry costs the seller a unit.
-      await releaseStock('gift card could not be debited in full');
-
-      this.logger.error(
-        `Gift card debit short on order ${placedId}: expected ${giftCardAmount}, got ${redeemed}`,
-      );
-      throw new HttpException(
-        'We could not apply your gift card, so the order was not placed. Please try again.',
-        HttpStatus.CONFLICT,
-      );
-      }
-    }
-
-    // ── 5. Hand the order to the sellers who must fulfil it ────────────────
-    //
-    // order-service owns the customer's copy; the seller portal reads
-    // `marketplace.marketplace_orders`, one row per seller. Nothing connected
-    // the two, so every order placed here was invisible to the seller who had to
-    // ship it — the seller Orders queue, dashboard counts, returns and payouts
-    // were all empty on a system that was taking money.
-    //
-    // Deliberately awaited rather than fired into Kafka: the seller must see the
-    // order the moment checkout returns, and a projection failure is something
-    // the caller needs to know about, not something to discover later.
-    if (placedId) {
-      const projection: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_SELLER_ORDERS, {
-      orderId: placedId,
-      orderNumber: order?.order?.orderNumber ?? order?.orderNumber ?? placedId,
-      customerId,
-      customerName: req?.user?.name ?? '',
-      items,
-      shippingAddress: payload?.shippingAddress ?? payload?.deliveryAddress ?? null,
-      paymentMethod: payload?.paymentMethod,
-      paymentStatus: order?.order?.paymentStatus ?? order?.paymentStatus,
-      discount,
-      deliveryFee: Number(order?.order?.deliveryFee ?? order?.deliveryFee) || 0,
-      taxAmount: Number(order?.order?.taxAmount ?? order?.taxAmount) || 0,
-      regionCode: req?.headers?.['x-region-code'] ?? null,
-      }).catch((err): null => {
-      this.logger.error(`Order ${placedId} placed but not projected to sellers: ${err?.message}`);
-      return null;
-      });
-
-      if (projection?.orphanedLines) {
-      this.logger.error(
-        `Order ${placedId}: ${projection.orphanedLines} line(s) had no seller and will not be fulfilled`,
-      );
-      }
-
-      // ── 6. Tell the seller, now ──────────────────────────────────────────
-      //
-      // marketplace-service also publishes `marketplace.order.placed`, and the
-      // Kafka→WebSocket bridge consumes it — but that path depends on a consumer
-      // group that is routinely mid-rebalance, and a seller learning about an
-      // order "eventually" is not good enough: this is the notification the
-      // whole portal is built around. Pushed directly here so it lands the
-      // moment checkout returns; the Kafka event remains for every other
-      // consumer (analytics, notification-service, the admin console).
-      //
-      // Best-effort by design — a socket problem must never fail a paid order.
-      //
-      // The currency travels with the event. `SellerGateway` falls back to INR
-      // when it is absent, so this push — which had no `currency` at all —
-      // announced a Qatari seller's takings as "₹115,960.00" in their browser
-      // notification while the same order read QR 115,960.00 on the page.
-      const regionCode = String(req?.headers?.['x-region-code'] ?? '') || undefined;
-      const currency = regionCode ? getRegionConfig(regionCode)?.currencyCode : undefined;
-
-      for (const sellerOrder of (projection?.orders ?? [])) {
-      this.sellerGateway?.notifyNewOrder(String(sellerOrder.sellerId), {
-        orderId: String(sellerOrder.id),
-        customerName: req?.user?.name ?? 'Customer',
-        items: items.filter((i) => i.sellerId === sellerOrder.sellerId).length,
-        total: Number(sellerOrder.grandTotal ?? 0),
-        type: 'marketplace',
-        currency,
-      }).catch((err: any) =>
-        this.logger.warn(`Live push for order ${sellerOrder.id} failed: ${err?.message}`),
-      );
-      }
-    }
-
-    return order;
+    return this.orders.place(req, payload);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -767,22 +530,7 @@ export class MarketplaceGatewayController {
   @ApiParam({ name: 'id', example: 'ORD-1685451234-4291', description: 'Order ID' })
   @ApiNotFoundResponse({ description: 'Order not found' })
   async getOrderById(@Req() req: any, @Param('id') id: string) {
-    return lastValueFrom(
-      this.orderClient.send({ cmd: 'get_order_by_id' }, { orderId: id, userId: this.userId(req), role: req?.user?.role }),
-    ).catch((err) => {
-      // Propagate a real status (403 Forbidden / 404 Not Found) from the order
-      // service rather than masking it as a generic 503.
-      //
-      // `statusCode` first: that is the field `RpcAwareExceptionsFilter` emits.
-      // This read only `err.status`, which the filter never sets, so every
-      // propagated error fell through to 503 — an IDOR rejection and a missing
-      // order both looked like the order service being down. `status` is kept as
-      // a fallback for producers that predate the filter.
-      const rawStatus = err?.statusCode ?? err?.status;
-      const status = typeof rawStatus === 'number' && rawStatus >= 100 && rawStatus < 600
-      ? rawStatus : HttpStatus.SERVICE_UNAVAILABLE;
-      throw new HttpException(err?.message || 'Order service unavailable', status);
-    });
+    return this.orders.getById(req, id);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -796,7 +544,10 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Create a return request' })
   @UsePipes(ForwardingValidationPipe)
   async createReturnRequest(@Req() req: any, @Body() payload: ForwardedReturnRequestDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_RETURN, { ...payload, customerId: this.userId(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_RETURN, {
+      ...payload,
+      customerId: this.userId(req),
+    });
   }
 
   @Get('returns')
@@ -810,7 +561,10 @@ export class MarketplaceGatewayController {
   ) {
     // Customer-facing: always scope to the authenticated customer.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_RETURNS, {
-      customerId: this.userId(req), status, page: +page, limit: +limit,
+      customerId: this.userId(req),
+      status,
+      page: +page,
+      limit: +limit,
     });
   }
 
@@ -827,19 +581,32 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update return request status (seller/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async updateReturnStatus(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedReturnStatusDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, { id, ...payload, _actor: this.actor(req) });
+  async updateReturnStatus(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: ForwardedReturnStatusDto,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, {
+      id,
+      ...payload,
+      _actor: this.actor(req),
+    });
   }
 
   @Post('products/:id/price-alert')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Watch a product for a price drop (customer)',
-    description: 'Records the current buy-box price as the reference. Optionally pass ' +
+    description:
+      'Records the current buy-box price as the reference. Optionally pass ' +
       '`targetPrice` to be told only at or below a specific figure.',
   })
   @ApiParam({ name: 'id', description: 'Product UUID' })
-  async createPriceAlert(@Req() req: any, @Param('id') id: string, @Body() body: CreatePriceAlertDto) {
+  async createPriceAlert(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: CreatePriceAlertDto,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_PRICE_ALERT, {
       productId: id,
       customerId: req.user?.userId ?? req.user?.sub,
@@ -872,7 +639,8 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Report a listing (customer)',
-    description: 'Flags a product for moderation review. One open report per shopper per product; ' +
+    description:
+      'Flags a product for moderation review. One open report per shopper per product; ' +
       'reporting again updates the existing report rather than creating a second.',
   })
   @ApiParam({ name: 'id', description: 'Product UUID' })
@@ -899,7 +667,10 @@ export class MarketplaceGatewayController {
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.LIST_PRODUCT_REPORTS, {
-      status, productId, page: +page, limit: +limit,
+      status,
+      productId,
+      page: +page,
+      limit: +limit,
     });
   }
 
@@ -907,7 +678,11 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Resolve a product report (admin)' })
-  async resolveProductReport(@Req() req: any, @Param('id') id: string, @Body() body: ResolveProductReportDto) {
+  async resolveProductReport(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: ResolveProductReportDto,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.RESOLVE_PRODUCT_REPORT, {
       id,
       status: body?.status,
@@ -980,8 +755,16 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update a coupon (seller/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async updateCoupon(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedCouponDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_COUPON, { id, dto: payload, _actor: this.actor(req) });
+  async updateCoupon(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: ForwardedCouponDto,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_COUPON, {
+      id,
+      dto: payload,
+      _actor: this.actor(req),
+    });
   }
 
   @Delete('coupons/:id')
@@ -990,7 +773,10 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Deactivate a coupon (seller/admin)' })
   async deleteCoupon(@Req() req: any, @Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.DELETE_COUPON, { id, _actor: this.actor(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.DELETE_COUPON, {
+      id,
+      _actor: this.actor(req),
+    });
   }
 
   @Post('coupons/validate')
@@ -1023,7 +809,10 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Get coupon usage stats (seller/admin)' })
   async getCouponUsage(@Req() req: any, @Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_COUPON_USAGE, { id, _actor: this.actor(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_COUPON_USAGE, {
+      id,
+      _actor: this.actor(req),
+    });
   }
 
   // ── Shipment Tracking ──────────────────────────────────────────────────────
@@ -1051,7 +840,10 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Add a tracking event (seller/driver/admin)' })
   @UsePipes(ForwardingValidationPipe)
   async addTrackingEvent(@Req() req: any, @Body() payload: ForwardedTrackingEventDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TRACKING_EVENT, { ...payload, _actor: this.actor(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TRACKING_EVENT, {
+      ...payload,
+      _actor: this.actor(req),
+    });
   }
 
   // ── Product Variants ───────────────────────────────────────────────────────
@@ -1068,8 +860,16 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Create a variant for a product (seller/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async createVariant(@Req() req: any, @Param('productId') productId: string, @Body() payload: ForwardedVariantDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_VARIANT, { productId, dto: payload, _actor: this.actor(req) });
+  async createVariant(
+    @Req() req: any,
+    @Param('productId') productId: string,
+    @Body() payload: ForwardedVariantDto,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_VARIANT, {
+      productId,
+      dto: payload,
+      _actor: this.actor(req),
+    });
   }
 
   @Get('variants/:id')
@@ -1084,8 +884,16 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update a variant (seller/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async updateVariant(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedVariantDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_VARIANT, { id, dto: payload, _actor: this.actor(req) });
+  async updateVariant(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: ForwardedVariantDto,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_VARIANT, {
+      id,
+      dto: payload,
+      _actor: this.actor(req),
+    });
   }
 
   @Delete('variants/:id')
@@ -1094,7 +902,10 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Soft-delete a variant (seller/admin)' })
   async deleteVariant(@Req() req: any, @Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.DELETE_VARIANT, { id, _actor: this.actor(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.DELETE_VARIANT, {
+      id,
+      _actor: this.actor(req),
+    });
   }
 
   @Put('variants/:id/stock')
@@ -1103,8 +914,16 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Update variant stock (seller/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async updateVariantStock(@Req() req: any, @Param('id') id: string, @Body() payload: ForwardedVariantStockDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_VARIANT_STOCK, { id, ...payload, _actor: this.actor(req) });
+  async updateVariantStock(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: ForwardedVariantStockDto,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_VARIANT_STOCK, {
+      id,
+      ...payload,
+      _actor: this.actor(req),
+    });
   }
 
   @Get('sellers/:sellerId/low-stock-variants')
@@ -1113,7 +932,10 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Get low-stock variants for a seller (seller/admin)' })
   async getLowStockVariants(@Req() req: any, @Param('sellerId') sellerId: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_LOW_STOCK_VARIANTS, { sellerId, _actor: this.actor(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_LOW_STOCK_VARIANTS, {
+      sellerId,
+      _actor: this.actor(req),
+    });
   }
 
   // ── Product Q&A ────────────────────────────────────────────────────────────
@@ -1125,13 +947,21 @@ export class MarketplaceGatewayController {
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_QUESTIONS, { productId, page: +page, limit: +limit });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_QUESTIONS, {
+      productId,
+      page: +page,
+      limit: +limit,
+    });
   }
 
   @Post('products/:productId/questions')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Ask a question about a product' })
-  async createQuestion(@Req() req: any, @Param('productId') productId: string, @Body() payload: CreateQuestionDto) {
+  async createQuestion(
+    @Req() req: any,
+    @Param('productId') productId: string,
+    @Body() payload: CreateQuestionDto,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_QUESTION, {
       productId,
       customerId: this.userId(req),
@@ -1149,7 +979,11 @@ export class MarketplaceGatewayController {
   @Post('questions/:questionId/answers')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Answer a product question' })
-  async createAnswer(@Req() req: any, @Param('questionId') questionId: string, @Body() payload: CreateAnswerDto) {
+  async createAnswer(
+    @Req() req: any,
+    @Param('questionId') questionId: string,
+    @Body() payload: CreateAnswerDto,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_ANSWER, {
       questionId,
       authorId: this.userId(req),
@@ -1208,7 +1042,13 @@ export class MarketplaceGatewayController {
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_DELIVERY_ASSIGNMENTS, { partnerId, orderId, status, page: +page, limit: +limit });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_DELIVERY_ASSIGNMENTS, {
+      partnerId,
+      orderId,
+      status,
+      page: +page,
+      limit: +limit,
+    });
   }
 
   @Get('delivery-assignments/:id')
@@ -1251,7 +1091,10 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Verify delivery OTP (driver/admin)' })
   async verifyDeliveryOtp(@Param('id') id: string, @Body() payload: VerifyDeliveryOtpDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.VERIFY_DELIVERY_OTP, { id, otp: payload.otp });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.VERIFY_DELIVERY_OTP, {
+      id,
+      otp: payload.otp,
+    });
   }
 
   @Post('delivery-assignments/:id/proof')
@@ -1274,13 +1117,18 @@ export class MarketplaceGatewayController {
 
   @Get('offers/bank')
   @ApiOperation({ summary: 'Get active bank offers' })
-  @ApiQuery({ name: 'category', required: false, description: 'Filter by applicable product category' })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Filter by applicable product category',
+  })
   @ApiOkResponse({ description: 'Active bank offers' })
   async getActiveBankOffers(@Query('category') category?: string) {
     // The live-window and category filtering moved with the data; the gateway
     // held its own query builder against a table it no longer owns.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_BANK_OFFERS, {
-      activeOnly: true, category,
+      activeOnly: true,
+      category,
     });
   }
 
@@ -1288,11 +1136,16 @@ export class MarketplaceGatewayController {
   // trade-in programmes run for weeks
   @PublicCache(300)
   @ApiOperation({ summary: 'Get active exchange/trade-in offers' })
-  @ApiQuery({ name: 'targetCategory', required: false, description: 'Filter by target product category' })
+  @ApiQuery({
+    name: 'targetCategory',
+    required: false,
+    description: 'Filter by target product category',
+  })
   @ApiOkResponse({ description: 'Active exchange offers' })
   async getActiveExchangeOffers(@Query('targetCategory') targetCategory?: string) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, {
-      activeOnly: true, targetCategory,
+      activeOnly: true,
+      targetCategory,
     });
   }
 
@@ -1301,7 +1154,10 @@ export class MarketplaceGatewayController {
   @ApiParam({ name: 'id', example: 'PRD-001', description: 'Product ID' })
   @ApiOkResponse({ description: 'Bank and exchange offers for a product' })
   async getOffersForProduct(@Param('id') id: string, @Query('category') category?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_OFFERS_FOR_PRODUCT, { productId: id, category });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_OFFERS_FOR_PRODUCT, {
+      productId: id,
+      category,
+    });
   }
 
   // ── Phase 1: Customer-Facing Discovery Routes ───────────────────────────
@@ -1335,17 +1191,31 @@ export class MarketplaceGatewayController {
 
   @Get('new-arrivals')
   @ApiOperation({ summary: 'Recently listed products, newest first' })
-  async getNewArrivals(@Req() req: any, @Query('page', ParsePagePipe) page: number, @Query('limit', ParseLimitPipe) limit: number) {
+  async getNewArrivals(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page: number,
+    @Query('limit', ParseLimitPipe) limit: number,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCTS, {
-      page: Number(page) || 1, limit: Number(limit) || 20, sort: 'newest', country: this.region(req),
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+      sort: 'newest',
+      country: this.region(req),
     });
   }
 
   @Get('best-sellers')
   @ApiOperation({ summary: 'Best-selling products, by purchase volume proxy' })
-  async getBestSellers(@Req() req: any, @Query('page', ParsePagePipe) page: number, @Query('limit', ParseLimitPipe) limit: number) {
+  async getBestSellers(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page: number,
+    @Query('limit', ParseLimitPipe) limit: number,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCTS, {
-      page: Number(page) || 1, limit: Number(limit) || 20, sort: 'popular', country: this.region(req),
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+      sort: 'popular',
+      country: this.region(req),
     });
   }
 
@@ -1356,13 +1226,21 @@ export class MarketplaceGatewayController {
     @Query('page', ParsePagePipe) page: number,
     @Query('limit', ParseLimitPipe) limit: number,
   ) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_QUESTIONS, { productId, page: Number(page) || 1, limit: Number(limit) || 10 });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_QUESTIONS, {
+      productId,
+      page: Number(page) || 1,
+      limit: Number(limit) || 10,
+    });
   }
 
   @Post('products/:id/qa')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Ask a question about a product' })
-  async askProductQuestion(@Req() req: any, @Param('id') productId: string, @Body() body: { text: string }) {
+  async askProductQuestion(
+    @Req() req: any,
+    @Param('id') productId: string,
+    @Body() body: { text: string },
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_QUESTION, {
       productId,
       customerId: this.userId(req),
@@ -1374,7 +1252,11 @@ export class MarketplaceGatewayController {
   @Post('qa/:questionId/answer')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Answer a product question' })
-  async answerProductQuestion(@Req() req: any, @Param('questionId') questionId: string, @Body() body: { text: string }) {
+  async answerProductQuestion(
+    @Req() req: any,
+    @Param('questionId') questionId: string,
+    @Body() body: { text: string },
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_ANSWER, {
       questionId,
       authorId: this.userId(req),
@@ -1402,7 +1284,9 @@ export class MarketplaceGatewayController {
   ) {
     try {
       return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCT_REVIEWS, {
-      productId, page: Number(page) || 1, limit: Number(limit) || 20,
+        productId,
+        page: Number(page) || 1,
+        limit: Number(limit) || 20,
       });
     } catch {
       // An unreachable service must not read as "this product has no reviews" in
@@ -1433,9 +1317,12 @@ export class MarketplaceGatewayController {
   @Get('products/:id/exchange-offers')
   @ApiOperation({ summary: 'Get exchange/trade-in offers for a product' })
   async getExchangeOffers(@Param('id') productId: string) {
-    const offers: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, {
-      activeOnly: true,
-    });
+    const offers: any = await this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS,
+      {
+        activeOnly: true,
+      },
+    );
     return { data: { productId, exchangeOffers: offers?.data ?? offers ?? [] } };
   }
 
@@ -1448,9 +1335,15 @@ export class MarketplaceGatewayController {
   @Get('notifications')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get my notification inbox' })
-  async getUserNotifications(@Req() req: any, @Query('page', ParsePagePipe) page: number, @Query('limit', ParseLimitPipe) limit: number) {
+  async getUserNotifications(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page: number,
+    @Query('limit', ParseLimitPipe) limit: number,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_NOTIFICATIONS, {
-      userId: this.userId(req), page: Number(page) || 1, limit: Number(limit) || 20,
+      userId: this.userId(req),
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
     });
   }
 
@@ -1458,14 +1351,19 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Mark all notifications as read' })
   async markAllNotificationsRead(@Req() req: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.MARK_ALL_NOTIFICATIONS_READ, { userId: this.userId(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.MARK_ALL_NOTIFICATIONS_READ, {
+      userId: this.userId(req),
+    });
   }
 
   @Put('notifications/:id/read')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Mark a notification as read' })
   async markNotificationRead(@Req() req: any, @Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.MARK_NOTIFICATION_READ, { id, userId: this.userId(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.MARK_NOTIFICATION_READ, {
+      id,
+      userId: this.userId(req),
+    });
   }
 
   @Post('gift-cards/balance')
@@ -1491,14 +1389,20 @@ export class MarketplaceGatewayController {
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   async redeemGiftCard(@Req() req: any, @Body() body: RedeemGiftCardDto) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GIFT_CARD_REDEEM, {
-      code: body.code, orderId: body.orderId, amount: body.amount, userId: this.userId(req),
+      code: body.code,
+      orderId: body.orderId,
+      amount: body.amount,
+      userId: this.userId(req),
     });
   }
 
   @Get('orders/:id/invoice')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get the tax invoice for an order' })
-  @ApiParam({ name: 'id', description: 'Order number or order UUID, as listed by GET /marketplace/orders' })
+  @ApiParam({
+    name: 'id',
+    description: 'Order number or order UUID, as listed by GET /marketplace/orders',
+  })
   /**
    * The invoice for one of the caller's own orders.
    *
@@ -1531,15 +1435,16 @@ export class MarketplaceGatewayController {
       const unitPrice = Number(item?.price ?? 0) || 0;
       const quantity = Number(item?.quantity ?? 1) || 1;
       return {
-      sno: idx + 1,
-      name: item?.productName || item?.name || `Item ${idx + 1}`,
-      quantity,
-      unitPrice,
-      total: unitPrice * quantity,
+        sno: idx + 1,
+        name: item?.productName || item?.name || `Item ${idx + 1}`,
+        quantity,
+        unitPrice,
+        total: unitPrice * quantity,
       };
     });
 
-    const subtotal = Number(order.subtotal ?? 0) || items.reduce((s: number, i: any) => s + i.total, 0);
+    const subtotal =
+      Number(order.subtotal ?? 0) || items.reduce((s: number, i: any) => s + i.total, 0);
     const grandTotal = Number(order.totalAmount ?? order.grandTotal ?? subtotal) || subtotal;
     const discount = Number(order.discount ?? 0) || 0;
     const deliveryFee = Number(order.deliveryFee ?? 0) || 0;
@@ -1547,7 +1452,10 @@ export class MarketplaceGatewayController {
     // Reported as a single figure with no jurisdiction attached: the gateway does
     // not know the seller's tax registration, and naming a component CGST/SGST
     // without one is a false legal statement on a document customers keep.
-    const taxAmount = Math.max(0, Math.round((grandTotal - (subtotal + deliveryFee - discount)) * 100) / 100);
+    const taxAmount = Math.max(
+      0,
+      Math.round((grandTotal - (subtotal + deliveryFee - discount)) * 100) / 100,
+    );
 
     const reference = String(order.orderNumber ?? order.id ?? orderId);
 
@@ -1572,9 +1480,9 @@ export class MarketplaceGatewayController {
     let seller: any = null;
     if (order.sellerId) {
       try {
-        const res: any = await this.sendToMarketplace(
-          MARKETPLACE_PATTERNS.GET_SELLER_FOR_INVOICE, { sellerId: order.sellerId },
-        );
+        const res: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_SELLER_FOR_INVOICE, {
+          sellerId: order.sellerId,
+        });
         seller = res?.data ?? res ?? null;
       } catch {
         // A seller-service hiccup must not make the invoice unavailable — the
@@ -1659,25 +1567,39 @@ export class MarketplaceGatewayController {
   @PublicCache(15)
   @ApiOperation({ summary: 'Get time-limited flash deals' })
   async getFlashDeals(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_FLASH_DEALS, { country: this.region(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_FLASH_DEALS, {
+      country: this.region(req),
+    });
   }
 
   @Get('deals-of-day')
   @ApiOperation({ summary: 'Get deals of the day (alias)' })
   async getDealsOfDay(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_FEATURED_PRODUCTS, { country: this.region(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_FEATURED_PRODUCTS, {
+      country: this.region(req),
+    });
   }
 
   @Get('trending')
   @ApiOperation({ summary: 'Recently listed products picking up traction' })
   async getTrendingProducts(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCTS, { page: 1, limit: 20, sort: 'trending', country: this.region(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCTS, {
+      page: 1,
+      limit: 20,
+      sort: 'trending',
+      country: this.region(req),
+    });
   }
 
   @Get('recommended')
   @ApiOperation({ summary: 'Highest-rated products' })
   async getRecommendedProducts(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCTS, { page: 1, limit: 20, sort: 'rating', country: this.region(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCTS, {
+      page: 1,
+      limit: 20,
+      sort: 'rating',
+      country: this.region(req),
+    });
   }
 
   @Get('verified-sellers')
@@ -1701,14 +1623,19 @@ export class MarketplaceGatewayController {
     ]);
     const bankOffers = bank?.data ?? bank ?? [];
     const exchangeOffers = exchange?.data ?? exchange ?? [];
-    return { data: { bankOffers, exchangeOffers }, total: bankOffers.length + exchangeOffers.length };
+    return {
+      data: { bankOffers, exchangeOffers },
+      total: bankOffers.length + exchangeOffers.length,
+    };
   }
 
   @Get('wishlist')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get my wishlist' })
   async getWishlistCurrent(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_WISHLIST, { userId: this.userId(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_WISHLIST, {
+      userId: this.userId(req),
+    });
   }
 
   // Identity from the JWT, matching @Get('wishlist') above and the cart routes.
@@ -1721,7 +1648,8 @@ export class MarketplaceGatewayController {
   @Post('wishlist')
   @ApiOperation({ summary: 'Add product to my wishlist' })
   async addToOwnWishlist(@Req() req: any, @Body() payload: WishlistProductDto) {
-    if (!payload?.productId) throw new HttpException('productId is required', HttpStatus.BAD_REQUEST);
+    if (!payload?.productId)
+      throw new HttpException('productId is required', HttpStatus.BAD_REQUEST);
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TO_WISHLIST, {
       userId: this.userId(req),
       productId: payload.productId,
@@ -1762,18 +1690,16 @@ export class MarketplaceGatewayController {
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
-    return await lastValueFrom(
-      this.orderClient.send({ cmd: 'get_customer_orders' }, {
-        customerId: this.userId(req), status, page: +page, limit: +limit,
-      }),
-    );
+    return this.orders.listForCustomer(req, { status, page, limit });
   }
 
   @Get('reviews')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get my reviews' })
   async getCustomerReviews(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CUSTOMER_REVIEWS, { customerId: this.userId(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CUSTOMER_REVIEWS, {
+      customerId: this.userId(req),
+    });
   }
 
   @Get('addresses')
@@ -1787,7 +1713,9 @@ export class MarketplaceGatewayController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get recently viewed products' })
   async getRecentlyViewed(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_RECENTLY_VIEWED, { userId: this.userId(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_RECENTLY_VIEWED, {
+      userId: this.userId(req),
+    });
   }
 
   @Delete('recently-viewed')
@@ -1796,14 +1724,19 @@ export class MarketplaceGatewayController {
   async clearRecentlyViewed(@Req() req: any) {
     // No try/catch fallback: "clear" is a mutation, and reporting success for a
     // delete that did not happen is the fault this whole pass is about.
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CLEAR_RECENTLY_VIEWED, { userId: this.userId(req) });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CLEAR_RECENTLY_VIEWED, {
+      userId: this.userId(req),
+    });
   }
 
   @Get('buy-again')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get buy-again product suggestions' })
   async getBuyAgain(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_BUY_AGAIN, { userId: this.userId(req), limit: 10 });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_BUY_AGAIN, {
+      userId: this.userId(req),
+      limit: 10,
+    });
   }
 
   @Get('gift-cards')
@@ -1833,9 +1766,16 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Update cart item quantity (current user)' })
   @ApiParam({ name: 'itemId', description: 'Product ID of the cart line' })
   @UsePipes(ForwardingValidationPipe)
-  async updateOwnCartItem(@Req() req: any, @Param('itemId') itemId: string, @Body() payload: ForwardedCartItemDto) {
+  async updateOwnCartItem(
+    @Req() req: any,
+    @Param('itemId') itemId: string,
+    @Body() payload: ForwardedCartItemDto,
+  ) {
     return lastValueFrom(
-      this.cartClient.send({ cmd: 'update_cart_item' }, { userId: this.userId(req), itemId, ...payload }),
+      this.cartClient.send(
+        { cmd: 'update_cart_item' },
+        { userId: this.userId(req), itemId, ...payload },
+      ),
     ).catch(() => {
       throw new HttpException('Cart service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     });
@@ -1845,11 +1785,18 @@ export class MarketplaceGatewayController {
   @Delete('cart/:itemId')
   @ApiOperation({ summary: 'Remove item from cart (current user)' })
   @ApiParam({ name: 'itemId', description: 'Product ID of the cart line' })
-  async removeOwnCartItem(@Req() req: any, @Param('itemId') itemId: string, @Body() body?: RemoveCartItemDto) {
+  async removeOwnCartItem(
+    @Req() req: any,
+    @Param('itemId') itemId: string,
+    @Body() body?: RemoveCartItemDto,
+  ) {
     // variantId is part of the line's identity, so it has to be forwarded —
     // without it a request to drop one variant matches the plain line instead.
     return lastValueFrom(
-      this.cartClient.send({ cmd: 'remove_cart_item' }, { userId: this.userId(req), itemId, variantId: body?.variantId }),
+      this.cartClient.send(
+        { cmd: 'remove_cart_item' },
+        { userId: this.userId(req), itemId, variantId: body?.variantId },
+      ),
     ).catch(() => {
       throw new HttpException('Cart service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     });
@@ -1881,10 +1828,7 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Remove item from cart' })
   @ApiParam({ name: 'userId', description: 'User ID' })
   @ApiParam({ name: 'itemId', description: 'Cart item ID or product ID' })
-  async removeCartItem(
-    @Param('userId') userId: string,
-    @Param('itemId') itemId: string,
-  ) {
+  async removeCartItem(@Param('userId') userId: string, @Param('itemId') itemId: string) {
     return lastValueFrom(
       this.cartClient.send({ cmd: 'remove_cart_item' }, { userId, itemId }),
     ).catch(() => {
@@ -1899,9 +1843,7 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Get cart by user ID' })
   @ApiParam({ name: 'userId', description: 'User ID' })
   async getCartByUserId(@Param('userId') userId: string) {
-    return lastValueFrom(
-      this.cartClient.send({ cmd: 'get_cart' }, { userId }),
-    ).catch(() => {
+    return lastValueFrom(this.cartClient.send({ cmd: 'get_cart' }, { userId })).catch(() => {
       throw new HttpException('Cart service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     });
   }
@@ -1913,7 +1855,10 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Add product to wishlist' })
   @ApiParam({ name: 'userId', description: 'User ID' })
   async addToWishlist(@Param('userId') userId: string, @Body() payload: WishlistProductDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TO_WISHLIST, { userId, productId: payload.productId });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TO_WISHLIST, {
+      userId,
+      productId: payload.productId,
+    });
   }
 
   // Wishlist remove (web sends DELETE /wishlist/:userId/:productId)
@@ -1923,10 +1868,7 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Remove product from wishlist' })
   @ApiParam({ name: 'userId', description: 'User ID' })
   @ApiParam({ name: 'productId', description: 'Product ID to remove' })
-  async removeFromWishlist(
-    @Param('userId') userId: string,
-    @Param('productId') productId: string,
-  ) {
+  async removeFromWishlist(@Param('userId') userId: string, @Param('productId') productId: string) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.REMOVE_FROM_WISHLIST, { userId, productId });
   }
 
@@ -1945,19 +1887,22 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Cancel an order' })
   @ApiParam({ name: 'id', description: 'Order ID' })
   @UsePipes(ForwardingValidationPipe)
-  async cancelOrder(@Req() req: any, @Param('id') orderId: string, @Body() payload: ForwardedOrderDto) {
-    return lastValueFrom(
-      this.orderClient.send({ cmd: 'cancel_order' }, { orderId, userId: this.userId(req), ...payload }),
-    ).catch(() => {
-      throw new HttpException('Order service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
-    });
+  async cancelOrder(
+    @Req() req: any,
+    @Param('id') orderId: string,
+    @Body() payload: ForwardedOrderDto,
+  ) {
+    return this.orders.cancel(req, orderId, payload);
   }
 
   // Order tracking sub-route (web sends GET /orders/:id/track)
   @UseGuards(JwtAuthGuard)
   @Get('orders/:id/track')
   @ApiOperation({ summary: 'Get order tracking info' })
-  @ApiParam({ name: 'id', description: 'Order number or order UUID, as listed by GET /marketplace/orders' })
+  @ApiParam({
+    name: 'id',
+    description: 'Order number or order UUID, as listed by GET /marketplace/orders',
+  })
   /**
    * Tracking events for one of the caller's own orders.
    *
@@ -1970,13 +1915,7 @@ export class MarketplaceGatewayController {
    * history of any order whose id it could name.
    */
   async trackOrder(@Req() req: any, @Param('id') orderId: string) {
-    const order = await this.fetchOwnedOrder(req, orderId);
-    const uuid = order?.orderId ?? order?.id;
-    const tracking: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_TRACKING, { orderId: uuid });
-    // The status the customer sees on the order itself, so a parcel with no
-    // courier scans yet still renders a timeline instead of an empty box.
-    return { ...tracking, orderStatus: order?.status ?? null, placedAt: order?.placedAt ?? null,
-      estimatedDeliveryAt: order?.estimatedDeliveryAt ?? null };
+    return this.orders.track(req, orderId);
   }
 
   // Top brands passthrough (web sends GET /brands/top)
@@ -1990,14 +1929,18 @@ export class MarketplaceGatewayController {
   @Get('sellers/verified')
   @ApiOperation({ summary: 'Get verified sellers (alias for /verified-sellers)' })
   async getVerifiedSellersAlias(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_VERIFIED_SELLERS, { country: this.region(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_VERIFIED_SELLERS, {
+      country: this.region(req),
+    });
   }
 
   // Sellers list (web sends GET /sellers)
   @Get('sellers')
   @ApiOperation({ summary: 'List all marketplace sellers' })
   async getAllSellers(@Req() req: any) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_SELLERS, { country: this.region(req) });
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_SELLERS, {
+      country: this.region(req),
+    });
   }
 
   // ── Brand Follow Endpoints ─────────────────────────────────────────────────
@@ -2022,15 +1965,33 @@ export class MarketplaceGatewayController {
   @Get('brands/followed')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'List brands followed by me' })
-  async getFollowedBrands(@Req() req: any, @Query('page', ParsePagePipe) page = 1, @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE) {
-    return this.sendToMarketplace('brand_followed_list', { userId: this.userId(req), page: +page, limit: +limit });
+  async getFollowedBrands(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+  ) {
+    return this.sendToMarketplace('brand_followed_list', {
+      userId: this.userId(req),
+      page: +page,
+      limit: +limit,
+    });
   }
 
   @Get('brands/feed')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get brand updates feed for me' })
-  async getBrandFeed(@Req() req: any, @Query('page', ParsePagePipe) page = 1, @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE, @Query('type') type?: string) {
-    return this.sendToMarketplace('brand_feed', { userId: this.userId(req), page: +page, limit: +limit, type });
+  async getBrandFeed(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('type') type?: string,
+  ) {
+    return this.sendToMarketplace('brand_feed', {
+      userId: this.userId(req),
+      page: +page,
+      limit: +limit,
+      type,
+    });
   }
 
   // Parametric :id routes — AFTER static routes
@@ -2063,7 +2024,11 @@ export class MarketplaceGatewayController {
 
   @Get('brands/:id/updates')
   @ApiOperation({ summary: 'Get updates from a specific brand' })
-  async getBrandUpdates(@Param('id') brandId: string, @Query('page', ParsePagePipe) page = 1, @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE) {
+  async getBrandUpdates(
+    @Param('id') brandId: string,
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+  ) {
     return this.sendToMarketplace('brand_updates', { brandId, page: +page, limit: +limit });
   }
 
