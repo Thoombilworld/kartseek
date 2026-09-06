@@ -7,7 +7,14 @@ import { notFound, permanentRedirect } from 'next/navigation';
 // body both resolve the product, and Next 15 leaves `fetch` uncached by default,
 // so without it every product render hit the catalogue twice.
 import { cookies, headers } from 'next/headers';
-import { getCurrencyCode, isCountryCode, DEFAULT_COUNTRY } from '@/lib/localization';
+import {
+  getCurrencyCode,
+  isCountryCode,
+  DEFAULT_COUNTRY,
+  getCountry,
+  formatMoney,
+} from '@/lib/localization';
+import { getMarketplaceDeliveryRule } from '@/lib/marketplace/delivery';
 import { productMeta } from '@/lib/seo/metadata';
 import { productSchema, breadcrumbSchema } from '@/lib/seo/schema';
 import { JsonLd } from '@/components/seo/json-ld';
@@ -476,11 +483,18 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   <div className="flex items-start gap-3">
                     <Truck className="w-5 h-5 text-blue-600 mt-0.5" />
                     <div>
+                      {/* The market's own rule, not a blanket claim — and PIN codes
+                          only mean something in India. */}
                       <h4 className="font-semibold text-slate-900 text-sm">
-                        Free Delivery Available
+                        Free delivery on orders over{' '}
+                        {formatMoney(getMarketplaceDeliveryRule(market).freeAbove, {
+                          country: market,
+                        })}
                       </h4>
                       <p className="text-slate-500 text-xs">
-                        Enter pincode to check exact delivery dates.
+                        {market === 'IN'
+                          ? 'Enter your PIN code to check delivery dates.'
+                          : `Delivered to your door across ${getCountry(market).name}.`}
                       </p>
                     </div>
                   </div>
