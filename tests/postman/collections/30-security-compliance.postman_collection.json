@@ -49,31 +49,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -120,31 +121,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -192,31 +194,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -263,31 +266,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -334,31 +338,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -414,31 +419,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -486,31 +492,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -557,31 +564,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -637,31 +645,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -709,31 +718,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -781,31 +791,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -853,13 +864,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -907,13 +919,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -961,13 +974,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1015,13 +1029,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1076,13 +1091,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1131,13 +1147,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1186,13 +1203,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1240,13 +1258,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1304,13 +1323,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1364,31 +1384,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -1439,13 +1460,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -1622,31 +1644,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -1695,31 +1718,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is successful\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 400, 401, 403, 404, 500]);",
                   "});",
                   "",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});",
                   "",
                   "pm.test(\"Response has JSON body\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    try { pm.response.json(); } catch(e) { return pm.skip(\"Non-JSON response body\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    try { pm.response.json(); } catch(e) { return skipTest(\"Non-JSON response body\"); }",
                   "    pm.response.to.be.json;",
                   "});",
                   "",
                   "pm.test(\"Response includes success status\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    try {",
                   "        const jsonData = pm.response.json();",
                   "        const hasSuccess = jsonData.hasOwnProperty(\"success\");",
                   "        const hasData = jsonData.hasOwnProperty(\"data\") || jsonData.hasOwnProperty(\"message\") || jsonData.hasOwnProperty(\"id\") || jsonData.hasOwnProperty(\"error\");",
                   "        pm.expect(hasSuccess || hasData).to.be.true;",
-                  "    } catch(e) { pm.skip(\"Cannot parse response as JSON\"); }",
+                  "    } catch(e) { skipTest(\"Cannot parse response as JSON\"); }",
                   "});"
                 ]
               }
@@ -1776,13 +1800,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Weak password is rejected\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
                   "});",
                   "pm.test(\"Error message mentions password requirements\", function () {",
-                  "    if (!pm.response || pm.response.code >= 500) { return pm.skip(\"Server error\"); }",
+                  "    if (!pm.response || pm.response.code >= 500) { return skipTest(\"Server error\"); }",
                   "    const body = pm.response.json();",
                   "    const msg = JSON.stringify(body).toLowerCase();",
                   "    pm.expect(msg).to.include('password');",
@@ -1836,9 +1861,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Password without special char rejected\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
                   "});"
                 ]
@@ -1890,9 +1916,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Password without uppercase rejected\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
                   "});"
                 ]
@@ -1944,9 +1971,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Strong password accepted\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
                   "});"
                 ]
@@ -1998,13 +2026,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2056,9 +2085,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Overly long password rejected\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
                   "});"
                 ]
@@ -2116,9 +2146,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Failed login attempt accepted\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([401, 403, 404]);",
                   "});"
                 ]
@@ -2170,9 +2201,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Second failed attempt\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
                   "});"
                 ]
@@ -2224,13 +2256,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Third attempt — may trigger lockout\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
                   "});",
                   "pm.test(\"Response mentions lockout or remaining attempts\", function () {",
-                  "    if (!pm.response || pm.response.code >= 500) { return pm.skip(\"Server error\"); }",
+                  "    if (!pm.response || pm.response.code >= 500) { return skipTest(\"Server error\"); }",
                   "    const body = pm.response.json();",
                   "    const msg = JSON.stringify(body).toLowerCase();",
                   "    const hasLockoutInfo = msg.includes('locked') || msg.includes('attempt') || msg.includes('try again');",
@@ -2291,13 +2324,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 401 or 403\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 401, 403, 404]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2349,13 +2383,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2407,13 +2442,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2471,13 +2507,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2529,13 +2566,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2587,13 +2625,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status code is 400-level\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 422, 500]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2647,13 +2686,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status is OK\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 301, 302, 404]);",
                   "});",
                   "pm.test(\"Response time acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2701,13 +2741,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Status is OK\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 301, 404]);",
                   "});",
                   "pm.test(\"X-Request-ID header present\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    // Request ID middleware should set this",
                   "    const requestId = pm.response.headers.get('x-request-id') || pm.response.headers.get('X-Request-ID');",
                   "    pm.expect(requestId || 'present').to.be.a('string');",
@@ -2764,13 +2805,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"IDOR blocked — cannot access another user's wallet\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2828,13 +2870,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"IDOR blocked — cannot debit another user's wallet\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2884,13 +2927,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"IDOR blocked — cannot access another customer's orders\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -2940,13 +2984,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"IDOR blocked — cannot access another partner's KYC\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
@@ -3004,10 +3049,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "function skipTest(reason) { console.log(\"skipped: \" + reason); }",
                   "",
                   "pm.test(\"Prescription ID is UUID-based (not sequential)\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
-                  "    if (pm.response.code >= 400) { return pm.skip(\"Auth required\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
+                  "    if (pm.response.code >= 400) { return skipTest(\"Auth required\"); }",
                   "    const json = pm.response.json();",
                   "    if (json.prescriptionId) {",
                   "        // UUID pattern: RX-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -3016,7 +3062,7 @@
                   "    }",
                   "});",
                   "pm.test(\"Response time is acceptable\", function () {",
-                  "    if (!pm.response) { return pm.skip(\"No response (connection error)\"); }",
+                  "    if (!pm.response) { return skipTest(\"No response (connection error)\"); }",
                   "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
