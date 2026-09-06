@@ -1,5 +1,5 @@
 import {
-  ACTIVE_REGION_CODES,
+  getActiveRegionCodes,
   DEFAULT_REGION,
   REGION_CONFIGS,
   SUPPORTED_COUNTRIES,
@@ -25,12 +25,12 @@ import {
 describe('region registry', () => {
   describe('trading markets', () => {
     it('always includes the home market', () => {
-      expect(ACTIVE_REGION_CODES).toContain(DEFAULT_REGION);
+      expect(getActiveRegionCodes()).toContain(DEFAULT_REGION);
       expect(isActiveRegion(DEFAULT_REGION)).toBe(true);
     });
 
     it('does not treat every known country as a trading market', () => {
-      const known = SUPPORTED_COUNTRIES.filter((c) => !ACTIVE_REGION_CODES.includes(c));
+      const known = SUPPORTED_COUNTRIES.filter((c) => !getActiveRegionCodes().includes(c));
       // Whichever are not configured must be refused for new business.
       for (const code of known) {
         expect(isActiveRegion(code)).toBe(false);
@@ -53,13 +53,27 @@ describe('region registry', () => {
       expect(isActiveRegion('ZZ')).toBe(false);
     });
 
+    it('reads ACTIVE_REGIONS when asked, not when the module was imported', () => {
+      const previous = process.env.ACTIVE_REGIONS;
+      try {
+        process.env.ACTIVE_REGIONS = 'QA,IN';
+        expect(isActiveRegion('IN')).toBe(true);
+        expect(getActiveRegionCodes()).toEqual(['QA', 'IN']);
+        process.env.ACTIVE_REGIONS = 'QA';
+        expect(isActiveRegion('IN')).toBe(false);
+      } finally {
+        if (previous === undefined) delete process.env.ACTIVE_REGIONS;
+        else process.env.ACTIVE_REGIONS = previous;
+      }
+    });
+
     it('accepts a lowercase code, since headers and cookies carry them', () => {
       expect(isActiveRegion(DEFAULT_REGION.toLowerCase())).toBe(true);
     });
 
     it('lists only trading markets', () => {
       const active = getActiveRegions().map((r) => r.code);
-      expect(active.length).toBe(ACTIVE_REGION_CODES.length);
+      expect(active.length).toBe(getActiveRegionCodes().length);
       for (const code of active) {
         expect(isActiveRegion(code)).toBe(true);
       }
@@ -84,7 +98,7 @@ describe('region registry', () => {
       expect(REGION_CONFIGS.QA.tax.rate).toBe(0);
     });
 
-    it('keeps India\'s GST intact for orders already placed there', () => {
+    it("keeps India's GST intact for orders already placed there", () => {
       expect(REGION_CONFIGS.IN.tax.rate).toBe(18);
       expect(REGION_CONFIGS.IN.tax.name).toBe('GST');
     });

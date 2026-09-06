@@ -1,8 +1,10 @@
 // ⚠️  Must be the very first import — populates process.env from .env
 // before any @Module decorators or NestFactory evaluate their config.
 // Security hardening: 2026-07-01 — ValidationPipe + AccountLockout + EncryptionService
-import * as dotenv from 'dotenv';
-dotenv.config();
+// `dotenv/config` runs inside the import graph, first; a `dotenv.config()`
+// call further down executes only after every hoisted import has already read
+// process.env (which is how ACTIVE_REGIONS was missed at startup).
+import 'dotenv/config';
 
 import { NestFactory } from '@nestjs/core';
 import { type NestExpressApplication } from '@nestjs/platform-express';

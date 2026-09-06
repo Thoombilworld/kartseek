@@ -1,7 +1,12 @@
-import { Injectable, type CanActivate, type ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  type CanActivate,
+  type ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { REGION_REQUIRED_KEY, BYPASS_REGION_KEY } from './region.decorator';
-import { isActiveRegion, ACTIVE_REGION_CODES } from './region.config';
+import { isActiveRegion, getActiveRegionCodes } from './region.config';
 
 /**
  * RegionGuard — Enforces that requests to @RegionRequired() endpoints
@@ -34,7 +39,7 @@ export class RegionGuard implements CanActivate {
     // rejected downstream. It names the markets actually open for business.
     if (!regionCode || !isActiveRegion(regionCode)) {
       throw new ForbiddenException(
-        `Valid region code required. Send X-Region-Code header with one of: ${ACTIVE_REGION_CODES.join(', ')}`,
+        `Valid region code required. Send X-Region-Code header with one of: ${getActiveRegionCodes().join(', ')}`,
       );
     }
 

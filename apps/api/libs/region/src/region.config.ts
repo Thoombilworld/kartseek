@@ -19,17 +19,34 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     tax: { name: 'GST', rate: 18, isInclusive: true },
     locale: 'en-IN',
     timezone: 'Asia/Kolkata',
-    defaultCoords: { lat: 28.6139, lng: 77.2090 },
+    defaultCoords: { lat: 28.6139, lng: 77.209 },
     defaultCity: 'New Delhi',
     callingCode: '+91',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'upi', gateway: 'upi', displayName: 'UPI (GPay / PhonePe / Paytm)', isDefault: true },
+      {
+        methodType: 'upi',
+        gateway: 'upi',
+        displayName: 'UPI (GPay / PhonePe / Paytm)',
+        isDefault: true,
+      },
       { methodType: 'card', gateway: 'razorpay', displayName: 'Credit / Debit Card' },
       { methodType: 'netbanking', gateway: 'razorpay', displayName: 'Net Banking' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   QA: {
     code: 'QA',
@@ -45,16 +62,32 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     tax: { name: 'No Tax', rate: 0, isInclusive: true },
     locale: 'ar-QA',
     timezone: 'Asia/Qatar',
-    defaultCoords: { lat: 25.2854, lng: 51.5310 },
+    defaultCoords: { lat: 25.2854, lng: 51.531 },
     defaultCity: 'Doha',
     callingCode: '+974',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   AE: {
     code: 'AE',
@@ -71,13 +104,30 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     defaultCity: 'Dubai',
     callingCode: '+971',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'samsung_pay', gateway: 'stripe', displayName: 'Samsung Pay' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   SA: {
     code: 'SA',
@@ -96,14 +146,31 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     defaultCity: 'Riyadh',
     callingCode: '+966',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'mada', gateway: 'mada', displayName: 'Mada Card' },
       { methodType: 'sadad', gateway: 'mada', displayName: 'SADAD' },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   BH: {
     code: 'BH',
@@ -121,13 +188,29 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     defaultCity: 'Manama',
     callingCode: '+973',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'benefit', gateway: 'benefit', displayName: 'Benefit Pay' },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   KW: {
     code: 'KW',
@@ -145,13 +228,29 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     defaultCity: 'Kuwait City',
     callingCode: '+965',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'knet', gateway: 'knet', displayName: 'KNET' },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   OM: {
     code: 'OM',
@@ -165,16 +264,32 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     tax: { name: 'VAT', rate: 5, isInclusive: true },
     locale: 'ar-OM',
     timezone: 'Asia/Muscat',
-    defaultCoords: { lat: 23.5880, lng: 58.3829 },
+    defaultCoords: { lat: 23.588, lng: 58.3829 },
     defaultCity: 'Muscat',
     callingCode: '+968',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   GB: {
     code: 'GB',
@@ -191,13 +306,28 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     defaultCity: 'London',
     callingCode: '+44',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'google_pay', gateway: 'stripe', displayName: 'Google Pay' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   US: {
     code: 'US',
@@ -214,14 +344,29 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     defaultCity: 'Washington, D.C.',
     callingCode: '+1',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'google_pay', gateway: 'stripe', displayName: 'Google Pay' },
       { methodType: 'ach', gateway: 'stripe', displayName: 'ACH Bank Transfer' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
+    ],
   },
   SG: {
     code: 'SG',
@@ -238,19 +383,38 @@ export const REGION_CONFIGS: Record<SupportedCountryCode, RegionConfig> = {
     defaultCity: 'Singapore',
     callingCode: '+65',
     isActive: true,
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     supportedPaymentMethods: [
-      { methodType: 'card', gateway: 'stripe', displayName: 'Credit / Debit Card', isDefault: true },
+      {
+        methodType: 'card',
+        gateway: 'stripe',
+        displayName: 'Credit / Debit Card',
+        isDefault: true,
+      },
       { methodType: 'apple_pay', gateway: 'stripe', displayName: 'Apple Pay' },
       { methodType: 'grabpay', gateway: 'stripe', displayName: 'GrabPay' },
       { methodType: 'paynow', gateway: 'stripe', displayName: 'PayNow' },
       { methodType: 'wallet', gateway: 'wallet', displayName: 'Kartseek Wallet' },
-    ]
-  }
+    ],
+  },
 };
 
 /** All supported country codes */
-export const SUPPORTED_COUNTRIES: SupportedCountryCode[] = Object.keys(REGION_CONFIGS) as SupportedCountryCode[];
+export const SUPPORTED_COUNTRIES: SupportedCountryCode[] = Object.keys(
+  REGION_CONFIGS,
+) as SupportedCountryCode[];
 
 /**
  * Which of the registry's regions the platform actually trades in.
@@ -268,7 +432,15 @@ export const SUPPORTED_COUNTRIES: SupportedCountryCode[] = Object.keys(REGION_CO
  */
 export const DEFAULT_REGION: SupportedCountryCode = 'QA';
 
-export const ACTIVE_REGION_CODES: SupportedCountryCode[] = (() => {
+/**
+ * Markets the platform trades in, from ACTIVE_REGIONS.
+ *
+ * Read at call time. This used to be a module-scope constant, evaluated while
+ * the import graph loaded — before main.ts had run dotenv.config() (ES imports
+ * are hoisted) — so it always held only the home market and every
+ * X-Region-Code header naming another active market was refused.
+ */
+export function getActiveRegionCodes(): SupportedCountryCode[] {
   const raw = process.env.ACTIVE_REGIONS?.trim();
   if (!raw) return [DEFAULT_REGION];
   const parsed = raw
@@ -277,7 +449,7 @@ export const ACTIVE_REGION_CODES: SupportedCountryCode[] = (() => {
     .filter((c): c is SupportedCountryCode => c in REGION_CONFIGS);
   // An env var naming only unknown codes must not silently close every market.
   return parsed.length > 0 ? parsed : [DEFAULT_REGION];
-})();
+}
 
 /**
  * Get region config by country code (returns undefined if unsupported).
@@ -299,10 +471,12 @@ export function isSupportedRegion(code: string): code is SupportedCountryCode {
 /** Whether the platform currently trades in this country. */
 export function isActiveRegion(code: string | undefined | null): code is SupportedCountryCode {
   if (!code) return false;
-  return (ACTIVE_REGION_CODES as string[]).includes(code.toUpperCase());
+  return (getActiveRegionCodes() as string[]).includes(code.toUpperCase());
 }
 
 /** Get all regions the platform currently trades in. */
 export function getActiveRegions(): RegionConfig[] {
-  return ACTIVE_REGION_CODES.map((c) => REGION_CONFIGS[c]).filter((r) => r?.isActive);
+  return getActiveRegionCodes()
+    .map((c) => REGION_CONFIGS[c])
+    .filter((r) => r?.isActive);
 }
