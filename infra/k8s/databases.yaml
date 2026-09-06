@@ -38,7 +38,7 @@ metadata:
   namespace: kartseek
   labels:
     app: postgres
-    critical: "true"
+    critical: 'true'
 spec:
   serviceName: postgres
   replicas: 1
@@ -49,7 +49,7 @@ spec:
     metadata:
       labels:
         app: postgres
-        critical: "true"
+        critical: 'true'
     spec:
       # postgis/postgis:*-alpine is an Alpine image: its `postgres` account is
       # uid/gid 70, NOT the 999 the Debian-based postgres images use. Running as
@@ -100,6 +100,23 @@ spec:
               containerPort: 5432
               protocol: TCP
 
+          # Crash recovery on a laptop's hostPath volume is slow: after an unclean
+          # stop (a Docker Desktop restart kills the pod outright) Postgres fsyncs
+          # the whole data directory before it accepts connections, 110 s and more
+          # here. The liveness probe allowed 60 s, killed it mid-recovery, and the
+          # next start had to recover again: 76 restarts in 24 days. The startup
+          # probe holds liveness off for up to 15 minutes; once it passes, liveness
+          # takes over at its normal cadence.
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 90
+
           livenessProbe:
             exec:
               command:
@@ -124,11 +141,11 @@ spec:
 
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: '500m'
+              memory: '1Gi'
             limits:
-              cpu: "2000m"
-              memory: "2Gi"
+              cpu: '2000m'
+              memory: '2Gi'
 
           securityContext:
             allowPrivilegeEscalation: false
@@ -183,7 +200,7 @@ metadata:
   namespace: kartseek
   labels:
     app: redis
-    critical: "true"
+    critical: 'true'
 spec:
   serviceName: redis
   replicas: 1
@@ -194,7 +211,7 @@ spec:
     metadata:
       labels:
         app: redis
-        critical: "true"
+        critical: 'true'
     spec:
       # redis:*-alpine runs as uid 999 but gid 1000 — fsGroup must match the gid
       # the process actually carries, or /data ends up group-owned by a group the
@@ -217,14 +234,14 @@ spec:
             - --requirepass
             - $(REDIS_PASSWORD)
             - --save
-            - "60"
-            - "1"
+            - '60'
+            - '1'
             - --loglevel
             - warning
             - --maxmemory
-            - "2gb"
+            - '2gb'
             - --maxmemory-policy
-            - "allkeys-lru"
+            - 'allkeys-lru'
 
           env:
             - name: REDIS_PASSWORD
@@ -242,6 +259,19 @@ spec:
           # never inside an exec probe. Written as `-a $(REDIS_PASSWORD)` the
           # probe sent that string literally, redis answered NOAUTH, and the
           # pod restarted forever. Go through a shell so the *shell* expands it.
+          # Loading a multi-gigabyte RDB from this volume after an unclean stop can
+          # outlast the 60 s the liveness probe allows; same arrangement as the
+          # Postgres StatefulSets above: startup holds liveness off, up to 10 min.
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - redis-cli --no-auth-warning -a "$REDIS_PASSWORD" ping | grep -q PONG
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+
           livenessProbe:
             exec:
               command:
@@ -266,11 +296,11 @@ spec:
 
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: '250m'
+              memory: '512Mi'
             limits:
-              cpu: "1000m"
-              memory: "2Gi"
+              cpu: '1000m'
+              memory: '2Gi'
 
           securityContext:
             allowPrivilegeEscalation: false
@@ -326,9 +356,9 @@ metadata:
   namespace: kartseek
   labels:
     app: kafka
-    critical: "true"
+    critical: 'true'
 spec:
-  serviceName: kafka   # must match the headless Service above so kafka-0.kafka.<ns>.svc resolves
+  serviceName: kafka # must match the headless Service above so kafka-0.kafka.<ns>.svc resolves
   replicas: 1
   selector:
     matchLabels:
@@ -337,7 +367,7 @@ spec:
     metadata:
       labels:
         app: kafka
-        critical: "true"
+        critical: 'true'
     spec:
       securityContext:
         runAsNonRoot: false
@@ -374,33 +404,33 @@ spec:
 
           env:
             - name: KAFKA_PROCESS_ROLES
-              value: "broker,controller"
+              value: 'broker,controller'
             # Listeners BIND here, so they must bind the wildcard. Binding to the
             # name "kafka" resolved to a headless Service with no address of its
             # own — and, before the pod is ready, to nothing at all — so the
             # broker could never bind and never became ready. Deadlock.
             - name: KAFKA_LISTENERS
-              value: "PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092"
+              value: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+              value: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
+              value: 'CONTROLLER'
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
-              value: "PLAINTEXT"
+              value: 'PLAINTEXT'
             - name: CLUSTER_ID
-              value: "c1c6d328-9104-4b47-ba03-3fa80eeb7254"
+              value: 'c1c6d328-9104-4b47-ba03-3fa80eeb7254'
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-              value: "1"
+              value: '1'
             - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
-              value: "1"
+              value: '1'
             - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
-              value: "1"
+              value: '1'
             - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
-              value: "0"
+              value: '0'
             - name: KAFKA_LOG_DIRS
-              value: "/var/lib/kafka/data"
+              value: '/var/lib/kafka/data'
             - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
-              value: "false"
+              value: 'false'
 
           ports:
             - name: client
@@ -415,6 +445,16 @@ spec:
           # liveness) and every invocation costs heap inside a 2Gi limit, so the
           # probes both flapped and competed with the broker for memory.
           # The client listener accepting connections is the signal we want.
+          # Log recovery after an unclean stop scans every segment before the
+          # listener opens, which on this volume can take longer than the 150 s
+          # the liveness probe allows. Startup holds liveness off, up to 15 min.
+          startupProbe:
+            tcpSocket:
+              port: 9092
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 90
+
           livenessProbe:
             tcpSocket:
               port: 9092
@@ -433,11 +473,11 @@ spec:
 
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: '500m'
+              memory: '1Gi'
             limits:
-              cpu: "2000m"
-              memory: "2Gi"
+              cpu: '2000m'
+              memory: '2Gi'
 
           volumeMounts:
             - name: kafka-data
@@ -487,7 +527,7 @@ metadata:
   namespace: kartseek
   labels:
     app: postgres-marketplace
-    critical: "true"
+    critical: 'true'
 spec:
   serviceName: postgres-marketplace
   replicas: 1
@@ -498,7 +538,7 @@ spec:
     metadata:
       labels:
         app: postgres-marketplace
-        critical: "true"
+        critical: 'true'
     spec:
       securityContext:
         runAsNonRoot: true
@@ -545,6 +585,23 @@ spec:
               containerPort: 5432
               protocol: TCP
 
+          # Crash recovery on a laptop's hostPath volume is slow: after an unclean
+          # stop (a Docker Desktop restart kills the pod outright) Postgres fsyncs
+          # the whole data directory before it accepts connections, 110 s and more
+          # here. The liveness probe allowed 60 s, killed it mid-recovery, and the
+          # next start had to recover again: 76 restarts in 24 days. The startup
+          # probe holds liveness off for up to 15 minutes; once it passes, liveness
+          # takes over at its normal cadence.
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 90
+
           livenessProbe:
             exec:
               command:
@@ -569,11 +626,11 @@ spec:
 
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: '500m'
+              memory: '1Gi'
             limits:
-              cpu: "2000m"
-              memory: "2Gi"
+              cpu: '2000m'
+              memory: '2Gi'
 
           securityContext:
             allowPrivilegeEscalation: false

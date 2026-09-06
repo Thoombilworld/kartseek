@@ -10,7 +10,7 @@
 # api-gateway.Dockerfile for the api-gateway-specific variant and the root
 # .dockerignore for what reaches the daemon.
 
-FROM node:25-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /repo
 
 # The root lockfile and every workspace manifest — npm ci reconciles the whole
@@ -45,7 +45,7 @@ FROM deps AS prod-deps
 RUN npm ci --workspace=apps/api --include-workspace-root --omit=dev \
   && mkdir -p apps/api/node_modules
 
-FROM node:25-alpine
+FROM node:26-alpine
 ARG APP
 ENV APP_NAME=${APP}
 ENV NODE_ENV=production

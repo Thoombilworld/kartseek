@@ -11,7 +11,7 @@
 # `nest build` at all. Hence the root context, the workspace-scoped install,
 # and the root .dockerignore that keeps the upload to what these images need.
 
-FROM node:25-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /repo
 
 # The root lockfile and every workspace manifest. `npm ci` reconciles the whole
@@ -49,7 +49,7 @@ RUN npm ci --workspace=apps/api --include-workspace-root --omit=dev \
   && mkdir -p apps/api/node_modules
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
-FROM node:25-alpine AS runner
+FROM node:26-alpine AS runner
 
 # Run as non-root.
 RUN addgroup --system --gid 1001 nodejs \

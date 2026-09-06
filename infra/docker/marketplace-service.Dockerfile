@@ -9,7 +9,7 @@
 # builder needs both trees. Root context for the same reason as the other API
 # images: one lockfile, at the root, installed through npm workspaces.
 
-FROM node:25-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /repo
 
 # The root lockfile and every workspace manifest — npm ci reconciles the whole
@@ -56,7 +56,7 @@ RUN npm ci --workspace=modules/marketplace/backend --workspace=apps/api --includ
   && mkdir -p modules/marketplace/backend/node_modules
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
-FROM node:25-alpine AS runner
+FROM node:26-alpine AS runner
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nestjs
 
