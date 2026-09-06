@@ -77,13 +77,14 @@ export function nextAppConfig({ extraIgnores = [] } = {}) {
       },
     },
     {
-      // eslint-config-next parses .js/.jsx/.mjs with its own Babel-based parser,
-      // whose scope manager lacks the addGlobals() that ESLint 10 calls while
-      // finalising a file, so the first JavaScript file aborts the whole run
+      // eslint-config-next parses .js/.jsx/.mjs/.mts/.cts with its own
+      // Babel-based parser (only .ts/.tsx go through typescript-eslint), and
+      // that parser's scope manager lacks the addGlobals() that ESLint 10 calls
+      // while finalising a file, so the first such file aborts the whole run
       // ("scopeManager.addGlobals is not a function"; still true in 16.3.3).
-      // The typescript-eslint parser reads plain JavaScript too; use it for
-      // every JavaScript file, and parse .cjs as CommonJS.
-      files: ['**/*.{js,jsx,mjs}'],
+      // The typescript-eslint parser reads all of them; use it for every file
+      // the preset would otherwise hand to Babel, and parse .cjs as CommonJS.
+      files: ['**/*.{js,jsx,mjs,mts,cts}'],
       languageOptions: { parser: tseslint.parser },
     },
     {

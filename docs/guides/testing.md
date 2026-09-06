@@ -196,11 +196,11 @@ driven down rather than grown:
 | `kartseek-web`                   | 132      |
 | `@kartseek/doctor-frontend`      | 9        |
 | `@kartseek/franchise-frontend`   | 4        |
-| `@kartseek/grocery-frontend`     | 3        |
-| `@kartseek/hotel-frontend`       | 9        |
+| `@kartseek/grocery-frontend`     | 6        |
+| `@kartseek/hotel-frontend`       | 12       |
 | `@kartseek/marketplace-frontend` | 36       |
 | `@kartseek/pharmacy-frontend`    | 2        |
-| `@kartseek/restaurant-frontend`  | 11       |
+| `@kartseek/restaurant-frontend`  | 16       |
 | `@kartseek/taxi-frontend`        | 4        |
 
 The pre-commit hook runs `eslint --fix` on staged files with the same
