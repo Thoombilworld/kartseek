@@ -1,4 +1,8 @@
-import { mapCatalogProduct, unwrapCatalogList, mapCatalogList } from '@/lib/api/map-catalog-product';
+import {
+  mapCatalogProduct,
+  unwrapCatalogList,
+  mapCatalogList,
+} from '@/lib/api/map-catalog-product';
 
 /**
  * The gateway wraps every response as `{ success, data }` and the paged catalogue
@@ -45,10 +49,10 @@ describe('mapCatalogProduct', () => {
   it('reads the entity field names the cards do not use', () => {
     const p: any = mapCatalogProduct(row);
 
-    expect(p.title).toBe('iPhone 15 Pro');   // entity says `name`
-    expect(p.brand).toBe('Apple');           // entity says `{ brand: { name } }`
-    expect(p.reviews).toBe(12400);           // entity says `reviewCount`
-    expect(p.rating).toBe(4.9);              // entity says `averageRating`
+    expect(p.title).toBe('iPhone 15 Pro'); // entity says `name`
+    expect(p.brand).toBe('Apple'); // entity says `{ brand: { name } }`
+    expect(p.reviews).toBe(12400); // entity says `reviewCount`
+    expect(p.rating).toBe(4.9); // entity says `averageRating`
   });
 
   it('converts the decimal price string to a number', () => {
@@ -63,10 +67,39 @@ describe('mapCatalogProduct', () => {
   it('prices from the buy-box listing when one is present', () => {
     const p: any = mapCatalogProduct({
       ...row,
-      listings: [{ sellingPrice: '120000.00' }, { sellingPrice: '115900.00', isBuyBoxWinner: true }],
+      listings: [
+        { sellingPrice: '120000.00' },
+        { sellingPrice: '115900.00', isBuyBoxWinner: true },
+      ],
     });
 
     expect(p.price).toBe(115900);
+  });
+
+  // A flash-deal row carries `dealPrice`; the pricer charges it, so the card
+  // must show it. Before this the deal page showed the ordinary offer price
+  // under a "FLASH" ribbon and the discount it claimed was just list vs offer.
+  it('shows the flash-deal price when the row carries one', () => {
+    const deal = mapCatalogProduct({
+      ...row,
+      listings: [{ sellingPrice: '300.00', mrp: '430.00', isBuyBoxWinner: true, isActive: true }],
+      dealPrice: 255,
+      dealEndsAt: '2026-09-13T11:38:48.882Z',
+    });
+    expect(deal.price).toBe(255);
+    expect(deal.mrp).toBe(430);
+    expect(deal.dealPrice).toBe(255);
+    expect(deal.dealEndsAt).toBe('2026-09-13T11:38:48.882Z');
+  });
+
+  it('ignores a deal price that is not actually lower than the offer', () => {
+    const notADeal = mapCatalogProduct({
+      ...row,
+      listings: [{ sellingPrice: '300.00', mrp: '430.00', isBuyBoxWinner: true, isActive: true }],
+      dealPrice: 300,
+    });
+    expect(notADeal.price).toBe(300);
+    expect(notADeal.dealPrice).toBeUndefined();
   });
 
   it('falls back to MRP when the listing endpoint omits listings', () => {

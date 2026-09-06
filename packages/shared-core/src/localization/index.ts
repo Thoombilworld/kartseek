@@ -19,3 +19,4 @@ export * from './legal';
 export * from './terms';
 export * from './corporate';
 export * from './seller';
+export * from './pricing-labels';

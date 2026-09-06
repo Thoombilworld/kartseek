@@ -31,6 +31,7 @@ import {
   getMarketplaceDeliveryRule,
 } from '@/lib/marketplace/delivery';
 import { productPath } from '@/lib/marketplace/product-url';
+import { getListPriceLabels } from '@/lib/localization';
 import { zoneHref } from '@/lib/routes/zone-href';
 
 /** A coupon as the catalogue actually holds it. */
@@ -53,6 +54,9 @@ interface CartItem {
 
 export default function CartPage() {
   const { formatCurrencyValue: fmt, country } = useRegion();
+  // "MRP" is India's printed ceiling price; the Gulf markets show a plain
+  // "was" price. Same figure, the market's own word for it.
+  const listPriceLabels = getListPriceLabels(country.code);
   const cart = useCartContext();
   const [coupon, setCoupon] = useState('');
   // Section-level, not page-level. Coupons and bank offers are secondary
@@ -385,6 +389,7 @@ export default function CartPage() {
                         {hasMrp && (
                           <>
                             <span className="text-sm text-slate-400 line-through">
+                              <span className="sr-only">{listPriceLabels.short} </span>
                               {fmt(item.mrp)}
                             </span>
                             <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
@@ -643,7 +648,7 @@ export default function CartPage() {
                       basket. */}
                   {savedMRP > 0 && (
                     <div className="flex justify-between text-green-600 font-semibold">
-                      <span>You Save (MRP)</span>
+                      <span>{listPriceLabels.savings}</span>
                       <span>− {fmt(savedMRP)}</span>
                     </div>
                   )}

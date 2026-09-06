@@ -51,7 +51,14 @@ export function buyBoxMrp(p: any): number {
 
 export function mapCatalogProduct(p: any): HomeProduct {
   const mrp = buyBoxMrp(p);
-  const price = buyBoxPrice(p);
+  const offerPrice = buyBoxPrice(p);
+  // A flash-deal row carries the campaign price. It is what the cart charges
+  // (the pricer applies the same live nomination), so it is what the card
+  // shows; the offer's list price stays as the struck-through figure. Before
+  // this the deal page showed the ordinary offer price under a "FLASH" ribbon.
+  const dealPrice = Number(p?.dealPrice ?? 0) || 0;
+  const onDeal = dealPrice > 0 && dealPrice < offerPrice;
+  const price = onDeal ? dealPrice : offerPrice;
 
   // The full gallery, primary first — the card swipes through it, so resolving
   // only the primary image here is what limited every grid to one photograph.
@@ -72,6 +79,8 @@ export function mapCatalogProduct(p: any): HomeProduct {
     delivery: p?.delivery,
     badge: p?.badge,
     badgeColor: p?.badgeColor,
+    dealPrice: onDeal ? dealPrice : undefined,
+    dealEndsAt: onDeal && typeof p?.dealEndsAt === 'string' ? p.dealEndsAt : undefined,
   } as unknown as HomeProduct;
 }
 

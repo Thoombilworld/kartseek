@@ -1,6 +1,7 @@
 'use client';
 
 import { useRegion } from '@/lib/contexts/region-context';
+import { getListPriceLabels } from '@/lib/localization';
 import { useVariants } from './variant-context';
 
 /**
@@ -13,8 +14,11 @@ import { useVariants } from './variant-context';
  * one number and the cart charged another.
  */
 export function ProductPriceDisplay({ sellingPrice, mrp }: { sellingPrice: number; mrp: number }) {
-  const { formatCurrencyValue } = useRegion();
+  const { formatCurrencyValue, country } = useRegion();
   const variants = useVariants();
+  // A struck-through figure is silent to a screen reader, and what it is
+  // called differs by market: "M.R.P." in India, a plain "Was" in the Gulf.
+  const listPriceLabels = getListPriceLabels(country.code);
 
   // Coerce here as well as at the caller: these props are typed `number`, but
   // they originate in an `any`-typed API response whose `decimal` columns are
@@ -30,7 +34,9 @@ export function ProductPriceDisplay({ sellingPrice, mrp }: { sellingPrice: numbe
     return (
       <div className="mb-2">
         <span className="text-xl font-bold text-slate-500">Price unavailable</span>
-        <p className="text-sm text-slate-400 mt-1">This product is not currently offered by any seller.</p>
+        <p className="text-sm text-slate-400 mt-1">
+          This product is not currently offered by any seller.
+        </p>
       </div>
     );
   }
@@ -40,7 +46,10 @@ export function ProductPriceDisplay({ sellingPrice, mrp }: { sellingPrice: numbe
       <span className="text-4xl font-black text-slate-900">{formatCurrencyValue(price)}</span>
       {discounted && (
         <>
-          <span className="text-lg text-slate-400 line-through mb-1">{formatCurrencyValue(list)}</span>
+          <span className="text-lg text-slate-400 line-through mb-1">
+            <span className="sr-only">{listPriceLabels.short} </span>
+            {formatCurrencyValue(list)}
+          </span>
           <span className="text-green-600 font-bold mb-1">{discount}% off</span>
         </>
       )}

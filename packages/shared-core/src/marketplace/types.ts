@@ -37,6 +37,10 @@ export interface HomeProduct {
   images?: string[];
   /** Pickable variant axes, e.g. `[{ variantName: 'Colour', variantOptions: [...] }]`. */
   variantAxes?: { variantName: string; variantOptions: string[] }[];
+  /** Set when `price` is a live flash-deal price rather than the offer price. */
+  dealPrice?: number;
+  /** ISO end of the deal window `dealPrice` belongs to. */
+  dealEndsAt?: string;
   /**
    * Bundled placeholder shown when the catalogue is unreachable: the card renders
    * but does not link, because this id exists only in this bundle and its detail
