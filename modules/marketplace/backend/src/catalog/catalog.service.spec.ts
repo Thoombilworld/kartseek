@@ -27,6 +27,7 @@ describe('CatalogService', () => {
   let sellerRepo: any;
   let reviewRepo: any;
   let variantRepo: any;
+  let nominationRepo: any;
 
   /**
    * Schema-qualified table names, as TypeORM's metadata reports them.
@@ -108,6 +109,7 @@ describe('CatalogService', () => {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       leftJoin: jest.fn().mockReturnThis(),
       innerJoin: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       setParameter: jest.fn().mockReturnThis(),
@@ -174,6 +176,7 @@ describe('CatalogService', () => {
     sellerRepo = module.get(getRepositoryToken(Seller));
     reviewRepo = module.get(getRepositoryToken(Review));
     variantRepo = module.get(getRepositoryToken(ProductVariant));
+    nominationRepo = module.get(getRepositoryToken(FlashDealNomination));
   });
 
   describe('getCategories', () => {
@@ -467,6 +470,29 @@ describe('CatalogService', () => {
 
     beforeEach(() => {
       redis.getJson.mockResolvedValue(null);
+    });
+
+    // Regression: the listings join condition names `:regionCode`. Product
+    // queries bind it through `scopeToRegion`; the flash-deal query never went
+    // through that, so the parameter reached Postgres unbound — "syntax error
+    // at or near ':'" — and the gateway answered "Marketplace service
+    // unavailable" for every market's flash deals (only the unscoped call worked).
+    it('binds the seller-region parameter on the flash-deal listings join', async () => {
+      await service.getFlashDeals('IN');
+
+      const qb = nominationRepo.createQueryBuilder.mock.results.at(-1)!.value;
+      const join = qb.leftJoinAndSelect.mock.calls.find(
+        ([prop]: [string]) => prop === 'p.listings',
+      );
+      expect(join).toBeDefined();
+      expect(join![2]).toContain(':regionCode');
+      expect(join![3]).toEqual({ regionCode: 'IN' });
+      // The deal itself is scoped to the market too.
+      const dealScope = qb.andWhere.mock.calls.find(
+        ([, params]: [string, any]) => params?.region === 'IN',
+      );
+      expect(dealScope).toBeDefined();
+      expect(dealScope![0]).toContain('deal.region_code');
     });
 
     it('restricts the catalogue to sellers in the requested region', async () => {
@@ -835,6 +861,100 @@ describe('CatalogService', () => {
       const res = await service.priceOrderItems([{ productId: SP, quantity: 1 }]);
       expect(res.ok).toBe(true);
       expect(res.items[0]).toMatchObject({ unitPrice: 9, listingId: 'L2', sellerId: 'S2' });
+    });
+  });
+
+  describe('flash deals at checkout', () => {
+    const PID = '7e1d1c2a-3b4c-4d5e-8f60-71829a3b4c5d';
+    const seller = { id: 'S-QA', verificationStatus: 'VERIFIED', isActive: true, regionCode: 'QA' };
+    const product = {
+      id: PID,
+      name: 'Dash cam',
+      mrp: '430.00',
+      is_active: true,
+      approval_status: 'APPROVED',
+    };
+    const offer = {
+      id: 'L-QA',
+      sellingPrice: '300.00',
+      mrp: '430.00',
+      stockQuantity: 10,
+      isBuyBoxWinner: true,
+      product: { id: PID },
+      seller,
+    };
+
+    beforeEach(() => {
+      productRepo.find.mockResolvedValue([product]);
+      (service as any).listingRepo.find.mockResolvedValue([offer]);
+      variantRepo.find.mockResolvedValue([]);
+    });
+
+    // The deal page shows `deal_price`; until this the cart charged the offer
+    // price regardless, so the "flash deal" was a countdown next to the
+    // ordinary price. The pricer now reads the same live nominations the page does.
+    it('charges the live deal price from the offer’s own seller', async () => {
+      nominationRepo
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([
+          { id: 'N1', productId: PID, sellerId: 'S-QA', dealPrice: '255.00' },
+        ]);
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 2 }], 'QA');
+      expect(res.ok).toBe(true);
+      expect(res.items[0]).toMatchObject({
+        unitPrice: 255,
+        offerPrice: 300,
+        lineTotal: 510,
+        dealNominationId: 'N1',
+        mrp: 430,
+      });
+      expect(res.subtotal).toBe(510);
+      // Scoped to the market the basket is priced in.
+      const qb = nominationRepo.createQueryBuilder.mock.results.at(-1)!.value;
+      expect(qb.andWhere.mock.calls.some(([, p]: [string, any]) => p?.region === 'QA')).toBe(true);
+    });
+
+    it('ignores another seller’s deal on the same product', async () => {
+      nominationRepo
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([
+          { id: 'N2', productId: PID, sellerId: 'S-OTHER', dealPrice: '100.00' },
+        ]);
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 1 }], 'QA');
+      expect(res.ok).toBe(true);
+      expect(res.items[0]).toMatchObject({ unitPrice: 300, dealNominationId: null });
+    });
+
+    it('never raises the price: a deal above the offer is not applied', async () => {
+      nominationRepo
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([
+          { id: 'N3', productId: PID, sellerId: 'S-QA', dealPrice: '350.00' },
+        ]);
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 1 }], 'QA');
+      expect(res.items[0]).toMatchObject({ unitPrice: 300, dealNominationId: null });
+    });
+
+    it('counts a deal line against the deal allocation when reserving, and refuses a sold-out deal', async () => {
+      // Listing decrement wins, the nomination increment finds no allocation left.
+      updateExecute.mockResolvedValueOnce({ affected: 1 }).mockResolvedValueOnce({ affected: 0 });
+      const res = await service.reserveListingStock([
+        { listingId: 'L-QA', productId: PID, quantity: 1, dealNominationId: 'N1' },
+      ]);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/sold out/i);
+    });
+
+    it('returns the deal on the reserved line so a release can hand the unit back', async () => {
+      const res = await service.reserveListingStock([
+        { listingId: 'L-QA', productId: PID, quantity: 1, dealNominationId: 'N1' },
+      ]);
+      expect(res.ok).toBe(true);
+      expect(res.reserved[0]).toMatchObject({
+        listingId: 'L-QA',
+        quantity: 1,
+        dealNominationId: 'N1',
+      });
     });
   });
 

@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike, In, MoreThanOrEqual } from 'typeorm';
 import { requireId } from '@app/common';
@@ -14,7 +20,11 @@ import { ShipmentTrackingEvent } from '../entities/shipment-tracking-event.entit
 import { ProductVariant } from '../entities/product-variant.entity';
 import { ProductQuestion, ProductAnswer } from '../entities/product-qa.entity';
 import { DeliveryAssignment } from '../entities/delivery-assignment.entity';
-import { ProductReport, type ProductReportReason, type ProductReportStatus } from '../entities/product-report.entity';
+import {
+  ProductReport,
+  type ProductReportReason,
+  type ProductReportStatus,
+} from '../entities/product-report.entity';
 import { PriceAlert } from '../entities/price-alert.entity';
 import { ProductListing } from '../entities/product-listing.entity';
 
@@ -54,11 +64,13 @@ export class MarketplaceFulfillmentService {
     @InjectRepository(ReturnRequest) private readonly returnRepo: Repository<ReturnRequest>,
     @InjectRepository(Coupon) private readonly couponRepo: Repository<Coupon>,
     @InjectRepository(CouponUsage) private readonly couponUsageRepo: Repository<CouponUsage>,
-    @InjectRepository(ShipmentTrackingEvent) private readonly trackingRepo: Repository<ShipmentTrackingEvent>,
+    @InjectRepository(ShipmentTrackingEvent)
+    private readonly trackingRepo: Repository<ShipmentTrackingEvent>,
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(ProductQuestion) private readonly questionRepo: Repository<ProductQuestion>,
     @InjectRepository(ProductAnswer) private readonly answerRepo: Repository<ProductAnswer>,
-    @InjectRepository(DeliveryAssignment) private readonly deliveryAssignmentRepo: Repository<DeliveryAssignment>,
+    @InjectRepository(DeliveryAssignment)
+    private readonly deliveryAssignmentRepo: Repository<DeliveryAssignment>,
     @InjectRepository(ProductReport) private readonly reportRepo: Repository<ProductReport>,
     @InjectRepository(PriceAlert) private readonly priceAlertRepo: Repository<PriceAlert>,
     @InjectRepository(ProductListing) private readonly listingRepo: Repository<ProductListing>,
@@ -111,7 +123,11 @@ export class MarketplaceFulfillmentService {
    * resource whose own `seller_id` was never populated. A record nobody
    * demonstrably owns is not a record anybody may edit.
    */
-  private async assertOwns(actor: Actor | undefined, resourceSellerId: string | null | undefined, subject: string) {
+  private async assertOwns(
+    actor: Actor | undefined,
+    resourceSellerId: string | null | undefined,
+    subject: string,
+  ) {
     if (MarketplaceFulfillmentService.isAdmin(actor)) return;
 
     const callerSellerId = await this.actorSellerId(actor);
@@ -119,13 +135,15 @@ export class MarketplaceFulfillmentService {
 
     this.logger.warn(
       `Blocked cross-seller write: owner=${actor?.ownerId ?? 'anonymous'} ` +
-      `seller=${callerSellerId ?? 'none'} attempted ${subject} owned by ${resourceSellerId ?? 'nobody'}`,
+        `seller=${callerSellerId ?? 'none'} attempted ${subject} owned by ${resourceSellerId ?? 'nobody'}`,
     );
     throw new ForbiddenException(`You do not have access to this ${subject}.`);
   }
 
   /** The seller who owns a variant — its own column, or the product's. */
-  private async variantSellerId(variantId: string): Promise<{ variant: ProductVariant; sellerId: string | null }> {
+  private async variantSellerId(
+    variantId: string,
+  ): Promise<{ variant: ProductVariant; sellerId: string | null }> {
     const variant = await this.variantRepo.findOne({ where: { id: variantId } });
     if (!variant) throw new NotFoundException(`Variant ${variantId} not found`);
     if (variant.sellerId) return { variant, sellerId: variant.sellerId };
@@ -154,7 +172,13 @@ export class MarketplaceFulfillmentService {
     return saved;
   }
 
-  async getReturnRequests(filters: { customerId?: string; sellerId?: string; status?: string; page?: number; limit?: number }) {
+  async getReturnRequests(filters: {
+    customerId?: string;
+    sellerId?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const where: any = {};
@@ -162,7 +186,10 @@ export class MarketplaceFulfillmentService {
     if (filters.sellerId) where.sellerId = filters.sellerId;
     if (filters.status) where.status = filters.status;
     const [data, total] = await this.returnRepo.findAndCount({
-      where, order: { createdAt: 'DESC' }, skip: (page - 1) * limit, take: limit,
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
@@ -227,7 +254,9 @@ export class MarketplaceFulfillmentService {
     if (!ret) throw new NotFoundException(`Return request ${id} not found`);
 
     if (String(ret.customerId) !== String(customerId)) {
-      this.logger.warn(`Blocked cancel of return ${id}: customer ${customerId} is not the requester`);
+      this.logger.warn(
+        `Blocked cancel of return ${id}: customer ${customerId} is not the requester`,
+      );
       throw new ForbiddenException('You do not have access to this return request.');
     }
 
@@ -242,12 +271,19 @@ export class MarketplaceFulfillmentService {
     }
 
     await this.returnRepo.update(id, { status: 'CANCELLED' });
-    await this.kafka.publish('return.status-updated', { id, status: 'CANCELLED', cancelledBy: 'CUSTOMER' });
+    await this.kafka.publish('return.status-updated', {
+      id,
+      status: 'CANCELLED',
+      cancelledBy: 'CUSTOMER',
+    });
     this.logger.log(`Return ${id} cancelled by customer ${customerId}`);
     return { success: true, id, status: 'CANCELLED' };
   }
 
-  async assignReturnPickup(id: string, dto: { pickupPartnerId: string; pickupScheduledAt: string }) {
+  async assignReturnPickup(
+    id: string,
+    dto: { pickupPartnerId: string; pickupScheduledAt: string },
+  ) {
     // `new Date(undefined)` is an Invalid Date, which TypeORM serialises as
     // "0NaN-NaN-NaNTNaN:NaN..." and Postgres rejects — surfacing as a 500 that
     // named the timestamp syntax rather than the missing field. Both values are
@@ -272,7 +308,10 @@ export class MarketplaceFulfillmentService {
   async createCoupon(dto: any) {
     const existing = await this.couponRepo.findOne({ where: { code: dto.code?.toUpperCase() } });
     if (existing) throw new BadRequestException(`Coupon code '${dto.code}' already exists`);
-    const entity = this.couponRepo.create({ ...dto, code: dto.code?.toUpperCase() } as any) as unknown as Coupon;
+    const entity = this.couponRepo.create({
+      ...dto,
+      code: dto.code?.toUpperCase(),
+    } as any) as unknown as Coupon;
     const saved = await this.couponRepo.save(entity);
     await this.kafka.publish('coupon.created', { id: saved.id, code: saved.code });
     this.logger.log(`Coupon created: ${saved.code}`);
@@ -298,18 +337,29 @@ export class MarketplaceFulfillmentService {
     page?: number;
     limit?: number;
     publicOnly?: boolean;
+    /** Market being browsed: only its coupons and the market-agnostic ones. */
+    region?: string;
   }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const publicOnly = filters.publicOnly !== false;
 
-    const qb = this.couponRepo.createQueryBuilder('c')
+    const qb = this.couponRepo
+      .createQueryBuilder('c')
       .orderBy('c.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
 
     if (filters.sellerId) qb.andWhere('c.sellerId = :sellerId', { sellerId: filters.sellerId });
-    if (filters.isActive !== undefined) qb.andWhere('c.isActive = :isActive', { isActive: filters.isActive });
+    // A flat amount is in one currency: a "QR 50 off" code must not be offered
+    // in India. Codes without a region apply everywhere.
+    if (filters.region) {
+      qb.andWhere('(c.regionCode IS NULL OR c.regionCode = :region)', {
+        region: filters.region.toUpperCase(),
+      });
+    }
+    if (filters.isActive !== undefined)
+      qb.andWhere('c.isActive = :isActive', { isActive: filters.isActive });
 
     if (publicOnly) {
       qb.andWhere('c.isActive = true')
@@ -332,15 +382,31 @@ export class MarketplaceFulfillmentService {
     return { ...coupon, usageStats: { totalRedemptions: usageCount } };
   }
 
-  async validateCoupon(dto: { code: string; customerId: string; orderTotal: number; paymentMethod?: string; productIds?: string[] }) {
+  async validateCoupon(dto: {
+    code: string;
+    customerId: string;
+    orderTotal: number;
+    paymentMethod?: string;
+    productIds?: string[];
+    region?: string;
+  }) {
     // `dto.code` was dereferenced straight into `.toUpperCase()`, so a checkout
     // that posted no coupon code answered 500 "Cannot read properties of
     // undefined" — a validation mistake reported as a server fault.
     if (!dto?.code || typeof dto.code !== 'string') {
       throw new BadRequestException('code is required to validate a coupon');
     }
-    const coupon = await this.couponRepo.findOne({ where: { code: dto.code.toUpperCase(), isActive: true } });
+    const coupon = await this.couponRepo.findOne({
+      where: { code: dto.code.toUpperCase(), isActive: true },
+    });
     if (!coupon) return { valid: false, reason: 'Coupon not found or inactive' };
+    if (
+      coupon.regionCode &&
+      dto.region &&
+      coupon.regionCode.toUpperCase() !== dto.region.toUpperCase()
+    ) {
+      return { valid: false, reason: 'This coupon is not valid in your market' };
+    }
 
     const now = new Date();
     if (now < coupon.validFrom || now > coupon.validUntil) {
@@ -353,41 +419,72 @@ export class MarketplaceFulfillmentService {
       return { valid: false, reason: 'Coupon usage limit reached' };
     }
     // Per-user limit
-    const userUses = await this.couponUsageRepo.count({ where: { couponId: coupon.id, customerId: dto.customerId } });
+    const userUses = await this.couponUsageRepo.count({
+      where: { couponId: coupon.id, customerId: dto.customerId },
+    });
     if (userUses >= coupon.usageLimitPerUser) {
-      return { valid: false, reason: 'You have already used this coupon the maximum number of times' };
+      return {
+        valid: false,
+        reason: 'You have already used this coupon the maximum number of times',
+      };
     }
     // Payment method restriction
-    if (coupon.applicablePaymentMethods?.length && dto.paymentMethod && !coupon.applicablePaymentMethods.includes(dto.paymentMethod)) {
-      return { valid: false, reason: `This coupon is only valid for ${coupon.applicablePaymentMethods.join(', ')} payments` };
+    if (
+      coupon.applicablePaymentMethods?.length &&
+      dto.paymentMethod &&
+      !coupon.applicablePaymentMethods.includes(dto.paymentMethod)
+    ) {
+      return {
+        valid: false,
+        reason: `This coupon is only valid for ${coupon.applicablePaymentMethods.join(', ')} payments`,
+      };
     }
     // Calculate discount
     let discount = 0;
     if (coupon.discountType === 'PERCENTAGE') {
       discount = dto.orderTotal * (Number(coupon.discountValue) / 100);
-      if (coupon.maxDiscount && discount > Number(coupon.maxDiscount)) discount = Number(coupon.maxDiscount);
+      if (coupon.maxDiscount && discount > Number(coupon.maxDiscount))
+        discount = Number(coupon.maxDiscount);
     } else if (coupon.discountType === 'FLAT') {
       discount = Number(coupon.discountValue);
     } else if (coupon.discountType === 'FREE_SHIPPING') {
       discount = 0; // Handled at checkout level
     }
-    return { valid: true, discount: Math.round(discount * 100) / 100, couponId: coupon.id, code: coupon.code, discountType: coupon.discountType };
+    return {
+      valid: true,
+      discount: Math.round(discount * 100) / 100,
+      couponId: coupon.id,
+      code: coupon.code,
+      discountType: coupon.discountType,
+    };
   }
 
-  async redeemCoupon(dto: { couponId: string; customerId: string; orderId: string; discountApplied: number }) {
+  async redeemCoupon(dto: {
+    couponId: string;
+    customerId: string;
+    orderId: string;
+    discountApplied: number;
+  }) {
     // Serialise concurrent redemptions with a row lock to enforce usage limits atomically.
     await this.dataSource.transaction(async (mgr) => {
       const couponRepo = mgr.getRepository(Coupon);
       const usageRepo = mgr.getRepository(CouponUsage);
-      const coupon = await couponRepo.findOne({ where: { id: dto.couponId }, lock: { mode: 'pessimistic_write' } });
+      const coupon = await couponRepo.findOne({
+        where: { id: dto.couponId },
+        lock: { mode: 'pessimistic_write' },
+      });
       if (!coupon) throw new NotFoundException('Coupon not found');
       if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
         throw new BadRequestException('Coupon usage limit reached');
       }
       if (coupon.usageLimitPerUser > 0) {
-        const userUses = await usageRepo.count({ where: { couponId: coupon.id, customerId: dto.customerId } });
+        const userUses = await usageRepo.count({
+          where: { couponId: coupon.id, customerId: dto.customerId },
+        });
         if (userUses >= coupon.usageLimitPerUser) {
-          throw new BadRequestException('You have already used this coupon the maximum number of times');
+          throw new BadRequestException(
+            'You have already used this coupon the maximum number of times',
+          );
         }
       }
       await usageRepo.save(usageRepo.create(dto));
@@ -406,10 +503,23 @@ export class MarketplaceFulfillmentService {
    * limit — writable, it makes the limit meaningless.
    */
   private static readonly COUPON_WRITABLE = [
-    'name', 'description', 'discountType', 'discountValue', 'maxDiscount', 'minOrderValue',
-    'usageLimit', 'usageLimitPerUser', 'validFrom', 'validUntil', 'isActive', 'isAutoApply',
-    'isFirstOrderOnly', 'applicableProductIds', 'applicableCategoryIds',
-    'applicablePaymentMethods', 'bankName',
+    'name',
+    'description',
+    'discountType',
+    'discountValue',
+    'maxDiscount',
+    'minOrderValue',
+    'usageLimit',
+    'usageLimitPerUser',
+    'validFrom',
+    'validUntil',
+    'isActive',
+    'isAutoApply',
+    'isFirstOrderOnly',
+    'applicableProductIds',
+    'applicableCategoryIds',
+    'applicablePaymentMethods',
+    'bankName',
   ] as const;
 
   /** A coupon and the seller who owns it. Platform-wide coupons are admin-only. */
@@ -426,7 +536,10 @@ export class MarketplaceFulfillmentService {
     // a campaign that spans the marketplace is not one seller's to edit.
     await this.assertOwns(actor, coupon.sellerId, 'coupon');
 
-    const patch = MarketplaceFulfillmentService.pick(dto, MarketplaceFulfillmentService.COUPON_WRITABLE);
+    const patch = MarketplaceFulfillmentService.pick(
+      dto,
+      MarketplaceFulfillmentService.COUPON_WRITABLE,
+    );
     if (Object.keys(patch).length === 0) {
       throw new BadRequestException('No updatable coupon fields were supplied.');
     }
@@ -449,9 +562,18 @@ export class MarketplaceFulfillmentService {
     const coupon = await this.couponOwner(couponId);
     await this.assertOwns(actor, coupon.sellerId, 'coupon');
 
-    const usages = await this.couponUsageRepo.find({ where: { couponId }, order: { redeemedAt: 'DESC' }, take: 100 });
+    const usages = await this.couponUsageRepo.find({
+      where: { couponId },
+      order: { redeemedAt: 'DESC' },
+      take: 100,
+    });
     const totalDiscount = usages.reduce((sum, u) => sum + Number(u.discountApplied), 0);
-    return { couponId, totalRedemptions: usages.length, totalDiscount, recentUsages: usages.slice(0, 20) };
+    return {
+      couponId,
+      totalRedemptions: usages.length,
+      totalDiscount,
+      recentUsages: usages.slice(0, 20),
+    };
   }
 
   // ── Shipment tracking ───────────────────────────────────────────────────────
@@ -484,7 +606,10 @@ export class MarketplaceFulfillmentService {
     // Update order's tracking info if it's a status-changing event
     if (['DELIVERED', 'OUT_FOR_DELIVERY', 'IN_TRANSIT', 'PICKED_UP'].includes(dto.status)) {
       const statusMap: Record<string, string> = {
-        PICKED_UP: 'SHIPPED', IN_TRANSIT: 'SHIPPED', OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY', DELIVERED: 'DELIVERED',
+        PICKED_UP: 'SHIPPED',
+        IN_TRANSIT: 'SHIPPED',
+        OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
+        DELIVERED: 'DELIVERED',
       };
       if (statusMap[dto.status]) {
         await this.orderRepo.update(dto.orderId, { status: statusMap[dto.status] });
@@ -496,18 +621,37 @@ export class MarketplaceFulfillmentService {
   }
 
   async getTrackingEvents(orderId: string) {
-    const events = await this.trackingRepo.find({ where: { orderId }, order: { timestamp: 'ASC' } });
+    const events = await this.trackingRepo.find({
+      where: { orderId },
+      order: { timestamp: 'ASC' },
+    });
     const latest = events.length > 0 ? events[events.length - 1] : null;
-    return { orderId, events, latestStatus: latest?.status, latestLocation: latest?.location, totalEvents: events.length };
+    return {
+      orderId,
+      events,
+      latestStatus: latest?.status,
+      latestLocation: latest?.location,
+      totalEvents: events.length,
+    };
   }
 
   async getTrackingByTrackingId(trackingId: string) {
-    const events = await this.trackingRepo.find({ where: { trackingId }, order: { timestamp: 'ASC' } });
+    const events = await this.trackingRepo.find({
+      where: { trackingId },
+      order: { timestamp: 'ASC' },
+    });
     if (events.length === 0) throw new NotFoundException(`No events for tracking ID ${trackingId}`);
     return { trackingId, events, latestStatus: events[events.length - 1]?.status };
   }
 
-  async ingestCourierWebhook(dto: { trackingId: string; status: string; location: string; timestamp: string; courierName: string; courierEventCode?: string }) {
+  async ingestCourierWebhook(dto: {
+    trackingId: string;
+    status: string;
+    location: string;
+    timestamp: string;
+    courierName: string;
+    courierEventCode?: string;
+  }) {
     // Find the order by tracking ID
     const order = await this.orderRepo.findOne({ where: { trackingId: dto.trackingId } });
     if (!order) {
@@ -522,11 +666,19 @@ export class MarketplaceFulfillmentService {
     // who could reach it could mark orders delivered. It is unreachable now that
     // the HTTP surface is closed (see HttpSurfaceGuard); before re-exposing it,
     // verify the courier's webhook signature here.
-    return this.addTrackingEvent({
-      orderId: order.id, trackingId: dto.trackingId, status: dto.status,
-      location: dto.location, timestamp: new Date(dto.timestamp),
-      courierName: dto.courierName, courierEventCode: dto.courierEventCode, source: 'WEBHOOK',
-    }, { role: 'SUPER_ADMIN' });
+    return this.addTrackingEvent(
+      {
+        orderId: order.id,
+        trackingId: dto.trackingId,
+        status: dto.status,
+        location: dto.location,
+        timestamp: new Date(dto.timestamp),
+        courierName: dto.courierName,
+        courierEventCode: dto.courierEventCode,
+        source: 'WEBHOOK',
+      },
+      { role: 'SUPER_ADMIN' },
+    );
   }
 
   // ── Product variants ────────────────────────────────────────────────────────
@@ -540,9 +692,20 @@ export class MarketplaceFulfillmentService {
    * its owner, defeating the ownership check on every subsequent request.
    */
   private static readonly VARIANT_WRITABLE = [
-    'sku', 'barcode', 'attributes', 'variantName', 'mrp', 'sellingPrice', 'costPrice',
-    'stockQuantity', 'lowStockThreshold', 'weightKg', 'dimensions', 'imageUrls',
-    'isActive', 'sortOrder',
+    'sku',
+    'barcode',
+    'attributes',
+    'variantName',
+    'mrp',
+    'sellingPrice',
+    'costPrice',
+    'stockQuantity',
+    'lowStockThreshold',
+    'weightKg',
+    'dimensions',
+    'imageUrls',
+    'isActive',
+    'sortOrder',
   ] as const;
 
   private static pick<T extends readonly string[]>(dto: any, allowed: T): Record<string, any> {
@@ -572,7 +735,8 @@ export class MarketplaceFulfillmentService {
 
   async getVariants(productId: string) {
     const variants = await this.variantRepo.find({
-      where: { productId, isActive: true }, order: { sortOrder: 'ASC' },
+      where: { productId, isActive: true },
+      order: { sortOrder: 'ASC' },
     });
     return { productId, variants, total: variants.length };
   }
@@ -587,7 +751,10 @@ export class MarketplaceFulfillmentService {
     const { sellerId } = await this.variantSellerId(id);
     await this.assertOwns(actor, sellerId, 'variant');
 
-    const patch = MarketplaceFulfillmentService.pick(dto, MarketplaceFulfillmentService.VARIANT_WRITABLE);
+    const patch = MarketplaceFulfillmentService.pick(
+      dto,
+      MarketplaceFulfillmentService.VARIANT_WRITABLE,
+    );
     if (Object.keys(patch).length === 0) {
       throw new BadRequestException('No updatable variant fields were supplied.');
     }
@@ -622,7 +789,9 @@ export class MarketplaceFulfillmentService {
       else if (dto.operation === 'INCREMENT') q += dto.quantity;
       else if (dto.operation === 'DECREMENT') {
         if (variant.stockQuantity < dto.quantity) {
-          throw new BadRequestException(`Insufficient stock: have ${variant.stockQuantity}, requested ${dto.quantity}`);
+          throw new BadRequestException(
+            `Insufficient stock: have ${variant.stockQuantity}, requested ${dto.quantity}`,
+          );
         }
         q = variant.stockQuantity - dto.quantity;
       }
@@ -639,7 +808,8 @@ export class MarketplaceFulfillmentService {
   async getLowStockVariants(sellerId: string, actor?: Actor) {
     await this.assertOwns(actor, sellerId, 'seller account');
 
-    const variants = await this.variantRepo.createQueryBuilder('v')
+    const variants = await this.variantRepo
+      .createQueryBuilder('v')
       .where('v.seller_id = :sellerId', { sellerId })
       .andWhere('v."isActive" = true')
       .andWhere('v."stockQuantity" <= v."lowStockThreshold"')
@@ -647,7 +817,6 @@ export class MarketplaceFulfillmentService {
       .getMany();
     return { data: variants, total: variants.length };
   }
-
 
   // ── Product reports ─────────────────────────────────────────────────────────
   //
@@ -657,11 +826,21 @@ export class MarketplaceFulfillmentService {
   // existing moderation action with its own audit trail, and wiring a shopper's
   // report straight through to a takedown would let one reporter delist a rival.
 
-  private static readonly REPORT_REASONS: readonly ProductReportReason[] =
-    ['COUNTERFEIT', 'PROHIBITED', 'MISLEADING', 'OFFENSIVE', 'PRICING', 'OTHER'];
+  private static readonly REPORT_REASONS: readonly ProductReportReason[] = [
+    'COUNTERFEIT',
+    'PROHIBITED',
+    'MISLEADING',
+    'OFFENSIVE',
+    'PRICING',
+    'OTHER',
+  ];
 
-  private static readonly REPORT_STATUSES: readonly ProductReportStatus[] =
-    ['PENDING', 'REVIEWING', 'ACTIONED', 'DISMISSED'];
+  private static readonly REPORT_STATUSES: readonly ProductReportStatus[] = [
+    'PENDING',
+    'REVIEWING',
+    'ACTIONED',
+    'DISMISSED',
+  ];
 
   /**
    * File a report against a listing.
@@ -715,13 +894,19 @@ export class MarketplaceFulfillmentService {
     const saved = await this.reportRepo.save(
       this.reportRepo.create({ productId, reporterId, reason, details, status: 'PENDING' }),
     );
-    await this.kafka.publish('marketplace.product.reported', { productId, reportId: saved.id, reason });
+    await this.kafka.publish('marketplace.product.reported', {
+      productId,
+      reportId: saved.id,
+      reason,
+    });
     this.logger.log(`Product report filed: ${productId} by ${reporterId} (${reason})`);
     return { success: true, id: saved.id, updated: false };
   }
 
   /** The moderation queue. Pending first, then oldest first within a status. */
-  async listProductReports(query: { status?: string; productId?: string; page?: number; limit?: number } = {}) {
+  async listProductReports(
+    query: { status?: string; productId?: string; page?: number; limit?: number } = {},
+  ) {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
 
@@ -775,7 +960,8 @@ export class MarketplaceFulfillmentService {
     const settled = status === 'ACTIONED' || status === 'DISMISSED';
     await this.reportRepo.update(reportId, {
       status,
-      resolutionNote: typeof dto?.resolutionNote === 'string' ? dto.resolutionNote.trim().slice(0, 2000) : null,
+      resolutionNote:
+        typeof dto?.resolutionNote === 'string' ? dto.resolutionNote.trim().slice(0, 2000) : null,
       reviewedBy: adminId,
       // Only a terminal decision stamps a review time; moving to REVIEWING is
       // picking the report up, not finishing with it.
@@ -784,7 +970,6 @@ export class MarketplaceFulfillmentService {
     this.logger.log(`Report ${reportId} -> ${status} by ${adminId}`);
     return { success: true, id: reportId, status };
   }
-
 
   // ── Price-drop alerts ───────────────────────────────────────────────────────
   //
@@ -823,19 +1008,23 @@ export class MarketplaceFulfillmentService {
     const customerId = requireId(dto?.customerId, 'customer');
     const productId = requireId(dto?.productId, 'product');
 
-    const product = await this.productRepo.findOne({ where: { id: productId }, select: ['id', 'is_active'] });
+    const product = await this.productRepo.findOne({
+      where: { id: productId },
+      select: ['id', 'is_active'],
+    });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
 
     const price = await this.payablePrice(productId);
     if (price === null) {
       // No live listing means no price to watch. Storing the alert anyway would
       // create a row that can never fire.
-      throw new BadRequestException('This product has no live listing to watch for a price change.');
+      throw new BadRequestException(
+        'This product has no live listing to watch for a price change.',
+      );
     }
 
-    const target = dto?.targetPrice === undefined || dto.targetPrice === null
-      ? null
-      : Number(dto.targetPrice);
+    const target =
+      dto?.targetPrice === undefined || dto.targetPrice === null ? null : Number(dto.targetPrice);
     if (target !== null && (!Number.isFinite(target) || target <= 0)) {
       throw new BadRequestException('`targetPrice` must be a positive amount.');
     }
@@ -857,9 +1046,15 @@ export class MarketplaceFulfillmentService {
       return { success: true, id: existing.id, watchingFrom: price, rearmed: true };
     }
 
-    const saved = await this.priceAlertRepo.save(this.priceAlertRepo.create({
-      customerId, productId, priceWhenSet: price, targetPrice: target, isActive: true,
-    }));
+    const saved = await this.priceAlertRepo.save(
+      this.priceAlertRepo.create({
+        customerId,
+        productId,
+        priceWhenSet: price,
+        targetPrice: target,
+        isActive: true,
+      }),
+    );
     this.logger.log(`Price alert set: ${productId} for ${customerId} at ${price}`);
     return { success: true, id: saved.id, watchingFrom: price, rearmed: false };
   }
@@ -907,7 +1102,7 @@ export class MarketplaceFulfillmentService {
 
     // One price lookup per product, not per alert.
     const prices = new Map<string, number | null>();
-    for (const id of new Set(alerts.map(a => a.productId))) {
+    for (const id of new Set(alerts.map((a) => a.productId))) {
       prices.set(id, await this.payablePrice(id));
     }
 
@@ -939,17 +1134,26 @@ export class MarketplaceFulfillmentService {
       fired.push(alert.id);
     }
 
-    if (fired.length) this.logger.log(`Price alerts fired: ${fired.length} of ${alerts.length} checked`);
+    if (fired.length)
+      this.logger.log(`Price alerts fired: ${fired.length} of ${alerts.length} checked`);
     return { checked: alerts.length, notified: fired.length, alerts: fired };
   }
 
   // ── Product Q&A ─────────────────────────────────────────────────────────────
-  async createQuestion(dto: { productId: string; customerId: string; customerName?: string; questionText: string }) {
+  async createQuestion(dto: {
+    productId: string;
+    customerId: string;
+    customerName?: string;
+    questionText: string;
+  }) {
     const product = await this.productRepo.findOne({ where: { id: dto.productId } });
     if (!product) throw new NotFoundException(`Product ${dto.productId} not found`);
     const entity = this.questionRepo.create(dto);
     const saved = await this.questionRepo.save(entity);
-    await this.kafka.publish('qa.question-created', { productId: dto.productId, questionId: saved.id });
+    await this.kafka.publish('qa.question-created', {
+      productId: dto.productId,
+      questionId: saved.id,
+    });
     return saved;
   }
 
@@ -957,19 +1161,25 @@ export class MarketplaceFulfillmentService {
     const [data, total] = await this.questionRepo.findAndCount({
       where: { productId, status: 'PUBLISHED' },
       order: { upvoteCount: 'DESC', createdAt: 'DESC' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (page - 1) * limit,
+      take: limit,
     });
     // Attach answer count for each question
     const questionsWithAnswers = await Promise.all(
       data.map(async (q) => {
-        const answerCount = await this.answerRepo.count({ where: { questionId: q.id, status: 'PUBLISHED' } });
+        const answerCount = await this.answerRepo.count({
+          where: { questionId: q.id, status: 'PUBLISHED' },
+        });
         return { ...q, answerCount };
       }),
     );
     return { data: questionsWithAnswers, total, page, limit };
   }
 
-  async createAnswer(questionId: string, dto: { authorId: string; authorName?: string; authorRole?: string; answerText: string }) {
+  async createAnswer(
+    questionId: string,
+    dto: { authorId: string; authorName?: string; authorRole?: string; answerText: string },
+  ) {
     const question = await this.questionRepo.findOne({ where: { id: questionId } });
     if (!question) throw new NotFoundException(`Question ${questionId} not found`);
     const entity = this.answerRepo.create({ ...dto, questionId });
@@ -1000,7 +1210,10 @@ export class MarketplaceFulfillmentService {
     const answer = await this.answerRepo.findOne({ where: { id: answerId } });
     if (!answer) throw new NotFoundException(`Answer ${answerId} not found`);
     // Un-accept any previously accepted answer for this question
-    await this.answerRepo.update({ questionId: answer.questionId, isAccepted: true }, { isAccepted: false });
+    await this.answerRepo.update(
+      { questionId: answer.questionId, isAccepted: true },
+      { isAccepted: false },
+    );
     await this.answerRepo.update(answerId, { isAccepted: true });
     return { success: true, answerId };
   }
@@ -1009,11 +1222,20 @@ export class MarketplaceFulfillmentService {
   async createDeliveryAssignment(dto: any) {
     // Generate a secure 4-digit OTP for delivery verification
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    const entity = this.deliveryAssignmentRepo.create({ ...dto, deliveryOtp: otp, status: 'PENDING', offeredAt: new Date() } as any) as unknown as DeliveryAssignment;
+    const entity = this.deliveryAssignmentRepo.create({
+      ...dto,
+      deliveryOtp: otp,
+      status: 'PENDING',
+      offeredAt: new Date(),
+    } as any) as unknown as DeliveryAssignment;
     const saved = await this.deliveryAssignmentRepo.save(entity);
 
     // Notify downstream services: delivery partner assignment
-    await this.kafka.publish('delivery.assigned', { id: saved.id, orderId: dto.orderId, partnerId: dto.partnerId });
+    await this.kafka.publish('delivery.assigned', {
+      id: saved.id,
+      orderId: dto.orderId,
+      partnerId: dto.partnerId,
+    });
 
     // Notify the customer of their delivery OTP (SMS/push notification)
     // This event is consumed by the notification-service to send the OTP to the customer
@@ -1027,9 +1249,15 @@ export class MarketplaceFulfillmentService {
     });
 
     // Also cache the OTP in Redis for fast lookup (24h TTL)
-    await this.redis.setJson(`delivery:otp:${saved.id}`, { otp, createdAt: new Date().toISOString() }, 86400);
+    await this.redis.setJson(
+      `delivery:otp:${saved.id}`,
+      { otp, createdAt: new Date().toISOString() },
+      86400,
+    );
 
-    this.logger.log(`Delivery assigned: ${saved.id} → partner ${dto.partnerId}, OTP notification queued`);
+    this.logger.log(
+      `Delivery assigned: ${saved.id} → partner ${dto.partnerId}, OTP notification queued`,
+    );
 
     // `saved` is the in-memory entity, so it still carries the OTP that was just
     // generated — `select: false` only governs what a *read* returns. The code
@@ -1039,7 +1267,13 @@ export class MarketplaceFulfillmentService {
     return assignment;
   }
 
-  async getDeliveryAssignments(filters: { partnerId?: string; orderId?: string; status?: string; page?: number; limit?: number }) {
+  async getDeliveryAssignments(filters: {
+    partnerId?: string;
+    orderId?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const where: any = {};
@@ -1047,25 +1281,34 @@ export class MarketplaceFulfillmentService {
     if (filters.orderId) where.orderId = filters.orderId;
     if (filters.status) where.status = filters.status;
     const [data, total] = await this.deliveryAssignmentRepo.findAndCount({
-      where, order: { createdAt: 'DESC' }, skip: (page - 1) * limit, take: limit,
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
 
   async getDeliveryAssignmentById(id: string) {
-    const assignment = await this.deliveryAssignmentRepo.findOne({ where: { id }, relations: { order: true } });
+    const assignment = await this.deliveryAssignmentRepo.findOne({
+      where: { id },
+      relations: { order: true },
+    });
     if (!assignment) throw new NotFoundException(`Delivery assignment ${id} not found`);
     return assignment;
   }
 
-  async updateDeliveryStatus(id: string, dto: {
-    status: string;
-    deliveryMode?: string;
-    deliveryNotes?: string;
-    proofPhotos?: string[];
-    deliveryCoordinates?: any;
-    failureReason?: string;
-  }) {
+  async updateDeliveryStatus(
+    id: string,
+    dto: {
+      status: string;
+      deliveryMode?: string;
+      deliveryNotes?: string;
+      proofPhotos?: string[];
+      deliveryCoordinates?: any;
+      failureReason?: string;
+    },
+  ) {
     const assignment = await this.deliveryAssignmentRepo.findOne({ where: { id } });
     if (!assignment) throw new NotFoundException(`Delivery assignment ${id} not found`);
     const update: any = { status: dto.status };
@@ -1078,7 +1321,8 @@ export class MarketplaceFulfillmentService {
       update.proofPhotos = dto.proofPhotos;
       update.deliveryCoordinates = dto.deliveryCoordinates;
     }
-    if (dto.status === 'FAILED' || dto.status === 'RETURNED') update.failureReason = dto.failureReason;
+    if (dto.status === 'FAILED' || dto.status === 'RETURNED')
+      update.failureReason = dto.failureReason;
     await this.deliveryAssignmentRepo.update(id, update);
     await this.kafka.publish('delivery.status-updated', { id, ...dto });
     this.logger.log(`Delivery ${id} status → ${dto.status}`);
@@ -1107,7 +1351,10 @@ export class MarketplaceFulfillmentService {
     const attempts = Number(await this.redis.get(attemptKey)) || 0;
     if (attempts >= 5) {
       this.logger.warn(`Delivery ${id}: OTP max attempts exceeded`);
-      return { verified: false, reason: 'Maximum verification attempts exceeded. Contact support.' };
+      return {
+        verified: false,
+        reason: 'Maximum verification attempts exceeded. Contact support.',
+      };
     }
 
     if (assignment.deliveryOtp !== otp) {
@@ -1132,14 +1379,20 @@ export class MarketplaceFulfillmentService {
     return { verified: true };
   }
 
-  async submitDeliveryProof(id: string, dto: { proofPhotos: string[]; deliveryMode: string; deliveryNotes?: string; coordinates?: any }) {
+  async submitDeliveryProof(
+    id: string,
+    dto: { proofPhotos: string[]; deliveryMode: string; deliveryNotes?: string; coordinates?: any },
+  ) {
     await this.deliveryAssignmentRepo.update(id, {
       proofPhotos: dto.proofPhotos,
       deliveryMode: dto.deliveryMode as any,
       deliveryNotes: dto.deliveryNotes,
       deliveryCoordinates: dto.coordinates,
     });
-    await this.kafka.publish('delivery.proof-submitted', { id, photoCount: dto.proofPhotos.length });
+    await this.kafka.publish('delivery.proof-submitted', {
+      id,
+      photoCount: dto.proofPhotos.length,
+    });
     return { success: true, id };
   }
 

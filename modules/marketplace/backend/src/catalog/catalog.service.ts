@@ -321,6 +321,18 @@ export class CatalogService {
     )`;
   }
 
+  /**
+   * The parameters {@link liveListingFor} needs, to pass in the same
+   * `leftJoinAndSelect` call. Product queries also bind `:regionCode` through
+   * `scopeToRegion`, which is why the join worked for them; the flash-deal
+   * query does not go through it, so its join reached Postgres with a literal
+   * `:regionCode` — "syntax error at or near ':'" — and the gateway reported
+   * every market's flash deals as "Marketplace service unavailable".
+   */
+  private regionParams(region?: string): Record<string, string> {
+    return region ? { regionCode: region.toUpperCase() } : {};
+  }
+
   /** Whether a seller may serve a market: active, not suspended, registered there or everywhere. */
   private static sellerMayServe(seller: any, region?: string): boolean {
     if (!seller) return false;
@@ -600,6 +612,48 @@ export class CatalogService {
    * must treat a partially-priced result as a failure — never as "price what we
    * can and continue".
    */
+  /**
+   * Deal prices in force right now, keyed `productId:sellerId`.
+   *
+   * The same predicates as {@link getFlashDeals}: an approved nomination in a
+   * campaign whose window is open, scoped to the market (or unscoped), with
+   * allocation left. Read at pricing time so the price the deal page shows is
+   * the price the cart charges — until this, `deal_price` was displayed
+   * nowhere and charged never; a "flash deal" was a product with a countdown
+   * beside it.
+   */
+  private async liveDealPrices(
+    productIds: string[],
+    market?: string,
+  ): Promise<Map<string, { nominationId: string; dealPrice: number }>> {
+    const deals = new Map<string, { nominationId: string; dealPrice: number }>();
+    if (productIds.length === 0) return deals;
+    const now = new Date();
+    const qb = this.nominationRepo
+      .createQueryBuilder('n')
+      .innerJoin('n.deal', 'deal')
+      .where('n.product_id IN (:...ids)', { ids: productIds })
+      .andWhere('n.status = :approved', { approved: 'APPROVED' })
+      .andWhere('deal.status IN (:...live)', { live: ['SCHEDULED', 'ACTIVE'] })
+      .andWhere('deal.window_start <= :now', { now })
+      .andWhere('deal.window_end > :now', { now })
+      .andWhere('(n.stock_allocated = 0 OR n.stock_sold < n.stock_allocated)')
+      .orderBy('deal.priority', 'ASC');
+    if (market) {
+      qb.andWhere('(deal.region_code IS NULL OR deal.region_code = :region)', { region: market });
+    }
+    for (const n of await qb.getMany()) {
+      const key = `${n.productId}:${n.sellerId}`;
+      const price = Number(n.dealPrice);
+      const current = deals.get(key);
+      // Two campaigns on one offer: the shopper gets the lower price.
+      if (!current || price < current.dealPrice) {
+        deals.set(key, { nominationId: n.id, dealPrice: price });
+      }
+    }
+    return deals;
+  }
+
   async priceOrderItems(
     items: Array<{ productId: string; quantity: number; variantId?: string }>,
     region?: string,
@@ -653,6 +707,11 @@ export class CatalogService {
       variantsByProduct.set(v.productId, bucket);
     }
 
+    // A live, approved flash deal from the offer's own seller beats the offer
+    // price while its window and allocation last. Deals are per product, so a
+    // SKU line keeps its SKU price.
+    const dealByOffer = await this.liveDealPrices(ids, market);
+
     let subtotal = 0;
     const priced = lines.map((line) => {
       const productId = String(line?.productId ?? '');
@@ -682,8 +741,12 @@ export class CatalogService {
         return fail('Please choose an option (size, colour…) for this product');
       }
 
-      const unitPrice = Number(variant ? variant.sellingPrice : listing.sellingPrice);
-      if (!Number.isFinite(unitPrice) || unitPrice <= 0) return fail('Product has no valid price');
+      const offerPrice = Number(variant ? variant.sellingPrice : listing.sellingPrice);
+      if (!Number.isFinite(offerPrice) || offerPrice <= 0)
+        return fail('Product has no valid price');
+      const deal = variant ? undefined : dealByOffer.get(`${productId}:${offerSellerId ?? ''}`);
+      const applied = deal && deal.dealPrice > 0 && deal.dealPrice < offerPrice ? deal : undefined;
+      const unitPrice = applied ? applied.dealPrice : offerPrice;
       const available = variant ? Number(variant.stockQuantity) : listing.stockQuantity;
       if (available < quantity) {
         return fail(`Only ${available} left in stock`);
@@ -703,6 +766,10 @@ export class CatalogService {
         mrp: Number(variant?.mrp ?? (listing as any).mrp ?? product.mrp) || 0,
         variantId: variant?.id ?? null,
         variantName: variant?.variantName ?? null,
+        // Set when a flash deal priced the line: the reservation counts the
+        // unit against the deal's allocation.
+        dealNominationId: applied?.nominationId ?? null,
+        offerPrice,
       };
     });
 
@@ -743,17 +810,30 @@ export class CatalogService {
    * two listings in opposite orders would otherwise deadlock on the second row.
    */
   async reserveListingStock(
-    lines: Array<{ listingId?: string; productId?: string; quantity: number; variantId?: string }>,
+    lines: Array<{
+      listingId?: string;
+      productId?: string;
+      quantity: number;
+      variantId?: string;
+      /** The flash deal that priced the line — its allocation is taken too. */
+      dealNominationId?: string;
+    }>,
   ): Promise<{
     ok: boolean;
     reason: string | null;
-    reserved: Array<{ listingId: string; quantity: number; variantId?: string }>;
+    reserved: Array<{
+      listingId: string;
+      quantity: number;
+      variantId?: string;
+      dealNominationId?: string;
+    }>;
   }> {
     const wanted = (Array.isArray(lines) ? lines : [])
       .map((l) => ({
         listingId: String(l?.listingId ?? ''),
         productId: String(l?.productId ?? ''),
         variantId: String(l?.variantId ?? ''),
+        dealNominationId: String(l?.dealNominationId ?? ''),
         quantity: Math.trunc(Number(l?.quantity ?? 0)),
       }))
       .filter((l) => l.listingId && l.quantity > 0)
@@ -768,7 +848,12 @@ export class CatalogService {
 
     try {
       const result = await this.listingRepo.manager.transaction(async (mgr) => {
-        const reserved: Array<{ listingId: string; quantity: number; variantId?: string }> = [];
+        const reserved: Array<{
+          listingId: string;
+          quantity: number;
+          variantId?: string;
+          dealNominationId?: string;
+        }> = [];
 
         for (const line of wanted) {
           const result = await mgr
@@ -805,10 +890,31 @@ export class CatalogService {
               );
             }
           }
+          // A deal-priced line also takes from the deal's allocation, and only
+          // while there is some left: the deal page hides a nomination once
+          // `stock_sold` reaches `stock_allocated`, and this is what makes that
+          // true rather than decorative. Zero allocation means unlimited.
+          if (line.dealNominationId) {
+            const dealResult = await mgr
+              .createQueryBuilder()
+              .update(FlashDealNomination)
+              .set({ stockSold: () => `stock_sold + :quantity` })
+              .where('id = :nid', { nid: line.dealNominationId })
+              .andWhere("status = 'APPROVED'")
+              .andWhere('(stock_allocated = 0 OR stock_sold + :quantity <= stock_allocated)')
+              .setParameter('quantity', line.quantity)
+              .execute();
+            if (!dealResult.affected) {
+              throw new BadRequestException(
+                `The flash deal on product ${line.productId || line.listingId} has sold out`,
+              );
+            }
+          }
           reserved.push({
             listingId: line.listingId,
             quantity: line.quantity,
             ...(line.variantId ? { variantId: line.variantId } : {}),
+            ...(line.dealNominationId ? { dealNominationId: line.dealNominationId } : {}),
           });
         }
 
@@ -968,13 +1074,19 @@ export class CatalogService {
    * than over-sells — and is logged loudly so it can be reconciled.
    */
   async releaseListingStock(
-    lines: Array<{ listingId?: string; quantity: number; variantId?: string }>,
+    lines: Array<{
+      listingId?: string;
+      quantity: number;
+      variantId?: string;
+      dealNominationId?: string;
+    }>,
   ): Promise<{ released: number }> {
     let released = 0;
 
     for (const line of Array.isArray(lines) ? lines : []) {
       const listingId = String(line?.listingId ?? '');
       const variantId = String(line?.variantId ?? '');
+      const dealNominationId = String(line?.dealNominationId ?? '');
       const quantity = Math.trunc(Number(line?.quantity ?? 0));
       if (!listingId || quantity <= 0) continue;
 
@@ -992,6 +1104,15 @@ export class CatalogService {
             .update(ProductVariant)
             .set({ stockQuantity: () => `"stockQuantity" + :quantity` })
             .where('id = :id', { id: variantId })
+            .setParameter('quantity', quantity)
+            .execute();
+        }
+        if (dealNominationId) {
+          await this.nominationRepo
+            .createQueryBuilder()
+            .update(FlashDealNomination)
+            .set({ stockSold: () => `GREATEST(stock_sold - :quantity, 0)` })
+            .where('id = :id', { id: dealNominationId })
             .setParameter('quantity', quantity)
             .execute();
         }
@@ -1020,7 +1141,12 @@ export class CatalogService {
       .leftJoinAndSelect('p.images', 'images')
       // Left, not inner: a product with no active listing still belongs in the
       // catalogue, it just has no selling price to show yet.
-      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
+      .leftJoinAndSelect(
+        'p.listings',
+        'listings',
+        this.liveListingFor('listings', region),
+        this.regionParams(region),
+      )
       .where('p.is_active = :active', { active: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' });
 
@@ -1302,7 +1428,12 @@ export class CatalogService {
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.images', 'images')
-      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
+      .leftJoinAndSelect(
+        'p.listings',
+        'listings',
+        this.liveListingFor('listings', region),
+        this.regionParams(region),
+      )
       .where('p.is_active = true')
       .andWhere('p.approval_status = :s', { s: 'APPROVED' });
 
@@ -1392,7 +1523,12 @@ export class CatalogService {
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.images', 'images')
-      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
+      .leftJoinAndSelect(
+        'p.listings',
+        'listings',
+        this.liveListingFor('listings', region),
+        this.regionParams(region),
+      )
       .where('n.status = :approved', { approved: 'APPROVED' })
       .andWhere('deal.status IN (:...live)', { live: ['SCHEDULED', 'ACTIVE'] })
       .andWhere('deal.window_start <= :now', { now })
@@ -1481,7 +1617,12 @@ export class CatalogService {
       // Search results are product cards like any other: without images and the
       // buy-box listing they render with no picture and at MRP.
       .leftJoinAndSelect('p.images', 'images')
-      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
+      .leftJoinAndSelect(
+        'p.listings',
+        'listings',
+        this.liveListingFor('listings', region),
+        this.regionParams(region),
+      )
       .addSelect(rankExpr, 'rank')
       .where('p.is_active = :active', { active: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' })

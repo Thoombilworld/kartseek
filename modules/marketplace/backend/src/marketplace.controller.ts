@@ -1354,8 +1354,8 @@ export class MarketplaceController {
   // is no seller-service), which is why they belong here.
 
   @MessagePattern({ cmd: 'get_available_flash_deals' })
-  tcpGetAvailableFlashDeals() {
-    return this.svc.getFlashDealsActive();
+  tcpGetAvailableFlashDeals(@Payload() data?: any) {
+    return this.svc.getFlashDealsActive(this.payloadRegion(data));
   }
 
   @MessagePattern({ cmd: 'submit_flash_deal_nomination' })
