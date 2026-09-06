@@ -45,7 +45,7 @@ Nest reported it up — not `nest build` succeeding in isolation.
 
 ## Decision
 
-All 18 core services and the 8 module backends compile with the Nest CLI's
+The gateway, the 17 core services, and the 8 module backends compile with the Nest CLI's
 rspack builder through the single `apps/api/rspack.config.js`. `@app/*`
 resolves through explicit `paths` and the `appLibs` alias list in that file;
 no `baseUrl`. Entity lists are explicit arrays, never globs, because a bundled

@@ -68,6 +68,18 @@ Dart follows Dart's own convention instead of TypeScript's: **snake_case**
 file names, and the `kartseek_` prefix on package names
 (`packages/shared-mobile` is the Dart package `kartseek_shared_mobile`).
 
+Ten `.tsx` files still carry a PascalCase file name instead of kebab-case: six
+under `apps/web/src/app/admin/**/page-builder/components/`
+(`GrocerySectionEditor.tsx`, `SectionTypeMenu.tsx`,
+`MarketplaceSectionEditor.tsx`, `MarketplaceSectionTypeMenu.tsx`,
+`SectionEditorModal.tsx`, `SortableSection.tsx`) and four in
+`packages/shared-ui/src/` (`recommendations/CrossModulePicks.tsx`,
+`recommendations/RecommendationCarousel.tsx`, `shared/NotifyMeModal.tsx`,
+`ui-widgets/ProgressBar.tsx`). They predate this rule and were left as-is in
+phase 1 to keep that fix wave scoped to path and naming corrections rather
+than a page-builder/shared-ui rename; rename each to kebab-case the next time
+its area is touched, not as a standalone change.
+
 ## Where new code goes
 
 - **A new vertical** (a ninth module alongside marketplace, grocery,

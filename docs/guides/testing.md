@@ -167,8 +167,12 @@ These are real failures on this branch today, unrelated to the platform
 reorganization — recorded here so a run that hits them is not mistaken for
 something this change broke.
 
-- **Lint is broken for `apps/web` and all eight module frontends.** A nested
-  ESLint 10.9.1 crashes with `scopeManager.addGlobals is not a function`.
+- **Lint is broken for `apps/web` and all eight module frontends, but not the
+  same way.** `apps/web` has an `eslint.config.mjs`; its nested ESLint 10.9.1
+  crashes with `scopeManager.addGlobals is not a function`. None of the eight
+  module frontends (`doctor`, `franchise`, `grocery`, `hotel`, `marketplace`,
+  `pharmacy`, `restaurant`, `taxi`) has an `eslint.config.*` at all, so each
+  fails instead with `ESLint couldn't find an eslint.config.* file`.
   Reproduce with `npm run lint -w kartseek-web` or
   `npm run lint -w @kartseek/<vertical>-frontend`.
 - **`apps/api` lint reports 35 problems**; `npm run lint -w kartseek-api`.

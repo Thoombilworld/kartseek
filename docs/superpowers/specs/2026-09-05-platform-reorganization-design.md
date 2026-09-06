@@ -753,3 +753,19 @@ and `flutter analyze` for the Dart workspaces when Dart files changed.
 Phase 1 → 2 → 3 → 4 → 5. Each phase gets its own implementation plan under
 `docs/superpowers/plans/`, written from this document without a further
 design round.
+
+## 15. Post-implementation notes (2026-09-06)
+
+- `apps/api`'s `build` is now `nest build --all` (the spec's §11 gate assumed
+  it).
+- The ten PascalCase `.tsx` files listed in `docs/guides/conventions.md` are a
+  recorded exception to D3.
+- `next-env.d.ts` files flip between `next dev` and `next build` output and
+  should be git-ignored before phase 4's CI.
+- `services.yaml`'s `defaults.node` (26.5.0) disagrees with the Dockerfiles'
+  `node:25-alpine` and phase 3 must reconcile them.
+- `runChecks` in `scripts/registry/validate.mjs` needs a fixture-tree test
+  before the phase 2 k8s generator lands.
+- `SELLER_TCP_PORT` is read by nothing and should be deleted from
+  `.env.example`, `env.validation.ts` and `infra/k8s/config.yaml` in phase 2.
+- `.env.example` should assert `DEV_AUTH_BYPASS=false` (spec §12) in phase 2.
