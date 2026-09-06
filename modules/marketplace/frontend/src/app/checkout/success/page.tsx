@@ -3,7 +3,16 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle, Package, ChevronRight, ArrowRight, Download, Truck, Home, Star } from 'lucide-react';
+import {
+  CheckCircle,
+  Package,
+  ChevronRight,
+  ArrowRight,
+  Download,
+  Truck,
+  Home,
+  Star,
+} from 'lucide-react';
 import { useRegion } from '@/lib/contexts/region-context';
 import { getOrderById } from '@/lib/api/marketplace';
 
@@ -40,15 +49,25 @@ function CheckoutSuccessInner() {
     if (!orderId) return;
     let cancelled = false;
     getOrderById(orderId)
-      .then((res: any) => { if (!cancelled) setOrder(res?.order ?? res?.data ?? res); })
-      .catch(() => { /* fall through to the empty state */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((res: any) => {
+        if (!cancelled) setOrder(res?.order ?? res?.data ?? res);
+      })
+      .catch(() => {
+        /* fall through to the empty state */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [orderId]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-slate-400">Loading your order…</div>
+      <div className="min-h-screen flex items-center justify-center text-slate-400">
+        Loading your order…
+      </div>
     );
   }
 
@@ -68,10 +87,16 @@ function CheckoutSuccessInner() {
               : 'This page confirms an order once one has been placed.'}
           </p>
           <div className="space-y-3">
-            <Link href="/orders" className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors">
+            <Link
+              href="/orders"
+              className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors"
+            >
               View your orders
             </Link>
-            <Link href="/" className="block w-full border border-slate-200 text-slate-700 font-semibold py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm">
+            <Link
+              href="/"
+              className="block w-full border border-slate-200 text-slate-700 font-semibold py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm"
+            >
               Continue shopping
             </Link>
           </div>
@@ -95,6 +120,7 @@ function CheckoutSuccessInner() {
     tax: Number(order.tax ?? 0) || 0,
     total: Number(order.totalAmount ?? order.total ?? 0) || 0,
     paymentMethod: order.paymentMethod ?? '—',
+    deliveryFee: Number(order.deliveryFee ?? 0) || 0,
   };
 
   return (
@@ -131,13 +157,18 @@ function CheckoutSuccessInner() {
             {/* Items */}
             <div className="space-y-3">
               {view.items.map((item, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                <div
+                  key={i}
+                  className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0"
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
                       <Package className="w-5 h-5 text-slate-300" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-800 line-clamp-1">{item.title}</p>
+                      <p className="text-sm font-medium text-slate-800 line-clamp-1">
+                        {item.title}
+                      </p>
                       <p className="text-xs text-slate-400">Qty: {item.qty}</p>
                     </div>
                   </div>
@@ -149,31 +180,40 @@ function CheckoutSuccessInner() {
             {/* Totals */}
             <div className="border-t border-slate-200 pt-3 space-y-1.5">
               <div className="flex justify-between text-sm text-slate-500">
-                <span>Subtotal</span><span>{fmt(view.subtotal)}</span>
+                <span>Subtotal</span>
+                <span>{fmt(view.subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm text-green-600">
-                <span>Shipping</span><span>FREE</span>
+                <span>Delivery</span>
+                <span>{view.deliveryFee > 0 ? fmt(view.deliveryFee) : 'FREE'}</span>
               </div>
               <div className="flex justify-between text-base font-bold text-slate-800 pt-2 border-t border-slate-200">
-                <span>Total Paid</span><span>{fmt(view.total)}</span>
+                <span>Total</span>
+                <span>{fmt(view.total)}</span>
               </div>
             </div>
 
             {/* Payment */}
             <div className="text-xs text-slate-400">
-              Paid via {view.paymentMethod}
+              {String(view.paymentMethod).toUpperCase() === 'COD'
+                ? `Pay ${fmt(view.total)} in cash on delivery`
+                : `Paid via ${view.paymentMethod}`}
             </div>
           </div>
         </div>
 
         {/* Actions */}
         <div className="flex flex-col gap-3">
-          <Link href="/orders"
-            className="px-6 py-3.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md">
+          <Link
+            href="/orders"
+            className="px-6 py-3.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md"
+          >
             <Package className="w-5 h-5" /> Track Your Order
           </Link>
-          <Link href="/"
-            className="px-6 py-3.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
+          <Link
+            href="/"
+            className="px-6 py-3.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+          >
             <Home className="w-5 h-5" /> Continue Shopping
           </Link>
           {/* Was a handler-less <button>. The invoice route already exists and
@@ -190,7 +230,7 @@ function CheckoutSuccessInner() {
         <div className="mt-8 bg-white border border-slate-200 rounded-xl p-5 text-center">
           <h3 className="font-semibold text-slate-800 mb-2">Rate your checkout experience</h3>
           <div className="flex justify-center gap-1 mb-2">
-            {[1, 2, 3, 4, 5].map(s => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <button key={s} className="p-1 hover:scale-110 transition-transform">
                 <Star className="w-7 h-7 text-slate-200 hover:text-amber-400 hover:fill-amber-400 transition-colors" />
               </button>

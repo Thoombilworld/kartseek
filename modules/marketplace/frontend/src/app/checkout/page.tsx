@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   MapPin,
@@ -33,9 +33,15 @@ import { PaymentMethodSelector } from '@/components/shared/payment-method-select
 import {
   toWirePaymentMethod,
   hasPostalCode,
+  getPaymentRestriction,
+  getPaymentLabel,
+  getCodLimit,
+  formatAddressLines,
   type AddressValue,
   type AddressFieldKey,
+  type PaymentMethodSpec,
 } from '@/lib/localization';
+import { useRouter } from 'next/navigation';
 import { AuthGate } from '@/components/shared/auth-gate';
 
 interface CheckoutItem {
@@ -44,6 +50,8 @@ interface CheckoutItem {
   brand: string;
   price: number;
   qty: number;
+  /** The chosen SKU; the order is priced and stocked by it. */
+  variantId?: string;
 }
 
 type Step = 'address' | 'payment' | 'review';
@@ -72,18 +80,18 @@ function CheckoutPageContent() {
     validateAddressValue,
     toWireAddressValue,
     calculateTaxValue,
-    defaultPaymentMethod,
     getDeliveryWindow,
+    getPaymentMethodsFor,
+    currentLanguage,
     timezoneLabel,
   } = useRegion();
+  const router = useRouter();
   const { logPincodeSearch } = usePincodeSearchLog();
   const cart = useCartContext();
   const { user } = useAuth();
   const [step, setStep] = useState<Step>('address');
-  const [placed, setPlaced] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [orderError, setOrderError] = useState('');
-  const [orderNumber, setOrderNumber] = useState('');
   // Region-shaped: a Qatari address carries building/street/zone, an Indian one
   // line1/city/state/PIN. `AddressForm` renders whichever the region defines.
   const [address, setAddress] = useState<AddressValue>({});
@@ -95,10 +103,6 @@ function CheckoutPageContent() {
   // switching from India to Qatar briefly saw `upi` selected against a gateway
   // that would decline it.
   const [pickedMethod, setPickedMethod] = useState<{ region: string; method: string } | null>(null);
-  const payMethod =
-    pickedMethod?.region === country.code
-      ? pickedMethod.method
-      : (defaultPaymentMethod?.type ?? 'card');
   const setPayMethod = (method: string) => setPickedMethod({ region: country.code, method });
   const [showGst, setShowGst] = useState(false);
   const [gstin, setGstin] = useState('');
@@ -121,6 +125,7 @@ function CheckoutPageContent() {
         brand: i.brand || '',
         price: Number(i.price) || 0,
         qty: Number(i.quantity) || 1,
+        variantId: i.variantId,
       })),
     [cart.items],
   );
@@ -241,6 +246,53 @@ function CheckoutPageContent() {
   // rather than printed as a misleading zero.
   const tax = calculateTaxValue(total);
 
+  // ── Which methods can settle THIS basket ──────────────────────────────────
+  //
+  // Every method the market supports used to be offered, and the order was
+  // marked placed whichever one was picked — but nothing initiates a card,
+  // wallet-brand or bank payment, so an "Apple Pay" order sat unpaid forever
+  // with no way for the customer to pay it. Only settleable methods are
+  // enabled (`requireSettleable`), the default is the first one that can take
+  // this basket, and both "Review" and "Place" stay disabled with the reason
+  // while none can. The gateway enforces the same rule server-side.
+  const settlementCtx = useMemo(
+    () => ({
+      amount: total,
+      module: 'marketplace',
+      walletBalance,
+      requireSettleable: true as const,
+    }),
+    [total, walletBalance],
+  );
+  const offeredMethods = useMemo(
+    () => getPaymentMethodsFor(settlementCtx),
+    [getPaymentMethodsFor, settlementCtx],
+  );
+  const restrictionFor = useCallback(
+    (m: PaymentMethodSpec) =>
+      getPaymentRestriction(m, {
+        ...settlementCtx,
+        country: country.code,
+        language: currentLanguage,
+      }),
+    [settlementCtx, country.code, currentLanguage],
+  );
+  const settleableDefault = useMemo(
+    () => offeredMethods.find((m) => !restrictionFor(m))?.type ?? '',
+    [offeredMethods, restrictionFor],
+  );
+  const payMethod = pickedMethod?.region === country.code ? pickedMethod.method : settleableDefault;
+  const payBlockedReason = useMemo<string | null>(() => {
+    const chosen = offeredMethods.find((m) => m.type === payMethod);
+    if (!chosen) {
+      const codLimit = getCodLimit(country.code);
+      return codLimit !== null && total > codLimit
+        ? `No payment method can settle a basket of ${fmt(total)} yet. Cash on delivery is available up to ${fmt(codLimit)} — reduce the basket, or check back once online payments launch.`
+        : 'Choose a payment method that can settle this order.';
+    }
+    return restrictionFor(chosen);
+  }, [offeredMethods, payMethod, restrictionFor, country.code, total, fmt]);
+
   // Promised delivery window, quoted in the region's clock. A Doha customer must
   // see Doha time even when their device is set elsewhere.
   const deliveryWindow = getDeliveryWindow(48 * 60, 72 * 60);
@@ -303,6 +355,11 @@ function CheckoutPageContent() {
       setStep('address');
       return;
     }
+    if (payBlockedReason) {
+      setOrderError(payBlockedReason);
+      setStep('payment');
+      return;
+    }
 
     setPlacing(true);
     try {
@@ -312,7 +369,11 @@ function CheckoutPageContent() {
       const res: any = await placeOrder({
         customerId: user.id,
         customerName: (address.fullName as string) || undefined,
-        items: orderItems.map((i) => ({ productId: i.productId, quantity: i.qty })),
+        items: orderItems.map((i) => ({
+          productId: i.productId,
+          quantity: i.qty,
+          variantId: i.variantId,
+        })),
         // Flattened into the envelope the order service persists, with the
         // region-native fields (building/street/zone) carried alongside so the
         // delivery partner gets an address they can actually navigate to.
@@ -325,13 +386,16 @@ function CheckoutPageContent() {
         giftCardCode: giftCardApplied || undefined,
       });
       const order = res?.order ?? res?.data ?? res;
-      setOrderNumber(order?.orderNumber ?? order?.id ?? '');
+      const placedNumber = String(order?.orderNumber ?? order?.id ?? '');
       // Empty the basket once the order is accepted. Without this the just-bought
       // items stayed in the cart: the header badge still showed them, returning
       // to /marketplace/cart offered them again, and a second trip through
       // checkout placed a duplicate order for goods already paid for.
       cart.clear();
-      setPlaced(true);
+      // The confirmation is its own route (bookmarkable, reloadable, and the
+      // only place that reads the order back from the API) — the inline card
+      // this replaced claimed a confirmation email nothing had sent.
+      router.push(`/checkout/success?orderId=${encodeURIComponent(placedNumber)}`);
     } catch (err: any) {
       setOrderError(err?.message || 'Could not place your order. Please try again.');
     } finally {
@@ -340,41 +404,6 @@ function CheckoutPageContent() {
   }
 
   const stepIndex = STEPS.findIndex((s) => s.id === step);
-
-  if (placed) {
-    return (
-      <div className="bg-slate-50 min-h-screen flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg p-10 max-w-md w-full text-center">
-          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 className="w-10 h-10 text-green-500" />
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 mb-2">Order Placed! 🎉</h1>
-          <p className="text-slate-500 mb-2">
-            Your order{' '}
-            {orderNumber && <span className="font-bold text-slate-800">#{orderNumber}</span>} has
-            been confirmed.
-          </p>
-          <p className="text-slate-500 text-sm mb-8">
-            We&apos;ve emailed your confirmation and will notify you as it ships.
-          </p>
-          <div className="space-y-3">
-            <Link
-              href="/"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors"
-            >
-              Continue Shopping
-            </Link>
-            <Link
-              href="/orders"
-              className="w-full border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl hover:bg-slate-50 transition-colors text-sm flex items-center justify-center"
-            >
-              Track Your Order
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-slate-50 min-h-screen pb-20">
@@ -480,7 +509,16 @@ function CheckoutPageContent() {
                   amount={total}
                   module="marketplace"
                   walletBalance={walletBalance}
+                  requireSettleable
                 />
+                {payBlockedReason && (
+                  <p
+                    role="status"
+                    className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
+                  >
+                    {payBlockedReason}
+                  </p>
+                )}
 
                 {/* ── Wallet Balance Toggle ─────────────────────────── */}
                 <div className="border border-blue-100 bg-blue-50/50 rounded-xl p-4 space-y-3">
@@ -609,114 +647,10 @@ function CheckoutPageContent() {
                     />
                   </div>
                 )}
-                {(payMethod === 'card' ||
-                  payMethod === 'debit_national' ||
-                  payMethod === 'mada' ||
-                  payMethod === 'knet' ||
-                  payMethod === 'benefit') && (
-                  /**
-                   * Card capture is NOT implemented. These inputs hold no state, are
-                   * wired to no gateway, and nothing they contain is ever submitted.
-                   *
-                   * They are disabled rather than merely inert, because an enabled
-                   * field is an invitation: a customer can type a real PAN and CVV
-                   * into a form that silently discards them, and the browser will
-                   * happily persist that number in autofill. Collecting card data
-                   * into this page would also pull the whole app into PCI scope —
-                   * the real integration belongs in the gateway's hosted fields or
-                   * tokenisation SDK, where the PAN never touches our DOM.
-                   *
-                   * `disabled` also keeps the values out of any form serialisation
-                   * or error report that might otherwise carry them off the device.
-                   */
-                  <fieldset disabled className="space-y-4" aria-describedby="card-pending-note">
-                    <div
-                      id="card-pending-note"
-                      className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
-                    >
-                      <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-900 leading-relaxed">
-                        <span className="font-bold">Card payment isn&apos;t available yet.</span>{' '}
-                        Please don&apos;t enter card details — this form is not connected to a
-                        payment provider. Choose another payment method to continue.
-                      </p>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="cc-number"
-                        className="block text-sm font-bold text-slate-400 mb-1.5"
-                      >
-                        Card Number
-                      </label>
-                      <input
-                        id="cc-number"
-                        name="cardNumber"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        placeholder="1234 5678 9012 3456"
-                        maxLength={19}
-                        className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none font-mono text-slate-400 cursor-not-allowed"
-                      />
-                    </div>
-                    {/* Name on card — required by every card network for
-                        authorisation, and simply absent from this form before. */}
-                    <div>
-                      <label
-                        htmlFor="cc-name"
-                        className="block text-sm font-bold text-slate-400 mb-1.5"
-                      >
-                        Name on Card
-                      </label>
-                      <input
-                        id="cc-name"
-                        name="cardholderName"
-                        autoComplete="off"
-                        placeholder="As printed on the card"
-                        className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none text-slate-400 cursor-not-allowed"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label
-                          htmlFor="cc-exp"
-                          className="block text-sm font-bold text-slate-400 mb-1.5"
-                        >
-                          Expiry
-                        </label>
-                        <input
-                          id="cc-exp"
-                          name="cardExpiry"
-                          inputMode="numeric"
-                          autoComplete="off"
-                          placeholder="MM / YY"
-                          maxLength={7}
-                          className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none font-mono text-slate-400 cursor-not-allowed"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="cc-csc"
-                          className="block text-sm font-bold text-slate-400 mb-1.5"
-                        >
-                          CVV
-                        </label>
-                        <input
-                          id="cc-csc"
-                          name="cardCvv"
-                          inputMode="numeric"
-                          autoComplete="off"
-                          placeholder="•••"
-                          maxLength={4}
-                          type="password"
-                          className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none font-mono text-slate-400 cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-                  </fieldset>
-                )}
 
                 <button
                   onClick={() => setStep('review')}
+                  disabled={!!payBlockedReason}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md"
                 >
                   Review Order <ChevronRight className="w-5 h-5" />
@@ -746,6 +680,68 @@ function CheckoutPageContent() {
                       Arriving {deliveryWindow.dayLabel} · all times {timezoneLabel} (
                       {country.timezone})
                     </span>
+                  </div>
+
+                  {/* What the customer is confirming: where it goes and how it is
+                      paid. The review used to list only the items, so an order
+                      could be placed without ever seeing either. */}
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="border border-slate-100 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5" /> Deliver to
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setStep('address')}
+                          className="text-xs font-bold text-blue-600 hover:underline"
+                        >
+                          Change
+                        </button>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {String(address.fullName ?? '')}
+                      </p>
+                      {formatAddressLines(address, {
+                        country: country.code,
+                        includeName: false,
+                        includeCountry: false,
+                      }).map((line) => (
+                        <p key={line} className="text-sm text-slate-600">
+                          {line}
+                        </p>
+                      ))}
+                      {address.phone && (
+                        <p className="text-xs text-slate-500 mt-1">{String(address.phone)}</p>
+                      )}
+                    </div>
+                    <div className="border border-slate-100 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5" /> Pay with
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setStep('payment')}
+                          className="text-xs font-bold text-blue-600 hover:underline"
+                        >
+                          Change
+                        </button>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {(() => {
+                          const chosen = offeredMethods.find((m) => m.type === payMethod);
+                          return chosen
+                            ? getPaymentLabel(chosen, currentLanguage)
+                            : 'No payment method selected';
+                        })()}
+                      </p>
+                      {useWallet && walletAmount > 0 && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          KARTSEEK Wallet covers {fmt(walletAmount)}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="divide-y divide-slate-50">
@@ -934,7 +930,7 @@ function CheckoutPageContent() {
                 )}
                 <button
                   onClick={handlePlaceOrder}
-                  disabled={placing}
+                  disabled={placing || !!payBlockedReason}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md text-lg"
                 >
                   {placing ? (

@@ -3,11 +3,35 @@
 import React, { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Heart, Star, Truck, ShoppingCart, Check, Loader2,
-  ChevronLeft, ChevronRight,
-  Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
-  Car, ShoppingBasket, Tv, Headphones,
-  Monitor, Briefcase, PawPrint, Paperclip, Watch, Armchair, Footprints, ToyBrick,
+  Heart,
+  Star,
+  Truck,
+  ShoppingCart,
+  Check,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Smartphone,
+  Laptop,
+  Shirt,
+  Sofa,
+  Dumbbell,
+  Baby,
+  Sparkles,
+  BookOpen,
+  Car,
+  ShoppingBasket,
+  Tv,
+  Headphones,
+  Monitor,
+  Briefcase,
+  PawPrint,
+  Paperclip,
+  Watch,
+  Armchair,
+  Footprints,
+  ToyBrick,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { addToWishlist, removeFromWishlist } from '@/lib/api/marketplace';
 import { useCartContext } from '@/lib/contexts/cart-context';
@@ -73,9 +97,27 @@ function cardImages(product: Pick<ProductCardModel, 'imageUrl' | 'images'>): str
 const MAX_CARD_IMAGES = 6;
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
-  Car, ShoppingBasket, Tv, Headphones, Monitor, Briefcase, PawPrint,
-  Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick,
+  Smartphone,
+  Laptop,
+  Shirt,
+  Sofa,
+  Dumbbell,
+  Baby,
+  Sparkles,
+  BookOpen,
+  Car,
+  ShoppingBasket,
+  Tv,
+  Headphones,
+  Monitor,
+  Briefcase,
+  PawPrint,
+  Paperclip,
+  Watch,
+  Armchair,
+  Heart,
+  Footprints,
+  ToyBrick,
 };
 
 function discountPercent(mrp: number, price: number): number {
@@ -115,17 +157,20 @@ function ProductMedia({
   const scrollingTo = useRef<number | null>(null);
   const count = images.length;
 
-  const goTo = useCallback((index: number, e?: React.MouseEvent) => {
-    // The whole card is a link; a control inside it must not navigate.
-    e?.preventDefault();
-    e?.stopPropagation();
-    const track = trackRef.current;
-    if (!track) return;
-    const next = Math.max(0, Math.min(index, count - 1));
-    setActive(next);
-    scrollingTo.current = next;
-    track.scrollTo({ left: next * track.clientWidth, behavior: 'smooth' });
-  }, [count]);
+  const goTo = useCallback(
+    (index: number, e?: React.MouseEvent) => {
+      // The whole card is a link; a control inside it must not navigate.
+      e?.preventDefault();
+      e?.stopPropagation();
+      const track = trackRef.current;
+      if (!track) return;
+      const next = Math.max(0, Math.min(index, count - 1));
+      setActive(next);
+      scrollingTo.current = next;
+      track.scrollTo({ left: next * track.clientWidth, behavior: 'smooth' });
+    },
+    [count],
+  );
 
   // Keep the dots in step with a finger-driven scroll.
   const handleScroll = useCallback(() => {
@@ -243,6 +288,10 @@ export interface ProductCardProps {
  */
 export function ProductCard({ product, formatCurrencyValue, priority }: ProductCardProps) {
   const discount = discountPercent(product.mrp, product.price);
+  // A product sold in sizes/colours has no single price or stock to add blind;
+  // the card used to add the parent listing at the parent's price, which the
+  // order then refused (or, before that, charged wrongly).
+  const hasVariants = (product.variantAxes?.length ?? 0) > 0;
   const savings = product.mrp > product.price ? product.mrp - product.price : 0;
 
   const [wishlisted, setWishlisted] = useState(false);
@@ -260,13 +309,16 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
   const cart = useCartContext();
   const toast = useToast();
 
-  const stop = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); };
+  const stop = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
 
   const handleWishlist = async (e: React.MouseEvent) => {
     stop(e);
     if (wishBusy) return;
     const next = !wishlisted;
-    setWishlisted(next);            // optimistic
+    setWishlisted(next); // optimistic
     setWishBusy(true);
     try {
       if (next) await addToWishlist(product.id);
@@ -334,7 +386,9 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
         {/* Badge takes precedence over the derived discount ribbon — a curated
             "BESTSELLER" outranks a number the card worked out for itself. */}
         {product.badge ? (
-          <span className={`absolute top-2 left-2 ${product.badgeColor || 'bg-slate-900'} text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 uppercase tracking-wide shadow-sm`}>
+          <span
+            className={`absolute top-2 left-2 ${product.badgeColor || 'bg-slate-900'} text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 uppercase tracking-wide shadow-sm`}
+          >
             {product.badge}
           </span>
         ) : discount > 0 ? (
@@ -351,11 +405,17 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
               : 'bg-white/85 text-slate-400 hover:text-red-500 hover:bg-red-50 border-slate-100'
           } ${wishBusy ? 'opacity-70' : ''}`}
           title={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-          aria-label={wishlisted ? `Remove ${product.title} from wishlist` : `Add ${product.title} to wishlist`}
+          aria-label={
+            wishlisted
+              ? `Remove ${product.title} from wishlist`
+              : `Add ${product.title} to wishlist`
+          }
           aria-pressed={wishlisted}
           onClick={handleWishlist}
         >
-          <Heart className={`w-4 h-4 transition-transform ${wishlisted ? 'fill-red-500 scale-110' : ''}`} />
+          <Heart
+            className={`w-4 h-4 transition-transform ${wishlisted ? 'fill-red-500 scale-110' : ''}`}
+          />
         </button>
       </div>
 
@@ -378,7 +438,9 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
             <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
               {rating.toFixed(1)} <Star className="w-2.5 h-2.5 fill-white" />
             </span>
-            <span className="text-[11px] text-slate-400">({formatReviewCount(product.reviews)})</span>
+            <span className="text-[11px] text-slate-400">
+              ({formatReviewCount(product.reviews)})
+            </span>
           </div>
         )}
 
@@ -396,7 +458,9 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
             </span>
             {savings > 0 && (
               <span className="flex items-baseline gap-1.5 whitespace-nowrap">
-                <span className="text-[11px] text-slate-400 line-through">{formatCurrencyValue(product.mrp)}</span>
+                <span className="text-[11px] text-slate-400 line-through">
+                  {formatCurrencyValue(product.mrp)}
+                </span>
                 <span className="text-[11px] text-green-600 font-bold">{discount}% off</span>
               </span>
             )}
@@ -422,26 +486,42 @@ export function ProductCard({ product, formatCurrencyValue, priority }: ProductC
             </p>
           )}
 
-          {linkable && (
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              disabled={cartState === 'adding'}
-              aria-label={`Add ${product.title} to cart`}
-              className={`mt-2.5 w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all duration-300 border ${
-                cartState === 'added'
-                  ? 'bg-green-600 border-green-600 text-white'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-blue-600 hover:border-blue-600 hover:text-white'
-              }`}
+          {linkable && hasVariants ? (
+            <Link
+              href={zoneHref(productPath(product))}
+              aria-label={`Choose options for ${product.title}`}
+              className="mt-2.5 w-full min-h-[44px] flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold border bg-slate-50 border-slate-200 text-slate-700 hover:bg-blue-600 hover:border-blue-600 hover:text-white transition-all duration-300"
             >
-              {cartState === 'adding' ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…</>
-              ) : cartState === 'added' ? (
-                <><Check className="w-3.5 h-3.5" /> Added to Cart</>
-              ) : (
-                <><ShoppingCart className="w-3.5 h-3.5" /> Add to Cart</>
-              )}
-            </button>
+              <SlidersHorizontal className="w-3.5 h-3.5" /> Choose options
+            </Link>
+          ) : (
+            linkable && (
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={cartState === 'adding'}
+                aria-label={`Add ${product.title} to cart`}
+                className={`mt-2.5 w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all duration-300 border ${
+                  cartState === 'added'
+                    ? 'bg-green-600 border-green-600 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-blue-600 hover:border-blue-600 hover:text-white'
+                }`}
+              >
+                {cartState === 'adding' ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…
+                  </>
+                ) : cartState === 'added' ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" /> Added to Cart
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-3.5 h-3.5" /> Add to Cart
+                  </>
+                )}
+              </button>
+            )
           )}
         </div>
       </div>
@@ -471,7 +551,10 @@ function VariantPreview({ axes }: { axes?: { variantName: string; variantOptions
   return (
     <div className="flex items-center gap-2 mb-2 min-h-5">
       {colour && (
-        <div className="flex items-center gap-1" aria-label={`Available colours: ${colour.variantOptions.join(', ')}`}>
+        <div
+          className="flex items-center gap-1"
+          aria-label={`Available colours: ${colour.variantOptions.join(', ')}`}
+        >
           {shown.map((name) => {
             const fill = swatchFill(name);
             return (
@@ -485,7 +568,9 @@ function VariantPreview({ axes }: { axes?: { variantName: string; variantOptions
               />
             );
           })}
-          {overflow > 0 && <span className="text-[10px] text-slate-400 font-medium">+{overflow}</span>}
+          {overflow > 0 && (
+            <span className="text-[10px] text-slate-400 font-medium">+{overflow}</span>
+          )}
         </div>
       )}
       {others.map((a) => (
