@@ -4,8 +4,7 @@
 /// The customer storefront, the Seller Marketplace Portal and the Super Admin
 /// panel all read the same registry, so a region only has to be described once.
 
-export type CountryCode =
-  | 'QA' | 'IN' | 'AE' | 'SA' | 'BH' | 'KW' | 'OM' | 'GB' | 'US' | 'SG';
+export type CountryCode = 'QA' | 'IN' | 'AE' | 'SA' | 'BH' | 'KW' | 'OM' | 'GB' | 'US' | 'SG';
 
 export type LanguageCode = 'en' | 'ar' | 'hi' | 'ta' | 'ml' | 'es';
 
@@ -41,9 +40,21 @@ export interface CurrencySpec {
 // ─── Addresses ───────────────────────────────────────────────────────────────
 
 export type AddressFieldKey =
-  | 'fullName' | 'phone' | 'buildingNumber' | 'unit' | 'streetNumber'
-  | 'streetName' | 'zoneNumber' | 'area' | 'landmark' | 'poBox'
-  | 'line1' | 'line2' | 'city' | 'state' | 'postalCode';
+  | 'fullName'
+  | 'phone'
+  | 'buildingNumber'
+  | 'unit'
+  | 'streetNumber'
+  | 'streetName'
+  | 'zoneNumber'
+  | 'area'
+  | 'landmark'
+  | 'poBox'
+  | 'line1'
+  | 'line2'
+  | 'city'
+  | 'state'
+  | 'postalCode';
 
 export interface AddressFieldSpec {
   key: AddressFieldKey;
@@ -82,10 +93,24 @@ export interface AddressSpec {
 // ─── Payments ────────────────────────────────────────────────────────────────
 
 export type PaymentMethodType =
-  | 'card' | 'debit_national' | 'apple_pay' | 'google_pay' | 'samsung_pay'
-  | 'wallet' | 'cod' | 'bank_transfer' | 'upi' | 'netbanking'
-  | 'mada' | 'sadad' | 'knet' | 'benefit' | 'telecom_wallet'
-  | 'paynow' | 'grabpay' | 'ach';
+  | 'card'
+  | 'debit_national'
+  | 'apple_pay'
+  | 'google_pay'
+  | 'samsung_pay'
+  | 'wallet'
+  | 'cod'
+  | 'bank_transfer'
+  | 'upi'
+  | 'netbanking'
+  | 'mada'
+  | 'sadad'
+  | 'knet'
+  | 'benefit'
+  | 'telecom_wallet'
+  | 'paynow'
+  | 'grabpay'
+  | 'ach';
 
 export interface PaymentMethodSpec {
   type: PaymentMethodType;
@@ -176,6 +201,12 @@ export interface CountryLocalization {
 
   measurementSystem: 'metric' | 'imperial';
   tax: TaxSpec;
+  /**
+   * Marketplace delivery rule in the market's own currency — flat fee below
+   * `freeAbove`, free at or above it. Mirrored by order-service's
+   * MARKETPLACE_RATES; change both.
+   */
+  delivery: { fee: number; freeAbove: number };
   address: AddressSpec;
   payments: PaymentMethodSpec[];
   compliance: ComplianceSpec;

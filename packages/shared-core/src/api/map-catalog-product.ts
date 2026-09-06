@@ -22,13 +22,35 @@ import { productImageList } from '@/lib/product-image';
  */
 export function buyBoxPrice(p: any): number {
   const mrp = Number(p?.mrp ?? p?.price ?? 0) || 0;
-  const listings: any[] = (Array.isArray(p?.listings) ? p.listings : []).filter((l: any) => l?.isActive !== false);
+  const listings: any[] = (Array.isArray(p?.listings) ? p.listings : []).filter(
+    (l: any) => l?.isActive !== false,
+  );
   const buyBox = listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0] ?? p?.listing;
   return Number(p?.discountedPrice ?? p?.sellingPrice ?? buyBox?.sellingPrice ?? mrp) || mrp;
 }
 
+/** The offer a card prices from: the buy-box winner, else the first live one. */
+export function buyBoxListing(p: any): any | null {
+  const listings: any[] = (Array.isArray(p?.listings) ? p.listings : []).filter(
+    (l: any) => l?.isActive !== false,
+  );
+  return listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0] ?? p?.listing ?? null;
+}
+
+/**
+ * The struck-through list price for the offer being shown.
+ *
+ * Each market's offer carries its own `mrp` in that market's currency;
+ * `Product.mrp` is one figure for the whole catalogue and is only the fallback.
+ * Reading the product figure under a rupee sign showed a riyal number.
+ */
+export function buyBoxMrp(p: any): number {
+  const offer = buyBoxListing(p);
+  return Number(offer?.mrp ?? p?.mrp ?? p?.price ?? 0) || 0;
+}
+
 export function mapCatalogProduct(p: any): HomeProduct {
-  const mrp = Number(p?.mrp ?? p?.price ?? 0) || 0;
+  const mrp = buyBoxMrp(p);
   const price = buyBoxPrice(p);
 
   // The full gallery, primary first — the card swipes through it, so resolving
@@ -70,5 +92,7 @@ export function unwrapCatalogList(json: any): any[] {
 
 /** Rows mapped for display, minus anything that could not open a detail page. */
 export function mapCatalogList(json: any): HomeProduct[] {
-  return unwrapCatalogList(json).map(mapCatalogProduct).filter((p) => p.id);
+  return unwrapCatalogList(json)
+    .map(mapCatalogProduct)
+    .filter((p) => p.id);
 }

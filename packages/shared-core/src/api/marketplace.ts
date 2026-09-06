@@ -6,28 +6,54 @@ export async function getMarketplaceHome(country?: string) {
 }
 
 // ── Categories ──────────────────────────────────────────────────────────────
-export async function getCategories() { return api.get<any>('/marketplace/category-list'); }
-export async function getCategoryById(id: string) { return api.get<any>(`/marketplace/category-list/${id}`); }
-export async function getSubcategoryById(id: string) { return api.get<any>(`/marketplace/subcategories/${id}`); }
+export async function getCategories() {
+  return api.get<any>('/marketplace/category-list');
+}
+export async function getCategoryById(id: string) {
+  return api.get<any>(`/marketplace/category-list/${id}`);
+}
+export async function getSubcategoryById(id: string) {
+  return api.get<any>(`/marketplace/subcategories/${id}`);
+}
 
 // ── Products ────────────────────────────────────────────────────────────────
 export async function getProducts(params?: Record<string, string>) {
   return api.get<any>('/marketplace/products', params);
 }
 
-export async function getProductById(id: string) { return api.get<any>(`/marketplace/products/${id}`); }
-export async function getFeaturedProducts() { return api.get<any>('/marketplace/featured'); }
-export async function getDeals() { return api.get<any>('/marketplace/deals'); }
-export async function getFlashDeals() { return api.get<any>('/marketplace/flash-deals'); }
+/**
+ * Product detail as one market sees it. Server components cannot send the
+ * region header (it is read from `document.cookie`), so the market travels as
+ * `?country=`; the gateway falls back to the header, then IP, when absent.
+ */
+export async function getProductById(id: string, country?: string) {
+  return api.get<any>(`/marketplace/products/${id}`, country ? { country } : undefined);
+}
+export async function getFeaturedProducts() {
+  return api.get<any>('/marketplace/featured');
+}
+export async function getDeals() {
+  return api.get<any>('/marketplace/deals');
+}
+export async function getFlashDeals() {
+  return api.get<any>('/marketplace/flash-deals');
+}
 
 // ── Search ──────────────────────────────────────────────────────────────────
-export async function searchMarketplace(query: string, filters: Record<string, string | number | boolean | undefined> = {}) {
+export async function searchMarketplace(
+  query: string,
+  filters: Record<string, string | number | boolean | undefined> = {},
+) {
   return api.get<any>('/marketplace/search', { q: query, ...filters });
 }
 
 // ── Brands ──────────────────────────────────────────────────────────────────
-export async function getBrands() { return api.get<any>('/marketplace/brands'); }
-export async function getTopBrands() { return api.get<any>('/marketplace/brands/top'); }
+export async function getBrands() {
+  return api.get<any>('/marketplace/brands');
+}
+export async function getTopBrands() {
+  return api.get<any>('/marketplace/brands/top');
+}
 export interface MarketplaceBrand {
   id: string;
   name: string;
@@ -58,15 +84,23 @@ export async function getBrandById(idOrSlug: string): Promise<MarketplaceBrand |
   const res = await getBrands();
   const rows: any[] = Array.isArray(res) ? res : (res?.data ?? res?.brands ?? []);
   const key = idOrSlug.toLowerCase();
-  return rows.find((b: any) => String(b?.id).toLowerCase() === key)
-    ?? rows.find((b: any) => String(b?.slug).toLowerCase() === key)
-    ?? null;
+  return (
+    rows.find((b: any) => String(b?.id).toLowerCase() === key) ??
+    rows.find((b: any) => String(b?.slug).toLowerCase() === key) ??
+    null
+  );
 }
 
 // ── Sellers ─────────────────────────────────────────────────────────────────
-export async function getSellers() { return api.get<any>('/marketplace/sellers'); }
-export async function getVerifiedSellers() { return api.get<any>('/marketplace/sellers/verified'); }
-export async function getSellerById(id: string) { return api.get<any>(`/marketplace/sellers/${id}`); }
+export async function getSellers() {
+  return api.get<any>('/marketplace/sellers');
+}
+export async function getVerifiedSellers() {
+  return api.get<any>('/marketplace/sellers/verified');
+}
+export async function getSellerById(id: string) {
+  return api.get<any>(`/marketplace/sellers/${id}`);
+}
 
 // ── Cart ────────────────────────────────────────────────────────────────────
 export async function getCart(userId?: string) {
@@ -81,7 +115,10 @@ export async function addToCart(productId: string, quantity: number, variantId?:
 // there is no separate cart-item identifier. `variantId` must be forwarded or a
 // variant line cannot be told apart from the plain one and the wrong row moves.
 export async function updateCartItem(itemId: string, quantity: number, variantId?: string) {
-  return api.put<any>(`/marketplace/cart/${itemId}`, { quantity, ...(variantId ? { variantId } : {}) });
+  return api.put<any>(`/marketplace/cart/${itemId}`, {
+    quantity,
+    ...(variantId ? { variantId } : {}),
+  });
 }
 
 export async function removeFromCart(itemId: string, variantId?: string) {
@@ -106,7 +143,9 @@ export async function getOrders(params?: Record<string, string>) {
   return api.get<any>('/marketplace/orders', params);
 }
 
-export async function getOrderById(id: string) { return api.get<any>(`/marketplace/orders/${id}`); }
+export async function getOrderById(id: string) {
+  return api.get<any>(`/marketplace/orders/${id}`);
+}
 
 export async function placeOrder(payload: any) {
   return api.post<any>('/marketplace/orders', payload);
@@ -154,7 +193,9 @@ export async function addProductReview(productId: string, review: any) {
  */
 export async function voteReviewHelpful(reviewId: string) {
   return api.post<{ success: boolean; alreadyVoted: boolean; helpfulCount: number }>(
-    `/marketplace/reviews/${reviewId}/helpful`, {});
+    `/marketplace/reviews/${reviewId}/helpful`,
+    {},
+  );
 }
 
 // A customer's own reviews across all products
@@ -178,7 +219,9 @@ export async function createSupportTicket(payload: any) {
 
 // ── Returns (Full CRUD) ─────────────────────────────────────────────────────
 
-export async function getReturnRequests(params?: Record<string, string | number | boolean | undefined>) {
+export async function getReturnRequests(
+  params?: Record<string, string | number | boolean | undefined>,
+) {
   return api.get<any>('/marketplace/returns', params);
 }
 
@@ -186,15 +229,27 @@ export async function getReturnById(id: string) {
   return api.get<any>(`/marketplace/returns/${id}`);
 }
 
-export async function updateReturnStatus(id: string, payload: { status: string; rejectionReason?: string; qcCondition?: string; qcNotes?: string }) {
+export async function updateReturnStatus(
+  id: string,
+  payload: { status: string; rejectionReason?: string; qcCondition?: string; qcNotes?: string },
+) {
   return api.put<any>(`/marketplace/returns/${id}/status`, payload);
 }
 
-export async function assignReturnPickup(id: string, payload: { pickupPartnerId: string; pickupScheduledAt: string }) {
+export async function assignReturnPickup(
+  id: string,
+  payload: { pickupPartnerId: string; pickupScheduledAt: string },
+) {
   return api.put<any>(`/marketplace/returns/${id}/assign-pickup`, payload);
 }
 
-export async function createReturn(payload: { orderId: string; reason: string; description?: string; imageUrls?: string[]; customerId: string }) {
+export async function createReturn(payload: {
+  orderId: string;
+  reason: string;
+  description?: string;
+  imageUrls?: string[];
+  customerId: string;
+}) {
   return api.post<any>('/marketplace/returns', payload);
 }
 
@@ -214,7 +269,12 @@ export async function cancelReturn(returnId: string) {
 // ── Product reports ─────────────────────────────────────────────────────────
 
 export type ProductReportReason =
-  | 'COUNTERFEIT' | 'PROHIBITED' | 'MISLEADING' | 'OFFENSIVE' | 'PRICING' | 'OTHER';
+  | 'COUNTERFEIT'
+  | 'PROHIBITED'
+  | 'MISLEADING'
+  | 'OFFENSIVE'
+  | 'PRICING'
+  | 'OTHER';
 
 /**
  * Flag a listing for moderation review.
@@ -310,11 +370,21 @@ export async function getCouponById(id: string) {
   return api.get<any>(`/marketplace/coupons/${id}`);
 }
 
-export async function validateCoupon(payload: { code: string; cartTotal: number; userId?: string; paymentMethod?: string }) {
+export async function validateCoupon(payload: {
+  code: string;
+  cartTotal: number;
+  userId?: string;
+  paymentMethod?: string;
+}) {
   return api.post<any>('/marketplace/coupons/validate', payload);
 }
 
-export async function redeemCoupon(payload: { code: string; orderId: string; customerId: string; cartTotal: number }) {
+export async function redeemCoupon(payload: {
+  code: string;
+  orderId: string;
+  customerId: string;
+  cartTotal: number;
+}) {
   return api.post<any>('/marketplace/coupons/redeem', payload);
 }
 
@@ -370,7 +440,10 @@ export async function deleteVariant(id: string) {
   return api.delete<any>(`/marketplace/variants/${id}`);
 }
 
-export async function updateVariantStock(id: string, payload: { operation: 'SET' | 'INCREMENT' | 'DECREMENT'; quantity: number }) {
+export async function updateVariantStock(
+  id: string,
+  payload: { operation: 'SET' | 'INCREMENT' | 'DECREMENT'; quantity: number },
+) {
   return api.put<any>(`/marketplace/variants/${id}/stock`, payload);
 }
 
@@ -380,11 +453,17 @@ export async function getLowStockVariants(sellerId: string) {
 
 // ── Product Q&A ─────────────────────────────────────────────────────────────
 
-export async function getQuestions(productId: string, params?: Record<string, string | number | boolean | undefined>) {
+export async function getQuestions(
+  productId: string,
+  params?: Record<string, string | number | boolean | undefined>,
+) {
   return api.get<any>(`/marketplace/products/${productId}/questions`, params);
 }
 
-export async function createQuestion(productId: string, payload: { questionText: string; customerName?: string }) {
+export async function createQuestion(
+  productId: string,
+  payload: { questionText: string; customerName?: string },
+) {
   return api.post<any>(`/marketplace/products/${productId}/questions`, payload);
 }
 
@@ -392,7 +471,10 @@ export async function getAnswers(questionId: string) {
   return api.get<any>(`/marketplace/questions/${questionId}/answers`);
 }
 
-export async function createAnswer(questionId: string, payload: { answerText: string; authorName?: string; authorRole?: string }) {
+export async function createAnswer(
+  questionId: string,
+  payload: { answerText: string; authorName?: string; authorRole?: string },
+) {
   return api.post<any>(`/marketplace/questions/${questionId}/answers`, payload);
 }
 
@@ -410,7 +492,9 @@ export async function acceptAnswer(answerId: string) {
 
 // ── Delivery Assignments ────────────────────────────────────────────────────
 
-export async function getDeliveryAssignments(params?: Record<string, string | number | boolean | undefined>) {
+export async function getDeliveryAssignments(
+  params?: Record<string, string | number | boolean | undefined>,
+) {
   return api.get<any>('/marketplace/delivery-assignments', params);
 }
 
@@ -422,7 +506,10 @@ export async function createDeliveryAssignment(payload: any) {
   return api.post<any>('/marketplace/delivery-assignments', payload);
 }
 
-export async function updateDeliveryStatus(id: string, payload: { status: string; failureReason?: string }) {
+export async function updateDeliveryStatus(
+  id: string,
+  payload: { status: string; failureReason?: string },
+) {
   return api.put<any>(`/marketplace/delivery-assignments/${id}/status`, payload);
 }
 
@@ -430,7 +517,15 @@ export async function verifyDeliveryOtp(id: string, otp: string) {
   return api.post<any>(`/marketplace/delivery-assignments/${id}/verify-otp`, { otp });
 }
 
-export async function submitDeliveryProof(id: string, payload: { proofPhotos: string[]; deliveryMode: string; deliveryNotes?: string; coordinates?: { lat: number; lng: number } }) {
+export async function submitDeliveryProof(
+  id: string,
+  payload: {
+    proofPhotos: string[];
+    deliveryMode: string;
+    deliveryNotes?: string;
+    coordinates?: { lat: number; lng: number };
+  },
+) {
   return api.post<any>(`/marketplace/delivery-assignments/${id}/proof`, payload);
 }
 

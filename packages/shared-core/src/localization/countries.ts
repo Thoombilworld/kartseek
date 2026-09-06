@@ -8,15 +8,20 @@
 /// Everything region-dependent in the three web clients derives from this file.
 /// `@/i18n/config` re-exports a compatibility view for older call sites.
 
-import type {
-  AddressSpec, CountryCode, CountryLocalization, PaymentMethodSpec,
-} from './types';
+import type { AddressSpec, CountryCode, CountryLocalization, PaymentMethodSpec } from './types';
 
 // ─── Shared address building blocks ──────────────────────────────────────────
 
 const CONTACT_FIELDS: AddressSpec['fields'] = [
   { key: 'fullName', label: 'Full Name', labelAr: 'الاسم الكامل', required: true, row: 1 },
-  { key: 'phone', label: 'Mobile Number', labelAr: 'رقم الهاتف', required: true, inputMode: 'tel', row: 1 },
+  {
+    key: 'phone',
+    label: 'Mobile Number',
+    labelAr: 'رقم الهاتف',
+    required: true,
+    inputMode: 'tel',
+    row: 1,
+  },
 ];
 
 /**
@@ -32,19 +37,84 @@ const CONTACT_FIELDS: AddressSpec['fields'] = [
 const QATAR_ADDRESS: AddressSpec = {
   hasPostalCode: false,
   guidance:
-    'Qatari addresses use the national Building / Street / Zone numbering issued by the '
-    + 'Ministry of Municipality. You can find all three on your Kahramaa bill or via the '
-    + 'Ministry\'s address search.',
+    'Qatari addresses use the national Building / Street / Zone numbering issued by the ' +
+    'Ministry of Municipality. You can find all three on your Kahramaa bill or via the ' +
+    "Ministry's address search.",
   fields: [
     ...CONTACT_FIELDS,
-    { key: 'buildingNumber', label: 'Building Number', labelAr: 'رقم المبنى', required: true, inputMode: 'numeric', maxLength: 4, pattern: '^[0-9]{1,4}$', patternMessage: 'Building number is 1–4 digits', row: 2 },
-    { key: 'unit', label: 'Unit / Floor / Apt', labelAr: 'الوحدة / الطابق', required: false, row: 2 },
-    { key: 'streetNumber', label: 'Street Number', labelAr: 'رقم الشارع', required: true, inputMode: 'numeric', maxLength: 4, pattern: '^[0-9]{1,4}$', patternMessage: 'Street number is 1–4 digits', row: 3 },
-    { key: 'zoneNumber', label: 'Zone Number', labelAr: 'رقم المنطقة', required: true, inputMode: 'numeric', maxLength: 3, pattern: '^[0-9]{1,3}$', patternMessage: 'Zone number is 1–3 digits', row: 3 },
-    { key: 'area', label: 'Area / District', labelAr: 'المنطقة', required: true, placeholder: 'e.g. Al Sadd, West Bay, Al Wakrah', row: 4 },
-    { key: 'city', label: 'City / Municipality', labelAr: 'المدينة', required: true, placeholder: 'Doha', row: 4 },
-    { key: 'landmark', label: 'Nearest Landmark', labelAr: 'أقرب معلم', required: false, helper: 'Helps the rider find you faster', row: 5 },
-    { key: 'poBox', label: 'P.O. Box', labelAr: 'صندوق البريد', required: false, inputMode: 'numeric', helper: 'Optional — for postal correspondence only', row: 5 },
+    {
+      key: 'buildingNumber',
+      label: 'Building Number',
+      labelAr: 'رقم المبنى',
+      required: true,
+      inputMode: 'numeric',
+      maxLength: 4,
+      pattern: '^[0-9]{1,4}$',
+      patternMessage: 'Building number is 1–4 digits',
+      row: 2,
+    },
+    {
+      key: 'unit',
+      label: 'Unit / Floor / Apt',
+      labelAr: 'الوحدة / الطابق',
+      required: false,
+      row: 2,
+    },
+    {
+      key: 'streetNumber',
+      label: 'Street Number',
+      labelAr: 'رقم الشارع',
+      required: true,
+      inputMode: 'numeric',
+      maxLength: 4,
+      pattern: '^[0-9]{1,4}$',
+      patternMessage: 'Street number is 1–4 digits',
+      row: 3,
+    },
+    {
+      key: 'zoneNumber',
+      label: 'Zone Number',
+      labelAr: 'رقم المنطقة',
+      required: true,
+      inputMode: 'numeric',
+      maxLength: 3,
+      pattern: '^[0-9]{1,3}$',
+      patternMessage: 'Zone number is 1–3 digits',
+      row: 3,
+    },
+    {
+      key: 'area',
+      label: 'Area / District',
+      labelAr: 'المنطقة',
+      required: true,
+      placeholder: 'e.g. Al Sadd, West Bay, Al Wakrah',
+      row: 4,
+    },
+    {
+      key: 'city',
+      label: 'City / Municipality',
+      labelAr: 'المدينة',
+      required: true,
+      placeholder: 'Doha',
+      row: 4,
+    },
+    {
+      key: 'landmark',
+      label: 'Nearest Landmark',
+      labelAr: 'أقرب معلم',
+      required: false,
+      helper: 'Helps the rider find you faster',
+      row: 5,
+    },
+    {
+      key: 'poBox',
+      label: 'P.O. Box',
+      labelAr: 'صندوق البريد',
+      required: false,
+      inputMode: 'numeric',
+      helper: 'Optional — for postal correspondence only',
+      row: 5,
+    },
   ],
   lines: [
     { keys: ['fullName'] },
@@ -61,7 +131,16 @@ const INDIA_ADDRESS: AddressSpec = {
   guidance: 'Enter the 6-digit PIN code to auto-fill your city and state.',
   fields: [
     ...CONTACT_FIELDS,
-    { key: 'postalCode', label: 'PIN Code', required: true, inputMode: 'numeric', maxLength: 6, pattern: '^[1-9][0-9]{5}$', patternMessage: 'PIN code is 6 digits and cannot start with 0', row: 2 },
+    {
+      key: 'postalCode',
+      label: 'PIN Code',
+      required: true,
+      inputMode: 'numeric',
+      maxLength: 6,
+      pattern: '^[1-9][0-9]{5}$',
+      patternMessage: 'PIN code is 6 digits and cannot start with 0',
+      row: 2,
+    },
     { key: 'line1', label: 'Flat / House No., Building', required: true, row: 3 },
     { key: 'line2', label: 'Area, Street, Sector', required: false, row: 4 },
     { key: 'landmark', label: 'Landmark', required: false, row: 4 },
@@ -82,16 +161,46 @@ function gulfAddress(opts: { postalCode: boolean; cityPlaceholder: string }): Ad
     hasPostalCode: opts.postalCode,
     fields: [
       ...CONTACT_FIELDS,
-      { key: 'buildingNumber', label: 'Building Number', labelAr: 'رقم المبنى', required: true, inputMode: 'numeric', row: 2 },
+      {
+        key: 'buildingNumber',
+        label: 'Building Number',
+        labelAr: 'رقم المبنى',
+        required: true,
+        inputMode: 'numeric',
+        row: 2,
+      },
       { key: 'unit', label: 'Unit / Floor', labelAr: 'الوحدة / الطابق', required: false, row: 2 },
       { key: 'streetName', label: 'Street', labelAr: 'الشارع', required: true, row: 3 },
-      { key: 'area', label: 'Area / District', labelAr: 'المنطقة', required: true, placeholder: opts.cityPlaceholder, row: 3 },
+      {
+        key: 'area',
+        label: 'Area / District',
+        labelAr: 'المنطقة',
+        required: true,
+        placeholder: opts.cityPlaceholder,
+        row: 3,
+      },
       { key: 'city', label: 'City', labelAr: 'المدينة', required: true, row: 4 },
       ...(opts.postalCode
-        ? [{ key: 'postalCode' as const, label: 'Postal Code', labelAr: 'الرمز البريدي', required: false, inputMode: 'numeric' as const, row: 4 }]
+        ? [
+            {
+              key: 'postalCode' as const,
+              label: 'Postal Code',
+              labelAr: 'الرمز البريدي',
+              required: false,
+              inputMode: 'numeric' as const,
+              row: 4,
+            },
+          ]
         : []),
       { key: 'landmark', label: 'Nearest Landmark', labelAr: 'أقرب معلم', required: false, row: 5 },
-      { key: 'poBox', label: 'P.O. Box', labelAr: 'صندوق البريد', required: false, inputMode: 'numeric', row: 5 },
+      {
+        key: 'poBox',
+        label: 'P.O. Box',
+        labelAr: 'صندوق البريد',
+        required: false,
+        inputMode: 'numeric',
+        row: 5,
+      },
     ],
     lines: [
       { keys: ['fullName'] },
@@ -124,26 +233,46 @@ const WESTERN_ADDRESS = (postalLabel: string, regionLabel: string): AddressSpec 
 // ─── Shared payment building blocks ──────────────────────────────────────────
 
 const WALLET: PaymentMethodSpec = {
-  type: 'wallet', gateway: 'wallet', label: 'KARTSEEK Wallet', labelAr: 'محفظة كارتسيك',
-  description: 'Pay from your KARTSEEK balance', icon: 'wallet',
+  type: 'wallet',
+  gateway: 'wallet',
+  label: 'KARTSEEK Wallet',
+  labelAr: 'محفظة كارتسيك',
+  description: 'Pay from your KARTSEEK balance',
+  icon: 'wallet',
 };
 
 const CARD = (gateway: string): PaymentMethodSpec => ({
-  type: 'card', gateway, label: 'Credit / Debit Card', labelAr: 'بطاقة ائتمان / خصم',
-  description: 'Visa, Mastercard, American Express', icon: 'card',
+  type: 'card',
+  gateway,
+  label: 'Credit / Debit Card',
+  labelAr: 'بطاقة ائتمان / خصم',
+  description: 'Visa, Mastercard, American Express',
+  icon: 'card',
 });
 
 const APPLE_PAY = (gateway: string): PaymentMethodSpec => ({
-  type: 'apple_pay', gateway, label: 'Apple Pay', description: 'Pay with Face ID or Touch ID', icon: 'apple',
+  type: 'apple_pay',
+  gateway,
+  label: 'Apple Pay',
+  description: 'Pay with Face ID or Touch ID',
+  icon: 'apple',
 });
 
 const GOOGLE_PAY = (gateway: string): PaymentMethodSpec => ({
-  type: 'google_pay', gateway, label: 'Google Pay', description: 'Pay with your saved Google card', icon: 'google',
+  type: 'google_pay',
+  gateway,
+  label: 'Google Pay',
+  description: 'Pay with your saved Google card',
+  icon: 'google',
 });
 
 const COD = (note: string): PaymentMethodSpec => ({
-  type: 'cod', gateway: 'cod', label: 'Cash on Delivery', labelAr: 'الدفع عند الاستلام',
-  description: note, icon: 'cash',
+  type: 'cod',
+  gateway: 'cod',
+  label: 'Cash on Delivery',
+  labelAr: 'الدفع عند الاستلام',
+  description: note,
+  icon: 'cash',
 });
 
 // ─── Registry ────────────────────────────────────────────────────────────────
@@ -175,42 +304,63 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     },
 
     timezone: 'Asia/Qatar',
-    utcOffsetMinutes: 180,   // AST, UTC+3
-    observesDst: false,      // Qatar has never observed daylight saving
+    utcOffsetMinutes: 180, // AST, UTC+3
+    observesDst: false, // Qatar has never observed daylight saving
     dateFormat: 'DD/MM/YYYY',
     timeFormat: 'hh:mm A',
     hour12: true,
-    firstDayOfWeek: 0,       // the Qatari working week runs Sunday–Thursday
-    weekend: [5, 6],         // Friday–Saturday
+    firstDayOfWeek: 0, // the Qatari working week runs Sunday–Thursday
+    weekend: [5, 6], // Friday–Saturday
 
     measurementSystem: 'metric',
 
     // Qatar has not implemented the GCC VAT framework — there is no
     // consumption tax on retail goods, so nothing is added at checkout.
-    tax: { name: 'No VAT', nameAr: 'لا توجد ضريبة', rate: 0, inclusive: true, registrationLabel: 'Commercial Registration (CR)' },
+    tax: {
+      name: 'No VAT',
+      nameAr: 'لا توجد ضريبة',
+      rate: 0,
+      inclusive: true,
+      registrationLabel: 'Commercial Registration (CR)',
+    },
+    delivery: { fee: 15, freeAbove: 200 },
 
     address: QATAR_ADDRESS,
 
     payments: [
       {
-        type: 'debit_national', gateway: 'naps', label: 'Himyan / NAPS Debit Card',
-        labelAr: 'بطاقة هميان / نابس', description: 'Qatar\'s domestic debit network',
-        isDefault: true, isLocal: true, icon: 'debit',
+        type: 'debit_national',
+        gateway: 'naps',
+        label: 'Himyan / NAPS Debit Card',
+        labelAr: 'بطاقة هميان / نابس',
+        description: "Qatar's domestic debit network",
+        isDefault: true,
+        isLocal: true,
+        icon: 'debit',
       },
       CARD('qpay'),
       APPLE_PAY('qpay'),
       GOOGLE_PAY('qpay'),
       {
-        type: 'telecom_wallet', gateway: 'ooredoo', label: 'Ooredoo Money',
-        labelAr: 'أوريدو موني', description: 'Pay from your Ooredoo Money wallet',
-        isLocal: true, icon: 'phone',
+        type: 'telecom_wallet',
+        gateway: 'ooredoo',
+        label: 'Ooredoo Money',
+        labelAr: 'أوريدو موني',
+        description: 'Pay from your Ooredoo Money wallet',
+        isLocal: true,
+        icon: 'phone',
       },
       { ...WALLET },
       COD('Pay the rider in cash on arrival'),
       {
-        type: 'bank_transfer', gateway: 'qnb', label: 'Bank Transfer',
-        labelAr: 'تحويل بنكي', description: 'QNB, CBQ, Doha Bank and other local banks',
-        isLocal: true, minAmount: 200, icon: 'bank',
+        type: 'bank_transfer',
+        gateway: 'qnb',
+        label: 'Bank Transfer',
+        labelAr: 'تحويل بنكي',
+        description: 'QNB, CBQ, Doha Bank and other local banks',
+        isLocal: true,
+        minAmount: 200,
+        icon: 'bank',
       },
     ],
 
@@ -218,7 +368,8 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
       law: 'PDPPL',
       lawAr: 'قانون حماية خصوصية البيانات الشخصية',
       citation: 'Law No. (13) of 2016 Concerning Personal Data Privacy Protection',
-      regulator: 'National Cyber Governance and Assurance Affairs (NCGAA), National Cyber Security Agency',
+      regulator:
+        'National Cyber Governance and Assurance Affairs (NCGAA), National Cyber Security Agency',
       regulatorUrl: 'https://www.ncsa.gov.qa',
       breachNotificationHours: 72,
       requiresExplicitConsent: true,
@@ -246,9 +397,20 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     },
 
     defaultCity: 'Doha',
-    coords: { lat: 25.2854, lng: 51.5310 },
+    coords: { lat: 25.2854, lng: 51.531 },
     bounds: { minLat: 24.4, maxLat: 26.2, minLng: 50.7, maxLng: 51.7 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -272,11 +434,27 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [0, 6],
     measurementSystem: 'metric',
     tax: { name: 'GST', rate: 18, inclusive: true, registrationLabel: 'GSTIN' },
+    delivery: { fee: 60, freeAbove: 2000 },
     address: INDIA_ADDRESS,
     payments: [
-      { type: 'upi', gateway: 'upi', label: 'UPI', description: 'GPay, PhonePe, Paytm, BHIM', isDefault: true, isLocal: true, icon: 'upi' },
+      {
+        type: 'upi',
+        gateway: 'upi',
+        label: 'UPI',
+        description: 'GPay, PhonePe, Paytm, BHIM',
+        isDefault: true,
+        isLocal: true,
+        icon: 'upi',
+      },
       CARD('razorpay'),
-      { type: 'netbanking', gateway: 'razorpay', label: 'Net Banking', description: 'All major Indian banks', isLocal: true, icon: 'bank' },
+      {
+        type: 'netbanking',
+        gateway: 'razorpay',
+        label: 'Net Banking',
+        description: 'All major Indian banks',
+        isLocal: true,
+        icon: 'bank',
+      },
       { ...WALLET },
       COD('Pay in cash when your order arrives'),
     ],
@@ -305,9 +483,21 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
       optInCookieCategories: ['analytics', 'marketing', 'personalisation'],
     },
     defaultCity: 'New Delhi',
-    coords: { lat: 28.6139, lng: 77.2090 },
+    coords: { lat: 28.6139, lng: 77.209 },
     bounds: { minLat: 6.5, maxLat: 37.1, minLng: 68.1, maxLng: 97.4 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -331,11 +521,14 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [6, 0],
     measurementSystem: 'metric',
     tax: { name: 'VAT', rate: 5, inclusive: true, registrationLabel: 'TRN' },
+    delivery: { fee: 15, freeAbove: 200 },
     address: gulfAddress({ postalCode: false, cityPlaceholder: 'e.g. Al Barsha, Deira' }),
     payments: [
-      CARD('stripe'), APPLE_PAY('stripe'),
+      CARD('stripe'),
+      APPLE_PAY('stripe'),
       { type: 'samsung_pay', gateway: 'stripe', label: 'Samsung Pay', icon: 'samsung' },
-      { ...WALLET }, COD('Pay the rider in cash on arrival'),
+      { ...WALLET },
+      COD('Pay the rider in cash on arrival'),
     ],
     compliance: {
       law: 'PDPL',
@@ -344,16 +537,38 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
       breachNotificationHours: 72,
       requiresExplicitConsent: true,
       dataResidencyRequired: false,
-      dataSubjectRights: ['Access', 'Rectification', 'Erasure', 'Restrict processing', 'Data portability', 'Object to processing'],
+      dataSubjectRights: [
+        'Access',
+        'Rectification',
+        'Erasure',
+        'Restrict processing',
+        'Data portability',
+        'Object to processing',
+      ],
       recordRetentionMonths: 60,
       minimumConsentAge: 18,
-      additionalRegulations: ['UAE Central Bank stored value facilities regulation', 'Federal Law on Consumer Protection'],
+      additionalRegulations: [
+        'UAE Central Bank stored value facilities regulation',
+        'Federal Law on Consumer Protection',
+      ],
       optInCookieCategories: ['analytics', 'marketing', 'personalisation'],
     },
     defaultCity: 'Dubai',
     coords: { lat: 25.2048, lng: 55.2708 },
     bounds: { minLat: 22.6, maxLat: 26.1, minLng: 51.5, maxLng: 56.4 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -376,13 +591,38 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     firstDayOfWeek: 0,
     weekend: [5, 6],
     measurementSystem: 'metric',
-    tax: { name: 'VAT', nameAr: 'ضريبة القيمة المضافة', rate: 15, inclusive: true, registrationLabel: 'VAT Number' },
+    tax: {
+      name: 'VAT',
+      nameAr: 'ضريبة القيمة المضافة',
+      rate: 15,
+      inclusive: true,
+      registrationLabel: 'VAT Number',
+    },
+    delivery: { fee: 15, freeAbove: 200 },
     address: gulfAddress({ postalCode: true, cityPlaceholder: 'e.g. Al Olaya, Al Malaz' }),
     payments: [
-      { type: 'mada', gateway: 'mada', label: 'mada', labelAr: 'مدى', description: 'Saudi domestic debit network', isDefault: true, isLocal: true, icon: 'debit' },
+      {
+        type: 'mada',
+        gateway: 'mada',
+        label: 'mada',
+        labelAr: 'مدى',
+        description: 'Saudi domestic debit network',
+        isDefault: true,
+        isLocal: true,
+        icon: 'debit',
+      },
       CARD('stripe'),
-      { type: 'sadad', gateway: 'sadad', label: 'SADAD', labelAr: 'سداد', isLocal: true, icon: 'bank' },
-      APPLE_PAY('stripe'), { ...WALLET }, COD('Pay the rider in cash on arrival'),
+      {
+        type: 'sadad',
+        gateway: 'sadad',
+        label: 'SADAD',
+        labelAr: 'سداد',
+        isLocal: true,
+        icon: 'bank',
+      },
+      APPLE_PAY('stripe'),
+      { ...WALLET },
+      COD('Pay the rider in cash on arrival'),
     ],
     compliance: {
       law: 'PDPL',
@@ -391,7 +631,14 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
       breachNotificationHours: 72,
       requiresExplicitConsent: true,
       dataResidencyRequired: true,
-      dataSubjectRights: ['Be informed', 'Access', 'Request a copy', 'Rectification', 'Destruction', 'Withdraw consent'],
+      dataSubjectRights: [
+        'Be informed',
+        'Access',
+        'Request a copy',
+        'Rectification',
+        'Destruction',
+        'Withdraw consent',
+      ],
       recordRetentionMonths: 60,
       minimumConsentAge: 18,
       additionalRegulations: ['ZATCA e-invoicing (Fatoora)', 'SAMA payment services rules'],
@@ -400,7 +647,19 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     defaultCity: 'Riyadh',
     coords: { lat: 24.7136, lng: 46.6753 },
     bounds: { minLat: 16.3, maxLat: 32.2, minLng: 34.5, maxLng: 55.7 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -424,10 +683,22 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [5, 6],
     measurementSystem: 'metric',
     tax: { name: 'VAT', rate: 10, inclusive: true, registrationLabel: 'VAT Account Number' },
+    delivery: { fee: 2, freeAbove: 25 },
     address: gulfAddress({ postalCode: true, cityPlaceholder: 'e.g. Seef, Juffair' }),
     payments: [
-      { type: 'benefit', gateway: 'benefit', label: 'BenefitPay', description: 'Bahrain\'s domestic payment network', isDefault: true, isLocal: true, icon: 'debit' },
-      CARD('stripe'), APPLE_PAY('stripe'), { ...WALLET }, COD('Pay the rider in cash on arrival'),
+      {
+        type: 'benefit',
+        gateway: 'benefit',
+        label: 'BenefitPay',
+        description: "Bahrain's domestic payment network",
+        isDefault: true,
+        isLocal: true,
+        icon: 'debit',
+      },
+      CARD('stripe'),
+      APPLE_PAY('stripe'),
+      { ...WALLET },
+      COD('Pay the rider in cash on arrival'),
     ],
     compliance: {
       law: 'PDPL',
@@ -436,7 +707,13 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
       breachNotificationHours: 72,
       requiresExplicitConsent: true,
       dataResidencyRequired: false,
-      dataSubjectRights: ['Access', 'Rectification', 'Erasure', 'Object to processing', 'Withdraw consent'],
+      dataSubjectRights: [
+        'Access',
+        'Rectification',
+        'Erasure',
+        'Object to processing',
+        'Withdraw consent',
+      ],
       recordRetentionMonths: 60,
       minimumConsentAge: 18,
       additionalRegulations: ['Central Bank of Bahrain payment rules'],
@@ -445,7 +722,18 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     defaultCity: 'Manama',
     coords: { lat: 26.0667, lng: 50.5577 },
     bounds: { minLat: 25.5, maxLat: 26.4, minLng: 50.3, maxLng: 50.9 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -469,10 +757,22 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [5, 6],
     measurementSystem: 'metric',
     tax: { name: 'No VAT', rate: 0, inclusive: true },
+    delivery: { fee: 2, freeAbove: 20 },
     address: gulfAddress({ postalCode: true, cityPlaceholder: 'e.g. Salmiya, Hawalli' }),
     payments: [
-      { type: 'knet', gateway: 'knet', label: 'KNET', description: 'Kuwait\'s domestic debit network', isDefault: true, isLocal: true, icon: 'debit' },
-      CARD('stripe'), APPLE_PAY('stripe'), { ...WALLET }, COD('Pay the rider in cash on arrival'),
+      {
+        type: 'knet',
+        gateway: 'knet',
+        label: 'KNET',
+        description: "Kuwait's domestic debit network",
+        isDefault: true,
+        isLocal: true,
+        icon: 'debit',
+      },
+      CARD('stripe'),
+      APPLE_PAY('stripe'),
+      { ...WALLET },
+      COD('Pay the rider in cash on arrival'),
     ],
     compliance: {
       law: 'CITRA DPPR',
@@ -490,7 +790,18 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     defaultCity: 'Kuwait City',
     coords: { lat: 29.3759, lng: 47.9774 },
     bounds: { minLat: 28.5, maxLat: 30.1, minLng: 46.5, maxLng: 48.5 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -514,8 +825,14 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [5, 6],
     measurementSystem: 'metric',
     tax: { name: 'VAT', rate: 5, inclusive: true, registrationLabel: 'VAT Number' },
+    delivery: { fee: 2, freeAbove: 25 },
     address: gulfAddress({ postalCode: true, cityPlaceholder: 'e.g. Ruwi, Qurum' }),
-    payments: [CARD('stripe'), APPLE_PAY('stripe'), { ...WALLET }, COD('Pay the rider in cash on arrival')],
+    payments: [
+      CARD('stripe'),
+      APPLE_PAY('stripe'),
+      { ...WALLET },
+      COD('Pay the rider in cash on arrival'),
+    ],
     compliance: {
       law: 'PDPL',
       citation: 'Royal Decree No. 6/2022 promulgating the Personal Data Protection Law',
@@ -530,9 +847,20 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
       optInCookieCategories: ['analytics', 'marketing', 'personalisation'],
     },
     defaultCity: 'Muscat',
-    coords: { lat: 23.5880, lng: 58.3829 },
+    coords: { lat: 23.588, lng: 58.3829 },
     bounds: { minLat: 16.6, maxLat: 26.4, minLng: 52.0, maxLng: 59.9 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -556,17 +884,27 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [0, 6],
     measurementSystem: 'imperial',
     tax: { name: 'VAT', rate: 20, inclusive: true, registrationLabel: 'VAT Number' },
+    delivery: { fee: 4, freeAbove: 40 },
     address: WESTERN_ADDRESS('Postcode', 'County'),
     payments: [CARD('stripe'), APPLE_PAY('stripe'), GOOGLE_PAY('stripe'), { ...WALLET }],
     compliance: {
       law: 'UK GDPR',
       citation: 'UK GDPR and the Data Protection Act 2018',
-      regulator: 'Information Commissioner\'s Office (ICO)',
+      regulator: "Information Commissioner's Office (ICO)",
       regulatorUrl: 'https://ico.org.uk',
       breachNotificationHours: 72,
       requiresExplicitConsent: true,
       dataResidencyRequired: false,
-      dataSubjectRights: ['Be informed', 'Access', 'Rectification', 'Erasure', 'Restrict processing', 'Data portability', 'Object', 'Rights around automated decision making'],
+      dataSubjectRights: [
+        'Be informed',
+        'Access',
+        'Rectification',
+        'Erasure',
+        'Restrict processing',
+        'Data portability',
+        'Object',
+        'Rights around automated decision making',
+      ],
       recordRetentionMonths: 72,
       minimumConsentAge: 13,
       additionalRegulations: ['PECR (cookies and e-marketing)', 'FCA payment services rules'],
@@ -575,7 +913,17 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     defaultCity: 'London',
     coords: { lat: 51.5074, lng: -0.1278 },
     bounds: { minLat: 49.9, maxLat: 60.9, minLng: -8.6, maxLng: 1.8 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -599,9 +947,12 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [0, 6],
     measurementSystem: 'imperial',
     tax: { name: 'Sales Tax', rate: 8.875, inclusive: false, registrationLabel: 'Sales Tax ID' },
+    delivery: { fee: 6, freeAbove: 50 },
     address: WESTERN_ADDRESS('ZIP Code', 'State'),
     payments: [
-      CARD('stripe'), APPLE_PAY('stripe'), GOOGLE_PAY('stripe'),
+      CARD('stripe'),
+      APPLE_PAY('stripe'),
+      GOOGLE_PAY('stripe'),
       { type: 'ach', gateway: 'stripe', label: 'ACH Bank Transfer', icon: 'bank' },
       { ...WALLET },
     ],
@@ -612,16 +963,33 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
       breachNotificationHours: 72,
       requiresExplicitConsent: false,
       dataResidencyRequired: false,
-      dataSubjectRights: ['Know what is collected', 'Delete', 'Correct', 'Opt out of sale or sharing', 'Limit use of sensitive data', 'Non-discrimination'],
+      dataSubjectRights: [
+        'Know what is collected',
+        'Delete',
+        'Correct',
+        'Opt out of sale or sharing',
+        'Limit use of sensitive data',
+        'Non-discrimination',
+      ],
       recordRetentionMonths: 84,
       minimumConsentAge: 13,
       additionalRegulations: ['FTC Act Section 5', 'COPPA', 'State e-commerce disclosure rules'],
       optInCookieCategories: ['marketing'],
     },
     defaultCity: 'New York',
-    coords: { lat: 40.7128, lng: -74.0060 },
+    coords: { lat: 40.7128, lng: -74.006 },
     bounds: { minLat: 24.5, maxLat: 49.4, minLng: -125.0, maxLng: -66.9 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 
@@ -645,9 +1013,11 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     weekend: [0, 6],
     measurementSystem: 'metric',
     tax: { name: 'GST', rate: 9, inclusive: true, registrationLabel: 'GST Registration Number' },
+    delivery: { fee: 5, freeAbove: 60 },
     address: WESTERN_ADDRESS('Postal Code', 'District'),
     payments: [
-      CARD('stripe'), APPLE_PAY('stripe'),
+      CARD('stripe'),
+      APPLE_PAY('stripe'),
       { type: 'paynow', gateway: 'stripe', label: 'PayNow', isLocal: true, icon: 'qr' },
       { type: 'grabpay', gateway: 'stripe', label: 'GrabPay', isLocal: true, icon: 'wallet' },
       { ...WALLET },
@@ -668,7 +1038,19 @@ export const COUNTRIES: Record<CountryCode, CountryLocalization> = {
     defaultCity: 'Singapore',
     coords: { lat: 1.3521, lng: 103.8198 },
     bounds: { minLat: 1.15, maxLat: 1.48, minLng: 103.6, maxLng: 104.1 },
-    enabledModules: ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'taxi', 'delivery', 'hotel-booking', 'wallet', 'loyalty', 'franchise'],
+    enabledModules: [
+      'marketplace',
+      'grocery',
+      'restaurant',
+      'pharmacy',
+      'doctor',
+      'taxi',
+      'delivery',
+      'hotel-booking',
+      'wallet',
+      'loyalty',
+      'franchise',
+    ],
     isActive: true,
   },
 };
@@ -819,7 +1201,10 @@ export function countryFromCoords(lat: number, lng: number): CountryCode | null 
     const b = COUNTRIES[code].bounds;
     if (lat < b.minLat || lat > b.maxLat || lng < b.minLng || lng > b.maxLng) continue;
     const area = (b.maxLat - b.minLat) * (b.maxLng - b.minLng);
-    if (area < bestArea) { best = code; bestArea = area; }
+    if (area < bestArea) {
+      best = code;
+      bestArea = area;
+    }
   }
   return best;
 }
