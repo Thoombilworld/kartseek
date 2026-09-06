@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK Ingress & Network Configuration
-# Deploy: kubectl apply -f k8s/ingress.yaml
+# Deploy: kubectl apply -f infra/k8s/ingress.yaml
 # Requires: nginx-ingress-controller or another Ingress controller
 # ══════════════════════════════════════════════════════════════════════════════
 

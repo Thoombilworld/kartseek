@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK Microservices Deployment (Auth, Order, Payment)
-# Deploy: kubectl apply -f k8s/microservices.yaml
+# Deploy: kubectl apply -f infra/k8s/microservices.yaml
 # ══════════════════════════════════════════════════════════════════════════════
 
 ---

@@ -4,7 +4,7 @@
   "description": "KARTSEEK Super App Microservices",
   "private": true,
   "scripts": {
-    "build": "nest build",
+    "build": "nest build --all",
     "migration:show": "typeorm-ts-node-commonjs -d data-source.ts migration:show",
     "migration:run": "typeorm-ts-node-commonjs -d data-source.ts migration:run",
     "migration:revert": "typeorm-ts-node-commonjs -d data-source.ts migration:revert",

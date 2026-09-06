@@ -1,7 +1,7 @@
 #!/bin/sh
 # ─────────────────────────────────────────────────────────────────────────────
 # Generate self-signed SSL certificate for local HTTP/2 development
-# Run: sh nginx/ssl/generate-certs.sh
+# Run: sh infra/nginx/ssl/generate-certs.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

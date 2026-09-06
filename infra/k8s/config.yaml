@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK Kubernetes ConfigMap & Secrets
-# Deploy: kubectl apply -f k8s/config.yaml
+# Deploy: kubectl apply -f infra/k8s/config.yaml
 # ══════════════════════════════════════════════════════════════════════════════
 
 ---
@@ -191,7 +191,7 @@ data:
 
   # ── Marketplace: dedicated database ───────────────────────────────────────
   # Full isolation from the other verticals. In production point this at a
-  # separate RDS/CloudSQL instance; k8s/databases.yaml ships a StatefulSet for it.
+  # separate RDS/CloudSQL instance; infra/k8s/databases.yaml ships a StatefulSet for it.
   MARKETPLACE_DB_HOST: "postgres-marketplace.kartseek.svc.cluster.local"
   MARKETPLACE_DB_PORT: "5432"
   MARKETPLACE_DB_NAME: "kartseek_marketplace"
@@ -250,7 +250,7 @@ stringData:
   # ── JWT Secrets ──────────────────────────────────────────────────────────
   # NOTE: with NODE_ENV=production the gateway's Joi schema REJECTS any secret
   # containing dev/test/change/example/placeholder, so this placeholder will
-  # deliberately refuse to boot. k8s/deploy.sh preflights for it.
+  # deliberately refuse to boot. infra/k8s/deploy.sh preflights for it.
   JWT_SECRET: "your-super-secret-jwt-key-min-32-chars-change-in-production"
   JWT_REFRESH_SECRET: "your-refresh-token-secret-min-32-chars-change-in-production"
 

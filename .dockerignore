@@ -41,6 +41,8 @@ modules/*/frontend/**
 apps/mcp-server
 packages
 docs
+# Cross-service test assets (Postman, smoke) are never part of an image.
+tests
 infra/k8s
 skills
 .claude

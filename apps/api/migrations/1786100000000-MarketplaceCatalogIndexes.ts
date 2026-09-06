@@ -45,7 +45,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm';
  *
  * ⚠️  DEV CAVEAT — `synchronize` drops the two expression indexes.
  *
- * MarketplaceModule sets `synchronize: NODE_ENV !== 'production'`, and TypeORM's
+ * MarketplaceServiceModule sets `synchronize: NODE_ENV !== 'production'`, and TypeORM's
  * schema sync drops any index it has no entity metadata for. The column indexes
  * survive because they are declared as `@Index()` on the entities; the GIN
  * indexes below cannot be expressed as decorators, so every dev restart removes

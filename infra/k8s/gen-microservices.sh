@@ -4,7 +4,7 @@
 # were missing from microservices.yaml (which only covers auth/order/payment).
 #
 # Ports come from each service's main.ts (HTTP / gRPC / TCP). Edit the table below
-# if a service's ports change, then re-run:  bash k8s/gen-microservices.sh
+# if a service's ports change, then re-run:  bash infra/k8s/gen-microservices.sh
 #
 # Probes use tcpSocket (port-open) rather than httpGet /health, so they work for
 # every service regardless of whether it exposes an HTTP health route.
@@ -49,7 +49,7 @@ wallet-service        3024  -     4014
 {
 echo "# ═══════════════════════════════════════════════════════════════════════════"
 echo "# KARTSEEK — Microservice Deployments + Services (GENERATED — do not edit by hand)"
-echo "# Source: k8s/gen-microservices.sh   |   ports from each service's main.ts"
+echo "# Source: infra/k8s/gen-microservices.sh   |   ports from each service's main.ts"
 echo "# Covers the 22 services missing from microservices.yaml (auth/order/payment)."
 echo "# Per-service differences belong in the case blocks of the generator."
 echo "# ═══════════════════════════════════════════════════════════════════════════"

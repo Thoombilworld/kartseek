@@ -8,7 +8,7 @@
      * reaches. With this on, `tsc --noEmit` reports it everywhere, first.
      */
     "isolatedModules": true,
-    // The repo root, not apps/api. `scripts/seed-franchise.ts` and
+    // The repo root, not apps/api. `scripts/seed/seed-franchise.ts` and
     // `scripts/verify-franchise-isolation.ts` legitimately import marketplace
     // entities, and marketplace now lives in modules/marketplace/backend — a
     // rootDir of "./" rejects those with TS6059. This only shapes the

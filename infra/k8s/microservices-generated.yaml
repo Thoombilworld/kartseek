@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════════
 # KARTSEEK — Microservice Deployments + Services (GENERATED — do not edit by hand)
-# Source: k8s/gen-microservices.sh   |   ports from each service's main.ts
+# Source: infra/k8s/gen-microservices.sh   |   ports from each service's main.ts
 # Covers the 22 services missing from microservices.yaml (auth/order/payment).
 # Per-service differences belong in the case blocks of the generator.
 # ═══════════════════════════════════════════════════════════════════════════

@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK Kubernetes Storage Classes
-# Deploy: kubectl apply -f k8s/storage.yaml
+# Deploy: kubectl apply -f infra/k8s/storage.yaml
 # ══════════════════════════════════════════════════════════════════════════════
 
 ---
@@ -65,7 +65,7 @@ reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 
 # ══════════════════════════════════════════════════════════════════════════════
-# NO PersistentVolumes are defined here — see k8s/storage-local-dev.yaml.
+# NO PersistentVolumes are defined here — see infra/k8s/storage-local-dev.yaml.
 # ══════════════════════════════════════════════════════════════════════════════
 # This file used to end with two static `local:` PVs "for local development".
 # They could never have worked, for three independent reasons:

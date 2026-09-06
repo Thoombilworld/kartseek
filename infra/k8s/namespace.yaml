@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK Kubernetes Namespace & RBAC
-# Deploy: kubectl apply -f k8s/namespace.yaml
+# Deploy: kubectl apply -f infra/k8s/namespace.yaml
 # ══════════════════════════════════════════════════════════════════════════════
 
 ---

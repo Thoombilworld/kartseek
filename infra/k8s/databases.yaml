@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK StatefulSets for Databases (PostgreSQL, Redis, Kafka)
-# Deploy: kubectl apply -f k8s/databases.yaml
+# Deploy: kubectl apply -f infra/k8s/databases.yaml
 # Note: For production, use managed services (RDS, ElastiCache, MSK)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -459,7 +459,7 @@ spec:
 # PostgreSQL — Marketplace (dedicated instance)
 # ══════════════════════════════════════════════════════════════════════════════
 # config.yaml has pointed MARKETPLACE_DB_HOST at postgres-marketplace since the
-# Marketplace module was isolated, but nothing in k8s/ ever created it: the
+# Marketplace module was isolated, but nothing in infra/k8s/ ever created it: the
 # service resolved NXDOMAIN and every catalogue query failed at connect.
 # ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1

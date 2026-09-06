@@ -83,7 +83,7 @@ async function main() {
   // Log to stderr (stdout is reserved for MCP protocol)
   console.error('🚀 KARTSEEK MCP Server running on stdio');
   console.error(`   API URL: ${process.env.KARTSEEK_API_URL || 'http://localhost:3001/api/v1'}`);
-  console.error(`   Tools registered: 12 modules, ~35 tools`);
+  console.error(`   Tools registered: 12 modules, 45 tools`);
 }
 
 main().catch((err) => {

@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK — Marketplace Service HorizontalPodAutoscaler
-# Deploy: kubectl apply -f k8s/marketplace-hpa.yaml
+# Deploy: kubectl apply -f infra/k8s/marketplace-hpa.yaml
 #
 # Requires metrics-server to be installed in the cluster:
 #   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml

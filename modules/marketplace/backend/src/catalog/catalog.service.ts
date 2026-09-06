@@ -491,7 +491,7 @@ export class CatalogService {
    * Returns `null` rather than throwing: having no seller account is a normal
    * state for a customer, not an error. A row whose `owner_id` was never
    * populated is unreachable by design — the guard fails closed on it too — and
-   * needs the backfill in `scripts/backfill-seller-owner.ts`.
+   * needs the backfill in `scripts/maintenance/backfill-seller-owner.ts`.
    */
   async getSellerByOwner(ownerId: string) {
     if (!ownerId || !CatalogService.UUID_RE.test(ownerId)) return null;

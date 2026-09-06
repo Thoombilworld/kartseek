@@ -1,11 +1,11 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # KARTSEEK Storage — LOCAL DEVELOPMENT ONLY
-# Apply INSTEAD OF k8s/storage.yaml on a laptop cluster:
+# Apply INSTEAD OF infra/k8s/storage.yaml on a laptop cluster:
 #   kubectl delete storageclass fast-ssd --ignore-not-found
-#   kubectl apply -f k8s/storage-local-dev.yaml
+#   kubectl apply -f infra/k8s/storage-local-dev.yaml
 # ══════════════════════════════════════════════════════════════════════════════
 # Every volumeClaimTemplate in databases.yaml asks for `fast-ssd`, which in
-# k8s/storage.yaml is backed by the AWS EBS CSI driver. That driver does not
+# infra/k8s/storage.yaml is backed by the AWS EBS CSI driver. That driver does not
 # exist on docker-desktop / kind / minikube, so all four database PVCs sit
 # Pending forever and nothing starts.
 #
@@ -41,7 +41,7 @@ reclaimPolicy: Delete
 volumeBindingMode: Immediate
 
 ---
-# The other three classes are referenced by nothing in k8s/ today, but are
+# The other three classes are referenced by nothing in infra/k8s/ today, but are
 # defined so that anything added later that names them still binds locally.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
