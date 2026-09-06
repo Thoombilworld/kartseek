@@ -38,7 +38,19 @@ describe('MarketplaceGatewayController', () => {
 
   describe('getProducts', () => {
     it('forwards catalog filters to the marketplace service', async () => {
-      await controller.getProducts(reqIn(), 2, 48, 'IN', 'electronics', 'electronics-laptops', 'apple', 'slr-1', '500', '90000', 'price_asc');
+      await controller.getProducts(
+        reqIn(),
+        2,
+        48,
+        'IN',
+        'electronics',
+        'electronics-laptops',
+        'apple',
+        'slr-1',
+        '500',
+        '90000',
+        'price_asc',
+      );
 
       expect(sentPayload()).toEqual({
         page: 2,
@@ -72,7 +84,18 @@ describe('MarketplaceGatewayController', () => {
     it('coerces numeric filters', async () => {
       // Positional: req, page, limit, country, category, subcategory, brand,
       // seller, minPrice, maxPrice.
-      await controller.getProducts(reqIn(), 1, 10, undefined, undefined, undefined, undefined, undefined, '1000', '2000');
+      await controller.getProducts(
+        reqIn(),
+        1,
+        10,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '1000',
+        '2000',
+      );
 
       const payload = sentPayload();
       expect(payload.minPrice).toBe(1000);
@@ -100,9 +123,16 @@ describe('MarketplaceGatewayController', () => {
      * no `price` rejects — and with the gateway forwarding only the request body,
      * that was every add-to-cart. It surfaced as 503, so it read as an outage.
      */
-    function build(product: any) {
+    /**
+     * The line is priced by `price_order_items` — the same authority checkout
+     * uses — so the cart quotes exactly what the order will charge, including
+     * the selected variant. The product itself is still fetched for its image.
+     */
+    function build(product: any, pricing: any = PRICING) {
       const cartSend = jest.fn().mockReturnValue(of({ success: true }));
-      const marketplaceSend = jest.fn().mockReturnValue(of(product));
+      const marketplaceSend = jest.fn((pattern: unknown) =>
+        JSON.stringify(pattern).includes('price_order_items') ? of(pricing) : of(product),
+      );
       const repo: any = { find: jest.fn(), findOne: jest.fn() };
       const catalogGrpc: any = {
         getHome: jest.fn().mockResolvedValue(null),
@@ -110,11 +140,28 @@ describe('MarketplaceGatewayController', () => {
         searchProducts: jest.fn().mockResolvedValue(null),
       };
       const ctrl = new MarketplaceGatewayController(
-        { send: marketplaceSend } as any, { send: cartSend } as any, { send: cartSend } as any,
+        { send: marketplaceSend } as any,
+        { send: cartSend } as any,
+        { send: cartSend } as any,
         catalogGrpc,
       );
       return { ctrl, cartSend };
     }
+
+    const PRICING = {
+      ok: true,
+      items: [
+        {
+          ok: true,
+          productId: 'p1',
+          quantity: 2,
+          unitPrice: 115900,
+          name: 'iPhone 15 Pro',
+          listingId: 'L1',
+        },
+      ],
+      subtotal: 231800,
+    };
 
     const PRODUCT = {
       id: 'p1',
@@ -143,12 +190,22 @@ describe('MarketplaceGatewayController', () => {
       expect(line.serviceType).toBe('marketplace');
     });
 
-    it('prices from the buy-box winner, not the first listing', async () => {
-      const { ctrl, cartSend } = build(PRODUCT);
+    it("uses the pricer's unit price and name, never the listing it happens to see", async () => {
+      const { ctrl, cartSend } = build(PRODUCT, {
+        ...PRICING,
+        items: [{ ...PRICING.items[0], unitPrice: 125900, name: 'iPhone 15 Pro — 256GB / Silver' }],
+      });
 
-      await ctrl.addToCart({ user: { id: 'u1' } }, { productId: 'p1', quantity: 1 } as any);
+      await ctrl.addToCart({ user: { id: 'u1' } }, {
+        productId: 'p1',
+        quantity: 1,
+        variantId: 'v-256-silver',
+      } as any);
 
-      expect(cartSend.mock.calls[0][1].price).toBe(115900);
+      const [, line] = cartSend.mock.calls[0];
+      expect(line.price).toBe(125900);
+      expect(line.name).toBe('iPhone 15 Pro — 256GB / Silver');
+      expect(line.variantId).toBe('v-256-silver');
     });
 
     it('prefers the primary image', async () => {
@@ -159,16 +216,37 @@ describe('MarketplaceGatewayController', () => {
       expect(cartSend.mock.calls[0][1].imageUrl).toBe('primary.jpg');
     });
 
-    it('falls back to MRP when the product has no active listing', async () => {
-      const { ctrl, cartSend } = build({ ...PRODUCT, listings: [] });
+    it("refuses the line with the pricer's reason when it cannot be priced", async () => {
+      const { ctrl, cartSend } = build(PRODUCT, {
+        ok: false,
+        reason: 'Please choose an option (size, colour…) for this product (p1)',
+        items: [
+          {
+            ok: false,
+            productId: 'p1',
+            quantity: 1,
+            reason: 'Please choose an option (size, colour…) for this product',
+          },
+        ],
+      });
 
-      await ctrl.addToCart({ user: { id: 'u1' } }, { productId: 'p1', quantity: 1 } as any);
-
-      expect(cartSend.mock.calls[0][1].price).toBe(134900);
+      await expect(
+        ctrl.addToCart({ user: { id: 'u1' } }, { productId: 'p1', quantity: 1 } as any),
+      ).rejects.toThrow(/choose an option/);
+      expect(cartSend).not.toHaveBeenCalled();
     });
 
     it('refuses an unpriceable product instead of adding a NaN line', async () => {
-      const { ctrl, cartSend } = build({ id: 'p1', name: 'Broken', mrp: null, listings: [] });
+      const { ctrl, cartSend } = build(
+        { id: 'p1', name: 'Broken', mrp: null, listings: [] },
+        {
+          ok: false,
+          reason: 'Product has no valid price (p1)',
+          items: [
+            { ok: false, productId: 'p1', quantity: 1, reason: 'Product has no valid price' },
+          ],
+        },
+      );
 
       await expect(
         ctrl.addToCart({ user: { id: 'u1' } }, { productId: 'p1', quantity: 1 } as any),
@@ -194,15 +272,29 @@ describe('MarketplaceGatewayController', () => {
      * id that is not in the database — a 404 on the product detail page.
      */
     it('serves the full feed over TCP even when the gRPC channel is up', async () => {
-      const grpcHome = { banners: [] as unknown[], flashDeals: [] as unknown[], categories: [] as unknown[], topBrands: [] as unknown[], featured: [] as unknown[], topSellers: [] as unknown[] };
+      const grpcHome = {
+        banners: [] as unknown[],
+        flashDeals: [] as unknown[],
+        categories: [] as unknown[],
+        topBrands: [] as unknown[],
+        featured: [] as unknown[],
+        topSellers: [] as unknown[],
+      };
       const catalogGrpc: any = {
         getHome: jest.fn().mockResolvedValue(grpcHome),
         getCategories: jest.fn().mockResolvedValue(null),
         searchProducts: jest.fn().mockResolvedValue(null),
       };
       const fullFeed = {
-        flashDeals: [] as unknown[], dealsOfDay: [] as unknown[], newArrivals: [] as unknown[], bestSellers: [] as unknown[],
-        trending: [] as unknown[], recommended: [] as unknown[], sponsored: [] as unknown[], heroBanners: [] as unknown[], brandPromos: {},
+        flashDeals: [] as unknown[],
+        dealsOfDay: [] as unknown[],
+        newArrivals: [] as unknown[],
+        bestSellers: [] as unknown[],
+        trending: [] as unknown[],
+        recommended: [] as unknown[],
+        sponsored: [] as unknown[],
+        heroBanners: [] as unknown[],
+        brandPromos: {},
       };
       const tcp = jest.fn().mockReturnValue(of(fullFeed));
       const client: any = { send: tcp };
@@ -214,7 +306,14 @@ describe('MarketplaceGatewayController', () => {
       expect(catalogGrpc.getHome).not.toHaveBeenCalled();
       expect(tcp).toHaveBeenCalledWith({ cmd: 'get_home' }, expect.anything());
       // The sections the truncated gRPC response would have dropped.
-      for (const key of ['trending', 'newArrivals', 'bestSellers', 'dealsOfDay', 'recommended', 'sponsored']) {
+      for (const key of [
+        'trending',
+        'newArrivals',
+        'bestSellers',
+        'dealsOfDay',
+        'recommended',
+        'sponsored',
+      ]) {
         expect(result).toHaveProperty(key);
       }
     });
