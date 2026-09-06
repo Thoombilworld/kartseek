@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 import { Seller } from './seller.entity';
@@ -39,6 +48,15 @@ export class ProductListing {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   sellingPrice: number;
+
+  /**
+   * The struck-through list price for THIS offer, in the seller's market
+   * currency. `Product.mrp` is one number for the whole catalogue, which cannot
+   * be right once the same product is offered in riyals and rupees; readers use
+   * this when set and fall back to the product's figure.
+   */
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  mrp: number | null;
 
   @Column({ type: 'int', default: 0 })
   stockQuantity: number;

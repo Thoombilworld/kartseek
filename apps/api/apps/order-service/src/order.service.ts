@@ -5,7 +5,6 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { Order } from './entities/order.entity';
 
-
 export enum OrderStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -30,7 +29,9 @@ export class OrderService {
   ) {}
 
   /** Redis is a read cache in front of the table, never the system of record. */
-  private cacheKey(orderNumber: string) { return `order:${orderNumber}`; }
+  private cacheKey(orderNumber: string) {
+    return `order:${orderNumber}`;
+  }
 
   async healthCheck() {
     return { service: 'order-service', status: 'ok', timestamp: new Date().toISOString() };
@@ -68,6 +69,8 @@ export class OrderService {
     couponCode?: string;
     walletAmount?: number;
     notes?: string;
+    /** Market the order is placed in — selects the delivery rule (and its currency). */
+    regionCode?: string;
   }) {
     const orderId = `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
@@ -78,40 +81,48 @@ export class OrderService {
     const claimed = Number(payload.subtotal);
     // Trust whichever is higher: an upstream that under-states the subtotal must
     // not be able to shrink the bill.
-    const subtotal = Math.round(Math.max(Number.isFinite(claimed) ? claimed : 0, lineSum) * 100) / 100;
+    const subtotal =
+      Math.round(Math.max(Number.isFinite(claimed) ? claimed : 0, lineSum) * 100) / 100;
 
     // Dynamic delivery fee based on admin-defined zone rates
     // Zone rates: Metro=40, Tier-1=49, Tier-2=69, Rest=79, default=50
-    const deliveryFee = await this.estimateDeliveryFee(payload.serviceType, subtotal);
+    const deliveryFee = await this.estimateDeliveryFee(
+      payload.serviceType,
+      subtotal,
+      payload.regionCode,
+    );
     // Never more than the basket, never negative — a bad discount cannot produce
     // a credit.
     const discount = Math.min(Math.max(Number(payload.discount) || 0, 0), subtotal);
     const walletDeduction = Math.min(Math.max(payload.walletAmount ?? 0, 0), subtotal - discount);
-    const totalAmount = Math.round((subtotal + deliveryFee - discount - walletDeduction) * 100) / 100;
+    const totalAmount =
+      Math.round((subtotal + deliveryFee - discount - walletDeduction) * 100) / 100;
 
     // Written to Postgres first — this row is the record of a payment taken, and
     // it must exist before the event that tells the rest of the platform so.
     // Orders used to live only in `redis.setJson(..., 86400)`, so every order
     // silently disappeared after 24 hours and none survived a cache flush.
-    const saved = await this.orderRepo.save(this.orderRepo.create({
-      orderNumber: orderId,
-      customerId: payload.customerId,
-      sellerId: (payload.items?.[0] as any)?.sellerId ?? undefined,
-      items: payload.items,
-      subtotal,
-      deliveryFee,
-      discount,
-      couponCode: payload.couponCode ?? null,
-      couponId: payload.couponId ?? null,
-      walletDeduction,
-      totalAmount,
-      deliveryAddress: payload.deliveryAddress,
-      serviceType: payload.serviceType,
-      paymentMethod: payload.paymentMethod,
-      status: OrderStatus.PENDING as any,
-      notes: payload.notes,
-      estimatedDeliveryAt: new Date(Date.now() + 35 * 60 * 1000),
-    }));
+    const saved = await this.orderRepo.save(
+      this.orderRepo.create({
+        orderNumber: orderId,
+        customerId: payload.customerId,
+        sellerId: (payload.items?.[0] as any)?.sellerId ?? undefined,
+        items: payload.items,
+        subtotal,
+        deliveryFee,
+        discount,
+        couponCode: payload.couponCode ?? null,
+        couponId: payload.couponId ?? null,
+        walletDeduction,
+        totalAmount,
+        deliveryAddress: payload.deliveryAddress,
+        serviceType: payload.serviceType,
+        paymentMethod: payload.paymentMethod,
+        status: OrderStatus.PENDING as any,
+        notes: payload.notes,
+        estimatedDeliveryAt: new Date(Date.now() + 35 * 60 * 1000),
+      }),
+    );
 
     const order = this.toWire(saved);
 
@@ -127,7 +138,9 @@ export class OrderService {
       itemCount: payload.items.length,
     });
 
-    this.logger.log(`Order placed: ${orderId} | Total: ${totalAmount} | Customer: ${payload.customerId}`);
+    this.logger.log(
+      `Order placed: ${orderId} | Total: ${totalAmount} | Customer: ${payload.customerId}`,
+    );
     return { success: true, order };
   }
 
@@ -159,7 +172,9 @@ export class OrderService {
       notes: row.notes ?? null,
       placedAt: row.placedAt instanceof Date ? row.placedAt.toISOString() : row.placedAt,
       estimatedDeliveryAt:
-        row.estimatedDeliveryAt instanceof Date ? row.estimatedDeliveryAt.toISOString() : row.estimatedDeliveryAt,
+        row.estimatedDeliveryAt instanceof Date
+          ? row.estimatedDeliveryAt.toISOString()
+          : row.estimatedDeliveryAt,
       updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
     };
   }
@@ -179,7 +194,9 @@ export class OrderService {
 
     const order = this.toWire(row);
     // Re-warm so the next read stays on the fast path.
-    await this.redis.setJson(this.cacheKey(orderId), order, 86400).catch((): undefined => undefined);
+    await this.redis
+      .setJson(this.cacheKey(orderId), order, 86400)
+      .catch((): undefined => undefined);
     return order;
   }
 
@@ -236,7 +253,9 @@ export class OrderService {
         totalAmount: order.totalAmount,
         itemCount: order.items?.length ?? 0,
       });
-      this.logger.log(`Delivery request created for order ${orderId} — awaiting partner assignment`);
+      this.logger.log(
+        `Delivery request created for order ${orderId} — awaiting partner assignment`,
+      );
     }
 
     // ── Commission Auto-Trigger on Delivery ──────────────────────────────────
@@ -254,7 +273,7 @@ export class OrderService {
       await this.kafka.publish('commission.trigger', {
         orderId,
         sellerId,
-        orderTotal: order.subtotal,  // Commission is on subtotal (excl. delivery fee)
+        orderTotal: order.subtotal, // Commission is on subtotal (excl. delivery fee)
         serviceType: order.serviceType,
         category,
         subCategory,
@@ -263,8 +282,8 @@ export class OrderService {
 
       this.logger.log(
         `Commission triggered for order ${orderId} | ` +
-        `Seller: ${sellerId} | Subtotal: ${order.subtotal} | ` +
-        `Service: ${order.serviceType} | Category: ${category ?? 'N/A'}`,
+          `Seller: ${sellerId} | Subtotal: ${order.subtotal} | ` +
+          `Service: ${order.serviceType} | Category: ${category ?? 'N/A'}`,
       );
     }
 
@@ -285,7 +304,12 @@ export class OrderService {
       timeline: [
         { status: 'CONFIRMED', at: order.placedAt, done: true },
         { status: 'PREPARING', at: null, done: order.status !== OrderStatus.PENDING },
-        { status: 'OUT_FOR_DELIVERY', at: null, done: order.status === OrderStatus.OUT_FOR_DELIVERY || order.status === OrderStatus.DELIVERED },
+        {
+          status: 'OUT_FOR_DELIVERY',
+          at: null,
+          done:
+            order.status === OrderStatus.OUT_FOR_DELIVERY || order.status === OrderStatus.DELIVERED,
+        },
         { status: 'DELIVERED', at: null, done: order.status === OrderStatus.DELIVERED },
       ],
     };
@@ -316,11 +340,12 @@ export class OrderService {
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
 
-    const where = wanted.length === 1
-      ? { customerId, status: wanted[0] as OrderStatus }
-      : wanted.length > 1
-        ? { customerId, status: In(wanted as OrderStatus[]) }
-        : { customerId };
+    const where =
+      wanted.length === 1
+        ? { customerId, status: wanted[0] as OrderStatus }
+        : wanted.length > 1
+          ? { customerId, status: In(wanted as OrderStatus[]) }
+          : { customerId };
 
     const [rows, total] = await this.orderRepo.findAndCount({
       where,
@@ -353,13 +378,34 @@ export class OrderService {
    * `subtotal` is the basket before discounts: a coupon should not cost the
    * customer their free delivery.
    */
-  private async estimateDeliveryFee(serviceType?: string, subtotal = 0): Promise<number> {
+  private async estimateDeliveryFee(
+    serviceType?: string,
+    subtotal = 0,
+    regionCode?: string,
+  ): Promise<number> {
+    // Marketplace rates are per market, in that market's own currency — one
+    // number for every currency meant QR 60 / free above QR 2,000 in Doha and
+    // AED 60 / 2,000 in Dubai. Mirrored by `delivery` in the web registry
+    // (packages/shared-core/src/localization/countries.ts); change both.
+    const MARKETPLACE_RATES: Record<string, { baseFee: number; freeDeliveryThreshold: number }> = {
+      QA: { baseFee: 15, freeDeliveryThreshold: 200 },
+      IN: { baseFee: 60, freeDeliveryThreshold: 2000 },
+      AE: { baseFee: 15, freeDeliveryThreshold: 200 },
+      SA: { baseFee: 15, freeDeliveryThreshold: 200 },
+      BH: { baseFee: 2, freeDeliveryThreshold: 25 },
+      KW: { baseFee: 2, freeDeliveryThreshold: 20 },
+      OM: { baseFee: 2, freeDeliveryThreshold: 25 },
+      GB: { baseFee: 4, freeDeliveryThreshold: 40 },
+      US: { baseFee: 6, freeDeliveryThreshold: 50 },
+      SG: { baseFee: 5, freeDeliveryThreshold: 60 },
+    };
+    const market = String(regionCode ?? '').toUpperCase();
     // Service-specific base fees aligned with delivery-service rateConfig
     const rateConfig: Record<string, { baseFee: number; freeDeliveryThreshold?: number }> = {
-      marketplace: { baseFee: 60, freeDeliveryThreshold: 2000 },
-      grocery:     { baseFee: 40, freeDeliveryThreshold: 1500 },
-      restaurant:  { baseFee: 30 },
-      pharmacy:    { baseFee: 50, freeDeliveryThreshold: 1000 },
+      marketplace: MARKETPLACE_RATES[market] ?? MARKETPLACE_RATES.QA,
+      grocery: { baseFee: 40, freeDeliveryThreshold: 1500 },
+      restaurant: { baseFee: 30 },
+      pharmacy: { baseFee: 50, freeDeliveryThreshold: 1000 },
     };
 
     const config = rateConfig[serviceType ?? 'marketplace'] ?? rateConfig.marketplace;
@@ -372,7 +418,9 @@ export class OrderService {
     try {
       const adminRate = await this.redis.get('shipping:default_rate');
       if (adminRate && !isNaN(Number(adminRate))) return Number(adminRate);
-    } catch { /* fallback to config */ }
+    } catch {
+      /* fallback to config */
+    }
 
     return config.baseFee;
   }

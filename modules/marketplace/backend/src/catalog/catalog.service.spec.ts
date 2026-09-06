@@ -837,4 +837,109 @@ describe('CatalogService', () => {
       expect(res.items[0]).toMatchObject({ unitPrice: 9, listingId: 'L2', sellerId: 'S2' });
     });
   });
+
+  describe('pricing per market', () => {
+    const PID = '2b3c706d-185e-4b7e-86e2-00b29682c552';
+    const QA_SELLER = {
+      id: 'S-QA',
+      verificationStatus: 'VERIFIED',
+      isActive: true,
+      regionCode: 'QA',
+    };
+    const IN_SELLER = {
+      id: 'S-IN',
+      verificationStatus: 'VERIFIED',
+      isActive: true,
+      regionCode: 'IN',
+    };
+    const product = {
+      id: PID,
+      name: 'iPhone 15 Pro',
+      mrp: '5850.00',
+      is_active: true,
+      approval_status: 'APPROVED',
+    };
+    const qaOffer = {
+      id: 'L-QA',
+      sellingPrice: '5050.00',
+      mrp: '5850.00',
+      stockQuantity: 10,
+      isBuyBoxWinner: true,
+      product: { id: PID },
+      seller: QA_SELLER,
+    };
+    const inOffer = {
+      id: 'L-IN',
+      sellingPrice: '115650.00',
+      mrp: '133965.00',
+      stockQuantity: 10,
+      isBuyBoxWinner: true,
+      product: { id: PID },
+      seller: IN_SELLER,
+    };
+    const qaVariant = {
+      id: 'V-QA',
+      productId: PID,
+      sellerId: 'S-QA',
+      variantName: '128GB / Black',
+      sellingPrice: '5061.00',
+      mrp: '5890.00',
+      stockQuantity: 5,
+      isActive: true,
+    };
+    const inVariant = {
+      id: 'V-IN',
+      productId: PID,
+      sellerId: 'S-IN',
+      variantName: '128GB / Black',
+      sellingPrice: '115900.00',
+      mrp: '134900.00',
+      stockQuantity: 5,
+      isActive: true,
+    };
+
+    beforeEach(() => {
+      productRepo.find.mockResolvedValue([product]);
+      (service as any).listingRepo.find.mockResolvedValue([qaOffer, inOffer]);
+      variantRepo.find.mockResolvedValue([qaVariant, inVariant]);
+    });
+
+    it("prices an Indian basket from the Indian seller's offer, not the Qatari one", async () => {
+      const res = await service.priceOrderItems(
+        [{ productId: PID, quantity: 1, variantId: 'V-IN' }],
+        'IN',
+      );
+      expect(res.ok).toBe(true);
+      expect(res.items[0]).toMatchObject({
+        unitPrice: 115900,
+        listingId: 'L-IN',
+        sellerId: 'S-IN',
+        mrp: 134900,
+      });
+    });
+
+    it('refuses a Qatari SKU in an Indian basket even though the product is offered there', async () => {
+      const res = await service.priceOrderItems(
+        [{ productId: PID, quantity: 1, variantId: 'V-QA' }],
+        'IN',
+      );
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/not available/i);
+    });
+
+    it('uses the offer list price for the discount base', async () => {
+      const res = await service.priceOrderItems(
+        [{ productId: PID, quantity: 1, variantId: 'V-QA' }],
+        'QA',
+      );
+      expect(res.ok).toBe(true);
+      expect(res.items[0]).toMatchObject({ unitPrice: 5061, listingId: 'L-QA', mrp: 5890 });
+    });
+
+    it('refuses a market nobody serves', async () => {
+      const res = await service.priceOrderItems([{ productId: PID, quantity: 1 }], 'SA');
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/seller/i);
+    });
+  });
 });

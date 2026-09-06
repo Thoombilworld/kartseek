@@ -306,6 +306,31 @@ export class CatalogService {
   private static readonly LIVE_LISTING = { isActive: true, approvalStatus: 'APPROVED' } as const;
 
   /**
+   * Join condition for a product's listings as ONE market sees them: live, and
+   * offered by a seller who trades in that market (or everywhere). Without the
+   * seller clause a card's buy box could be another market's offer — a riyal
+   * price rendered under a rupee sign.
+   */
+  private liveListingFor(alias: string, region?: string): string {
+    const base = CatalogService.liveListing(alias);
+    if (!region) return base;
+    return `${base} AND ${alias}.seller_id IN (
+      SELECT s.id FROM ${this.tableOf(Seller)} s
+      WHERE s."isActive" = true AND s."verificationStatus" <> 'SUSPENDED'
+        AND (s.region_code = :regionCode OR s.region_code IS NULL)
+    )`;
+  }
+
+  /** Whether a seller may serve a market: active, not suspended, registered there or everywhere. */
+  private static sellerMayServe(seller: any, region?: string): boolean {
+    if (!seller) return false;
+    if (seller.verificationStatus === 'SUSPENDED' || seller.isActive === false) return false;
+    if (!region) return true;
+    const code = seller.regionCode ?? seller.region_code ?? null;
+    return code == null || String(code).toUpperCase() === region;
+  }
+
+  /**
    * Real product/review/rating figures for a set of sellers.
    *
    * `sellers.total_products`, `total_reviews`, `total_orders` and `seller_rating`
@@ -575,7 +600,10 @@ export class CatalogService {
    * must treat a partially-priced result as a failure — never as "price what we
    * can and continue".
    */
-  async priceOrderItems(items: Array<{ productId: string; quantity: number; variantId?: string }>) {
+  async priceOrderItems(
+    items: Array<{ productId: string; quantity: number; variantId?: string }>,
+    region?: string,
+  ) {
     const lines = Array.isArray(items) ? items : [];
     if (lines.length === 0) {
       return { ok: false, reason: 'No items to price', items: [], subtotal: 0 };
@@ -599,13 +627,13 @@ export class CatalogService {
           order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC' },
         })
       : [];
+    const market = region ? region.toUpperCase() : undefined;
     const buyBox = new Map<string, ProductListing>();
     for (const listing of listings) {
-      // A suspended or deactivated seller keeps its rows but may not trade:
-      // the storefront hides them and checkout must not price them either.
-      const seller = (listing as any).seller;
-      if (seller && (seller.verificationStatus === 'SUSPENDED' || seller.isActive === false))
-        continue;
+      // The offer must come from a seller who may trade in this market: a
+      // suspended store keeps its rows, and a Qatari offer must not price an
+      // Indian basket.
+      if (!CatalogService.sellerMayServe((listing as any).seller, market)) continue;
       // Ordered buy-box-first, so the first listing seen for a product wins.
       const pid = (listing as any).product?.id;
       if (pid && !buyBox.has(pid)) buyBox.set(pid, listing);
@@ -640,7 +668,12 @@ export class CatalogService {
       if (!listing) return fail('This seller is not accepting orders right now');
 
       const variantId = String(line?.variantId ?? '');
-      const productVariants = variantsByProduct.get(productId) ?? [];
+      // Only the SKUs the chosen offer's seller sells (or catalogue-wide ones):
+      // each market's seller carries its own copies at its own prices.
+      const offerSellerId: string | null = (listing as any).seller?.id ?? null;
+      const productVariants = (variantsByProduct.get(productId) ?? []).filter(
+        (v) => !v.sellerId || v.sellerId === offerSellerId,
+      );
       let variant: ProductVariant | undefined;
       if (variantId) {
         variant = productVariants.find((v) => v.id === variantId);
@@ -667,7 +700,7 @@ export class CatalogService {
         listingId: listing.id,
         sellerId: (listing as any).seller?.id ?? null,
         name: variant?.variantName ? `${product.name} — ${variant.variantName}` : product.name,
-        mrp: Number(variant?.mrp ?? product.mrp) || 0,
+        mrp: Number(variant?.mrp ?? (listing as any).mrp ?? product.mrp) || 0,
         variantId: variant?.id ?? null,
         variantName: variant?.variantName ?? null,
       };
@@ -987,7 +1020,7 @@ export class CatalogService {
       .leftJoinAndSelect('p.images', 'images')
       // Left, not inner: a product with no active listing still belongs in the
       // catalogue, it just has no selling price to show yet.
-      .leftJoinAndSelect('p.listings', 'listings', CatalogService.liveListing('listings'))
+      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
       .where('p.is_active = :active', { active: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' });
 
@@ -1121,7 +1154,7 @@ export class CatalogService {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   private static readonly SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
 
-  async getProductById(idOrSlug: string) {
+  async getProductById(idOrSlug: string, region?: string) {
     // The product detail route is addressable by slug as well as by UUID — the
     // storefront's own SEO metadata and share links are built from `product.slug`
     // — but every non-UUID used to be rejected here, so those URLs 400'd and the
@@ -1134,7 +1167,10 @@ export class CatalogService {
     }
     const where = byId ? { id: idOrSlug } : { slug: idOrSlug };
 
-    const cached = await this.redis.getJson(`product:${idOrSlug}`);
+    // Keyed by market as well as id: the same product carries a different offer,
+    // SKUs and currency per market, and one key served Qatar's detail to India.
+    const detailKey = `product:${idOrSlug}:${region ? region.toUpperCase() : 'ALL'}`;
+    const cached = await this.redis.getJson(detailKey);
     if (cached) return cached;
 
     // Try with subcategory first; fall back without it if the relation doesn't exist
@@ -1195,6 +1231,14 @@ export class CatalogService {
       this.logger.warn(`Failed to fetch related data for product ${productId}`);
     }
 
+    // One market's view: offers from sellers who trade here (or everywhere),
+    // buy box first, and only the SKUs that seller sells. Listing every
+    // market's offer put a Qatari price on the Indian page and vice versa.
+    const market = region ? region.toUpperCase() : undefined;
+    listings = listings.filter((l: any) => CatalogService.sellerMayServe(l?.seller, market));
+    const buyBoxSellerId: string | null = (listings[0] as any)?.seller?.id ?? null;
+    variants = variants.filter((v: any) => !v?.sellerId || v.sellerId === buyBoxSellerId);
+
     // `variantDimensions` is what the storefront's selector renders. It was only
     // ever read off `metadata`, which nothing populates — so colour and size
     // pickers never appeared even once variants existed as rows. Derive it from
@@ -1216,7 +1260,7 @@ export class CatalogService {
       reviewCount: product.reviewCount,
       averageRating: product.averageRating,
     };
-    await this.redis.setJson(`product:${idOrSlug}`, result, 120);
+    await this.redis.setJson(detailKey, result, 120);
     return result;
   }
 
@@ -1258,7 +1302,7 @@ export class CatalogService {
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.images', 'images')
-      .leftJoinAndSelect('p.listings', 'listings', CatalogService.liveListing('listings'))
+      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
       .where('p.is_active = true')
       .andWhere('p.approval_status = :s', { s: 'APPROVED' });
 
@@ -1298,7 +1342,10 @@ export class CatalogService {
       // orderBy() parses its argument as a property path, so a raw expression is
       // read as an alias ('"(p" alias was not found'). Select it under a name and
       // order by that instead.
-      .addSelect('(p.mrp - listings.sellingPrice) / p.mrp', 'discount_ratio');
+      .addSelect(
+        '(COALESCE(listings.mrp, p.mrp) - listings.sellingPrice) / NULLIF(COALESCE(listings.mrp, p.mrp), 0)',
+        'discount_ratio',
+      );
 
     this.scopeToRegion(dealsQb, region);
     this.rankLocalFirst(dealsQb, region);
@@ -1345,7 +1392,7 @@ export class CatalogService {
       .leftJoinAndSelect('p.brand', 'brand')
       .leftJoinAndSelect('p.category', 'category')
       .leftJoinAndSelect('p.images', 'images')
-      .leftJoinAndSelect('p.listings', 'listings', CatalogService.liveListing('listings'))
+      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
       .where('n.status = :approved', { approved: 'APPROVED' })
       .andWhere('deal.status IN (:...live)', { live: ['SCHEDULED', 'ACTIVE'] })
       .andWhere('deal.window_start <= :now', { now })
@@ -1434,7 +1481,7 @@ export class CatalogService {
       // Search results are product cards like any other: without images and the
       // buy-box listing they render with no picture and at MRP.
       .leftJoinAndSelect('p.images', 'images')
-      .leftJoinAndSelect('p.listings', 'listings', CatalogService.liveListing('listings'))
+      .leftJoinAndSelect('p.listings', 'listings', this.liveListingFor('listings', region))
       .addSelect(rankExpr, 'rank')
       .where('p.is_active = :active', { active: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' })

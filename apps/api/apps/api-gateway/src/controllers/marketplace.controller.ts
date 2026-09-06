@@ -332,8 +332,17 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Get product detail' })
   @ApiParam({ name: 'id', example: 'PRD-001', description: 'Product ID' })
   @ApiNotFoundResponse({ description: 'Product not found' })
-  async getProductById(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCT_BY_ID, id);
+  async getProductById(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Query('country') country?: string,
+  ) {
+    // The market decides which offers and SKUs the detail carries. Server
+    // components cannot send the region header, so they pass ?country=.
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCT_BY_ID, {
+      id,
+      country: this.region(req, country),
+    });
   }
 
   @Get('products')
@@ -432,7 +441,11 @@ export class MarketplaceGatewayController {
    * Prices are decimal columns, so TypeORM hands them back as strings — they must
    * be Number()'d or the subtotal becomes string concatenation.
    */
-  private async addResolvedItem(userId: string | undefined, payload: AddToCartDto) {
+  private async addResolvedItem(
+    userId: string | undefined,
+    payload: AddToCartDto,
+    region?: string,
+  ) {
     const productId = (payload as any)?.productId;
     if (!productId) throw new HttpException('productId is required', HttpStatus.BAD_REQUEST);
 
@@ -450,6 +463,7 @@ export class MarketplaceGatewayController {
     const variantId = (payload as any)?.variantId || undefined;
     const pricing: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.PRICE_ORDER_ITEMS, {
       items: [{ productId, quantity, variantId }],
+      country: region,
     });
     const priced = pricing?.items?.[0];
     if (!pricing?.ok || !priced?.ok) {
@@ -473,6 +487,9 @@ export class MarketplaceGatewayController {
       imageUrl: (images.find((i: any) => i?.isPrimary) ?? images[0])?.url,
       variantId,
       serviceType: 'marketplace',
+      // The market this line was priced for; GET /cart shows only the current
+      // market's lines so a riyal price never sits under a rupee sign.
+      regionCode: region,
     };
 
     return lastValueFrom(this.cartClient.send({ cmd: 'add_to_cart' }, line)).catch(() => {
@@ -487,15 +504,19 @@ export class MarketplaceGatewayController {
   @ApiCreatedResponse({ description: 'Item added to cart' })
   @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid product or quantity' })
   async addToCart(@Req() req: any, @Body() payload: AddToCartDto) {
-    return this.addResolvedItem(this.userId(req), payload);
+    return this.addResolvedItem(this.userId(req), payload, this.region(req));
   }
 
   @UseGuards(JwtAuthGuard, ResourceOwnershipGuard)
   @ResourceOwner({ paramKey: 'userId' })
   @Post('cart/:userId')
   @ApiOperation({ summary: 'Add item to cart with user ID' })
-  async addToCartWithUserId(@Param('userId') userId: string, @Body() payload: AddToCartDto) {
-    return this.addResolvedItem(userId, payload);
+  async addToCartWithUserId(
+    @Req() req: any,
+    @Param('userId') userId: string,
+    @Body() payload: AddToCartDto,
+  ) {
+    return this.addResolvedItem(userId, payload, this.region(req));
   }
 
   @UseGuards(JwtAuthGuard, ResourceOwnershipGuard)
@@ -511,11 +532,37 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Get current cart' })
   @ApiOkResponse({ description: 'Cart contents' })
   async getCart(@Req() req: any) {
-    return lastValueFrom(
+    const cart = await lastValueFrom(
       this.cartClient.send({ cmd: 'get_cart' }, { userId: this.userId(req) }),
     ).catch(() => {
       throw new HttpException('Cart service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     });
+    return this.scopeCartToRegion(cart, this.region(req));
+  }
+
+  /**
+   * Only the lines priced for the market being browsed.
+   *
+   * Lines are priced in the currency of the market they were added in, and the
+   * client formats every number in the current market's currency — so a basket
+   * started in Doha showed riyal figures under a rupee sign after switching to
+   * India. Lines that predate the tag carry no region and stay visible.
+   */
+  private scopeCartToRegion(payload: any, region?: string) {
+    const cart = payload?.cart ?? payload;
+    if (!region || !Array.isArray(cart?.items)) return payload;
+    const items = cart.items.filter(
+      (i: any) => !i?.regionCode || String(i.regionCode).toUpperCase() === region,
+    );
+    const subtotal =
+      Math.round(
+        items.reduce(
+          (sum: number, i: any) => sum + (Number(i?.price) || 0) * (Number(i?.quantity) || 0),
+          0,
+        ) * 100,
+      ) / 100;
+    const scoped = { ...cart, items, subtotal };
+    return payload?.cart ? { ...payload, cart: scoped } : scoped;
   }
 
   // ── Checkout ────────────────────────────────────────────────────────────────

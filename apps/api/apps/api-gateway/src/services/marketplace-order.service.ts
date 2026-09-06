@@ -99,12 +99,17 @@ export class MarketplaceOrderService {
     }
 
     const requested = Array.isArray(payload?.items) ? payload.items : [];
+    // The market the customer is buying in: decides which offers price the
+    // basket, the delivery rule, and the currency the order is recorded in.
+    const region = String(req?.headers?.['x-region-code'] ?? '').toUpperCase() || undefined;
+
     if (requested.length === 0) {
       throw new HttpException('Cart is empty', HttpStatus.BAD_REQUEST);
     }
 
     // ── 1. Authoritative prices ────────────────────────────────────────────
     const pricing: any = await this.sendToMarketplace(MARKETPLACE_PATTERNS.PRICE_ORDER_ITEMS, {
+      country: region,
       items: requested.map((i: any) => ({
         productId: i?.productId,
         quantity: i?.quantity,
@@ -252,6 +257,7 @@ export class MarketplaceOrderService {
           giftCardAmount: giftCardAmount || undefined,
           deliveryAddress: payload?.shippingAddress ?? payload?.deliveryAddress ?? '',
           serviceType: 'marketplace',
+          regionCode: region,
           paymentMethod: payload?.paymentMethod,
           walletAmount: Number(payload?.walletAmount) || 0,
           notes: payload?.notes,
