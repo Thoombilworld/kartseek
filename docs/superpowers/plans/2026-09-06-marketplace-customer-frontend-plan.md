@@ -1107,3 +1107,20 @@ Acceptance: no invented figures reachable.
 - Cart lines are tagged with their market and `GET /cart` is scoped to it (part of B-05).
 - Cart Remove/quantity keyed by product + variant (found while verifying; not in the gap report).
 - Zone layouts seed the region from `X-Country-Code` (all eight zones; found while verifying).
+
+### Done in the third pass (2026-09-06, offers everywhere / promos / zones)
+
+- **S-01, promotions half** — coupons, flash deals and banners per market are seeded; live FX repricing. Reviews and images remain.
+- **B-24 empty promotions** — closed for coupons, flash deals and banners.
+- **MKT-003 data half, completed** — 178 live offers in every market; the E2E probe product removed.
+- **Flash deals honoured at checkout** (found while verifying; not in the gap report): deal price shown and charged, allocation counted on reserve/release.
+- **Coupons scoped to their market** (found while verifying).
+- **Market-specific list-price wording** — `getListPriceLabels`; cart and PDP use it.
+- **Zones: `NEXT_PUBLIC_ACTIVE_REGIONS` everywhere** — all seven other zones followed the marketplace's pattern; shell test pins it.
+- **Production migration for `product_listings.mrp`** — committed with the apply procedure.
+
+Still open from this pass:
+
+- **B-10** cancel-releases-stock now also has to hand back the flash-deal allocation (`releaseListingStock` already does when given `dealNominationId`; the cancel path calls neither).
+- **New: per-market content for doctor, pharmacy, taxi** — fixtures are Indian/rupee whatever the market; each vertical needs market-scoped data before its storefront is honest outside India.
+- **B-16 / S-01 reviews and images** unchanged.

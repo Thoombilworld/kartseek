@@ -411,3 +411,50 @@ All verification orders were cancelled afterwards. Tests: marketplace backend 19
 - Exchange rates are seed-time constants (QA base: IN ×22.9, AE ×1.01, SA ×1.03); prices do not float. Re-run the seed to reprice.
 - Coupons, flash deals and banners are still empty in every market (B-24).
 - Cancelling an order still does not release reserved stock (B-10).
+
+## 15. Offers everywhere, live pricing, promotions, and the other zones (2026-09-06, third pass)
+
+Requested after §14: the products with no offer, exchange rates, coupons/flash deals/banners, the other zones after the region-header fix, the `product_listings.mrp` migration, and market-appropriate list-price wording.
+
+### 15.1 The "64 products without a Qatari listing"
+
+63 of them did have an official-store offer — sitting in `approvalStatus = PENDING`, so the product was approved but its only offer was not, and nothing could price or copy it. The seed's step 0 approves the official store's own offers; every market now carries 178 live offers. The 64th was `E2E Integration Probe e2e`, residue of `apps/api/scripts/e2e-marketplace.ts` (its own pre-run cleanup deletes it by name); removed the same way. Nothing else referenced it.
+
+### 15.2 Seed v2 (`marketplace-markets-seed.mjs`)
+
+| Step        | What it does now                                                                                                                                                                                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FX          | Live QAR rates from `open.er-api.com` (IN 25.9647, AE 1.0089, SA 1.0302 on 2026-09-06), `FX_<CC>` env overrides, pegged fallbacks when offline. Every market's offers and SKUs are repriced on each run. |
+| Coupons     | `WELCOME10` (10 %, first order, every market) + one flat code per market with a local minimum: `SAVE50QA`, `SAVE500IN`, `SAVE50AE`, `SAVE50SA`, each with `region_code`.                                 |
+| Flash deals | One ACTIVE seven-day window per market with 8 APPROVED nominations from that market's official store at 15 % off, allocation 20.                                                                         |
+| Banners     | 2 hero + 1 campaign per market in Redis (`regions: [cc]`); the cache flush now skips `*-banners`.                                                                                                        |
+
+### 15.3 Defects found while verifying, and fixed
+
+- **Flash deals answered "Marketplace service unavailable" in every market.** `getFlashDeals` used `liveListingFor('listings', region)` without binding `:regionCode` (product queries bind it via `scopeToRegion`; this one never went through it), so Postgres received a literal `:regionCode`. Every listings join now binds the parameter in the same call. Regression test added.
+- **The deal price was decorative.** Nothing read `deal_price`: the deal page showed the ordinary offer price under a FLASH ribbon and the cart charged it. `mapCatalogProduct` shows `dealPrice`; `priceOrderItems` charges a live, approved nomination from the offer's own seller (never a SKU line, never above the offer price); the reservation counts the unit against `stock_allocated` and refuses a sold-out deal; release hands it back. Five backend tests, two mapper tests.
+- **Coupons ignored the market.** A riyal flat code was listed and accepted in India. `getCoupons`/`validateCoupon` take the region (region-less codes run everywhere); gateway `GET /coupons`, `POST /coupons/validate`, the checkout's coupon check and `GET /flash-deals/active` pass it. Five tests.
+- **MRP wording outside India.** `getListPriceLabels(country)`: India "M.R.P." / "You save (MRP)"; Qatar, UAE and Saudi a plain "Was" / "You save on list price"; GB "RRP", US "List". Used by the cart's savings line and the product page's struck-through price, which is now announced to screen readers. The column keeps its name. Seller and admin portals still say MRP (staff-facing, unchanged).
+
+### 15.4 Verified per market (API + browser)
+
+| Check                                                     | QA                                                                                                                       | IN                                       | AE                      | SA                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- | ----------------------- | ----------------------- |
+| Products (header-scoped)                                  | 178                                                                                                                      | 178                                      | 178                     | 178                     |
+| Coupons page                                              | WELCOME10, SAVE50QA (min QR 300)                                                                                         | WELCOME10, SAVE500IN (min ₹3,000)        | WELCOME10, SAVE50AE     | WELCOME10, SAVE50SA     |
+| Flash deals (`/flash-deals`, `/flash-deals/active`, home) | 8, dash cam QR 255 vs offer 300                                                                                          | 8, ₹6,621 vs ₹7,789                      | 8, AED 257.28 vs 302.68 | 8, SAR 262.71 vs 309.07 |
+| Home banners                                              | hero-QA-local/flash + campaign-QA-welcome                                                                                | IN set                                   | AE set                  | SA set                  |
+| PDP list price                                            | "Was QR 430.00", QR 300, free delivery over QR 200, no PIN check                                                         | "M.R.P. ₹ 11,165.00", ₹ 7,789, PIN check | —                       | —                       |
+| Cart / order (COD)                                        | dash cam carted at QR 255; order placed at 255 with `dealNominationId`, `stock_sold` 0 → 1, listing 314 → 313; cancelled | —                                        | —                       | —                       |
+
+Cancelling the order did not return the unit or the allocation (B-10, already open); both were restored by hand. Tests: marketplace backend 203/203 → 208 with the new cases, gateway 26/26, shell 81 + 13 + 49, zone 24/24; backend, zone and API type-checks clean (the API one was failing on a pre-existing `seed-doctor.ts` index type, fixed).
+
+### 15.5 The other zones after the region-header fix
+
+Re-tested under the India cookie. The layout fix held (`<html lang>`, metadata), but every zone except the marketplace still rendered Qatar: grocery "Deliver to The Pearl, Doha", taxi "From QR 80.00", and the consent notice "handled under PDPPL in Qatar" on all of them. Root cause: only the marketplace zone (and the shell) define `NEXT_PUBLIC_ACTIVE_REGIONS`, and `RegionProvider` accepts a server region only if `isActiveCountry()` — so the other seven zones refused IN and fell back to Qatar. Each zone now ships `.env.example`, warns at config load when the variable is missing, and a shell test pins every zone's market list to the shell's. After the fix: grocery "Deliver to India · Bandra West, Mumbai", ₹ stores; taxi "From ₹ 80.00", "DPDP Act in India"; restaurant New Delhi, ₹.
+
+What remains is content, not region plumbing: doctor and pharmacy render India-only fixtures in rupees whatever the market (their backends have no per-market data), the taxi fare table is one number formatted in the viewer's currency, and hotel is a deliberately multi-country landing page. Those need per-market data in each vertical (see plan, third pass).
+
+### 15.6 Production migration
+
+`apps/api/migrations/1786501500000-ProductListingListPrice.ts` (commit aeef670): `ALTER TABLE marketplace.product_listings ADD COLUMN IF NOT EXISTS mrp numeric(10,2)` plus a backfill from `products.mrp`; `down` drops the column. Loads under `npm run migration:show`. Apply from `apps/api` with `MARKETPLACE_DB_*` set: `npm run migration:baseline` once (records the pre-existing schema), then `npm run migration:run`.
