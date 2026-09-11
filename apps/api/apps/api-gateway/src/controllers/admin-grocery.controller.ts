@@ -1,15 +1,29 @@
 import {
-  Controller, Get, Post, Patch, Delete, Param, Req,
-  Body, Query, UseGuards, Inject, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import {
-  ApiTags, ApiOperation, ApiBearerAuth, ApiQuery,
-} from '@nestjs/swagger';
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Req,
+  Body,
+  Query,
+  UseGuards,
+  Inject,
+  Logger,
+  HttpException,
+  HttpStatus,
+  ForbiddenException,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
+import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
  * Admin Grocery Controller
@@ -26,10 +40,9 @@ import { UserRole, rpcCatch } from '@app/common';
 export class AdminGroceryController {
   private readonly logger = new Logger(AdminGroceryController.name);
 
-  constructor(
-    @Inject('GROCERY_SERVICE') private readonly groceryClient: ClientProxy) {}
+  constructor(@Inject('GROCERY_SERVICE') private readonly groceryClient: ClientProxy) {}
 
-    /**
+  /**
    * Forward to grocery-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -44,10 +57,7 @@ export class AdminGroceryController {
       return await lastValueFrom(
         this.groceryClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Grocery service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Grocery service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -57,8 +67,24 @@ export class AdminGroceryController {
   }
 
   /** The acting admin, from the verified token — recorded on every mutation. */
-  private actorId(req: any): string | undefined {
-    return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub;
+  private actorId(req: any): string {
+    return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
+  }
+
+  /**
+   * The market this request may act in, as `scope` for the backend. A locked
+   * admin gets their market (and any other market they name is refused and
+   * logged); a global admin gets undefined — every market — or the market they
+   * filtered on.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
   }
 
   // NOTE ON RESPONSE SHAPE
@@ -72,8 +98,9 @@ export class AdminGroceryController {
   // ── Dashboard ─────────────────────────────────────────────────
   @Get('dashboard')
   @ApiOperation({ summary: 'Admin grocery dashboard stats' })
-  getDashboard() {
-    return this.send('admin.grocery.dashboard', {});
+  async getDashboard(@Req() req: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that dashboard');
+    return this.send('admin.grocery.dashboard', { scope });
   }
 
   // ── Stores ────────────────────────────────────────────────────
@@ -83,31 +110,45 @@ export class AdminGroceryController {
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'search', required: false })
-  getStores(
+  @ApiQuery({ name: 'regionCode', required: false })
+  async getStores(
+    @Req() req: any,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('regionCode') regionCode?: string,
   ) {
-    return this.send('admin.grocery.stores', { page, limit, status, search });
+    const { scope, market } = this.scopeOf(req, regionCode, 'those stores');
+    return this.send('admin.grocery.stores', {
+      page,
+      limit,
+      status,
+      search,
+      regionCode: market,
+      scope,
+    });
   }
 
   @Get('stores/:id')
   @ApiOperation({ summary: 'Get store detail' })
-  getStoreById(@Param('id') id: string) {
-    return this.send('admin.grocery.storeDetail', { id });
+  async getStoreById(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that store');
+    return this.send('admin.grocery.storeDetail', { id, scope });
   }
 
   @Patch('stores/:id/approve')
   @ApiOperation({ summary: 'Approve a grocery store' })
-  approveStore(@Req() req: any, @Param('id') id: string) {
-    return this.send('admin.grocery.approve', { id, actorId: this.actorId(req) });
+  async approveStore(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that store');
+    return this.send('admin.grocery.approve', { id, actorId: this.actorId(req), scope });
   }
 
   @Patch('stores/:id/suspend')
   @ApiOperation({ summary: 'Suspend a grocery store' })
-  suspendStore(@Req() req: any, @Param('id') id: string, @Body() body: { reason?: string }) {
-    return this.send('admin.grocery.suspend', { id, ...body, actorId: this.actorId(req) });
+  async suspendStore(@Req() req: any, @Param('id') id: string, @Body() body: { reason?: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that store');
+    return this.send('admin.grocery.suspend', { id, ...body, actorId: this.actorId(req), scope });
   }
 
   // ── Products ──────────────────────────────────────────────────
@@ -116,15 +157,25 @@ export class AdminGroceryController {
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'category', required: false })
-  getProducts(
+  @ApiQuery({ name: 'regionCode', required: false })
+  async getProducts(
+    @Req() req: any,
     @Query('page') page = 1,
     @Query('limit') limit = 30,
     @Query('category') category?: string,
     @Query('storeId') storeId?: string,
     @Query('approvalStatus') approvalStatus?: string,
+    @Query('regionCode') regionCode?: string,
   ) {
+    const { scope, market } = this.scopeOf(req, regionCode, 'those products');
     return this.send('admin.grocery.products', {
-      page, limit, category, storeId, approvalStatus,
+      page,
+      limit,
+      category,
+      storeId,
+      approvalStatus,
+      regionCode: market,
+      scope,
     });
   }
 
@@ -135,38 +186,66 @@ export class AdminGroceryController {
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'search', required: false })
-  getOrders(
+  @ApiQuery({ name: 'regionCode', required: false })
+  async getOrders(
+    @Req() req: any,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('storeId') storeId?: string,
+    @Query('regionCode') regionCode?: string,
   ) {
-    return this.send('admin.grocery.orders', { page, limit, status, search, storeId });
+    const { scope, market } = this.scopeOf(req, regionCode, 'those orders');
+    return this.send('admin.grocery.orders', {
+      page,
+      limit,
+      status,
+      search,
+      storeId,
+      regionCode: market,
+      scope,
+    });
   }
 
   // ── Categories ────────────────────────────────────────────────
+  // Grocery taxonomy (`grocery_categories`) carries no market column — it is
+  // shared by every market, the same tree with per-node `countries` filtering
+  // at read time, not a market-owned record. Reads are open to a locked admin;
+  // writes are refused for one outright rather than silently applying platform
+  // wide from whichever market's admin happened to make the request.
   @Get('categories')
-  @ApiOperation({ summary: 'List grocery categories' })
-  getCategories() {
+  @GlobalEntity('grocery taxonomy is shared by every market')
+  @ApiOperation({ summary: 'List grocery categories (shared by every market)' })
+  async getCategories(@Req() req: any) {
+    this.scopeOf(req, undefined, 'those categories');
     return this.send('admin.grocery.categories', {});
   }
 
   @Post('categories')
   @ApiOperation({ summary: 'Create category' })
-  createCategory(@Body() body: Record<string, unknown>) {
+  async createCategory(@Req() req: any, @Body() body: Record<string, unknown>) {
+    this.scopeOf(req, undefined, 'those categories');
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Grocery taxonomy is managed globally.');
     return this.send('admin.grocery.createCategory', body);
   }
 
   @Patch('categories/:id')
   @ApiOperation({ summary: 'Update category' })
-  updateCategory(@Param('id') id: string, @Body() body: any) {
+  async updateCategory(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    this.scopeOf(req, undefined, 'those categories');
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Grocery taxonomy is managed globally.');
     return this.send('admin.grocery.updateCategory', { ...body, id });
   }
 
   @Delete('categories/:id')
   @ApiOperation({ summary: 'Delete category' })
-  deleteCategory(@Param('id') id: string) {
+  async deleteCategory(@Req() req: any, @Param('id') id: string) {
+    this.scopeOf(req, undefined, 'those categories');
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Grocery taxonomy is managed globally.');
     return this.send('admin.grocery.deleteCategory', { id });
   }
 
@@ -174,26 +253,33 @@ export class AdminGroceryController {
   @Get('delivery-zones')
   @ApiOperation({ summary: 'List delivery zones' })
   @ApiQuery({ name: 'regionCode', required: false })
-  getDeliveryZones(@Query('regionCode') regionCode?: string) {
-    return this.send('admin.grocery.deliveryZones', { regionCode });
+  async getDeliveryZones(@Req() req: any, @Query('regionCode') regionCode?: string) {
+    const { scope, market } = this.scopeOf(req, regionCode, 'those delivery zones');
+    return this.send('admin.grocery.deliveryZones', { regionCode: market, scope });
   }
 
   @Post('delivery-zones')
   @ApiOperation({ summary: 'Create delivery zone' })
-  createDeliveryZone(@Body() body: any) {
-    return this.send('admin.grocery.createDeliveryZone', body);
+  async createDeliveryZone(
+    @Req() req: any,
+    @Body() body: { regionCode?: string; [k: string]: unknown },
+  ) {
+    const { scope, market } = this.scopeOf(req, body?.regionCode, 'that delivery zone');
+    return this.send('admin.grocery.createDeliveryZone', { ...body, regionCode: market, scope });
   }
 
   @Patch('delivery-zones/:id')
   @ApiOperation({ summary: 'Update delivery zone' })
-  updateDeliveryZone(@Param('id') id: string, @Body() body: any) {
-    return this.send('admin.grocery.updateDeliveryZone', { ...body, id });
+  async updateDeliveryZone(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that delivery zone');
+    return this.send('admin.grocery.updateDeliveryZone', { ...body, id, scope });
   }
 
   @Delete('delivery-zones/:id')
   @ApiOperation({ summary: 'Delete delivery zone' })
-  deleteDeliveryZone(@Param('id') id: string) {
-    return this.send('admin.grocery.deleteDeliveryZone', { id });
+  async deleteDeliveryZone(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that delivery zone');
+    return this.send('admin.grocery.deleteDeliveryZone', { id, scope });
   }
 
   // ── Flash Deals ───────────────────────────────────────────────
@@ -201,50 +287,81 @@ export class AdminGroceryController {
   @ApiOperation({ summary: 'List flash deals (moderation queue)' })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'storeId', required: false })
-  getFlashDeals(
+  @ApiQuery({ name: 'regionCode', required: false })
+  async getFlashDeals(
+    @Req() req: any,
     @Query('status') status?: string,
     @Query('storeId') storeId?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
+    @Query('regionCode') regionCode?: string,
   ) {
-    return this.send('admin.grocery.flashDeals', { status, storeId, page, limit });
+    const { scope, market } = this.scopeOf(req, regionCode, 'those flash deals');
+    return this.send('admin.grocery.flashDeals', {
+      status,
+      storeId,
+      page,
+      limit,
+      regionCode: market,
+      scope,
+    });
   }
 
   @Post('flash-deals')
   @ApiOperation({ summary: 'Create flash deal' })
-  createFlashDeal(@Body() body: any) {
-    return this.send('admin.grocery.createFlashDeal', body);
+  async createFlashDeal(@Req() req: any, @Body() body: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that flash deal');
+    return this.send('admin.grocery.createFlashDeal', { ...body, scope });
   }
 
   @Patch('flash-deals/:id/approve')
   @ApiOperation({ summary: 'Approve a flash deal' })
-  approveFlashDeal(@Req() req: any, @Param('id') id: string) {
-    return this.send('approve_flash_deal', { dealId: id, approvedBy: this.actorId(req) });
+  async approveFlashDeal(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that flash deal');
+    return this.send('approve_flash_deal', { dealId: id, approvedBy: this.actorId(req), scope });
   }
 
   @Patch('flash-deals/:id/reject')
   @ApiOperation({ summary: 'Reject a flash deal' })
-  rejectFlashDeal(@Param('id') id: string, @Body() body: { reason: string }) {
-    return this.send('reject_flash_deal', { dealId: id, ...body });
+  async rejectFlashDeal(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { reason: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that flash deal');
+    return this.send('reject_flash_deal', { dealId: id, ...body, scope });
   }
 
   // ── Reports ───────────────────────────────────────────────────
   @Get('reports')
   @ApiOperation({ summary: 'Grocery reports' })
-  getReports(@Query('period') period = '30d') {
-    return this.send('admin.grocery.reports', { period });
+  async getReports(@Req() req: any, @Query('period') period = '30d') {
+    const { scope } = this.scopeOf(req, undefined, 'those reports');
+    return this.send('admin.grocery.reports', { period, scope });
   }
 
   // ── Settings ──────────────────────────────────────────────────
+  // Platform-wide policy (commission, minimum order, auto-approve) — the same
+  // knobs in every market, not something a regional admin owns a copy of.
   @Get('settings')
   @ApiOperation({ summary: 'Get grocery admin settings' })
-  getSettings() {
+  async getSettings(@Req() req: any) {
+    this.scopeOf(req, undefined, 'those settings');
     return this.send('admin.grocery.settings', {});
   }
 
   @Post('settings')
   @ApiOperation({ summary: 'Update grocery settings' })
-  updateSettings(@Req() req: any, @Body() body: any) {
-    return this.send('admin.grocery.updateSettings', { ...body, actorId: this.actorId(req) });
+  async updateSettings(@Req() req: any, @Body() body: any) {
+    const { scope } = this.scopeOf(req, undefined, 'those settings');
+    // Refused here too, not only by grocery-service: a locked admin's request
+    // should never reach the wire for a write that can only ever be platform
+    // wide.
+    if (scope) throw new ForbiddenException('Grocery settings are managed globally.');
+    return this.send('admin.grocery.updateSettings', {
+      ...body,
+      actorId: this.actorId(req),
+      scope,
+    });
   }
 }
