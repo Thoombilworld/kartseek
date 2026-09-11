@@ -4,7 +4,12 @@ import * as path from 'path';
 
 const CONTROLLERS = path.join(__dirname, '..', 'controllers');
 const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)?\s*\)/;
-const SCOPED = /resolveMarket\(|marketScopeOf\(|assertRecordInScope\(|this\.scopeOf\(/;
+// `refuseLockedAdmin(` counts: it reads `marketScopeOf(req)` itself and refuses
+// a region-locked caller outright, which is how a route whose target has no
+// market dimension yet resolves the caller's scope. It is not an exemption —
+// a global admin still passes, and the denial is logged like any other.
+const SCOPED =
+  /resolveMarket\(|marketScopeOf\(|assertRecordInScope\(|this\.scopeOf\(|refuseLockedAdmin\(/;
 const GLOBAL = /@GlobalEntity\(/;
 
 /** The handler's own signature line: two-space indent, optional async, a name, an open paren. */

@@ -71,7 +71,12 @@ export class AdminController {
   // over its HTTP port. Only `get_admin_dashboard` was exposed that way, so the
   // other ten operations below existed in the service, were routable on this
   // service's own HTTP port, and were unreachable from the gateway — which is
-  // why the eleven /admin/* calls in the web client had no route to hit.
+  // why the eleven `/admin/…` calls in the web client had no route to hit.
+  //
+  // The wildcard used to be written literally here. `stripComments` in the
+  // gateway↔service contract spec removes block comments before line comments,
+  // so that stray `/*` paired with the next `*/` in the file and swallowed ten
+  // @MessagePattern handlers — the contract check reported them unimplemented.
   @MessagePattern({ cmd: 'get_admin_dashboard' })
   msgDashboard(@Payload() d?: { country?: string; scope?: string }) {
     return this.svc.getDashboardStats(d?.scope ?? d?.country);
@@ -164,6 +169,12 @@ export class AdminController {
       entityType: string;
       entityId: string;
       details?: any;
+      /**
+       * The market the entry belongs to. `addAuditLog` has always written it
+       * (defaulting to `ALL`), but the payload type omitted it — so the gateway
+       * could not send one without a cast and every audit row read `ALL`.
+       */
+      country?: string;
     },
   ) {
     return this.svc.addAuditLog(d);

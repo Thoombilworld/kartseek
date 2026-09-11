@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { ForbiddenException } from '@nestjs/common';
-import { assertRecordInScope, marketScopeOf, resolveMarket } from './market-scope';
+import { describe, it, expect, vi } from 'vitest';
+import { ForbiddenException, Logger } from '@nestjs/common';
+import {
+  assertRecordInScope,
+  marketScopeOf,
+  refuseLockedAdmin,
+  resolveMarket,
+} from './market-scope';
 
 const reqAs = (user: Record<string, unknown>) => ({
   user,
@@ -63,5 +68,39 @@ describe('assertRecordInScope', () => {
     expect(() => assertRecordInScope(reqAs(qaAdmin), null, 'that banner')).toThrow(
       'that banner belongs to every market',
     );
+  });
+});
+
+describe('refuseLockedAdmin', () => {
+  it('lets a global admin and a SUPER_ADMIN through', () => {
+    expect(() => refuseLockedAdmin(reqAs(globalAdmin), 'marketplace settings')).not.toThrow();
+    expect(() => refuseLockedAdmin(reqAs(superAdmin), 'marketplace settings')).not.toThrow();
+  });
+  it('refuses a locked admin with the platform wording', () => {
+    expect(() => refuseLockedAdmin(reqAs(qaAdmin), 'marketplace settings')).toThrow(
+      ForbiddenException,
+    );
+    expect(() => refuseLockedAdmin(reqAs(qaAdmin), 'marketplace settings')).toThrow(
+      'Your account is restricted to the QA market; marketplace settings belongs to every market.',
+    );
+  });
+  it('keeps the copy a spec pins when one is passed', () => {
+    expect(() =>
+      refuseLockedAdmin(
+        reqAs(qaAdmin),
+        'catalogue taxonomy',
+        'Catalogue taxonomy is managed globally.',
+      ),
+    ).toThrow('Catalogue taxonomy is managed globally.');
+  });
+  it('logs the denial with the [region-scope-denied] prefix', () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(() => refuseLockedAdmin(reqAs(qaAdmin), 'SEO settings')).toThrow(ForbiddenException);
+      expect(String(warn.mock.calls[0][0])).toContain('[region-scope-denied]');
+      expect(String(warn.mock.calls[0][0])).toContain('target=every market');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

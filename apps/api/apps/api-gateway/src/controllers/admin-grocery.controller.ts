@@ -13,7 +13,6 @@ import {
   Logger,
   HttpException,
   HttpStatus,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
@@ -22,7 +21,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { marketScopeOf, resolveMarket, refuseLockedAdmin } from '../guards/market-scope';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
@@ -148,7 +147,14 @@ export class AdminGroceryController {
   @ApiOperation({ summary: 'Suspend a grocery store' })
   async suspendStore(@Req() req: any, @Param('id') id: string, @Body() body: { reason?: string }) {
     const { scope } = this.scopeOf(req, undefined, 'that store');
-    return this.send('admin.grocery.suspend', { id, ...body, actorId: this.actorId(req), scope });
+    // Every explicit key after the spread: a body `{ "id": "<other>" }`
+    // used to retarget the decision at a store in another market.
+    return this.send('admin.grocery.suspend', {
+      ...body,
+      id,
+      actorId: this.actorId(req),
+      scope,
+    });
   }
 
   // ── Products ──────────────────────────────────────────────────
@@ -226,8 +232,7 @@ export class AdminGroceryController {
   @ApiOperation({ summary: 'Create category' })
   async createCategory(@Req() req: any, @Body() body: Record<string, unknown>) {
     this.scopeOf(req, undefined, 'those categories');
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Grocery taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'grocery taxonomy', 'Grocery taxonomy is managed globally.');
     return this.send('admin.grocery.createCategory', body);
   }
 
@@ -235,8 +240,7 @@ export class AdminGroceryController {
   @ApiOperation({ summary: 'Update category' })
   async updateCategory(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     this.scopeOf(req, undefined, 'those categories');
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Grocery taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'grocery taxonomy', 'Grocery taxonomy is managed globally.');
     return this.send('admin.grocery.updateCategory', { ...body, id });
   }
 
@@ -244,8 +248,7 @@ export class AdminGroceryController {
   @ApiOperation({ summary: 'Delete category' })
   async deleteCategory(@Req() req: any, @Param('id') id: string) {
     this.scopeOf(req, undefined, 'those categories');
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Grocery taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'grocery taxonomy', 'Grocery taxonomy is managed globally.');
     return this.send('admin.grocery.deleteCategory', { id });
   }
 
@@ -357,7 +360,7 @@ export class AdminGroceryController {
     // Refused here too, not only by grocery-service: a locked admin's request
     // should never reach the wire for a write that can only ever be platform
     // wide.
-    if (scope) throw new ForbiddenException('Grocery settings are managed globally.');
+    refuseLockedAdmin(req, 'grocery settings', 'Grocery settings are managed globally.');
     return this.send('admin.grocery.updateSettings', {
       ...body,
       actorId: this.actorId(req),

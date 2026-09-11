@@ -26,6 +26,24 @@ export function marketPredicate(
   return normaliseMarket(scope) ?? normaliseMarket(requested ?? undefined);
 }
 
+/**
+ * Refuse a scoped caller when the record cannot be attributed to any market
+ * yet (fail closed), logged with the same prefix as every other denial.
+ */
+export function refuseUnattributable(
+  scope: string | undefined,
+  what: string,
+  logger: { warn(message: string): void } = fallbackLogger,
+  message?: string,
+): void {
+  const lock = normaliseMarket(scope);
+  if (!lock) return;
+  logger.warn(
+    `[region-scope-denied] ${what} cannot be attributed to a market yet; refused for a ${lock}-scoped admin`,
+  );
+  throw new ForbiddenException(message ?? `This ${what} cannot be attributed to a market yet.`);
+}
+
 export function assertInMarket(
   recordRegion: string | null | undefined,
   scope: string | undefined,

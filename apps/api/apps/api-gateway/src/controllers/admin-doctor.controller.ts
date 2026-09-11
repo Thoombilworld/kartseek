@@ -13,7 +13,6 @@ import {
   Logger,
   HttpException,
   HttpStatus,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
@@ -22,7 +21,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { marketScopeOf, resolveMarket, refuseLockedAdmin } from '../guards/market-scope';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
@@ -175,8 +174,10 @@ export class AdminDoctorController {
     const { scope } = this.scopeOf(req, undefined, 'that doctor');
     return {
       data: await this.send('admin.doctor.verifyDoctor', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),
@@ -189,8 +190,10 @@ export class AdminDoctorController {
     const { scope } = this.scopeOf(req, undefined, 'that doctor');
     return {
       data: await this.send('admin.doctor.suspendDoctor', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),
@@ -237,8 +240,7 @@ export class AdminDoctorController {
     @Body() body: { name: string; icon?: string; description?: string },
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that specialty');
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Doctor taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'doctor taxonomy', 'Doctor taxonomy is managed globally.');
     return {
       data: await this.send('admin.doctor.createSpecialty', {
         ...body,

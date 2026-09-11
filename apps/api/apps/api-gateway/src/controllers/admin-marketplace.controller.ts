@@ -13,7 +13,6 @@ import {
   Req,
   Logger,
   ServiceUnavailableException,
-  ForbiddenException,
   NotFoundException,
   ParseUUIDPipe,
   HttpException,
@@ -38,7 +37,12 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
-import { marketScopeOf, resolveMarket, assertRecordInScope } from '../guards/market-scope';
+import {
+  marketScopeOf,
+  resolveMarket,
+  assertRecordInScope,
+  refuseLockedAdmin,
+} from '../guards/market-scope';
 import { UserRole, rpcCatch } from '@app/common';
 import { User } from '../entities/user.entity';
 import { MARKETPLACE_PATTERNS } from '../contracts';
@@ -152,11 +156,11 @@ export class AdminMarketplaceController {
    * A global admin is unaffected.
    */
   private refuseUnattributableBalance(req: any): void {
-    if (marketScopeOf(req).locked) {
-      throw new ForbiddenException(
-        'This wallet/loyalty account cannot be attributed to a market yet.',
-      );
-    }
+    refuseLockedAdmin(
+      req,
+      'a wallet/loyalty account',
+      'This wallet/loyalty account cannot be attributed to a market yet.',
+    );
   }
 
   /**
@@ -685,9 +689,11 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Feature a product on homepage' })
   async featureProduct(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() body: any) {
     const { scope } = this.scopeOf(req, undefined, 'that product');
+    // Every explicit key after the spread: a body `{ "id": "<other product>" }`
+    // used to retarget the decision at a product in another market.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_FEATURE_PRODUCT, {
-      id,
       ...body,
+      id,
       adminId: this.actorId(req),
       scope,
     });
@@ -717,8 +723,7 @@ export class AdminMarketplaceController {
   @Post('categories')
   @ApiOperation({ summary: 'Create a new category' })
   async createCategory(@Req() req: any, @Body() data: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_CATEGORY, { dto: data });
   }
 
@@ -728,8 +733,7 @@ export class AdminMarketplaceController {
   @Patch('categories/:id')
   @ApiOperation({ summary: 'Update a category' })
   async updateCategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_CATEGORY, { id, dto: data });
   }
 
@@ -743,8 +747,7 @@ export class AdminMarketplaceController {
   @Delete('categories/:id')
   @ApiOperation({ summary: 'Delete a category (deactivates it when products exist)' })
   async deleteCategory(@Req() req: any, @Param('id') id: string) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_CATEGORY, { id });
   }
 
@@ -762,16 +765,14 @@ export class AdminMarketplaceController {
   @Post('subcategories')
   @ApiOperation({ summary: 'Create subcategory' })
   async createSubcategory(@Req() req: any, @Body() data: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_SUBCATEGORY, { dto: data });
   }
 
   @Patch('subcategories/:id')
   @ApiOperation({ summary: 'Update subcategory' })
   async updateSubcategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SUBCATEGORY, { id, dto: data });
   }
 
@@ -787,8 +788,7 @@ export class AdminMarketplaceController {
   @Delete('subcategories/:id')
   @ApiOperation({ summary: 'Delete subcategory (deactivates it when products exist)' })
   async deleteSubcategory(@Req() req: any, @Param('id') id: string) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_SUBCATEGORY, { id });
   }
 
@@ -811,8 +811,7 @@ export class AdminMarketplaceController {
   @Post('attributes')
   @ApiOperation({ summary: 'Create attribute' })
   async createAttribute(@Req() req: any, @Body() data: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_ATTRIBUTE, { dto: data });
   }
 
@@ -822,8 +821,7 @@ export class AdminMarketplaceController {
   @Patch('attributes/:id')
   @ApiOperation({ summary: 'Update attribute' })
   async updateAttribute(@Req() req: any, @Param('id') id: string, @Body() data: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_ATTRIBUTE, { id, dto: data });
   }
 
@@ -837,8 +835,7 @@ export class AdminMarketplaceController {
   @Delete('attributes/:id')
   @ApiOperation({ summary: 'Deactivate an attribute' })
   async deleteAttribute(@Req() req: any, @Param('id') id: string) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_ATTRIBUTE, { id });
   }
 
@@ -868,8 +865,7 @@ export class AdminMarketplaceController {
   @Put('brands/:id')
   @ApiOperation({ summary: 'Update a brand' })
   async updateBrand(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, { id, dto });
   }
 
@@ -886,8 +882,7 @@ export class AdminMarketplaceController {
     // Reported `status: 'APPROVED'` without asking marketplace-service, so a
     // brand approved in the admin panel stayed pending everywhere else. Its
     // sibling `rejectBrand` two handlers down always forwarded correctly.
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, {
       id,
       dto: { status: 'APPROVED', approvedBy: this.actorId(req) },
@@ -897,8 +892,7 @@ export class AdminMarketplaceController {
   @Patch('brands/:id/reject')
   @ApiOperation({ summary: 'Reject a brand' })
   async rejectBrand(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_BRAND, {
       id,
       reason: body?.reason,
@@ -913,8 +907,7 @@ export class AdminMarketplaceController {
     @Param('id') id: string,
     @Body() body: { notes: string },
   ) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, {
       id,
       dto: {
@@ -928,8 +921,7 @@ export class AdminMarketplaceController {
   @Patch('brands/:id/suspend')
   @ApiOperation({ summary: 'Suspend a brand' })
   async suspendBrand(@Req() req: any, @Param('id') id: string) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_BRAND, {
       id,
       adminId: this.actorId(req),
@@ -1047,6 +1039,7 @@ export class AdminMarketplaceController {
     // `action` is the target status. Echoing it back without asking
     // order-service meant an admin could move an order through any state and
     // the customer's order never changed.
+    refuseLockedAdmin(req, 'an order decision');
     const { scope } = this.scopeOf(req, undefined, 'that order');
     return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
       orderId: id,
@@ -1060,6 +1053,7 @@ export class AdminMarketplaceController {
   @Put('orders/:id/cancel')
   @ApiOperation({ summary: 'Cancel an order' })
   async cancelOrder(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    refuseLockedAdmin(req, 'an order decision');
     const { scope } = this.scopeOf(req, undefined, 'that order');
     return this.sendTo(this.orderClient, 'Order service', 'cancel_order', {
       orderId: id,
@@ -1114,6 +1108,12 @@ export class AdminMarketplaceController {
   ) {
     // Returned an empty list inline, so the refunds queue was always empty and
     // an admin had no way to tell that from "nothing is pending".
+    //
+    // `region`/`scope` go out and refund-service drops both, so this list is
+    // the whole platform's whatever the caller is locked to. Showing it to a
+    // QA admin under a QA heading is the leak; refused until refunds carry a
+    // market (Plan C1).
+    refuseLockedAdmin(req, 'the refund queue');
     const { scope, market } = this.scopeOf(req, country, 'those refunds');
     return this.sendTo(this.refundClient, 'Refund service', 'get_pending_refunds', {
       page: +page,
@@ -1127,6 +1127,11 @@ export class AdminMarketplaceController {
   // takes it as an argument. All three used to answer with the status in their
   // own name and write nothing, so a refund could be approved and processed in
   // the admin panel while the customer was never paid.
+  //
+  // refund-service destructures a fixed set of fields and never reads `scope`,
+  // so forwarding it was enforcement in name only: a QA-locked admin could
+  // approve an Indian refund. Refused here, before any RPC, until refunds carry
+  // a market (Plan C1). Global admins are unaffected.
   @Post('refunds/:id/approve')
   @ApiOperation({ summary: 'Approve a refund' })
   async approveRefund(
@@ -1134,6 +1139,7 @@ export class AdminMarketplaceController {
     @Param('id') id: string,
     @Body() body?: { remarks?: string },
   ) {
+    refuseLockedAdmin(req, 'a refund decision');
     const { scope } = this.scopeOf(req, undefined, 'that refund');
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
       id,
@@ -1151,6 +1157,7 @@ export class AdminMarketplaceController {
     @Param('id') id: string,
     @Body() body: { amount?: number; reason?: string; note?: string },
   ) {
+    refuseLockedAdmin(req, 'a refund decision');
     const { scope } = this.scopeOf(req, undefined, 'that refund');
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
       id,
@@ -1164,6 +1171,7 @@ export class AdminMarketplaceController {
   @Put('refunds/:id/reject')
   @ApiOperation({ summary: 'Reject a refund' })
   async rejectRefund(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    refuseLockedAdmin(req, 'a refund decision');
     const { scope } = this.scopeOf(req, undefined, 'that refund');
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
       id,
@@ -1196,6 +1204,9 @@ export class AdminMarketplaceController {
     @Query('page', ParsePagePipe) page = 1,
     @Query('country') country?: string,
   ) {
+    // commission-service reads neither `region` nor `scope`; every total below
+    // is platform-wide. Refused for a locked admin until it does (Plan C1).
+    refuseLockedAdmin(req, 'commission earnings');
     const { scope, market } = this.scopeOf(req, country, 'that commission');
     // A single seller's ledger, or the platform-wide totals. An unreachable
     // commission-service is an error, not an empty ledger and not a zeroed
@@ -1232,6 +1243,7 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Category commission rate card' })
   @ApiQuery({ name: 'country', required: false })
   async getCommissionRateCard(@Req() req: any, @Query('country') country?: string) {
+    refuseLockedAdmin(req, 'the commission rate card');
     const { scope, market } = this.scopeOf(req, country, 'that rate card');
     const card = await this.sendToCommission('get_category_rate_card', { region: market, scope });
     // An empty rate card reads as "the platform charges no commission".
@@ -1245,6 +1257,7 @@ export class AdminMarketplaceController {
     @Req() req: any,
     @Body() body: { category: string; subCategory?: string; updates: any },
   ) {
+    refuseLockedAdmin(req, 'the commission rate card');
     const { scope } = this.scopeOf(req, undefined, 'that rate card');
     // A rate change that did not happen answered 200 with `success: false`,
     // which the console renders as a saved change. Same rule as the payout
@@ -1267,6 +1280,7 @@ export class AdminMarketplaceController {
       expiresAt?: string;
     },
   ) {
+    refuseLockedAdmin(req, 'a commission override');
     const { scope } = this.scopeOf(req, undefined, 'that commission');
     const result = await this.sendToCommission('set_seller_commission_override', {
       ...body,
@@ -1284,6 +1298,7 @@ export class AdminMarketplaceController {
     @Param('sellerId') sellerId: string,
     @Query('serviceType') serviceType = 'marketplace',
   ) {
+    refuseLockedAdmin(req, 'a commission override');
     const { scope } = this.scopeOf(req, undefined, 'that commission');
     const result = await this.sendToCommission('remove_seller_commission_override', {
       sellerId,
@@ -1323,6 +1338,8 @@ export class AdminMarketplaceController {
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('country') country?: string,
   ) {
+    // payout-service ignores `region`/`scope`: this is every market's queue.
+    refuseLockedAdmin(req, 'the payout queue');
     const { scope, market } = this.scopeOf(req, country, 'those payouts');
     const cmd = sellerId ? 'get_seller_payouts' : 'get_pending_payouts';
     const payload = sellerId
@@ -1340,6 +1357,7 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Payout volume and success rate' })
   @ApiQuery({ name: 'country', required: false })
   async getPayoutStats(@Req() req: any, @Query('country') country?: string) {
+    refuseLockedAdmin(req, 'payout statistics');
     const { scope, market } = this.scopeOf(req, country, 'that report');
     const stats = await this.sendToPayout('get_payout_stats', { region: market, scope });
     if (!stats) throw new ServiceUnavailableException('Payouts are temporarily unavailable.');
@@ -1349,6 +1367,7 @@ export class AdminMarketplaceController {
   @Patch('payouts/:id/approve')
   @ApiOperation({ summary: 'Approve a payout request' })
   async approvePayout(@Req() req: any, @Param('id') id: string) {
+    refuseLockedAdmin(req, 'a payout decision');
     const { scope } = this.scopeOf(req, undefined, 'that payout');
     const result = await this.sendToPayout('approve_payout', {
       payoutId: id,
@@ -1362,6 +1381,7 @@ export class AdminMarketplaceController {
   @Patch('payouts/:id/process')
   @ApiOperation({ summary: 'Execute an approved payout' })
   async processPayout(@Req() req: any, @Param('id') id: string) {
+    refuseLockedAdmin(req, 'a payout decision');
     const { scope } = this.scopeOf(req, undefined, 'that payout');
     const result = await this.sendToPayout('process_payout', {
       payoutId: id,
@@ -1381,6 +1401,7 @@ export class AdminMarketplaceController {
   async retryPayout(@Req() req: any, @Param('id') id: string) {
     // Was `return { success: true, status: 'processing' }` — it reported a retry
     // it had not started, so a stuck payout looked as though it had been requeued.
+    refuseLockedAdmin(req, 'a payout decision');
     const { scope } = this.scopeOf(req, undefined, 'that payout');
     const result = await this.sendToPayout('retry_payout', {
       payoutId: id,
@@ -1840,6 +1861,7 @@ export class AdminMarketplaceController {
 
   // ── SEO ──────────────────────────────────────────────────────────────────────
   @Get('seo')
+  @GlobalEntity('platform settings are read by every market')
   @ApiOperation({ summary: 'Get marketplace SEO settings' })
   @ApiQuery({ name: 'country', required: false })
   async getSeoSettings(@Req() req: any, @Query('country') country?: string) {
@@ -1847,9 +1869,13 @@ export class AdminMarketplaceController {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SEO, { region: market, scope });
   }
 
+  // One row of SEO defaults serves every storefront — `getSeoSettings()` takes
+  // no market and `updateSeoSettings()` writes the single platform record — so
+  // a QA-locked admin editing it would be rewriting India's meta tags too.
   @Patch('seo')
   @ApiOperation({ summary: 'Update marketplace SEO settings' })
   async updateSeoSettings(@Req() req: any, @Body() dto: any) {
+    refuseLockedAdmin(req, 'SEO settings');
     const { scope } = this.scopeOf(req, dto?.country ?? dto?.regionCode, 'those SEO settings');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SEO, { dto, scope });
   }
@@ -1875,6 +1901,7 @@ export class AdminMarketplaceController {
 
   // ── Settings ────────────────────────────────────────────────────────────────
   @Get('settings')
+  @GlobalEntity('platform settings are read by every market')
   @ApiOperation({ summary: 'Get marketplace settings' })
   @ApiQuery({ name: 'country', required: false })
   async getSettings(@Req() req: any, @Query('country') country?: string) {
@@ -1885,9 +1912,11 @@ export class AdminMarketplaceController {
     });
   }
 
+  // Same shape as SEO: a single platform settings record, no market column.
   @Patch('settings')
   @ApiOperation({ summary: 'Update marketplace settings' })
   async updateSettings(@Req() req: any, @Body() dto: any) {
+    refuseLockedAdmin(req, 'marketplace settings');
     const { scope } = this.scopeOf(req, dto?.country ?? dto?.regionCode, 'those settings');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SETTINGS, { dto, scope });
   }
@@ -1930,7 +1959,7 @@ export class AdminMarketplaceController {
     const regionCode =
       resolveMarket(req, dto?.regionCode ?? dto?.country, 'this flash deal') ?? null;
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_FLASH_DEAL, {
-      dto: { ...dto, regionCode, createdBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
+      dto: { ...dto, regionCode, createdBy: this.actorId(req) },
     });
   }
 
@@ -1981,7 +2010,7 @@ export class AdminMarketplaceController {
   async approveNomination(@Req() req: any, @Param('nominationId') nominationId: string) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_NOMINATION, {
       nominationId,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
       region: marketScopeOf(req).region,
     });
   }
@@ -1996,7 +2025,7 @@ export class AdminMarketplaceController {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_NOMINATION, {
       nominationId,
       reason: body?.reason,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
       region: marketScopeOf(req).region,
     });
   }
@@ -2040,6 +2069,8 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'List admin notifications' })
   @ApiQuery({ name: 'country', required: false })
   async getNotifications(@Req() req: any, @Query('country') country?: string) {
+    // Notification rows carry no market, so this list is the platform's.
+    refuseLockedAdmin(req, 'platform notifications');
     const { scope, market } = this.scopeOf(req, country, 'those notifications');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS, {
       region: market,
@@ -2049,7 +2080,11 @@ export class AdminMarketplaceController {
 
   @Post('notifications')
   @ApiOperation({ summary: 'Send notification' })
+  // `sendNotification()` writes one row that every admin console reads; the
+  // entity has no market column, so a scoped admin's "notify my sellers" would
+  // notify the platform. Refused until notifications carry a market (Plan C1).
   async sendNotification(@Req() req: any, @Body() dto: any) {
+    refuseLockedAdmin(req, 'platform notifications');
     const { scope, market } = this.scopeOf(
       req,
       dto?.regionCode ?? dto?.country,
@@ -2074,16 +2109,14 @@ export class AdminMarketplaceController {
   @Post('hsn-codes')
   @ApiOperation({ summary: 'Create HSN code' })
   async createHsnCode(@Req() req: any, @Body() dto: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_HSN_CODE, { dto });
   }
 
   @Patch('hsn-codes/:id')
   @ApiOperation({ summary: 'Update HSN code' })
   async updateHsnCode(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_HSN_CODE, { id, dto });
   }
 
@@ -2261,6 +2294,8 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'List compliance countries' })
   @ApiQuery({ name: 'country', required: false })
   async getComplianceCountries(@Req() req: any, @Query('country') country?: string) {
+    // The whole point of this list is every country's profile.
+    refuseLockedAdmin(req, 'the compliance country list');
     const { scope, market } = this.scopeOf(req, country, 'that compliance profile');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_COMPLIANCE_COUNTRIES, {
       region: market,
@@ -2379,6 +2414,11 @@ export class AdminMarketplaceController {
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('country') country?: string,
   ) {
+    // wallet-service's search reads neither `region` nor `scope`, so the page
+    // below is every market's ledger. Refused for a locked admin until wallet
+    // transactions carry a market (Plan C1); the cache key stays per market so
+    // nothing has to change here when they do.
+    refuseLockedAdmin(req, 'the wallet transaction ledger');
     const { scope, market } = this.scopeOf(req, country, 'those transactions');
     // Cached per market as well as per user: one shared key would have served a
     // Qatari admin's page to an Indian one.
@@ -2554,8 +2594,11 @@ export class AdminMarketplaceController {
   async updateLoyaltyConfig(@Req() req: any, @Body() dto: any) {
     // The tiers, earn rules and redemption rate are one platform-wide config:
     // a regional admin editing them would reprice loyalty in every market.
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('The loyalty programme is configured globally.');
+    refuseLockedAdmin(
+      req,
+      'the loyalty programme',
+      'The loyalty programme is configured globally.',
+    );
     await this.redis.setJson('admin:loyalty:config', dto, 0); // No TTL — persistent config
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
       action: 'loyalty.config_updated',
@@ -2635,10 +2678,12 @@ export class AdminMarketplaceController {
     // Every number below is a literal. It is left as one — inventing a read
     // would be worse — but it is at least no longer served to a locked admin
     // as though it were their market's.
-    const { scope } = this.scopeOf(req, country, 'that report');
-    if (scope) {
-      throw new ForbiddenException('This report cannot be attributed to a market yet.');
-    }
+    this.scopeOf(req, country, 'that report');
+    refuseLockedAdmin(
+      req,
+      'loyalty analytics',
+      'This report cannot be attributed to a market yet.',
+    );
     return {
       totalPointsInCirculation: 285000,
       totalPointsAwarded: 420000,
@@ -2890,6 +2935,8 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'List customer RFM segments' })
   @ApiQuery({ name: 'country', required: false })
   async getCustomerSegments(@Req() req: any, @Query('country') country?: string) {
+    // RFM segments are computed platform-wide and carry no market.
+    refuseLockedAdmin(req, 'customer segments');
     const { scope, market } = this.scopeOf(req, country, 'those customers');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CUSTOMER_SEGMENTS, {
       region: market,
@@ -3164,6 +3211,7 @@ export class AdminMarketplaceController {
   @Put('settings')
   @ApiOperation({ summary: 'Update marketplace settings (PUT alias)' })
   async putSettings(@Req() req: any, @Body() dto: any) {
+    refuseLockedAdmin(req, 'marketplace settings');
     this.scopeOf(req, undefined, 'those settings');
     return this.updateSettings(req, dto);
   }
@@ -3178,6 +3226,7 @@ export class AdminMarketplaceController {
   @Put('seo')
   @ApiOperation({ summary: 'Update SEO settings (PUT alias)' })
   async putSeoSettings(@Req() req: any, @Body() dto: any) {
+    refuseLockedAdmin(req, 'SEO settings');
     this.scopeOf(req, undefined, 'those SEO settings');
     return this.updateSeoSettings(req, dto);
   }
@@ -3234,6 +3283,7 @@ export class AdminMarketplaceController {
   @Post('payouts/:id/process')
   @ApiOperation({ summary: 'Execute an approved payout (POST alias)' })
   async postProcessPayout(@Req() req: any, @Param('id') id: string) {
+    refuseLockedAdmin(req, 'a payout decision');
     this.scopeOf(req, undefined, 'that payout');
     return this.processPayout(req, id);
   }

@@ -13,7 +13,6 @@ import {
   Logger,
   HttpException,
   HttpStatus,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
@@ -22,7 +21,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { marketScopeOf, resolveMarket, refuseLockedAdmin } from '../guards/market-scope';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
@@ -155,8 +154,10 @@ export class AdminHotelController {
     const { scope } = this.scopeOf(req, undefined, 'that hotel');
     return {
       data: await this.send('admin.hotel.suspend', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),
@@ -219,8 +220,7 @@ export class AdminHotelController {
     @Body() body: { name: string; icon?: string; category?: string },
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that amenity');
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Hotel taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'hotel taxonomy', 'Hotel taxonomy is managed globally.');
     return {
       data: await this.send('admin.hotel.createAmenity', {
         ...body,
@@ -290,8 +290,10 @@ export class AdminHotelController {
     const { scope } = this.scopeOf(req, undefined, 'that review');
     return {
       data: await this.send('admin.hotel.moderateReview', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),

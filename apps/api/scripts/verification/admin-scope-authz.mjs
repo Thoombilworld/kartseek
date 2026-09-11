@@ -53,9 +53,18 @@ async function call(token, method, path, body) {
   }
   return { status: r.status, json };
 }
+/**
+ * The rows in a gateway envelope.
+ *
+ * Normally `json.data.data`, but a handler that returns `{ data: result }`
+ * around a service result that is itself `{ data, total }` nests them one
+ * level deeper (`listings/pending` does). Walk down `.data` until an array
+ * turns up; still null — fail closed — when none does.
+ */
 const listOf = (j) => {
-  const r = j?.data?.data ?? j?.data;
-  return Array.isArray(r) ? r : null;
+  let node = j?.data;
+  for (let depth = 0; depth < 4 && node && !Array.isArray(node); depth++) node = node.data;
+  return Array.isArray(node) ? node : null;
 };
 /** A 'sees only <market>' proof: fails closed on a non-200 or a missing list; an empty list is reported, not counted as proof. */
 const onlyMarket = (name, res, pick, market) => {
@@ -183,6 +192,175 @@ const onlyMarket = (name, res, pick, market) => {
   else skip('QA admin refused suspending an IN store', 'no IN grocery store seeded');
   const qaOrders = await call(qa, 'GET', '/admin/grocery/orders?limit=50');
   onlyMarket('QA admin sees only QA grocery orders', qaOrders, (o) => o.store?.regionCode, 'QA');
+
+  // ── The fix wave: handlers that used to drop the scope the gateway sent ────
+  console.log('marketplace moderation, finance and platform writes');
+  // A product's market is its seller's, and the refusal must come from the
+  // marketplace handler (`This product belongs to <X>, not to the <Y> market.`),
+  // not only from the gateway — that is the hole this wave closes. Probed with
+  // whichever market actually has a product: IN against the QA admin, else QA
+  // against the IN admin. The pair is symmetric, so either proves the same path.
+  const crossProduct = async () => {
+    const inRow = listOf(
+      (await call(g, 'GET', '/admin/marketplace/products?country=IN&limit=1')).json,
+    )?.[0];
+    if (inRow) return { row: inRow, actor: qa, owner: 'IN', caller: 'QA' };
+    const qaRow = listOf(
+      (await call(g, 'GET', '/admin/marketplace/products?country=QA&limit=1')).json,
+    )?.[0];
+    if (qaRow) return { row: qaRow, actor: ind, owner: 'QA', caller: 'IN' };
+    return null;
+  };
+  const probe = await crossProduct();
+  if (probe) {
+    const active = (j) => j?.data?.data?.is_active ?? j?.data?.is_active;
+    const before = active(
+      (await call(g, 'GET', `/admin/marketplace/products/${probe.row.id}`)).json,
+    );
+    const denied = await call(
+      probe.actor,
+      'PATCH',
+      `/admin/marketplace/products/${probe.row.id}/unpublish`,
+      { reason: 'probe' },
+    );
+    ok(
+      `${probe.caller} admin refused unpublishing the ${probe.owner} product`,
+      denied.status === 403,
+      `status ${denied.status}`,
+    );
+    ok(
+      'the refusal came from the marketplace handler, not just the gateway',
+      String(denied.json?.message ?? '').includes(`belongs to ${probe.owner}`),
+      `message ${JSON.stringify(denied.json?.message)}`,
+    );
+    const after = active(
+      (await call(g, 'GET', `/admin/marketplace/products/${probe.row.id}`)).json,
+    );
+    ok(
+      `the ${probe.owner} product is unchanged after the refused unpublish`,
+      before !== undefined && before === after,
+      `is_active ${before} -> ${after}`,
+    );
+  } else {
+    skip('cross-market product unpublish is refused', 'no IN or QA product seeded');
+    skip(
+      'the refusal came from the marketplace handler, not just the gateway',
+      'no product seeded',
+    );
+    skip('the product is unchanged after the refused unpublish', 'no product seeded');
+  }
+  // refund-service reads no market, so this is refused at the gateway before any
+  // RPC — the id need not exist, and a 404 here would mean the RPC went out.
+  ok(
+    'QA admin refused approving a refund, before any RPC',
+    (
+      await call(
+        qa,
+        'POST',
+        '/admin/marketplace/refunds/00000000-0000-4000-8000-000000000001/approve',
+        { remarks: 'probe' },
+      )
+    ).status === 403,
+  );
+  ok(
+    'QA admin refused writing platform marketplace settings',
+    (await call(qa, 'PATCH', '/admin/marketplace/settings', {})).status === 403,
+  );
+  onlyMarket(
+    'QA admin sees only QA offers in the moderation queue',
+    await call(qa, 'GET', '/admin/marketplace/listings/pending?limit=50'),
+    (l) => l.seller?.regionCode ?? l.seller?.region_code,
+    'QA',
+  );
+
+  // Q&A carries no region column: its market is its product's seller's, which
+  // only the backend predicate can apply. Two scoped queues that together fit
+  // inside the global one is what a real predicate looks like from outside.
+  const qaCount = async (token) =>
+    (listOf((await call(token, 'GET', '/admin/marketplace/qa-moderation')).json) ?? []).length;
+  const [qaAll, qaQa, qaIn] = [await qaCount(g), await qaCount(qa), await qaCount(ind)];
+  if (qaAll === 0) skip('the Q&A moderation queue is split by market', 'no questions seeded');
+  else
+    ok(
+      'the Q&A moderation queue is split by market',
+      qaQa + qaIn <= qaAll && (qaQa < qaAll || qaIn < qaAll),
+      `global ${qaAll}, QA ${qaQa}, IN ${qaIn}`,
+    );
+  ok(
+    'platform settings stay readable in every market',
+    (await call(qa, 'GET', '/admin/marketplace/settings')).status === 200 &&
+      (await call(qa, 'GET', '/admin/marketplace/seo')).status === 200,
+  );
+  for (const [name, path] of [
+    ['the refund queue', '/admin/marketplace/refunds'],
+    ['the payout queue', '/admin/marketplace/payouts'],
+    ['commission earnings', '/admin/marketplace/commissions'],
+    ['customer segments', '/admin/marketplace/customer-segments'],
+    ['platform notifications', '/admin/marketplace/notifications'],
+    ['the compliance country list', '/admin/marketplace/compliance/countries'],
+    ['the wallet ledger', '/admin/marketplace/wallet/transactions'],
+  ]) {
+    const scoped = await call(qa, 'GET', path);
+    const global = await call(g, 'GET', path);
+    ok(
+      `QA admin refused ${name}, global admin still reads it`,
+      scoped.status === 403 && global.status === 200,
+      `qa ${scoped.status}, global ${global.status}`,
+    );
+  }
+
+  console.log('hotel');
+  ok(
+    'QA admin refused IN hotels by query',
+    (await call(qa, 'GET', '/admin/hotel/hotels?countryCode=IN')).status === 403,
+  );
+  const inHotel = listOf(
+    (await call(g, 'GET', '/admin/hotel/hotels?countryCode=IN&limit=1')).json,
+  )?.[0];
+  if (inHotel)
+    ok(
+      'QA admin refused suspending an IN hotel',
+      (await call(qa, 'PATCH', `/admin/hotel/hotels/${inHotel.id}/suspend`, { reason: 'probe' }))
+        .status === 403,
+    );
+  else skip('QA admin refused suspending an IN hotel', 'no IN hotel seeded');
+
+  console.log('restaurant');
+  ok(
+    'QA admin refused IN restaurants by query',
+    (await call(qa, 'GET', '/admin/restaurant/restaurants?countryCode=IN')).status === 403,
+  );
+  const inRestaurant = listOf(
+    (await call(g, 'GET', '/admin/restaurant/restaurants?countryCode=IN&limit=1')).json,
+  )?.[0];
+  if (inRestaurant)
+    ok(
+      'QA admin refused suspending an IN restaurant',
+      (
+        await call(qa, 'PATCH', `/admin/restaurant/restaurants/${inRestaurant.id}/suspend`, {
+          reason: 'probe',
+        })
+      ).status === 403,
+    );
+  else skip('QA admin refused suspending an IN restaurant', 'no IN restaurant seeded');
+
+  console.log('pharmacy');
+  ok(
+    'QA admin refused IN pharmacy stores by query',
+    (await call(qa, 'GET', '/admin/pharmacy/stores?countryCode=IN')).status === 403,
+  );
+
+  console.log('doctor');
+  ok(
+    'QA admin refused IN clinics by query',
+    (await call(qa, 'GET', '/admin/doctor/clinics?countryCode=IN')).status === 403,
+  );
+  // Doctors carry no market at all, so a scoped admin is refused outright
+  // rather than shown every market's practitioners.
+  ok(
+    'QA admin refused the unattributable doctor directory',
+    (await call(qa, 'GET', '/admin/doctor/doctors')).status === 403,
+  );
 
   console.log('security');
   ok(

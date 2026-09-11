@@ -13,7 +13,6 @@ import {
   Logger,
   HttpException,
   HttpStatus,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
@@ -22,7 +21,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { marketScopeOf, resolveMarket, refuseLockedAdmin } from '../guards/market-scope';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
@@ -141,8 +140,10 @@ export class AdminPharmacyController {
     const { scope } = this.scopeOf(req, undefined, 'that pharmacy');
     return {
       data: await this.send('admin.pharmacy.suspend', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),
@@ -246,8 +247,10 @@ export class AdminPharmacyController {
     const { scope } = this.scopeOf(req, undefined, 'that licence');
     return {
       data: await this.send('admin.pharmacy.verifyLicense', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),
@@ -272,8 +275,7 @@ export class AdminPharmacyController {
   @ApiOperation({ summary: 'Create category' })
   async createCategory(@Req() req: any, @Body() body: { name: string; icon?: string }) {
     const { scope } = this.scopeOf(req, undefined, 'that category');
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Pharmacy taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'pharmacy taxonomy', 'Pharmacy taxonomy is managed globally.');
     return {
       data: await this.send('admin.pharmacy.createCategory', {
         ...body,

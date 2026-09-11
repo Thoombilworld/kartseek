@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
-import { assertInMarket, marketPredicate, normaliseMarket } from './market-scope';
+import {
+  assertInMarket,
+  marketPredicate,
+  normaliseMarket,
+  refuseUnattributable,
+} from './market-scope';
 
 describe('normaliseMarket', () => {
   it('upper-cases and trims an ISO code', () => {
@@ -44,5 +49,33 @@ describe('marketPredicate', () => {
   it('is the normalised request when global', () => {
     expect(marketPredicate(undefined, 'in')).toBe('IN');
     expect(marketPredicate(undefined, undefined)).toBeUndefined();
+  });
+});
+
+describe('refuseUnattributable', () => {
+  it('lets a global admin (no scope) through', () => {
+    expect(() => refuseUnattributable(undefined, 'report')).not.toThrow();
+    expect(() => refuseUnattributable('', 'report')).not.toThrow();
+  });
+  it('refuses a scoped admin and logs the denial with the shared prefix', () => {
+    const lines: string[] = [];
+    expect(() => refuseUnattributable('qa', 'report', { warn: (m) => lines.push(m) })).toThrow(
+      ForbiddenException,
+    );
+    expect(lines[0]).toContain('[region-scope-denied]');
+    expect(lines[0]).toContain('QA-scoped admin');
+  });
+  it("uses the default copy, and the caller's copy when a spec pins one", () => {
+    expect(() => refuseUnattributable('QA', 'campaign')).toThrow(
+      'This campaign cannot be attributed to a market yet.',
+    );
+    expect(() =>
+      refuseUnattributable(
+        'QA',
+        'surge zone',
+        undefined,
+        'Surge zones cannot be attributed to a market yet.',
+      ),
+    ).toThrow('Surge zones cannot be attributed to a market yet.');
   });
 });

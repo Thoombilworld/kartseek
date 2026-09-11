@@ -13,7 +13,6 @@ import {
   Logger,
   HttpException,
   HttpStatus,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
@@ -22,7 +21,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { marketScopeOf, resolveMarket, refuseLockedAdmin } from '../guards/market-scope';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
@@ -147,8 +146,10 @@ export class AdminRestaurantController {
     const { scope } = this.scopeOf(req, undefined, 'that restaurant');
     return {
       data: await this.send('admin.restaurant.suspend', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),
@@ -237,8 +238,10 @@ export class AdminRestaurantController {
     const { scope } = this.scopeOf(req, undefined, 'that complaint');
     return {
       data: await this.send('admin.restaurant.resolveComplaint', {
-        id,
+        // Every explicit key after the spread: a body `{ "id": "<other>" }`
+        // used to retarget the decision at a record in another market.
         ...body,
+        id,
         scope,
         adminId: this.actorId(req),
       }),
@@ -288,8 +291,7 @@ export class AdminRestaurantController {
   @ApiOperation({ summary: 'Create a cuisine category' })
   async createCuisine(@Req() req: any, @Body() body: { name: string; icon?: string }) {
     const { scope } = this.scopeOf(req, undefined, 'that cuisine');
-    if (marketScopeOf(req).locked)
-      throw new ForbiddenException('Restaurant taxonomy is managed globally.');
+    refuseLockedAdmin(req, 'restaurant taxonomy', 'Restaurant taxonomy is managed globally.');
     return {
       data: await this.send('admin.restaurant.createCuisine', {
         ...body,

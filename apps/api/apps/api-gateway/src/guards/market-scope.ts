@@ -77,6 +77,26 @@ export function assertRecordInScope(
   if (owner !== scope.region) denyOutOfScope(req, scope, owner ?? 'every market', what);
 }
 
+/**
+ * Refuse a region-locked admin outright, logged. For targets that have no
+ * market dimension yet — platform settings, a refund the owning service cannot
+ * attribute — the rule is fail closed until the dimension exists. A global
+ * admin passes; the log line names who was refused and why.
+ */
+export function refuseLockedAdmin(req: any, what: string, message?: string): void {
+  const scope = marketScopeOf(req);
+  if (!scope.locked) return;
+  logger.warn(
+    `[region-scope-denied] user=${scope.userId ?? 'unknown'} role=${scope.role} scope=${scope.region} ` +
+      `target=every market what="${what}" route=${req?.method ?? ''} ${req?.originalUrl ?? req?.url ?? ''} ` +
+      `requestId=${req?.headers?.['x-request-id'] ?? req?.id ?? '-'}`,
+  );
+  throw new ForbiddenException(
+    message ??
+      `Your account is restricted to the ${scope.region} market; ${what} belongs to every market.`,
+  );
+}
+
 function denyOutOfScope(req: any, scope: MarketScope, target: string, what: string): never {
   logger.warn(
     `[region-scope-denied] user=${scope.userId ?? 'unknown'} role=${scope.role} scope=${scope.region} ` +
