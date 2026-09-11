@@ -25,6 +25,7 @@ import {
   IsPositive,
   IsUUID,
   IsArray,
+  IsIP,
 } from 'class-validator';
 import { ForwardedBody } from '../decorators/forwarded-body.decorator';
 import { SELLER_TYPES } from '@app/common';
@@ -753,24 +754,67 @@ export class KycSubmitDto {
 
 // ─── Security (DDoS Admin) ────────────────────────────────────────────────────
 
+/**
+ * `POST /admin/security/bans`.
+ *
+ * Every field carried `@ApiProperty` and nothing else, so the gateway's pipe —
+ * which runs `whitelist: true` with `forbidNonWhitelisted: true` — stripped all
+ * three as unknown properties and answered
+ * `property ip should not exist; property durationSeconds should not exist;
+ * property reason should not exist` to the DTO's own documented body. The route
+ * had never worked; Swagger described a request the server refused.
+ *
+ * `@IsIP()` and not a CIDR range: `DdosProtectionMiddleware` tests membership
+ * with `sismember('ddos:whitelist', clientIp)` and bans are keyed
+ * `ddos:banned:<ip>`, both exact. A `10.0.0.0/8` accepted here would be stored,
+ * listed on the security page, and match nothing — a control that looks applied
+ * and is inert.
+ */
 export class BanIpRequestDto {
   @ApiProperty({ example: '192.168.1.100', description: 'IPv4 or IPv6 address to ban' })
+  @IsString()
+  @IsNotEmpty()
+  @IsIP()
   ip: string;
 
-  @ApiProperty({
+  /**
+   * Optional, with the hour the console offers as its default. Floors at a
+   * minute (anything shorter expires before the attacker notices) and caps at
+   * 30 days — Redis holds the ban as a key TTL, so a longer one is really a
+   * permanent block and should be a firewall rule, not a cache entry.
+   */
+  @ApiPropertyOptional({
     example: 3600,
     minimum: 60,
     maximum: 2592000,
+    default: 3600,
     description: 'Ban duration in seconds',
   })
-  durationSeconds: number;
+  @IsOptional()
+  @IsInt()
+  @Min(60)
+  @Max(2592000)
+  durationSeconds: number = 3600;
 
-  @ApiProperty({ example: 'Manual ban — repeated credential stuffing' })
-  reason: string;
+  /** Stored with the ban and shown in the console's ban table, so it is bounded. */
+  @ApiPropertyOptional({
+    example: 'Manual ban — repeated credential stuffing',
+    maxLength: 200,
+    default: 'Manual ban from the admin console',
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  reason: string = 'Manual ban from the admin console';
 }
 
+/** `POST /admin/security/whitelist` — see `BanIpRequestDto` for why this was a 400, and why not CIDR. */
 export class WhitelistIpRequestDto {
   @ApiProperty({ example: '10.0.0.1', description: 'IPv4 or IPv6 address to whitelist' })
+  @IsString()
+  @IsNotEmpty()
+  @IsIP()
   ip: string;
 }
 

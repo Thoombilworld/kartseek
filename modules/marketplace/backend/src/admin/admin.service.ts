@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, TreeRepository, ILike, In, MoreThanOrEqual, IsNull } from 'typeorm';
+import { Repository, TreeRepository, ILike, In, MoreThanOrEqual } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import {
@@ -1459,61 +1459,47 @@ export class MarketplaceAdminService {
     return { success: true, id };
   }
 
-  async getAdminNotifications(scope?: string) {
-    // `MarketplaceNotification` carries no market column, so this list is the
-    // platform's. Refused for a scoped admin rather than relabelled as theirs.
+  /**
+   * The signed-in administrator's own notifications, newest first.
+   *
+   * Two defects met here. The query was `where: { userId: IsNull() }`, but
+   * `MarketplaceNotification.userId` is a plain `@Column()` — NOT NULL — so it
+   * could never match a row; and the "if no DB records" branch below it
+   * returned four hand-written objects ("3 new sellers awaiting approval",
+   * "Weekly payout batch of ₹2.3L ready for processing" — rupees, on a
+   * Qatar-first platform). The fallback was therefore not a fallback: it was the
+   * only reachable path, and the console header rendered fiction on every admin
+   * page.
+   *
+   * Notifications are now what the table can actually express: rows addressed to
+   * this user. An empty result is an honest empty state — the header renders
+   * "Nothing to report." — not an invitation to invent four.
+   *
+   * `unreadCount` is counted in the database rather than from the page of 50, so
+   * the header's badge is right even when the unread rows are older than the
+   * page.
+   */
+  async getAdminNotifications(scope?: string, userId?: string) {
+    // The rows carry no market column, so a market-locked admin cannot be shown
+    // this list as theirs. Refused rather than relabelled — the gateway refuses
+    // it first, and this is the backstop for any other caller.
     this.refuseUnattributable(scope, 'platform notification');
-    // `MarketplaceNotification` has no `targetRole` — the `as any` hid that from
-    // the compiler and TypeORM threw at runtime ("Property \"targetRole\" was not
-    // found"), so the admin notifications screen answered 500 rather than a list.
-    // The entity scopes by `userId` and `type`; admin-facing rows are the ones
-    // with no user attached.
-    const notifications = await this.notificationRepo.find({
-      where: { userId: IsNull() },
+
+    // Without an actor there is nobody to answer for. Loud rather than an empty
+    // list, which would be indistinguishable from "you have none".
+    if (!userId) {
+      throw new BadRequestException(
+        'An admin notification list needs an actor; the request carried none.',
+      );
+    }
+
+    const [data, total] = await this.notificationRepo.findAndCount({
+      where: { userId },
       order: { createdAt: 'DESC' },
       take: 50,
     });
-    if (notifications.length > 0) return { data: notifications, total: notifications.length };
-    // If no DB records, return system-generated admin notifications
-    const systemNotifs = [
-      {
-        id: 'sn-1',
-        title: 'New Seller Registration',
-        message: '3 new sellers awaiting approval',
-        type: 'seller_approval',
-        priority: 'high',
-        isRead: false,
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-      },
-      {
-        id: 'sn-2',
-        title: 'Low Stock Alert',
-        message: '12 products below reorder threshold',
-        type: 'inventory',
-        priority: 'medium',
-        isRead: false,
-        createdAt: new Date(Date.now() - 7200000).toISOString(),
-      },
-      {
-        id: 'sn-3',
-        title: 'Return Spike Detected',
-        message: 'Return rate increased 15% in Electronics category',
-        type: 'analytics',
-        priority: 'high',
-        isRead: true,
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-      },
-      {
-        id: 'sn-4',
-        title: 'Payout Batch Ready',
-        message: 'Weekly payout batch of ₹2.3L ready for processing',
-        type: 'payout',
-        priority: 'medium',
-        isRead: true,
-        createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-      },
-    ];
-    return { data: systemNotifs, total: systemNotifs.length };
+    const unreadCount = await this.notificationRepo.count({ where: { userId, isRead: false } });
+    return { data, total, unreadCount };
   }
 
   async sendNotification(dto: any, scope?: string) {

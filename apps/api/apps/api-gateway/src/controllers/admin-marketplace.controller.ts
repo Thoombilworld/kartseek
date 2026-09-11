@@ -2087,15 +2087,20 @@ export class AdminMarketplaceController {
 
   // ── Notifications ───────────────────────────────────────────────────────────
   @Get('notifications')
-  @ApiOperation({ summary: 'List admin notifications' })
+  @ApiOperation({ summary: "List the signed-in administrator's notifications" })
   @ApiQuery({ name: 'country', required: false })
   async getNotifications(@Req() req: any, @Query('country') country?: string) {
     // Notification rows carry no market, so this list is the platform's.
     refuseLockedAdmin(req, 'platform notifications');
     const { scope, market } = this.scopeOf(req, country, 'those notifications');
+    // The actor, from the verified token — never from the caller. The rows are
+    // addressed to a user (`marketplace_notifications.userId` is NOT NULL), and
+    // without one the service could only ever return nothing, which is why it
+    // used to substitute four invented rows instead.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS, {
       region: market,
       scope,
+      userId: this.actorId(req),
     });
   }
 

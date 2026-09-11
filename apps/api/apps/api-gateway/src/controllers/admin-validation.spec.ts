@@ -10,6 +10,7 @@ import { AdminAuditController } from './admin-audit.controller';
 import { AdminCoreController } from './admin-core.controller';
 import { AdminTaxiController } from './admin-taxi.controller';
 import { AuditEntryDto } from '../dto/admin-audit.dto';
+import { BanIpRequestDto, WhitelistIpRequestDto } from '../dto/gateway.dto';
 import { KycDecisionDto, ReasonDto as CoreReasonDto } from '../dto/admin-core.dto';
 import {
   PayoutBatchDto,
@@ -391,6 +392,76 @@ describe('audit entry DTO', () => {
       expect(out.action).toBe(action);
     },
   );
+});
+
+/**
+ * The security write bodies.
+ *
+ * Both DTOs carried `@ApiProperty` and no validators, so the gateway's pipe
+ * stripped every field as unknown and answered 400 — `property ip should not
+ * exist` — to the exact body Swagger documents. The routes had never worked.
+ */
+describe('security ban and whitelist DTOs', () => {
+  it('accepts the body the console sends, and defaults what it omits', async () => {
+    const out = (await run(BanIpRequestDto, {
+      ip: '203.0.113.77',
+      durationSeconds: 900,
+      reason: 'burst flood',
+    })) as BanIpRequestDto;
+    expect(out).toEqual({ ip: '203.0.113.77', durationSeconds: 900, reason: 'burst flood' });
+
+    // `banIp(ip, durationSeconds, reason)` has no optional parameters and the
+    // controller does `Math.round(dto.durationSeconds / 60)`, so an omitted
+    // duration must arrive as a number, not as NaN in a success message.
+    const bare = (await run(BanIpRequestDto, { ip: '203.0.113.77' })) as BanIpRequestDto;
+    expect(bare.durationSeconds).toBe(3600);
+    expect(bare.reason).toBe('Manual ban from the admin console');
+  });
+
+  it('accepts IPv6, which the ban keys and the whitelist set both hold', async () => {
+    expect(((await run(BanIpRequestDto, { ip: '::1' })) as BanIpRequestDto).ip).toBe('::1');
+    expect(
+      ((await run(WhitelistIpRequestDto, { ip: '::ffff:127.0.0.1' })) as WhitelistIpRequestDto).ip,
+    ).toBe('::ffff:127.0.0.1');
+  });
+
+  it.each([
+    ['nothing at all', {}, 'ip should not be empty'],
+    ['a hostname', { ip: 'evil.example.com' }, 'ip must be an ip address'],
+    // `sismember` and `ddos:banned:<ip>` are exact, so a range would be stored,
+    // listed, and match no request — a control that looks applied and is inert.
+    ['a CIDR range', { ip: '10.0.0.0/8' }, 'ip must be an ip address'],
+    ['a wildcard', { ip: '192.168.1.*' }, 'ip must be an ip address'],
+  ])('refuses %s as an address to ban', async (_label, body, message) => {
+    expect(await rejectionOf(BanIpRequestDto, body)).toEqual(
+      expect.arrayContaining([expect.stringContaining(message)]),
+    );
+  });
+
+  it('refuses the same addresses for the whitelist', async () => {
+    expect(await rejectionOf(WhitelistIpRequestDto, { ip: '10.0.0.0/8' })).toEqual(
+      expect.arrayContaining([expect.stringContaining('ip must be an ip address')]),
+    );
+  });
+
+  it.each([
+    ['a ban shorter than a minute', { ip: '203.0.113.1', durationSeconds: 30 }],
+    ['a ban longer than 30 days', { ip: '203.0.113.1', durationSeconds: 2592001 }],
+    ['a fractional duration', { ip: '203.0.113.1', durationSeconds: 90.5 }],
+  ])('refuses %s', async (_label, body) => {
+    expect(await rejectionOf(BanIpRequestDto, body)).toEqual(
+      expect.arrayContaining([expect.stringContaining('durationSeconds')]),
+    );
+  });
+
+  it('refuses a reason longer than the column, and an unknown field', async () => {
+    expect(
+      await rejectionOf(BanIpRequestDto, { ip: '203.0.113.1', reason: 'x'.repeat(201) }),
+    ).toEqual(expect.arrayContaining([expect.stringContaining('reason')]));
+    expect(await rejectionOf(BanIpRequestDto, { ip: '203.0.113.1', permanent: true })).toContain(
+      'property permanent should not exist',
+    );
+  });
 });
 
 // ── 3. No DTO drifts away from its table ─────────────────────────────────────

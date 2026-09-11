@@ -12,6 +12,7 @@ import {
   UsePipes,
   ValidationPipe,
   Logger,
+  Req,
 } from '@nestjs/common';
 import {
   type DtoMessage,
@@ -885,8 +886,10 @@ export class MarketplaceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('admin/notifications')
-  getAdminNotifications() {
-    return this.admin.getAdminNotifications();
+  getAdminNotifications(@Req() req: any) {
+    // Same contract as the TCP handler: the actor comes from the verified
+    // token, never from the caller.
+    return this.admin.getAdminNotifications(undefined, req?.user?.id ?? req?.user?.userId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -1500,7 +1503,11 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_notifications' })
   tcpAdminGetNotifications(@Payload() d: any) {
-    return this.admin.getAdminNotifications(d?.scope);
+    // `userId` carries the acting administrator, taken from the verified token
+    // by the gateway. Notifications are addressed to a user — the list used to
+    // ask for rows with no user at all, which the NOT NULL column made
+    // impossible, so it always fell through to four invented rows.
+    return this.admin.getAdminNotifications(d?.scope, d?.userId);
   }
 
   @MessagePattern({ cmd: 'admin_send_notification' })

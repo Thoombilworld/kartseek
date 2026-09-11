@@ -95,7 +95,22 @@ export class AdminCoreController {
 
   // ── Overview ───────────────────────────────────────────────────────────────
 
+  /**
+   * `dashboard.view` is enforced here, not merely documented.
+   *
+   * The console's forbidden panel tells the reader which permission they lack,
+   * and the only honest way to say `dashboard.view` is for the route to check
+   * it: a 403 that was really a *role* refusal, under a panel naming a
+   * permission, sends an administrator to ask for a grant that would change
+   * nothing. All five seeded roles hold it (see
+   * `migrations/1786501800000-AdminRoles.ts`) and SUPER_ADMIN signs in with
+   * `*`, so nothing loses access.
+   *
+   * The roles are repeated because `@Roles` on a handler *overrides* the
+   * class-level list rather than adding to it.
+   */
   @Get('dashboard')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:dashboard.view')
   @ApiOperation({ summary: 'Platform-wide admin dashboard counters' })
   @ApiQuery({ name: 'country', required: false })
   async dashboard(@Req() req: any, @Query('country') country?: string) {

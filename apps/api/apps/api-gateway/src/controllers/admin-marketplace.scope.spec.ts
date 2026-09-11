@@ -212,3 +212,28 @@ describe('AdminMarketplaceController — sellers and products', () => {
     expect(client.send).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Notifications are addressed to a user, so the request has to carry one.
+ *
+ * `marketplace_notifications.userId` is NOT NULL, and the service used to ask
+ * for rows with no user at all — a query that could never match, which is why it
+ * fell through to four invented rows on every call. The actor comes from the
+ * verified token here, never from the caller.
+ */
+describe('AdminMarketplaceController — notifications', () => {
+  it('sends the acting administrator as the owner of the list', async () => {
+    const { ctrl, client } = build(() => ({ data: [], total: 0, unreadCount: 0 }));
+    await ctrl.getNotifications(req(globalAdmin));
+    expect(client.send).toHaveBeenCalledWith(
+      { cmd: MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS },
+      expect.objectContaining({ userId: 'u-g' }),
+    );
+  });
+
+  it('refuses a market-locked admin before asking — the rows carry no market', async () => {
+    const { ctrl, client } = build(() => ({ data: [], total: 0 }));
+    await expect(ctrl.getNotifications(req(qaAdmin))).rejects.toThrow(ForbiddenException);
+    expect(client.send).not.toHaveBeenCalled();
+  });
+});
