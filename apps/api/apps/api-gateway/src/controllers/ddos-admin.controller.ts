@@ -19,8 +19,10 @@ import {
   ApiBody,
   ApiNoContentResponse,
 } from '@nestjs/swagger';
-import { DdosMonitorService } from '@app/security';
-import { JwtAuthGuard } from '@app/security';
+import { DdosMonitorService, JwtAuthGuard } from '@app/security';
+import { UserRole } from '@app/common';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import {
   BanIpRequestDto,
   WhitelistIpRequestDto,
@@ -28,18 +30,19 @@ import {
   SuccessResponseDto,
 } from '../dto/gateway.dto';
 
-
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 /**
  * DDoS Admin Controller — Security dashboard API.
  *
- * All endpoints require a valid JWT admin token.
- * Base path: /api/v1/admin/security
+ * Requires an admin role, not merely a session: with JwtAuthGuard alone any
+ * signed-in customer could read the threat board, ban or whitelist IPs and
+ * reset attack mode. Base path: /api/v1/admin/security
  */
 @ApiTags('🛡️ Security')
 @ApiBearerAuth('JWT')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 @Controller('admin/security')
 export class DdosAdminController {
   constructor(private readonly monitor: DdosMonitorService) {}
@@ -49,7 +52,8 @@ export class DdosAdminController {
   @Get('status')
   @ApiOperation({
     summary: 'DDoS threat status',
-    description: 'Returns the current threat level, active ban counts, and attack-mode flags. Refresh every 10s on the admin dashboard.',
+    description:
+      'Returns the current threat level, active ban counts, and attack-mode flags. Refresh every 10s on the admin dashboard.',
   })
   @ApiOkResponse({
     description: 'Current threat status',
@@ -72,7 +76,8 @@ export class DdosAdminController {
   @Get('trend')
   @ApiOperation({
     summary: '14-day ban trend',
-    description: 'Returns daily HTTP and WebSocket ban counts for the last 14 days, suitable for a trend chart.',
+    description:
+      'Returns daily HTTP and WebSocket ban counts for the last 14 days, suitable for a trend chart.',
   })
   async getBanTrend() {
     return this.monitor.getBanTrend();
@@ -81,7 +86,8 @@ export class DdosAdminController {
   @Get('stats/endpoints')
   @ApiOperation({
     summary: 'Per-endpoint request stats',
-    description: 'Returns request counts broken down by method, path, and hour. Useful for identifying abused endpoints.',
+    description:
+      'Returns request counts broken down by method, path, and hour. Useful for identifying abused endpoints.',
   })
   async getEndpointStats() {
     return this.monitor.getEndpointStats();
@@ -90,7 +96,8 @@ export class DdosAdminController {
   @Get('offenders')
   @ApiOperation({
     summary: 'Top strike offenders',
-    description: 'Returns the top 20 IPs ranked by strike count (not yet banned). Useful for proactive manual banning.',
+    description:
+      'Returns the top 20 IPs ranked by strike count (not yet banned). Useful for proactive manual banning.',
   })
   async getTopOffenders() {
     return this.monitor.getTopOffenders(20);
@@ -101,7 +108,8 @@ export class DdosAdminController {
   @Get('bans')
   @ApiOperation({
     summary: 'List all banned IPs',
-    description: 'Returns all currently banned IPs for both HTTP and WebSocket traffic, sorted by remaining ban duration.',
+    description:
+      'Returns all currently banned IPs for both HTTP and WebSocket traffic, sorted by remaining ban duration.',
   })
   async getBannedIps() {
     return this.monitor.getBannedIps();
@@ -109,17 +117,26 @@ export class DdosAdminController {
 
   @Post('bans')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Manually ban an IP', description: 'Bans an IP for both HTTP and WebSocket traffic.' })
+  @ApiOperation({
+    summary: 'Manually ban an IP',
+    description: 'Bans an IP for both HTTP and WebSocket traffic.',
+  })
   @ApiBody({ type: BanIpRequestDto })
   @ApiCreatedResponse({ type: SuccessResponseDto, description: 'IP banned successfully' })
   async banIp(@Body() dto: BanIpRequestDto) {
     await this.monitor.banIp(dto.ip, dto.durationSeconds, dto.reason);
-    return { success: true, message: `IP ${dto.ip} banned for ${Math.round(dto.durationSeconds / 60)} minutes.` };
+    return {
+      success: true,
+      message: `IP ${dto.ip} banned for ${Math.round(dto.durationSeconds / 60)} minutes.`,
+    };
   }
 
   @Delete('bans/:ip')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Unban an IP', description: 'Removes HTTP ban, WebSocket ban, and clears all strike records for the IP.' })
+  @ApiOperation({
+    summary: 'Unban an IP',
+    description: 'Removes HTTP ban, WebSocket ban, and clears all strike records for the IP.',
+  })
   @ApiParam({ name: 'ip', description: 'IPv4 or IPv6 address to unban', example: '192.168.1.100' })
   async unbanIp(@Param('ip') ip: string) {
     await this.monitor.unbanIp(ip);
@@ -129,14 +146,20 @@ export class DdosAdminController {
   // ── Whitelist ──────────────────────────────────────────────────────────────
 
   @Get('whitelist')
-  @ApiOperation({ summary: 'Get whitelist', description: 'Returns all IPs that bypass DDoS checks (trusted services, internal IPs).' })
+  @ApiOperation({
+    summary: 'Get whitelist',
+    description: 'Returns all IPs that bypass DDoS checks (trusted services, internal IPs).',
+  })
   async getWhitelist() {
     return this.monitor.getWhitelistedIps();
   }
 
   @Post('whitelist')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Add IP to whitelist', description: 'Whitelisted IPs bypass all DDoS rate-limiting. Any existing ban is also cleared.' })
+  @ApiOperation({
+    summary: 'Add IP to whitelist',
+    description: 'Whitelisted IPs bypass all DDoS rate-limiting. Any existing ban is also cleared.',
+  })
   @ApiBody({ type: WhitelistIpRequestDto })
   @ApiCreatedResponse({ type: SuccessResponseDto, description: 'IP added to whitelist' })
   async addToWhitelist(@Body() dto: WhitelistIpRequestDto) {
@@ -146,7 +169,10 @@ export class DdosAdminController {
 
   @Delete('whitelist/:ip')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Remove IP from whitelist', description: 'The IP will be subject to standard DDoS checks again after removal.' })
+  @ApiOperation({
+    summary: 'Remove IP from whitelist',
+    description: 'The IP will be subject to standard DDoS checks again after removal.',
+  })
   @ApiParam({ name: 'ip', description: 'IPv4 or IPv6 address to remove', example: '10.0.0.1' })
   async removeFromWhitelist(@Param('ip') ip: string) {
     await this.monitor.removeFromWhitelist(ip);
@@ -159,7 +185,8 @@ export class DdosAdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Reset attack mode',
-    description: 'Manually clears the elevated attack mode flag if it was triggered by a false positive. Rate limits return to normal.',
+    description:
+      'Manually clears the elevated attack mode flag if it was triggered by a false positive. Rate limits return to normal.',
   })
   async resetAttackMode() {
     await this.monitor.resetAttackMode();

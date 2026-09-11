@@ -85,6 +85,8 @@ interface Route {
   path: string;
   guarded: boolean;
   declaredPublic: boolean;
+  /** True when the class block or the route block carries @Roles(...) with an admin role. */
+  adminRole: boolean;
 }
 
 /**
@@ -124,6 +126,8 @@ function collectRoutes(): Route[] {
     const classBlock = src.slice(top, classLine).join('\n');
     const classGuarded = /@UseGuards\([^)]*JwtAuth/.test(classBlock);
     const classPublic = /@Public\(\)/.test(classBlock);
+    const ADMIN_ROLE = /@Roles\([^)]*(UserRole\.(SUPER_ADMIN|ADMIN)|'(SUPER_ADMIN|ADMIN)')/;
+    const classAdminRole = ADMIN_ROLE.test(classBlock);
 
     for (let i = classLine; i < src.length; i++) {
       const m = src[i].match(HTTP);
@@ -142,6 +146,7 @@ function collectRoutes(): Route[] {
         path: ('/' + base + (sub ? '/' + sub : '')).replace(/\/+/g, '/'),
         guarded: classGuarded || /@UseGuards\([^)]*JwtAuth/.test(block),
         declaredPublic: classPublic || /@Public\(\)/.test(block),
+        adminRole: classAdminRole || ADMIN_ROLE.test(block),
       });
     }
   }
@@ -163,6 +168,14 @@ describe('gateway route exposure', () => {
       .filter((r) => !PUBLIC_PREFIXES.some(([re]) => re.test(r.path)));
 
     const report = exposed.map((r) => `  ${r.verb} ${r.path}   (${r.file})`).join('\n');
+    expect(report).toBe('');
+  });
+
+  it('requires an admin role on every /admin route', () => {
+    // A JwtAuthGuard alone admits any signed-in customer. /admin/security was
+    // exactly that: authenticated, unrolled, and able to ban IPs.
+    const unrolled = routes.filter((r) => r.path.startsWith('/admin') && !r.adminRole);
+    const report = unrolled.map((r) => `  ${r.verb} ${r.path}   (${r.file})`).join('\n');
     expect(report).toBe('');
   });
 
