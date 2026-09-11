@@ -40,6 +40,81 @@ export interface AdminListParams {
   category?: string;
 }
 
+// ─── Audit trail (/admin/audit-logs) ─────────────────────────────────────────
+
+/**
+ * One row of the platform's immutable audit trail, as `audit-log-service`
+ * stores it. `actionType` is either `http.<verb>.<path>` (derived by the
+ * gateway's interceptor from an admin mutation) or `console.<action>` (recorded
+ * explicitly by the console). `country` is the market the action belonged to,
+ * `'ALL'` for one that belonged to every market, and `'UNKNOWN'` where the
+ * request carried no market at all.
+ */
+export interface AuditLogRow {
+  _id?: string;
+  id?: string;
+  actionType: string;
+  actorId: string;
+  actorEmail?: string;
+  actorRole?: string;
+  actorIp?: string;
+  entityType?: string;
+  entityId?: string;
+  oldValue?: Record<string, unknown>;
+  newValue?: Record<string, unknown>;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+  isSensitive?: boolean;
+  country: string;
+  service: string;
+  createdAt?: string;
+}
+
+export interface AuditLogPage {
+  data: AuditLogRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/**
+ * The audit trail's own filter set. Not `AdminListParams`: none of `search`,
+ * `status`, `role` or `category` means anything here, and `actionType` is a
+ * prefix match rather than an exact one.
+ */
+export interface AuditLogParams {
+  page?: number;
+  limit?: number;
+  actorId?: string;
+  actorEmail?: string;
+  entityType?: string;
+  entityId?: string;
+  actionType?: string;
+  country?: string;
+  /** ISO date, inclusive. */
+  from?: string;
+  /** ISO date, inclusive. */
+  to?: string;
+}
+
+/** What the console may send when recording an action it performed itself. */
+export interface AuditLogEntryInput {
+  action: string;
+  entityType?: string;
+  entityId?: string;
+  details?: Record<string, unknown>;
+  reason?: string;
+  /**
+   * @deprecated Accepted and discarded. The gateway reads the actor from the
+   * verified token, and its validation pipe rejects any field `AuditEntryDto`
+   * does not declare — so a body carrying this is a 400, not a mis-attributed
+   * entry. Several admin pages still pass it; `addAuditLog` strips it rather
+   * than trusting each caller to stop, because stripping at the one place that
+   * builds the request is the only place it cannot be forgotten.
+   */
+  adminId?: string;
+}
+
 // ─── Roles & staff (/admin/roles, /admin/staff — SUPER_ADMIN only) ───────────
 
 /** One permission the console may grant, as the gateway defines it. */
@@ -135,7 +210,15 @@ function getHeaders(): HeadersInit {
   };
 }
 
-function buildQuery(params: AdminListParams): string {
+/**
+ * Widened from `AdminListParams` so the audit filters can use it too.
+ * `AdminListParams` itself is deliberately left alone — it is the shape of a
+ * *list* endpoint's query, and adding `actorEmail`/`from`/`to` to it would
+ * offer every list page filters no list endpoint reads. `object` rather than an
+ * index-signature type because the params are interfaces, which TypeScript will
+ * not assign to `Record<string, …>`.
+ */
+function buildQuery(params: object): string {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') q.set(key, String(value));
@@ -284,15 +367,24 @@ export const adminCoreApi = {
     }),
 
   // ── Audit Logs ────────────────────────────────────────────────────────────
-  getAuditLogs: (p: AdminListParams = {}) =>
-    apiCall(`${BASE_URL}/admin/audit-logs${buildQuery(p)}`),
-  addAuditLog: (entry: {
-    action: string;
-    adminId: string;
-    entityType: string;
-    entityId: string;
-    details?: Record<string, unknown>;
-  }) => apiCall(`${BASE_URL}/admin/audit-logs`, { method: 'POST', body: JSON.stringify(entry) }),
+  getAuditLogs: (p: AuditLogParams = {}) =>
+    apiCall<AuditLogPage>(`${BASE_URL}/admin/audit-logs${buildQuery(p)}`),
+  /** Every entry for one record — `GET /admin/audit-logs/entity/:type/:id`. */
+  getEntityAuditLogs: (entityType: string, entityId: string) =>
+    apiCall<AuditLogPage>(
+      `${BASE_URL}/admin/audit-logs/entity/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+    ),
+  /**
+   * Record a console-originated action.
+   *
+   * No `adminId`: the gateway reads the actor from the verified token and the
+   * request body is whitelisted, so sending one is both useless and rejected.
+   */
+  addAuditLog: ({ adminId: _ignored, ...entry }: AuditLogEntryInput) =>
+    apiCall<{ success: boolean; logId: string }>(`${BASE_URL}/admin/audit-logs`, {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    }),
 
   // ── Revenue Reports ───────────────────────────────────────────────────────
   getRevenue: (startDate: string, endDate: string) =>

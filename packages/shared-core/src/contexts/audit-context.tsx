@@ -1,10 +1,8 @@
 'use client';
 
-import React, {
-  createContext, useContext, useCallback, useRef,
-  type ReactNode
-} from 'react';
-import { useAuth, type AuthUser } from './auth-context';
+import React, { createContext, useContext, useCallback, useRef, type ReactNode } from 'react';
+import { useAuth } from './auth-context';
+import { adminCoreApi } from '@/lib/api/admin-core';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,8 +28,6 @@ export interface AuditEntry {
   details?: string;
   /** Severity level */
   severity: AuditSeverity;
-  /** IP address (mocked for frontend) */
-  ipAddress: string;
 }
 
 export interface AuditFilters {
@@ -47,13 +43,27 @@ export interface AuditFilters {
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface AuditContextValue {
-  /** Log a new audit event */
+  /**
+   * Record an action the console performed itself (sign-in, sign-out).
+   *
+   * Fire-and-forget from the caller's point of view, but the write is a real
+   * `POST /admin/audit-logs`: the entry lands in the same immutable collection
+   * the gateway's interceptor writes to, and the local copy is appended only
+   * once the server confirms it.
+   */
   logAction: (action: string, module: string, details?: string, severity?: AuditSeverity) => void;
-  /** Get all audit entries with optional filtering */
+  /**
+   * Actions this browser session recorded and the server accepted.
+   *
+   * Deliberately *not* the audit trail — that is a server query, and
+   * `/admin/audit-logs` asks for it directly. This used to be seeded with seven
+   * invented entries so the page looked populated, which meant the one screen an
+   * administrator checks after an incident showed fabricated history.
+   */
   getAuditLog: (filters?: AuditFilters) => AuditEntry[];
-  /** Get total count of audit entries */
+  /** How many of this session's actions were recorded. */
   getAuditCount: () => number;
-  /** Clear all audit entries */
+  /** Forget this session's local copy. Does not, and cannot, alter the trail. */
   clearAuditLog: () => void;
 }
 
@@ -62,105 +72,81 @@ const AuditContext = createContext<AuditContextValue | undefined>(undefined);
 // ─── Region names for display ─────────────────────────────────────────────────
 
 const REGION_NAMES: Record<string, string> = {
-  IN: 'India', QA: 'Qatar', AE: 'UAE', SA: 'Saudi Arabia',
-  BH: 'Bahrain', KW: 'Kuwait', OM: 'Oman', GB: 'United Kingdom',
-  US: 'United States', SG: 'Singapore', ALL: 'All Regions',
+  IN: 'India',
+  QA: 'Qatar',
+  AE: 'UAE',
+  SA: 'Saudi Arabia',
+  BH: 'Bahrain',
+  KW: 'Kuwait',
+  OM: 'Oman',
+  GB: 'United Kingdom',
+  US: 'United States',
+  SG: 'Singapore',
+  ALL: 'All Regions',
 };
 
-// ─── Seed data for initial audit log ──────────────────────────────────────────
-
-function generateSeedEntries(): AuditEntry[] {
-  const now = new Date();
-  return [
-    {
-      id: 'audit_seed_001', timestamp: new Date(now.getTime() - 86400000 * 2).toISOString(),
-      adminId: 'adm_admin', adminName: 'Super Admin', adminEmail: 'admin@kartseek.com',
-      adminRoleId: 'R-01', adminRoleName: 'Super Admin',
-      regionCode: 'ALL', regionName: 'All Regions',
-      module: 'System', action: 'System configuration updated', details: 'Updated payment gateway settings for Stripe',
-      severity: 'info', ipAddress: '192.168.1.10',
-    },
-    {
-      id: 'audit_seed_002', timestamp: new Date(now.getTime() - 86400000 * 1.5).toISOString(),
-      adminId: 'adm_uae', adminName: 'Sarah Al-Rashid', adminEmail: 'uae@kartseek.com',
-      adminRoleId: 'R-03', adminRoleName: 'Country Manager',
-      regionCode: 'AE', regionName: 'UAE',
-      module: 'Sellers', action: 'Approved new seller registration', details: 'Seller: Dubai Electronics LLC (SLR-4521)',
-      severity: 'info', ipAddress: '85.115.62.40',
-    },
-    {
-      id: 'audit_seed_003', timestamp: new Date(now.getTime() - 86400000).toISOString(),
-      adminId: 'adm_saudi', adminName: 'Fatima Noor', adminEmail: 'saudi@kartseek.com',
-      adminRoleId: 'R-03', adminRoleName: 'Country Manager',
-      regionCode: 'SA', regionName: 'Saudi Arabia',
-      module: 'KYC', action: 'Verified KYC documents for seller', details: 'Seller: Al Madinah Spices (SLR-7812)',
-      severity: 'info', ipAddress: '178.33.140.15',
-    },
-    {
-      id: 'audit_seed_004', timestamp: new Date(now.getTime() - 3600000 * 12).toISOString(),
-      adminId: 'adm_finance', adminName: 'Priya Sharma', adminEmail: 'finance@kartseek.com',
-      adminRoleId: 'R-15', adminRoleName: 'Finance Manager',
-      regionCode: 'ALL', regionName: 'All Regions',
-      module: 'Finance', action: 'Processed batch payout', details: 'Payout batch #PB-2026-0711: 142 sellers, total ₹14,20,000',
-      severity: 'info', ipAddress: '103.92.45.210',
-    },
-    {
-      id: 'audit_seed_005', timestamp: new Date(now.getTime() - 3600000 * 6).toISOString(),
-      adminId: 'adm_support', adminName: 'Maria Garcia', adminEmail: 'support@kartseek.com',
-      adminRoleId: 'R-14', adminRoleName: 'Customer Support Agent',
-      regionCode: 'ALL', regionName: 'All Regions',
-      module: 'Orders', action: 'Processed refund for order', details: 'Order #ORD-89234: Refund of $45.99 to customer',
-      severity: 'warning', ipAddress: '72.134.88.155',
-    },
-    {
-      id: 'audit_seed_006', timestamp: new Date(now.getTime() - 3600000 * 3).toISOString(),
-      adminId: 'adm_india', adminName: 'Vikram Singh', adminEmail: 'india@kartseek.com',
-      adminRoleId: 'R-04', adminRoleName: 'State/District Manager',
-      regionCode: 'IN', regionName: 'India',
-      module: 'Delivery', action: 'Updated delivery zone boundaries', details: 'Mumbai Zone 3: Added 15 new PIN codes',
-      severity: 'info', ipAddress: '49.36.100.22',
-    },
-    {
-      id: 'audit_seed_007', timestamp: new Date(now.getTime() - 3600000).toISOString(),
-      adminId: 'adm_admin', adminName: 'Super Admin', adminEmail: 'admin@kartseek.com',
-      adminRoleId: 'R-01', adminRoleName: 'Super Admin',
-      regionCode: 'ALL', regionName: 'All Regions',
-      module: 'Security', action: 'Failed login attempt detected', details: 'Multiple failed OTP attempts from IP 103.45.67.89',
-      severity: 'critical', ipAddress: '103.45.67.89',
-    },
-  ];
+/**
+ * The payload `POST /admin/audit-logs` accepts.
+ *
+ * Exported so the page spec can assert its shape without rendering a provider.
+ * Note what is absent: no `adminId`, no `adminEmail`, no `country`. The gateway
+ * takes all three from the verified token, and its validation pipe rejects any
+ * field `AuditEntryDto` does not declare — so a console that sent its own idea
+ * of who was acting would get a 400, which is the point.
+ */
+export function auditPostPayload(
+  action: string,
+  module: string,
+  details?: string,
+  severity: AuditSeverity = 'info',
+) {
+  return {
+    // `console.<module>.<action>` — the gateway prefixes `console.`, so the
+    // module goes in front of the action here and the trail sorts by surface.
+    action: `${module}.${action}`,
+    entityType: module,
+    details: { details, severity } as Record<string, unknown>,
+  };
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AuditProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const logRef = useRef<AuditEntry[]>(generateSeedEntries());
+  const logRef = useRef<AuditEntry[]>([]);
 
   const logAction = useCallback(
     (action: string, module: string, details?: string, severity: AuditSeverity = 'info') => {
-      const entry: AuditEntry = {
-        id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-        timestamp: new Date().toISOString(),
-        adminId: user?.id || 'unknown',
-        adminName: user?.name || 'Unknown',
-        adminEmail: user?.email || 'unknown@kartseek.com',
-        adminRoleId: user?.adminRoleId,
-        adminRoleName: user?.adminRoleName,
-        regionCode: user?.regionCode || 'ALL',
-        regionName: REGION_NAMES[user?.regionCode || 'ALL'] || 'Unknown',
-        module,
-        action,
-        details,
-        severity,
-        ipAddress: '127.0.0.1', // Frontend mock
-      };
-      logRef.current = [entry, ...logRef.current];
+      const payload = auditPostPayload(action, module, details, severity);
 
-      // Keep max 500 entries in memory
-      if (logRef.current.length > 500) {
-        logRef.current = logRef.current.slice(0, 500);
-      }
+      void adminCoreApi
+        .addAuditLog(payload)
+        .then((res) => {
+          // Appended only on success. An entry kept locally after a rejected
+          // write would be a row the console shows and the trail does not have.
+          if (!res.success) return;
+          const entry: AuditEntry = {
+            id: res.data?.logId ?? `audit_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            adminId: user?.id || 'unknown',
+            adminName: user?.name || 'Unknown',
+            adminEmail: user?.email || 'unknown',
+            adminRoleId: user?.adminRoleId,
+            adminRoleName: user?.adminRoleName,
+            regionCode: user?.regionCode || 'ALL',
+            regionName: REGION_NAMES[user?.regionCode || 'ALL'] || 'Unknown',
+            module,
+            action,
+            details,
+            severity,
+          };
+          logRef.current = [entry, ...logRef.current].slice(0, 500);
+        })
+        .catch(() => {
+          // `addAuditLog` resolves with `{ success: false }` rather than
+          // throwing; this only catches a programming error. Either way the
+          // local copy stays empty, which is the honest outcome.
+        });
     },
     [user],
   );
@@ -169,22 +155,24 @@ export function AuditProvider({ children }: { children: ReactNode }) {
     let results = [...logRef.current];
 
     if (filters?.module) {
-      results = results.filter(e => e.module === filters.module);
+      results = results.filter((e) => e.module === filters.module);
     }
     if (filters?.regionCode) {
-      results = results.filter(e => e.regionCode === filters.regionCode || e.regionCode === 'ALL');
+      results = results.filter(
+        (e) => e.regionCode === filters.regionCode || e.regionCode === 'ALL',
+      );
     }
     if (filters?.severity) {
-      results = results.filter(e => e.severity === filters.severity);
+      results = results.filter((e) => e.severity === filters.severity);
     }
     if (filters?.adminEmail) {
-      results = results.filter(e => e.adminEmail === filters.adminEmail);
+      results = results.filter((e) => e.adminEmail === filters.adminEmail);
     }
     if (filters?.startDate) {
-      results = results.filter(e => e.timestamp >= filters.startDate!);
+      results = results.filter((e) => e.timestamp >= filters.startDate!);
     }
     if (filters?.endDate) {
-      results = results.filter(e => e.timestamp <= filters.endDate!);
+      results = results.filter((e) => e.timestamp <= filters.endDate!);
     }
     if (filters?.limit) {
       results = results.slice(0, filters.limit);

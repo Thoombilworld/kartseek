@@ -73,7 +73,8 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
   try {
     const res = await fetch(url, { headers: getHeaders(), ...options });
     const json = await res.json();
-    if (!res.ok) return { success: false, data: null as T, error: json.message || 'Request failed' };
+    if (!res.ok)
+      return { success: false, data: null as T, error: json.message || 'Request failed' };
     return { success: true, data: json.data ?? json, message: json.message };
   } catch (err) {
     return { success: false, data: null as T, error: 'Network error — please check API Gateway' };
@@ -86,64 +87,153 @@ export const adminMarketplaceApi = {
   getDashboard: () => apiCall(`${BASE_URL}/admin/marketplace/dashboard`),
 
   // ── Sellers ────────────────────────────────────────────────────────────────
-  getSellers:       (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/sellers${buildQuery(p)}`),
-  getSellerById:    (id: string) => apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}`),
-  approveSeller:    (id: string, reason?: string) => apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/approve`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  rejectSeller:     (id: string, reason: string) => apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  suspendSeller:    (id: string, reason: string) => apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/suspend`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  reactivateSeller: (id: string) => apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/reactivate`, { method: 'PATCH' }),
+  getSellers: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers${buildQuery(p)}`),
+  getSellerById: (id: string) => apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}`),
+  approveSeller: (id: string, reason?: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  rejectSeller: (id: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  suspendSeller: (id: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/suspend`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  reactivateSeller: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/reactivate`, { method: 'PATCH' }),
 
   // ── Products ───────────────────────────────────────────────────────────────
-  getProducts:          (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/products${buildQuery(p)}`),
-  getProductById:       (id: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}`),
-  approveProduct:       (id: string, reason?: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}/approve`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  rejectProduct:        (id: string, reason: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  requestCorrection:    (id: string, notes: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}/request-correction`, { method: 'PATCH', body: JSON.stringify({ notes }) }),
-  publishProduct:       (id: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}/publish`, { method: 'PATCH' }),
-  unpublishProduct:     (id: string, reason?: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}/unpublish`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  featureProduct:       (id: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}/feature`, { method: 'PATCH' }),
-  unfeatureProduct:     (id: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}/unfeature`, { method: 'PATCH' }),
+  getProducts: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products${buildQuery(p)}`),
+  getProductById: (id: string) => apiCall(`${BASE_URL}/admin/marketplace/products/${id}`),
+  approveProduct: (id: string, reason?: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products/${id}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  rejectProduct: (id: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  requestCorrection: (id: string, notes: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products/${id}/request-correction`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
+    }),
+  publishProduct: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products/${id}/publish`, { method: 'PATCH' }),
+  unpublishProduct: (id: string, reason?: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products/${id}/unpublish`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  featureProduct: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products/${id}/feature`, { method: 'PATCH' }),
+  unfeatureProduct: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/products/${id}/unfeature`, { method: 'PATCH' }),
 
   // ── Categories ─────────────────────────────────────────────────────────────
-  getCategories:      (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/categories${buildQuery(p)}`),
-  createCategory:     (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/marketplace/categories`, { method: 'POST', body: JSON.stringify(data) }),
+  getCategories: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/categories${buildQuery(p)}`),
+  createCategory: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/marketplace/categories`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   // `category-list` is a *web route* name, not an API one — the gateway declares
   // `@Patch('categories/:id')`, so this 404'd and the admin category editor
   // failed with a generic "Request failed" every time.
-  updateCategory:     (id: string, data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/marketplace/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  getSubcategories:   (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/subcategories${buildQuery(p)}`),
-  createSubcategory:  (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/marketplace/subcategories`, { method: 'POST', body: JSON.stringify(data) }),
-  updateSubcategory:  (id: string, data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/marketplace/subcategories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  getAttributes:      (categoryId?: string) => apiCall(`${BASE_URL}/admin/marketplace/attributes${categoryId ? `?categoryId=${categoryId}` : ''}`),
-  createAttribute:    (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/marketplace/attributes`, { method: 'POST', body: JSON.stringify(data) }),
-  updateAttribute:    (id: string, data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/marketplace/attributes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateCategory: (id: string, data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/marketplace/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  getSubcategories: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/subcategories${buildQuery(p)}`),
+  createSubcategory: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/marketplace/subcategories`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateSubcategory: (id: string, data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/marketplace/subcategories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  getAttributes: (categoryId?: string) =>
+    apiCall(
+      `${BASE_URL}/admin/marketplace/attributes${categoryId ? `?categoryId=${categoryId}` : ''}`,
+    ),
+  createAttribute: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/marketplace/attributes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAttribute: (id: string, data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/marketplace/attributes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   // ── Brands ─────────────────────────────────────────────────────────────────
-  getBrands:              (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/brands${buildQuery(p)}`),
-  getBrandCenter:         (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/brand-center${buildQuery(p)}`),
-  approveBrand:           (id: string) => apiCall(`${BASE_URL}/admin/marketplace/brands/${id}/approve`, { method: 'PATCH' }),
-  rejectBrand:            (id: string, reason: string) => apiCall(`${BASE_URL}/admin/marketplace/brands/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  requestBrandCorrection: (id: string, notes: string) => apiCall(`${BASE_URL}/admin/marketplace/brands/${id}/request-correction`, { method: 'PATCH', body: JSON.stringify({ notes }) }),
+  getBrands: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/brands${buildQuery(p)}`),
+  getBrandCenter: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/brand-center${buildQuery(p)}`),
+  approveBrand: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/brands/${id}/approve`, { method: 'PATCH' }),
+  rejectBrand: (id: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/brands/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  requestBrandCorrection: (id: string, notes: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/brands/${id}/request-correction`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
+    }),
 
   // ── Campaigns ──────────────────────────────────────────────────────────────
-  getCampaigns:      (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/campaigns${buildQuery(p)}`),
-  approveCampaign:   (id: string) => apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/approve`, { method: 'PATCH' }),
-  rejectCampaign:    (id: string, reason: string) => apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  pauseCampaign:     (id: string) => apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/pause`, { method: 'PATCH' }),
-  resumeCampaign:    (id: string) => apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/resume`, { method: 'PATCH' }),
+  getCampaigns: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/campaigns${buildQuery(p)}`),
+  approveCampaign: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/approve`, { method: 'PATCH' }),
+  rejectCampaign: (id: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  pauseCampaign: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/pause`, { method: 'PATCH' }),
+  resumeCampaign: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/campaigns/${id}/resume`, { method: 'PATCH' }),
 
   // ── Orders / Returns / Refunds ─────────────────────────────────────────────
-  getOrders:    (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/orders${buildQuery(p)}`),
-  getReturns:   (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/returns${buildQuery(p)}`),
-  getRefunds:   (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/refunds${buildQuery(p)}`),
+  getOrders: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/orders${buildQuery(p)}`),
+  getReturns: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/returns${buildQuery(p)}`),
+  getRefunds: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/refunds${buildQuery(p)}`),
 
   // ── Finance ────────────────────────────────────────────────────────────────
-  getCommissions: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/commissions${buildQuery(p)}`),
-  getPayouts:     (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/payouts${buildQuery(p)}`),
+  getCommissions: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/commissions${buildQuery(p)}`),
+  getPayouts: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/payouts${buildQuery(p)}`),
 
   // ── Reports / Audit ────────────────────────────────────────────────────────
-  getReports:   (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/reports${buildQuery(p)}`),
-  getAuditLogs: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/marketplace/audit-logs${buildQuery(p)}`),
+  getReports: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/marketplace/reports${buildQuery(p)}`),
+  // `getAuditLogs` is gone with the stub route it called. There is one audit
+  // trail: `adminCoreApi.getAuditLogs({ entityType: 'sellers' })` and friends.
 } as const;
 
 export default adminMarketplaceApi;
