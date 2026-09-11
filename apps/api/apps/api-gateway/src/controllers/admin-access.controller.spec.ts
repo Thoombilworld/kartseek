@@ -10,6 +10,8 @@ import { plainToInstance } from 'class-transformer';
 import { AdminAccessController } from './admin-access.controller';
 import { CreateStaffDto, UpdateStaffDto } from '../dto/admin-access.dto';
 import { GatewayValidationPipe } from '../pipes/gateway-validation.pipe';
+import { ROLES_KEY } from '../decorators/roles.decorator';
+import { UserRole, unknownPermissionKeys } from '@app/common';
 
 const superAdmin = { id: 'u-s', role: 'SUPER_ADMIN' };
 const lockedAdmin = { id: 'u-qa', role: 'ADMIN', regionCode: 'QA', regionLocked: true };
@@ -390,6 +392,62 @@ describe('AdminAccessController', () => {
     expect(body).not.toContain('$2b$12$notasecretbutlooksliketone');
     expect(body).not.toContain('enc:+9715000');
     expect(res.data[0]).toMatchObject({ id: 'u1', email: 'a@kartseek.com' });
+  });
+
+  // ── Declared access ────────────────────────────────────────────────────────
+  //
+  // The handlers above are called directly, so nothing in this file exercises
+  // `RolesGuard`. These read the decorators instead: a method-level `@Roles`
+  // *replaces* the class-level one, so the difference between a read and a
+  // write here is a property of each decorator and of nothing else.
+  describe('declared roles and permissions', () => {
+    const declared = (method: keyof AdminAccessController) =>
+      Reflect.getMetadata(ROLES_KEY, AdminAccessController.prototype[method] as object) as string[];
+
+    it('lets a global admin holding staff.view read roles and staff', () => {
+      // The console's "Staff Management" item is gated on `staff.view`, which
+      // the seeded `admin` role holds. Leaving the reads SUPER_ADMIN-only meant
+      // that link existed for every global admin and always answered 403.
+      for (const method of ['listRoles', 'listStaff'] as const) {
+        expect(declared(method)).toEqual([UserRole.SUPER_ADMIN, UserRole.ADMIN, 'perm:staff.view']);
+      }
+    });
+
+    it('keeps every write to SUPER_ADMIN holding staff.manage', () => {
+      // Reading the directory is not the authority to mint an account in it.
+      for (const method of [
+        'createRole',
+        'updateRole',
+        'deleteRole',
+        'createStaff',
+        'updateStaff',
+      ] as const) {
+        expect(declared(method)).toEqual([UserRole.SUPER_ADMIN, 'perm:staff.manage']);
+      }
+    });
+
+    it('names only keys the vocabulary defines', () => {
+      const used = [
+        ...new Set(
+          (
+            [
+              'listRoles',
+              'listStaff',
+              'createRole',
+              'updateRole',
+              'deleteRole',
+              'createStaff',
+              'updateStaff',
+            ] as const
+          ).flatMap((m) =>
+            declared(m)
+              .filter((r) => r.startsWith('perm:'))
+              .map((r) => r.slice(5)),
+          ),
+        ),
+      ];
+      expect(unknownPermissionKeys(used)).toEqual([]);
+    });
   });
 });
 

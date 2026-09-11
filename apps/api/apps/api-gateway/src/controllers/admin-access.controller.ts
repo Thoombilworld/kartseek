@@ -49,7 +49,7 @@ import {
 const MAX_PAGE_SIZE = 100;
 
 /**
- * Roles & staff — SUPER_ADMIN only, and never a market-locked account.
+ * Roles & staff — SUPER_ADMIN to write, and never a market-locked account.
  *
  * Both `/admin/roles` and `/admin/staff` used to be static arrays inside the
  * admin console: seventeen roles with invented user counts and twelve
@@ -64,10 +64,12 @@ const MAX_PAGE_SIZE = 100;
  * and every market's staffing; letting them write would let them mint
  * themselves an unlocked account.
  *
- * Each route also names `staff.view` or `staff.manage`. Today that is
- * redundant — SUPER_ADMIN signs in with the wildcard, so the key always
- * passes — but the permission is the durable statement of what the route
- * costs, and it is what would hold if the role set here were ever widened.
+ * The two reads also admit a global ADMIN holding `staff.view` — the console's
+ * "Staff Management" item is gated on that key, and a link that always answers
+ * 403 is worse than no link. Every write stays SUPER_ADMIN + `staff.manage`:
+ * reading the directory is not the same authority as minting an account in it.
+ * `regional_admin` carries neither key, so a market-locked admin is still
+ * refused here on two counts.
  */
 @ApiTags('👑 Admin — Access')
 @ApiBearerAuth('JWT')
@@ -143,7 +145,7 @@ export class AdminAccessController {
   // ── Roles ──────────────────────────────────────────────────────────────────
 
   @Get('roles')
-  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.view')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, 'perm:staff.view')
   @GlobalEntity('roles apply to every market')
   @ApiOperation({ summary: 'Admin roles with their permission sets' })
   async listRoles(@Req() req: any) {
@@ -237,7 +239,7 @@ export class AdminAccessController {
   // ── Staff ──────────────────────────────────────────────────────────────────
 
   @Get('staff')
-  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.view')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, 'perm:staff.view')
   @GlobalEntity('staff directory is global; the lock is a property of each record')
   @ApiOperation({ summary: 'Staff accounts' })
   @ApiQuery({ name: 'search', required: false })

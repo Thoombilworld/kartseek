@@ -1070,6 +1070,7 @@ export class AdminMarketplaceController {
   }
 
   @Get('returns')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
   @ApiOperation({ summary: 'List return requests' })
   @ApiQuery({ name: 'country', required: false })
   async getReturns(@Req() req: any, @Query('country') country?: string) {
@@ -1106,6 +1107,7 @@ export class AdminMarketplaceController {
   }
 
   @Get('refunds')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
   @ApiOperation({ summary: 'List refund requests awaiting a decision' })
   @ApiQuery({ name: 'country', required: false })
   async getRefunds(

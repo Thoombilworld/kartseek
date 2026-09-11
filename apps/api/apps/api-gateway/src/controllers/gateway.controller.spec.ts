@@ -1,18 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './gateway.controller';
 import { StaffMfaService } from '../services/staff-mfa.service';
 
-/** Just the columns `adminPermissionsFor` reads off `admin.admin_roles`. */
+/** Just the columns `adminPermissionsFor` and `adminRoleSummary` read. */
 interface AdminRoleRow {
   id: string;
   key: string;
+  name: string;
   permissions: string[];
 }
 
 const PHONE = '+97455512345';
+const PASSWORD = 'AdminPass123!';
+// Cheap on purpose: `login` only ever compares, and the cost factor is the
+// production hash's business, not this file's.
+const PASSWORD_HASH = bcrypt.hashSync(PASSWORD, 4);
 
 const makeController = (user: Record<string, unknown>, roles: AdminRoleRow[] = []) => {
   const store = new Map<string, string>();
@@ -184,12 +190,20 @@ describe('AuthController — adminPermissions claim', () => {
   const ADMIN_ROLE: AdminRoleRow = {
     id: 'role-admin',
     key: 'admin',
+    name: 'Admin',
     permissions: ['finance.view', 'orders.refund'],
   };
   const REGIONAL_ROLE: AdminRoleRow = {
     id: 'role-regional',
     key: 'regional_admin',
+    name: 'Regional Admin',
     permissions: ['finance.view'],
+  };
+  const FINANCE_ROLE: AdminRoleRow = {
+    id: 'role-finance',
+    key: 'finance_manager',
+    name: 'Finance Manager',
+    permissions: ['finance.view', 'finance.payouts'],
   };
   beforeEach(() => {
     process.env.NODE_ENV = 'test';
@@ -199,17 +213,36 @@ describe('AuthController — adminPermissions claim', () => {
     process.env.DEV_AUTH_BYPASS = 'false';
   });
 
-  /** Drive a staff account all the way through the second factor to a session. */
-  const signIn = async (user: Record<string, unknown>, roles: AdminRoleRow[]) => {
+  /** What `completeLogin` hands back — the body the admin console consumes. */
+  interface SessionBody {
+    accessToken: string;
+    refreshToken: string;
+    user: Record<string, unknown>;
+  }
+
+  /**
+   * Drive a staff account all the way through the second factor to a session.
+   *
+   * `via` picks which half of sign-in raises the challenge: `/auth/login` with
+   * a password, or `/auth/otp/verify` with an SMS code. Both must end in the
+   * same session, so both are driven rather than one standing in for the other.
+   */
+  const signIn = async (
+    user: Record<string, unknown>,
+    roles: AdminRoleRow[],
+    via: 'password' | 'otp' = 'otp',
+  ) => {
     const ctx = makeController(user, roles);
-    const challenge = (await ctx.controller.verifyOtp({
-      phone: PHONE,
-      otp: '123456',
-    } as never)) as { challengeToken: string; devCode: string };
+    const challenge = (await (via === 'password'
+      ? ctx.controller.login({ email: String(user.email), password: PASSWORD } as never)
+      : ctx.controller.verifyOtp({ phone: PHONE, otp: '123456' } as never))) as {
+      challengeToken: string;
+      devCode: string;
+    };
     const session = (await ctx.controller.mfaVerify({
       challengeToken: challenge.challengeToken,
       code: challenge.devCode,
-    } as never)) as { accessToken: string; refreshToken: string };
+    } as never)) as unknown as SessionBody;
     return {
       ...ctx,
       session,
@@ -221,8 +254,63 @@ describe('AuthController — adminPermissions claim', () => {
     id: 'staff-1',
     email: 'ops@kartseek.com',
     phone: PHONE,
+    passwordHash: PASSWORD_HASH,
     isActive: true,
     ...over,
+  });
+
+  /**
+   * The response body, not the token.
+   *
+   * The admin console never decodes the JWT and never calls `/auth/profile`:
+   * `admin/login/page.tsx` hands this object to `toAdminUser`. Asserting only
+   * `jwt.verify(...)` is what let a release sign the claim correctly and still
+   * leave every non-SUPER_ADMIN staff account with an empty sidebar.
+   */
+  it('returns the permissions and the assigned role in the sign-in body', async () => {
+    const { session, claims } = await signIn(staff({ role: 'admin', adminRoleId: ADMIN_ROLE.id }), [
+      ADMIN_ROLE,
+    ]);
+    expect(session.user.adminPermissions).toEqual(ADMIN_ROLE.permissions);
+    expect(session.user.adminRole).toEqual({
+      id: ADMIN_ROLE.id,
+      key: 'admin',
+      name: ADMIN_ROLE.name,
+    });
+    // The body and the token describe the same account or neither is trustworthy.
+    expect(session.user.adminPermissions).toEqual(claims.adminPermissions);
+  });
+
+  it('returns the same body when the challenge came from a password login', async () => {
+    const { session } = await signIn(
+      staff({ role: 'finance_manager', adminRoleId: FINANCE_ROLE.id }),
+      [FINANCE_ROLE],
+      'password',
+    );
+    expect(session.user.adminPermissions).toEqual(FINANCE_ROLE.permissions);
+    expect((session.user.adminRole as { key: string }).key).toBe('finance_manager');
+  });
+
+  it('reports a staff account with no role row as adminRole null, not missing', async () => {
+    const { session } = await signIn(staff({ role: 'super_admin' }), []);
+    expect(session.user.adminPermissions).toEqual(['*']);
+    expect(session.user).toHaveProperty('adminRole', null);
+  });
+
+  it('omits both keys from a customer’s sign-in body', async () => {
+    const { controller } = makeController({
+      id: 'cust-1',
+      email: 'jane@example.com',
+      phone: PHONE,
+      role: 'customer',
+      isActive: true,
+    });
+    const res = (await controller.verifyOtp({
+      phone: PHONE,
+      otp: '123456',
+    } as never)) as unknown as SessionBody;
+    expect(res.user).not.toHaveProperty('adminPermissions');
+    expect(res.user).not.toHaveProperty('adminRole');
   });
 
   it('signs the assigned role’s permissions into both tokens', async () => {

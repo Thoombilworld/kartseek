@@ -297,14 +297,6 @@ export class AuthController {
   }
 
   /**
-   * The session itself, shared by password login and MFA completion.
-   *
-   * Everything that makes a login real lives here — the token pair, the Redis
-   * `session:` record the guard and logout read, and the hashed refresh token —
-   * so a staff sign-in that clears its second factor gets exactly the session a
-   * customer gets, not a reconstruction of one.
-   */
-  /**
    * The permission keys an account signs in with: its admin role's, or the
    * system role matching its `UserRole`.
    *
@@ -329,15 +321,52 @@ export class AuthController {
       ? await this.roleRepo.findOne({ where: { id: user.adminRoleId } })
       : null;
     const key = user.regionLocked ? 'regional_admin' : role.toLowerCase();
-    const fallback = byId ? null : await this.roleRepo.findOne({ where: { key } });
+    // Only when the account names no role at all. An `admin_role_id` pointing
+    // at a row that has since been deleted must resolve to nothing, not to the
+    // system role for the account's `UserRole` — that would silently re-widen
+    // an account somebody had deliberately narrowed.
+    const fallback = user.adminRoleId ? null : await this.roleRepo.findOne({ where: { key } });
     return (byId ?? fallback)?.permissions ?? [];
   }
 
+  /**
+   * The assigned role as the console displays it. `null` for a staff account
+   * that holds no role row, which is not the same as a role it cannot read.
+   *
+   * Shared by `completeLogin` and `/auth/profile` so the two cannot describe
+   * the same account differently — the console builds its session from the
+   * login body and never re-reads the profile.
+   */
+  private async adminRoleSummary(
+    user: User,
+  ): Promise<{ id: string; key: string; name: string } | null> {
+    if (!user.adminRoleId) return null;
+    const role = await this.roleRepo.findOne({ where: { id: user.adminRoleId } });
+    return role ? { id: role.id, key: role.key, name: role.name } : null;
+  }
+
+  /**
+   * The session itself, shared by password login and MFA completion.
+   *
+   * Everything that makes a login real lives here — the token pair, the Redis
+   * `session:` record the guard and logout read, and the hashed refresh token —
+   * so a staff sign-in that clears its second factor gets exactly the session a
+   * customer gets, not a reconstruction of one.
+   */
   private async completeLogin(user: User) {
-    // Issue JWT tokens
-    const { accessToken, refreshToken } = this.issueTokens(user, {
-      adminPermissions: await this.adminPermissionsFor(user),
-    });
+    /**
+     * The keys go in the token *and* in the body.
+     *
+     * The admin console never decodes the JWT and never calls `/auth/profile`:
+     * it builds its session from this response (`admin/login/page.tsx` →
+     * `toAdminUser`) and rehydrates from localStorage afterwards. Signing the
+     * claim while omitting it here left `hasPermission` false for every key, so
+     * every sidebar section filtered to zero items and an ADMIN signed in to a
+     * console with no links at all. One computation, both destinations.
+     */
+    const adminPermissions = await this.adminPermissionsFor(user);
+    const adminRole = adminPermissions ? await this.adminRoleSummary(user) : null;
+    const { accessToken, refreshToken } = this.issueTokens(user, { adminPermissions });
 
     // Cache session in Redis (1 hour TTL)
     await this.redis.setJson(
@@ -382,6 +411,11 @@ export class AuthController {
         // enforces the same values from the token.
         regionCode: user.regionCode ?? null,
         regionLocked: user.regionLocked === true,
+        // Staff only, and omitted outright for everyone else: a customer's
+        // session carrying `adminPermissions: []` would invite a client to ask
+        // the question at all. `adminRole` is null for a staff account that
+        // holds no role row — a real answer, unlike its absence.
+        ...(adminPermissions ? { adminPermissions, adminRole } : {}),
         avatar: null as unknown,
       },
       accessToken,
@@ -732,6 +766,11 @@ export class AuthController {
       // Verify the refresh token signature
       const decoded = this.jwtService.verify(body.refreshToken);
       const userId = decoded.sub;
+      // A token with no subject must not reach the user read below:
+      // `findOne({ where: { id: undefined } })` returns the *first* row in the
+      // table, not none. The Redis lookup happens to fail first today, so this
+      // removes a dependency on that ordering rather than fixing a live hole.
+      if (!userId) throw new UnauthorizedException('Invalid refresh token');
 
       // Only a refresh token may be exchanged here. Tokens minted before `type`
       // existed carry none, and are still accepted so live sessions survive the
@@ -942,9 +981,7 @@ export class AuthController {
     // profile read that disagreed with the bearer token would draw a sidebar
     // whose links answer 403.
     const adminPermissions = req.user?.adminPermissions ?? null;
-    const adminRole = user.adminRoleId
-      ? await this.roleRepo.findOne({ where: { id: user.adminRoleId } })
-      : null;
+    const adminRole = await this.adminRoleSummary(user);
 
     return {
       success: true,
@@ -963,7 +1000,7 @@ export class AuthController {
       regionCode: user.regionCode ?? null,
       regionLocked: user.regionLocked === true,
       adminPermissions,
-      adminRole: adminRole ? { id: adminRole.id, key: adminRole.key, name: adminRole.name } : null,
+      adminRole,
       name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
       isActive: user.isActive,
       createdAt: user.createdAt,
