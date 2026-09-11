@@ -36,8 +36,7 @@ export function verifyWsToken(client: Socket): WsUser | null {
 
   // 1. Try auth.token (Socket.IO v4 preferred pattern)
   let token: string | undefined =
-    (client.handshake.auth?.token as string) ||
-    (client.handshake.query?.token as string);
+    (client.handshake.auth?.token as string) || (client.handshake.query?.token as string);
 
   if (token?.startsWith('Bearer ')) {
     token = token.slice(7);
@@ -46,6 +45,17 @@ export function verifyWsToken(client: Socket): WsUser | null {
   if (token) {
     try {
       const decoded = jwt.verify(token, secret) as any;
+      // Only an access token is a credential. A valid signature is not enough:
+      // this gateway also signs 30-day refresh tokens and short-lived `mfa`
+      // challenge tokens, and both used to open `/notifications`, `/orders` and
+      // `/chat` as their subject — the challenge token being the worse of the
+      // two, since it is handed to a browser that has not yet proved the second
+      // factor. Same rule as `JwtAuthGuard`: tokens minted before `type` existed
+      // carry none and stay accepted until they expire.
+      if (decoded.type && decoded.type !== 'access') {
+        logger.warn(`WS token rejected: type '${decoded.type}' cannot authorise a socket`);
+        return null;
+      }
       return {
         id: decoded.sub || decoded.id,
         email: decoded.email,
@@ -95,7 +105,10 @@ export function authenticateWsClient(client: Socket, gatewayName: string): WsUse
   const user = verifyWsToken(client);
   if (!user) {
     logger.warn(`⛔ ${gatewayName}: client ${client.id} rejected — invalid or missing token`);
-    client.emit('error', { code: 'AUTH_REQUIRED', message: 'Valid JWT token is required. Provide via auth.token or query.token.' });
+    client.emit('error', {
+      code: 'AUTH_REQUIRED',
+      message: 'Valid JWT token is required. Provide via auth.token or query.token.',
+    });
     client.disconnect(true);
     return null;
   }

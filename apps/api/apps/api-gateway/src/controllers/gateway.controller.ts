@@ -645,18 +645,34 @@ export class AuthController {
       user = await this.userRepo.save(user);
     }
 
-    const { accessToken, refreshToken } = this.issueTokens({ ...user, phone: body.phone });
-
-    // Clear used OTP
+    // Clear the used OTP before deciding what to hand back, so the code is spent
+    // on both paths. Clearing it only after a token was issued meant a staff
+    // sign-in that stops at the second factor left the SMS code live for another
+    // challenge — and for anyone else who had read it.
     await this.redis.del(`otp:${body.phone}`);
 
-    return {
-      success: true,
-      user: { id: user.id, phone: body.phone, role: user.role },
-      accessToken,
-      refreshToken,
-      expiresIn: 3600,
-    };
+    /**
+     * A phone number is not a second factor for staff.
+     *
+     * This path called `issueTokens` directly, so a staff account that carries a
+     * `phone` value could obtain a working staff access token from an SMS code
+     * alone — straight past the challenge `/auth/login` demands. It also wrote
+     * neither the `session:` record nor the hashed `refresh:` entry, so what it
+     * minted was not even the session the rest of the gateway expects. Both
+     * halves are fixed by ending in the same two places `login` does.
+     */
+    if (isStaffRole(user.role)) {
+      const challenge = await this.staffMfa.createChallenge(user);
+      return {
+        success: true,
+        requires2FA: true,
+        challengeToken: challenge.challengeToken,
+        user: { id: user.id, email: user.email, role: user.role },
+        ...(challenge.devCode ? { devCode: challenge.devCode } : {}),
+      };
+    }
+
+    return this.completeLogin(user);
   }
 
   // ── Token Refresh ──────────────────────────────────────────────────────────
