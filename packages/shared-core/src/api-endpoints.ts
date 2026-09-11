@@ -353,6 +353,26 @@ export interface AuthSession {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  /**
+   * Staff sign-in only: the password was right but no session was issued. The
+   * gateway has delivered a six-digit code and is waiting for
+   * `authApi.mfaVerify(challengeToken, code)`, which returns the real session.
+   *
+   * **A response carrying this has no `accessToken` or `refreshToken`**, so
+   * branch on `requires2FA` before reading either. They stay typed as present
+   * because every other caller of `/auth/login` — the customer and seller
+   * portals — only ever sees the completed form, and widening them would push a
+   * check for an impossible state into each of those.
+   */
+  requires2FA?: boolean;
+  /** The pending sign-in. Authorises nothing on its own — see JwtAuthGuard. */
+  challengeToken?: string;
+  /**
+   * The code itself, echoed only by a non-production gateway running with
+   * `DEV_MFA_ECHO=true` or `DEV_AUTH_BYPASS=true`, so a developer without a
+   * mail provider can still sign in. Never present in production.
+   */
+  devCode?: string;
 }
 
 export interface RegisterPayload {
@@ -375,6 +395,9 @@ export const authApi = {
   /** Creates a seller bound to one portal. The account starts pending approval. */
   registerSeller: (payload: SellerRegisterPayload) =>
     api.post<AuthSession>('/auth/seller/register', payload),
+  /** Completes a staff sign-in. The code is checked by the gateway, never here. */
+  mfaVerify: (challengeToken: string, code: string) =>
+    api.post<AuthSession>('/auth/mfa/verify', { challengeToken, code }),
   refresh: (refreshToken: string) => api.post<AuthSession>('/auth/refresh', { refreshToken }),
   /** Ends the server-side session. Requires the access token, so call before clearing it. */
   logout: () => api.post<{ success: boolean }>('/auth/logout'),

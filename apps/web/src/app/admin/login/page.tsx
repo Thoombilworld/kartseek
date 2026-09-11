@@ -23,14 +23,8 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { KartseekLoader } from '@/components/kartseek-loader';
-import { authApi, ApiError, type AuthApiUser } from '@/lib/api-endpoints';
+import { authApi, ApiError, type AuthApiUser, type AuthSession } from '@/lib/api-endpoints';
 import { toAdminUser, type StaffSessionUser } from '@/auth/admin-session';
-
-// B2 replaces the OTP phase with a real challenge flow; until then these stay
-// hard-coded (no demo account map backs them — the credential step below is
-// the only thing that decides who signs in).
-const VALID_OTP = process.env.NEXT_PUBLIC_ADMIN_OTP || '123456';
-const VALID_BACKUP_PREFIX = 'BACKUP-';
 
 export default function AdminLoginPage() {
   return (
@@ -161,26 +155,31 @@ function AdminLoginForm() {
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState(0);
 
-  // 2FA state
+  // 2FA state. The whole of the pending sign-in is `challengeToken`: until the
+  // gateway trades it for a session there is no token, no user and nothing
+  // stored — which is the point of the change. `pendingIdentity` is only what
+  // the challenge response named, shown so the operator can see whose account
+  // the code was sent for.
   const [phase, setPhase] = useState<'credentials' | 'otp'>('credentials');
   const [otp, setOtp] = useState('');
   const [otpAttempts, setOtpAttempts] = useState(0);
-  const [useBackupCode, setUseBackupCode] = useState(false);
-  const [backupCode, setBackupCode] = useState('');
   const [countdown, setCountdown] = useState(300); // 5 minutes
   const [otpSuccess, setOtpSuccess] = useState(false);
   const [shake, setShake] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [pendingUser, setPendingUser] = useState<AuthUser | null>(null);
-  const [pendingToken, setPendingToken] = useState('');
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [pendingIdentity, setPendingIdentity] = useState<AuthApiUser | null>(null);
+  const [devCode, setDevCode] = useState('');
 
-  const { login, set2FARequired, complete2FA } = useAuth();
+  const { login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '/admin';
 
   const isLocked = attempts >= 5;
-  const isOtpLocked = otpAttempts >= 3;
+  // The gateway stops accepting after five wrong codes and says so; this only
+  // keeps the form from posting a sixth it already knows will be refused.
+  const isOtpLocked = otpAttempts >= 5;
 
   // Countdown timer for OTP validity
   useEffect(() => {
@@ -228,10 +227,13 @@ function AdminLoginForm() {
      *
      * The password check was also decorative, because the accounts and their
      * passwords were in client-side source.
+     *
+     * A staff account gets no token from this call at all — only a challenge to
+     * complete below.
      */
-    let session: { user: AuthApiUser; accessToken: string; refreshToken?: string };
+    let session: AuthSession;
     try {
-      session = (await authApi.login(email.trim().toLowerCase(), password)) as typeof session;
+      session = await authApi.login(email.trim().toLowerCase(), password);
     } catch (err) {
       setAttempts((prev) => prev + 1);
       const message =
@@ -245,70 +247,81 @@ function AdminLoginForm() {
       return;
     }
 
-    // The role, market lock and permissions come from the signed token, never
-    // from the form or a client-side table. Someone with a customer account
-    // must not reach the admin console by knowing its URL, and what a staff
-    // account can see must be what the token actually grants.
-    let user: AuthUser;
-    try {
-      user = toAdminUser(session as { user: StaffSessionUser });
-    } catch {
-      setError('This account does not have admin access.');
+    // Only a staff role is answered with a challenge. Anything else — a
+    // customer who knows this URL, a seller — gets a normal session from the
+    // gateway, which is not a console session: nothing is stored here.
+    if (session.requires2FA && session.challengeToken) {
+      setChallengeToken(session.challengeToken);
+      setPendingIdentity(session.user);
+      setDevCode(session.devCode ?? '');
+      setPhase('otp');
+      setCountdown(300);
+      setOtp('');
+      setOtpAttempts(0);
+      setError('');
       setLoading(false);
       return;
     }
-    const token = session.accessToken;
-    login(user, token, session.refreshToken);
-    set2FARequired();
-    setPendingUser(user);
-    setPendingToken(token);
-    setPhase('otp');
-    setCountdown(300);
-    setOtp('');
-    setOtpAttempts(0);
-    setError('');
+    setError('This account does not have admin access.');
     setLoading(false);
   };
 
   const handleOtpSubmit = async () => {
+    if (!challengeToken) {
+      setPhase('credentials');
+      return;
+    }
     if (isOtpLocked) {
-      setError('Too many failed OTP attempts. Please contact your administrator.');
+      setError('Too many failed attempts. Please sign in again.');
       return;
     }
 
     setError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-
-    const codeToValidate = useBackupCode ? backupCode : otp;
-    const isValid = useBackupCode
-      ? codeToValidate.toUpperCase().startsWith(VALID_BACKUP_PREFIX) && codeToValidate.length >= 12
-      : codeToValidate === VALID_OTP;
-
-    if (!isValid) {
+    try {
+      // The gateway checks the code. This used to compare it against a constant
+      // compiled into the bundle, after the session had already been stored.
+      const verified = await authApi.mfaVerify(challengeToken, otp);
+      // The role, market lock and permissions come from the signed token, never
+      // from the form or a client-side table. Someone with a customer account
+      // must not reach the admin console by knowing its URL, and what a staff
+      // account can see must be what the token actually grants.
+      const user: AuthUser = toAdminUser(verified as { user: StaffSessionUser });
+      login(user, verified.accessToken, verified.refreshToken);
+      setOtpSuccess(true);
+      router.push(redirect);
+    } catch (err) {
       setOtpAttempts((prev) => prev + 1);
       setError(
-        `Invalid ${useBackupCode ? 'backup code' : 'verification code'}. ${3 - otpAttempts - 1} attempts remaining.`,
+        err instanceof ApiError ? err.message : 'We could not verify the code. Please try again.',
       );
       setShake(true);
       setTimeout(() => setShake(false), 600);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // OTP valid → complete 2FA and enter dashboard
-    setOtpSuccess(true);
-    setLoading(false);
-    await new Promise((r) => setTimeout(r, 1000));
-    complete2FA();
-    router.push(redirect);
   };
 
-  const handleResend = () => {
+  /** A fresh challenge means a fresh code: ask the gateway for another one. */
+  const handleResend = async () => {
     setResendTimer(30);
-    setCountdown(300);
     setOtp('');
     setError('');
+    try {
+      const session = await authApi.login(email.trim().toLowerCase(), password);
+      if (session.requires2FA && session.challengeToken) {
+        setChallengeToken(session.challengeToken);
+        setDevCode(session.devCode ?? '');
+        setCountdown(300);
+        setOtpAttempts(0);
+      } else {
+        setError('That sign-in is no longer valid. Please start again.');
+      }
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'We could not send a new code. Please try again.',
+      );
+    }
   };
 
   // Auto-submit when all 6 digits entered
@@ -524,7 +537,11 @@ function AdminLoginForm() {
               {/* Back button */}
               <button
                 onClick={() => {
+                  // Abandon the challenge as well as the screen: going back and
+                  // signing in again must start a new one.
                   setPhase('credentials');
+                  setChallengeToken(null);
+                  setDevCode('');
                   setError('');
                 }}
                 className="flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-sm mb-6 transition-colors"
@@ -555,10 +572,19 @@ function AdminLoginForm() {
               <p className="text-sm text-slate-500 mb-8 text-center">
                 {otpSuccess
                   ? 'Redirecting to your dashboard...'
-                  : useBackupCode
-                    ? 'Enter one of your backup recovery codes.'
-                    : 'Enter the 6-digit code from your authenticator app.'}
+                  : `Enter the 6-digit code we sent to ${pendingIdentity?.email ?? 'your account'}.`}
               </p>
+
+              {devCode && !otpSuccess && (
+                <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm rounded-xl px-4 py-3 mb-6 flex items-start gap-2">
+                  <Key className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Development build — your code is{' '}
+                    <span className="font-mono font-bold tracking-widest">{devCode}</span>. A
+                    production gateway never returns it.
+                  </span>
+                </div>
+              )}
 
               {error && (
                 <div
@@ -571,29 +597,8 @@ function AdminLoginForm() {
 
               {!otpSuccess && (
                 <div className="space-y-5">
-                  {useBackupCode ? (
-                    /* Backup code input */
-                    <div>
-                      <label
-                        className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5"
-                        htmlFor="backup-code-input"
-                      >
-                        Backup Code
-                      </label>
-                      <input
-                        type="text"
-                        value={backupCode}
-                        onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
-                        placeholder="BACKUP-XXXX-XXXX"
-                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-700 bg-slate-900 text-white font-mono text-center placeholder:text-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm transition-all tracking-widest"
-                        disabled={isOtpLocked}
-                        id="backup-code-input"
-                      />
-                    </div>
-                  ) : (
-                    /* OTP digit inputs */
-                    <OtpInput length={6} value={otp} onChange={setOtp} disabled={isOtpLocked} />
-                  )}
+                  {/* OTP digit inputs */}
+                  <OtpInput length={6} value={otp} onChange={setOtp} disabled={isOtpLocked} />
 
                   {/* Timer + resend */}
                   <div className="flex items-center justify-between">
@@ -622,53 +627,35 @@ function AdminLoginForm() {
                     </button>
                   </div>
 
-                  {/* Verify button (for backup codes or manual submit) */}
-                  {useBackupCode && (
-                    <button
-                      onClick={handleOtpSubmit}
-                      disabled={loading || isOtpLocked || !backupCode}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-400 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
-                      aria-label="Action"
-                    >
-                      {loading ? (
-                        <KartseekLoader size="sm" />
-                      ) : (
-                        <>
-                          <Key className="w-4 h-4" /> Verify Backup Code
-                        </>
-                      )}
-                    </button>
-                  )}
+                  {/* Verify button — the digits auto-submit, this is the manual path */}
+                  <button
+                    onClick={handleOtpSubmit}
+                    disabled={loading || isOtpLocked || otp.length !== 6}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-400 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                    aria-label="Action"
+                  >
+                    {loading ? (
+                      <KartseekLoader size="sm" />
+                    ) : (
+                      <>
+                        <Key className="w-4 h-4" /> Verify Code
+                      </>
+                    )}
+                  </button>
 
-                  {/* Toggle backup code / OTP mode */}
-                  <div className="text-center pt-2">
-                    <button
-                      onClick={() => {
-                        setUseBackupCode(!useBackupCode);
-                        setError('');
-                      }}
-                      className="text-xs text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2"
-                    >
-                      {useBackupCode
-                        ? 'Use authenticator code instead'
-                        : 'Lost your device? Use a backup code'}
-                    </button>
-                  </div>
-
-                  {/* Logged-in user info */}
+                  {/* Who the code was sent for — named by the challenge, not by a session */}
                   <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex items-center gap-3 mt-4">
                     <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {pendingUser?.name
-                        ?.split(' ')
-                        .map((w) => w[0])
-                        .join('') || '?'}
+                      {pendingIdentity?.email?.[0]?.toUpperCase() || '?'}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-white">{pendingUser?.name}</p>
-                      <p className="text-xs text-slate-400">{pendingUser?.email}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white truncate">
+                        {pendingIdentity?.email}
+                      </p>
+                      <p className="text-xs text-slate-400">Verification pending</p>
                     </div>
                     <span className="text-xs bg-emerald-500/15 text-emerald-400 px-2 py-1 rounded-lg font-bold border border-emerald-500/20">
-                      {pendingUser?.role?.replace('_', ' ')}
+                      {pendingIdentity?.role?.replace(/_/g, ' ')}
                     </span>
                   </div>
                 </div>
