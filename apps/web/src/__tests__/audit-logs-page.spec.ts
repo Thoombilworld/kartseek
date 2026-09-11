@@ -14,11 +14,13 @@ import {
   AUDIT_CSV_COLUMNS,
   AUDIT_PAGE_SIZE,
   MARKETPLACE_ENTITY_TYPES,
+  auditHeadline,
   auditOutcome,
   auditRequestId,
+  classifyAuditFailure,
   formatAuditTime,
   parseAuditQuery,
-} from '../app/admin/audit-logs/page';
+} from '../lib/audit-trail';
 import { auditPostPayload } from '@/lib/contexts/audit-context';
 import { toCsv } from '../lib/export-csv';
 
@@ -124,7 +126,7 @@ describe('audit row presentation', () => {
 
 describe('CSV export', () => {
   it('exports the columns the table shows, in the same order', () => {
-    expect(AUDIT_CSV_COLUMNS.map((c) => c.header)).toEqual([
+    expect(AUDIT_CSV_COLUMNS.map((c: (typeof AUDIT_CSV_COLUMNS)[number]) => c.header)).toEqual([
       'Time',
       'Action',
       'Actor ID',
@@ -174,5 +176,57 @@ describe('console-originated entries', () => {
     expect(Object.keys(payload).sort()).toEqual(['action', 'details', 'entityType']);
     expect(payload.adminId).toBeUndefined();
     expect(payload.country).toBeUndefined();
+  });
+});
+
+describe('classifyAuditFailure — what the page is allowed to say', () => {
+  // `JwtAuthGuard`'s two commonest messages. They are auth-shaped, which is
+  // exactly why `useAdminData` used to swallow them and leave the page drawing
+  // an empty table; they must reach the reader as "we do not know", never as
+  // "nothing happened".
+  it.each([
+    'You must be logged in to access this resource.',
+    'This token cannot be used to access resources.',
+    'Network error — API Gateway unreachable',
+    'Audit service unavailable',
+    'Request failed (500)',
+  ])('treats %p as unreachable, not as an empty trail', (message) => {
+    expect(classifyAuditFailure(message)).toBe('unreachable');
+  });
+
+  // The server answered and refused — saying "did not answer" would be false.
+  it.each([
+    'Missing required permissions: audit.logs',
+    'Insufficient permissions. Your role cannot perform this action.',
+    'Your account is restricted to the IN market; that audit trail belongs to QA.',
+    'You do not have permission to access this resource.',
+  ])('treats %p as forbidden', (message) => {
+    expect(classifyAuditFailure(message)).toBe('forbidden');
+  });
+
+  it('falls back to unreachable when there is no message at all', () => {
+    expect(classifyAuditFailure(undefined)).toBe('unreachable');
+    expect(classifyAuditFailure('')).toBe('unreachable');
+  });
+});
+
+describe('auditHeadline — the dashboard activity panel', () => {
+  it('shortens an interceptor row to the verb and the tail of the path', () => {
+    expect(
+      auditHeadline({
+        ...row,
+        actionType: 'http.patch./api/v1/admin/marketplace/sellers/abc/approve',
+      }),
+    ).toBe('PATCH abc/approve');
+  });
+
+  it('drops the console prefix, which the gateway adds', () => {
+    expect(auditHeadline({ ...row, actionType: 'console.Auth.Admin signed in' })).toBe(
+      'Auth.Admin signed in',
+    );
+  });
+
+  it('leaves an action it does not recognise exactly as stored', () => {
+    expect(auditHeadline({ ...row, actionType: 'seller.approved' })).toBe('seller.approved');
   });
 });

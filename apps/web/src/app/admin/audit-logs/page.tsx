@@ -9,18 +9,25 @@ import {
   Clock,
   Download,
   Globe,
+  Lock,
   PlugZap,
   Search,
   Shield,
 } from 'lucide-react';
 import { useAdminData, AdminLoadingSkeleton } from '@/hooks/useAdminData';
+import { adminCoreApi, type AuditLogRow } from '@/lib/api/admin-core';
+import { downloadCsv } from '@/lib/export-csv';
 import {
-  adminCoreApi,
-  type AuditLogPage,
-  type AuditLogParams,
-  type AuditLogRow,
-} from '@/lib/api/admin-core';
-import { downloadCsv, type CsvColumn } from '@/lib/export-csv';
+  AUDIT_CSV_COLUMNS,
+  AUDIT_PAGE_SIZE,
+  auditOutcome,
+  auditRequestId,
+  auditRowId,
+  classifyAuditFailure,
+  formatAuditTime,
+  parseAuditQuery,
+  type AuditFetchResult,
+} from '@/lib/audit-trail';
 
 /**
  * Security Audit Logs — the platform's real trail.
@@ -33,115 +40,10 @@ import { downloadCsv, type CsvColumn } from '@/lib/export-csv';
  * it. There is no fallback array here now. If the API cannot be reached the
  * page says so, by name, rather than drawing history that did not happen.
  *
- * Filters live in the URL so a row someone found can be linked to.
+ * Filters live in the URL so a row someone found can be linked to. The pure
+ * helpers live in `lib/audit-trail.ts` so the marketplace audit page can share
+ * them without importing a route module.
  */
-
-// ─── Pure helpers (exported for the spec) ────────────────────────────────────
-
-export const AUDIT_PAGE_SIZE = 50;
-
-/**
- * The marketplace record kinds the trail carries, as the gateway's interceptor
- * derives them from the URL path. Shared with the marketplace audit page, which
- * is the same trail pre-filtered to these.
- */
-export const MARKETPLACE_ENTITY_TYPES = [
-  'sellers',
-  'products',
-  'orders',
-  'payouts',
-  'refunds',
-  'returns',
-  'commissions',
-  'coupons',
-  'banners',
-  'deals',
-] as const;
-
-/**
- * Build the API query from the URL.
- *
- * Pure and exported so the mapping is testable without a router: a filter that
- * silently fails to reach the server is indistinguishable, on screen, from a
- * filter that matched nothing.
- */
-export function parseAuditQuery(
-  params: URLSearchParams,
-  defaults: Partial<AuditLogParams> = {},
-): AuditLogParams {
-  const text = (key: string) => params.get(key)?.trim() || undefined;
-  const page = Number(params.get('page'));
-  return {
-    page: Number.isFinite(page) && page > 0 ? page : 1,
-    limit: defaults.limit ?? AUDIT_PAGE_SIZE,
-    actionType: text('actionType'),
-    // An explicit `entityType` in the URL wins over the page's own default, so
-    // the marketplace page can preset one and still let the reader change it.
-    entityType: text('entityType') ?? defaults.entityType,
-    actorEmail: text('actorEmail'),
-    from: text('from'),
-    to: text('to'),
-  };
-}
-
-/** `createdAt` for a stored row; fixed-width so the column scans vertically. */
-export function formatAuditTime(iso?: string): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-GB', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-}
-
-/**
- * How the request ended.
- *
- * The gateway interceptor records `outcome` and `statusCode` under `metadata`;
- * a console-originated entry has neither, and says so rather than claiming a
- * success it never observed.
- */
-export function auditOutcome(row: AuditLogRow): { label: string; ok: boolean | null } {
-  const meta = row.metadata ?? {};
-  const status = meta.statusCode;
-  const outcome = typeof meta.outcome === 'string' ? meta.outcome : undefined;
-  if (status == null && !outcome) return { label: '—', ok: null };
-  const code = typeof status === 'number' ? status : Number(status);
-  const label = Number.isFinite(code) ? `${outcome ?? ''} ${code}`.trim() : (outcome ?? '—');
-  return { label, ok: Number.isFinite(code) ? code < 400 : outcome === 'success' };
-}
-
-export function auditRequestId(row: AuditLogRow): string {
-  const id = row.metadata?.requestId;
-  return typeof id === 'string' && id ? id : '—';
-}
-
-export function auditRowId(row: AuditLogRow, index: number): string {
-  return row._id ?? row.id ?? `${row.actionType}-${row.createdAt ?? index}`;
-}
-
-/** One column per visible field, so an exported file matches what was on screen. */
-export const AUDIT_CSV_COLUMNS: CsvColumn<AuditLogRow>[] = [
-  { header: 'Time', value: (r) => r.createdAt ?? '' },
-  { header: 'Action', value: (r) => r.actionType },
-  { header: 'Actor ID', value: (r) => r.actorId },
-  { header: 'Actor Email', value: (r) => r.actorEmail ?? '' },
-  { header: 'Actor Role', value: (r) => r.actorRole ?? '' },
-  { header: 'Entity Type', value: (r) => r.entityType ?? '' },
-  { header: 'Entity ID', value: (r) => r.entityId ?? '' },
-  { header: 'Market', value: (r) => r.country },
-  { header: 'Service', value: (r) => r.service },
-  { header: 'Request ID', value: (r) => auditRequestId(r) },
-  { header: 'Outcome', value: (r) => auditOutcome(r).label },
-  { header: 'IP', value: (r) => r.actorIp ?? '' },
-  { header: 'Reason', value: (r) => r.reason ?? '' },
-];
 
 // ─── Shared pieces ───────────────────────────────────────────────────────────
 
@@ -164,7 +66,8 @@ export function AuditNotConnected({ error, onRetry }: { error: string; onRetry: 
           GET /admin/audit-logs
         </code>{' '}
         did not answer, so this page cannot say what administrators have done. It is showing nothing
-        rather than guessing.
+        rather than guessing. If you have been on this page a while, your session may have expired —
+        sign in again.
       </p>
       <p className="text-xs text-red-600 mt-3 font-medium">{error}</p>
       <button
@@ -173,6 +76,34 @@ export function AuditNotConnected({ error, onRetry }: { error: string; onRetry: 
       >
         Try again
       </button>
+    </div>
+  );
+}
+
+/**
+ * The server answered, and said no.
+ *
+ * Distinct from "not connected" on purpose: `Missing required permissions:
+ * audit.logs` under "the audit trail is not connected … did not answer" is
+ * simply false, and it sends the reader to look for an outage that is not
+ * happening.
+ */
+export function AuditForbidden({ error }: { error: string }) {
+  return (
+    <div className="bg-white border border-amber-200 rounded-2xl p-8 text-center">
+      <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
+        <Lock className="w-6 h-6" />
+      </div>
+      <p className="font-bold text-slate-900">You cannot read this audit trail.</p>
+      <p className="text-sm text-slate-500 mt-1 max-w-lg mx-auto">
+        <code className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">
+          GET /admin/audit-logs
+        </code>{' '}
+        answered and refused. Reading the trail needs the{' '}
+        <span className="font-mono text-xs">audit.logs</span> permission, and a region-locked
+        account may only read its own market.
+      </p>
+      <p className="text-xs text-amber-700 mt-3 font-medium">{error}</p>
     </div>
   );
 }
@@ -309,10 +240,18 @@ export function AuditLogsScreen({
     [router, pathname, searchParams],
   );
 
-  const { data, loading, error, refetch } = useAdminData<AuditLogPage>(async () => {
+  // Resolves a result instead of throwing one. `useAdminData` treats an
+  // auth-shaped *throw* as "degrade gracefully" — `data = null`, `error = null`
+  // — so an expired token (`You must be logged in to access this resource.`)
+  // used to land in the `!loading && !error` branch and draw "No audit entries
+  // match these filters": the empty-trail lie this page exists to prevent, shown
+  // for the commonest failure there is. Resolving keeps that hook unchanged for
+  // every other page, mid-token-refresh included.
+  const { data, loading, error, refetch } = useAdminData<AuditFetchResult>(async () => {
     const res = await adminCoreApi.getAuditLogs(query);
-    if (!res.success) throw new Error(res.error || 'Could not load the audit trail');
-    return res.data;
+    if (res.success && res.data) return { ok: true, page: res.data };
+    const message = res.error || 'Could not load the audit trail';
+    return { ok: false, kind: classifyAuditFailure(message), message };
   }, [
     query.page,
     query.limit,
@@ -323,10 +262,22 @@ export function AuditLogsScreen({
     query.to,
   ]);
 
-  const rows = data?.data ?? [];
-  const total = data?.total ?? 0;
-  const page = data?.page ?? query.page ?? 1;
-  const limit = data?.limit ?? AUDIT_PAGE_SIZE;
+  const result = data ?? null;
+  const success = result?.ok ? result.page : null;
+  // A thrown error (`error`) should not happen — `apiCall` never rejects — but
+  // if one ever does it is still a failure, never an empty table.
+  const failure: { kind: 'forbidden' | 'unreachable'; message: string } | null = result?.ok
+    ? null
+    : result
+      ? { kind: result.kind, message: result.message }
+      : error
+        ? { kind: classifyAuditFailure(error), message: error }
+        : null;
+
+  const rows = success?.data ?? [];
+  const total = success?.total ?? 0;
+  const page = success?.page ?? query.page ?? 1;
+  const limit = success?.limit ?? AUDIT_PAGE_SIZE;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const markets = new Set(rows.map((r) => r.country)).size;
 
@@ -431,9 +382,12 @@ export function AuditLogsScreen({
       </div>
 
       {loading && <AdminLoadingSkeleton rows={6} />}
-      {!loading && error && <AuditNotConnected error={error} onRetry={refetch} />}
+      {!loading && failure?.kind === 'forbidden' && <AuditForbidden error={failure.message} />}
+      {!loading && failure?.kind === 'unreachable' && (
+        <AuditNotConnected error={failure.message} onRetry={refetch} />
+      )}
 
-      {!loading && !error && (
+      {!loading && !failure && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <AuditTable
             rows={rows}

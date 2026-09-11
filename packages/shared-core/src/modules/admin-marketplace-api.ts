@@ -379,8 +379,12 @@ export const adminMarketplaceApi = {
   updateSettings: (dto: any) => api.put('/admin/marketplace/settings', dto),
 
   // ── Audit Logs ────────────────────────────────────────────────
-  getAuditLogs: (params?: { action?: string; actor?: string; page?: number; limit?: number }) =>
-    api.get<Paginated<any>>('/admin/marketplace/audit-logs', params as any),
+  // `getAuditLogs` is gone with the `GET /admin/marketplace/audit-logs` stub it
+  // called — a route that always answered `{ data: [], total: 0 }`. There is one
+  // audit trail and one client for it: `adminCoreApi.getAuditLogs`, against
+  // `GET /admin/audit-logs`, which is market-scoped from the caller's token.
+  // Its filters are named for what is stored (`actionType`, `actorEmail`), not
+  // the `{ action, actor }` this took and never used.
 
   // ── Reports ───────────────────────────────────────────────────
   getReports: (params?: { type?: string; period?: string; country?: string }) =>

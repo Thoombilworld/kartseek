@@ -2,7 +2,8 @@
 
 import React, { Suspense } from 'react';
 import { AdminLoadingSkeleton } from '@/hooks/useAdminData';
-import { AuditLogsScreen, MARKETPLACE_ENTITY_TYPES } from '../../audit-logs/page';
+import { MARKETPLACE_ENTITY_TYPES } from '@/lib/audit-trail';
+import { AuditLogsScreen } from '../../audit-logs/page';
 
 /**
  * Marketplace Audit Logs.
