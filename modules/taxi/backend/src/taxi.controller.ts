@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards, UseFilters, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  UseFilters,
+  BadRequestException,
+} from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '@app/security';
@@ -7,15 +19,29 @@ import { VendorManagementService } from './services/vendor-management.service';
 import { DriverOnboardingService } from './services/driver-onboarding.service';
 import { TaxiConfigService } from './services/taxi-config.service';
 import { TaxiPayoutService } from './services/taxi-payout.service';
-import { type EmptyMessage, RpcAwareExceptionsFilter } from '@app/common';
+import { type EmptyMessage, RpcAwareExceptionsFilter, assertInMarket } from '@app/common';
 import {
-  EstimateFareDto, RequestRideDto, CancelRideDto, RateRideDto,
-  DriverOnlineDto, DriverIdDto, DriverLocationDto, DriverStartRideDto, DriverCompleteRideDto,
-  NearbyDriversQueryDto, PaginationQueryDto,
-  AdminVendorQueryDto, AdminActionDto, AdminRejectDto,
-  AdminDriverQueryDto, DriverSuspendDto,
-  DocumentReviewDto, PendingDocumentsQueryDto,
-  UpsertRateCardDto, AdminPayoutQueryDto, PayoutBatchDto,
+  EstimateFareDto,
+  RequestRideDto,
+  CancelRideDto,
+  RateRideDto,
+  DriverOnlineDto,
+  DriverIdDto,
+  DriverLocationDto,
+  DriverStartRideDto,
+  DriverCompleteRideDto,
+  NearbyDriversQueryDto,
+  PaginationQueryDto,
+  AdminVendorQueryDto,
+  AdminActionDto,
+  AdminRejectDto,
+  AdminDriverQueryDto,
+  DriverSuspendDto,
+  DocumentReviewDto,
+  PendingDocumentsQueryDto,
+  UpsertRateCardDto,
+  AdminPayoutQueryDto,
+  PayoutBatchDto,
 } from './dto/taxi.dto';
 
 /**
@@ -51,7 +77,9 @@ export class TaxiController {
   // ══════════════════════════════════════════════════════════════════════════
 
   @Get('health')
-  health() { return this.svc.healthCheck(); }
+  health() {
+    return this.svc.healthCheck();
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // CUSTOMER ENDPOINTS (JWT + rate-limited)
@@ -89,7 +117,9 @@ export class TaxiController {
     @Param('id') id: string,
     @Body('status') status: string,
     @Body('driverId') driverId?: string,
-  ) { return this.svc.updateRideStatus(id, status, driverId); }
+  ) {
+    return this.svc.updateRideStatus(id, status, driverId);
+  }
 
   @Post('rides/:id/rating')
   @UseGuards(JwtAuthGuard)
@@ -163,11 +193,7 @@ export class TaxiController {
 
   @Get('drivers/:id/history')
   @UseGuards(JwtAuthGuard)
-  getHistory(
-    @Param('id') id: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
+  getHistory(@Param('id') id: string, @Query('page') page = 1, @Query('limit') limit = 20) {
     return this.svc.getRideHistory(id, +page, +limit);
   }
 
@@ -528,22 +554,34 @@ export class TaxiController {
   // ══════════════════════════════════════════════════════════════════════════
 
   @MessagePattern({ cmd: 'estimate_taxi_fare' })
-  msgEstimate(@Payload() d: EstimateFareDto) { return this.svc.estimateFare(d); }
+  msgEstimate(@Payload() d: EstimateFareDto) {
+    return this.svc.estimateFare(d);
+  }
 
   @MessagePattern({ cmd: 'request_ride' })
-  msgRequest(@Payload() d: RequestRideDto) { return this.svc.requestRide(d as any); }
+  msgRequest(@Payload() d: RequestRideDto) {
+    return this.svc.requestRide(d as any);
+  }
 
   @MessagePattern({ cmd: 'driver_accept_ride' })
-  msgAccept(@Payload() d: EmptyMessage) { return this.svc.driverAcceptRide(d.rideId, d.driverId); }
+  msgAccept(@Payload() d: EmptyMessage) {
+    return this.svc.driverAcceptRide(d.rideId, d.driverId);
+  }
 
   @MessagePattern({ cmd: 'driver_reject_ride' })
-  msgReject(@Payload() d: EmptyMessage) { return this.svc.driverRejectRide(d.rideId, d.driverId); }
+  msgReject(@Payload() d: EmptyMessage) {
+    return this.svc.driverRejectRide(d.rideId, d.driverId);
+  }
 
   @MessagePattern({ cmd: 'driver_go_online' })
-  msgOnline(@Payload() d: DriverOnlineDto) { return this.svc.driverGoOnline(d.driverId, d); }
+  msgOnline(@Payload() d: DriverOnlineDto) {
+    return this.svc.driverGoOnline(d.driverId, d);
+  }
 
   @MessagePattern({ cmd: 'driver_go_offline' })
-  msgOffline(@Payload() d: DriverIdDto) { return this.svc.driverGoOffline(d.driverId); }
+  msgOffline(@Payload() d: DriverIdDto) {
+    return this.svc.driverGoOffline(d.driverId);
+  }
 
   // ── Admin console commands ────────────────────────────────────────────────
   // The gateway's admin-* controllers address this service with dot-notation
@@ -553,10 +591,35 @@ export class TaxiController {
   // existed; only the patterns were missing.
 
   @MessagePattern({ cmd: 'admin.taxi.vendors' })
-  tcpAdminGetVendors(@Payload() d: EmptyMessage) { return this.vendors.getVendors(d); }
+  tcpAdminGetVendors(
+    @Payload()
+    d: {
+      countryCode?: string;
+      scope?: string;
+      status?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    return this.vendors.getVendors({ ...d, countryCode: d?.scope ?? d?.countryCode });
+  }
 
   @MessagePattern({ cmd: 'admin.taxi.drivers' })
-  tcpAdminGetDrivers(@Payload() d: EmptyMessage) { return this.onboarding.getDrivers(d); }
+  tcpAdminGetDrivers(
+    @Payload()
+    d: {
+      countryCode?: string;
+      scope?: string;
+      vendorId?: string;
+      status?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    return this.onboarding.getDrivers({ ...d, countryCode: d?.scope ?? d?.countryCode });
+  }
 
   // ── Admin console, continued ──────────────────────────────────────────────
   //
@@ -565,76 +628,154 @@ export class TaxiController {
   // console had no route for any of it and every screen 404'd.
 
   @MessagePattern({ cmd: 'admin.taxi.documents.pending' })
-  tcpPendingDocuments(@Payload() d: { countryCode?: string; ownerType?: 'vendor' | 'driver'; page?: number; limit?: number }) {
-    return this.onboarding.getPendingDocuments(d ?? {});
+  tcpPendingDocuments(
+    @Payload()
+    d: {
+      countryCode?: string;
+      scope?: string;
+      ownerType?: 'vendor' | 'driver';
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    return this.onboarding.getPendingDocuments({
+      ...(d ?? {}),
+      countryCode: d?.scope ?? d?.countryCode,
+    });
   }
 
   @MessagePattern({ cmd: 'admin.taxi.documents.review' })
-  tcpReviewDocument(@Payload() d: { documentId: string; adminId: string; decision: 'approved' | 'rejected'; rejectionReason?: string }) {
-    return this.onboarding.reviewDocument(d?.documentId, d?.adminId, d?.decision, d?.rejectionReason);
+  tcpReviewDocument(
+    @Payload()
+    d: {
+      documentId: string;
+      adminId: string;
+      decision: 'approved' | 'rejected';
+      rejectionReason?: string;
+      scope?: string;
+    },
+  ) {
+    return this.onboarding.reviewDocument(
+      d?.documentId,
+      d?.adminId,
+      d?.decision,
+      d?.rejectionReason,
+      d?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin.taxi.driver.suspend' })
-  tcpSuspendDriver(@Payload() d: { driverId: string; reason: string }) {
-    return this.onboarding.suspendDriver(d?.driverId, d?.reason ?? '');
+  tcpSuspendDriver(@Payload() d: { driverId: string; reason: string; scope?: string }) {
+    return this.onboarding.suspendDriver(d?.driverId, d?.reason ?? '', d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin.taxi.driver.block' })
-  tcpBlockDriver(@Payload() d: { driverId: string; reason: string }) {
-    return this.onboarding.blockDriver(d?.driverId, d?.reason ?? '');
+  tcpBlockDriver(@Payload() d: { driverId: string; reason: string; scope?: string }) {
+    return this.onboarding.blockDriver(d?.driverId, d?.reason ?? '', d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin.taxi.rate_cards' })
-  tcpRateCards(@Payload() d: { countryCode: string }) {
+  tcpRateCards(@Payload() d: { countryCode: string; scope?: string }) {
+    assertInMarket(d?.countryCode, d?.scope, 'rate card');
     return this.config.getRateCards(d?.countryCode);
   }
 
   @MessagePattern({ cmd: 'admin.taxi.rate_card.upsert' })
-  tcpUpsertRateCard(@Payload() d: { countryCode: string; vehicleType: string; [k: string]: unknown }) {
-    const { countryCode, vehicleType, ...rest } = d ?? ({} as any);
+  tcpUpsertRateCard(
+    @Payload()
+    d: {
+      countryCode: string;
+      vehicleType: string;
+      scope?: string;
+      adminId?: string;
+      [k: string]: unknown;
+    },
+  ) {
+    assertInMarket(d?.countryCode, d?.scope, 'rate card');
+    const { countryCode, vehicleType, scope: _s, adminId: _a, ...rest } = d ?? ({} as any);
     return this.config.upsertRateCard(countryCode, vehicleType, rest);
   }
 
   @MessagePattern({ cmd: 'admin.taxi.configs' })
-  tcpAllConfigs() { return this.config.getAllConfigs(); }
+  async tcpAllConfigs(@Payload() d?: { scope?: string }) {
+    const all = await this.config.getAllConfigs();
+    return d?.scope
+      ? all.filter((c) => c.countryCode?.toUpperCase() === d.scope!.toUpperCase())
+      : all;
+  }
 
   @MessagePattern({ cmd: 'admin.taxi.config.get' })
-  tcpGetConfig(@Payload() d: { countryCode: string }) {
+  tcpGetConfig(@Payload() d: { countryCode: string; scope?: string }) {
+    assertInMarket(d?.countryCode, d?.scope, 'configuration');
     return this.config.getCountryConfig(d?.countryCode);
   }
 
   @MessagePattern({ cmd: 'admin.taxi.config.upsert' })
-  tcpUpsertConfig(@Payload() d: { countryCode: string; [k: string]: unknown }) {
-    const { countryCode, ...rest } = d ?? ({} as any);
+  tcpUpsertConfig(
+    @Payload() d: { countryCode: string; scope?: string; adminId?: string; [k: string]: unknown },
+  ) {
+    assertInMarket(d?.countryCode, d?.scope, 'configuration');
+    const { countryCode, scope: _s, adminId: _a, ...rest } = d ?? ({} as any);
     return this.config.upsertCountryConfig(countryCode, rest);
   }
 
   @MessagePattern({ cmd: 'admin.taxi.payouts' })
-  tcpPayouts(@Payload() d: { countryCode?: string; recipientType?: 'vendor' | 'driver'; status?: string; search?: string; page?: number; limit?: number }) {
-    return this.payouts.getAllPayouts(d ?? {});
+  tcpPayouts(
+    @Payload()
+    d: {
+      countryCode?: string;
+      scope?: string;
+      recipientType?: 'vendor' | 'driver';
+      status?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    return this.payouts.getAllPayouts({ ...(d ?? {}), countryCode: d?.scope ?? d?.countryCode });
   }
 
   @MessagePattern({ cmd: 'admin.taxi.payouts.process' })
-  tcpProcessPayouts(@Payload() d: { payoutIds: string[] }) {
-    return this.payouts.processPayouts(d?.payoutIds ?? []);
+  tcpProcessPayouts(@Payload() d: { payoutIds: string[]; scope?: string }) {
+    return this.payouts.processPayouts(d?.payoutIds ?? [], d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin.taxi.payouts.summary' })
-  tcpPayoutSummary(@Payload() d: { countryCode?: string; startDate?: string; endDate?: string }) {
+  tcpPayoutSummary(
+    @Payload() d: { countryCode?: string; scope?: string; startDate?: string; endDate?: string },
+  ) {
     return this.payouts.getPlatformPayoutSummary({
-      countryCode: d?.countryCode,
+      countryCode: d?.scope ?? d?.countryCode,
       startDate: d?.startDate ? new Date(d.startDate) : undefined,
       endDate: d?.endDate ? new Date(d.endDate) : undefined,
     });
   }
 
   @MessagePattern({ cmd: 'admin.taxi.drivers.nearby' })
-  tcpNearbyDrivers(@Payload() d: { lat: number; lng: number; radiusKm?: number; vehicleType?: string }) {
-    return this.svc.getNearbyDrivers(d?.lat, d?.lng, d?.radiusKm ?? 5, d?.vehicleType);
+  tcpNearbyDrivers(
+    @Payload()
+    d: {
+      lat: number;
+      lng: number;
+      radiusKm?: number;
+      vehicleType?: string;
+      countryCode?: string;
+      scope?: string;
+    },
+  ) {
+    return this.svc.getNearbyDrivers(
+      d?.lat,
+      d?.lng,
+      d?.radiusKm ?? 5,
+      d?.vehicleType,
+      d?.scope ?? d?.countryCode,
+    );
   }
 
   @MessagePattern({ cmd: 'admin.taxi.surge' })
   tcpSurge(@Payload() d: { lat: number; lng: number }) {
+    // No market on the surge model yet — see Plan D. The gateway still
+    // resolves and forwards `scope`; this handler does not read it.
     return this.svc.getSurgeMultiplier(d?.lat, d?.lng);
   }
 }

@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
+import { assertInMarket } from '@app/common';
 import { TaxiPayoutRecordEntity } from '../entities/taxi-payout-record.entity';
 import { TaxiCountryConfigEntity } from '../entities/taxi-country-config.entity';
 import { TaxiVendorEntity } from '../entities/taxi-vendor.entity';
@@ -126,7 +127,9 @@ export class TaxiPayoutService {
       currency,
     });
 
-    this.logger.log(`💰 Payouts generated for ride ${rideId}: driver=${driverNetPayout} ${currency}, vendor=${vendorCommission} ${currency}`);
+    this.logger.log(
+      `💰 Payouts generated for ride ${rideId}: driver=${driverNetPayout} ${currency}, vendor=${vendorCommission} ${currency}`,
+    );
     return payouts;
   }
 
@@ -140,7 +143,8 @@ export class TaxiPayoutService {
     recipientId: string,
     filters: { status?: string; page?: number; limit?: number } = {},
   ): Promise<{ data: TaxiPayoutRecordEntity[]; total: number; summary: PayoutSummary }> {
-    const qb = this.payoutRepo.createQueryBuilder('p')
+    const qb = this.payoutRepo
+      .createQueryBuilder('p')
       .where('p.recipientType = :type', { type: recipientType })
       .andWhere('p.recipientId = :id', { id: recipientId });
 
@@ -231,13 +235,24 @@ export class TaxiPayoutService {
   /**
    * Process approved payouts (trigger payment gateway transfers).
    */
-  async processPayouts(payoutIds: string[]): Promise<{
+  async processPayouts(
+    payoutIds: string[],
+    scope?: string,
+  ): Promise<{
     processed: number;
     failed: number;
   }> {
     const payouts = await this.payoutRepo.find({
       where: { id: In(payoutIds), status: 'approved' },
     });
+
+    // Assert every row before anything is written. Loading them first and
+    // checking each one up front means a batch that mixes a QA-scoped
+    // admin's own payouts with one belonging to India is refused whole,
+    // rather than partially processed before the offending row is reached.
+    for (const payout of payouts) {
+      assertInMarket(payout.countryCode, scope, 'payout', this.logger);
+    }
 
     let processed = 0;
     let failed = 0;
@@ -346,7 +361,8 @@ export class TaxiPayoutService {
     startDate?: Date;
     endDate?: Date;
   }): Promise<PayoutSummary & { settledAmount: number; failedAmount: number }> {
-    const qb = this.payoutRepo.createQueryBuilder('p')
+    const qb = this.payoutRepo
+      .createQueryBuilder('p')
       .select('COALESCE(SUM(p.grossAmount), 0)', 'totalGross')
       .addSelect('COALESCE(SUM(p.netPayout), 0)', 'totalNet')
       .addSelect('COALESCE(SUM(p.platformCommission), 0)', 'totalPlatformCommission')
@@ -366,7 +382,8 @@ export class TaxiPayoutService {
     const result = await qb.getRawOne();
 
     // Pending breakdown
-    const pendingQb = this.payoutRepo.createQueryBuilder('p')
+    const pendingQb = this.payoutRepo
+      .createQueryBuilder('p')
       .select('COALESCE(SUM(p.netPayout), 0)', 'amount')
       .addSelect('COUNT(*)', 'count')
       .where('p.status IN (:...statuses)', { statuses: ['pending', 'approved'] });
@@ -374,14 +391,16 @@ export class TaxiPayoutService {
     const pendingResult = await pendingQb.getRawOne();
 
     // Settled breakdown
-    const settledQb = this.payoutRepo.createQueryBuilder('p')
+    const settledQb = this.payoutRepo
+      .createQueryBuilder('p')
       .select('COALESCE(SUM(p.netPayout), 0)', 'amount')
       .where('p.status = :status', { status: 'settled' });
     if (filters.countryCode) settledQb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });
     const settledResult = await settledQb.getRawOne();
 
     // Failed breakdown
-    const failedQb = this.payoutRepo.createQueryBuilder('p')
+    const failedQb = this.payoutRepo
+      .createQueryBuilder('p')
       .select('COALESCE(SUM(p.netPayout), 0)', 'amount')
       .where('p.status = :status', { status: 'failed' });
     if (filters.countryCode) failedQb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });

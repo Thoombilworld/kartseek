@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { TaxiPayoutService } from './taxi-payout.service';
 import { TaxiConfigService } from './taxi-config.service';
+import { TaxiDriverEntity } from '../entities/taxi-driver.entity';
 
 /**
  * DriverDispatchService — Manages the driver lifecycle during a ride.
@@ -24,6 +27,8 @@ export class DriverDispatchService {
     private readonly kafka: KafkaProducerService,
     private readonly payoutSvc: TaxiPayoutService,
     private readonly configSvc: TaxiConfigService,
+    @InjectRepository(TaxiDriverEntity)
+    private readonly driverRepo: Repository<TaxiDriverEntity>,
   ) {}
 
   // ─── Online / Offline ─────────────────────────────────────────────────────
@@ -31,26 +36,44 @@ export class DriverDispatchService {
   /**
    * Set driver to ONLINE — registers in Redis GEO + status store.
    */
-  async goOnline(driverId: string, profile?: {
-    firstName?: string;
-    vehicleType?: string;
-    vehiclePlate?: string;
-    rating?: number;
-    acceptanceRate?: number;
-  }): Promise<void> {
+  async goOnline(
+    driverId: string,
+    profile?: {
+      firstName?: string;
+      vehicleType?: string;
+      vehiclePlate?: string;
+      rating?: number;
+      acceptanceRate?: number;
+    },
+  ): Promise<void> {
     await this.redis.setJson(`driver:status:${driverId}`, { online: true }, 0);
 
     // Cache driver profile for quick matching lookups
     if (profile) {
-      await this.redis.setJson(`driver:profile:${driverId}`, {
-        ...profile,
-        onlineSince: new Date().toISOString(),
-      }, 0);
+      // The admin fleet map filters nearby drivers by country (see
+      // TaxiService.getNearbyDrivers) — a QA-scoped admin must never see an
+      // Indian driver plotted on their map. The driver entity carries the
+      // authoritative countryCode; read it here rather than trust a
+      // client-supplied value, so the cached profile can't be spoofed.
+      const driver = await this.driverRepo.findOne({
+        where: { id: driverId },
+        select: ['id', 'countryCode'],
+      });
+      await this.redis.setJson(
+        `driver:profile:${driverId}`,
+        {
+          ...profile,
+          countryCode: driver?.countryCode,
+          onlineSince: new Date().toISOString(),
+        },
+        0,
+      );
     }
 
     this.logger.log(`🟢 Driver ${driverId} is now ONLINE`);
     await this.kafka.publish('taxi.driver.status_changed', {
-      driverId, status: 'ONLINE',
+      driverId,
+      status: 'ONLINE',
     });
   }
 
@@ -64,7 +87,8 @@ export class DriverDispatchService {
 
     this.logger.log(`🔴 Driver ${driverId} is now OFFLINE`);
     await this.kafka.publish('taxi.driver.status_changed', {
-      driverId, status: 'OFFLINE',
+      driverId,
+      status: 'OFFLINE',
     });
   }
 
@@ -98,15 +122,30 @@ export class DriverDispatchService {
 
     // If on an active ride, store location for customer tracking
     if (rideId) {
-      await this.redis.setJson(`driver:loc:${rideId}`, {
-        driverId, lat, lng, heading, speed,
-        timestamp: new Date().toISOString(),
-      }, 300); // 5 min TTL
+      await this.redis.setJson(
+        `driver:loc:${rideId}`,
+        {
+          driverId,
+          lat,
+          lng,
+          heading,
+          speed,
+          timestamp: new Date().toISOString(),
+        },
+        300,
+      ); // 5 min TTL
 
       // Store location trail for trip reconstruction
-      await this.redis.rpush(`ride:trail:${rideId}`, JSON.stringify({
-        lat, lng, heading, speed, t: Date.now(),
-      }));
+      await this.redis.rpush(
+        `ride:trail:${rideId}`,
+        JSON.stringify({
+          lat,
+          lng,
+          heading,
+          speed,
+          t: Date.now(),
+        }),
+      );
     }
   }
 
@@ -130,7 +169,9 @@ export class DriverDispatchService {
     await this.redis.set(`ride:waiting:${rideId}`, Date.now().toString());
 
     await this.kafka.publish('taxi.ride.status_updated', {
-      id: rideId, status: 'DRIVER_ARRIVED', driverId,
+      id: rideId,
+      status: 'DRIVER_ARRIVED',
+      driverId,
     });
 
     this.logger.log(`📍 Driver ${driverId} arrived at pickup for ride ${rideId}`);
@@ -165,7 +206,10 @@ export class DriverDispatchService {
     await this.redis.del(`ride:waiting:${rideId}`);
 
     await this.kafka.publish('taxi.ride.status_updated', {
-      id: rideId, status: 'RIDE_STARTED', driverId, waitingMinutes,
+      id: rideId,
+      status: 'RIDE_STARTED',
+      driverId,
+      waitingMinutes,
     });
 
     this.logger.log(`🚀 Ride ${rideId} started (waited ${waitingMinutes} min)`);
@@ -174,17 +218,20 @@ export class DriverDispatchService {
   /**
    * Complete the ride and generate final fare.
    */
-  async completeRide(rideId: string, driverId: string, params?: {
-    finalDistanceKm?: number;
-    finalDurationMin?: number;
-  }): Promise<{ finalFare: number; breakdown: any }> {
+  async completeRide(
+    rideId: string,
+    driverId: string,
+    params?: {
+      finalDistanceKm?: number;
+      finalDurationMin?: number;
+    },
+  ): Promise<{ finalFare: number; breakdown: any }> {
     const ride = await this.redis.getJson<any>(`ride:${rideId}`);
     if (!ride) return { finalFare: 0, breakdown: null };
 
     // Calculate actual distance from trail or use provided
-    const finalDistanceKm = params?.finalDistanceKm
-      ?? await this.calculateTrailDistance(rideId)
-      ?? 5.0;
+    const finalDistanceKm =
+      params?.finalDistanceKm ?? (await this.calculateTrailDistance(rideId)) ?? 5.0;
     const finalDurationMin = params?.finalDurationMin ?? 15;
 
     // Fare calculation
@@ -195,7 +242,8 @@ export class DriverDispatchService {
       bike: { baseFare: 30, distanceRate: 18, timeRate: 3, minimumFare: 50 },
     };
     const rate = rates[ride.vehicleType] || rates['economy'];
-    const calcFare = rate.baseFare + (finalDistanceKm * rate.distanceRate) + (finalDurationMin * rate.timeRate);
+    const calcFare =
+      rate.baseFare + finalDistanceKm * rate.distanceRate + finalDurationMin * rate.timeRate;
     const waitingFare = (ride.waitingMinutes || 0) * 2;
     const finalFare = Math.max(Math.round(calcFare + waitingFare), rate.minimumFare);
 
@@ -211,8 +259,8 @@ export class DriverDispatchService {
       // Use defaults on error
     }
     const platformCommission = Math.round(finalFare * platformRate);
-    const vendorCommission = ride.vendorId && ride.vendorId !== 'INDEPENDENT'
-      ? Math.round(finalFare * vendorRate) : 0;
+    const vendorCommission =
+      ride.vendorId && ride.vendorId !== 'INDEPENDENT' ? Math.round(finalFare * vendorRate) : 0;
     const driverEarning = finalFare - platformCommission - vendorCommission;
 
     const breakdown = {
@@ -252,10 +300,15 @@ export class DriverDispatchService {
     // held — the event published a fare nothing had reconciled against the one
     // logged on the next line. Spread first so the explicit values win.
     await this.kafka.publish('taxi.ride.completed', {
-      ...breakdown, id: rideId, driverId, finalFare,
+      ...breakdown,
+      id: rideId,
+      driverId,
+      finalFare,
     });
 
-    this.logger.log(`✅ Ride ${rideId} completed — fare: INR ${finalFare}, driver earns: INR ${driverEarning}`);
+    this.logger.log(
+      `✅ Ride ${rideId} completed — fare: INR ${finalFare}, driver earns: INR ${driverEarning}`,
+    );
 
     // Generate payout records for financial reconciliation
     try {
@@ -309,11 +362,11 @@ export class DriverDispatchService {
 
   private haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) ** 2;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 

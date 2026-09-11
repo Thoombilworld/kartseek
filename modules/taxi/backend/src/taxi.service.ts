@@ -45,9 +45,12 @@ export class TaxiService {
   // ─── Fare Estimation ──────────────────────────────────────────────────────
 
   async estimateFare(dto: {
-    pickupLat: number; pickupLng: number;
-    dropLat: number; dropLng: number;
-    vehicleType?: string; zoneId?: string;
+    pickupLat: number;
+    pickupLng: number;
+    dropLat: number;
+    dropLng: number;
+    vehicleType?: string;
+    zoneId?: string;
   }) {
     if (dto.vehicleType) {
       return this.fare.estimateSingleVehicleType({
@@ -71,10 +74,17 @@ export class TaxiService {
   // ─── Ride Request & Matching ──────────────────────────────────────────────
 
   async requestRide(dto: {
-    customerId: string; pickupLat: number; pickupLng: number;
-    dropLat: number; dropLng: number; vehicleType: string;
-    paymentMethod: string; pickupAddress?: string; dropAddress?: string;
-    fareEstimate?: number; preferredDriverId?: string;
+    customerId: string;
+    pickupLat: number;
+    pickupLng: number;
+    dropLat: number;
+    dropLng: number;
+    vehicleType: string;
+    paymentMethod: string;
+    pickupAddress?: string;
+    dropAddress?: string;
+    fareEstimate?: number;
+    preferredDriverId?: string;
   }) {
     const rideId = `RIDE-${Date.now()}`;
     const ride = {
@@ -140,10 +150,15 @@ export class TaxiService {
 
   // ─── Driver Actions ───────────────────────────────────────────────────────
 
-  async driverGoOnline(driverId: string, profile?: {
-    firstName?: string; vehicleType?: string;
-    vehiclePlate?: string; rating?: number;
-  }) {
+  async driverGoOnline(
+    driverId: string,
+    profile?: {
+      firstName?: string;
+      vehicleType?: string;
+      vehiclePlate?: string;
+      rating?: number;
+    },
+  ) {
     await this.dispatch.goOnline(driverId, profile);
     return { success: true, message: 'Driver is now ONLINE' };
   }
@@ -154,8 +169,12 @@ export class TaxiService {
   }
 
   async driverUpdateLocation(params: {
-    driverId: string; lat: number; lng: number;
-    heading?: number; speed?: number; rideId?: string;
+    driverId: string;
+    lat: number;
+    lng: number;
+    heading?: number;
+    speed?: number;
+    rideId?: string;
   }) {
     await this.dispatch.updateLocation(params);
     return { success: true };
@@ -187,12 +206,18 @@ export class TaxiService {
     return { success: true, status: 'RIDE_STARTED' };
   }
 
-  async driverCompleteRide(rideId: string, driverId: string, params?: {
-    finalDistanceKm?: number; finalDurationMin?: number;
-  }) {
+  async driverCompleteRide(
+    rideId: string,
+    driverId: string,
+    params?: {
+      finalDistanceKm?: number;
+      finalDurationMin?: number;
+    },
+  ) {
     const result = await this.dispatch.completeRide(rideId, driverId, params);
     await this.kafka.publish('taxi.ride.completed', {
-      id: rideId, driverId,
+      id: rideId,
+      driverId,
       finalDistanceKm: params?.finalDistanceKm,
       finalDurationMin: params?.finalDurationMin,
     });
@@ -219,7 +244,11 @@ export class TaxiService {
     } catch (dbErr) {
       this.logger.warn(`⚠️ Failed to persist rating to PostgreSQL: ${dbErr}`);
     }
-    await this.kafka.publish('taxi.ride.rated', { id: rideId, rating: dto.rating, tipAmount: dto.tipAmount });
+    await this.kafka.publish('taxi.ride.rated', {
+      id: rideId,
+      rating: dto.rating,
+      tipAmount: dto.tipAmount,
+    });
     return { success: true };
   }
 
@@ -228,7 +257,12 @@ export class TaxiService {
   async updateRideStatus(rideId: string, status: string, driverId?: string) {
     const ride = await this.redis.getJson<any>(`ride:${rideId}`);
     if (!ride) return { success: false, reason: 'Ride not found' };
-    const updated = { ...ride, status, driverId: driverId ?? ride.driverId, updatedAt: new Date().toISOString() };
+    const updated = {
+      ...ride,
+      status,
+      driverId: driverId ?? ride.driverId,
+      updatedAt: new Date().toISOString(),
+    };
     await this.redis.setJson(`ride:${rideId}`, updated, 3600);
     await this.kafka.publish('taxi.ride.status_updated', { id: rideId, status, driverId });
 
@@ -249,7 +283,13 @@ export class TaxiService {
     return { success: true, rideId, status };
   }
 
-  async getNearbyDrivers(lat: number, lng: number, radiusKm = 5, vehicleType?: string) {
+  async getNearbyDrivers(
+    lat: number,
+    lng: number,
+    radiusKm = 5,
+    vehicleType?: string,
+    countryCode?: string,
+  ) {
     const drivers = await this.redis.georadius('drivers:locations', lng, lat, radiusKm);
 
     const enriched = await Promise.all(
@@ -271,18 +311,26 @@ export class TaxiService {
           rating: profile.rating ?? 4.5,
           isOnTrip: !!meta.tripId,
           name: profile.firstName ?? `Driver ${d.member.slice(0, 5)}`,
+          countryCode: profile.countryCode ?? null,
         };
       }),
     );
 
     // Filter by vehicle type if specified
-    const filtered = vehicleType
-      ? enriched.filter(d => d.vehicleType === vehicleType)
-      : enriched;
+    let filtered = vehicleType ? enriched.filter((d) => d.vehicleType === vehicleType) : enriched;
+
+    // A country-scoped admin's fleet map must never plot a driver from
+    // another market. A profile with no countryCode — never written, or
+    // written before this field existed — is excluded whenever a country is
+    // required; there is no default to fall back on.
+    if (countryCode) {
+      const cc = countryCode.toUpperCase();
+      filtered = filtered.filter((d) => d.countryCode?.toUpperCase() === cc);
+    }
 
     return {
       count: filtered.length,
-      drivers: filtered.filter(d => !d.isOnTrip), // Only show available drivers
+      drivers: filtered.filter((d) => !d.isOnTrip), // Only show available drivers
     };
   }
 

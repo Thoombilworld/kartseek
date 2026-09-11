@@ -2,8 +2,10 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
+import { assertInMarket } from '@app/common';
 import { TaxiDriverEntity } from '../entities/taxi-driver.entity';
 import { TaxiDocumentEntity } from '../entities/taxi-document.entity';
+import { TaxiVendorEntity } from '../entities/taxi-vendor.entity';
 import { TaxiCountryConfigEntity } from '../entities/taxi-country-config.entity';
 
 /**
@@ -124,7 +126,9 @@ export class DriverOnboardingService {
         documentType: dto.documentType,
       });
 
-      this.logger.log(`📄 Document resubmitted: ${dto.documentType} for ${dto.ownerType} ${dto.ownerId}`);
+      this.logger.log(
+        `📄 Document resubmitted: ${dto.documentType} for ${dto.ownerType} ${dto.ownerId}`,
+      );
       return saved;
     }
 
@@ -148,7 +152,9 @@ export class DriverOnboardingService {
       await this.recalculateOnboardingProgress(dto.ownerId);
     }
 
-    this.logger.log(`📄 Document submitted: ${dto.documentType} for ${dto.ownerType} ${dto.ownerId}`);
+    this.logger.log(
+      `📄 Document submitted: ${dto.documentType} for ${dto.ownerType} ${dto.ownerId}`,
+    );
     return saved;
   }
 
@@ -160,16 +166,32 @@ export class DriverOnboardingService {
     adminId: string,
     decision: 'approved' | 'rejected',
     rejectionReason?: string,
+    scope?: string,
   ): Promise<TaxiDocumentEntity> {
     const doc = await this.documentRepo.findOne({ where: { id: documentId } });
     if (!doc) {
       throw new NotFoundException(`Document ${documentId} not found`);
     }
 
+    // Documents have no country column of their own — polymorphic ownership
+    // means the market is whichever driver or vendor owns the row. Resolve
+    // that before writing the decision: a regional admin must not be able to
+    // approve or reject a document by owner type/id alone.
+    const owner =
+      doc.ownerType === 'driver'
+        ? await this.driverRepo.findOne({
+            where: { id: doc.ownerId },
+            select: ['id', 'countryCode'],
+          })
+        : await this.driverRepo.manager
+            .getRepository(TaxiVendorEntity)
+            .findOne({ where: { id: doc.ownerId }, select: ['id', 'countryCode'] });
+    assertInMarket(owner?.countryCode ?? null, scope, 'document', this.logger);
+
     doc.status = decision;
     doc.reviewedBy = adminId;
     doc.reviewedAt = new Date();
-    doc.rejectionReason = decision === 'rejected' ? (rejectionReason || 'Document rejected') : null;
+    doc.rejectionReason = decision === 'rejected' ? rejectionReason || 'Document rejected' : null;
 
     const saved = await this.documentRepo.save(doc);
 
@@ -187,14 +209,19 @@ export class DriverOnboardingService {
       await this.recalculateOnboardingProgress(doc.ownerId);
     }
 
-    this.logger.log(`${decision === 'approved' ? '✅' : '❌'} Document ${doc.documentType} ${decision} for ${doc.ownerType} ${doc.ownerId}`);
+    this.logger.log(
+      `${decision === 'approved' ? '✅' : '❌'} Document ${doc.documentType} ${decision} for ${doc.ownerType} ${doc.ownerId}`,
+    );
     return saved;
   }
 
   /**
    * Get all documents for a driver or vendor.
    */
-  async getDocuments(ownerType: 'vendor' | 'driver', ownerId: string): Promise<TaxiDocumentEntity[]> {
+  async getDocuments(
+    ownerType: 'vendor' | 'driver',
+    ownerId: string,
+  ): Promise<TaxiDocumentEntity[]> {
     return this.documentRepo.find({
       where: { ownerType, ownerId },
       order: { createdAt: 'DESC' },
@@ -210,11 +237,30 @@ export class DriverOnboardingService {
     page?: number;
     limit?: number;
   }): Promise<{ data: TaxiDocumentEntity[]; total: number }> {
-    const qb = this.documentRepo.createQueryBuilder('d')
+    // A document has no country column of its own (see TaxiDocumentEntity):
+    // the market comes from whichever driver or vendor owns it, joined
+    // through the entity classes — never a bare table string, which would
+    // silently match one of the `public.*` decoy tables instead of the real
+    // `taxi.*` ones.
+    //
+    // `d.ownerId` is `character varying` (the polymorphic key has no FK to
+    // pin its type), while `drv.id` / `ven.id` are `uuid` — comparing them
+    // directly is a Postgres type error ("operator does not exist: uuid =
+    // character varying"), not a silent non-match, so it surfaces immediately
+    // rather than quietly returning nothing. Cast the uuid side to text.
+    const qb = this.documentRepo
+      .createQueryBuilder('d')
+      .leftJoin(TaxiDriverEntity, 'drv', "d.ownerType = 'driver' AND drv.id::text = d.ownerId")
+      .leftJoin(TaxiVendorEntity, 'ven', "d.ownerType = 'vendor' AND ven.id::text = d.ownerId")
       .where('d.status IN (:...statuses)', { statuses: ['pending', 'under_review'] });
 
     if (filters.ownerType) {
       qb.andWhere('d.ownerType = :ot', { ot: filters.ownerType });
+    }
+    if (filters.countryCode) {
+      qb.andWhere('COALESCE(drv.countryCode, ven.countryCode) = :cc', {
+        cc: filters.countryCode.toUpperCase(),
+      });
     }
 
     const page = filters.page ?? 1;
@@ -249,7 +295,10 @@ export class DriverOnboardingService {
       where: { countryCode: driver.countryCode },
     });
     const requiredDocuments = config?.requiredDriverDocuments || [
-      'driving_license', 'vehicle_registration', 'vehicle_insurance', 'identity_proof',
+      'driving_license',
+      'vehicle_registration',
+      'vehicle_insurance',
+      'identity_proof',
     ];
 
     // Get submitted docs
@@ -258,20 +307,19 @@ export class DriverOnboardingService {
     });
 
     const approvedDocuments = docs
-      .filter(d => d.status === 'approved')
-      .map(d => d.documentType);
+      .filter((d) => d.status === 'approved')
+      .map((d) => d.documentType);
 
     const rejectedDocuments = docs
-      .filter(d => d.status === 'rejected')
-      .map(d => d.documentType);
+      .filter((d) => d.status === 'rejected')
+      .map((d) => d.documentType);
 
-    const missingDocuments = requiredDocuments.filter(
-      r => !approvedDocuments.includes(r),
-    );
+    const missingDocuments = requiredDocuments.filter((r) => !approvedDocuments.includes(r));
 
-    const progress = requiredDocuments.length > 0
-      ? Math.round((approvedDocuments.length / requiredDocuments.length) * 100)
-      : 100;
+    const progress =
+      requiredDocuments.length > 0
+        ? Math.round((approvedDocuments.length / requiredDocuments.length) * 100)
+        : 100;
 
     return {
       isComplete: missingDocuments.length === 0,
@@ -336,9 +384,10 @@ export class DriverOnboardingService {
   /**
    * Suspend a driver.
    */
-  async suspendDriver(driverId: string, reason: string): Promise<TaxiDriverEntity> {
+  async suspendDriver(driverId: string, reason: string, scope?: string): Promise<TaxiDriverEntity> {
     const driver = await this.driverRepo.findOne({ where: { id: driverId } });
     if (!driver) throw new NotFoundException(`Driver ${driverId} not found`);
+    assertInMarket(driver.countryCode, scope, 'driver', this.logger);
 
     driver.status = 'suspended';
     driver.suspensionReason = reason;
@@ -346,7 +395,9 @@ export class DriverOnboardingService {
     const saved = await this.driverRepo.save(driver);
 
     await this.kafka.publish('taxi.driver.suspended', {
-      driverId: saved.id, name: saved.fullName, reason,
+      driverId: saved.id,
+      name: saved.fullName,
+      reason,
     });
 
     this.logger.log(`⚠️ Driver "${saved.fullName}" suspended: ${reason}`);
@@ -356,9 +407,10 @@ export class DriverOnboardingService {
   /**
    * Block a driver permanently.
    */
-  async blockDriver(driverId: string, reason: string): Promise<TaxiDriverEntity> {
+  async blockDriver(driverId: string, reason: string, scope?: string): Promise<TaxiDriverEntity> {
     const driver = await this.driverRepo.findOne({ where: { id: driverId } });
     if (!driver) throw new NotFoundException(`Driver ${driverId} not found`);
+    assertInMarket(driver.countryCode, scope, 'driver', this.logger);
 
     driver.status = 'blocked';
     driver.suspensionReason = reason;
@@ -379,8 +431,7 @@ export class DriverOnboardingService {
     page?: number;
     limit?: number;
   }): Promise<{ data: TaxiDriverEntity[]; total: number }> {
-    const qb = this.driverRepo.createQueryBuilder('d')
-      .leftJoinAndSelect('d.vendor', 'vendor');
+    const qb = this.driverRepo.createQueryBuilder('d').leftJoinAndSelect('d.vendor', 'vendor');
 
     if (filters.countryCode) {
       qb.andWhere('d.countryCode = :cc', { cc: filters.countryCode });
@@ -395,9 +446,12 @@ export class DriverOnboardingService {
       qb.andWhere('d.status = :status', { status: filters.status });
     }
     if (filters.search) {
-      qb.andWhere('(d.firstName ILIKE :s OR d.lastName ILIKE :s OR d.email ILIKE :s OR d.vehiclePlate ILIKE :s)', {
-        s: `%${filters.search}%`,
-      });
+      qb.andWhere(
+        '(d.firstName ILIKE :s OR d.lastName ILIKE :s OR d.email ILIKE :s OR d.vehiclePlate ILIKE :s)',
+        {
+          s: `%${filters.search}%`,
+        },
+      );
     }
 
     const page = filters.page ?? 1;
