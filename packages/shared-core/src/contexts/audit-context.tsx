@@ -86,6 +86,26 @@ const REGION_NAMES: Record<string, string> = {
 };
 
 /**
+ * Fold a caller's action into the machine key the trail stores.
+ *
+ * Callers pass sentences — `logAction('Admin signed in', 'Auth', …)` filed
+ * entries as `console.Auth.Admin signed in`, a key with capitals and a space in
+ * it that no prefix filter, sort or aggregation can address. The gateway now
+ * refuses anything that is not a slug (`AuditEntryDto`), so this is what keeps
+ * an old call site recording an entry rather than silently 400ing: it is the
+ * one place every console-originated key is built.
+ *
+ * Lower-cased, with anything outside `[a-z0-9_.-]` collapsed to `_` and the
+ * result trimmed of leading and trailing separators.
+ */
+export function auditActionKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/g, '_')
+    .replace(/^[_.-]+|[_.-]+$/g, '');
+}
+
+/**
  * The payload `POST /admin/audit-logs` accepts.
  *
  * Exported so the page spec can assert its shape without rendering a provider.
@@ -103,7 +123,9 @@ export function auditPostPayload(
   return {
     // `console.<module>.<action>` — the gateway prefixes `console.`, so the
     // module goes in front of the action here and the trail sorts by surface.
-    action: `${module}.${action}`,
+    // Both halves are slugged: a readable sentence belongs in `details`, and a
+    // key that varies by capitalisation splits one action into several.
+    action: `${auditActionKey(module)}.${auditActionKey(action)}`,
     entityType: module,
     details: { details, severity } as Record<string, unknown>,
   };

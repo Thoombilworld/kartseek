@@ -161,18 +161,45 @@ describe('CSV export', () => {
 
 describe('console-originated entries', () => {
   it('posts the action namespaced by module, with severity kept in details', () => {
-    expect(auditPostPayload('Admin signed in', 'Auth', 'user@x signed in')).toEqual({
-      action: 'Auth.Admin signed in',
-      entityType: 'Auth',
+    expect(auditPostPayload('signed_in', 'auth', 'user@x signed in')).toEqual({
+      action: 'auth.signed_in',
+      entityType: 'auth',
       details: { details: 'user@x signed in', severity: 'info' },
     });
+  });
+
+  /**
+   * The trail is queried by `actionType` prefix, and this used to send
+   * `Auth.Admin signed in` — stored as `console.Auth.Admin signed in`, a key
+   * with capitals and a space that no filter, sort or prefix match can address,
+   * and a different key for every caller who capitalised differently. The
+   * gateway's `AuditEntryDto` now refuses anything that is not a slug, so a call
+   * site that still passes a sentence must be folded here rather than 400.
+   */
+  it.each([
+    ['a sentence', 'Admin signed in', 'Auth', 'auth.admin_signed_in'],
+    ['capitals', 'SignedIn', 'Auth', 'auth.signedin'],
+    ['punctuation', 'seller:approved!', 'Sellers', 'sellers.seller_approved'],
+    ['already a key', 'signed_out', 'auth', 'auth.signed_out'],
+  ])('slugs %s into a machine key', (_label, action, module, expected) => {
+    const payload = auditPostPayload(action, module) as Record<string, unknown>;
+    expect(payload.action).toBe(expected);
+    // What the gateway will accept — kept in step with `admin-audit.dto.ts`.
+    expect(payload.action as string).toMatch(/^[a-z][a-z0-9_.-]{2,80}$/);
+  });
+
+  it('keeps the readable sentence in details, where it belongs', () => {
+    const payload = auditPostPayload('signed_in', 'auth', 'Sara (Super Admin) signed in') as {
+      details: { details?: string };
+    };
+    expect(payload.details.details).toBe('Sara (Super Admin) signed in');
   });
 
   it('names no actor and no market — the gateway takes both from the token', () => {
     // `AuditEntryDto` is whitelisted with `forbidNonWhitelisted`, so any of
     // these in the body would be a 400; more importantly, a console that could
     // name its own actor could write the trail as somebody else.
-    const payload = auditPostPayload('Admin signed out', 'Auth') as Record<string, unknown>;
+    const payload = auditPostPayload('signed_out', 'auth') as Record<string, unknown>;
     expect(Object.keys(payload).sort()).toEqual(['action', 'details', 'entityType']);
     expect(payload.adminId).toBeUndefined();
     expect(payload.country).toBeUndefined();
