@@ -55,6 +55,37 @@ describe('toAdminUser', () => {
       [],
     );
   });
+  it('builds a finance manager from the sign-in body the gateway now returns', () => {
+    // The shape `completeLogin` hands back, seeded `finance_manager` list and
+    // all: this function is the only thing between that body and the console's
+    // sidebar, so the list has to survive it intact and gain no wildcard.
+    const seeded = [
+      'dashboard.view',
+      'orders.view',
+      'orders.refund',
+      'finance.view',
+      'finance.payouts',
+      'finance.reports',
+      'wallet.audit',
+      'audit.logs',
+    ];
+    const u = toAdminUser({
+      user: {
+        id: 'u2',
+        email: 'ae-finance@kartseek.com',
+        name: 'AE Finance',
+        role: 'finance_manager',
+        adminPermissions: seeded,
+        adminRole: { id: 'r-fin', key: 'finance_manager', name: 'Finance Manager' },
+      },
+    });
+    expect(u.role).toBe('FINANCE_MANAGER');
+    expect(u.adminPermissions).toEqual(seeded);
+    expect(u.adminPermissions).not.toContain('*');
+    expect(u.adminRoleId).toBe('r-fin');
+    expect(u.adminRoleName).toBe('Finance Manager');
+  });
+
   it('never invents 2FA state', () => {
     expect(toAdminUser({ user: base }).twoFactorEnabled).toBeUndefined();
   });

@@ -231,10 +231,15 @@ const navSections: NavSection[] = [
         perm: 'system.health',
       },
       {
+        // The key the route itself enforces (`DdosAdminController` →
+        // `perm:security.manage`). It was `system.settings`, so granting the
+        // permission hid the page and granting the nav key showed a link that
+        // answered 403. The neighbours below keep `system.settings` — they are
+        // different backends, not the DDoS console.
         href: '/admin/security',
         label: 'Security & DDoS',
         icon: ShieldAlert,
-        perm: 'system.settings',
+        perm: 'security.manage',
       },
       { href: '/admin/gdpr', label: 'GDPR & Privacy', icon: Shield, perm: 'system.settings' },
       { href: '/admin/audit-logs', label: 'Audit Logs', icon: ScrollText, perm: 'audit.logs' },

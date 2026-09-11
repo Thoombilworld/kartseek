@@ -33,6 +33,7 @@ import {
   AdminErrorBanner,
 } from '@/hooks/useAdminData';
 import { REGIONS } from '@/lib/contexts/region-context';
+import { useAuth } from '@/lib/contexts/auth-context';
 import {
   adminCoreApi,
   type AdminRoleRow,
@@ -49,7 +50,14 @@ import {
  * invented colleagues (`DEMO_STAFF`) against a hard-coded role list and a
  * hard-coded list of region *names*, and "adding" one pushed an object into
  * React state. There is no fallback array now: an unreachable API or a caller
- * who is not a SUPER_ADMIN sees the error, not a staffed directory.
+ * the gateway refuses sees the error, not a staffed directory.
+ *
+ * Two permissions, not one. `staff.view` is what the nav item and
+ * `GET /admin/staff` require, and a global ADMIN holding it gets a read-only
+ * directory. Every control that writes — add, edit, suspend, reactivate — is
+ * hidden without `staff.manage`, which only `super_admin` holds among the
+ * seeded roles. Hiding them is a courtesy, not the enforcement: the writes are
+ * SUPER_ADMIN-only at the gateway regardless of what the page draws.
  *
  * Three fixture columns are gone with the data, because nothing stores them:
  * `department`, `lastActive`, and the per-user 2FA toggle. The second factor
@@ -454,12 +462,15 @@ function StaffModal({
 function StaffDrawer({
   staff,
   roleName,
+  canManage,
   onClose,
   onEdit,
   onToggleActive,
 }: {
   staff: StaffRow;
   roleName: string;
+  /** Whether the viewer holds `staff.manage`; without it the drawer only reads. */
+  canManage: boolean;
   onClose: () => void;
   onEdit: () => void;
   onToggleActive: () => void;
@@ -551,28 +562,30 @@ function StaffDrawer({
           </div>
         </div>
 
-        <div className="p-4 border-t border-slate-200 flex gap-2">
-          <button
-            onClick={onEdit}
-            className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
-          >
-            <Edit2 className="w-3.5 h-3.5" /> Edit
-          </button>
-          <button
-            onClick={onToggleActive}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5 ${staff.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
-          >
-            {staff.isActive ? (
-              <>
-                <UserX className="w-3.5 h-3.5" /> Suspend
-              </>
-            ) : (
-              <>
-                <UserCheck className="w-3.5 h-3.5" /> Reactivate
-              </>
-            )}
-          </button>
-        </div>
+        {canManage && (
+          <div className="p-4 border-t border-slate-200 flex gap-2">
+            <button
+              onClick={onEdit}
+              className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Edit2 className="w-3.5 h-3.5" /> Edit
+            </button>
+            <button
+              onClick={onToggleActive}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5 ${staff.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+            >
+              {staff.isActive ? (
+                <>
+                  <UserX className="w-3.5 h-3.5" /> Suspend
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-3.5 h-3.5" /> Reactivate
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
@@ -582,6 +595,9 @@ function StaffDrawer({
 
 export default function StaffPage() {
   useMarketplaceRegionFilter([]);
+
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('staff.manage');
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -687,16 +703,26 @@ export default function StaffPage() {
             Admin accounts, their permission role and the market each one is confined to.
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditStaff(undefined);
-            setShowModal(true);
-          }}
-          disabled={loading || !!error || roles.length === 0}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" /> Add Staff Member
-        </button>
+        {canManage ? (
+          <button
+            onClick={() => {
+              setEditStaff(undefined);
+              setShowModal(true);
+            }}
+            disabled={loading || !!error || roles.length === 0}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" /> Add Staff Member
+          </button>
+        ) : (
+          // Said plainly rather than left blank: an administrator who can read
+          // the directory should know why there is nothing to press, not
+          // wonder whether the page failed to load.
+          <p className="text-xs text-slate-500 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5" /> Read-only — staff changes need the Manage Staff
+            permission.
+          </p>
+        )}
       </div>
 
       {issuedPassword && (
@@ -882,27 +908,31 @@ export default function StaffPage() {
                           >
                             <Eye className="w-4 h-4 text-slate-400" />
                           </button>
-                          <button
-                            onClick={() => {
-                              setEditStaff(s);
-                              setShowModal(true);
-                            }}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-4 h-4 text-blue-500" />
-                          </button>
-                          <button
-                            onClick={() => void toggleActive(s)}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg"
-                            title={s.isActive ? 'Suspend' : 'Reactivate'}
-                          >
-                            {s.isActive ? (
-                              <ToggleRight className="w-4 h-4 text-emerald-500" />
-                            ) : (
-                              <ToggleLeft className="w-4 h-4 text-slate-300" />
-                            )}
-                          </button>
+                          {canManage && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditStaff(s);
+                                  setShowModal(true);
+                                }}
+                                className="p-1.5 hover:bg-slate-100 rounded-lg"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-4 h-4 text-blue-500" />
+                              </button>
+                              <button
+                                onClick={() => void toggleActive(s)}
+                                className="p-1.5 hover:bg-slate-100 rounded-lg"
+                                title={s.isActive ? 'Suspend' : 'Reactivate'}
+                              >
+                                {s.isActive ? (
+                                  <ToggleRight className="w-4 h-4 text-emerald-500" />
+                                ) : (
+                                  <ToggleLeft className="w-4 h-4 text-slate-300" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -943,6 +973,7 @@ export default function StaffPage() {
         <StaffDrawer
           staff={viewStaff}
           roleName={roleNameOf(viewStaff)}
+          canManage={canManage}
           onClose={() => setViewStaff(null)}
           onEdit={() => {
             setEditStaff(viewStaff);

@@ -6,7 +6,10 @@ export interface StaffSessionUser extends AuthApiUser {
   regionCode?: string | null;
   regionLocked?: boolean;
   adminPermissions?: string[];
-  adminRole?: { id: string; name: string } | null;
+  // `key` is the stable machine name (`regional_admin`) both `/auth/login` and
+  // `/auth/profile` send. It was omitted here while the type was written
+  // against a payload nothing produced yet, which silently dropped it.
+  adminRole?: { id: string; key: string; name: string } | null;
 }
 
 const ROLE_LABEL: Record<StaffRole, string> = {
@@ -30,10 +33,11 @@ export function toAdminUser(session: { user: StaffSessionUser }): AuthUser {
   if (!isStaffRole(role)) throw new Error('This account does not have admin access.');
   const regionLocked = u.regionLocked === true;
   // No role but SUPER_ADMIN gets a wildcard, and no role gets one by default.
-  // An ADMIN used to, transitionally, because nothing signed the claim; the API
-  // signs it for every staff account now, so an empty list here means the
-  // account really was granted nothing — draw that rather than paper over it,
-  // or the console shows links that answer 403.
+  // An ADMIN used to, transitionally, because nothing put the keys in this
+  // payload. `completeLogin` now returns `adminPermissions` for every staff
+  // account, so an empty list here means the account really was granted
+  // nothing — draw that rather than paper over it, or the console shows links
+  // that answer 403.
   const permissions =
     role === 'SUPER_ADMIN' ? ['*'] : Array.isArray(u.adminPermissions) ? u.adminPermissions : [];
   return {

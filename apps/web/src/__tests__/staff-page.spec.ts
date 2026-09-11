@@ -18,6 +18,20 @@ jest.mock('@/hooks/useMarketplaceRegionFilter', () => ({
   useMarketplaceRegionFilter: () => ({ regionLabel: 'All Markets', isFiltered: false }),
 }));
 
+/**
+ * The viewer's permission keys. `staff.view` alone is a real state now: the
+ * gateway admits a global ADMIN holding it to `GET /admin/staff` while every
+ * write stays SUPER_ADMIN + `staff.manage`.
+ */
+let permissions: string[] = ['*'];
+
+jest.mock('@/lib/contexts/auth-context', () => ({
+  useAuth: () => ({
+    hasPermission: (...perms: string[]) =>
+      permissions.includes('*') || perms.every((p) => permissions.includes(p)),
+  }),
+}));
+
 jest.mock('@/lib/api/admin-core', () => ({
   adminCoreApi: {
     listRoles: (...a: unknown[]) => listRoles(...a),
@@ -150,8 +164,29 @@ function render(
 describe('/admin/staff', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    permissions = ['*'];
     listRoles.mockResolvedValue({ success: true, data: ROLES_PAYLOAD });
     listStaff.mockResolvedValue({ success: true, data: STAFF_PAYLOAD });
+  });
+
+  it('gives a staff.view admin the directory without a single control that writes', () => {
+    // The reads admit a global ADMIN holding `staff.view`; the writes do not.
+    // Drawing "Add Staff Member" for them would be a button whose only outcome
+    // is a 403 from the gateway.
+    permissions = ['staff.view', 'dashboard.view'];
+    const html = render();
+    expect(html).toContain('superadmin@kartseek.com');
+    expect(html).not.toContain('Add Staff Member');
+    expect(html).not.toContain('title="Edit"');
+    expect(html).not.toContain('title="Suspend"');
+    expect(html).toContain('Read-only');
+  });
+
+  it('keeps every control for a viewer holding staff.manage', () => {
+    permissions = ['staff.view', 'staff.manage'];
+    const html = render();
+    expect(html).toContain('Add Staff Member');
+    expect(html).toContain('title="Edit"');
   });
 
   it('renders the staff accounts the API returned', () => {
