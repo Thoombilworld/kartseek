@@ -6,6 +6,10 @@ import { PharmacyService } from '../pharmacy.service';
  * message. pharmacy-service's admin surface is a read — the store list — so
  * what has to hold here is that the predicate reaches the query: without it the
  * Qatar admin's Stores screen listed every market's pharmacies.
+ *
+ * The market is `regionCode`, the platform's ISO-2 market identifier. It is not
+ * `countryCode`: that column carries a legacy alpha-3 default ('IND') that
+ * nothing seeds, so filtering on it matched no row in any market.
  */
 
 function service() {
@@ -19,26 +23,26 @@ function service() {
 }
 
 describe('PharmacyService.getAdminStoreList narrows to the caller market', () => {
-  it('adds the country predicate when a market is given', async () => {
+  it('adds the region predicate when a market is given', async () => {
     const { svc, storeRepo } = service();
-    await svc.getAdminStoreList({ countryCode: 'QA' });
+    await svc.getAdminStoreList({ regionCode: 'QA' });
     expect(storeRepo.findAndCount).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ countryCode: 'QA' }) }),
+      expect.objectContaining({ where: expect.objectContaining({ regionCode: 'QA' }) }),
     );
   });
 
   it('keeps a status filter alongside the market', async () => {
     const { svc, storeRepo } = service();
-    await svc.getAdminStoreList({ status: 'ACTIVE', countryCode: 'QA' });
+    await svc.getAdminStoreList({ status: 'ACTIVE', regionCode: 'QA' });
     expect(storeRepo.findAndCount.mock.calls[0][0].where).toMatchObject({
       status: 'ACTIVE',
-      countryCode: 'QA',
+      regionCode: 'QA',
     });
   });
 
   it('leaves the list unfiltered for a global admin', async () => {
     const { svc, storeRepo } = service();
     await svc.getAdminStoreList({});
-    expect(storeRepo.findAndCount.mock.calls[0][0].where.countryCode).toBeUndefined();
+    expect(storeRepo.findAndCount.mock.calls[0][0].where.regionCode).toBeUndefined();
   });
 });

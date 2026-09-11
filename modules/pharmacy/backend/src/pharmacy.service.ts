@@ -779,21 +779,25 @@ export class PharmacyService {
   }
 
   /**
-   * `countryCode` is the caller's market, forwarded by the gateway as `scope`
+   * `regionCode` is the caller's market, forwarded by the gateway as `scope`
    * for a region-locked administrator and left undefined for a global one.
    * Without it the Qatar admin's Stores screen listed every market's
    * pharmacies.
+   *
+   * `regionCode`, not `countryCode`: the platform's market identifier is the
+   * ISO-2 code, while `countryCode` here carries a legacy alpha-3 default
+   * ('IND') that nothing seeds — filtering on it matched no row in any market.
    */
   async getAdminStoreList(params: {
     status?: string;
     page?: number;
     limit?: number;
-    countryCode?: string;
+    regionCode?: string;
   }) {
-    const { status, page = 1, limit = 50, countryCode } = params;
+    const { status, page = 1, limit = 50, regionCode } = params;
     const where: any = {};
     if (status) where.status = status;
-    if (countryCode) where.countryCode = countryCode;
+    if (regionCode) where.regionCode = regionCode;
     return this.storeRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },

@@ -476,10 +476,12 @@ export class PharmacyController {
   }
 
   // `scope` is the caller's market when the gateway resolved one for a
-  // region-locked administrator, and undefined for a global one.
+  // region-locked administrator, and undefined for a global one. The gateway
+  // names it `countryCode` on the wire; the column it resolves to here is
+  // `regionCode`, the platform's ISO-2 market identifier.
   @MessagePattern({ cmd: 'admin_list_pharmacy_stores' })
   msgAdminList(@Payload() d: EmptyMessage) {
-    return this.svc.getAdminStoreList({ ...d, countryCode: d?.scope ?? d?.countryCode });
+    return this.svc.getAdminStoreList({ ...d, regionCode: d?.scope ?? d?.countryCode });
   }
 
   @MessagePattern({ cmd: 'set_pharmacy_commission' })
@@ -568,7 +570,7 @@ export class PharmacyController {
       status: d?.status,
       page: d?.page,
       limit: d?.limit,
-      countryCode: d?.scope ?? d?.countryCode,
+      regionCode: d?.scope ?? d?.countryCode,
     });
   }
 
