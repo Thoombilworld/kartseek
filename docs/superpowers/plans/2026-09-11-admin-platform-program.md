@@ -163,3 +163,18 @@ Run after each plan lands and at the end. "Suite" is the existing gate; nothing 
 | Grocery / Restaurant / Pharmacy / Doctor / Hotel customer flows | Postman `03-customer-app`                                          | —                                | —       | —       | —       | —       | —       | —     |
 | Franchise / Wallet / Loyalty                                    | Postman + unit                                                     | —                                | —       | —       | —       | —       | —       | —     |
 | Mobile (Flutter analyze)                                        | customer 0 issues / shared-mobile 1 warning                        | baseline                         | —       | —       | —       | —       | —       | —     |
+
+## Plan B hand-off (2026-09-12)
+
+Plan B is complete on `feat/admin-platform-upgrade` (41 task commits + the final fix wave `195d612`,
+`e63a8ed`, `edea039`, `ba2fae4` and the proof-script update `0a048cb`); whole-branch review verdict
+**MERGEABLE** (`.superpowers/sdd/2026-09-11-admin-identity-rbac-audit-plan/final-review.md`). The
+completion report with sections A–L and every task marked PASS / FIXED / REMAINING is
+`docs/superpowers/plans/2026-09-12-admin-platform-completion-report.md`. Items deferred by the final
+review (4 Important, 34 Minor) are assigned there to Plans C, D and E; Plan C must start by absorbing its
+14 items (service hardening, auth recovery, `getDashboardStats` honesty, notification writers, DTO
+coercion), Plan D its taxi paging / `/taxi/admin/*` blind spot, Plan E its 13 console items and the eight
+remaining fixture pages listed in `task-7b-report.md` §7. Operational notes: run
+`npm run migration:run:main` (apps/api) once against the main database so the ledger records the three
+hand-applied migrations; the fleet gateway on :3001 must be restarted before any browser walkthrough;
+staff sessions issued before the deploy carry no permission claim for up to one hour.
