@@ -49,7 +49,54 @@ export const AppDataSource = new DataSource({
   database: process.env.MARKETPLACE_DB_NAME || process.env.DB_NAME || 'kartseek_db',
   schema: 'public',
   entities: [],
-  migrations: ['migrations/*.ts'],
+  /**
+   * Named one by one, not `migrations/*.ts`.
+   *
+   * The glob swept in five migrations that belong to the **main** database —
+   * `users`, `order.orders`, `admin.admin_roles` and the gateway's own tables —
+   * and this DataSource resolves `MARKETPLACE_DB_*` first, so running them
+   * created those objects in the marketplace database and left the gateway's
+   * `users` table without `admin_role_id`. Every staff login then answers 500,
+   * because `AuthController` reads that column on each sign-in.
+   *
+   * They now live in `data-source.main.ts` (`npm run migration:run:main`),
+   * which documents why each of the five was classified that way — including
+   * the three that mention `users` and still belong here.
+   * `data-source.main.spec.ts` asserts the two lists partition the folder:
+   * a new migration named in neither, or in both, fails the suite.
+   */
+  migrations: [
+    'migrations/1719468000000-InitialMarketplaceSchema.ts',
+    'migrations/1719554400000-MarketplaceTier6Entities.ts',
+    'migrations/1720310400000-AuditRemediation.ts',
+    'migrations/1720396800000-BrandFollowAndUpdates.ts',
+    'migrations/1753574400000-SellerOwnership.ts',
+    'migrations/1753578000000-SellerKycAndSettings.ts',
+    'migrations/1785840000000-WalletAndPayoutSchemas.ts',
+    'migrations/1785850000000-SellerStaffPromotionsSupport.ts',
+    'migrations/1786100000000-MarketplaceCatalogIndexes.ts',
+    'migrations/1786200000000-ScopeSkuUniquenessToSeller.ts',
+    'migrations/1786300000000-ListingApprovalAndBuyBox.ts',
+    'migrations/1786400000000-CategoryVariantSchema.ts',
+    'migrations/1786400100000-CatalogueOwnershipBackfill.ts',
+    'migrations/1786400200000-QuarantineShadowPublicTables.ts',
+    'migrations/1786499000000-MarketplaceSchema.ts',
+    'migrations/1786500000000-VerticalModuleSchemas.ts',
+    'migrations/1786500100000-GrocerySchema.ts',
+    'migrations/1786500200000-RemainingServiceSchemas.ts',
+    'migrations/1786500300000-FranchiseTable.ts',
+    'migrations/1786500500000-PaymentServiceTables.ts',
+    'migrations/1786500600000-LocationServiceTables.ts',
+    'migrations/1786500700000-GroceryTables.ts',
+    'migrations/1786500800000-FlashDealTables.ts',
+    'migrations/1786500900000-ProductFeaturedFlag.ts',
+    'migrations/1786501000000-ReturnCancelledStatus.ts',
+    'migrations/1786501100000-ProductReports.ts',
+    'migrations/1786501200000-PriceAlerts.ts',
+    'migrations/1786501300000-GroceryStorePromoted.ts',
+    'migrations/1786501400000-GroceryOrderTax.ts',
+    'migrations/1786501500000-ProductListingListPrice.ts',
+  ],
   migrationsTableName: 'migrations',
   // Each migration in its own transaction, so a failure rolls that one back and
   // leaves every migration before it applied. `ListingApprovalAndBuyBox` relies
