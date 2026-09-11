@@ -719,24 +719,32 @@ export class RestaurantController {
   // were in place, a 503 once they were removed. The implementations already
   // existed; only the patterns were missing.
 
+  // `scope` is the caller's market when the gateway resolved one for a
+  // region-locked administrator, and undefined for a global one. The list
+  // narrows to it; the decisions are asserted against the restaurant's own
+  // market inside the service, before anything is written or published.
+
   @MessagePattern({ cmd: 'admin.restaurant.list' })
   tcpAdminGetAdminRestaurantList(@Payload() d: EmptyMessage) {
-    return this.svc.getAdminRestaurantList(d);
+    return this.svc.getAdminRestaurantList({ ...d, countryCode: d?.scope ?? d?.countryCode });
   }
 
   @MessagePattern({ cmd: 'admin.restaurant.approve' })
   tcpAdminApproveRestaurant(
-    @Payload() d: RestaurantScopedMessage & IdMessage & { adminId?: string },
+    @Payload() d: RestaurantScopedMessage & IdMessage & { adminId?: string; scope?: string },
   ) {
     return this.svc.approveRestaurant(
       requireId(d?.id, 'record') ?? d?.restaurantId,
       requireId(d?.adminId, 'admin'),
+      d?.scope,
     );
   }
 
   @MessagePattern({ cmd: 'admin.restaurant.suspend' })
-  tcpAdminSuspendRestaurant(@Payload() d: RestaurantScopedMessage & IdMessage) {
-    return this.svc.suspendRestaurant(requireId(d?.id, 'record') ?? d?.restaurantId);
+  tcpAdminSuspendRestaurant(
+    @Payload() d: RestaurantScopedMessage & IdMessage & { scope?: string },
+  ) {
+    return this.svc.suspendRestaurant(requireId(d?.id, 'record') ?? d?.restaurantId, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin.restaurant.cuisines' })

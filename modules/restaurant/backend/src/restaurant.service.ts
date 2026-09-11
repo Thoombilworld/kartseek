@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike, In, SelectQueryBuilder, type ObjectLiteral, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
+import { assertInMarket } from '@app/common';
 
 import {
   Restaurant,
@@ -959,7 +960,20 @@ export class RestaurantService {
     });
   }
 
-  async approveRestaurant(restaurantId: string, adminId: string) {
+  /**
+   * `scope` is the caller's market when the gateway resolved one for a
+   * region-locked administrator. The restaurant is loaded before the update
+   * rather than approved blind: a decision has to be checked against the
+   * restaurant's own market, and an `update` by id alone cannot be.
+   */
+  async approveRestaurant(restaurantId: string, adminId: string, scope?: string) {
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id: restaurantId },
+      select: { id: true, countryCode: true },
+    });
+    if (!restaurant) throw new NotFoundException(`Restaurant ${restaurantId} not found`);
+    assertInMarket(restaurant.countryCode, scope, 'restaurant', this.logger);
+
     await this.restaurantRepo.update(restaurantId, {
       status: RestaurantStatus.APPROVED,
       isOnline: true,
@@ -977,7 +991,14 @@ export class RestaurantService {
     return { success: true, restaurantId, message: 'Restaurant rejected' };
   }
 
-  async suspendRestaurant(restaurantId: string) {
+  async suspendRestaurant(restaurantId: string, scope?: string) {
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id: restaurantId },
+      select: { id: true, countryCode: true },
+    });
+    if (!restaurant) throw new NotFoundException(`Restaurant ${restaurantId} not found`);
+    assertInMarket(restaurant.countryCode, scope, 'restaurant', this.logger);
+
     await this.restaurantRepo.update(restaurantId, {
       status: RestaurantStatus.SUSPENDED,
       isOnline: false,
@@ -1003,10 +1024,21 @@ export class RestaurantService {
     return { success: true };
   }
 
-  async getAdminRestaurantList(opts: { status?: string; page?: number; limit?: number }) {
-    const { status, page = 1, limit = 50 } = opts;
+  /**
+   * `countryCode` is the caller's market, forwarded by the gateway as `scope`
+   * for a region-locked administrator and left undefined for a global one.
+   * Without it the Qatar admin's restaurant list was the whole platform's.
+   */
+  async getAdminRestaurantList(opts: {
+    status?: string;
+    page?: number;
+    limit?: number;
+    countryCode?: string;
+  }) {
+    const { status, page = 1, limit = 50, countryCode } = opts;
     const where: any = {};
     if (status && status !== 'all') where.status = status;
+    if (countryCode) where.countryCode = countryCode;
     const [data, total] = await this.restaurantRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },
