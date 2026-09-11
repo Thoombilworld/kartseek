@@ -1,15 +1,13 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository, ILike, In, MoreThanOrEqual, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
-import { assertInMarket as assertInMarketShared } from '@app/common';
+import {
+  assertInMarket as assertInMarketShared,
+  marketPredicate,
+  refuseUnattributable as refuseUnattributableShared,
+} from '@app/common';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
 import { Category } from '../entities/category.entity';
@@ -787,9 +785,7 @@ export class MarketplaceAdminService {
    * scope) is unaffected. Plan C adds the columns that make these resolvable.
    */
   private refuseUnattributable(scope: string | undefined, what: string): void {
-    if (!scope) return;
-    this.logger.warn(`[region-scope-denied] ${what} has no market for a ${scope}-scoped admin`);
-    throw new ForbiddenException(`This ${what} cannot be attributed to a market yet.`);
+    refuseUnattributableShared(scope, what, this.logger);
   }
 
   /**
@@ -1173,7 +1169,13 @@ export class MarketplaceAdminService {
     return { success: true, id };
   }
 
-  async updateCampaign(id: string, dto: any) {
+  /**
+   * A campaign is a Kafka event with no row and no market column, so nothing
+   * can say whose it is. A scoped admin editing one would be editing every
+   * market's, which is why this fails closed rather than passing silently.
+   */
+  async updateCampaign(id: string, dto: any, scope?: string) {
+    this.refuseUnattributable(scope, 'campaign');
     await this.kafka.publish('campaign.updated', { id, ...dto });
     return { success: true, id };
   }
@@ -1297,7 +1299,9 @@ export class MarketplaceAdminService {
     return { success: true, id: `comm-${Date.now()}` };
   }
 
-  async updateCommission(id: string, dto: any) {
+  /** Same shape as a campaign: an event, no row, no market. */
+  async updateCommission(id: string, dto: any, scope?: string) {
+    this.refuseUnattributable(scope, 'commission rule');
     await this.kafka.publish('commission.updated', { id, ...dto });
     return { success: true, id };
   }
@@ -1455,7 +1459,10 @@ export class MarketplaceAdminService {
     return { success: true, id };
   }
 
-  async getAdminNotifications() {
+  async getAdminNotifications(scope?: string) {
+    // `MarketplaceNotification` carries no market column, so this list is the
+    // platform's. Refused for a scoped admin rather than relabelled as theirs.
+    this.refuseUnattributable(scope, 'platform notification');
     // `MarketplaceNotification` has no `targetRole` — the `as any` hid that from
     // the compiler and TypeORM threw at runtime ("Property \"targetRole\" was not
     // found"), so the admin notifications screen answered 500 rather than a list.
@@ -1509,7 +1516,8 @@ export class MarketplaceAdminService {
     return { data: systemNotifs, total: systemNotifs.length };
   }
 
-  async sendNotification(dto: any) {
+  async sendNotification(dto: any, scope?: string) {
+    this.refuseUnattributable(scope, 'platform notification');
     await this.kafka.publish('notification.sent', dto);
     return { success: true, id: `notif-${Date.now()}` };
   }
@@ -1532,7 +1540,9 @@ export class MarketplaceAdminService {
     );
   }
 
-  async updateMarketplaceSettings(dto: any) {
+  /** One platform-wide settings record — mirrors `updateLoyaltyConfig`. */
+  async updateMarketplaceSettings(dto: any, scope?: string) {
+    this.refuseUnattributable(scope, 'marketplace settings record');
     await this.redis.setJson('admin:settings', dto, 0);
     await this.kafka.publish('settings.updated', dto);
     return { success: true };
@@ -1573,7 +1583,9 @@ export class MarketplaceAdminService {
     );
   }
 
-  async updateSeoSettings(dto: any) {
+  /** One platform-wide SEO record — mirrors `updateLoyaltyConfig`. */
+  async updateSeoSettings(dto: any, scope?: string) {
+    this.refuseUnattributable(scope, 'SEO settings record');
     await this.redis.setJson('admin:seo', dto, 0);
     await this.kafka.publish('seo.updated', dto);
     return { success: true };
@@ -1689,13 +1701,41 @@ export class MarketplaceAdminService {
    * `admin_get_dashboard` and rendered whatever came back — and no column to
    * read from either. See the 1786500900000 migration.
    */
-  async getAdminFeaturedProducts() {
-    const [data, total] = await this.productRepo.findAndCount({
-      where: { is_featured: true },
-      relations: { brand: true, category: true, images: true },
-      order: { updated_at: 'DESC' },
-    });
+  async getAdminFeaturedProducts(scope?: string) {
+    // A product's market is its seller's, so the predicate goes on the join —
+    // the same one `adminProductQuery` uses, through the `Seller` entity class
+    // rather than a bare table name (the `public.*` decoys shadow it).
+    const market = marketPredicate(scope);
+    const qb = this.adminProductQuery(market)
+      .leftJoinAndSelect('p.brand', 'brand')
+      .leftJoinAndSelect('p.category', 'category')
+      .leftJoinAndSelect('p.images', 'images')
+      // `andWhere`, never `where`: `where()` replaces every condition already on
+      // the builder, which would have silently dropped the region predicate
+      // `adminProductQuery` just added and served every market's featured rail.
+      .andWhere('p.is_featured = true')
+      .orderBy('p.updated_at', 'DESC');
+    const [data, total] = await qb.getManyAndCount();
     return { data, total };
+  }
+
+  /**
+   * The market a product belongs to: its seller's.
+   *
+   * Featuring is a write on the catalogue row, and `products` has no market
+   * column — the only thing that can place one is the seller who submitted it.
+   * A product with no seller is unattributable, not global.
+   */
+  private async assertProductInMarket(productId: string, scope: string | undefined): Promise<void> {
+    if (!scope) return;
+    const product = await this.productRepo.findOne({
+      where: { id: productId },
+      select: ['id', 'seller_id'] as any,
+    });
+    const owner = (product as any)?.seller_id
+      ? await this.sellerMarket((product as any).seller_id)
+      : null;
+    this.assertInMarket(owner, scope, 'product');
   }
 
   /**
@@ -1704,12 +1744,13 @@ export class MarketplaceAdminService {
    * Was a Kafka publish, a cache eviction and `{ success: true }` — no write,
    * and an unknown id reported success just as loudly as a real one.
    */
-  async addFeaturedProduct(dto: any) {
+  async addFeaturedProduct(dto: any, scope?: string) {
     const id = dto?.productId ?? dto?.id;
     if (!id) throw new BadRequestException('A productId is required.');
 
     const product = await this.productRepo.findOne({ where: { id } });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
+    await this.assertProductInMarket(id, scope);
 
     product.is_featured = true;
     await this.productRepo.save(product);
@@ -1719,9 +1760,10 @@ export class MarketplaceAdminService {
     return { success: true, id };
   }
 
-  async removeFeaturedProduct(id: string) {
+  async removeFeaturedProduct(id: string, scope?: string) {
     const product = await this.productRepo.findOne({ where: { id } });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
+    await this.assertProductInMarket(id, scope);
 
     product.is_featured = false;
     await this.productRepo.save(product);
@@ -1756,7 +1798,11 @@ export class MarketplaceAdminService {
    * `marketplace_orders` — and they are labelled as what they are, not as
    * behavioural cohorts nothing computed.
    */
-  async getCustomerSegments() {
+  async getCustomerSegments(scope?: string) {
+    // RFM buckets are counted across every order on the platform; there is no
+    // market predicate to apply, so a scoped admin gets a refusal, not a total
+    // that is not theirs.
+    this.refuseUnattributable(scope, 'customer segment report');
     const rows: { customer_id: string; orders: string; spend: string }[] = await this.orderRepo
       .createQueryBuilder('o')
       .select('o.customerId', 'customer_id')
@@ -2016,18 +2062,30 @@ export class MarketplaceAdminService {
     await this.redis.delPattern('marketplace:featured:*');
   }
 
-  async getSponsoredProducts(status?: string) {
+  async getSponsoredProducts(status?: string, scope?: string) {
     // The sponsored-ads platform (bids, budgets, impressions, clicks) is not
     // implemented. Return an honest empty result instead of fabricated ad metrics.
-    return { data: [] as unknown[], total: 0, status, dataAvailable: false };
+    // There are no rows to filter, so the market is echoed rather than dropped:
+    // the day slots exist, the predicate goes where `region` is read.
+    return {
+      data: [] as unknown[],
+      total: 0,
+      status,
+      region: scope ?? null,
+      dataAvailable: false,
+    };
   }
 
-  async updateSponsoredProduct(id: string, dto: any) {
+  /** A sponsored slot has no row and no seller to join to — fail closed. */
+  async updateSponsoredProduct(id: string, dto: any, scope?: string) {
+    this.refuseUnattributable(scope, 'sponsored slot');
     await this.kafka.publish('sponsored.updated', { id, ...dto });
     return { success: true, id };
   }
 
-  async getComplianceCountries() {
+  async getComplianceCountries(scope?: string) {
+    // The list is every country's compliance profile by definition.
+    this.refuseUnattributable(scope, 'compliance country list');
     const cached = await this.redis.getJson('admin:compliance:countries');
     return cached || { data: [], total: 0 };
   }
@@ -2145,12 +2203,22 @@ export class MarketplaceAdminService {
     return { success: true, sellerId, amount };
   }
 
-  async getQAItems(status?: string) {
-    const questions = await this.questionRepo.find({
-      order: { createdAt: 'DESC' },
-      take: 50,
-      relations: ['product'] as any,
-    });
+  async getQAItems(status?: string, scope?: string) {
+    // A question's market is its product's seller's — the same two-hop path
+    // `reviewMarket` uses. Without the predicate the moderation queue showed
+    // every market's questions to a region-locked moderator.
+    const market = marketPredicate(scope);
+    const qb = this.questionRepo
+      .createQueryBuilder('q')
+      .leftJoinAndSelect('q.product', 'product')
+      .orderBy('q.createdAt', 'DESC')
+      .take(50);
+    if (market) {
+      qb.innerJoin(Seller, 's', 's.id = product.seller_id').andWhere('s.region_code = :market', {
+        market,
+      });
+    }
+    const questions = await qb.getMany();
     const items = questions.map((q) => ({
       id: q.id,
       type: 'question',
@@ -2166,7 +2234,17 @@ export class MarketplaceAdminService {
     return { data: filtered, total: filtered.length, status };
   }
 
-  async moderateQAItem(id: string, dto: any) {
+  async moderateQAItem(id: string, dto: any, scope?: string) {
+    // Resolve the question's product, then the product's seller. A question
+    // that reaches neither has no market and is refused, not allowed through.
+    if (scope) {
+      const question = await this.questionRepo.findOne({
+        where: { id },
+        select: ['id', 'productId'] as any,
+      });
+      if (!question?.productId) this.refuseUnattributable(scope, 'question');
+      await this.assertProductInMarket(question!.productId, scope);
+    }
     await this.kafka.publish('qa.moderated', { id, ...dto });
     return { success: true, id };
   }

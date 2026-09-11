@@ -11,7 +11,7 @@ import {
   UseGuards,
   UsePipes,
   ValidationPipe,
-  ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import {
   type DtoMessage,
@@ -21,6 +21,7 @@ import {
   RpcAwareExceptionsFilter,
   type SellerScopedMessage,
   messageId,
+  refuseUnattributable,
   requireId,
 } from '@app/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
@@ -126,6 +127,8 @@ function actorOf(data: any): { ownerId?: string; role?: string; regionCode?: str
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('marketplace')
 export class MarketplaceController {
+  private readonly logger = new Logger(MarketplaceController.name);
+
   constructor(
     private readonly svc: MarketplaceService,
     private readonly catalog: CatalogService,
@@ -1467,7 +1470,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_update_seo' })
   tcpAdminUpdateSeo(@Payload() d: any) {
-    return this.admin.updateSeoSettings(d?.dto ?? d);
+    return this.admin.updateSeoSettings(d?.dto ?? d, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_settings' })
@@ -1477,7 +1480,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_update_settings' })
   tcpAdminUpdateSettings(@Payload() d: any) {
-    return this.admin.updateMarketplaceSettings(d?.dto ?? d);
+    return this.admin.updateMarketplaceSettings(d?.dto ?? d, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_promotions' })
@@ -1497,12 +1500,12 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_notifications' })
   tcpAdminGetNotifications(@Payload() d: any) {
-    return this.admin.getAdminNotifications();
+    return this.admin.getAdminNotifications(d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_send_notification' })
   tcpAdminSendNotification(@Payload() d: any) {
-    return this.admin.sendNotification(d?.dto ?? d);
+    return this.admin.sendNotification(d?.dto ?? d, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_hsn_codes' })
@@ -1522,37 +1525,37 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_featured' })
   tcpAdminGetFeatured(@Payload() d: any) {
-    return this.admin.getAdminFeaturedProducts();
+    return this.admin.getAdminFeaturedProducts(d?.scope ?? this.payloadRegion(d));
   }
 
   @MessagePattern({ cmd: 'admin_add_featured' })
   tcpAdminAddFeatured(@Payload() d: any) {
-    return this.admin.addFeaturedProduct(d?.dto ?? d);
+    return this.admin.addFeaturedProduct(d?.dto ?? d, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_remove_featured' })
   tcpAdminRemoveFeatured(@Payload() d: any) {
-    return this.admin.removeFeaturedProduct(d?.id);
+    return this.admin.removeFeaturedProduct(d?.id, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_sponsored' })
   tcpAdminGetSponsored(@Payload() d: any) {
-    return this.admin.getSponsoredProducts(d?.status);
+    return this.admin.getSponsoredProducts(d?.status, d?.scope ?? this.payloadRegion(d));
   }
 
   @MessagePattern({ cmd: 'admin_update_sponsored' })
   tcpAdminUpdateSponsored(@Payload() d: any) {
-    return this.admin.updateSponsoredProduct(d?.id, d?.dto ?? d);
+    return this.admin.updateSponsoredProduct(d?.id, d?.dto ?? d, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_qa' })
   tcpAdminGetQa(@Payload() d: any) {
-    return this.admin.getQAItems(d?.status);
+    return this.admin.getQAItems(d?.status, d?.scope ?? this.payloadRegion(d));
   }
 
   @MessagePattern({ cmd: 'admin_moderate_qa' })
   tcpAdminModerateQa(@Payload() d: any) {
-    return this.admin.moderateQAItem(d?.id, d?.dto ?? d);
+    return this.admin.moderateQAItem(d?.id, d?.dto ?? d, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_complaints' })
@@ -1567,7 +1570,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_compliance_countries' })
   tcpAdminGetComplianceCountries(@Payload() d: any) {
-    return this.admin.getComplianceCountries();
+    return this.admin.getComplianceCountries(d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_update_compliance_country' })
@@ -1607,7 +1610,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_customer_segments' })
   tcpAdminGetCustomerSegments(@Payload() d: any) {
-    return this.admin.getCustomerSegments();
+    return this.admin.getCustomerSegments(d?.scope);
   }
   // Took no payload at all, so the market the gateway resolved was thrown away
   // and a region-locked admin's dashboard showed platform-wide counts.
@@ -1707,9 +1710,18 @@ export class MarketplaceController {
   // responses instead — an admin approving a payout or blocking a seller got a
   // green result and nothing was written. See the audit note on stub handlers.
 
+  // The gateway sends `scope` on every one of these; each handler forwards it so
+  // the service can resolve the product's market through its seller and refuse
+  // before the write. Dropping it made the gateway check the only one there was.
   @MessagePattern({ cmd: 'admin_publish_product' })
   tcpAdminPublishProduct(@Payload() d: IdMessage & DtoMessage) {
-    return this.svc.setProductPublished(requireId(d?.id, 'record'), d?.adminId || 'admin', true);
+    return this.svc.setProductPublished(
+      requireId(d?.id, 'record'),
+      d?.adminId || 'admin',
+      true,
+      undefined,
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_unpublish_product' })
@@ -1719,12 +1731,17 @@ export class MarketplaceController {
       d?.adminId || 'admin',
       false,
       d?.reason,
+      (d as { scope?: string })?.scope,
     );
   }
 
   @MessagePattern({ cmd: 'admin_suspend_product' })
   tcpAdminSuspendProduct(@Payload() d: IdMessage & DtoMessage) {
-    return this.svc.suspendProduct(requireId(d?.id, 'record'), d?.adminId || 'admin');
+    return this.svc.suspendProduct(
+      requireId(d?.id, 'record'),
+      d?.adminId || 'admin',
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_request_product_correction' })
@@ -1733,17 +1750,24 @@ export class MarketplaceController {
       requireId(d?.id, 'record'),
       d?.adminId || 'admin',
       d?.notes || '',
+      (d as { scope?: string })?.scope,
     );
   }
 
   @MessagePattern({ cmd: 'admin_feature_product' })
   tcpAdminFeatureProduct(@Payload() d: IdMessage) {
-    return this.admin.addFeaturedProduct({ productId: d?.id, ...d });
+    return this.admin.addFeaturedProduct(
+      { productId: d?.id, ...d },
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_unfeature_product' })
   tcpAdminUnfeatureProduct(@Payload() d: IdMessage) {
-    return this.admin.removeFeaturedProduct(requireId(d?.id, 'record'));
+    return this.admin.removeFeaturedProduct(
+      requireId(d?.id, 'record'),
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_update_brand' })
@@ -1767,7 +1791,11 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_update_campaign' })
   tcpAdminUpdateCampaign(@Payload() d: IdMessage & DtoMessage) {
-    return this.admin.updateCampaign(requireId(d?.id, 'record'), d?.dto ?? d);
+    return this.admin.updateCampaign(
+      requireId(d?.id, 'record'),
+      d?.dto ?? d,
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_block_seller' })
@@ -1795,7 +1823,11 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_update_commission' })
   tcpAdminUpdateCommission(@Payload() d: IdMessage & DtoMessage) {
-    return this.admin.updateCommission(requireId(d?.id, 'record'), d?.dto ?? d);
+    return this.admin.updateCommission(
+      requireId(d?.id, 'record'),
+      d?.dto ?? d,
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_process_payout' })
@@ -1971,17 +2003,30 @@ export class MarketplaceController {
   // the routes that let it be seen and decided.
   @MessagePattern({ cmd: 'admin_pending_listings' })
   tcpAdminPendingListings(@Payload() d: PaginatedMessage) {
-    return this.svc.getPendingListings(d?.page || 1, d?.limit || 20);
+    return this.svc.getPendingListings(
+      d?.page || 1,
+      d?.limit || 20,
+      (d as { scope?: string })?.scope ?? this.payloadRegion(d),
+    );
   }
 
   @MessagePattern({ cmd: 'admin_approve_listing' })
   tcpAdminApproveListing(@Payload() d: IdMessage & DtoMessage) {
-    return this.svc.approveListing(d?.id ?? d?.listingId, d?.adminId || 'admin');
+    return this.svc.approveListing(
+      d?.id ?? d?.listingId,
+      d?.adminId || 'admin',
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_reject_listing' })
   tcpAdminRejectListing(@Payload() d: IdMessage & DtoMessage) {
-    return this.svc.rejectListing(d?.id ?? d?.listingId, d?.adminId || 'admin', d?.reason || '');
+    return this.svc.rejectListing(
+      d?.id ?? d?.listingId,
+      d?.adminId || 'admin',
+      d?.reason || '',
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'release_listing_stock' })
@@ -2157,7 +2202,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'update_return_status' })
   tcpUpdateReturnStatus(@Payload() data: any) {
-    return this.fulfillment.updateReturnStatus(data?.id, data, actorOf(data));
+    return this.fulfillment.updateReturnStatus(data?.id, data, actorOf(data), data?.scope);
   }
 
   @MessagePattern({ cmd: 'get_seller_for_invoice' })
@@ -2536,7 +2581,7 @@ export class MarketplaceController {
    * A global admin — no scope — is unaffected.
    */
   private refuseScopedReport(scope?: string): void {
-    if (scope) throw new ForbiddenException('This report cannot be attributed to a market yet.');
+    refuseUnattributable(scope, 'report', this.logger);
   }
 
   @MessagePattern({ cmd: 'admin_get_revenue_analytics' })

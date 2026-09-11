@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import { MarketplaceService } from '../marketplace.service';
 import { MarketplaceAdminService } from './admin.service';
+import { MarketplaceFulfillmentService } from '../fulfillment/fulfillment.service';
 
 describe('MarketplaceService seller decisions respect scope', () => {
   function service(sellerRegion: string) {
@@ -244,5 +245,249 @@ describe('the admin dashboard is counted per market, not platform-wide', () => {
     expect(counted.every((w) => w.regionCode === undefined)).toBe(true);
     expect(where).not.toContain('o.region_code = :region');
     expect(where).not.toContain('s.region_code = :region');
+  });
+});
+
+// ── The fix wave: handlers that used to drop the scope the gateway sent ──────
+//
+// Each of these four families reached a service method with no `scope`
+// parameter at all, so the gateway's check was the only one and a direct TCP
+// caller — or a gateway route someone forgot — wrote across markets.
+
+describe('product moderation writes assert the market before touching the row', () => {
+  function service(sellerRegion: string | null) {
+    const product = {
+      id: 'p-1',
+      seller_id: 'seller-1',
+      approval_status: 'APPROVED',
+      is_active: true,
+    };
+    const productRepo = { findOne: vi.fn(async () => product), save: vi.fn(async (p: any) => p) };
+    const sellerRepo = {
+      findOne: vi.fn(async () =>
+        sellerRegion ? { id: 'seller-1', regionCode: sellerRegion } : null,
+      ),
+    };
+    const svc = Object.create(MarketplaceService.prototype) as MarketplaceService;
+    Object.assign(svc, {
+      productRepo,
+      sellerRepo,
+      kafka: { publish: vi.fn(async () => undefined) },
+      redis: { del: vi.fn(), delPattern: vi.fn(), keys: vi.fn(async () => []) },
+      logger: { log: vi.fn(), warn: vi.fn() },
+    });
+    return { svc, productRepo, sellerRepo };
+  }
+
+  it('refuses publish, unpublish, suspend and correction across markets, writing nothing', async () => {
+    for (const call of [
+      (s: MarketplaceService) => s.setProductPublished('p-1', 'admin-qa', true, undefined, 'QA'),
+      (s: MarketplaceService) => s.setProductPublished('p-1', 'admin-qa', false, 'spam', 'QA'),
+      (s: MarketplaceService) => s.suspendProduct('p-1', 'admin-qa', 'QA'),
+      (s: MarketplaceService) => s.requestProductCorrection('p-1', 'admin-qa', 'fix it', 'QA'),
+    ]) {
+      const { svc, productRepo } = service('IN');
+      await expect(call(svc)).rejects.toThrow(ForbiddenException);
+      expect(productRepo.save).not.toHaveBeenCalled();
+    }
+  });
+
+  it('lets the market owner and a global admin through', async () => {
+    const own = service('QA');
+    await expect(
+      own.svc.setProductPublished('p-1', 'admin-qa', false, undefined, 'QA'),
+    ).resolves.toMatchObject({ success: true });
+    const global = service('IN');
+    await expect(global.svc.suspendProduct('p-1', 'admin-global')).resolves.toMatchObject({
+      success: true,
+    });
+    expect(global.sellerRepo.findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('listing moderation resolves the market through the offering seller', () => {
+  function service(sellerRegion: string | null) {
+    const listing: any = {
+      id: 'l-1',
+      approvalStatus: 'PENDING',
+      isActive: false,
+      product: { id: 'p-1', approval_status: 'APPROVED' },
+      seller: sellerRegion ? { id: 's-1', regionCode: sellerRegion } : null,
+    };
+    const listingRepo = {
+      findOne: vi.fn(async () => listing),
+      save: vi.fn(async (l: any) => l),
+      findAndCount: vi.fn(async () => [[], 0]),
+    };
+    const svc = Object.create(MarketplaceService.prototype) as MarketplaceService;
+    Object.assign(svc, {
+      listingRepo,
+      catalog: { recomputeBuyBox: vi.fn(async () => ({ winnerId: null })) },
+      kafka: { publish: vi.fn(async () => undefined) },
+      logger: { log: vi.fn(), warn: vi.fn() },
+    });
+    return { svc, listingRepo };
+  }
+
+  it('refuses approve and reject on another market’s offer, writing nothing', async () => {
+    for (const call of [
+      (s: MarketplaceService) => s.approveListing('l-1', 'admin-qa', 'QA'),
+      (s: MarketplaceService) => s.rejectListing('l-1', 'admin-qa', 'no', 'QA'),
+    ]) {
+      const { svc, listingRepo } = service('IN');
+      await expect(call(svc)).rejects.toThrow(ForbiddenException);
+      expect(listingRepo.save).not.toHaveBeenCalled();
+    }
+  });
+
+  it('refuses an offer with no seller at all — unattributable is not global', async () => {
+    const { svc, listingRepo } = service(null);
+    await expect(svc.approveListing('l-1', 'admin-qa', 'QA')).rejects.toThrow(ForbiddenException);
+    expect(listingRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('filters the pending queue on the seller’s market, and leaves it open to a global admin', async () => {
+    const { svc, listingRepo } = service('QA');
+    await svc.getPendingListings(1, 20, 'qa');
+    expect(listingRepo.findAndCount.mock.calls[0][0].where).toEqual({
+      approvalStatus: 'PENDING',
+      seller: { regionCode: 'QA' },
+    });
+    await svc.getPendingListings(1, 20);
+    expect(listingRepo.findAndCount.mock.calls[1][0].where).toEqual({
+      approvalStatus: 'PENDING',
+    });
+  });
+});
+
+describe('return transitions assert the return’s own market', () => {
+  function service(region: string | null) {
+    const returnRepo = {
+      findOne: vi.fn(async () => ({ id: 'r-1', sellerId: 's-1', regionCode: region })),
+      update: vi.fn(async () => ({ affected: 1 })),
+    };
+    const svc = Object.create(
+      MarketplaceFulfillmentService.prototype,
+    ) as MarketplaceFulfillmentService;
+    Object.assign(svc, {
+      returnRepo,
+      kafka: { publish: vi.fn(async () => undefined) },
+      logger: { log: vi.fn(), warn: vi.fn() },
+      assertOwns: vi.fn(async () => undefined),
+    });
+    return { svc, returnRepo };
+  }
+
+  it('refuses a return from another market before the update', async () => {
+    const { svc, returnRepo } = service('IN');
+    await expect(
+      svc.updateReturnStatus('r-1', { status: 'REFUNDED' }, undefined, 'QA'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(returnRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('allows the owning market and a global admin', async () => {
+    const own = service('QA');
+    await expect(
+      own.svc.updateReturnStatus('r-1', { status: 'RECEIVED' }, undefined, 'QA'),
+    ).resolves.toMatchObject({ success: true });
+    const global = service('IN');
+    await expect(
+      global.svc.updateReturnStatus('r-1', { status: 'RECEIVED' }),
+    ).resolves.toMatchObject({ success: true });
+  });
+});
+
+describe('handlers with nothing to attribute fail closed for a scoped admin', () => {
+  function admin() {
+    const kafka = { publish: vi.fn(async () => undefined) };
+    const redis = { setJson: vi.fn(async () => undefined), getJson: vi.fn(async () => null) };
+    const svc = Object.create(MarketplaceAdminService.prototype) as MarketplaceAdminService;
+    Object.assign(svc, { kafka, redis, logger: { log: vi.fn(), warn: vi.fn() } });
+    return { svc, kafka, redis };
+  }
+
+  it('refuses a campaign update and publishes no event', async () => {
+    const { svc, kafka } = admin();
+    await expect(svc.updateCampaign('c-1', { name: 'x' }, 'QA')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(kafka.publish).not.toHaveBeenCalled();
+  });
+
+  it('refuses commission rules, sponsored slots, notifications, settings and SEO', async () => {
+    for (const call of [
+      (s: MarketplaceAdminService) => s.updateCommission('r-1', {}, 'QA'),
+      (s: MarketplaceAdminService) => s.updateSponsoredProduct('s-1', {}, 'QA'),
+      (s: MarketplaceAdminService) => s.sendNotification({ title: 'x' }, 'QA'),
+      (s: MarketplaceAdminService) => s.getAdminNotifications('QA'),
+      (s: MarketplaceAdminService) => s.getComplianceCountries('QA'),
+      (s: MarketplaceAdminService) => s.getCustomerSegments('QA'),
+      (s: MarketplaceAdminService) => s.updateMarketplaceSettings({}, 'QA'),
+      (s: MarketplaceAdminService) => s.updateSeoSettings({}, 'QA'),
+    ]) {
+      const { svc, kafka, redis } = admin();
+      await expect(call(svc)).rejects.toThrow(ForbiddenException);
+      expect(kafka.publish).not.toHaveBeenCalled();
+      expect(redis.setJson).not.toHaveBeenCalled();
+    }
+  });
+
+  it('leaves every one of them open to a global admin', async () => {
+    const { svc, kafka } = admin();
+    await expect(svc.updateCampaign('c-1', { name: 'x' })).resolves.toMatchObject({
+      success: true,
+    });
+    expect(kafka.publish).toHaveBeenCalledWith('campaign.updated', { id: 'c-1', name: 'x' });
+  });
+});
+
+describe('featured and Q&A reads carry the market predicate onto the seller join', () => {
+  function query(repoKey: 'productRepo' | 'questionRepo') {
+    const joins: { kind: string; on: string }[] = [];
+    const where: string[] = [];
+    const qb: any = {
+      leftJoin: (_e: unknown, _a: string, on: string) => (joins.push({ kind: 'left', on }), qb),
+      innerJoin: (_e: unknown, _a: string, on: string) => (joins.push({ kind: 'inner', on }), qb),
+      leftJoinAndSelect: (on: string) => (joins.push({ kind: 'leftSelect', on }), qb),
+      // `where` would reset everything already on the builder — a call to it is
+      // the bug this harness exists to catch, so record it distinguishably.
+      where: (w: string) => (where.push(`RESET:${w}`), qb),
+      andWhere: (w: string) => (where.push(w), qb),
+      orderBy: () => qb,
+      take: () => qb,
+      skip: () => qb,
+      getMany: async () => [],
+      getManyAndCount: async () => [[], 0],
+    };
+    const svc = Object.create(MarketplaceAdminService.prototype) as MarketplaceAdminService;
+    Object.assign(svc, {
+      [repoKey]: { createQueryBuilder: () => qb },
+      logger: { log: vi.fn(), warn: vi.fn() },
+    });
+    return { svc, joins, where };
+  }
+
+  it('filters the featured rail on the seller’s market and never resets the builder', async () => {
+    const scoped = query('productRepo');
+    await scoped.svc.getAdminFeaturedProducts('qa');
+    expect(scoped.where).toContain('s.region_code = :region');
+    expect(scoped.where).toContain('p.is_featured = true');
+    expect(scoped.where.some((w) => w.startsWith('RESET:'))).toBe(false);
+
+    const global = query('productRepo');
+    await global.svc.getAdminFeaturedProducts();
+    expect(global.where).not.toContain('s.region_code = :region');
+  });
+
+  it('inner-joins the seller behind the question’s product for a scoped moderator only', async () => {
+    const scoped = query('questionRepo');
+    await scoped.svc.getQAItems(undefined, 'qa');
+    expect(scoped.joins).toContainEqual({ kind: 'inner', on: 's.id = product.seller_id' });
+    expect(scoped.where).toContain('s.region_code = :market');
+
+    const global = query('questionRepo');
+    await global.svc.getQAItems();
+    expect(global.joins.some((j) => j.kind === 'inner')).toBe(false);
   });
 });

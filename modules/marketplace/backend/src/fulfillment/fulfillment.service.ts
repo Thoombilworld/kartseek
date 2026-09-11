@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike, In, MoreThanOrEqual } from 'typeorm';
-import { requireId } from '@app/common';
+import { assertInMarket, requireId } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { Product } from '../entities/product.entity';
@@ -257,12 +257,17 @@ export class MarketplaceFulfillmentService {
     id: string,
     dto: { status: string; rejectionReason?: string; qcCondition?: string; qcNotes?: string },
     actor?: Actor,
+    scope?: string,
   ) {
     const ret = await this.returnRepo.findOne({ where: { id } });
     if (!ret) throw new NotFoundException(`Return request ${id} not found`);
     // A seller may only decide their own returns. `REFUNDED` moves money, so an
     // unscoped transition here was a write into another seller's ledger.
     await this.assertOwns(actor, ret.sellerId, 'return request');
+    // And an admin may only decide returns in their own market. The row carries
+    // `region_code` itself, so this needs no join — the gateway sent `scope` and
+    // this handler was dropping it, which let a QA admin refund an Indian return.
+    assertInMarket(ret.regionCode, scope, 'return request', this.logger);
 
     const update: any = { status: dto.status };
     if (dto.status === 'REJECTED') update.rejectionReason = dto.rejectionReason;

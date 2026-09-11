@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
-import { assertInMarket } from '@app/common';
+import { assertInMarket, marketPredicate } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
@@ -222,12 +222,15 @@ export class MarketplaceService {
    * marketplace polices per merchant, and they are exactly what a second seller
    * supplies when they list against an existing catalogue entry.
    */
-  async approveListing(listingId: string, adminId: string) {
+  async approveListing(listingId: string, adminId: string, scope?: string) {
     const listing = await this.listingRepo.findOne({
       where: { id: listingId },
       relations: ['product', 'seller'],
     });
     if (!listing) throw new NotFoundException('Listing not found');
+    // An offer's market is the offering seller's, which the relation already
+    // loaded — no second read, and a listing with no seller is unattributable.
+    assertInMarket((listing as any).seller?.regionCode ?? null, scope, 'listing', this.logger);
 
     const product: any = (listing as any).product;
     if (product?.approval_status !== 'APPROVED') {
@@ -258,12 +261,13 @@ export class MarketplaceService {
   }
 
   /** Refuse one seller's offer. The product and every other offer stand. */
-  async rejectListing(listingId: string, adminId: string, reason: string) {
+  async rejectListing(listingId: string, adminId: string, reason: string, scope?: string) {
     const listing = await this.listingRepo.findOne({
       where: { id: listingId },
       relations: ['product', 'seller'],
     });
     if (!listing) throw new NotFoundException('Listing not found');
+    assertInMarket((listing as any).seller?.regionCode ?? null, scope, 'listing', this.logger);
 
     listing.approvalStatus = 'REJECTED';
     listing.rejectionReason = reason || (null as any);
@@ -293,12 +297,19 @@ export class MarketplaceService {
    * Without this the listings would sit PENDING forever with nothing to surface
    * them — which is how a moderation gate becomes a silent block.
    */
-  async getPendingListings(page = 1, limit = 20) {
+  async getPendingListings(page = 1, limit = 20, scope?: string) {
     const take = Math.min(Math.max(Number(limit) || 20, 1), 100);
     const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
 
+    // The third place the market is enforced: the query itself. Without the
+    // predicate a QA-locked admin's queue listed every market's pending offers
+    // — the moderation screen leaked the catalogue it could not decide on.
+    const market = marketPredicate(scope);
+    const where: Record<string, unknown> = { approvalStatus: 'PENDING' };
+    if (market) where.seller = { regionCode: market };
+
     const [data, total] = await this.listingRepo.findAndCount({
-      where: { approvalStatus: 'PENDING' },
+      where: where as any,
       relations: ['product', 'seller'],
       // Oldest first: a queue a seller is waiting in is answered in order.
       order: { createdAt: 'ASC' },
@@ -315,9 +326,15 @@ export class MarketplaceService {
    * Distinct from REJECTED: the listing stays in the queue and the seller can
    * resubmit, so it must not be treated as a terminal decision.
    */
-  async requestProductCorrection(productId: string, adminId: string, notes: string) {
+  async requestProductCorrection(
+    productId: string,
+    adminId: string,
+    notes: string,
+    scope?: string,
+  ) {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
+    await this.assertProductInMarket(product, scope);
     product.approval_status = 'CORRECTION_REQUESTED';
     await this.productRepo.save(product);
 
@@ -343,9 +360,13 @@ export class MarketplaceService {
     adminId: string,
     published: boolean,
     reason?: string,
+    scope?: string,
   ) {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
+    // Before the write, not after: the gateway forwards `scope` and this is the
+    // handler that decides whether the caller owns the product's market.
+    await this.assertProductInMarket(product, scope);
     product.is_active = published;
     await this.productRepo.save(product);
 
@@ -457,9 +478,10 @@ export class MarketplaceService {
     return { success: true, productId, reason, listingsDeactivated: deactivated.affected ?? 0 };
   }
 
-  async suspendProduct(productId: string, adminId: string) {
+  async suspendProduct(productId: string, adminId: string, scope?: string) {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
+    await this.assertProductInMarket(product, scope);
     product.approval_status = 'SUSPENDED';
     product.is_active = false;
     await this.productRepo.save(product);
