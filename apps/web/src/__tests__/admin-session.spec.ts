@@ -16,6 +16,14 @@ describe('staff roles', () => {
     expect(isStaffRole('customer')).toBe(false);
     expect(isStaffRole(undefined)).toBe(false);
   });
+  it('pins every gate that decides console access: all five staff roles pass, customer and seller do not', () => {
+    for (const role of STAFF_ROLES) {
+      expect(isStaffRole(role)).toBe(true);
+      expect(isStaffRole(role.toLowerCase())).toBe(true);
+    }
+    expect(isStaffRole('customer')).toBe(false);
+    expect(isStaffRole('seller')).toBe(false);
+  });
 });
 
 describe('toAdminUser', () => {

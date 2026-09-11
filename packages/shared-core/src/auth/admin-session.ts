@@ -44,7 +44,7 @@ export function toAdminUser(session: { user: StaffSessionUser }): AuthUser {
     name: u.name ?? u.email,
     email: u.email,
     phone: u.phone,
-    role: role as AuthUser['role'],
+    role,
     isVerified: true,
     regionCode: u.regionCode ?? undefined,
     regionLocked,

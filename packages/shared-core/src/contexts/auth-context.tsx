@@ -13,7 +13,16 @@ import { AUTH_TOKEN_KEY } from '@/lib/auth-token';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'CUSTOMER' | 'SELLER' | 'DRIVER' | 'SUPER_ADMIN' | 'FRANCHISE';
+export type UserRole =
+  | 'CUSTOMER'
+  | 'SELLER'
+  | 'DRIVER'
+  | 'SUPER_ADMIN'
+  | 'ADMIN'
+  | 'SUPPORT_AGENT'
+  | 'FINANCE_MANAGER'
+  | 'PRODUCT_MANAGER'
+  | 'FRANCHISE';
 
 /**
  * Seller sub-type — determines which portal the seller has access to.

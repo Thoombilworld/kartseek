@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { isStaffRole } from '@/auth/staff-roles';
 
 /**
  * Route guard for the admin marketplace console.
@@ -18,12 +19,19 @@ import { useAuth } from '@/lib/contexts/auth-context';
  * the two cannot disagree. `isHydrated` matters: `AuthProvider` restores the
  * session in an effect, so on the first render nobody is authenticated yet and
  * redirecting there would log out every direct navigation and refresh.
+ *
+ * The check used to be `hasRole('SUPER_ADMIN')`, which only ever matched the
+ * one role every admin login used to be stamped with. Once the console started
+ * carrying a signed-in account's real role (ADMIN, SUPPORT_AGENT, ...), that
+ * check turned into a regression: a correctly signed-in regional admin passed
+ * the shell's own guard and then bounced straight back out on every one of the
+ * 105 pages under here.
  */
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, hasRole, isHydrated } = useAuth();
+  const { isAuthenticated, user, isHydrated } = useAuth();
 
-  const authorized = isAuthenticated && hasRole('SUPER_ADMIN');
+  const authorized = isAuthenticated && isStaffRole(user?.role);
 
   useEffect(() => {
     if (isHydrated && !authorized) router.replace('/admin/login');
