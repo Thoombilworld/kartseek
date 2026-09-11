@@ -1,8 +1,12 @@
 'use client';
 
 import React, {
-  createContext, useContext, useReducer, useCallback,
-  useEffect, type ReactNode
+  createContext,
+  useContext,
+  useReducer,
+  useCallback,
+  useEffect,
+  type ReactNode,
 } from 'react';
 import { authApi } from '@/lib/api-endpoints';
 import { AUTH_TOKEN_KEY } from '@/lib/auth-token';
@@ -16,37 +20,37 @@ export type UserRole = 'CUSTOMER' | 'SELLER' | 'DRIVER' | 'SUPER_ADMIN' | 'FRANC
  * Stored in the JWT payload and replicated to a cookie for edge middleware.
  */
 export type SellerType =
-  | 'marketplace'   // General e-commerce seller
-  | 'grocery'       // Grocery store seller
-  | 'restaurant'    // Restaurant / food partner
-  | 'pharmacy'      // Pharmacy seller
-  | 'doctor'        // Doctor / clinic / hospital
-  | 'hotel'         // Hotel / property owner
-  | 'taxi'          // Taxi / ride-hailing vendor
-  | 'delivery';     // Delivery partner
+  | 'marketplace' // General e-commerce seller
+  | 'grocery' // Grocery store seller
+  | 'restaurant' // Restaurant / food partner
+  | 'pharmacy' // Pharmacy seller
+  | 'doctor' // Doctor / clinic / hospital
+  | 'hotel' // Hotel / property owner
+  | 'taxi' // Taxi / ride-hailing vendor
+  | 'delivery'; // Delivery partner
 
 /** Dashboard URL for each seller type */
 export const SELLER_DASHBOARDS: Record<SellerType, string> = {
   marketplace: '/seller/marketplace',
-  grocery:     '/seller/grocery/dashboard',
-  restaurant:  '/seller/restaurant/dashboard',
-  pharmacy:    '/seller/pharmacy/dashboard',
-  doctor:      '/seller/doctor/dashboard',
-  hotel:       '/hotel-owner',
-  taxi:        '/seller/taxi',
-  delivery:    '/seller/delivery'
+  grocery: '/seller/grocery/dashboard',
+  restaurant: '/seller/restaurant/dashboard',
+  pharmacy: '/seller/pharmacy/dashboard',
+  doctor: '/seller/doctor/dashboard',
+  hotel: '/hotel-owner',
+  taxi: '/seller/taxi',
+  delivery: '/seller/delivery',
 };
 
 /** Public login URL for each seller type */
 export const SELLER_LOGIN_URLS: Record<SellerType, string> = {
   marketplace: '/seller/login',
-  grocery:     '/seller/grocery/login',
-  restaurant:  '/seller/restaurant/login',
-  pharmacy:    '/seller/pharmacy/login',
-  doctor:      '/seller/doctor/login',
-  hotel:       '/hotel-owner/login',
-  taxi:        '/seller/taxi/login',
-  delivery:    '/seller/login'
+  grocery: '/seller/grocery/login',
+  restaurant: '/seller/restaurant/login',
+  pharmacy: '/seller/pharmacy/login',
+  doctor: '/seller/doctor/login',
+  hotel: '/hotel-owner/login',
+  taxi: '/seller/taxi/login',
+  delivery: '/seller/login',
 };
 
 export type TwoFactorMethod = 'authenticator' | 'sms' | 'email';
@@ -88,17 +92,17 @@ export interface AuthUser {
 }
 
 interface AuthState {
-  user:        AuthUser | null;
-  token:       string | null;
-  isLoading:   boolean;
-  isHydrated:  boolean;
+  user: AuthUser | null;
+  token: string | null;
+  isLoading: boolean;
+  isHydrated: boolean;
   /** True when credentials are valid but 2FA OTP is still pending */
   requires2FA: boolean;
 }
 
 type AuthAction =
-  | { type: 'HYDRATE';  user: AuthUser | null; token: string | null; requires2FA?: boolean }
-  | { type: 'LOGIN';    user: AuthUser; token: string }
+  | { type: 'HYDRATE'; user: AuthUser | null; token: string | null; requires2FA?: boolean }
+  | { type: 'LOGIN'; user: AuthUser; token: string }
   | { type: 'LOGOUT' }
   | { type: 'UPDATE_USER'; updates: Partial<AuthUser> }
   | { type: 'SET_LOADING'; loading: boolean }
@@ -110,7 +114,14 @@ type AuthAction =
 function authReducer(state: AuthState, action: AuthAction): AuthState {
   switch (action.type) {
     case 'HYDRATE':
-      return { ...state, user: action.user, token: action.token, isLoading: false, isHydrated: true, requires2FA: action.requires2FA ?? false };
+      return {
+        ...state,
+        user: action.user,
+        token: action.token,
+        isLoading: false,
+        isHydrated: true,
+        requires2FA: action.requires2FA ?? false,
+      };
     case 'LOGIN':
       return { ...state, user: action.user, token: action.token, isLoading: false };
     case 'LOGOUT':
@@ -129,20 +140,24 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 }
 
 const INITIAL_STATE: AuthState = {
-  user: null, token: null, isLoading: true, isHydrated: false, requires2FA: false
+  user: null,
+  token: null,
+  isLoading: true,
+  isHydrated: false,
+  requires2FA: false,
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface AuthContextValue extends AuthState {
-  login:          (user: AuthUser, token: string, refreshToken?: string) => void;
-  logout:         () => void;
-  updateUser:     (updates: Partial<AuthUser>) => void;
+  login: (user: AuthUser, token: string, refreshToken?: string) => void;
+  logout: () => void;
+  updateUser: (updates: Partial<AuthUser>) => void;
   isAuthenticated: boolean;
-  hasRole:        (...roles: UserRole[]) => boolean;
-  hasSellerType:  (...types: SellerType[]) => boolean;
+  hasRole: (...roles: UserRole[]) => boolean;
+  hasSellerType: (...types: SellerType[]) => boolean;
   /** Check if the current admin user has ALL of the specified permissions */
-  hasPermission:  (...perms: string[]) => boolean;
+  hasPermission: (...perms: string[]) => boolean;
   /** Check if the current admin user has ANY of the specified permissions */
   hasAnyPermission: (...perms: string[]) => boolean;
   /** Redirect path for the current seller's dashboard */
@@ -150,7 +165,7 @@ interface AuthContextValue extends AuthState {
   /** Mark the current login as requiring 2FA verification */
   set2FARequired: () => void;
   /** Complete the 2FA verification step and allow access */
-  complete2FA:    () => void;
+  complete2FA: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -159,11 +174,11 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 // Re-exported from the shared module so the writer here and every reader in
 // `lib/api/*` are guaranteed to agree on the key.
-const STORAGE_KEY_TOKEN   = AUTH_TOKEN_KEY;
-const STORAGE_KEY_USER    = 'kartseek_user';
-const STORAGE_KEY_2FA     = 'kartseek_2fa_pending';
+const STORAGE_KEY_TOKEN = AUTH_TOKEN_KEY;
+const STORAGE_KEY_USER = 'kartseek_user';
+const STORAGE_KEY_2FA = 'kartseek_2fa_pending';
 const STORAGE_KEY_REFRESH = 'kartseek_refresh_token';
-const COOKIE_MAX_AGE      = 60 * 60 * 24 * 30; // 30 days
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 /**
  * Normalise the gateway's role onto the client union.
@@ -184,17 +199,23 @@ export function normaliseRole(role: string | undefined): UserRole {
     case 'RESTAURANT_SELLER':
     case 'PHARMACY_SELLER':
     case 'PHARMACIST':
-    case 'DOCTOR':      return 'SELLER';
+    case 'DOCTOR':
+      return 'SELLER';
     case 'DRIVER':
     case 'TAXI_DRIVER':
     case 'DELIVERY_DRIVER':
-    case 'DELIVERY_BOY': return 'DRIVER';
-    case 'SUPER_ADMIN': return 'SUPER_ADMIN';
-    case 'ADMIN':       return 'SUPER_ADMIN';
+    case 'DELIVERY_BOY':
+      return 'DRIVER';
+    case 'SUPER_ADMIN':
+      return 'SUPER_ADMIN';
+    case 'ADMIN':
+      return 'SUPER_ADMIN';
     case 'FRANCHISE':
     case 'FRANCHISE_OWNER':
-    case 'FRANCHISE_ADMIN': return 'FRANCHISE';
-    default:            return 'CUSTOMER';
+    case 'FRANCHISE_ADMIN':
+      return 'FRANCHISE';
+    default:
+      return 'CUSTOMER';
   }
 }
 
@@ -204,10 +225,20 @@ export function normaliseRole(role: string | undefined): UserRole {
  * `name` is defensive on purpose: register echoes the submitted name, but login
  * currently returns the email's local part, and neither is guaranteed present.
  */
-export function toAuthUser(apiUser: {
-  id: string; name?: string; email: string; phone?: string; role: string;
-  sellerType?: string | null; status?: string | null;
-}, regionCode?: string): AuthUser {
+export function toAuthUser(
+  apiUser: {
+    id: string;
+    name?: string;
+    email: string;
+    phone?: string;
+    role: string;
+    sellerType?: string | null;
+    status?: string | null;
+    regionCode?: string | null;
+    regionLocked?: boolean;
+  },
+  regionCode?: string,
+): AuthUser {
   return {
     id: apiUser.id,
     name: apiUser.name?.trim() || apiUser.email.split('@')[0],
@@ -229,12 +260,23 @@ export function toAuthUser(apiUser: {
         ? apiUser.status === 'active'
         : (apiUser.status ?? 'active') === 'active',
     isVerified: false,
-    regionCode,
+    // A region-locked staff account's market comes from the API, never from
+    // the browser's chosen region, and the lock itself is a signed claim the
+    // gateway enforces on every request — the console only mirrors it.
+    regionCode: apiUser.regionLocked && apiUser.regionCode ? apiUser.regionCode : regionCode,
+    regionLocked: apiUser.regionLocked === true,
   };
 }
 
 const SELLER_TYPES: readonly SellerType[] = [
-  'marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'hotel', 'taxi', 'delivery',
+  'marketplace',
+  'grocery',
+  'restaurant',
+  'pharmacy',
+  'doctor',
+  'hotel',
+  'taxi',
+  'delivery',
 ];
 
 function isSellerType(value: unknown): value is SellerType {
@@ -262,16 +304,20 @@ function persist(user: AuthUser, token: string, refreshToken?: string) {
     if (user.regionLocked !== undefined) {
       document.cookie = `kartseek_region_locked=${user.regionLocked}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Strict`;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function hydrate(): { user: AuthUser | null; token: string | null; requires2FA: boolean } {
   try {
     const token = localStorage.getItem(STORAGE_KEY_TOKEN);
-    const raw   = localStorage.getItem(STORAGE_KEY_USER);
+    const raw = localStorage.getItem(STORAGE_KEY_USER);
     const pending2FA = localStorage.getItem(STORAGE_KEY_2FA) === 'true';
     if (token && raw) return { token, user: JSON.parse(raw) as AuthUser, requires2FA: pending2FA };
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { user: null, token: null, requires2FA: false };
 }
 
@@ -288,7 +334,9 @@ function clearStorage() {
     document.cookie = 'kartseek_country=; path=/; max-age=0; SameSite=Strict';
     document.cookie = 'kartseek_admin_role=; path=/; max-age=0; SameSite=Strict';
     document.cookie = 'kartseek_region_locked=; path=/; max-age=0; SameSite=Strict';
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -320,58 +368,91 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const logout = useCallback(() => {
     if (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_TOKEN)) {
-      void authApi.logout().catch(() => { /* local sign-out proceeds regardless */ });
+      void authApi.logout().catch(() => {
+        /* local sign-out proceeds regardless */
+      });
     }
     clearStorage();
     dispatch({ type: 'LOGOUT' });
   }, []);
 
-  const updateUser = useCallback((updates: Partial<AuthUser>) => {
-    dispatch({ type: 'UPDATE_USER', updates });
-    if (state.user && state.token) {
-      persist({ ...state.user, ...updates }, state.token);
-    }
-  }, [state.user, state.token]);
+  const updateUser = useCallback(
+    (updates: Partial<AuthUser>) => {
+      dispatch({ type: 'UPDATE_USER', updates });
+      if (state.user && state.token) {
+        persist({ ...state.user, ...updates }, state.token);
+      }
+    },
+    [state.user, state.token],
+  );
 
-  const hasRole = useCallback((...roles: UserRole[]) => {
-    return !!state.user && roles.includes(state.user.role);
-  }, [state.user]);
+  const hasRole = useCallback(
+    (...roles: UserRole[]) => {
+      return !!state.user && roles.includes(state.user.role);
+    },
+    [state.user],
+  );
 
-  const hasSellerType = useCallback((...types: SellerType[]) => {
-    return !!state.user?.sellerType && types.includes(state.user.sellerType);
-  }, [state.user]);
+  const hasSellerType = useCallback(
+    (...types: SellerType[]) => {
+      return !!state.user?.sellerType && types.includes(state.user.sellerType);
+    },
+    [state.user],
+  );
 
-  const hasPermission = useCallback((...perms: string[]) => {
-    if (!state.user?.adminPermissions) return state.user?.role === 'SUPER_ADMIN';
-    return perms.every(p => state.user!.adminPermissions!.includes(p));
-  }, [state.user]);
+  const hasPermission = useCallback(
+    (...perms: string[]) => {
+      if (!state.user?.adminPermissions) return state.user?.role === 'SUPER_ADMIN';
+      return perms.every((p) => state.user!.adminPermissions!.includes(p));
+    },
+    [state.user],
+  );
 
-  const hasAnyPermission = useCallback((...perms: string[]) => {
-    if (!state.user?.adminPermissions) return state.user?.role === 'SUPER_ADMIN';
-    return perms.some(p => state.user!.adminPermissions!.includes(p));
-  }, [state.user]);
+  const hasAnyPermission = useCallback(
+    (...perms: string[]) => {
+      if (!state.user?.adminPermissions) return state.user?.role === 'SUPER_ADMIN';
+      return perms.some((p) => state.user!.adminPermissions!.includes(p));
+    },
+    [state.user],
+  );
 
-  const sellerDashboard = state.user?.sellerType
-    ? SELLER_DASHBOARDS[state.user.sellerType]
-    : null;
+  const sellerDashboard = state.user?.sellerType ? SELLER_DASHBOARDS[state.user.sellerType] : null;
 
   const set2FARequired = useCallback(() => {
-    try { localStorage.setItem(STORAGE_KEY_2FA, 'true'); } catch { /* ignore */ }
+    try {
+      localStorage.setItem(STORAGE_KEY_2FA, 'true');
+    } catch {
+      /* ignore */
+    }
     dispatch({ type: 'SET_2FA_REQUIRED' });
   }, []);
 
   const complete2FA = useCallback(() => {
-    try { localStorage.removeItem(STORAGE_KEY_2FA); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem(STORAGE_KEY_2FA);
+    } catch {
+      /* ignore */
+    }
     dispatch({ type: 'COMPLETE_2FA' });
   }, []);
 
   return (
-    <AuthContext.Provider value={{
-      ...state,
-      isAuthenticated: !!state.user && !!state.token && !state.requires2FA,
-      login, logout, updateUser, hasRole, hasSellerType, hasPermission, hasAnyPermission,
-      sellerDashboard, set2FARequired, complete2FA
-    }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        isAuthenticated: !!state.user && !!state.token && !state.requires2FA,
+        login,
+        logout,
+        updateUser,
+        hasRole,
+        hasSellerType,
+        hasPermission,
+        hasAnyPermission,
+        sellerDashboard,
+        set2FARequired,
+        complete2FA,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

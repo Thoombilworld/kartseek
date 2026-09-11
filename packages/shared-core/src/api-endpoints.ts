@@ -75,7 +75,11 @@ let refreshInFlight: Promise<string | null> | null = null;
 
 function readRefreshToken(): string | null {
   if (typeof window === 'undefined') return null;
-  try { return localStorage.getItem(REFRESH_TOKEN_KEY); } catch { return null; }
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -113,7 +117,9 @@ function clearSession(): void {
   try {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
-  } catch { /* nothing to clear */ }
+  } catch {
+    /* nothing to clear */
+  }
   clearTokenCookie();
 }
 
@@ -140,7 +146,10 @@ async function refreshAccessToken(): Promise<string | null> {
       const body = await res.json();
       const payload = body?.data ?? body;
       const accessToken: string | undefined = payload?.accessToken;
-      if (!accessToken) { clearSession(); return null; }
+      if (!accessToken) {
+        clearSession();
+        return null;
+      }
       storeRefreshedSession(accessToken, payload?.refreshToken);
       return accessToken;
     } catch {
@@ -206,9 +215,10 @@ async function request<T>(
 
   // Generate client-side request ID for distributed tracing
   // crypto.randomUUID() requires Safari 15.4+ / secure context — fallback for older browsers
-  const requestId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  const requestId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   (headers as Record<string, string>)['X-Request-ID'] = requestId;
 
   // Abort if the API doesn't respond within 8 s — prevents indefinite
@@ -233,7 +243,11 @@ async function request<T>(
 
   if (!res.ok) {
     let body: unknown;
-    try { body = await res.json(); } catch { body = await res.text(); }
+    try {
+      body = await res.json();
+    } catch {
+      body = await res.text();
+    }
     throw new ApiError(res.status, (body as any)?.message ?? res.statusText, body);
   }
 
@@ -251,7 +265,13 @@ async function request<T>(
   // as their payload (e.g. `{ success: true, id, name }` from createCategory,
   // which the interceptor passes through un-wrapped) intact.
   const body = await res.json();
-  if (body && typeof body === 'object' && !Array.isArray(body) && 'success' in body && 'data' in body) {
+  if (
+    body &&
+    typeof body === 'object' &&
+    !Array.isArray(body) &&
+    'success' in body &&
+    'data' in body
+  ) {
     return (body as { data: T }).data;
   }
   return body as T;
@@ -273,7 +293,12 @@ export const api = {
    * is why the portal's image pickers were decorative even though
    * `/upload/product-image` and `/upload/brand-image` have always existed.
    */
-  upload: <T>(path: string, file: File, fields: Record<string, string> = {}, fieldName = 'image') => {
+  upload: <T>(
+    path: string,
+    file: File,
+    fields: Record<string, string> = {},
+    fieldName = 'image',
+  ) => {
     const form = new FormData();
     form.append(fieldName, file);
     for (const [key, value] of Object.entries(fields)) form.append(key, value);
@@ -307,6 +332,12 @@ export interface AuthApiUser {
   sellerType?: string | null;
   /** `pending` until an admin approves a self-registered seller. */
   status?: string | null;
+  /**
+   * Staff market scope, from `users.region_code` / `users.region_locked` and
+   * signed into the token: a region-locked admin may act in one market only.
+   */
+  regionCode?: string | null;
+  regionLocked?: boolean;
   avatar?: string | null;
   createdAt?: string;
 }
@@ -338,60 +369,64 @@ export interface SellerRegisterPayload extends RegisterPayload {
 }
 
 export const authApi = {
-  login:          (email: string, password: string)                 => api.post<AuthSession>('/auth/login', { email, password }),
-  register:       (payload: RegisterPayload)                        => api.post<AuthSession>('/auth/register', payload),
+  login: (email: string, password: string) =>
+    api.post<AuthSession>('/auth/login', { email, password }),
+  register: (payload: RegisterPayload) => api.post<AuthSession>('/auth/register', payload),
   /** Creates a seller bound to one portal. The account starts pending approval. */
-  registerSeller: (payload: SellerRegisterPayload)                  => api.post<AuthSession>('/auth/seller/register', payload),
-  refresh:        (refreshToken: string)                            => api.post<AuthSession>('/auth/refresh', { refreshToken }),
+  registerSeller: (payload: SellerRegisterPayload) =>
+    api.post<AuthSession>('/auth/seller/register', payload),
+  refresh: (refreshToken: string) => api.post<AuthSession>('/auth/refresh', { refreshToken }),
   /** Ends the server-side session. Requires the access token, so call before clearing it. */
-  logout:         ()                                                => api.post<{ success: boolean }>('/auth/logout'),
-  profile:        ()                                                => api.get<AuthApiUser & { success: boolean }>('/auth/profile'),
-  forgotPassword: (email: string)                                   => api.post('/auth/forgot-password', { email }),
-  resetPassword:  (token: string, newPassword: string)              => api.post('/auth/reset-password', { token, newPassword }),
-  verifyOtp:      (phone: string, otp: string)                     => api.post('/auth/otp/verify', { phone, otp }),
+  logout: () => api.post<{ success: boolean }>('/auth/logout'),
+  profile: () => api.get<AuthApiUser & { success: boolean }>('/auth/profile'),
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, newPassword }),
+  verifyOtp: (phone: string, otp: string) => api.post('/auth/otp/verify', { phone, otp }),
 };
 
 // ─── Region endpoints ─────────────────────────────────────────────────────────
 
 export const regionApi = {
   detect: (lat: number, lng: number) => api.get('/regions/detect', { lat, lng }),
-  list:   ()                         => api.get('/regions'),
+  list: () => api.get('/regions'),
 };
 
 // ─── User endpoints ───────────────────────────────────────────────────────────
 
 export const userApi = {
-  getProfile:     (userId: string) => api.get(`/users/${userId}/profile`),
-  updateProfile:  (userId: string, data: object) => api.put(`/users/${userId}/profile`, data),
-  getAddresses:   (userId: string) => api.get(`/users/${userId}/addresses`),
-  addAddress:     (userId: string, data: object) => api.post(`/users/${userId}/addresses`, data),
-  deleteAddress:  (userId: string, addressId: string) => api.delete(`/users/${userId}/addresses/${addressId}`),
+  getProfile: (userId: string) => api.get(`/users/${userId}/profile`),
+  updateProfile: (userId: string, data: object) => api.put(`/users/${userId}/profile`, data),
+  getAddresses: (userId: string) => api.get(`/users/${userId}/addresses`),
+  addAddress: (userId: string, data: object) => api.post(`/users/${userId}/addresses`, data),
+  deleteAddress: (userId: string, addressId: string) =>
+    api.delete(`/users/${userId}/addresses/${addressId}`),
 };
 
 // ─── Order endpoints ──────────────────────────────────────────────────────────
 
 export const orderApi = {
-  checkout:  (payload: object) => api.post('/orders/checkout', payload),
-  tracking:  (orderId: string) => api.get(`/orders/${orderId}/tracking`),
-  getById:   (orderId: string) => api.get(`/orders/${orderId}`),
+  checkout: (payload: object) => api.post('/orders/checkout', payload),
+  tracking: (orderId: string) => api.get(`/orders/${orderId}/tracking`),
+  getById: (orderId: string) => api.get(`/orders/${orderId}`),
 };
 
 // ─── Taxi endpoints ───────────────────────────────────────────────────────────
 
 export const taxiApi = {
-  estimate:     (payload: object)                     => api.post('/taxi/estimate', payload),
-  book:         (payload: object)                     => api.post('/taxi/book', payload),
-  cancelRide:   (rideId: string, reason: string)      => api.post(`/taxi/${rideId}/cancel`, { reason }),
-  rateDriver:   (rideId: string, rating: number, comment?: string) =>
-                  api.post(`/taxi/${rideId}/rate-driver`, { rating, comment }),
+  estimate: (payload: object) => api.post('/taxi/estimate', payload),
+  book: (payload: object) => api.post('/taxi/book', payload),
+  cancelRide: (rideId: string, reason: string) => api.post(`/taxi/${rideId}/cancel`, { reason }),
+  rateDriver: (rideId: string, rating: number, comment?: string) =>
+    api.post(`/taxi/${rideId}/rate-driver`, { rating, comment }),
 };
 
 // ─── Wallet endpoints ─────────────────────────────────────────────────────────
 
 export const walletApi = {
-  getBalance:     (userId: string) => api.get(`/wallet/${userId}/balance`),
-  topUp:          (userId: string, payload: object) => api.post(`/wallet/${userId}/topup`, payload),
-  getTransactions:(userId: string) => api.get(`/wallet/${userId}/transactions`),
+  getBalance: (userId: string) => api.get(`/wallet/${userId}/balance`),
+  topUp: (userId: string, payload: object) => api.post(`/wallet/${userId}/topup`, payload),
+  getTransactions: (userId: string) => api.get(`/wallet/${userId}/transactions`),
 };
 
 // ─── Search ───────────────────────────────────────────────────────────────────
@@ -404,8 +439,8 @@ export const searchApi = {
 // ─── Health ───────────────────────────────────────────────────────────────────
 
 export const healthApi = {
-  check:   () => api.get('/health'),
-  ready:   () => api.get('/health/ready'),
+  check: () => api.get('/health'),
+  ready: () => api.get('/health/ready'),
   metrics: () => api.get('/health/metrics'),
 };
 
@@ -413,90 +448,115 @@ export const healthApi = {
 
 export const marketplaceApi = {
   // Categories
-  getCategories:       ()                       => api.get('/marketplace/categories'),
-  getCategoryById:     (id: string)             => api.get(`/marketplace/categories/${id}`),
+  getCategories: () => api.get('/marketplace/categories'),
+  getCategoryById: (id: string) => api.get(`/marketplace/categories/${id}`),
 
   // Products
-  getProducts:         (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/products', params),
-  getProductById:      (id: string)             => api.get(`/marketplace/products/${id}`),
-  searchProducts:      (q: string, params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/search', { q, ...params }),
-  getProductReviews:   (productId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/marketplace/products/${productId}/reviews`, params),
-  addProductReview:    (productId: string, data: object) => api.post(`/marketplace/products/${productId}/reviews`, data),
+  getProducts: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/products', params),
+  getProductById: (id: string) => api.get(`/marketplace/products/${id}`),
+  searchProducts: (q: string, params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/search', { q, ...params }),
+  getProductReviews: (
+    productId: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ) => api.get(`/marketplace/products/${productId}/reviews`, params),
+  addProductReview: (productId: string, data: object) =>
+    api.post(`/marketplace/products/${productId}/reviews`, data),
 
   // Brands & Sellers
-  getBrands:           ()                       => api.get('/marketplace/brands'),
-  getTopBrands:        ()                       => api.get('/marketplace/brands/top'),
-  getSellers:          ()                       => api.get('/marketplace/sellers'),
-  getVerifiedSellers:  ()                       => api.get('/marketplace/sellers/verified'),
+  getBrands: () => api.get('/marketplace/brands'),
+  getTopBrands: () => api.get('/marketplace/brands/top'),
+  getSellers: () => api.get('/marketplace/sellers'),
+  getVerifiedSellers: () => api.get('/marketplace/sellers/verified'),
 
   // Cart (Redis-backed)
-  getCart:             (userId: string)         => api.get(`/marketplace/cart/${userId}`),
-  addToCart:           (userId: string, data: object) => api.post(`/marketplace/cart/${userId}`, data),
-  updateCartItem:      (userId: string, itemId: string, data: object) => api.put(`/marketplace/cart/${userId}/${itemId}`, data),
-  removeCartItem:      (userId: string, itemId: string) => api.delete(`/marketplace/cart/${userId}/${itemId}`),
+  getCart: (userId: string) => api.get(`/marketplace/cart/${userId}`),
+  addToCart: (userId: string, data: object) => api.post(`/marketplace/cart/${userId}`, data),
+  updateCartItem: (userId: string, itemId: string, data: object) =>
+    api.put(`/marketplace/cart/${userId}/${itemId}`, data),
+  removeCartItem: (userId: string, itemId: string) =>
+    api.delete(`/marketplace/cart/${userId}/${itemId}`),
 
   // Wishlist
-  getWishlist:         (userId: string)         => api.get(`/marketplace/wishlist/${userId}`),
-  addToWishlist:       (userId: string, data: object) => api.post(`/marketplace/wishlist/${userId}`, data),
-  removeFromWishlist:  (userId: string, productId: string) => api.delete(`/marketplace/wishlist/${userId}/${productId}`),
+  getWishlist: (userId: string) => api.get(`/marketplace/wishlist/${userId}`),
+  addToWishlist: (userId: string, data: object) =>
+    api.post(`/marketplace/wishlist/${userId}`, data),
+  removeFromWishlist: (userId: string, productId: string) =>
+    api.delete(`/marketplace/wishlist/${userId}/${productId}`),
 
   // Orders
-  getOrders:           (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/orders', params),
-  placeOrder:          (data: object)           => api.post('/marketplace/orders', data),
-  cancelOrder:         (orderId: string, data?: object) => api.put(`/marketplace/orders/${orderId}/cancel`, data),
-  trackOrder:          (orderId: string)        => api.get(`/marketplace/orders/${orderId}/track`),
+  getOrders: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/orders', params),
+  placeOrder: (data: object) => api.post('/marketplace/orders', data),
+  cancelOrder: (orderId: string, data?: object) =>
+    api.put(`/marketplace/orders/${orderId}/cancel`, data),
+  trackOrder: (orderId: string) => api.get(`/marketplace/orders/${orderId}/track`),
 
   // Recently viewed
-  getRecentlyViewed:   (userId: string)         => api.get(`/marketplace/recently-viewed/${userId}`),
+  getRecentlyViewed: (userId: string) => api.get(`/marketplace/recently-viewed/${userId}`),
 
   // ── Tier 6: Returns ─────────────────────────────────────────────────────
-  getReturns:          (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/returns', params),
-  getReturnById:       (id: string)             => api.get(`/marketplace/returns/${id}`),
-  createReturn:        (data: object)           => api.post('/marketplace/returns', data),
-  updateReturnStatus:  (id: string, data: object) => api.put(`/marketplace/returns/${id}/status`, data),
-  assignReturnPickup:  (id: string, data: object) => api.put(`/marketplace/returns/${id}/assign-pickup`, data),
+  getReturns: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/returns', params),
+  getReturnById: (id: string) => api.get(`/marketplace/returns/${id}`),
+  createReturn: (data: object) => api.post('/marketplace/returns', data),
+  updateReturnStatus: (id: string, data: object) =>
+    api.put(`/marketplace/returns/${id}/status`, data),
+  assignReturnPickup: (id: string, data: object) =>
+    api.put(`/marketplace/returns/${id}/assign-pickup`, data),
 
   // ── Tier 6: Coupons ─────────────────────────────────────────────────────
-  getCoupons:          (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/coupons', params),
-  getCouponById:       (id: string)             => api.get(`/marketplace/coupons/${id}`),
+  getCoupons: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/coupons', params),
+  getCouponById: (id: string) => api.get(`/marketplace/coupons/${id}`),
   // Bank/card offers, served by the gateway from `bank_offers`. The cart and
   // product pages were rendering a hardcoded HDFC/SBI/ICICI list instead.
-  getBankOffers:       (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/offers/bank', params),
+  getBankOffers: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/offers/bank', params),
   // Real gift-card balance. The cart credited a flat 5,000 to any code starting
   // with `KART-GIFT-`, which checkout then refused to redeem.
-  getGiftCardBalance:  (data: { code: string })  => api.post('/marketplace/gift-cards/balance', data),
-  validateCoupon:      (data: object)           => api.post('/marketplace/coupons/validate', data),
-  redeemCoupon:        (data: object)           => api.post('/marketplace/coupons/redeem', data),
-  getCouponUsage:      (id: string)             => api.get(`/marketplace/coupons/${id}/usage`),
+  getGiftCardBalance: (data: { code: string }) => api.post('/marketplace/gift-cards/balance', data),
+  validateCoupon: (data: object) => api.post('/marketplace/coupons/validate', data),
+  redeemCoupon: (data: object) => api.post('/marketplace/coupons/redeem', data),
+  getCouponUsage: (id: string) => api.get(`/marketplace/coupons/${id}/usage`),
 
   // ── Tier 6: Tracking ────────────────────────────────────────────────────
-  getTrackingEvents:   (orderId: string)        => api.get(`/marketplace/tracking/order/${orderId}`),
-  getTrackingById:     (trackingId: string)     => api.get(`/marketplace/tracking/${trackingId}`),
+  getTrackingEvents: (orderId: string) => api.get(`/marketplace/tracking/order/${orderId}`),
+  getTrackingById: (trackingId: string) => api.get(`/marketplace/tracking/${trackingId}`),
 
   // ── Tier 6: Variants ────────────────────────────────────────────────────
-  getVariants:         (productId: string)      => api.get(`/marketplace/products/${productId}/variants`),
-  getVariantById:      (id: string)             => api.get(`/marketplace/variants/${id}`),
+  getVariants: (productId: string) => api.get(`/marketplace/products/${productId}/variants`),
+  getVariantById: (id: string) => api.get(`/marketplace/variants/${id}`),
 
   // ── Tier 6: Q&A ─────────────────────────────────────────────────────────
-  getQuestions:        (productId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/marketplace/products/${productId}/questions`, params),
-  createQuestion:      (productId: string, data: object) => api.post(`/marketplace/products/${productId}/questions`, data),
-  getAnswers:          (questionId: string)     => api.get(`/marketplace/questions/${questionId}/answers`),
-  createAnswer:        (questionId: string, data: object) => api.post(`/marketplace/questions/${questionId}/answers`, data),
-  upvoteQuestion:      (id: string)             => api.post(`/marketplace/questions/${id}/upvote`, {}),
-  voteAnswerHelpful:   (id: string)             => api.post(`/marketplace/answers/${id}/helpful`, {}),
+  getQuestions: (
+    productId: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ) => api.get(`/marketplace/products/${productId}/questions`, params),
+  createQuestion: (productId: string, data: object) =>
+    api.post(`/marketplace/products/${productId}/questions`, data),
+  getAnswers: (questionId: string) => api.get(`/marketplace/questions/${questionId}/answers`),
+  createAnswer: (questionId: string, data: object) =>
+    api.post(`/marketplace/questions/${questionId}/answers`, data),
+  upvoteQuestion: (id: string) => api.post(`/marketplace/questions/${id}/upvote`, {}),
+  voteAnswerHelpful: (id: string) => api.post(`/marketplace/answers/${id}/helpful`, {}),
 
   // ── Tier 6: Delivery Assignments ────────────────────────────────────────
-  getDeliveryAssignments: (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/delivery-assignments', params),
-  getDeliveryById:     (id: string)             => api.get(`/marketplace/delivery-assignments/${id}`),
-  verifyDeliveryOtp:   (id: string, otp: string) => api.post(`/marketplace/delivery-assignments/${id}/verify-otp`, { otp }),
+  getDeliveryAssignments: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/delivery-assignments', params),
+  getDeliveryById: (id: string) => api.get(`/marketplace/delivery-assignments/${id}`),
+  verifyDeliveryOtp: (id: string, otp: string) =>
+    api.post(`/marketplace/delivery-assignments/${id}/verify-otp`, { otp }),
 };
 
 // ─── Seller Portal ────────────────────────────────────────────────────────────
 
 export const sellerApi = {
   // Dashboard
-  getDashboard:        (sellerId: string, period?: string) => api.get(`/sellers/${sellerId}/dashboard`, { period }),
-  getProfile:          (sellerId: string)       => api.get(`/sellers/${sellerId}/profile`),
+  getDashboard: (sellerId: string, period?: string) =>
+    api.get(`/sellers/${sellerId}/dashboard`, { period }),
+  getProfile: (sellerId: string) => api.get(`/sellers/${sellerId}/profile`),
   /**
    * Lifecycle status of the caller's own application.
    *
@@ -504,23 +564,8 @@ export const sellerApi = {
    * `SellerApprovalGuard` and answers 403 to anyone not yet APPROVED — which is
    * precisely who reads a status page.
    */
-  getApplicationStatus: (sellerId: string)       => api.get<{
-    id: string;
-    businessName: string | null;
-    storeSlug: string | null;
-    countryCode: string | null;
-    verificationStatus: string | null;
-    kycStatus: string | null;
-    submittedAt: string | null;
-  }>(`/sellers/${sellerId}/application-status`),
-  /**
-   * The signed-in user's own application, when the caller has no seller id.
-   *
-   * Sign-in sends an unapproved seller to the status page and cannot pass an id:
-   * the JWT carries the user id, and a seller's own id is a different value.
-   */
-  getMyApplicationStatus: () => api.get<{
-    application: {
+  getApplicationStatus: (sellerId: string) =>
+    api.get<{
       id: string;
       businessName: string | null;
       storeSlug: string | null;
@@ -528,149 +573,226 @@ export const sellerApi = {
       verificationStatus: string | null;
       kycStatus: string | null;
       submittedAt: string | null;
-    } | null;
-  }>('/sellers/me/application-status'),
-  updateProfile:       (sellerId: string, data: object) => api.put(`/sellers/${sellerId}/profile`, data),
-  register:            (data: object)           => api.post('/sellers/register', data),
+    }>(`/sellers/${sellerId}/application-status`),
+  /**
+   * The signed-in user's own application, when the caller has no seller id.
+   *
+   * Sign-in sends an unapproved seller to the status page and cannot pass an id:
+   * the JWT carries the user id, and a seller's own id is a different value.
+   */
+  getMyApplicationStatus: () =>
+    api.get<{
+      application: {
+        id: string;
+        businessName: string | null;
+        storeSlug: string | null;
+        countryCode: string | null;
+        verificationStatus: string | null;
+        kycStatus: string | null;
+        submittedAt: string | null;
+      } | null;
+    }>('/sellers/me/application-status'),
+  updateProfile: (sellerId: string, data: object) => api.put(`/sellers/${sellerId}/profile`, data),
+  register: (data: object) => api.post('/sellers/register', data),
 
   // Brand
-  getBrand:            (sellerId: string)       => api.get(`/sellers/${sellerId}/brand`),
-  updateBrand:         (sellerId: string, data: object) => api.put(`/sellers/${sellerId}/brand`, data),
+  getBrand: (sellerId: string) => api.get(`/sellers/${sellerId}/brand`),
+  updateBrand: (sellerId: string, data: object) => api.put(`/sellers/${sellerId}/brand`, data),
 
   // Products
-  getProducts:         (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/sellers/${sellerId}/products`, params),
-  getProduct:          (sellerId: string, productId: string) => api.get(`/sellers/${sellerId}/products/${productId}`),
-  addProduct:          (sellerId: string, data: object) => api.post(`/sellers/${sellerId}/products`, data),
-  updateProduct:       (sellerId: string, productId: string, data: object) => api.put(`/sellers/${sellerId}/products/${productId}`, data),
-  deleteProduct:       (sellerId: string, productId: string) => api.delete(`/sellers/${sellerId}/products/${productId}`),
-  saveDraft:           (sellerId: string, data: object) => api.post(`/sellers/${sellerId}/products/draft`, data),
-  bulkUpload:          (sellerId: string, data: object) => api.post(`/sellers/${sellerId}/products/bulk`, data),
+  getProducts: (sellerId: string, params?: Record<string, string | number | boolean | undefined>) =>
+    api.get(`/sellers/${sellerId}/products`, params),
+  getProduct: (sellerId: string, productId: string) =>
+    api.get(`/sellers/${sellerId}/products/${productId}`),
+  addProduct: (sellerId: string, data: object) => api.post(`/sellers/${sellerId}/products`, data),
+  updateProduct: (sellerId: string, productId: string, data: object) =>
+    api.put(`/sellers/${sellerId}/products/${productId}`, data),
+  deleteProduct: (sellerId: string, productId: string) =>
+    api.delete(`/sellers/${sellerId}/products/${productId}`),
+  saveDraft: (sellerId: string, data: object) =>
+    api.post(`/sellers/${sellerId}/products/draft`, data),
+  bulkUpload: (sellerId: string, data: object) =>
+    api.post(`/sellers/${sellerId}/products/bulk`, data),
 
   // Inventory
-  getInventory:        (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/sellers/${sellerId}/inventory`, params),
-  updateStock:         (sellerId: string, productId: string, stock: number) => api.put(`/sellers/${sellerId}/inventory/${productId}`, { stock }),
-  getLowStock:         (sellerId: string)       => api.get(`/sellers/${sellerId}/inventory/low-stock`),
+  getInventory: (
+    sellerId: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ) => api.get(`/sellers/${sellerId}/inventory`, params),
+  updateStock: (sellerId: string, productId: string, stock: number) =>
+    api.put(`/sellers/${sellerId}/inventory/${productId}`, { stock }),
+  getLowStock: (sellerId: string) => api.get(`/sellers/${sellerId}/inventory/low-stock`),
 
   // Orders
-  getOrders:           (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/sellers/${sellerId}/orders`, params),
-  getOrder:            (sellerId: string, orderId: string) => api.get(`/sellers/${sellerId}/orders/${orderId}`),
-  acceptOrder:         (sellerId: string, orderId: string) => api.post(`/sellers/${sellerId}/orders/${orderId}/accept`),
-  rejectOrder:         (sellerId: string, orderId: string, reason: string) => api.post(`/sellers/${sellerId}/orders/${orderId}/reject`, { reason }),
-  markPacked:          (sellerId: string, orderId: string) => api.post(`/sellers/${sellerId}/orders/${orderId}/pack`),
-  shipOrder:           (sellerId: string, orderId: string, data: object) => api.post(`/sellers/${sellerId}/orders/${orderId}/ship`, data),
+  getOrders: (sellerId: string, params?: Record<string, string | number | boolean | undefined>) =>
+    api.get(`/sellers/${sellerId}/orders`, params),
+  getOrder: (sellerId: string, orderId: string) =>
+    api.get(`/sellers/${sellerId}/orders/${orderId}`),
+  acceptOrder: (sellerId: string, orderId: string) =>
+    api.post(`/sellers/${sellerId}/orders/${orderId}/accept`),
+  rejectOrder: (sellerId: string, orderId: string, reason: string) =>
+    api.post(`/sellers/${sellerId}/orders/${orderId}/reject`, { reason }),
+  markPacked: (sellerId: string, orderId: string) =>
+    api.post(`/sellers/${sellerId}/orders/${orderId}/pack`),
+  shipOrder: (sellerId: string, orderId: string, data: object) =>
+    api.post(`/sellers/${sellerId}/orders/${orderId}/ship`, data),
 
   // Finance
-  getWallet:           (sellerId: string)       => api.get(`/sellers/${sellerId}/wallet`),
-  getTransactions:     (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/sellers/${sellerId}/transactions`, params),
-  getPayouts:          (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/sellers/${sellerId}/payouts`, params),
-  requestPayout:       (sellerId: string, data: object) => api.post(`/sellers/${sellerId}/payouts`, data),
+  getWallet: (sellerId: string) => api.get(`/sellers/${sellerId}/wallet`),
+  getTransactions: (
+    sellerId: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ) => api.get(`/sellers/${sellerId}/transactions`, params),
+  getPayouts: (sellerId: string, params?: Record<string, string | number | boolean | undefined>) =>
+    api.get(`/sellers/${sellerId}/payouts`, params),
+  requestPayout: (sellerId: string, data: object) => api.post(`/sellers/${sellerId}/payouts`, data),
 
   // Marketing
-  getCampaigns:        (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/sellers/${sellerId}/campaigns`, params),
-  createCampaign:      (sellerId: string, data: object) => api.post(`/sellers/${sellerId}/campaigns`, data),
+  getCampaigns: (
+    sellerId: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ) => api.get(`/sellers/${sellerId}/campaigns`, params),
+  createCampaign: (sellerId: string, data: object) =>
+    api.post(`/sellers/${sellerId}/campaigns`, data),
 
   // Store
-  getStorefront:       (sellerId: string)       => api.get(`/sellers/${sellerId}/storefront`),
-  updateStorefront:    (sellerId: string, data: object) => api.put(`/sellers/${sellerId}/storefront`, data),
-  getReviews:          (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/sellers/${sellerId}/reviews`, params),
+  getStorefront: (sellerId: string) => api.get(`/sellers/${sellerId}/storefront`),
+  updateStorefront: (sellerId: string, data: object) =>
+    api.put(`/sellers/${sellerId}/storefront`, data),
+  getReviews: (sellerId: string, params?: Record<string, string | number | boolean | undefined>) =>
+    api.get(`/sellers/${sellerId}/reviews`, params),
 
   // Settings
-  getSettings:         (sellerId: string)       => api.get(`/sellers/${sellerId}/settings`),
-  updateSettings:      (sellerId: string, data: object) => api.put(`/sellers/${sellerId}/settings`, data),
+  getSettings: (sellerId: string) => api.get(`/sellers/${sellerId}/settings`),
+  updateSettings: (sellerId: string, data: object) =>
+    api.put(`/sellers/${sellerId}/settings`, data),
 
   // Reports
-  getReports:          (sellerId: string, type?: string) => api.get(`/sellers/${sellerId}/reports`, { type }),
-  exportReport:        (sellerId: string, type?: string) => api.get(`/sellers/${sellerId}/reports/export`, { type }),
+  getReports: (sellerId: string, type?: string) =>
+    api.get(`/sellers/${sellerId}/reports`, { type }),
+  exportReport: (sellerId: string, type?: string) =>
+    api.get(`/sellers/${sellerId}/reports/export`, { type }),
 
   // ── Tier 6: Returns ─────────────────────────────────────────────────────
-  getReturns:          (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/marketplace/returns`, { sellerId, ...params }),
-  getReturnById:       (returnId: string)       => api.get(`/marketplace/returns/${returnId}`),
-  updateReturnStatus:  (returnId: string, data: object) => api.put(`/marketplace/returns/${returnId}/status`, data),
+  getReturns: (sellerId: string, params?: Record<string, string | number | boolean | undefined>) =>
+    api.get(`/marketplace/returns`, { sellerId, ...params }),
+  getReturnById: (returnId: string) => api.get(`/marketplace/returns/${returnId}`),
+  updateReturnStatus: (returnId: string, data: object) =>
+    api.put(`/marketplace/returns/${returnId}/status`, data),
 
   // ── Tier 6: Variants ────────────────────────────────────────────────────
-  getProductVariants:  (productId: string)      => api.get(`/marketplace/products/${productId}/variants`),
-  createVariant:       (productId: string, data: object) => api.post(`/marketplace/products/${productId}/variants`, data),
-  updateVariant:       (variantId: string, data: object) => api.put(`/marketplace/variants/${variantId}`, data),
-  deleteVariant:       (variantId: string)      => api.delete(`/marketplace/variants/${variantId}`),
-  updateVariantStock:  (variantId: string, data: object) => api.put(`/marketplace/variants/${variantId}/stock`, data),
-  getLowStockVariants: (sellerId: string)       => api.get(`/marketplace/sellers/${sellerId}/low-stock-variants`),
+  getProductVariants: (productId: string) => api.get(`/marketplace/products/${productId}/variants`),
+  createVariant: (productId: string, data: object) =>
+    api.post(`/marketplace/products/${productId}/variants`, data),
+  updateVariant: (variantId: string, data: object) =>
+    api.put(`/marketplace/variants/${variantId}`, data),
+  deleteVariant: (variantId: string) => api.delete(`/marketplace/variants/${variantId}`),
+  updateVariantStock: (variantId: string, data: object) =>
+    api.put(`/marketplace/variants/${variantId}/stock`, data),
+  getLowStockVariants: (sellerId: string) =>
+    api.get(`/marketplace/sellers/${sellerId}/low-stock-variants`),
 
   // ── Tier 6: Q&A ─────────────────────────────────────────────────────────
-  getProductQuestions: (productId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/marketplace/products/${productId}/questions`, params),
-  answerQuestion:      (questionId: string, data: object) => api.post(`/marketplace/questions/${questionId}/answers`, data),
-  acceptAnswer:        (answerId: string)       => api.put(`/marketplace/answers/${answerId}/accept`, {}),
+  getProductQuestions: (
+    productId: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ) => api.get(`/marketplace/products/${productId}/questions`, params),
+  answerQuestion: (questionId: string, data: object) =>
+    api.post(`/marketplace/questions/${questionId}/answers`, data),
+  acceptAnswer: (answerId: string) => api.put(`/marketplace/answers/${answerId}/accept`, {}),
 
   // ── Tier 6: Coupons ─────────────────────────────────────────────────────
-  getCoupons:          (sellerId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/marketplace/coupons`, { sellerId, ...params }),
-  createCoupon:        (data: object)           => api.post('/marketplace/coupons', data),
-  updateCoupon:        (couponId: string, data: object) => api.put(`/marketplace/coupons/${couponId}`, data),
-  deleteCoupon:        (couponId: string)       => api.delete(`/marketplace/coupons/${couponId}`),
-  getCouponUsage:      (couponId: string)       => api.get(`/marketplace/coupons/${couponId}/usage`),
+  getCoupons: (sellerId: string, params?: Record<string, string | number | boolean | undefined>) =>
+    api.get(`/marketplace/coupons`, { sellerId, ...params }),
+  createCoupon: (data: object) => api.post('/marketplace/coupons', data),
+  updateCoupon: (couponId: string, data: object) =>
+    api.put(`/marketplace/coupons/${couponId}`, data),
+  deleteCoupon: (couponId: string) => api.delete(`/marketplace/coupons/${couponId}`),
+  getCouponUsage: (couponId: string) => api.get(`/marketplace/coupons/${couponId}/usage`),
 
   // ── Tier 6: Shipping & Tracking ─────────────────────────────────────────
-  getShipmentTracking: (orderId: string)        => api.get(`/marketplace/tracking/order/${orderId}`),
-  addTrackingEvent:    (data: object)           => api.post('/marketplace/tracking/events', data),
+  getShipmentTracking: (orderId: string) => api.get(`/marketplace/tracking/order/${orderId}`),
+  addTrackingEvent: (data: object) => api.post('/marketplace/tracking/events', data),
 };
 
 // ─── Admin Marketplace ────────────────────────────────────────────────────────
 
 export const adminMarketplaceApi = {
   // Dashboard
-  getDashboard:        ()                       => api.get('/admin/marketplace/dashboard'),
+  getDashboard: () => api.get('/admin/marketplace/dashboard'),
 
   // Sellers
-  getSellers:          (params?: Record<string, string | number | boolean | undefined>) => api.get('/admin/marketplace/sellers', params),
-  getSellerById:       (id: string)             => api.get(`/admin/marketplace/sellers/${id}`),
-  approveSeller:       (id: string, data?: object) => api.patch(`/admin/marketplace/sellers/${id}/approve`, data),
-  rejectSeller:        (id: string, data: object) => api.patch(`/admin/marketplace/sellers/${id}/reject`, data),
-  suspendSeller:       (id: string, data: object) => api.patch(`/admin/marketplace/sellers/${id}/suspend`, data),
-  reactivateSeller:    (id: string)             => api.patch(`/admin/marketplace/sellers/${id}/reactivate`),
+  getSellers: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/admin/marketplace/sellers', params),
+  getSellerById: (id: string) => api.get(`/admin/marketplace/sellers/${id}`),
+  approveSeller: (id: string, data?: object) =>
+    api.patch(`/admin/marketplace/sellers/${id}/approve`, data),
+  rejectSeller: (id: string, data: object) =>
+    api.patch(`/admin/marketplace/sellers/${id}/reject`, data),
+  suspendSeller: (id: string, data: object) =>
+    api.patch(`/admin/marketplace/sellers/${id}/suspend`, data),
+  reactivateSeller: (id: string) => api.patch(`/admin/marketplace/sellers/${id}/reactivate`),
 
   // Products
-  getProducts:         (params?: Record<string, string | number | boolean | undefined>) => api.get('/admin/marketplace/products', params),
-  getProductById:      (id: string)             => api.get(`/admin/marketplace/products/${id}`),
-  approveProduct:      (id: string)             => api.patch(`/admin/marketplace/products/${id}/approve`),
-  rejectProduct:       (id: string, data: object) => api.patch(`/admin/marketplace/products/${id}/reject`, data),
-  featureProduct:      (id: string)             => api.patch(`/admin/marketplace/products/${id}/feature`),
-  unfeatureProduct:    (id: string)             => api.patch(`/admin/marketplace/products/${id}/unfeature`),
+  getProducts: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/admin/marketplace/products', params),
+  getProductById: (id: string) => api.get(`/admin/marketplace/products/${id}`),
+  approveProduct: (id: string) => api.patch(`/admin/marketplace/products/${id}/approve`),
+  rejectProduct: (id: string, data: object) =>
+    api.patch(`/admin/marketplace/products/${id}/reject`, data),
+  featureProduct: (id: string) => api.patch(`/admin/marketplace/products/${id}/feature`),
+  unfeatureProduct: (id: string) => api.patch(`/admin/marketplace/products/${id}/unfeature`),
 
   // Categories & Brands
-  getCategories:       ()                       => api.get('/admin/marketplace/categories'),
-  createCategory:      (data: object)           => api.post('/admin/marketplace/categories', data),
-  updateCategory:      (id: string, data: object) => api.patch(`/admin/marketplace/categories/${id}`, data),
-  getBrands:           ()                       => api.get('/admin/marketplace/brands'),
+  getCategories: () => api.get('/admin/marketplace/categories'),
+  createCategory: (data: object) => api.post('/admin/marketplace/categories', data),
+  updateCategory: (id: string, data: object) =>
+    api.patch(`/admin/marketplace/categories/${id}`, data),
+  getBrands: () => api.get('/admin/marketplace/brands'),
 
   // Orders, Payouts, Campaigns
-  getOrders:           (params?: Record<string, string | number | boolean | undefined>) => api.get('/admin/marketplace/orders', params),
-  getPayouts:          (params?: Record<string, string | number | boolean | undefined>) => api.get('/admin/marketplace/payouts', params),
-  getCampaigns:        (params?: Record<string, string | number | boolean | undefined>) => api.get('/admin/marketplace/campaigns', params),
+  getOrders: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/admin/marketplace/orders', params),
+  getPayouts: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/admin/marketplace/payouts', params),
+  getCampaigns: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/admin/marketplace/campaigns', params),
 
   // ── Tier 6: Returns Management ──────────────────────────────────────────
-  getReturns:          (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/returns', params),
-  getReturnById:       (id: string)             => api.get(`/marketplace/returns/${id}`),
-  updateReturnStatus:  (id: string, data: object) => api.put(`/marketplace/returns/${id}/status`, data),
-  assignReturnPickup:  (id: string, data: object) => api.put(`/marketplace/returns/${id}/assign-pickup`, data),
+  getReturns: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/returns', params),
+  getReturnById: (id: string) => api.get(`/marketplace/returns/${id}`),
+  updateReturnStatus: (id: string, data: object) =>
+    api.put(`/marketplace/returns/${id}/status`, data),
+  assignReturnPickup: (id: string, data: object) =>
+    api.put(`/marketplace/returns/${id}/assign-pickup`, data),
 
   // ── Tier 6: Coupons Management ──────────────────────────────────────────
-  getCoupons:          (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/coupons', params),
-  createCoupon:        (data: object)           => api.post('/marketplace/coupons', data),
-  updateCoupon:        (id: string, data: object) => api.put(`/marketplace/coupons/${id}`, data),
-  deleteCoupon:        (id: string)             => api.delete(`/marketplace/coupons/${id}`),
-  getCouponUsage:      (id: string)             => api.get(`/marketplace/coupons/${id}/usage`),
+  getCoupons: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/coupons', params),
+  createCoupon: (data: object) => api.post('/marketplace/coupons', data),
+  updateCoupon: (id: string, data: object) => api.put(`/marketplace/coupons/${id}`, data),
+  deleteCoupon: (id: string) => api.delete(`/marketplace/coupons/${id}`),
+  getCouponUsage: (id: string) => api.get(`/marketplace/coupons/${id}/usage`),
 
   // ── Tier 6: Delivery Management ─────────────────────────────────────────
-  getDeliveryAssignments: (params?: Record<string, string | number | boolean | undefined>) => api.get('/marketplace/delivery-assignments', params),
-  createDeliveryAssignment: (data: object)      => api.post('/marketplace/delivery-assignments', data),
+  getDeliveryAssignments: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get('/marketplace/delivery-assignments', params),
+  createDeliveryAssignment: (data: object) => api.post('/marketplace/delivery-assignments', data),
 
   // ── Tier 6: Variants Management ─────────────────────────────────────────
-  getVariants:         (productId: string)      => api.get(`/marketplace/products/${productId}/variants`),
-  getLowStockVariants: (sellerId: string)       => api.get(`/marketplace/sellers/${sellerId}/low-stock-variants`),
+  getVariants: (productId: string) => api.get(`/marketplace/products/${productId}/variants`),
+  getLowStockVariants: (sellerId: string) =>
+    api.get(`/marketplace/sellers/${sellerId}/low-stock-variants`),
 
   // ── Tier 6: Q&A Moderation ──────────────────────────────────────────────
-  getQuestions:        (productId: string, params?: Record<string, string | number | boolean | undefined>) => api.get(`/marketplace/products/${productId}/questions`, params),
-  getAnswers:          (questionId: string)     => api.get(`/marketplace/questions/${questionId}/answers`),
-  acceptAnswer:        (answerId: string)       => api.put(`/marketplace/answers/${answerId}/accept`, {}),
+  getQuestions: (
+    productId: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ) => api.get(`/marketplace/products/${productId}/questions`, params),
+  getAnswers: (questionId: string) => api.get(`/marketplace/questions/${questionId}/answers`),
+  acceptAnswer: (answerId: string) => api.put(`/marketplace/answers/${answerId}/accept`, {}),
 
   // ── Tier 6: Tracking ────────────────────────────────────────────────────
-  getTrackingEvents:   (orderId: string)        => api.get(`/marketplace/tracking/order/${orderId}`),
+  getTrackingEvents: (orderId: string) => api.get(`/marketplace/tracking/order/${orderId}`),
 };

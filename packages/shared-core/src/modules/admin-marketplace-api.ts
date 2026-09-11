@@ -64,9 +64,21 @@ export interface AdminRefund {
 
 export interface DashboardKPIs {
   sellers: { total: number; active: number; pending: number; suspended: number; blocked: number };
-  products: { total: number; approved: number; pending: number; rejected: number; unpublished: number };
+  products: {
+    total: number;
+    approved: number;
+    pending: number;
+    rejected: number;
+    unpublished: number;
+  };
   brands: { total: number; approved: number; pendingApproval: number; rejected: number };
-  campaigns: { active: number; scheduled: number; pending: number; paused: number; expired: number };
+  campaigns: {
+    active: number;
+    scheduled: number;
+    pending: number;
+    paused: number;
+    expired: number;
+  };
   orders: { today: number; thisWeek: number; thisMonth: number; pending: number };
   returns: { open: number; resolved: number };
   refunds: { pending: number; processed: number; amount: number };
@@ -76,12 +88,14 @@ export interface DashboardKPIs {
 }
 
 // Shared paginated response
-interface Paginated<T> { data: T[]; total: number }
+interface Paginated<T> {
+  data: T[];
+  total: number;
+}
 
 // ─── Admin API ────────────────────────────────────────────────────────────────
 
 export const adminMarketplaceApi = {
-
   // ── Dashboard ─────────────────────────────────────────────────
   getDashboard: (country?: string) =>
     api.get<DashboardKPIs>('/admin/marketplace/dashboard', country ? { country } : undefined),
@@ -104,7 +118,7 @@ export const adminMarketplaceApi = {
             todayRevenue
           }
         }
-      `
+      `,
     });
   },
 
@@ -118,46 +132,45 @@ export const adminMarketplaceApi = {
   updateCategory: (id: string, dto: Partial<AdminCategory>) =>
     api.put('/admin/marketplace/categories/' + id, dto),
 
-  deleteCategory: (id: string) =>
-    api.delete('/admin/marketplace/categories/' + id),
+  deleteCategory: (id: string) => api.delete('/admin/marketplace/categories/' + id),
 
   // ── Subcategory Management ────────────────────────────────────
   getSubcategories: (params?: { categoryId?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/subcategories', params as any),
 
-  createSubcategory: (dto: any) =>
-    api.post('/admin/marketplace/subcategories', dto),
+  createSubcategory: (dto: any) => api.post('/admin/marketplace/subcategories', dto),
 
   updateSubcategory: (id: string, dto: any) =>
     api.put('/admin/marketplace/subcategories/' + id, dto),
 
-  deleteSubcategory: (id: string) =>
-    api.delete('/admin/marketplace/subcategories/' + id),
+  deleteSubcategory: (id: string) => api.delete('/admin/marketplace/subcategories/' + id),
 
   // ── Attribute Management ──────────────────────────────────────
   getAttributes: (params?: { category?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/attributes', params as any),
 
-  createAttribute: (dto: any) =>
-    api.post('/admin/marketplace/attributes', dto),
+  createAttribute: (dto: any) => api.post('/admin/marketplace/attributes', dto),
 
-  updateAttribute: (id: string, dto: any) =>
-    api.put('/admin/marketplace/attributes/' + id, dto),
+  updateAttribute: (id: string, dto: any) => api.put('/admin/marketplace/attributes/' + id, dto),
 
-  deleteAttribute: (id: string) =>
-    api.delete('/admin/marketplace/attributes/' + id),
+  deleteAttribute: (id: string) => api.delete('/admin/marketplace/attributes/' + id),
 
   // ── Product Moderation ────────────────────────────────────────
   // `search` added for the featured-products picker, which had no way to look
   // up a real product and filtered a bundled fixture list instead.
-  getProducts: (params?: { page?: number; limit?: number; category?: string; status?: string; country?: string; search?: string }) =>
-    api.get<Paginated<AdminProduct>>('/admin/marketplace/products', params as any),
+  getProducts: (params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    status?: string;
+    country?: string;
+    search?: string;
+  }) => api.get<Paginated<AdminProduct>>('/admin/marketplace/products', params as any),
 
   createProduct: (dto: object) =>
     api.post<{ data: { productId: string } }>('/admin/marketplace/products', dto),
 
-  updateProduct: (id: string, dto: object) =>
-    api.put('/admin/marketplace/products/' + id, dto),
+  updateProduct: (id: string, dto: object) => api.put('/admin/marketplace/products/' + id, dto),
 
   approveProduct: (id: string, adminId: string) =>
     api.patch(`/admin/marketplace/products/${id}/approve`, { adminId }),
@@ -169,27 +182,22 @@ export const adminMarketplaceApi = {
     api.patch(`/admin/marketplace/products/${id}/suspend`, { adminId }),
 
   // ── Featured Products ─────────────────────────────────────────
-  getFeaturedProducts: () =>
-    api.get<Paginated<any>>('/admin/marketplace/featured'),
+  getFeaturedProducts: () => api.get<Paginated<any>>('/admin/marketplace/featured'),
 
   addFeaturedProduct: (dto: { productId: string; section?: string; sortOrder?: number }) =>
     api.post('/admin/marketplace/featured', dto),
 
-  removeFeaturedProduct: (id: string) =>
-    api.delete('/admin/marketplace/featured/' + id),
+  removeFeaturedProduct: (id: string) => api.delete('/admin/marketplace/featured/' + id),
 
   // ── Brand Moderation ──────────────────────────────────────────
   getBrands: (params?: { search?: string; status?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/brands', params as any),
 
-  createBrand: (dto: any) =>
-    api.post('/admin/marketplace/brands', dto),
+  createBrand: (dto: any) => api.post('/admin/marketplace/brands', dto),
 
-  updateBrand: (id: string, dto: any) =>
-    api.put('/admin/marketplace/brands/' + id, dto),
+  updateBrand: (id: string, dto: any) => api.put('/admin/marketplace/brands/' + id, dto),
 
-  deleteBrand: (id: string) =>
-    api.delete('/admin/marketplace/brands/' + id),
+  deleteBrand: (id: string) => api.delete('/admin/marketplace/brands/' + id),
 
   approveBrand: (id: string, adminId: string) =>
     api.patch(`/admin/marketplace/brands/${id}/approve`, { adminId }),
@@ -204,8 +212,7 @@ export const adminMarketplaceApi = {
   getSellers: (params?: { search?: string; status?: string; country?: string }) =>
     api.get<Paginated<AdminSeller>>('/admin/marketplace/sellers', params as any),
 
-  getPendingSellers: () =>
-    api.get<Paginated<any>>('/admin/marketplace/sellers/pending'),
+  getPendingSellers: () => api.get<Paginated<any>>('/admin/marketplace/sellers/pending'),
 
   // ── Regional approvals ────────────────────────────────────────
   // Scoped by market: approving a Qatari seller means checking a Commercial
@@ -235,22 +242,19 @@ export const adminMarketplaceApi = {
   blockSeller: (id: string, adminId: string) =>
     api.patch(`/admin/marketplace/sellers/${id}/block`, { adminId }),
 
-  getSellerHealth: (id: string) =>
-    api.get<any>(`/admin/marketplace/sellers/${id}/health`),
+  getSellerHealth: (id: string) => api.get<any>(`/admin/marketplace/sellers/${id}/health`),
 
   // ── Orders ────────────────────────────────────────────────────
   getOrders: (params?: { userId?: string; sellerId?: string; status?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/orders', params as any),
 
-  getOrderById: (id: string) =>
-    api.get<any>('/admin/marketplace/orders/' + id),
+  getOrderById: (id: string) => api.get<any>('/admin/marketplace/orders/' + id),
 
   // ── Returns Adjudication ──────────────────────────────────────
   getReturns: (params?: { sellerId?: string; status?: string; page?: number }) =>
     api.get<Paginated<AdminReturn>>('/admin/marketplace/returns', params as any),
 
-  approveReturn: (id: string) =>
-    api.post(`/admin/marketplace/returns/${id}/approve`),
+  approveReturn: (id: string) => api.post(`/admin/marketplace/returns/${id}/approve`),
 
   rejectReturn: (id: string, dto: { reason: string }) =>
     api.post(`/admin/marketplace/returns/${id}/reject`, dto),
@@ -267,33 +271,33 @@ export const adminMarketplaceApi = {
     api.get<Paginated<any>>('/admin/marketplace/payouts', params as any),
 
   // ── Banners ───────────────────────────────────────────────────
+  // The typed route is the real one; the flat `/admin/marketplace/banners`
+  // GET answers an empty stub. `country` narrows to banners running in one
+  // market (a region-locked admin always gets their own).
   getBanners: (params?: { type?: string; country?: string }) =>
-    api.get<Paginated<any>>('/admin/marketplace/banners', params as any),
+    api.get<Paginated<any>>(
+      `/admin/marketplace/banners/${params?.type ?? 'hero'}`,
+      params?.country ? { country: params.country } : undefined,
+    ),
 
-  createBanner: (dto: any) =>
-    api.post('/admin/marketplace/banners', dto),
+  createBanner: (dto: any) => api.post('/admin/marketplace/banners', dto),
 
-  updateBanner: (id: string, dto: any) =>
-    api.put('/admin/marketplace/banners/' + id, dto),
+  updateBanner: (id: string, dto: any) => api.put('/admin/marketplace/banners/' + id, dto),
 
-  deleteBanner: (id: string) =>
-    api.delete('/admin/marketplace/banners/' + id),
+  deleteBanner: (id: string) => api.delete('/admin/marketplace/banners/' + id),
 
   // ── Flash Deals ───────────────────────────────────────────────
-  getFlashDeals: (params?: { status?: string }) =>
+  getFlashDeals: (params?: { status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/flash-deals', params as any),
 
-  createFlashDeal: (dto: any) =>
-    api.post('/admin/marketplace/flash-deals', dto),
+  createFlashDeal: (dto: any) => api.post('/admin/marketplace/flash-deals', dto),
 
-  updateFlashDeal: (id: string, dto: any) =>
-    api.put('/admin/marketplace/flash-deals/' + id, dto),
+  updateFlashDeal: (id: string, dto: any) => api.put('/admin/marketplace/flash-deals/' + id, dto),
 
-  deleteFlashDeal: (id: string) =>
-    api.delete('/admin/marketplace/flash-deals/' + id),
+  deleteFlashDeal: (id: string) => api.delete('/admin/marketplace/flash-deals/' + id),
 
-  getNominations: () =>
-    api.get<Paginated<any>>('/admin/marketplace/flash-deals/nominations'),
+  getNominations: (params?: { status?: string; country?: string }) =>
+    api.get<Paginated<any>>('/admin/marketplace/flash-deals/nominations', params as any),
 
   approveNomination: (nominationId: string) =>
     api.patch('/admin/marketplace/flash-deals/nominations/' + nominationId + '/approve', {}),
@@ -305,34 +309,36 @@ export const adminMarketplaceApi = {
   getCampaigns: (params?: { status?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/campaigns', params as any),
 
-  createCampaign: (dto: any) =>
-    api.post('/admin/marketplace/campaigns', dto),
+  createCampaign: (dto: any) => api.post('/admin/marketplace/campaigns', dto),
 
-  updateCampaign: (id: string, dto: any) =>
-    api.put('/admin/marketplace/campaigns/' + id, dto),
+  updateCampaign: (id: string, dto: any) => api.put('/admin/marketplace/campaigns/' + id, dto),
 
-  deleteCampaign: (id: string) =>
-    api.delete('/admin/marketplace/campaigns/' + id),
+  deleteCampaign: (id: string) => api.delete('/admin/marketplace/campaigns/' + id),
 
-  // ── Promotions ────────────────────────────────────────────────
-  getPromotions: () =>
-    api.get<Paginated<any>>('/admin/marketplace/promotions'),
+  // ── Coupons (platform codes; issued for one market or every market) ──
+  getCoupons: (params?: { country?: string; isActive?: boolean }) =>
+    api.get<Paginated<any>>('/admin/marketplace/coupons', params as any),
 
-  createPromotion: (dto: any) =>
-    api.post('/admin/marketplace/promotions', dto),
+  createCoupon: (dto: any) => api.post('/marketplace/coupons', dto),
 
-  updatePromotion: (id: string, dto: any) =>
-    api.put('/admin/marketplace/promotions/' + id, dto),
+  updateCoupon: (id: string, dto: any) => api.put('/marketplace/coupons/' + id, dto),
+
+  deleteCoupon: (id: string) => api.delete('/marketplace/coupons/' + id),
+
+  // ── Promotions (run by sellers; listed per market through the seller) ──
+  getPromotions: (params?: { country?: string }) =>
+    api.get<Paginated<any>>('/admin/marketplace/promotions', params as any),
+
+  createPromotion: (dto: any) => api.post('/admin/marketplace/promotions', dto),
+
+  updatePromotion: (id: string, dto: any) => api.put('/admin/marketplace/promotions/' + id, dto),
 
   // ── Commissions ───────────────────────────────────────────────
-  getCommissions: () =>
-    api.get<Paginated<any>>('/admin/marketplace/commissions'),
+  getCommissions: () => api.get<Paginated<any>>('/admin/marketplace/commissions'),
 
-  createCommission: (dto: any) =>
-    api.post('/admin/marketplace/commissions', dto),
+  createCommission: (dto: any) => api.post('/admin/marketplace/commissions', dto),
 
-  updateCommission: (id: string, dto: any) =>
-    api.put('/admin/marketplace/commissions/' + id, dto),
+  updateCommission: (id: string, dto: any) => api.put('/admin/marketplace/commissions/' + id, dto),
 
   // ── Payouts ───────────────────────────────────────────────────
   getPayouts: (params?: { status?: string }) =>
@@ -348,36 +354,29 @@ export const adminMarketplaceApi = {
   flagReview: (id: string, reason: string) =>
     api.patch(`/admin/marketplace/reviews/${id}/flag`, { reason }),
 
-  hideReview: (id: string) =>
-    api.patch(`/admin/marketplace/reviews/${id}/hide`),
+  hideReview: (id: string) => api.patch(`/admin/marketplace/reviews/${id}/hide`),
 
   // ── Complaints ────────────────────────────────────────────────
   getComplaints: (params?: { status?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/complaints', params as any),
 
-  updateComplaint: (id: string, dto: any) =>
-    api.put('/admin/marketplace/complaints/' + id, dto),
+  updateComplaint: (id: string, dto: any) => api.put('/admin/marketplace/complaints/' + id, dto),
 
   // ── QA Moderation ─────────────────────────────────────────────
   getQAItems: (params?: { status?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/qa-moderation', params as any),
 
-  moderateQAItem: (id: string, dto: any) =>
-    api.put('/admin/marketplace/qa-moderation/' + id, dto),
+  moderateQAItem: (id: string, dto: any) => api.put('/admin/marketplace/qa-moderation/' + id, dto),
 
   // ── Notifications ─────────────────────────────────────────────
-  getNotifications: () =>
-    api.get<Paginated<any>>('/admin/marketplace/notifications'),
+  getNotifications: () => api.get<Paginated<any>>('/admin/marketplace/notifications'),
 
-  sendNotification: (dto: any) =>
-    api.post('/admin/marketplace/notifications', dto),
+  sendNotification: (dto: any) => api.post('/admin/marketplace/notifications', dto),
 
   // ── Settings ──────────────────────────────────────────────────
-  getSettings: () =>
-    api.get<any>('/admin/marketplace/settings'),
+  getSettings: () => api.get<any>('/admin/marketplace/settings'),
 
-  updateSettings: (dto: any) =>
-    api.put('/admin/marketplace/settings', dto),
+  updateSettings: (dto: any) => api.put('/admin/marketplace/settings', dto),
 
   // ── Audit Logs ────────────────────────────────────────────────
   getAuditLogs: (params?: { action?: string; actor?: string; page?: number; limit?: number }) =>
@@ -391,45 +390,34 @@ export const adminMarketplaceApi = {
   getPageLayout: (country?: string) =>
     api.get<any>('/admin/marketplace/page-layout', country ? { country } : undefined),
 
-  updatePageLayout: (dto: any) =>
-    api.put('/admin/marketplace/page-layout', dto),
+  updatePageLayout: (dto: any) => api.put('/admin/marketplace/page-layout', dto),
 
   // ── SEO Settings ──────────────────────────────────────────────
-  getSeoSettings: () =>
-    api.get<any>('/admin/marketplace/seo'),
+  getSeoSettings: () => api.get<any>('/admin/marketplace/seo'),
 
-  updateSeoSettings: (dto: any) =>
-    api.put('/admin/marketplace/seo', dto),
+  updateSeoSettings: (dto: any) => api.put('/admin/marketplace/seo', dto),
 
   // ── HSN / Tax Master ──────────────────────────────────────────
   getHsnCodes: (params?: { search?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/hsn-codes', params as any),
 
-  createHsnCode: (dto: any) =>
-    api.post('/admin/marketplace/hsn-codes', dto),
+  createHsnCode: (dto: any) => api.post('/admin/marketplace/hsn-codes', dto),
 
-  updateHsnCode: (id: string, dto: any) =>
-    api.put('/admin/marketplace/hsn-codes/' + id, dto),
+  updateHsnCode: (id: string, dto: any) => api.put('/admin/marketplace/hsn-codes/' + id, dto),
 
   // ── Bank Offers ───────────────────────────────────────────────
-  getBankOffers: () =>
-    api.get<Paginated<any>>('/admin/marketplace/bank-offers'),
+  getBankOffers: () => api.get<Paginated<any>>('/admin/marketplace/bank-offers'),
 
-  createBankOffer: (dto: any) =>
-    api.post('/admin/marketplace/bank-offers', dto),
+  createBankOffer: (dto: any) => api.post('/admin/marketplace/bank-offers', dto),
 
-  updateBankOffer: (id: string, dto: any) =>
-    api.put('/admin/marketplace/bank-offers/' + id, dto),
+  updateBankOffer: (id: string, dto: any) => api.put('/admin/marketplace/bank-offers/' + id, dto),
 
-  deleteBankOffer: (id: string) =>
-    api.delete('/admin/marketplace/bank-offers/' + id),
+  deleteBankOffer: (id: string) => api.delete('/admin/marketplace/bank-offers/' + id),
 
   // ── Exchange Offers ───────────────────────────────────────────
-  getExchangeOffers: () =>
-    api.get<Paginated<any>>('/admin/marketplace/exchange-offers'),
+  getExchangeOffers: () => api.get<Paginated<any>>('/admin/marketplace/exchange-offers'),
 
-  createExchangeOffer: (dto: any) =>
-    api.post('/admin/marketplace/exchange-offers', dto),
+  createExchangeOffer: (dto: any) => api.post('/admin/marketplace/exchange-offers', dto),
 
   updateExchangeOffer: (id: string, dto: any) =>
     api.put('/admin/marketplace/exchange-offers/' + id, dto),
@@ -442,8 +430,7 @@ export const adminMarketplaceApi = {
     api.put('/admin/marketplace/sponsored/' + id, dto),
 
   // ── Compliance / Countries ────────────────────────────────────
-  getComplianceCountries: () =>
-    api.get<Paginated<any>>('/admin/marketplace/compliance/countries'),
+  getComplianceCountries: () => api.get<Paginated<any>>('/admin/marketplace/compliance/countries'),
 
   updateComplianceCountry: (code: string, dto: any) =>
     api.put('/admin/marketplace/compliance/countries/' + code, dto),
@@ -452,22 +439,18 @@ export const adminMarketplaceApi = {
   getCustomers: (params?: { search?: string; page?: number }) =>
     api.get<Paginated<any>>('/admin/marketplace/customers', params as any),
 
-  blockCustomer: (id: string) =>
-    api.put('/admin/marketplace/customers/' + id + '/block'),
+  blockCustomer: (id: string) => api.put('/admin/marketplace/customers/' + id + '/block'),
 
   // ── Seller Wallets ────────────────────────────────────────────
-  getSellerWallets: () =>
-    api.get<Paginated<any>>('/admin/marketplace/seller-wallets'),
+  getSellerWallets: () => api.get<Paginated<any>>('/admin/marketplace/seller-wallets'),
 
   adjustSellerWallet: (id: string, dto: { amount: number; reason: string }) =>
     api.post(`/admin/marketplace/seller-wallets/${id}/adjust`, dto),
 
   // ── India Operations ──────────────────────────────────────────
-  getIndiaOpsConfig: () =>
-    api.get<any>('/admin/marketplace/india-ops'),
+  getIndiaOpsConfig: () => api.get<any>('/admin/marketplace/india-ops'),
 
-  updateIndiaOpsConfig: (dto: any) =>
-    api.put('/admin/marketplace/india-ops', dto),
+  updateIndiaOpsConfig: (dto: any) => api.put('/admin/marketplace/india-ops', dto),
 
   // ── Orders ───────────────────────────────────────────────────
   updateOrder: (id: string, dto: { action: string; reason?: string }) =>

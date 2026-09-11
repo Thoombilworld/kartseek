@@ -5,30 +5,70 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth, type AuthUser } from '@/lib/contexts/auth-context';
 import {
-  Eye, EyeOff, Mail, Lock, ArrowRight, Shield, ShieldCheck,
-  Activity, Globe, BarChart3, Server, Key, Smartphone, ArrowLeft,
-  RefreshCw, CheckCircle2,
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  ArrowRight,
+  Shield,
+  ShieldCheck,
+  Activity,
+  Globe,
+  BarChart3,
+  Server,
+  Key,
+  Smartphone,
+  ArrowLeft,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react';
 import { KartseekLoader } from '@/components/kartseek-loader';
 import { authApi, ApiError, type AuthApiUser } from '@/lib/api-endpoints';
 
 /* ── All permission keys (mirrors roles/page.tsx) ─────────────────────────── */
 const ALL_PERMS = [
-  'dashboard.view', 'users.view', 'users.manage', 'users.delete',
-  'sellers.view', 'sellers.manage', 'sellers.approve',
-  'orders.view', 'orders.manage', 'orders.refund',
-  'finance.view', 'finance.payouts', 'finance.reports',
-  'kyc.view', 'kyc.approve',
-  'content.view', 'content.manage', 'promotions.manage',
-  'system.settings', 'system.health', 'audit.logs',
-  'franchise.view', 'franchise.manage',
-  'delivery.view', 'delivery.manage',
-  'support.view', 'support.respond',
-  'modules.marketplace', 'modules.grocery', 'modules.restaurant',
-  'modules.pharmacy', 'modules.doctor', 'modules.taxi',
-  'staff.view', 'staff.manage', 'staff.invite',
-  'loyalty.config', 'loyalty.adjust', 'loyalty.view',
-  'wallet.audit', 'wallet.adjust', 'wallet.freeze',
+  'dashboard.view',
+  'users.view',
+  'users.manage',
+  'users.delete',
+  'sellers.view',
+  'sellers.manage',
+  'sellers.approve',
+  'orders.view',
+  'orders.manage',
+  'orders.refund',
+  'finance.view',
+  'finance.payouts',
+  'finance.reports',
+  'kyc.view',
+  'kyc.approve',
+  'content.view',
+  'content.manage',
+  'promotions.manage',
+  'system.settings',
+  'system.health',
+  'audit.logs',
+  'franchise.view',
+  'franchise.manage',
+  'delivery.view',
+  'delivery.manage',
+  'support.view',
+  'support.respond',
+  'modules.marketplace',
+  'modules.grocery',
+  'modules.restaurant',
+  'modules.pharmacy',
+  'modules.doctor',
+  'modules.taxi',
+  'staff.view',
+  'staff.manage',
+  'staff.invite',
+  'loyalty.config',
+  'loyalty.adjust',
+  'loyalty.view',
+  'wallet.audit',
+  'wallet.adjust',
+  'wallet.freeze',
 ];
 
 /* ── Demo admin accounts with RBAC metadata ──────────────────────────────── */
@@ -47,57 +87,160 @@ const ADMIN_ACCOUNTS: Record<string, AdminAccount> = {
   [process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@kartseek.com']: {
     password: process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'KartAdmin@2026',
     name: 'Super Admin',
-    adminRoleId: 'R-01', adminRoleName: 'Super Admin',
+    adminRoleId: 'R-01',
+    adminRoleName: 'Super Admin',
     adminPermissions: ALL_PERMS,
-    regionCode: 'ALL', regionLocked: false,
+    regionCode: 'ALL',
+    regionLocked: false,
     phone: '+91 98765 43210',
   },
   [process.env.NEXT_PUBLIC_OPS_EMAIL || 'ops@kartseek.com']: {
     password: process.env.NEXT_PUBLIC_OPS_PASSWORD || 'KartAdmin@2026',
     name: 'Operations Admin',
-    adminRoleId: 'R-02', adminRoleName: 'Admin',
-    adminPermissions: ALL_PERMS.filter(p => !['users.delete', 'system.settings'].includes(p)),
-    regionCode: 'ALL', regionLocked: false,
+    adminRoleId: 'R-02',
+    adminRoleName: 'Admin',
+    adminPermissions: ALL_PERMS.filter((p) => !['users.delete', 'system.settings'].includes(p)),
+    regionCode: 'ALL',
+    regionLocked: false,
     phone: '+91 87654 32109',
   },
   'uae@kartseek.com': {
     password: 'KartAdmin@2026',
     name: 'Sarah Al-Rashid',
-    adminRoleId: 'R-03', adminRoleName: 'Country Manager',
-    adminPermissions: ['dashboard.view', 'users.view', 'users.manage', 'sellers.view', 'sellers.manage', 'sellers.approve', 'orders.view', 'orders.manage', 'finance.view', 'finance.reports', 'kyc.view', 'kyc.approve', 'franchise.view', 'franchise.manage', 'delivery.view', 'delivery.manage', 'support.view', 'staff.view', 'modules.marketplace', 'modules.grocery', 'modules.restaurant', 'modules.pharmacy', 'modules.doctor', 'modules.taxi', 'loyalty.view', 'wallet.audit'],
-    regionCode: 'AE', regionLocked: true,
+    adminRoleId: 'R-03',
+    adminRoleName: 'Country Manager',
+    adminPermissions: [
+      'dashboard.view',
+      'users.view',
+      'users.manage',
+      'sellers.view',
+      'sellers.manage',
+      'sellers.approve',
+      'orders.view',
+      'orders.manage',
+      'finance.view',
+      'finance.reports',
+      'kyc.view',
+      'kyc.approve',
+      'franchise.view',
+      'franchise.manage',
+      'delivery.view',
+      'delivery.manage',
+      'support.view',
+      'staff.view',
+      'modules.marketplace',
+      'modules.grocery',
+      'modules.restaurant',
+      'modules.pharmacy',
+      'modules.doctor',
+      'modules.taxi',
+      'loyalty.view',
+      'wallet.audit',
+    ],
+    regionCode: 'AE',
+    regionLocked: true,
     phone: '+971 50 123 4567',
   },
   'saudi@kartseek.com': {
     password: 'KartAdmin@2026',
     name: 'Fatima Noor',
-    adminRoleId: 'R-03', adminRoleName: 'Country Manager',
-    adminPermissions: ['dashboard.view', 'users.view', 'users.manage', 'sellers.view', 'sellers.manage', 'sellers.approve', 'orders.view', 'orders.manage', 'finance.view', 'finance.reports', 'kyc.view', 'kyc.approve', 'franchise.view', 'franchise.manage', 'delivery.view', 'delivery.manage', 'support.view', 'staff.view', 'modules.marketplace', 'modules.grocery', 'modules.restaurant', 'modules.pharmacy', 'modules.doctor', 'modules.taxi', 'loyalty.view', 'wallet.audit'],
-    regionCode: 'SA', regionLocked: true,
+    adminRoleId: 'R-03',
+    adminRoleName: 'Country Manager',
+    adminPermissions: [
+      'dashboard.view',
+      'users.view',
+      'users.manage',
+      'sellers.view',
+      'sellers.manage',
+      'sellers.approve',
+      'orders.view',
+      'orders.manage',
+      'finance.view',
+      'finance.reports',
+      'kyc.view',
+      'kyc.approve',
+      'franchise.view',
+      'franchise.manage',
+      'delivery.view',
+      'delivery.manage',
+      'support.view',
+      'staff.view',
+      'modules.marketplace',
+      'modules.grocery',
+      'modules.restaurant',
+      'modules.pharmacy',
+      'modules.doctor',
+      'modules.taxi',
+      'loyalty.view',
+      'wallet.audit',
+    ],
+    regionCode: 'SA',
+    regionLocked: true,
     phone: '+966 55 987 6543',
   },
   'india@kartseek.com': {
     password: 'KartAdmin@2026',
     name: 'Vikram Singh',
-    adminRoleId: 'R-04', adminRoleName: 'State/District Manager',
-    adminPermissions: ['dashboard.view', 'sellers.view', 'sellers.manage', 'orders.view', 'orders.manage', 'kyc.view', 'kyc.approve', 'franchise.view', 'delivery.view', 'delivery.manage', 'support.view', 'support.respond', 'modules.marketplace', 'modules.grocery', 'modules.restaurant', 'modules.pharmacy', 'modules.doctor', 'modules.taxi', 'loyalty.view'],
-    regionCode: 'IN', regionLocked: true,
+    adminRoleId: 'R-04',
+    adminRoleName: 'State/District Manager',
+    adminPermissions: [
+      'dashboard.view',
+      'sellers.view',
+      'sellers.manage',
+      'orders.view',
+      'orders.manage',
+      'kyc.view',
+      'kyc.approve',
+      'franchise.view',
+      'delivery.view',
+      'delivery.manage',
+      'support.view',
+      'support.respond',
+      'modules.marketplace',
+      'modules.grocery',
+      'modules.restaurant',
+      'modules.pharmacy',
+      'modules.doctor',
+      'modules.taxi',
+      'loyalty.view',
+    ],
+    regionCode: 'IN',
+    regionLocked: true,
     phone: '+91 76543 21098',
   },
   'finance@kartseek.com': {
     password: 'KartAdmin@2026',
     name: 'Priya Sharma',
-    adminRoleId: 'R-15', adminRoleName: 'Finance Manager',
-    adminPermissions: ['dashboard.view', 'finance.view', 'finance.payouts', 'finance.reports', 'orders.view', 'wallet.audit', 'loyalty.view'],
-    regionCode: 'ALL', regionLocked: false,
+    adminRoleId: 'R-15',
+    adminRoleName: 'Finance Manager',
+    adminPermissions: [
+      'dashboard.view',
+      'finance.view',
+      'finance.payouts',
+      'finance.reports',
+      'orders.view',
+      'wallet.audit',
+      'loyalty.view',
+    ],
+    regionCode: 'ALL',
+    regionLocked: false,
     phone: '+91 87654 32109',
   },
   'support@kartseek.com': {
     password: 'KartAdmin@2026',
     name: 'Maria Garcia',
-    adminRoleId: 'R-14', adminRoleName: 'Customer Support Agent',
-    adminPermissions: ['dashboard.view', 'users.view', 'orders.view', 'orders.refund', 'support.view', 'support.respond'],
-    regionCode: 'ALL', regionLocked: false,
+    adminRoleId: 'R-14',
+    adminRoleName: 'Customer Support Agent',
+    adminPermissions: [
+      'dashboard.view',
+      'users.view',
+      'orders.view',
+      'orders.refund',
+      'support.view',
+      'support.respond',
+    ],
+    regionCode: 'ALL',
+    regionLocked: false,
     phone: '+1 555 456 7890',
   },
 };
@@ -127,7 +270,13 @@ function makeAdminUser(email: string, account: AdminAccount): AuthUser {
 
 export default function AdminLoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-950"><KartseekLoader size="lg" message="Loading..." /></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-950">
+          <KartseekLoader size="lg" message="Loading..." />
+        </div>
+      }
+    >
       <AdminLoginForm />
     </Suspense>
   );
@@ -135,7 +284,12 @@ export default function AdminLoginPage() {
 
 // ─── OTP Input Component ──────────────────────────────────────────────────────
 
-function OtpInput({ length, value, onChange, disabled }: {
+function OtpInput({
+  length,
+  value,
+  onChange,
+  disabled,
+}: {
   length: number;
   value: string;
   onChange: (val: string) => void;
@@ -202,23 +356,26 @@ function OtpInput({ length, value, onChange, disabled }: {
       {Array.from({ length }).map((_, i) => (
         <input
           key={i}
-          ref={el => { refs.current[i] = el; }}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
           autoComplete={i === 0 ? 'one-time-code' : 'off'}
           maxLength={2}
           value={digits[i] || ''}
-          onChange={e => handleChange(i, e.target.value)}
-          onKeyDown={e => handleKeyDown(i, e)}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
           onFocus={handleFocus}
           disabled={disabled}
           className={`w-12 h-14 text-center text-xl font-black rounded-xl border-2 outline-none transition-all
-            ${disabled
-              ? 'bg-slate-800 border-slate-700 text-slate-500'
-              : digits[i]
-                ? 'bg-slate-800 border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/20'
-                : 'bg-slate-900 border-slate-700 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+            ${
+              disabled
+                ? 'bg-slate-800 border-slate-700 text-slate-500'
+                : digits[i]
+                  ? 'bg-slate-800 border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/20'
+                  : 'bg-slate-900 border-slate-700 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
             }`}
           id={`otp-digit-${i}`}
           aria-label={`OTP digit ${i + 1} of ${length}`}
@@ -233,11 +390,11 @@ function OtpInput({ length, value, onChange, disabled }: {
 // ─── Main Login Form ──────────────────────────────────────────────────────────
 
 function AdminLoginForm() {
-  const [email, setEmail]     = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPw, setShowPw]   = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [error, setError] = useState('');
   const [attempts, setAttempts] = useState(0);
 
   // 2FA state
@@ -264,14 +421,14 @@ function AdminLoginForm() {
   // Countdown timer for OTP validity
   useEffect(() => {
     if (phase !== 'otp' || countdown <= 0) return;
-    const t = setInterval(() => setCountdown(c => c - 1), 1000);
+    const t = setInterval(() => setCountdown((c) => c - 1), 1000);
     return () => clearInterval(t);
   }, [phase, countdown]);
 
   // Resend timer
   useEffect(() => {
     if (resendTimer <= 0) return;
-    const t = setInterval(() => setResendTimer(c => c - 1), 1000);
+    const t = setInterval(() => setResendTimer((c) => c - 1), 1000);
     return () => clearInterval(t);
   }, [resendTimer]);
 
@@ -310,13 +467,16 @@ function AdminLoginForm() {
      */
     let session: { user: AuthApiUser; accessToken: string; refreshToken?: string };
     try {
-      session = await authApi.login(email.trim().toLowerCase(), password) as typeof session;
+      session = (await authApi.login(email.trim().toLowerCase(), password)) as typeof session;
     } catch (err) {
-      setAttempts(prev => prev + 1);
-      const message = err instanceof ApiError && err.status < 500
-        ? err.message
-        : 'We could not reach the sign-in service. Please try again.';
-      setError(`${message}${err instanceof ApiError && err.status < 500 ? ` ${Math.max(0, 5 - attempts - 1)} attempts remaining.` : ''}`);
+      setAttempts((prev) => prev + 1);
+      const message =
+        err instanceof ApiError && err.status < 500
+          ? err.message
+          : 'We could not reach the sign-in service. Please try again.';
+      setError(
+        `${message}${err instanceof ApiError && err.status < 500 ? ` ${Math.max(0, 5 - attempts - 1)} attempts remaining.` : ''}`,
+      );
       setLoading(false);
       return;
     }
@@ -332,8 +492,25 @@ function AdminLoginForm() {
 
     // Presentation only — labels and permission chips for the console. Access is
     // decided by the token's role, and by the API on every request.
-    const account = ADMIN_ACCOUNTS[email.toLowerCase()] ?? ADMIN_ACCOUNTS[Object.keys(ADMIN_ACCOUNTS)[0]];
-    const user = { ...makeAdminUser(email, account), id: session.user?.id ?? email, name: session.user?.name ?? account.name };
+    const known = ADMIN_ACCOUNTS[email.toLowerCase()];
+    const account = known ?? ADMIN_ACCOUNTS[Object.keys(ADMIN_ACCOUNTS)[0]];
+    // Market scope comes from the signed session, never from the demo table:
+    // the API enforces the same claim on every request, so the console has to
+    // show the lock the token actually carries.
+    const regionLocked = session.user?.regionLocked === true;
+    const user = {
+      ...makeAdminUser(email, account),
+      id: session.user?.id ?? email,
+      name: session.user?.name ?? account.name,
+      regionCode: session.user?.regionCode ?? undefined,
+      regionLocked,
+      ...(known
+        ? {}
+        : {
+            adminRoleId: regionLocked ? 'R-REGIONAL' : 'R-02',
+            adminRoleName: regionLocked ? 'Regional Admin' : 'Admin',
+          }),
+    };
     const token = session.accessToken;
     login(user, token, session.refreshToken);
     set2FARequired();
@@ -363,8 +540,10 @@ function AdminLoginForm() {
       : codeToValidate === VALID_OTP;
 
     if (!isValid) {
-      setOtpAttempts(prev => prev + 1);
-      setError(`Invalid ${useBackupCode ? 'backup code' : 'verification code'}. ${3 - otpAttempts - 1} attempts remaining.`);
+      setOtpAttempts((prev) => prev + 1);
+      setError(
+        `Invalid ${useBackupCode ? 'backup code' : 'verification code'}. ${3 - otpAttempts - 1} attempts remaining.`,
+      );
       setShake(true);
       setTimeout(() => setShake(false), 600);
       setLoading(false);
@@ -391,7 +570,7 @@ function AdminLoginForm() {
     if (otp.length === 6 && phase === 'otp' && !loading && !isOtpLocked) {
       handleOtpSubmit();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otp]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -416,30 +595,51 @@ function AdminLoginForm() {
             </div>
             <div>
               <span className="text-xl font-black tracking-tight block">KARTSEEK</span>
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.3em]">Admin Console</span>
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.3em]">
+                Admin Console
+              </span>
             </div>
           </div>
 
           <h2 className="text-4xl font-black leading-tight mb-4">
             {phase === 'credentials' ? (
-              <>Admin Portal<span className="text-emerald-400">.</span></>
+              <>
+                Admin Portal<span className="text-emerald-400">.</span>
+              </>
             ) : (
-              <>Two-Factor<span className="text-emerald-400"> Auth.</span></>
+              <>
+                Two-Factor<span className="text-emerald-400"> Auth.</span>
+              </>
             )}
           </h2>
           <p className="text-slate-400 text-lg max-w-sm">
             {phase === 'credentials'
               ? 'Secure administrative access for platform management, analytics, and operations control.'
-              : 'An additional layer of security protects your admin account from unauthorized access.'
-            }
+              : 'An additional layer of security protects your admin account from unauthorized access.'}
           </p>
         </div>
 
         <div className="relative z-10 space-y-4">
-          <FeatureItem icon={<Shield className="w-5 h-5 text-emerald-400" />} text="Role-based access with audit logging" active={true} />
-          <FeatureItem icon={<Key className="w-5 h-5 text-cyan-400" />} text="Two-factor authentication (TOTP)" active={phase === 'otp'} />
-          <FeatureItem icon={<Globe className="w-5 h-5 text-amber-400" />} text="Multi-region platform management" active={false} />
-          <FeatureItem icon={<Server className="w-5 h-5 text-violet-400" />} text="Infrastructure & system health" active={false} />
+          <FeatureItem
+            icon={<Shield className="w-5 h-5 text-emerald-400" />}
+            text="Role-based access with audit logging"
+            active={true}
+          />
+          <FeatureItem
+            icon={<Key className="w-5 h-5 text-cyan-400" />}
+            text="Two-factor authentication (TOTP)"
+            active={phase === 'otp'}
+          />
+          <FeatureItem
+            icon={<Globe className="w-5 h-5 text-amber-400" />}
+            text="Multi-region platform management"
+            active={false}
+          />
+          <FeatureItem
+            icon={<Server className="w-5 h-5 text-violet-400" />}
+            text="Infrastructure & system health"
+            active={false}
+          />
         </div>
 
         <div className="relative z-10 mt-8 pt-6 border-t border-slate-800/50">
@@ -457,7 +657,9 @@ function AdminLoginForm() {
             <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
               <ShieldCheck className="w-4 h-4 text-white" />
             </div>
-            <span className="text-xl font-black tracking-tight text-white">KARTSEEK <span className="text-emerald-400">Admin</span></span>
+            <span className="text-xl font-black tracking-tight text-white">
+              KARTSEEK <span className="text-emerald-400">Admin</span>
+            </span>
           </div>
 
           {/* ─── Phase 1: Credentials ──────────────────────────────────── */}
@@ -466,7 +668,8 @@ function AdminLoginForm() {
               <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5 mb-6">
                 <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
                 <p className="text-xs text-emerald-300 font-medium">
-                  This is a restricted area. Authorized personnel only. All access attempts are logged.
+                  This is a restricted area. Authorized personnel only. All access attempts are
+                  logged.
                 </p>
               </div>
 
@@ -484,7 +687,10 @@ function AdminLoginForm() {
 
               <form onSubmit={handleCredentialSubmit} className="space-y-5">
                 <div>
-                  <label htmlFor="admin-email" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <label
+                    htmlFor="admin-email"
+                    className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5"
+                  >
                     Admin Email
                   </label>
                   <div className="relative">
@@ -504,7 +710,10 @@ function AdminLoginForm() {
                 </div>
 
                 <div>
-                  <label htmlFor="admin-password" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <label
+                    htmlFor="admin-password"
+                    className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5"
+                  >
                     Password
                   </label>
                   <div className="relative">
@@ -535,15 +744,19 @@ function AdminLoginForm() {
                   type="submit"
                   disabled={loading || isLocked}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-400 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 text-sm"
-                 aria-label="Action">{loading ? (
+                  aria-label="Action"
+                >
+                  {loading ? (
                     <KartseekLoader size="sm" />
                   ) : isLocked ? (
                     <>Account Locked — Try later</>
                   ) : (
                     <>
-                      <ShieldCheck className="w-4 h-4" /> Secure Sign In <ArrowRight className="w-4 h-4" />
+                      <ShieldCheck className="w-4 h-4" /> Secure Sign In{' '}
+                      <ArrowRight className="w-4 h-4" />
                     </>
-                  )}</button>
+                  )}
+                </button>
               </form>
 
               <div className="mt-8 space-y-3">
@@ -564,7 +777,10 @@ function AdminLoginForm() {
             <>
               {/* Back button */}
               <button
-                onClick={() => { setPhase('credentials'); setError(''); }}
+                onClick={() => {
+                  setPhase('credentials');
+                  setError('');
+                }}
                 className="flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-sm mb-6 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" /> Back to sign in
@@ -572,15 +788,18 @@ function AdminLoginForm() {
 
               {/* 2FA Icon */}
               <div className="flex justify-center mb-6">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border-2 transition-all ${
-                  otpSuccess
-                    ? 'bg-emerald-500/20 border-emerald-500/40'
-                    : 'bg-slate-800 border-slate-700'
-                }`}>
-                  {otpSuccess
-                    ? <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-                    : <Smartphone className="w-8 h-8 text-emerald-400" />
-                  }
+                <div
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center border-2 transition-all ${
+                    otpSuccess
+                      ? 'bg-emerald-500/20 border-emerald-500/40'
+                      : 'bg-slate-800 border-slate-700'
+                  }`}
+                >
+                  {otpSuccess ? (
+                    <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                  ) : (
+                    <Smartphone className="w-8 h-8 text-emerald-400" />
+                  )}
                 </div>
               </div>
 
@@ -592,12 +811,13 @@ function AdminLoginForm() {
                   ? 'Redirecting to your dashboard...'
                   : useBackupCode
                     ? 'Enter one of your backup recovery codes.'
-                    : 'Enter the 6-digit code from your authenticator app.'
-                }
+                    : 'Enter the 6-digit code from your authenticator app.'}
               </p>
 
               {error && (
-                <div className={`bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 mb-6 flex items-start gap-2 ${shake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}>
+                <div
+                  className={`bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 mb-6 flex items-start gap-2 ${shake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}
+                >
                   <Shield className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -608,13 +828,16 @@ function AdminLoginForm() {
                   {useBackupCode ? (
                     /* Backup code input */
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5" htmlFor="backup-code-input">
+                      <label
+                        className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5"
+                        htmlFor="backup-code-input"
+                      >
                         Backup Code
                       </label>
                       <input
                         type="text"
                         value={backupCode}
-                        onChange={e => setBackupCode(e.target.value.toUpperCase())}
+                        onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
                         placeholder="BACKUP-XXXX-XXXX"
                         className="w-full px-4 py-3 rounded-xl border-2 border-slate-700 bg-slate-900 text-white font-mono text-center placeholder:text-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm transition-all tracking-widest"
                         disabled={isOtpLocked}
@@ -623,12 +846,7 @@ function AdminLoginForm() {
                     </div>
                   ) : (
                     /* OTP digit inputs */
-                    <OtpInput
-                      length={6}
-                      value={otp}
-                      onChange={setOtp}
-                      disabled={isOtpLocked}
-                    />
+                    <OtpInput length={6} value={otp} onChange={setOtp} disabled={isOtpLocked} />
                   )}
 
                   {/* Timer + resend */}
@@ -637,7 +855,12 @@ function AdminLoginForm() {
                       {countdown > 0 ? (
                         <>
                           <Activity className="w-3 h-3 text-slate-500" />
-                          <span className="text-slate-500">Valid for <span className="text-emerald-400 font-bold">{formatTime(countdown)}</span></span>
+                          <span className="text-slate-500">
+                            Valid for{' '}
+                            <span className="text-emerald-400 font-bold">
+                              {formatTime(countdown)}
+                            </span>
+                          </span>
                         </>
                       ) : (
                         <span className="text-red-400 font-bold">Code expired</span>
@@ -659,23 +882,40 @@ function AdminLoginForm() {
                       onClick={handleOtpSubmit}
                       disabled={loading || isOtpLocked || !backupCode}
                       className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-400 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
-                     aria-label="Action">{loading ? <KartseekLoader size="sm" /> : <><Key className="w-4 h-4" /> Verify Backup Code</>}</button>
+                      aria-label="Action"
+                    >
+                      {loading ? (
+                        <KartseekLoader size="sm" />
+                      ) : (
+                        <>
+                          <Key className="w-4 h-4" /> Verify Backup Code
+                        </>
+                      )}
+                    </button>
                   )}
 
                   {/* Toggle backup code / OTP mode */}
                   <div className="text-center pt-2">
                     <button
-                      onClick={() => { setUseBackupCode(!useBackupCode); setError(''); }}
+                      onClick={() => {
+                        setUseBackupCode(!useBackupCode);
+                        setError('');
+                      }}
                       className="text-xs text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2"
                     >
-                      {useBackupCode ? 'Use authenticator code instead' : 'Lost your device? Use a backup code'}
+                      {useBackupCode
+                        ? 'Use authenticator code instead'
+                        : 'Lost your device? Use a backup code'}
                     </button>
                   </div>
 
                   {/* Logged-in user info */}
                   <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex items-center gap-3 mt-4">
                     <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {pendingUser?.name?.split(' ').map(w => w[0]).join('') || '?'}
+                      {pendingUser?.name
+                        ?.split(' ')
+                        .map((w) => w[0])
+                        .join('') || '?'}
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-bold text-white">{pendingUser?.name}</p>
@@ -693,7 +933,10 @@ function AdminLoginForm() {
           {/* Back to customer portal */}
           {phase === 'credentials' && (
             <div className="mt-10 pt-6 border-t border-slate-800">
-              <Link href="/auth/login" className="text-sm text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-2">
+              <Link
+                href="/auth/login"
+                className="text-sm text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-2"
+              >
                 <ArrowRight className="w-3 h-3 rotate-180" /> Back to Customer Portal
               </Link>
             </div>
@@ -707,21 +950,47 @@ function AdminLoginForm() {
           error itself. */}
       <style jsx global>{`
         @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-          20%, 40%, 60%, 80% { transform: translateX(4px); }
+          0%,
+          100% {
+            transform: translateX(0);
+          }
+          10%,
+          30%,
+          50%,
+          70%,
+          90% {
+            transform: translateX(-4px);
+          }
+          20%,
+          40%,
+          60%,
+          80% {
+            transform: translateX(4px);
+          }
         }
       `}</style>
     </div>
   );
 }
 
-function FeatureItem({ icon, text, active }: { icon: React.ReactNode; text: string; active?: boolean }) {
+function FeatureItem({
+  icon,
+  text,
+  active,
+}: {
+  icon: React.ReactNode;
+  text: string;
+  active?: boolean;
+}) {
   return (
-    <div className={`flex items-center gap-3 transition-opacity ${active ? 'opacity-100' : 'opacity-60'}`}>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${
-        active ? 'bg-white/10 border-emerald-500/30' : 'bg-white/5 border-white/10'
-      }`}>
+    <div
+      className={`flex items-center gap-3 transition-opacity ${active ? 'opacity-100' : 'opacity-60'}`}
+    >
+      <div
+        className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${
+          active ? 'bg-white/10 border-emerald-500/30' : 'bg-white/5 border-white/10'
+        }`}
+      >
         {icon}
       </div>
       <p className={`text-sm font-medium ${active ? 'text-white' : 'text-slate-400'}`}>{text}</p>
