@@ -1,15 +1,29 @@
 import {
-  Controller, Get, Post, Patch, Delete, Param,
-  Body, Query, UseGuards, Inject, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import {
-  ApiTags, ApiOperation, ApiBearerAuth, ApiQuery,
-} from '@nestjs/swagger';
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Req,
+  Body,
+  Query,
+  UseGuards,
+  Inject,
+  Logger,
+  HttpException,
+  HttpStatus,
+  ForbiddenException,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
+import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
  * Admin Hotel Controller
@@ -40,10 +54,30 @@ import { UserRole, rpcCatch } from '@app/common';
 export class AdminHotelController {
   private readonly logger = new Logger(AdminHotelController.name);
 
-  constructor(
-    @Inject('HOTEL_SERVICE') private readonly hotelClient: ClientProxy) {}
+  constructor(@Inject('HOTEL_SERVICE') private readonly hotelClient: ClientProxy) {}
 
-    /**
+  /** The acting administrator, from the verified token — recorded on decisions. */
+  private actorId(req: any): string {
+    return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
+  }
+
+  /**
+   * The market this request may act in, as `scope` for the backend. A locked
+   * admin gets their market (and any other market they name is refused and
+   * logged); a global admin gets undefined — every market — or the market they
+   * filtered on.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
+  }
+
+  /**
    * Forward to hotel-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -58,10 +92,7 @@ export class AdminHotelController {
       return await lastValueFrom(
         this.hotelClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Hotel service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Hotel service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -73,8 +104,10 @@ export class AdminHotelController {
   // ── Dashboard ─────────────────────────────────────────────────
   @Get('dashboard')
   @ApiOperation({ summary: 'Admin hotel dashboard stats' })
-  async getDashboard() {
-    return { data: await this.send('admin_hotel_stats', {}) };
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getDashboard(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that dashboard');
+    return { data: await this.send('admin_hotel_stats', { countryCode: market, scope }) };
   }
 
   // ── Hotels ────────────────────────────────────────────────────
@@ -82,104 +115,209 @@ export class AdminHotelController {
   @ApiOperation({ summary: 'List all hotels' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'status', required: false })
-  async getHotels(@Query('page') page = 1, @Query('limit') limit = 20, @Query('status') status?: string) {
-    return await this.send('admin_list_hotels', { page, limit, status });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getHotels(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those hotels');
+    return await this.send('admin_list_hotels', {
+      page,
+      limit,
+      status,
+      countryCode: market,
+      scope,
+    });
   }
 
   @Get('hotels/:id')
   @ApiOperation({ summary: 'Get hotel detail' })
-  async getHotelById(@Param('id') id: string) {
-    return { data: await this.send('get_hotel', { id }) };
+  async getHotelById(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that hotel');
+    return { data: await this.send('get_hotel', { id, scope }) };
   }
 
   @Patch('hotels/:id/approve')
   @ApiOperation({ summary: 'Approve a hotel' })
-  async approveHotel(@Param('id') id: string) {
-    return { data: await this.send('admin.hotel.approve', { id }) };
+  async approveHotel(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that hotel');
+    return {
+      data: await this.send('admin.hotel.approve', { id, scope, adminId: this.actorId(req) }),
+    };
   }
 
   @Patch('hotels/:id/suspend')
   @ApiOperation({ summary: 'Suspend a hotel' })
-  async suspendHotel(@Param('id') id: string, @Body() body: { reason?: string }) {
-    return { data: await this.send('admin.hotel.suspend', { id, ...body }) };
+  async suspendHotel(@Req() req: any, @Param('id') id: string, @Body() body: { reason?: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that hotel');
+    return {
+      data: await this.send('admin.hotel.suspend', {
+        id,
+        ...body,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Rooms ─────────────────────────────────────────────────────
   @Get('rooms')
   @ApiOperation({ summary: 'List rooms across all hotels' })
-  async getRooms(@Query('page') page = 1, @Query('hotelId') hotelId?: string) {
-    return await this.send('admin.hotel.rooms', { page, hotelId });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getRooms(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('hotelId') hotelId?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those rooms');
+    return await this.send('admin.hotel.rooms', { page, hotelId, countryCode: market, scope });
   }
 
   // ── Bookings ──────────────────────────────────────────────────
   @Get('bookings')
   @ApiOperation({ summary: 'List hotel bookings' })
-  async getBookings(@Query('page') page = 1, @Query('status') status?: string) {
-    return await this.send('admin.hotel.bookings', { page, status });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getBookings(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those bookings');
+    return await this.send('admin.hotel.bookings', { page, status, countryCode: market, scope });
   }
 
   @Get('bookings/:id')
   @ApiOperation({ summary: 'Get booking detail' })
-  async getBookingById(@Param('id') id: string) {
-    return { data: await this.send('admin.hotel.bookingDetail', { id }) };
+  async getBookingById(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that booking');
+    return { data: await this.send('admin.hotel.bookingDetail', { id, scope }) };
   }
 
   // ── Amenities ─────────────────────────────────────────────────
+  //
+  // One catalogue for the whole platform: "Pool", "Spa", "Airport shuttle" mean
+  // the same thing in Doha and in Delhi, so the list is not filtered by market.
+  // A locked admin reads it; only the write is withheld, because editing the
+  // catalogue would change every other market's hotels along with their own.
   @Get('amenities')
+  @GlobalEntity('hotel taxonomy is shared by every market')
   @ApiOperation({ summary: 'List global amenity categories' })
-  async getAmenities() {
+  async getAmenities(@Req() req: any) {
+    this.scopeOf(req, undefined, 'those amenities');
     return { data: await this.send('admin.hotel.amenities', {}) };
   }
 
   @Post('amenities')
   @ApiOperation({ summary: 'Create amenity' })
-  async createAmenity(@Body() body: { name: string; icon?: string; category?: string }) {
-    return { data: await this.send('admin.hotel.createAmenity', body) };
+  async createAmenity(
+    @Req() req: any,
+    @Body() body: { name: string; icon?: string; category?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that amenity');
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Hotel taxonomy is managed globally.');
+    return {
+      data: await this.send('admin.hotel.createAmenity', {
+        ...body,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Pricing ───────────────────────────────────────────────────
   @Get('pricing')
   @ApiOperation({ summary: 'Get global pricing rules' })
-  async getPricing() {
-    return { data: await this.send('admin.hotel.pricing', {}) };
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getPricing(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that pricing');
+    return { data: await this.send('admin.hotel.pricing', { countryCode: market, scope }) };
   }
 
   @Post('pricing')
   @ApiOperation({ summary: 'Update pricing rules' })
-  async updatePricing(@Body() body: any) {
-    return { data: await this.send('admin.hotel.updatePricing', body) };
+  async updatePricing(@Req() req: any, @Body() body: any) {
+    const { scope, market } = this.scopeOf(req, body?.countryCode, 'that pricing');
+    return {
+      data: await this.send('admin.hotel.updatePricing', {
+        ...body,
+        countryCode: market,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Reports ───────────────────────────────────────────────────
   @Get('reports')
   @ApiOperation({ summary: 'Hotel reports' })
-  async getReports(@Query('period') period = '30d') {
-    return { data: await this.send('admin.hotel.reports', { period }) };
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getReports(
+    @Req() req: any,
+    @Query('period') period = '30d',
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those reports');
+    return { data: await this.send('admin.hotel.reports', { period, countryCode: market, scope }) };
   }
 
   // ── Reviews ───────────────────────────────────────────────────
   @Get('reviews')
   @ApiOperation({ summary: 'List hotel reviews for moderation' })
-  async getReviews(@Query('page') page = 1, @Query('status') status?: string) {
-    return await this.send('admin.hotel.reviews', { page, status });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getReviews(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those reviews');
+    return await this.send('admin.hotel.reviews', { page, status, countryCode: market, scope });
   }
 
   @Patch('reviews/:id')
   @ApiOperation({ summary: 'Moderate a review' })
-  async moderateReview(@Param('id') id: string, @Body() body: { action: 'approve' | 'remove'; reason?: string }) {
-    return { data: await this.send('admin.hotel.moderateReview', { id, ...body }) };
+  async moderateReview(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { action: 'approve' | 'remove'; reason?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that review');
+    return {
+      data: await this.send('admin.hotel.moderateReview', {
+        id,
+        ...body,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Settings ──────────────────────────────────────────────────
   @Get('settings')
   @ApiOperation({ summary: 'Get hotel admin settings' })
-  async getSettings() {
-    return { data: await this.send('admin.hotel.settings', {}) };
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getSettings(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those settings');
+    return { data: await this.send('admin.hotel.settings', { countryCode: market, scope }) };
   }
 
   @Post('settings')
   @ApiOperation({ summary: 'Update hotel settings' })
-  async updateSettings(@Body() body: any) {
-    return { data: await this.send('admin.hotel.updateSettings', body) };
+  async updateSettings(@Req() req: any, @Body() body: any) {
+    const { scope, market } = this.scopeOf(req, body?.countryCode, 'those settings');
+    return {
+      data: await this.send('admin.hotel.updateSettings', {
+        ...body,
+        countryCode: market,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 }

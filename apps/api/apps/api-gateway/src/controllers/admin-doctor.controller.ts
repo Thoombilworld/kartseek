@@ -1,15 +1,29 @@
 import {
-  Controller, Get, Post, Patch, Delete, Param,
-  Body, Query, UseGuards, Inject, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import {
-  ApiTags, ApiOperation, ApiBearerAuth, ApiQuery,
-} from '@nestjs/swagger';
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Req,
+  Body,
+  Query,
+  UseGuards,
+  Inject,
+  Logger,
+  HttpException,
+  HttpStatus,
+  ForbiddenException,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
+import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
  * Admin Doctor Controller
@@ -26,10 +40,30 @@ import { UserRole, rpcCatch } from '@app/common';
 export class AdminDoctorController {
   private readonly logger = new Logger(AdminDoctorController.name);
 
-  constructor(
-    @Inject('DOCTOR_SERVICE') private readonly doctorClient: ClientProxy) {}
+  constructor(@Inject('DOCTOR_SERVICE') private readonly doctorClient: ClientProxy) {}
 
-    /**
+  /** The acting administrator, from the verified token — recorded on decisions. */
+  private actorId(req: any): string {
+    return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
+  }
+
+  /**
+   * The market this request may act in, as `scope` for the backend. A locked
+   * admin gets their market (and any other market they name is refused and
+   * logged); a global admin gets undefined — every market — or the market they
+   * filtered on.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
+  }
+
+  /**
    * Forward to doctor-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -44,10 +78,7 @@ export class AdminDoctorController {
       return await lastValueFrom(
         this.doctorClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Doctor service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Doctor service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -59,8 +90,10 @@ export class AdminDoctorController {
   // ── Dashboard ─────────────────────────────────────────────────
   @Get('dashboard')
   @ApiOperation({ summary: 'Admin doctor dashboard stats' })
-  async getDashboard() {
-    return { data: await this.send('admin.doctor.dashboard', {}) };
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getDashboard(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that dashboard');
+    return { data: await this.send('admin.doctor.dashboard', { countryCode: market, scope }) };
   }
 
   // ── Clinics ───────────────────────────────────────────────────
@@ -68,91 +101,201 @@ export class AdminDoctorController {
   @ApiOperation({ summary: 'List all clinics' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'status', required: false })
-  async getClinics(@Query('page') page = 1, @Query('limit') limit = 20, @Query('status') status?: string) {
-    return await this.send('admin.doctor.clinics', { page, limit, status });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getClinics(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those clinics');
+    return await this.send('admin.doctor.clinics', {
+      page,
+      limit,
+      status,
+      countryCode: market,
+      scope,
+    });
   }
 
   @Get('clinics/:id')
   @ApiOperation({ summary: 'Get clinic detail' })
-  async getClinicById(@Param('id') id: string) {
-    return { data: await this.send('admin.doctor.clinicDetail', { id }) };
+  async getClinicById(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that clinic');
+    return { data: await this.send('admin.doctor.clinicDetail', { id, scope }) };
   }
 
   @Patch('clinics/:id/approve')
   @ApiOperation({ summary: 'Approve a clinic' })
-  async approveClinic(@Param('id') id: string) {
-    return { data: await this.send('admin.doctor.approveClinic', { id }) };
+  async approveClinic(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that clinic');
+    return {
+      data: await this.send('admin.doctor.approveClinic', {
+        id,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Doctors ───────────────────────────────────────────────────
   @Get('doctors')
   @ApiOperation({ summary: 'List all doctors' })
-  async getDoctors(@Query('page') page = 1, @Query('specialty') specialty?: string) {
-    return await this.send('admin.doctor.doctors', { page, specialty });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getDoctors(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('specialty') specialty?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those doctors');
+    return await this.send('admin.doctor.doctors', {
+      page,
+      specialty,
+      countryCode: market,
+      scope,
+    });
   }
 
   @Get('doctors/:id')
   @ApiOperation({ summary: 'Get doctor detail' })
-  async getDoctorById(@Param('id') id: string) {
-    return { data: await this.send('admin.doctor.doctorDetail', { id }) };
+  async getDoctorById(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that doctor');
+    return { data: await this.send('admin.doctor.doctorDetail', { id, scope }) };
   }
 
   @Patch('doctors/:id/verify')
   @ApiOperation({ summary: 'Verify a doctor credentials' })
-  async verifyDoctor(@Param('id') id: string, @Body() body: { verified: boolean; notes?: string }) {
-    return { data: await this.send('admin.doctor.verifyDoctor', { id, ...body }) };
+  async verifyDoctor(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { verified: boolean; notes?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that doctor');
+    return {
+      data: await this.send('admin.doctor.verifyDoctor', {
+        id,
+        ...body,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   @Patch('doctors/:id/suspend')
   @ApiOperation({ summary: 'Suspend a doctor' })
-  async suspendDoctor(@Param('id') id: string, @Body() body: { reason: string }) {
-    return { data: await this.send('admin.doctor.suspendDoctor', { id, ...body }) };
+  async suspendDoctor(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that doctor');
+    return {
+      data: await this.send('admin.doctor.suspendDoctor', {
+        id,
+        ...body,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Appointments ──────────────────────────────────────────────
   @Get('appointments')
   @ApiOperation({ summary: 'List all appointments' })
-  async getAppointments(@Query('page') page = 1, @Query('status') status?: string) {
-    return await this.send('admin.doctor.appointments', { page, status });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getAppointments(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those appointments');
+    return await this.send('admin.doctor.appointments', {
+      page,
+      status,
+      countryCode: market,
+      scope,
+    });
   }
 
   // ── Specialties ───────────────────────────────────────────────
+  //
+  // One catalogue for the whole platform — "Hepatology" is the same specialty
+  // in every market — so it is read unfiltered. Only the write is withheld from
+  // a locked admin, because adding to the catalogue would change every other
+  // market's directory too.
   @Get('specialties')
+  @GlobalEntity('doctor taxonomy is shared by every market')
   @ApiOperation({ summary: 'List medical specialties' })
-  async getSpecialties() {
+  async getSpecialties(@Req() req: any) {
+    this.scopeOf(req, undefined, 'those specialties');
     return { data: await this.send('admin.doctor.specialties', {}) };
   }
 
   @Post('specialties')
   @ApiOperation({ summary: 'Create specialty' })
-  async createSpecialty(@Body() body: { name: string; icon?: string; description?: string }) {
-    return { data: await this.send('admin.doctor.createSpecialty', body) };
+  async createSpecialty(
+    @Req() req: any,
+    @Body() body: { name: string; icon?: string; description?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that specialty');
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Doctor taxonomy is managed globally.');
+    return {
+      data: await this.send('admin.doctor.createSpecialty', {
+        ...body,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Prescriptions ─────────────────────────────────────────────
   @Get('prescriptions')
   @ApiOperation({ summary: 'List prescriptions for audit' })
-  async getPrescriptions(@Query('page') page = 1) {
-    return await this.send('admin.doctor.prescriptions', { page });
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getPrescriptions(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those prescriptions');
+    return await this.send('admin.doctor.prescriptions', { page, countryCode: market, scope });
   }
 
   // ── Reports ───────────────────────────────────────────────────
   @Get('reports')
   @ApiOperation({ summary: 'Doctor platform reports' })
-  async getReports(@Query('period') period = '30d') {
-    return { data: await this.send('admin.doctor.reports', { period }) };
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getReports(
+    @Req() req: any,
+    @Query('period') period = '30d',
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those reports');
+    return {
+      data: await this.send('admin.doctor.reports', { period, countryCode: market, scope }),
+    };
   }
 
   // ── Settings ──────────────────────────────────────────────────
   @Get('settings')
   @ApiOperation({ summary: 'Get doctor admin settings' })
-  async getSettings() {
-    return { data: await this.send('admin.doctor.settings', {}) };
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getSettings(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those settings');
+    return { data: await this.send('admin.doctor.settings', { countryCode: market, scope }) };
   }
 
   @Post('settings')
   @ApiOperation({ summary: 'Update doctor settings' })
-  async updateSettings(@Body() body: any) {
-    return { data: await this.send('admin.doctor.updateSettings', body) };
+  async updateSettings(@Req() req: any, @Body() body: any) {
+    const { scope, market } = this.scopeOf(req, body?.countryCode, 'those settings');
+    return {
+      data: await this.send('admin.doctor.updateSettings', {
+        ...body,
+        countryCode: market,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 }
