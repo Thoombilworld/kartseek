@@ -140,6 +140,26 @@ export class AdminMarketplaceController {
   // lock inline, where a reviewer reading the handler can see it.
 
   /**
+   * A customer's wallet and loyalty balances are platform-wide.
+   *
+   * Neither wallet-service nor loyalty-service stores a market on a balance, or
+   * reads the `scope` this controller sends, so there is nothing that can say
+   * whether a given user is a regional admin's to credit, debit, freeze or
+   * award points to. Forwarding `scope` to a service that ignores it would have
+   * left a QA-locked admin unable to *read* a points balance while still able
+   * to credit a wallet in any market — enforcement in name only. Refused here
+   * instead, before any RPC, until those services carry the market (Plan C1).
+   * A global admin is unaffected.
+   */
+  private refuseUnattributableBalance(req: any): void {
+    if (marketScopeOf(req).locked) {
+      throw new ForbiddenException(
+        'This wallet/loyalty account cannot be attributed to a market yet.',
+      );
+    }
+  }
+
+  /**
    * Finance reads that must never invent a number.
    *
    * Returns `null` when the service is unreachable so the caller can say
@@ -1177,7 +1197,10 @@ export class AdminMarketplaceController {
     @Query('country') country?: string,
   ) {
     const { scope, market } = this.scopeOf(req, country, 'that commission');
-    // A single seller's ledger, or the platform-wide totals.
+    // A single seller's ledger, or the platform-wide totals. An unreachable
+    // commission-service is an error, not an empty ledger and not a zeroed
+    // total: "the platform earned nothing" and "we could not ask" have to look
+    // different on a finance screen.
     if (sellerId) {
       const history = await this.sendToCommission('get_seller_commission_history', {
         sellerId,
@@ -1185,7 +1208,9 @@ export class AdminMarketplaceController {
         limit: DEFAULT_PAGE_SIZE,
         scope,
       });
-      return history ?? { data: [], total: 0 };
+      if (!history)
+        throw new ServiceUnavailableException('Commissions are temporarily unavailable.');
+      return history;
     }
 
     const [totals, summary] = await Promise.all([
@@ -1197,8 +1222,10 @@ export class AdminMarketplaceController {
       }),
       this.sendToCommission('get_platform_revenue_summary', { region: market, scope }),
     ]);
+    if (!totals || !summary)
+      throw new ServiceUnavailableException('Commissions are temporarily unavailable.');
 
-    return { totals: totals ?? null, summary: summary ?? null };
+    return { totals, summary };
   }
 
   @Get('commissions/rate-card')
@@ -1206,11 +1233,10 @@ export class AdminMarketplaceController {
   @ApiQuery({ name: 'country', required: false })
   async getCommissionRateCard(@Req() req: any, @Query('country') country?: string) {
     const { scope, market } = this.scopeOf(req, country, 'that rate card');
-    return (
-      (await this.sendToCommission('get_category_rate_card', { region: market, scope })) ?? {
-        data: [],
-      }
-    );
+    const card = await this.sendToCommission('get_category_rate_card', { region: market, scope });
+    // An empty rate card reads as "the platform charges no commission".
+    if (!card) throw new ServiceUnavailableException('Commissions are temporarily unavailable.');
+    return card;
   }
 
   @Put('commissions/rate-card')
@@ -1220,12 +1246,12 @@ export class AdminMarketplaceController {
     @Body() body: { category: string; subCategory?: string; updates: any },
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that rate card');
-    return (
-      (await this.sendToCommission('update_category_rate', { ...body, scope })) ?? {
-        success: false,
-        message: 'Commission service unavailable',
-      }
-    );
+    // A rate change that did not happen answered 200 with `success: false`,
+    // which the console renders as a saved change. Same rule as the payout
+    // mutations: a write that failed must surface as an error.
+    const result = await this.sendToCommission('update_category_rate', { ...body, scope });
+    if (!result) throw new ServiceUnavailableException('Commissions are temporarily unavailable.');
+    return result;
   }
 
   @Post('commissions/overrides')
@@ -1242,13 +1268,13 @@ export class AdminMarketplaceController {
     },
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that commission');
-    return (
-      (await this.sendToCommission('set_seller_commission_override', {
-        ...body,
-        serviceType: body.serviceType ?? 'marketplace',
-        scope,
-      })) ?? { success: false, message: 'Commission service unavailable' }
-    );
+    const result = await this.sendToCommission('set_seller_commission_override', {
+      ...body,
+      serviceType: body.serviceType ?? 'marketplace',
+      scope,
+    });
+    if (!result) throw new ServiceUnavailableException('Commissions are temporarily unavailable.');
+    return result;
   }
 
   @Delete('commissions/overrides/:sellerId')
@@ -1259,13 +1285,13 @@ export class AdminMarketplaceController {
     @Query('serviceType') serviceType = 'marketplace',
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that commission');
-    return (
-      (await this.sendToCommission('remove_seller_commission_override', {
-        sellerId,
-        serviceType,
-        scope,
-      })) ?? { success: false, message: 'Commission service unavailable' }
-    );
+    const result = await this.sendToCommission('remove_seller_commission_override', {
+      sellerId,
+      serviceType,
+      scope,
+    });
+    if (!result) throw new ServiceUnavailableException('Commissions are temporarily unavailable.');
+    return result;
   }
 
   @Patch('commissions/:id')
@@ -1303,7 +1329,11 @@ export class AdminMarketplaceController {
       ? { sellerId, page: Number(page), limit: Number(limit), region: market, scope }
       : { page: Number(page), limit: Number(limit), region: market, scope };
 
-    return (await this.sendToPayout(cmd, payload)) ?? { data: [], total: 0, totalAmount: 0 };
+    // An empty queue is a decision an admin acts on — "nothing to approve
+    // today". An unreachable payout-service must not be able to say that.
+    const result = await this.sendToPayout(cmd, payload);
+    if (!result) throw new ServiceUnavailableException('Payouts are temporarily unavailable.');
+    return result;
   }
 
   @Get('payouts/stats')
@@ -1311,7 +1341,9 @@ export class AdminMarketplaceController {
   @ApiQuery({ name: 'country', required: false })
   async getPayoutStats(@Req() req: any, @Query('country') country?: string) {
     const { scope, market } = this.scopeOf(req, country, 'that report');
-    return (await this.sendToPayout('get_payout_stats', { region: market, scope })) ?? null;
+    const stats = await this.sendToPayout('get_payout_stats', { region: market, scope });
+    if (!stats) throw new ServiceUnavailableException('Payouts are temporarily unavailable.');
+    return stats;
   }
 
   @Patch('payouts/:id/approve')
@@ -2398,6 +2430,7 @@ export class AdminMarketplaceController {
     // The money moves first. The audit entry is written after, and only if the
     // adjustment actually landed — logging it first recorded credits that never
     // happened and made the log the least trustworthy record of the two.
+    this.refuseUnattributableBalance(req);
     const { scope } = this.scopeOf(req, undefined, 'that wallet');
     const result = await this.sendTo(
       this.walletClient,
@@ -2433,6 +2466,7 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Freeze a user wallet (fraud prevention)' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async freezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
+    this.refuseUnattributableBalance(req);
     const { scope } = this.scopeOf(req, undefined, 'that wallet');
     const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_freeze', {
       userId: dto.userId,
@@ -2454,6 +2488,7 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Unfreeze a user wallet' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async unfreezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
+    this.refuseUnattributableBalance(req);
     const { scope } = this.scopeOf(req, undefined, 'that wallet');
     const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_unfreeze', {
       userId: dto.userId,
@@ -2536,14 +2571,16 @@ export class AdminMarketplaceController {
   @ApiParam({ name: 'userId' })
   async getUserLoyalty(@Req() req: any, @Param('userId') userId: string) {
     // A points balance a locked admin may not attribute to their own market is
-    // not theirs to read. The user's market is loyalty-service's to answer, and
-    // it has no read that returns it yet, so this refuses rather than guessing.
-    const { scope } = this.scopeOf(req, undefined, 'that loyalty account');
-    if (scope) {
-      throw new ForbiddenException('This loyalty account cannot be attributed to a market yet.');
-    }
+    // not theirs to read — same reason the four balance writes refuse.
+    this.refuseUnattributableBalance(req);
+    this.scopeOf(req, undefined, 'that loyalty account');
+    // Redis is the first tier and loyalty-service is the source. A miss on both
+    // is "we do not know", not "this customer has zero points and Bronze tier":
+    // that fabricated balance is what an admin used to see for any user id at
+    // all, including one that does not exist.
     const cached = await this.redis.getJson<any>(`loyalty:${userId}`);
-    return cached || { userId, points: 0, tier: 'Bronze', totalEarned: 0, totalReversed: 0 };
+    if (cached) return cached;
+    return this.sendTo(this.loyaltyClient, 'Loyalty service', 'get_loyalty_points', { userId });
   }
 
   @Post('loyalty/adjust')
@@ -2561,6 +2598,7 @@ export class AdminMarketplaceController {
     @Req() req: any,
     @Body() dto: { userId: string; points: number; reason: string },
   ) {
+    this.refuseUnattributableBalance(req);
     const { scope } = this.scopeOf(req, undefined, 'that loyalty account');
     const result = await this.sendTo(
       this.loyaltyClient,

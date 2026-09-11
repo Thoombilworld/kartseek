@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ForbiddenException, HttpException } from '@nestjs/common';
-import { of } from 'rxjs';
+import { ForbiddenException, HttpException, ServiceUnavailableException } from '@nestjs/common';
+import { of, throwError } from 'rxjs';
 import { AdminMarketplaceController } from './admin-marketplace.controller';
 import { MARKETPLACE_PATTERNS } from '../contracts/marketplace.patterns';
 
@@ -11,6 +11,8 @@ const req = (user: object) => ({ user, method: 'GET', originalUrl: '/x', headers
 function build(sendImpl: (cmd: any, payload: any) => any) {
   const client = { send: vi.fn((cmd, payload) => of(sendImpl(cmd, payload))) };
   const noop = { send: vi.fn(() => of({})) };
+  const wallet = { send: vi.fn(() => of({ balance: 10 })) };
+  const loyalty = { send: vi.fn(() => of({ points: 10 })) };
   const ctrl = new AdminMarketplaceController(
     {
       get: vi.fn(async () => null),
@@ -27,12 +29,12 @@ function build(sendImpl: (cmd: any, payload: any) => any) {
     { update: vi.fn(async () => undefined), findOne: vi.fn(async () => null) } as any, // userRepo
     noop as any, // commission
     noop as any, // payout
-    noop as any, // wallet
-    noop as any, // loyalty
+    wallet as any, // wallet
+    loyalty as any, // loyalty
     noop as any, // order
     noop as any, // refund
   );
-  return { ctrl, client };
+  return { ctrl, client, wallet, loyalty };
 }
 
 describe('AdminMarketplaceController — sellers and products', () => {
@@ -118,6 +120,85 @@ describe('AdminMarketplaceController — sellers and products', () => {
     for (const call of client.send.mock.calls) {
       expect(call[1]).toMatchObject({ scope: 'QA', adminId: 'u-qa' });
     }
+  });
+
+  it('refuses a locked admin a wallet adjustment before the money moves', async () => {
+    const { ctrl, wallet } = build(() => ({}));
+    await expect(
+      ctrl.adjustWalletBalance(req(qaAdmin), {
+        userId: 'u-1',
+        amount: 500,
+        reason: 'goodwill',
+        type: 'CREDIT',
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    // Neither wallet-service nor loyalty-service reads `scope`, so forwarding it
+    // would have been enforcement in name only: the refusal has to happen here,
+    // and nothing may be sent.
+    expect(wallet.send).not.toHaveBeenCalled();
+  });
+
+  it('lets a global admin adjust a wallet', async () => {
+    const { ctrl, wallet } = build(() => ({}));
+    await ctrl.adjustWalletBalance(req(globalAdmin), {
+      userId: 'u-1',
+      amount: 500,
+      reason: 'goodwill',
+      type: 'CREDIT',
+    });
+    expect(wallet.send).toHaveBeenCalled();
+  });
+
+  it('refuses a locked admin the other three balance routes too', async () => {
+    const { ctrl, wallet, loyalty } = build(() => ({}));
+    await expect(
+      ctrl.freezeWallet(req(qaAdmin), { userId: 'u-1', reason: 'fraud' }),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      ctrl.unfreezeWallet(req(qaAdmin), { userId: 'u-1', reason: 'cleared' }),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      ctrl.adjustLoyaltyPoints(req(qaAdmin), { userId: 'u-1', points: 100, reason: 'goodwill' }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(wallet.send).not.toHaveBeenCalled();
+    expect(loyalty.send).not.toHaveBeenCalled();
+  });
+
+  it('reads a loyalty balance from the service rather than inventing one', async () => {
+    const { ctrl, loyalty } = build(() => ({}));
+    await expect(ctrl.getUserLoyalty(req(globalAdmin), 'u-1')).resolves.toMatchObject({
+      points: 10,
+    });
+    expect(loyalty.send).toHaveBeenCalledWith({ cmd: 'get_loyalty_points' }, { userId: 'u-1' });
+  });
+
+  it('says finance is unavailable rather than reporting an empty queue', async () => {
+    // `sendToPayout` / `sendToCommission` swallow the RPC failure and answer
+    // null. Every caller used to turn that null into `{ data: [], total: 0 }`,
+    // so an outage was indistinguishable from "nothing to approve today".
+    const down = { send: vi.fn(() => throwError(() => new Error('ECONNREFUSED'))) };
+    const ctrl = new AdminMarketplaceController(
+      { getJson: vi.fn(async () => null), setJson: vi.fn(async () => undefined) } as any,
+      { publish: vi.fn(async () => undefined) } as any,
+      { send: vi.fn(() => of({})) } as any,
+      {} as any,
+      down as any, // commission
+      down as any, // payout
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    await expect(ctrl.getPayouts(req(globalAdmin))).rejects.toThrow(ServiceUnavailableException);
+    await expect(ctrl.getPayoutStats(req(globalAdmin))).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+    await expect(ctrl.getCommissions(req(globalAdmin))).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+    await expect(ctrl.getCommissionRateCard(req(globalAdmin))).rejects.toThrow(
+      ServiceUnavailableException,
+    );
   });
 
   it('refuses a locked admin any write to the shared catalogue taxonomy', async () => {
