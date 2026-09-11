@@ -28,13 +28,31 @@ const skip = (name, why) => {
   console.log(`  ○ ${name} — skipped: ${why}`);
 };
 
+/**
+ * Signs in, completing the staff second factor when one is demanded.
+ *
+ * A staff login answers with a challenge and no token; the gateway echoes the
+ * code only when it is not in production and one of DEV_MFA_ECHO /
+ * DEV_AUTH_BYPASS is on. Without that echo there is no way for a script to read
+ * the mailbox, so it says so rather than reporting every check as a failure.
+ */
 async function login({ email, password }) {
   const r = await fetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const j = await r.json();
+  let j = await r.json();
+  if (j.requires2FA) {
+    if (!j.devCode)
+      throw new Error(`MFA required for ${email}; run the fleet with DEV_MFA_ECHO=true`);
+    const v = await fetch(`${BASE}/auth/mfa/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
+    });
+    j = await v.json();
+  }
   if (!j.accessToken)
     throw new Error(`login failed for ${email}: ${JSON.stringify(j).slice(0, 200)}`);
   return j.accessToken;

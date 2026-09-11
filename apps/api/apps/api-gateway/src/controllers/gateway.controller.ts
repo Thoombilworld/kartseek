@@ -28,6 +28,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
+import { Throttle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -36,7 +37,8 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { JwtAuthGuard, AccountLockoutService, EncryptionService } from '@app/security';
 import { User } from '../entities/user.entity';
-import { UserRole, sellerTypeFromRole, type SellerType } from '@app/common';
+import { UserRole, sellerTypeFromRole, isStaffRole, type SellerType } from '@app/common';
+import { StaffMfaService } from '../services/staff-mfa.service';
 import {
   LoginDto,
   RegisterDto,
@@ -46,6 +48,7 @@ import {
   OtpVerifyDto,
   RefreshTokenDto,
   ForgotPasswordDto,
+  MfaVerifyDto,
 } from '../dto/gateway.dto';
 
 /**
@@ -68,6 +71,7 @@ export class AuthController {
     private readonly lockout: AccountLockoutService,
     private readonly encryption: EncryptionService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    private readonly staffMfa: StaffMfaService,
   ) {}
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -156,9 +160,13 @@ export class AuthController {
   // ── Email/Password Login ───────────────────────────────────────────────────
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Login with email and password',
-    description: 'Authenticates a user and returns a JWT access token + refresh token.',
+    description:
+      'Authenticates a user and returns a JWT access token + refresh token. ' +
+      'A staff role gets `{ requires2FA: true, challengeToken }` and no tokens ' +
+      'until POST /auth/mfa/verify.',
   })
   @ApiBody({
     schema: {
@@ -250,9 +258,44 @@ export class AuthController {
       );
     }
 
-    // ── Success — clear lockout and issue tokens ─────────────────────────────
+    // ── Success — clear lockout ──────────────────────────────────────────────
+    // A correct password clears the counter whether or not a second factor
+    // follows: the lockout is there to stop password guessing, and leaving it
+    // armed would let a staff account lock itself out by signing in five times.
     await this.lockout.clearAttempts(emailKey);
 
+    /**
+     * Staff finish signing in with a second factor, so no session exists yet.
+     *
+     * The console used to receive the access token here and then ask for an OTP
+     * it checked in the browser against a build-time constant. The password was
+     * therefore the only real barrier, and anyone who skipped the OTP screen —
+     * or read the constant out of the JavaScript bundle — was already signed in.
+     * What goes back now is a challenge that authorises nothing.
+     */
+    if (isStaffRole(user.role)) {
+      const challenge = await this.staffMfa.createChallenge(user);
+      return {
+        success: true,
+        requires2FA: true,
+        challengeToken: challenge.challengeToken,
+        user: { id: user.id, email: user.email, role: user.role },
+        ...(challenge.devCode ? { devCode: challenge.devCode } : {}),
+      };
+    }
+
+    return this.completeLogin(user);
+  }
+
+  /**
+   * The session itself, shared by password login and MFA completion.
+   *
+   * Everything that makes a login real lives here — the token pair, the Redis
+   * `session:` record the guard and logout read, and the hashed refresh token —
+   * so a staff sign-in that clears its second factor gets exactly the session a
+   * customer gets, not a reconstruction of one.
+   */
+  private async completeLogin(user: User) {
     // Issue JWT tokens
     const { accessToken, refreshToken } = this.issueTokens(user);
 
@@ -305,6 +348,26 @@ export class AuthController {
       refreshToken,
       expiresIn: 3600,
     };
+  }
+
+  // ── Staff second factor ────────────────────────────────────────────────────
+  @Post('mfa/verify')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Complete a staff sign-in with the delivered code',
+    description:
+      'Exchanges the challenge token from /auth/login plus the six-digit code ' +
+      'for the normal login response. The code is checked here, never in the client.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Expired challenge, wrong code, or attempts exhausted' })
+  async mfaVerify(@Body() body: MfaVerifyDto) {
+    const userId = await this.staffMfa.verify(body.challengeToken, body.code);
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    // Re-read rather than trusting the challenge: an account disabled during
+    // the five minutes the code was valid must not still be able to finish.
+    if (!user || !user.isActive) throw new UnauthorizedException('Account unavailable.');
+    return this.completeLogin(user);
   }
 
   // ── Registration ───────────────────────────────────────────────────────────

@@ -26,6 +26,32 @@ export const ADMIN_ROLES = [
   UserRole.PRODUCT_MANAGER,
 ];
 
+/**
+ * The roles that sign in to the admin console — the same list as ADMIN_ROLES,
+ * spelled as the wire values so it can be compared against whatever a token or
+ * a `users.role` column holds. Mirrors `STAFF_ROLES` in shared-core, which is
+ * the web client's half of the same contract.
+ *
+ * `isStaffRole` is what decides that a login must clear a second factor before
+ * it gets a session, so it is deliberately case-insensitive: the enum stores
+ * `super_admin` while the JWT and the console both talk in `SUPER_ADMIN`, and a
+ * casing mismatch here would silently hand staff a session with no second
+ * factor at all.
+ */
+export const STAFF_ROLES = [
+  'SUPER_ADMIN',
+  'ADMIN',
+  'SUPPORT_AGENT',
+  'FINANCE_MANAGER',
+  'PRODUCT_MANAGER',
+] as const;
+
+export function isStaffRole(role: unknown): boolean {
+  return (
+    typeof role === 'string' && (STAFF_ROLES as readonly string[]).includes(role.toUpperCase())
+  );
+}
+
 export const SELLER_ROLES = [
   UserRole.SELLER,
   UserRole.RESTAURANT_SELLER,
@@ -70,11 +96,16 @@ export function isSellerType(value: unknown): value is SellerType {
  */
 export function sellerTypeFromRole(role: string | undefined): SellerType | null {
   switch ((role ?? '').toLowerCase()) {
-    case 'grocery_seller':    return 'grocery';
-    case 'restaurant_seller': return 'restaurant';
+    case 'grocery_seller':
+      return 'grocery';
+    case 'restaurant_seller':
+      return 'restaurant';
     case 'pharmacy_seller':
-    case 'pharmacist':        return 'pharmacy';
-    case 'doctor':            return 'doctor';
-    default:                  return null;
+    case 'pharmacist':
+      return 'pharmacy';
+    case 'doctor':
+      return 'doctor';
+    default:
+      return null;
   }
 }

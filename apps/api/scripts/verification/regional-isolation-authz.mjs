@@ -1,13 +1,32 @@
 /* global process, console, fetch */
 import pg from 'pg';
-const API = 'http://127.0.0.1:3001/api/v1';
+// Overridable so the checks can be pointed at a gateway on another port, the
+// way admin-scope-authz.mjs already allows.
+const API = process.env.API_BASE ?? 'http://127.0.0.1:3001/api/v1';
+/**
+ * Signs in, completing the staff second factor when one is demanded. Every
+ * account below is staff, so without the gateway's dev echo of the code there
+ * is no token at all — hence the explicit failure rather than 36 confusing 401s.
+ */
 const login = async (email, password) => {
   const r = await fetch(API + '/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const j = await r.json();
+  let j = await r.json();
+  if (j.requires2FA) {
+    if (!j.devCode)
+      throw new Error(`MFA required for ${email}; run the fleet with DEV_MFA_ECHO=true`);
+    const v = await fetch(API + '/auth/mfa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
+    });
+    j = await v.json();
+  }
+  if (!j.accessToken)
+    throw new Error(`login failed for ${email}: ${JSON.stringify(j).slice(0, 200)}`);
   return j.accessToken;
 };
 const qa = await login('qa-admin@kartseek.com', 'AdminPass123!');

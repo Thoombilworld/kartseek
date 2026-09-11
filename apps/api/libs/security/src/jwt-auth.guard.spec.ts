@@ -17,8 +17,12 @@ const notPublic = { getAllAndOverride: () => false } as any;
 
 describe('JwtAuthGuard dev bypass', () => {
   const env = process.env;
-  beforeEach(() => { process.env = { ...env, NODE_ENV: 'development', DEV_AUTH_BYPASS: 'true' }; });
-  afterAll(() => { process.env = env; });
+  beforeEach(() => {
+    process.env = { ...env, NODE_ENV: 'development', DEV_AUTH_BYPASS: 'true' };
+  });
+  afterAll(() => {
+    process.env = env;
+  });
 
   it('injects a CUSTOMER by default, leaving admin routes closed', async () => {
     delete process.env.DEV_AUTH_BYPASS_ROLE;
@@ -76,5 +80,66 @@ describe('JwtAuthGuard dev bypass', () => {
     const { ctx, request } = contextFor();
     await new JwtAuthGuard(notPublic).canActivate(ctx).catch((): undefined => undefined);
     expect(request.user).toBeUndefined();
+  });
+});
+
+describe('JwtAuthGuard token type', () => {
+  /**
+   * Reaching the type check means getting past passport, which has no strategy
+   * registered under test. `super.canActivate` is swapped for a stand-in that
+   * populates `request.user` exactly as `JwtStrategy.validate()` would, so what
+   * is under test is the guard's own decision about the `type` claim.
+   */
+  const parentProto = Object.getPrototypeOf(JwtAuthGuard.prototype);
+  const realCanActivate = parentProto.canActivate;
+  const env = process.env;
+
+  const authenticateAs = (user: Record<string, unknown>) => {
+    parentProto.canActivate = function (ctx: any) {
+      ctx.switchToHttp().getRequest().user = user;
+      return true;
+    };
+  };
+
+  beforeEach(() => {
+    // The bypass would answer before the type check ever ran.
+    process.env = { ...env, NODE_ENV: 'test', DEV_AUTH_BYPASS: 'false' };
+  });
+  afterEach(() => {
+    parentProto.canActivate = realCanActivate;
+    process.env = env;
+  });
+
+  it('refuses an MFA challenge token used as a Bearer credential', async () => {
+    // The challenge token is handed to a browser that has not yet proved the
+    // second factor. If it opened protected routes, the factor would be
+    // optional in practice — sign in, ignore the code, use the token.
+    authenticateAs({ sub: 'u1', userId: 'u1', role: 'SUPER_ADMIN', type: 'mfa' });
+    const { ctx } = contextFor({ authorization: 'Bearer mfa.challenge.token' });
+    await expect(new JwtAuthGuard(notPublic).canActivate(ctx)).rejects.toThrow(
+      'This token cannot be used to access resources.',
+    );
+  });
+
+  it('refuses a refresh token used as a Bearer credential', async () => {
+    authenticateAs({ sub: 'u1', userId: 'u1', role: 'CUSTOMER', type: 'refresh' });
+    const { ctx } = contextFor({ authorization: 'Bearer refresh.token' });
+    await expect(new JwtAuthGuard(notPublic).canActivate(ctx)).rejects.toThrow(
+      'This token cannot be used to access resources.',
+    );
+  });
+
+  it('admits an access token', async () => {
+    authenticateAs({ sub: 'u1', userId: 'u1', role: 'CUSTOMER', type: 'access' });
+    const { ctx } = contextFor({ authorization: 'Bearer access.token' });
+    await expect(new JwtAuthGuard(notPublic).canActivate(ctx)).resolves.toBe(true);
+  });
+
+  it('still admits a token minted before the type claim existed', async () => {
+    // Sessions live at rollout carry no `type`; they age out with their own
+    // expiry rather than being cut off mid-flight.
+    authenticateAs({ sub: 'u1', userId: 'u1', role: 'CUSTOMER' });
+    const { ctx } = contextFor({ authorization: 'Bearer legacy.token' });
+    await expect(new JwtAuthGuard(notPublic).canActivate(ctx)).resolves.toBe(true);
   });
 });

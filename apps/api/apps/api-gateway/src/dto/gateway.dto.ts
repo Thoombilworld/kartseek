@@ -185,6 +185,19 @@ export class RefreshTokenDto {
   refreshToken: string;
 }
 
+/** Completes a staff sign-in: the challenge from /auth/login plus the code. */
+export class MfaVerifyDto {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  @IsNotEmpty({ message: 'Challenge token is required' })
+  @IsString()
+  challengeToken: string;
+
+  @ApiProperty({ example: '482910' })
+  @IsNotEmpty({ message: 'Verification code is required' })
+  @Matches(/^\d{6}$/, { message: 'code must be 6 digits' })
+  code: string;
+}
+
 export class ForgotPasswordDto {
   @ApiProperty({ example: 'user@kartseek.com' })
   @IsNotEmpty({ message: 'Email is required' })

@@ -81,24 +81,33 @@ const check = (name, ok, detail) => {
   results.push({ name, ok });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
 };
-const login = async () => {
+/**
+ * Signs in, completing the staff second factor when one is demanded. A customer
+ * never sees a challenge, so this one helper covers both callers below.
+ */
+const login = async (email, password) => {
   const r = await fetch(API + '/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'testcustomer@kartseek.com', password: 'TestPass123!' }),
+    body: JSON.stringify({ email, password }),
   });
-  return (await r.json()).accessToken;
+  let j = await r.json();
+  if (j.requires2FA) {
+    if (!j.devCode)
+      throw new Error(`MFA required for ${email}; run the fleet with DEV_MFA_ECHO=true`);
+    const v = await fetch(API + '/auth/mfa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
+    });
+    j = await v.json();
+  }
+  if (!j.accessToken)
+    throw new Error(`login failed for ${email}: ${JSON.stringify(j).slice(0, 200)}`);
+  return j.accessToken;
 };
-const admin = async () => {
-  const r = await fetch(API + '/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@kartseek.com', password: 'AdminPass123!' }),
-  });
-  return (await r.json()).accessToken;
-};
-const customer = await login();
-const superAdmin = await admin();
+const customer = await login('testcustomer@kartseek.com', 'TestPass123!');
+const superAdmin = await login('admin@kartseek.com', 'AdminPass123!');
 const call = async (cc, method, path, body, token = customer) => {
   const r = await fetch(API + path, {
     method,

@@ -91,6 +91,7 @@ import { AdminCoreController } from './controllers/admin-core.controller';
 import { TestSeedService } from './services/test-seed.service';
 import { MarketplaceCatalogService } from './services/marketplace-catalog.service';
 import { MarketplaceOrderService } from './services/marketplace-order.service';
+import { StaffMfaService } from './services/staff-mfa.service';
 import { SellerOwnershipGuard } from './guards/seller-ownership.guard';
 import { GroceryStoreOwnershipGuard } from './guards/grocery-store-ownership.guard';
 import { SellerModuleGuard } from './guards/seller-module.guard';
@@ -506,6 +507,8 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
     // gRPC client for the Marketplace catalogue (falls back to TCP when down)
     MarketplaceCatalogService,
     MarketplaceOrderService, // order placement shared by /marketplace/orders and /orders/checkout
+    // Second factor for staff sign-in — issues, delivers and checks the code
+    StaffMfaService,
     // ── WebSocket Gateways ─────────────────────────────────────────────────
     TrackingGateway, // /tracking  — unified tracking hub
     TaxiTrackingGateway, // /taxi      — taxi driver GPS streaming
