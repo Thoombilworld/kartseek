@@ -45,8 +45,15 @@ describe('toAdminUser', () => {
     ).toEqual(['orders.view']);
     expect(toAdminUser({ user: { ...base, role: 'super_admin' } }).adminPermissions).toEqual(['*']);
   });
-  it('gives an ADMIN with no claim yet the transitional wildcard (removed in B4)', () => {
-    expect(toAdminUser({ user: base }).adminPermissions).toEqual(['*']);
+  it('grants an ADMIN with no claim nothing at all', () => {
+    // The transitional branch that handed ADMIN a wildcard is gone: the API
+    // signs `adminPermissions` for every staff account now, so an absent claim
+    // is a real answer — and a sidebar full of links that answer 403 is worse
+    // than a short one.
+    expect(toAdminUser({ user: base }).adminPermissions).toEqual([]);
+    expect(toAdminUser({ user: { ...base, role: 'finance_manager' } }).adminPermissions).toEqual(
+      [],
+    );
   });
   it('never invents 2FA state', () => {
     expect(toAdminUser({ user: base }).twoFactorEnabled).toBeUndefined();

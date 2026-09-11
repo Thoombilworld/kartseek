@@ -63,8 +63,15 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   exact?: boolean;
-  /** Permission key(s) required — item is hidden if user lacks ALL of these */
-  perm?: string;
+  /**
+   * Permission key required — the item is hidden unless the signed-in account
+   * holds it. Mandatory, not optional: while it was optional three items had
+   * none, and an item with no key is shown to everyone who can open the
+   * console at all — including the support agent and the finance manager, who
+   * would then click through to a page the gateway answers 403 for. A new
+   * entry now has to say who it is for.
+   */
+  perm: string;
 }
 
 interface NavSection {
@@ -121,7 +128,7 @@ const navSections: NavSection[] = [
         perm: 'modules.restaurant',
       },
       { href: '/admin/pharmacy', label: 'Pharmacy', icon: Pill, perm: 'modules.pharmacy' },
-      { href: '/admin/hotel-booking', label: 'Hotel Booking', icon: Hotel },
+      { href: '/admin/hotel-booking', label: 'Hotel Booking', icon: Hotel, perm: 'modules.hotel' },
       {
         href: '/admin/doctor',
         label: 'Doctor / Hospital',
@@ -143,12 +150,9 @@ const navSections: NavSection[] = [
         icon: MapPin,
         perm: 'delivery.view',
       },
-      {
-        href: '/admin/hotel-booking/loyalty',
-        label: 'Loyalty Program',
-        icon: Gift,
-        perm: 'loyalty.view',
-      },
+      // The hotel module's own "Loyalty Program" link lived here beside the
+      // identical entry under Finance, so the sidebar offered the same label
+      // twice and the two went to different pages. Finance keeps it.
     ],
   },
   {
@@ -196,8 +200,8 @@ const navSections: NavSection[] = [
         icon: HeadphonesIcon,
         perm: 'support.view',
       },
-      { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-      { href: '/admin/sos', label: 'SOS Emergency', icon: AlertTriangle },
+      { href: '/admin/notifications', label: 'Notifications', icon: Bell, perm: 'dashboard.view' },
+      { href: '/admin/sos', label: 'SOS Emergency', icon: AlertTriangle, perm: 'support.view' },
     ],
   },
   {
@@ -462,11 +466,9 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {navSections.map((section) => {
-          // Filter items by permission
-          const visibleItems = section.items.filter((item) => {
-            if (!item.perm) return true; // No permission required
-            return hasPermission(item.perm);
-          });
+          // Filter items by permission. Every item declares one, so there is no
+          // "shown to everybody" branch to fall through to.
+          const visibleItems = section.items.filter((item) => hasPermission(item.perm));
           if (visibleItems.length === 0) return null;
           return (
             <div key={section.label}>

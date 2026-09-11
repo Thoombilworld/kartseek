@@ -29,16 +29,13 @@ export function toAdminUser(session: { user: StaffSessionUser }): AuthUser {
   const role = String(u.role ?? '').toUpperCase();
   if (!isStaffRole(role)) throw new Error('This account does not have admin access.');
   const regionLocked = u.regionLocked === true;
+  // No role but SUPER_ADMIN gets a wildcard, and no role gets one by default.
+  // An ADMIN used to, transitionally, because nothing signed the claim; the API
+  // signs it for every staff account now, so an empty list here means the
+  // account really was granted nothing — draw that rather than paper over it,
+  // or the console shows links that answer 403.
   const permissions =
-    role === 'SUPER_ADMIN'
-      ? ['*']
-      : Array.isArray(u.adminPermissions)
-        ? u.adminPermissions
-        : // Transitional until B4 signs the claim: an ADMIN without one keeps the
-          // full console rather than an empty sidebar.
-          role === 'ADMIN'
-          ? ['*']
-          : [];
+    role === 'SUPER_ADMIN' ? ['*'] : Array.isArray(u.adminPermissions) ? u.adminPermissions : [];
   return {
     id: u.id,
     name: u.name ?? u.email,

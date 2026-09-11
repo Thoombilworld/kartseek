@@ -215,10 +215,21 @@ export function normaliseRole(role: string | undefined): UserRole {
     case 'DELIVERY_DRIVER':
     case 'DELIVERY_BOY':
       return 'DRIVER';
+    // Each staff role keeps its own identity. `ADMIN` used to map to
+    // SUPER_ADMIN here — a promotion performed by the customer login path, on
+    // the client, which made every `hasRole('SUPER_ADMIN')` check true for an
+    // ordinary administrator and defeated the whole point of signing a role.
+    // The union has carried these literals since B1.
     case 'SUPER_ADMIN':
       return 'SUPER_ADMIN';
     case 'ADMIN':
-      return 'SUPER_ADMIN';
+      return 'ADMIN';
+    case 'SUPPORT_AGENT':
+      return 'SUPPORT_AGENT';
+    case 'FINANCE_MANAGER':
+      return 'FINANCE_MANAGER';
+    case 'PRODUCT_MANAGER':
+      return 'PRODUCT_MANAGER';
     case 'FRANCHISE':
     case 'FRANCHISE_OWNER':
     case 'FRANCHISE_ADMIN':
