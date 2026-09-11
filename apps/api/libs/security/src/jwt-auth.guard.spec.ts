@@ -51,6 +51,23 @@ describe('JwtAuthGuard dev bypass', () => {
     expect(request.user.id).toBe(request.user.userId);
   });
 
+  it('gives an admin bypass user the wildcard, and everyone else none', async () => {
+    // The bypass stands in for a signed-in account, and since B4 a staff
+    // account's token carries `adminPermissions`. Without one here, every
+    // `perm:`-gated route answers 403 under DEV_AUTH_BYPASS_ROLE=SUPER_ADMIN —
+    // the bypass would look active while the route it exists to open stayed
+    // shut, which is the same trap the role default fell into.
+    process.env.DEV_AUTH_BYPASS_ROLE = 'SUPER_ADMIN';
+    const admin = contextFor();
+    await new JwtAuthGuard(notPublic).canActivate(admin.ctx);
+    expect(admin.request.user.adminPermissions).toEqual(['*']);
+
+    process.env.DEV_AUTH_BYPASS_ROLE = 'CUSTOMER';
+    const customer = contextFor();
+    await new JwtAuthGuard(notPublic).canActivate(customer.ctx);
+    expect(customer.request.user.adminPermissions).toEqual([]);
+  });
+
   it('normalises the configured role to upper case', async () => {
     process.env.DEV_AUTH_BYPASS_ROLE = 'admin';
     const { ctx, request } = contextFor();

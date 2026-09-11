@@ -1,4 +1,9 @@
-import { Injectable, type CanActivate, type ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  type CanActivate,
+  type ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ROLES_KEY } from '../decorators/roles.decorator';
@@ -23,7 +28,7 @@ export class RolesGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    
+
     if (!requiredRoles) {
       return true; // No roles required, access granted
     }
@@ -50,15 +55,19 @@ export class RolesGuard implements CanActivate {
     }
 
     // Separate role requirements from permission requirements
-    const roleRequirements = requiredRoles.filter(r => !r.startsWith('perm:'));
-    const permRequirements = requiredRoles.filter(r => r.startsWith('perm:')).map(r => r.slice(5));
+    const roleRequirements = requiredRoles.filter((r) => !r.startsWith('perm:'));
+    const permRequirements = requiredRoles
+      .filter((r) => r.startsWith('perm:'))
+      .map((r) => r.slice(5));
 
     // Check role-based access
     if (roleRequirements.length > 0) {
       const userRoleUpper = user.role.toUpperCase();
       const hasRole = roleRequirements.some((role) => role.toUpperCase() === userRoleUpper);
       if (!hasRole) {
-        throw new ForbiddenException('Insufficient permissions. Your role cannot perform this action.');
+        throw new ForbiddenException(
+          'Insufficient permissions. Your role cannot perform this action.',
+        );
       }
     }
 
@@ -71,7 +80,11 @@ export class RolesGuard implements CanActivate {
     // was a trap laid for the first one rather than a live hole.
     if (permRequirements.length > 0) {
       const granted: string[] = Array.isArray(user.adminPermissions) ? user.adminPermissions : [];
-      const hasPerms = permRequirements.every((perm) => granted.includes(perm));
+      // `'*'` is what SUPER_ADMIN signs in with — one wildcard instead of an
+      // enumerated list, so a permission key introduced by a later route does
+      // not have to be back-filled onto the account that grants it.
+      const hasPerms =
+        granted.includes('*') || permRequirements.every((perm) => granted.includes(perm));
       if (!hasPerms) {
         throw new ForbiddenException(
           `Missing required permissions: ${permRequirements.join(', ')}`,

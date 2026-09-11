@@ -55,7 +55,13 @@ import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagin
  * sellers, products, categories, brands, campaigns, bank offers, exchange offers,
  * orders, refunds, payouts.
  *
- * All endpoints require SUPER_ADMIN role.
+ * Every endpoint requires an admin role (class-level `@Roles`). The money
+ * routes — payouts, refunds and returns decisions, commissions, wallets and
+ * loyalty — additionally name a permission key, and a method-level `@Roles`
+ * *replaces* the class-level one rather than adding to it, so each of them
+ * restates the role set alongside the key. `FINANCE_MANAGER` appears there and
+ * nowhere else: that role exists to work these routes and is not an admin
+ * anywhere else in the console.
  */
 @ApiTags('👑 Admin')
 @ApiBearerAuth('JWT')
@@ -1073,6 +1079,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('returns/:id/approve')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.refund')
   @ApiOperation({ summary: 'Approve a return request' })
   async approveReturn(@Req() req: any, @Param('id') id: string) {
     const { scope } = this.scopeOf(req, undefined, 'that return');
@@ -1085,6 +1092,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('returns/:id/reject')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.refund')
   @ApiOperation({ summary: 'Reject a return request' })
   async rejectReturn(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
     const { scope } = this.scopeOf(req, undefined, 'that return');
@@ -1133,6 +1141,7 @@ export class AdminMarketplaceController {
   // approve an Indian refund. Refused here, before any RPC, until refunds carry
   // a market (Plan C1). Global admins are unaffected.
   @Post('refunds/:id/approve')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.refund')
   @ApiOperation({ summary: 'Approve a refund' })
   async approveRefund(
     @Req() req: any,
@@ -1151,6 +1160,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('refunds/:id/process')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.refund')
   @ApiOperation({ summary: 'Process an approved refund' })
   async processRefund(
     @Req() req: any,
@@ -1169,6 +1179,7 @@ export class AdminMarketplaceController {
   }
 
   @Put('refunds/:id/reject')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.refund')
   @ApiOperation({ summary: 'Reject a refund' })
   async rejectRefund(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
     refuseLockedAdmin(req, 'a refund decision');
@@ -1192,6 +1203,7 @@ export class AdminMarketplaceController {
    * Now reads commission-service, which is the service that charges them.
    */
   @Get('commissions')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Platform commission earnings' })
   @ApiQuery({ name: 'sellerId', required: false })
   @ApiQuery({ name: 'startDate', required: false })
@@ -1240,6 +1252,7 @@ export class AdminMarketplaceController {
   }
 
   @Get('commissions/rate-card')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Category commission rate card' })
   @ApiQuery({ name: 'country', required: false })
   async getCommissionRateCard(@Req() req: any, @Query('country') country?: string) {
@@ -1252,6 +1265,7 @@ export class AdminMarketplaceController {
   }
 
   @Put('commissions/rate-card')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Change a category commission rate' })
   async updateCommissionRateCard(
     @Req() req: any,
@@ -1268,6 +1282,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('commissions/overrides')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Give a seller a negotiated commission rate' })
   async setCommissionOverride(
     @Req() req: any,
@@ -1292,6 +1307,7 @@ export class AdminMarketplaceController {
   }
 
   @Delete('commissions/overrides/:sellerId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Remove a seller’s negotiated rate' })
   async removeCommissionOverride(
     @Req() req: any,
@@ -1310,6 +1326,7 @@ export class AdminMarketplaceController {
   }
 
   @Patch('commissions/:id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Update commission rate for a module' })
   async updateCommission(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     const { scope } = this.scopeOf(req, undefined, 'that commission');
@@ -1328,6 +1345,7 @@ export class AdminMarketplaceController {
    * held these as real rows since the wallet/payout schemas were created.
    */
   @Get('payouts')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Seller payout requests awaiting action' })
   @ApiQuery({ name: 'sellerId', required: false })
   @ApiQuery({ name: 'country', required: false })
@@ -1354,6 +1372,7 @@ export class AdminMarketplaceController {
   }
 
   @Get('payouts/stats')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Payout volume and success rate' })
   @ApiQuery({ name: 'country', required: false })
   async getPayoutStats(@Req() req: any, @Query('country') country?: string) {
@@ -1365,6 +1384,7 @@ export class AdminMarketplaceController {
   }
 
   @Patch('payouts/:id/approve')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Approve a payout request' })
   async approvePayout(@Req() req: any, @Param('id') id: string) {
     refuseLockedAdmin(req, 'a payout decision');
@@ -1379,6 +1399,7 @@ export class AdminMarketplaceController {
   }
 
   @Patch('payouts/:id/process')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Execute an approved payout' })
   async processPayout(@Req() req: any, @Param('id') id: string) {
     refuseLockedAdmin(req, 'a payout decision');
@@ -1397,6 +1418,7 @@ export class AdminMarketplaceController {
   // of the pair above, which reach payout-service where the records actually live.
 
   @Post('payouts/:id/retry')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Retry a failed payout' })
   async retryPayout(@Req() req: any, @Param('id') id: string) {
     // Was `return { success: true, status: 'processing' }` — it reported a retry
@@ -2348,6 +2370,7 @@ export class AdminMarketplaceController {
 
   // ── Seller Wallets ──────────────────────────────────────────────────────────
   @Get('seller-wallets')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'List seller wallets' })
   @ApiQuery({ name: 'country', required: false })
   async getSellerWallets(@Req() req: any, @Query('country') country?: string) {
@@ -2359,6 +2382,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('seller-wallets/:id/adjust')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Adjust seller wallet balance' })
   async adjustSellerWallet(
     @Req() req: any,
@@ -2394,6 +2418,7 @@ export class AdminMarketplaceController {
 
   // ── Sellers Pending ─────────────────────────────────────────────────────────
   @Get('wallet/transactions')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Search all wallet transactions (admin audit)' })
   @ApiQuery({ name: 'userId', required: false })
   @ApiQuery({ name: 'type', required: false, enum: ['CREDIT', 'DEBIT'] })
@@ -2452,6 +2477,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('wallet/adjust')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Manually adjust a user wallet balance (admin)' })
   @ApiBody({
     schema: {
@@ -2503,6 +2529,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('wallet/freeze')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Freeze a user wallet (fraud prevention)' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async freezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
@@ -2525,6 +2552,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('wallet/unfreeze')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Unfreeze a user wallet' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async unfreezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
@@ -2551,6 +2579,7 @@ export class AdminMarketplaceController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Get('loyalty/config')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Get loyalty program configuration' })
   async getLoyaltyConfig(@Req() req: any) {
     // One programme for the whole platform: a locked admin reads it, and the
@@ -2590,6 +2619,7 @@ export class AdminMarketplaceController {
   }
 
   @Patch('loyalty/config')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Update loyalty program configuration' })
   async updateLoyaltyConfig(@Req() req: any, @Body() dto: any) {
     // The tiers, earn rules and redemption rate are one platform-wide config:
@@ -2610,6 +2640,7 @@ export class AdminMarketplaceController {
   }
 
   @Get('loyalty/users/:userId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Get user loyalty detail (admin view)' })
   @ApiParam({ name: 'userId' })
   async getUserLoyalty(@Req() req: any, @Param('userId') userId: string) {
@@ -2627,6 +2658,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('loyalty/adjust')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Manually adjust user loyalty points (admin)' })
   @ApiBody({
     schema: {
@@ -2672,6 +2704,7 @@ export class AdminMarketplaceController {
   }
 
   @Get('loyalty/analytics')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'Get loyalty program analytics' })
   @ApiQuery({ name: 'country', required: false })
   async getLoyaltyAnalytics(@Req() req: any, @Query('country') country?: string) {
@@ -3281,6 +3314,7 @@ export class AdminMarketplaceController {
   }
 
   @Post('payouts/:id/process')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Execute an approved payout (POST alias)' })
   async postProcessPayout(@Req() req: any, @Param('id') id: string) {
     refuseLockedAdmin(req, 'a payout decision');
@@ -3302,6 +3336,7 @@ export class AdminMarketplaceController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Put('commissions/:id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Update a commission rule (PUT alias)' })
   async putCommission(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     this.scopeOf(req, undefined, 'that commission');

@@ -63,6 +63,11 @@ const MAX_PAGE_SIZE = 100;
  * merely *read* the directory would still hand them every colleague's email
  * and every market's staffing; letting them write would let them mint
  * themselves an unlocked account.
+ *
+ * Each route also names `staff.view` or `staff.manage`. Today that is
+ * redundant — SUPER_ADMIN signs in with the wildcard, so the key always
+ * passes — but the permission is the durable statement of what the route
+ * costs, and it is what would hold if the role set here were ever widened.
  */
 @ApiTags('👑 Admin — Access')
 @ApiBearerAuth('JWT')
@@ -138,6 +143,7 @@ export class AdminAccessController {
   // ── Roles ──────────────────────────────────────────────────────────────────
 
   @Get('roles')
+  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.view')
   @GlobalEntity('roles apply to every market')
   @ApiOperation({ summary: 'Admin roles with their permission sets' })
   async listRoles(@Req() req: any) {
@@ -155,6 +161,7 @@ export class AdminAccessController {
   }
 
   @Post('roles')
+  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.manage')
   @ApiOperation({ summary: 'Create a custom role' })
   async createRole(@Req() req: any, @Body() dto: CreateRoleDto) {
     refuseLockedAdmin(req, 'roles and staff', 'Roles and staff are managed globally.');
@@ -180,6 +187,7 @@ export class AdminAccessController {
   }
 
   @Patch('roles/:id')
+  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.manage')
   @ApiOperation({ summary: 'Rename a role or change its permissions' })
   async updateRole(
     @Req() req: any,
@@ -208,6 +216,7 @@ export class AdminAccessController {
   }
 
   @Delete('roles/:id')
+  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.manage')
   @ApiOperation({ summary: 'Delete a custom role that no staff member holds' })
   async deleteRole(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     refuseLockedAdmin(req, 'roles and staff', 'Roles and staff are managed globally.');
@@ -228,6 +237,7 @@ export class AdminAccessController {
   // ── Staff ──────────────────────────────────────────────────────────────────
 
   @Get('staff')
+  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.view')
   @GlobalEntity('staff directory is global; the lock is a property of each record')
   @ApiOperation({ summary: 'Staff accounts' })
   @ApiQuery({ name: 'search', required: false })
@@ -263,6 +273,7 @@ export class AdminAccessController {
   }
 
   @Post('staff')
+  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.manage')
   @ApiOperation({ summary: 'Create a staff account; a temporary password is emailed' })
   async createStaff(@Req() req: any, @Body() dto: CreateStaffDto) {
     refuseLockedAdmin(req, 'roles and staff', 'Roles and staff are managed globally.');
@@ -338,6 +349,7 @@ export class AdminAccessController {
   }
 
   @Patch('staff/:id')
+  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.manage')
   @ApiOperation({ summary: "Change a staff member's role, market lock or active flag" })
   async updateStaff(
     @Req() req: any,

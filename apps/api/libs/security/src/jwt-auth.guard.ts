@@ -1,4 +1,10 @@
-import { Injectable, type ExecutionContext, UnauthorizedException, Logger, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  type ExecutionContext,
+  UnauthorizedException,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 import { RedisService } from '@app/redis';
@@ -52,7 +58,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const hasAuthHeader = !!request.headers['authorization'];
 
     // Dev auth bypass — requires explicit opt-in via DEV_AUTH_BYPASS=true
-    if (process.env.DEV_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production' && !hasAuthHeader) {
+    if (
+      process.env.DEV_AUTH_BYPASS === 'true' &&
+      process.env.NODE_ENV !== 'production' &&
+      !hasAuthHeader
+    ) {
       if (!request.user) {
         // The injected role decides what the bypass can reach. It used to be a
         // hard-coded CUSTOMER, which made every @Roles-protected admin and seller
@@ -60,7 +70,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         // route stayed shut. Still CUSTOMER by default: widening it is a
         // deliberate act, set DEV_AUTH_BYPASS_ROLE (e.g. SUPER_ADMIN).
         const role = (process.env.DEV_AUTH_BYPASS_ROLE || 'CUSTOMER').toUpperCase();
-        this.logger.warn(`⚠️  DEV AUTH BYPASS active — injecting ${role} user for ${request.method} ${request.path}`);
+        this.logger.warn(
+          `⚠️  DEV AUTH BYPASS active — injecting ${role} user for ${request.method} ${request.path}`,
+        );
         // Shape must match what `JwtStrategy.validate()` returns, not just
         // overlap with it. This used to inject `{ id, email, role, name }` and
         // nothing else, while every user-scoped handler reads `req.user.userId`
@@ -77,6 +89,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
           email: 'dev@kartseek.dev',
           role,
           name: 'Dev User',
+          // A real staff token carries its role's permission keys, and routes
+          // gated on `perm:` read nothing else. Without this the bypass could
+          // reach a `@Roles(UserRole.SUPER_ADMIN)` route and still be refused
+          // by the permission half of the same decorator.
+          adminPermissions: ['SUPER_ADMIN', 'ADMIN'].includes(role) ? ['*'] : [],
         };
       }
       return true;
@@ -134,4 +151,3 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return user;
   }
 }
-

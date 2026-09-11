@@ -1,7 +1,66 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { JwtService } from '@nestjs/jwt';
+import * as crypto from 'crypto';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './gateway.controller';
 import { StaffMfaService } from '../services/staff-mfa.service';
+
+/** Just the columns `adminPermissionsFor` reads off `admin.admin_roles`. */
+interface AdminRoleRow {
+  id: string;
+  key: string;
+  permissions: string[];
+}
+
+const PHONE = '+97455512345';
+
+const makeController = (user: Record<string, unknown>, roles: AdminRoleRow[] = []) => {
+  const store = new Map<string, string>();
+  const redis = {
+    get: vi.fn(async (k: string) => store.get(k) ?? null),
+    set: vi.fn(async (k: string, v: string) => {
+      store.set(k, v);
+    }),
+    setJson: vi.fn(async (k: string, v: unknown) => {
+      store.set(k, JSON.stringify(v));
+    }),
+    del: vi.fn(async (k: string) => {
+      store.delete(k);
+    }),
+  };
+  const kafka = { publish: vi.fn(async () => undefined) };
+  const jwt = new JwtService({ secret: 'test-secret' });
+  const userRepo = {
+    findOne: vi.fn(async () => user),
+    create: vi.fn(),
+    save: vi.fn(),
+  };
+  const roleRepo = {
+    findOne: vi.fn(
+      async ({ where }: { where: { id?: string; key?: string } }) =>
+        roles.find((r) => (where.id ? r.id === where.id : r.key === where.key)) ?? null,
+    ),
+  };
+  const lockout = {
+    isLockedOut: vi.fn(async () => 0),
+    recordFailedAttempt: vi.fn(),
+    clearAttempts: vi.fn(async () => undefined),
+  };
+  // The real MFA service, so this covers the wiring and not a stand-in for it.
+  const staffMfa = new StaffMfaService(redis as never, kafka as never, jwt);
+  const controller = new AuthController(
+    redis as never,
+    kafka as never,
+    jwt,
+    lockout as never,
+    {} as never,
+    userRepo as never,
+    roleRepo as never,
+    staffMfa,
+  );
+  store.set(`otp:${PHONE}`, '123456');
+  return { controller, redis, kafka, store, jwt, userRepo, roleRepo };
+};
 
 /**
  * The phone half of sign-in.
@@ -17,49 +76,6 @@ import { StaffMfaService } from '../services/staff-mfa.service';
  * everyone else gets `completeLogin`.
  */
 describe('AuthController — /auth/otp/verify', () => {
-  const PHONE = '+97455512345';
-
-  const makeController = (user: Record<string, unknown>) => {
-    const store = new Map<string, string>();
-    const redis = {
-      get: vi.fn(async (k: string) => store.get(k) ?? null),
-      set: vi.fn(async (k: string, v: string) => {
-        store.set(k, v);
-      }),
-      setJson: vi.fn(async (k: string, v: unknown) => {
-        store.set(k, JSON.stringify(v));
-      }),
-      del: vi.fn(async (k: string) => {
-        store.delete(k);
-      }),
-    };
-    const kafka = { publish: vi.fn(async () => undefined) };
-    const jwt = new JwtService({ secret: 'test-secret' });
-    const userRepo = {
-      findOne: vi.fn(async () => user),
-      create: vi.fn(),
-      save: vi.fn(),
-    };
-    const lockout = {
-      isLockedOut: vi.fn(async () => 0),
-      recordFailedAttempt: vi.fn(),
-      clearAttempts: vi.fn(async () => undefined),
-    };
-    // The real MFA service, so this covers the wiring and not a stand-in for it.
-    const staffMfa = new StaffMfaService(redis as never, kafka as never, jwt);
-    const controller = new AuthController(
-      redis as never,
-      kafka as never,
-      jwt,
-      lockout as never,
-      {} as never,
-      userRepo as never,
-      staffMfa,
-    );
-    store.set(`otp:${PHONE}`, '123456');
-    return { controller, redis, kafka, store, jwt };
-  };
-
   beforeEach(() => {
     process.env.NODE_ENV = 'test';
     process.env.DEV_MFA_ECHO = 'false';
@@ -153,5 +169,190 @@ describe('AuthController — /auth/otp/verify', () => {
       accessToken: string;
     };
     expect(jwt.verify(res.accessToken)).toMatchObject({ sub: 'cust-1', type: 'access' });
+  });
+});
+
+/**
+ * The permission claim.
+ *
+ * `RolesGuard` has understood `perm:` requirements for a while and nothing ever
+ * signed the claim it reads, so a route gated on a key would have refused every
+ * account on the platform. These cases pin the other end of that wire: what the
+ * token carries, where it comes from, and when it is recomputed.
+ */
+describe('AuthController — adminPermissions claim', () => {
+  const ADMIN_ROLE: AdminRoleRow = {
+    id: 'role-admin',
+    key: 'admin',
+    permissions: ['finance.view', 'orders.refund'],
+  };
+  const REGIONAL_ROLE: AdminRoleRow = {
+    id: 'role-regional',
+    key: 'regional_admin',
+    permissions: ['finance.view'],
+  };
+  beforeEach(() => {
+    process.env.NODE_ENV = 'test';
+    // The challenge code has to come back in the response for the spec to
+    // complete a staff sign-in the way a real one completes.
+    process.env.DEV_MFA_ECHO = 'true';
+    process.env.DEV_AUTH_BYPASS = 'false';
+  });
+
+  /** Drive a staff account all the way through the second factor to a session. */
+  const signIn = async (user: Record<string, unknown>, roles: AdminRoleRow[]) => {
+    const ctx = makeController(user, roles);
+    const challenge = (await ctx.controller.verifyOtp({
+      phone: PHONE,
+      otp: '123456',
+    } as never)) as { challengeToken: string; devCode: string };
+    const session = (await ctx.controller.mfaVerify({
+      challengeToken: challenge.challengeToken,
+      code: challenge.devCode,
+    } as never)) as { accessToken: string; refreshToken: string };
+    return {
+      ...ctx,
+      session,
+      claims: ctx.jwt.verify(session.accessToken) as Record<string, unknown>,
+    };
+  };
+
+  const staff = (over: Record<string, unknown>) => ({
+    id: 'staff-1',
+    email: 'ops@kartseek.com',
+    phone: PHONE,
+    isActive: true,
+    ...over,
+  });
+
+  it('signs the assigned role’s permissions into both tokens', async () => {
+    const { session, claims, jwt } = await signIn(
+      staff({ role: 'admin', adminRoleId: ADMIN_ROLE.id }),
+      [ADMIN_ROLE],
+    );
+    expect(claims.adminPermissions).toEqual(ADMIN_ROLE.permissions);
+    // The refresh token carries it too, so a rotation is not a demotion.
+    expect(jwt.verify(session.refreshToken)).toMatchObject({
+      adminPermissions: ADMIN_ROLE.permissions,
+    });
+  });
+
+  it('gives SUPER_ADMIN the wildcard without consulting a role row', async () => {
+    const { claims, roleRepo } = await signIn(staff({ role: 'super_admin' }), []);
+    expect(claims.adminPermissions).toEqual(['*']);
+    expect(roleRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it('falls back to regional_admin for a market-locked account with no role row', async () => {
+    // The QA admin predates `users.admin_role_id`; its lock is what says which
+    // system role it is, and reading `role.toLowerCase()` would hand a locked
+    // ADMIN the global Admin set including every market.
+    const { claims } = await signIn(
+      staff({ role: 'admin', regionCode: 'QA', regionLocked: true }),
+      [ADMIN_ROLE, REGIONAL_ROLE],
+    );
+    expect(claims.adminPermissions).toEqual(REGIONAL_ROLE.permissions);
+  });
+
+  it('grants nothing when the account names no role and none matches', async () => {
+    const { claims } = await signIn(staff({ role: 'support_agent' }), []);
+    expect(claims.adminPermissions).toEqual([]);
+  });
+
+  it('omits the claim entirely for a customer', async () => {
+    const { controller, jwt } = makeController({
+      id: 'cust-1',
+      email: 'jane@example.com',
+      phone: PHONE,
+      role: 'customer',
+      isActive: true,
+    });
+    const res = (await controller.verifyOtp({ phone: PHONE, otp: '123456' } as never)) as {
+      accessToken: string;
+    };
+    expect(jwt.verify(res.accessToken)).not.toHaveProperty('adminPermissions');
+  });
+});
+
+describe('AuthController — /auth/refresh', () => {
+  const sha256 = (v: string) => crypto.createHash('sha256').update(v).digest('hex');
+
+  const withRefreshToken = (
+    user: Record<string, unknown>,
+    roles: AdminRoleRow[],
+    claims: Record<string, unknown>,
+  ) => {
+    const ctx = makeController(user, roles);
+    const refreshToken = ctx.jwt.sign({ ...claims, type: 'refresh' }, { expiresIn: 600 });
+    ctx.store.set(`refresh:${claims.sub}`, sha256(refreshToken));
+    return { ...ctx, refreshToken };
+  };
+
+  beforeEach(() => {
+    process.env.NODE_ENV = 'test';
+  });
+
+  it('recomputes the permissions instead of copying the old claim', async () => {
+    // The route used to rebuild the user from the refresh token's own claims
+    // and never read the database, so a role narrowed in the console stayed
+    // wide for as long as the holder kept refreshing — thirty days.
+    const role: AdminRoleRow = { id: 'role-1', key: 'support_agent', permissions: ['orders.view'] };
+    const { controller, jwt, refreshToken } = withRefreshToken(
+      {
+        id: 'staff-1',
+        email: 'ops@kartseek.com',
+        role: 'support_agent',
+        adminRoleId: role.id,
+        isActive: true,
+      },
+      [role],
+      { sub: 'staff-1', email: 'ops@kartseek.com', role: 'admin', adminPermissions: ['*'] },
+    );
+    const res = (await controller.refreshToken({ refreshToken } as never)) as {
+      accessToken: string;
+    };
+    expect(jwt.verify(res.accessToken)).toMatchObject({
+      role: 'support_agent',
+      adminPermissions: ['orders.view'],
+    });
+  });
+
+  it('refuses a deactivated account', async () => {
+    // Deactivating a staff member has to end their access, not merely stop the
+    // next sign-in: a live refresh token is otherwise a month-long key.
+    const { controller, refreshToken } = withRefreshToken(
+      { id: 'staff-1', email: 'ops@kartseek.com', role: 'admin', isActive: false },
+      [],
+      { sub: 'staff-1', email: 'ops@kartseek.com', role: 'admin' },
+    );
+    await expect(controller.refreshToken({ refreshToken } as never)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('refuses a token whose account no longer exists', async () => {
+    const ctx = makeController(null as never, []);
+    const refreshToken = ctx.jwt.sign(
+      { sub: 'gone-1', role: 'admin', type: 'refresh' },
+      {
+        expiresIn: 600,
+      },
+    );
+    ctx.store.set('refresh:gone-1', sha256(refreshToken));
+    await expect(ctx.controller.refreshToken({ refreshToken } as never)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('still rotates the stored hash for a healthy session', async () => {
+    const { controller, redis, refreshToken } = withRefreshToken(
+      { id: 'cust-1', email: 'jane@example.com', role: 'customer', isActive: true },
+      [],
+      { sub: 'cust-1', email: 'jane@example.com', role: 'customer' },
+    );
+    const res = (await controller.refreshToken({ refreshToken } as never)) as {
+      refreshToken: string;
+    };
+    expect(redis.set).toHaveBeenCalledWith('refresh:cust-1', sha256(res.refreshToken), 2592000);
   });
 });

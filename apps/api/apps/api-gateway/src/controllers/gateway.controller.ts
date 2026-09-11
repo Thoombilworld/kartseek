@@ -37,6 +37,7 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { JwtAuthGuard, AccountLockoutService, EncryptionService } from '@app/security';
 import { User } from '../entities/user.entity';
+import { AdminRole } from '../entities/admin-role.entity';
 import { UserRole, sellerTypeFromRole, isStaffRole, type SellerType } from '@app/common';
 import { StaffMfaService } from '../services/staff-mfa.service';
 import {
@@ -71,6 +72,7 @@ export class AuthController {
     private readonly lockout: AccountLockoutService,
     private readonly encryption: EncryptionService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(AdminRole) private readonly roleRepo: Repository<AdminRole>,
     private readonly staffMfa: StaffMfaService,
   ) {}
 
@@ -107,19 +109,22 @@ export class AuthController {
    * second were byte-identical, so "rotation" inside that window was a no-op and
    * no individual token could be revoked or audited.
    */
-  private issueTokens(user: {
-    // Nullable to match the `users` table: an account is identified by email
-    // *or* phone, and the entity types both as nullable. Declaring them
-    // `string | undefined` forced every caller to launder a real column
-    // through a cast, which is how a `null` email reached the claim below.
-    id: string;
-    email?: string | null;
-    phone?: string | null;
-    role: string;
-    sellerType?: string | null;
-    regionCode?: string | null;
-    regionLocked?: boolean | null;
-  }) {
+  private issueTokens(
+    user: {
+      // Nullable to match the `users` table: an account is identified by email
+      // *or* phone, and the entity types both as nullable. Declaring them
+      // `string | undefined` forced every caller to launder a real column
+      // through a cast, which is how a `null` email reached the claim below.
+      id: string;
+      email?: string | null;
+      phone?: string | null;
+      role: string;
+      sellerType?: string | null;
+      regionCode?: string | null;
+      regionLocked?: boolean | null;
+    },
+    extra?: { adminPermissions?: string[] },
+  ) {
     // `sellerType` rides in the token so portal isolation can be enforced from a
     // signed claim. Omitted entirely for non-sellers rather than sent as null, so
     // "no seller type" is unambiguous to every consumer.
@@ -137,6 +142,10 @@ export class AuthController {
       // token carries no claim to misread; `regionLocked` only ever appears as true.
       ...(user.regionCode ? { regionCode: String(user.regionCode).toUpperCase() } : {}),
       ...(user.regionLocked ? { regionLocked: true } : {}),
+      // The console permission keys `RolesGuard` checks `perm:` requirements
+      // against. Omitted rather than signed as `[]` for a customer, so an
+      // absent claim means "not staff" and never "staff with nothing granted".
+      ...(extra?.adminPermissions ? { adminPermissions: extra.adminPermissions } : {}),
     };
     const accessToken = this.jwtService.sign(
       { ...identity, type: 'access', jti: crypto.randomUUID() },
@@ -295,9 +304,40 @@ export class AuthController {
    * so a staff sign-in that clears its second factor gets exactly the session a
    * customer gets, not a reconstruction of one.
    */
+  /**
+   * The permission keys an account signs in with: its admin role's, or the
+   * system role matching its `UserRole`.
+   *
+   * Resolved at sign-in rather than read from the database on every request —
+   * the guard runs on routes that have no repository and no business opening a
+   * connection. The cost is that a narrowed role takes effect at the holder's
+   * next refresh rather than instantly, which is why `/auth/refresh` recomputes
+   * this rather than copying the old claim across.
+   *
+   * The fallback by key exists because accounts predate `users.admin_role_id`:
+   * the QA regional admin carries a market lock and no role row, and the lock
+   * is what says which system role it really is. Reading `role.toLowerCase()`
+   * for it would hand a locked ADMIN the global Admin set.
+   */
+  private async adminPermissionsFor(user: User): Promise<string[] | undefined> {
+    const role = String(user.role).toUpperCase();
+    if (!isStaffRole(role)) return undefined;
+    // Never a database lookup: the wildcard is the platform owner's by
+    // definition, and a missing `admin_roles` row must not silently narrow it.
+    if (role === 'SUPER_ADMIN') return ['*'];
+    const byId = user.adminRoleId
+      ? await this.roleRepo.findOne({ where: { id: user.adminRoleId } })
+      : null;
+    const key = user.regionLocked ? 'regional_admin' : role.toLowerCase();
+    const fallback = byId ? null : await this.roleRepo.findOne({ where: { key } });
+    return (byId ?? fallback)?.permissions ?? [];
+  }
+
   private async completeLogin(user: User) {
     // Issue JWT tokens
-    const { accessToken, refreshToken } = this.issueTokens(user);
+    const { accessToken, refreshToken } = this.issueTokens(user, {
+      adminPermissions: await this.adminPermissionsFor(user),
+    });
 
     // Cache session in Redis (1 hour TTL)
     await this.redis.setJson(
@@ -706,18 +746,34 @@ export class AuthController {
         throw new UnauthorizedException('Refresh token has been revoked');
       }
 
-      // Issue new tokens. `sellerType` must be carried across or the refreshed
-      // token silently loses it: a seller who stayed signed in past the access
-      // token's hour would come back without a portal claim and be locked out of
-      // their own module.
-      const { accessToken: newAccessToken, refreshToken: newRefreshToken } = this.issueTokens({
-        id: userId,
-        email: decoded.email,
-        role: decoded.role,
-        sellerType: decoded.sellerType,
-        regionCode: decoded.regionCode,
-        regionLocked: decoded.regionLocked === true,
-      });
+      /**
+       * The account itself, not a literal rebuilt from the old claims.
+       *
+       * This route used to mint a fresh hour of access from thirty-day-old
+       * claims without ever asking the database, which made two things
+       * permanent that are supposed to be revocable: a staff member
+       * deactivated in the console kept refreshing until their refresh token
+       * expired, and a role narrowed there stayed wide for just as long,
+       * because the new token was a copy of the old one's authority.
+       *
+       * Reading the user is also what lets the permission claim be recomputed
+       * below — the only moment between sign-ins where a role change can take
+       * effect.
+       */
+      const user = await this.userRepo.findOne({ where: { id: userId } });
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('Account unavailable.');
+      }
+
+      // `sellerType` must be carried across or the refreshed token silently
+      // loses it: a seller who stayed signed in past the access token's hour
+      // would come back without a portal claim and be locked out of their own
+      // module. It comes off the account now, so a portal granted or withdrawn
+      // since the last sign-in is reflected too.
+      const { accessToken: newAccessToken, refreshToken: newRefreshToken } = this.issueTokens(
+        user,
+        { adminPermissions: await this.adminPermissionsFor(user) },
+      );
 
       // Rotate refresh token hash
       await this.redis.set(
@@ -881,6 +937,15 @@ export class AuthController {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
 
+    // Straight from the verified token, not recomputed: the console must gate
+    // its navigation on exactly the keys the gateway will enforce, and a
+    // profile read that disagreed with the bearer token would draw a sidebar
+    // whose links answer 403.
+    const adminPermissions = req.user?.adminPermissions ?? null;
+    const adminRole = user.adminRoleId
+      ? await this.roleRepo.findOne({ where: { id: user.adminRoleId } })
+      : null;
+
     return {
       success: true,
       id: user.id,
@@ -897,6 +962,8 @@ export class AuthController {
       status: user.status,
       regionCode: user.regionCode ?? null,
       regionLocked: user.regionLocked === true,
+      adminPermissions,
+      adminRole: adminRole ? { id: adminRole.id, key: adminRole.key, name: adminRole.name } : null,
       name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
       isActive: user.isActive,
       createdAt: user.createdAt,

@@ -47,6 +47,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       // market-scope helper reads these to confine a regional admin.
       regionCode: payload.regionCode,
       regionLocked: payload.regionLocked === true,
+      // Permission keys signed at login from the account's admin role; RolesGuard
+      // checks `perm:` requirements against them. Absent for non-staff.
+      adminPermissions: Array.isArray(payload.adminPermissions)
+        ? payload.adminPermissions
+        : undefined,
       // Carried through for JwtAuthGuard and the logout handler: `type` keeps a
       // refresh token from being used as a Bearer credential, and `jti`/`exp` are
       // what let a single session be revoked for exactly its remaining lifetime.

@@ -38,11 +38,16 @@ import {
  * Requires an admin role, not merely a session: with JwtAuthGuard alone any
  * signed-in customer could read the threat board, ban or whitelist IPs and
  * reset attack mode. Base path: /api/v1/admin/security
+ *
+ * `security.manage` narrows it further, and the whole controller is gated on
+ * it rather than the mutations alone: the threat board names every banned and
+ * whitelisted address, which is the map of the platform's defences. A finance
+ * manager or a support agent holding the ADMIN role would otherwise read it.
  */
 @ApiTags('🛡️ Security')
 @ApiBearerAuth('JWT')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, 'perm:security.manage')
 @Controller('admin/security')
 export class DdosAdminController {
   constructor(private readonly monitor: DdosMonitorService) {}
