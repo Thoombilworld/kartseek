@@ -46,7 +46,7 @@
 
 ---
 
-### Task A1: The security controller requires an admin role, and the exposure spec pins it for every `/admin` route
+### Task 1 (A1): The security controller requires an admin role, and the exposure spec pins it for every `/admin` route
 
 **Files:**
 
@@ -154,7 +154,7 @@ git commit -m "fix(gateway): the security console requires an admin role; every 
 
 ---
 
-### Task A2: Shared `assertInMarket` in `@app/common`, unit specs for both halves of scope, dead guards deleted
+### Task 2 (A2): Shared `assertInMarket` in `@app/common`, unit specs for both halves of scope, dead guards deleted
 
 **Files:**
 
@@ -415,7 +415,7 @@ git commit -m "refactor(api): one shared assertInMarket for every backend; scope
 
 ---
 
-### Task A3: Admin core (users, KYC, audit, revenue) is market-scoped end to end
+### Task 3 (A3): Admin core (users, KYC, audit, revenue) is market-scoped end to end
 
 **Files:**
 
@@ -928,7 +928,7 @@ git commit -m "fix(admin-core): users, KYC, audit and revenue confined to the ca
 
 ---
 
-### Task A4: Marketplace sellers, products and approvals are scoped; the filter payload bugs are fixed; no placeholder on outage
+### Task 4 (A4): Marketplace sellers, products and approvals are scoped; the filter payload bugs are fixed; no placeholder on outage
 
 **Files:**
 
@@ -1374,7 +1374,7 @@ git commit -m "fix(marketplace): admin seller and product handlers assert the re
 
 ---
 
-### Task A5: Taxi administration is market-scoped; the suspend command name is fixed
+### Task 5 (A5): Taxi administration is market-scoped; the suspend command name is fixed
 
 **Files:**
 
@@ -1815,7 +1815,7 @@ git commit -m "fix(taxi): admin handlers assert the driver, vendor, document, pa
 
 ---
 
-### Task A6: Grocery administration is market-scoped through the store
+### Task 6 (A6): Grocery administration is market-scoped through the store
 
 **Files:**
 
@@ -1934,7 +1934,7 @@ git commit -m "fix(grocery): admin lists and decisions scoped through the store'
 
 ---
 
-### Task A7: Hotel, restaurant, pharmacy and doctor — the routes that have handlers are scoped
+### Task 7 (A7): Hotel, restaurant, pharmacy and doctor — the routes that have handlers are scoped
 
 **Files:**
 
@@ -1948,7 +1948,7 @@ git commit -m "fix(grocery): admin lists and decisions scoped through the store'
 
 ---
 
-### Task A8: Regression spec — every `/admin` route is market-scoped or declared global with a reason
+### Task 8 (A8): Regression spec — every `/admin` route is market-scoped or declared global with a reason
 
 **Files:**
 
@@ -2083,7 +2083,7 @@ git commit -m "test(gateway): every admin route resolves a market or declares it
 
 ---
 
-### Task A9: Live authorization proof across users, sellers, products, taxi and grocery
+### Task 9 (A9): Live authorization proof across users, sellers, products, taxi and grocery
 
 **Files:**
 

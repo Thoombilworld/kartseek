@@ -45,7 +45,7 @@
 
 ---
 
-### Task B1: The console tells the truth about role and market
+### Task 1 (B1): The console tells the truth about role and market
 
 **Files:**
 
@@ -263,7 +263,7 @@ git commit -m "fix(web): the admin console takes role, market and permissions fr
 
 ---
 
-### Task B2: A real second factor for staff, enforced by the server
+### Task 2 (B2): A real second factor for staff, enforced by the server
 
 **Files:**
 
@@ -637,7 +637,7 @@ Then `npm run verify:admin-scope` → all passed (the script now completes the c
 
 ---
 
-### Task B3: Admin roles and staff are persisted and managed by SUPER_ADMIN
+### Task 3 (B3): Admin roles and staff are persisted and managed by SUPER_ADMIN
 
 **Files:**
 
@@ -1181,7 +1181,7 @@ Jest: `apps/web/src/app/admin/roles/__tests__/roles-page.test.tsx` mocks `@/lib/
 
 ---
 
-### Task B4: The token carries permissions and the guards use them
+### Task 4 (B4): The token carries permissions and the guards use them
 
 **Files:**
 
@@ -1264,7 +1264,7 @@ Specs green; `nest build --all`; live: log in as `qa-admin@` → decode the acce
 
 ---
 
-### Task B5: One readable, immutable audit trail
+### Task 5 (B5): One readable, immutable audit trail
 
 **Files:**
 
@@ -1469,7 +1469,7 @@ Spec → 2 passed; `nest build --all`; restart audit-log-service (TCP `:4028` in
 
 ---
 
-### Task B6: Admin request bodies are validated
+### Task 6 (B6): Admin request bodies are validated
 
 **Files:**
 
@@ -1666,7 +1666,7 @@ Spec → 3 passed; `nest build --all`; live: `POST /admin/taxi/rates` with `base
 
 ---
 
-### Task B7: Fixture data removed from every page whose API exists
+### Task 7 (B7): Fixture data removed from every page whose API exists
 
 **Files:**
 
