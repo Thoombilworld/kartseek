@@ -555,6 +555,33 @@ export class AdminService {
     logs.unshift(log);
     await this.redis.setJson('admin:audit:logs', logs.slice(0, 10000), 86400 * 90);
 
+    // Forward onto the platform trail.
+    //
+    // This Redis list is capped at 10,000 entries under a 90-day TTL and is not
+    // what the admin console reads any more — `GET /admin/audit-logs` goes to
+    // audit-log-service and its immutable Mongo collection. The gateway stopped
+    // calling `admin_audit_log_add`, but other services may still reach this
+    // handler over TCP, and an entry written here and nowhere else would be an
+    // administrative action absent from the one trail an auditor reads. The
+    // publish makes the Redis list a cache of the real record rather than a
+    // second, divergent one.
+    //
+    // Best-effort by design: a broker problem must not fail the write that has
+    // already landed.
+    try {
+      await this.kafka.publish('audit.log', {
+        actionType: entry.action,
+        actorId: entry.adminId,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        metadata: entry.details,
+        country: entry.country ?? 'ALL',
+        service: 'admin-service',
+      });
+    } catch (err) {
+      this.logger.warn(`audit forward failed for ${entry.action}: ${(err as Error)?.message}`);
+    }
+
     return { success: true, logId: log.id };
   }
 

@@ -11,9 +11,7 @@ import * as Joi from 'joi';
  */
 export const envValidationSchema = Joi.object({
   // ── App ──────────────────────────────────────────────────────────────────
-  NODE_ENV: Joi.string()
-    .valid('development', 'production', 'test')
-    .default('development'),
+  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   API_GATEWAY_PORT: Joi.number().port().default(3001),
 
   // ── Skip Flags (dev convenience) ─────────────────────────────────────────
@@ -30,10 +28,24 @@ export const envValidationSchema = Joi.object({
   DEV_AUTH_BYPASS_ROLE: Joi.string()
     .uppercase()
     .valid(
-      'CUSTOMER', 'ADMIN', 'SUPER_ADMIN', 'SELLER', 'DRIVER',
-      'FRANCHISE_ADMIN', 'FRANCHISE_OWNER', 'SUPPORT_AGENT', 'FINANCE_MANAGER',
-      'PRODUCT_MANAGER', 'RESTAURANT_SELLER', 'GROCERY_SELLER', 'PHARMACY_SELLER',
-      'PHARMACIST', 'DOCTOR', 'TAXI_DRIVER', 'DELIVERY_DRIVER', 'DELIVERY_BOY',
+      'CUSTOMER',
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SELLER',
+      'DRIVER',
+      'FRANCHISE_ADMIN',
+      'FRANCHISE_OWNER',
+      'SUPPORT_AGENT',
+      'FINANCE_MANAGER',
+      'PRODUCT_MANAGER',
+      'RESTAURANT_SELLER',
+      'GROCERY_SELLER',
+      'PHARMACY_SELLER',
+      'PHARMACIST',
+      'DOCTOR',
+      'TAXI_DRIVER',
+      'DELIVERY_DRIVER',
+      'DELIVERY_BOY',
     )
     .default('CUSTOMER'),
 
@@ -53,7 +65,9 @@ export const envValidationSchema = Joi.object({
   DB_SYNCHRONIZE: Joi.string().valid('true', 'false').default('false'),
 
   // ── MongoDB ──────────────────────────────────────────────────────────────
-  MONGO_URI: Joi.string().uri({ scheme: ['mongodb', 'mongodb+srv'] }).optional(),
+  MONGO_URI: Joi.string()
+    .uri({ scheme: ['mongodb', 'mongodb+srv'] })
+    .optional(),
 
   // ── Redis ────────────────────────────────────────────────────────────────
   REDIS_HOST: Joi.string().default('127.0.0.1'),
@@ -66,13 +80,17 @@ export const envValidationSchema = Joi.object({
   KAFKA_GROUP_ID: Joi.string().default('kartseek-consumers'),
 
   // ── JWT ──────────────────────────────────────────────────────────────────
-  JWT_SECRET: Joi.string().min(16).required()
+  JWT_SECRET: Joi.string()
+    .min(16)
+    .required()
     .description('JWT signing secret — must be at least 16 characters')
     .custom((value, helpers) => {
       if (process.env.NODE_ENV === 'production') {
         const weakPatterns = ['dev', 'test', 'change', 'example', 'placeholder'];
         if (weakPatterns.some((p) => value.toLowerCase().includes(p))) {
-          return helpers.error('any.invalid', { message: 'JWT_SECRET contains dev/test patterns — use a strong secret in production' });
+          return helpers.error('any.invalid', {
+            message: 'JWT_SECRET contains dev/test patterns — use a strong secret in production',
+          });
         }
       }
       return value;
@@ -80,7 +98,9 @@ export const envValidationSchema = Joi.object({
   JWT_EXPIRES_IN: Joi.number().positive().default(900),
 
   // ── Encryption (PII / Field-Level) ──────────────────────────────────────
-  ENCRYPTION_KEY: Joi.string().hex().length(64)
+  ENCRYPTION_KEY: Joi.string()
+    .hex()
+    .length(64)
     .when('NODE_ENV', { is: 'production', then: Joi.required(), otherwise: Joi.optional() })
     .description('AES-256-GCM key — 64-character hex string (32 bytes)'),
 
@@ -140,10 +160,10 @@ export const envValidationSchema = Joi.object({
   HOTEL_TCP_PORT: Joi.number().port().default(4025),
   PAYMENT_TCP_PORT: Joi.number().port().default(4026),
   TAXI_TCP_PORT: Joi.number().port().default(4027),
+  AUDIT_LOG_TCP_PORT: Joi.number().port().default(4028),
 }).options({
   // Allow env vars not listed above (e.g. PATH, npm_*)
   allowUnknown: true,
   // Strip unknown keys from the validated config object
   stripUnknown: false,
 });
-

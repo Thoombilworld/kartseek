@@ -197,47 +197,15 @@ export class AdminCoreController {
   }
 
   // ── Audit trail ────────────────────────────────────────────────────────────
-
-  @Get('audit-logs')
-  @ApiOperation({ summary: 'Administrative actions, newest first' })
-  @ApiQuery({ name: 'action', required: false })
-  @ApiQuery({ name: 'adminId', required: false })
-  async auditLogs(
-    @Req() req: any,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('action') action?: string,
-    @Query('adminId') adminId?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-  ) {
-    const { scope } = this.scopeOf(req, undefined, 'that audit trail');
-    return this.send('admin_audit_logs', {
-      page,
-      limit,
-      action,
-      adminId,
-      startDate,
-      endDate,
-      scope,
-    });
-  }
-
-  @Post('audit-logs')
-  @ApiOperation({ summary: 'Record an administrative action' })
-  async addAuditLog(
-    @Req() req: any,
-    @Body() dto: { action: string; entityType: string; entityId: string; details?: unknown },
-  ) {
-    // The actor comes from the verified token, never from the request body —
-    // otherwise the audit trail records whoever the caller claims to be.
-    const { scope } = this.scopeOf(req, undefined, 'that audit trail');
-    return this.send('admin_audit_log_add', {
-      ...dto,
-      adminId: this.actorId(req),
-      country: scope ?? 'ALL',
-    });
-  }
+  //
+  // `GET`/`POST /admin/audit-logs` used to live here and forward to
+  // admin-service, which kept its own list in a Redis key — separate from, and
+  // invisible to, the immutable Mongo collection the gateway's AuditInterceptor
+  // has been filling with every admin mutation since it started publishing to
+  // Kafka. Two trails, neither complete.
+  //
+  // Both routes now live on `AdminAuditController`, against audit-log-service,
+  // which owns that collection. The path is unchanged, so no client moved.
 
   // ── Reporting ──────────────────────────────────────────────────────────────
 

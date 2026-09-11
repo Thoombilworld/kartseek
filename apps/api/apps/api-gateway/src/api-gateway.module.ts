@@ -88,6 +88,7 @@ import {
 } from './controllers/static-pages.controller';
 import { AdminSeoController } from './controllers/admin-seo.controller';
 import { AdminCoreController } from './controllers/admin-core.controller';
+import { AdminAuditController } from './controllers/admin-audit.controller';
 import { AdminAccessController } from './controllers/admin-access.controller';
 import { TestSeedService } from './services/test-seed.service';
 import { MarketplaceCatalogService } from './services/marketplace-catalog.service';
@@ -442,6 +443,14 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
         transport: Transport.TCP,
         options: { host: svcHost('TAXI'), port: +(process.env.TAXI_TCP_PORT ?? 4027) },
       },
+      {
+        // audit-log-service also consumes Kafka (`audit.log`), which is how the
+        // trail is written. This TCP client is the read side: Kafka cannot
+        // answer a filtered query, and the admin console needs one.
+        name: 'AUDIT_LOG_SERVICE',
+        transport: Transport.TCP,
+        options: { host: svcHost('AUDIT_LOG'), port: +(process.env.AUDIT_LOG_TCP_PORT ?? 4028) },
+      },
     ]),
 
     // ── Cloud Storage ─────────────────────────────────────────────────────────
@@ -484,7 +493,8 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
     RecommendationController, // /recommendations — personalized recommendations
     AdminStaticPagesController, // /admin/static-pages — CMS for legal & company pages
     AdminSeoController, // /admin/seo — per-path SEO metadata overrides
-    AdminCoreController, // /admin — platform-wide admin (users, KYC, audit, revenue)
+    AdminCoreController, // /admin — platform-wide admin (users, KYC, revenue)
+    AdminAuditController, // /admin/audit-logs — the immutable trail, read from Mongo
     AdminAccessController, // /admin/roles, /admin/staff — SUPER_ADMIN only
     PublicPagesController, // /pages/:slug — public page content API
   ],

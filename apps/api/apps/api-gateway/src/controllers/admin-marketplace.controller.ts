@@ -1446,15 +1446,12 @@ export class AdminMarketplaceController {
     return { data: [] as unknown[], total: 0 };
   }
 
-  @Get('audit-logs')
-  @ApiOperation({ summary: 'Get admin audit logs' })
-  @ApiQuery({ name: 'country', required: false })
-  async getAuditLogs(@Req() req: any, @Query('country') country?: string) {
-    // Still a stub. The real audit trail is `GET /admin/audit-logs` on
-    // admin-core, which is scoped there; this alias was never wired to it.
-    this.scopeOf(req, country, 'that audit trail');
-    return { data: [] as unknown[], total: 0 };
-  }
+  // `GET audit-logs` used to sit here, answering `{ data: [], total: 0 }` from a
+  // stub that was never wired to anything. It is gone rather than filled in:
+  // there is one audit trail, `GET /admin/audit-logs`, and the marketplace audit
+  // page reads it with `entityType` set to a marketplace record kind. A second
+  // marketplace-shaped endpoint over the same collection would only be a second
+  // place for the scoping rules to drift.
 
   // ── Banner Management ─────────────────────────────────────────────────────
   /**

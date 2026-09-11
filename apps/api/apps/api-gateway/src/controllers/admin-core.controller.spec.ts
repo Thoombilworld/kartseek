@@ -38,13 +38,15 @@ describe('AdminCoreController market scope', () => {
     expect(payload.scope).toBeUndefined();
   });
 
-  it('carries scope on ban, unban, kyc and audit calls', async () => {
+  // The audit calls moved to AdminAuditController, which talks to
+  // audit-log-service rather than admin-service; their scoping is asserted in
+  // `admin-audit.controller.spec.ts`.
+  it('carries scope on ban, unban, kyc and revenue calls', async () => {
     await ctrl.banUser(req(qaAdmin), 'user-1', { reason: 'fraud' });
     await ctrl.unbanUser(req(qaAdmin), 'user-1');
     await ctrl.pendingKyc(req(qaAdmin), 1, 20);
     await ctrl.approveKyc(req(qaAdmin), 'e-1', { entityType: 'seller' });
     await ctrl.rejectKyc(req(qaAdmin), 'e-1', { entityType: 'seller', reason: 'blurry' });
-    await ctrl.auditLogs(req(qaAdmin), 1, 50);
     await ctrl.revenueReport(req(qaAdmin));
     for (const call of client.send.mock.calls) expect(call[1]).toMatchObject({ scope: 'QA' });
   });
