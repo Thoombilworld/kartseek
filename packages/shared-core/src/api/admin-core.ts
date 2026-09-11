@@ -96,6 +96,30 @@ export interface CreateStaffPayload {
   regionLocked?: boolean;
 }
 
+/**
+ * What `PATCH /admin/staff/:id` accepts — deliberately NOT
+ * `Partial<CreateStaffPayload>`.
+ *
+ * `email` is absent because `UpdateStaffDto` does not declare it, and the
+ * gateway's validation pipe runs `forbidNonWhitelisted: true`: a payload
+ * carrying `email` is rejected with 400 rather than ignored. Changing the
+ * address an account signs in with — and receives its second factor at — is a
+ * separate concern from editing a staff record, so the field stays off both
+ * ends of the contract and TypeScript refuses the object literal that includes
+ * it.
+ */
+export interface UpdateStaffPayload {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  role?: string;
+  adminRoleId?: string;
+  /** `null` clears the market — the account becomes global again. Omit to leave it alone. */
+  regionCode?: string | null;
+  regionLocked?: boolean;
+  isActive?: boolean;
+}
+
 export interface StaffListParams extends AdminListParams {
   roleId?: string;
   regionCode?: string;
@@ -183,7 +207,7 @@ export const adminCoreApi = {
       method: 'POST',
       body: JSON.stringify(dto),
     }),
-  updateStaff: (id: string, dto: Partial<CreateStaffPayload> & { isActive?: boolean }) =>
+  updateStaff: (id: string, dto: UpdateStaffPayload) =>
     apiCall<{ data: StaffRow }>(`${BASE_URL}/admin/staff/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(dto),

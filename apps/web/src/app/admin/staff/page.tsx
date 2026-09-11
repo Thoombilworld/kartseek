@@ -37,6 +37,7 @@ import {
   adminCoreApi,
   type AdminRoleRow,
   type CreateStaffPayload,
+  type UpdateStaffPayload,
   type StaffRow,
 } from '@/lib/api/admin-core';
 
@@ -89,6 +90,67 @@ const MARKETS = Object.values(REGIONS).map((r) => ({ code: r.code, name: r.name,
 /** Roles a staff account may hold. SUPER_ADMIN is made by an operator, not here. */
 const ASSIGNABLE_ROLES = ['ADMIN', 'SUPPORT_AGENT', 'FINANCE_MANAGER', 'PRODUCT_MANAGER'];
 
+/**
+ * What the modal collects. Deliberately neither `CreateStaffPayload` nor
+ * `UpdateStaffPayload`: create needs an email and update must not send one, so
+ * `handleSave` builds each wire payload explicitly from these values rather
+ * than spreading one object into both.
+ */
+export interface StaffFormValues {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  role: string;
+  adminRoleId: string;
+  /** `null` is the "Every market (global)" option. */
+  regionCode: string | null;
+  regionLocked: boolean;
+  isActive?: boolean;
+}
+
+/**
+ * The PATCH body for an edit.
+ *
+ * Built field by field, and without `email`: the gateway's validation pipe
+ * runs `forbidNonWhitelisted: true` and `UpdateStaffDto` declares no email, so
+ * a payload carrying one is rejected with 400 rather than ignored. Spreading
+ * the form wholesale made every staff edit fail — only the suspend toggle,
+ * which sends `{ isActive }` alone, ever worked.
+ *
+ * `regionCode` is passed through as-is, `null` included: that is what clears
+ * the market. Dropping the key would silently leave the old one.
+ */
+export function buildStaffUpdate(form: StaffFormValues): UpdateStaffPayload {
+  return {
+    firstName: form.firstName,
+    lastName: form.lastName,
+    ...(form.phone ? { phone: form.phone } : {}),
+    role: form.role,
+    adminRoleId: form.adminRoleId,
+    regionCode: form.regionCode,
+    regionLocked: form.regionLocked,
+    ...(form.isActive === undefined ? {} : { isActive: form.isActive }),
+  };
+}
+
+/**
+ * The POST body for a new account. `CreateStaffDto.regionCode` is a two-letter
+ * string or absent — never null — so a global account simply omits the key.
+ */
+export function buildStaffCreate(form: StaffFormValues): CreateStaffPayload {
+  return {
+    email: form.email,
+    firstName: form.firstName,
+    lastName: form.lastName,
+    ...(form.phone ? { phone: form.phone } : {}),
+    role: form.role,
+    adminRoleId: form.adminRoleId,
+    ...(form.regionCode ? { regionCode: form.regionCode } : {}),
+    regionLocked: form.regionLocked,
+  };
+}
+
 // ── Add/Edit Staff Modal ────────────────────────────────────────────────────
 
 function StaffModal({
@@ -101,7 +163,7 @@ function StaffModal({
   staff?: StaffRow;
   roles: AdminRoleRow[];
   saving?: boolean;
-  onSave: (data: CreateStaffPayload & { isActive?: boolean }) => void;
+  onSave: (data: StaffFormValues) => void;
   onClose: () => void;
 }) {
   const assignableRoles = roles.filter((r) => r.key !== 'super_admin');
@@ -368,8 +430,11 @@ function StaffModal({
                 ...(phone.trim() ? { phone: phone.trim() } : {}),
                 role,
                 adminRoleId,
-                ...(regionCode ? { regionCode } : { regionCode: '' }),
-                regionLocked,
+                // '' is the "Every market (global)" option; it travels as an
+                // explicit null so the server clears the column, rather than
+                // as a dropped key, which would leave the old market in place.
+                regionCode: regionCode || null,
+                regionLocked: regionCode ? regionLocked : false,
                 ...(staff ? { isActive } : {}),
               })
             }
@@ -562,11 +627,11 @@ export default function StaffPage() {
   const lockedCount = staffList.filter((s) => s.regionLocked).length;
   const unassigned = staffList.filter((s) => !s.adminRoleId).length;
 
-  const handleSave = async (form: CreateStaffPayload & { isActive?: boolean }) => {
-    const payload = { ...form, regionCode: form.regionCode || undefined };
+  const handleSave = async (form: StaffFormValues) => {
     if (editStaff) {
+      const update = buildStaffUpdate(form);
       const done = await execute(async () => {
-        const res = await adminCoreApi.updateStaff(editStaff.id, payload);
+        const res = await adminCoreApi.updateStaff(editStaff.id, update);
         if (!res.success) throw new Error(res.error || 'Could not update this staff member');
         return res.data;
       }, `Updated ${form.firstName} ${form.lastName}`);
@@ -577,8 +642,9 @@ export default function StaffPage() {
       }
       return;
     }
+    const create = buildStaffCreate(form);
     const created = await execute(async () => {
-      const res = await adminCoreApi.createStaff(payload);
+      const res = await adminCoreApi.createStaff(create);
       if (!res.success) throw new Error(res.error || 'Could not create this staff member');
       return res.data;
     }, `Invited ${form.email}`);

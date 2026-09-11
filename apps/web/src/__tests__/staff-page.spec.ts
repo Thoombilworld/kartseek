@@ -117,7 +117,9 @@ jest.mock('@/hooks/useAdminData', () => ({
     React.createElement('div', null, `Failed to load data: ${error}`),
 }));
 
-const StaffPage = require('../app/admin/staff/page').default;
+const staffPageModule = require('../app/admin/staff/page');
+const StaffPage = staffPageModule.default;
+const { buildStaffUpdate, buildStaffCreate } = staffPageModule;
 
 /** Strings that only ever existed in the deleted DEMO_STAFF / DEPARTMENTS / REGIONS arrays. */
 const FIXTURE_STRINGS = [
@@ -200,5 +202,75 @@ describe('/admin/staff', () => {
     const html = render();
     // A code the old hard-coded REGIONS name list could not have produced.
     expect(html).toMatch(/value="[A-Z]{2}"/);
+  });
+});
+
+/**
+ * The wire payloads, which is where the console and the gateway have to agree.
+ * `UpdateStaffDto` declares no `email` and the gateway validates with
+ * `forbidNonWhitelisted: true`, so an update carrying one is a 400, not a
+ * harmless extra field.
+ */
+describe('staff payloads', () => {
+  const form = {
+    email: 'ae-admin@kartseek.com',
+    firstName: 'Emirates',
+    lastName: 'Admin',
+    phone: '+971500000111',
+    role: 'ADMIN',
+    adminRoleId: 'r-2',
+    regionCode: 'AE' as string | null,
+    regionLocked: true,
+    isActive: true,
+  };
+
+  it('never puts email in an update payload', () => {
+    expect(Object.keys(buildStaffUpdate(form))).not.toContain('email');
+    expect(buildStaffUpdate({ ...form, regionCode: null, regionLocked: false })).not.toHaveProperty(
+      'email',
+    );
+  });
+
+  it('sends every editable field the update contract declares', () => {
+    expect(buildStaffUpdate(form)).toEqual({
+      firstName: 'Emirates',
+      lastName: 'Admin',
+      phone: '+971500000111',
+      role: 'ADMIN',
+      adminRoleId: 'r-2',
+      regionCode: 'AE',
+      regionLocked: true,
+      isActive: true,
+    });
+  });
+
+  it('clears the market with an explicit null, not a dropped key', () => {
+    const payload = buildStaffUpdate({ ...form, regionCode: null, regionLocked: false });
+    expect(payload).toHaveProperty('regionCode');
+    expect(payload.regionCode).toBeNull();
+    expect(payload.regionLocked).toBe(false);
+    // A dropped key would leave the old market in place on the server.
+    expect(JSON.stringify(payload)).toContain('"regionCode":null');
+  });
+
+  it('omits isActive when the form did not offer it (the create modal)', () => {
+    expect(buildStaffUpdate({ ...form, isActive: undefined })).not.toHaveProperty('isActive');
+  });
+
+  it('creates with an email and omits the market entirely when global', () => {
+    expect(buildStaffCreate(form)).toMatchObject({
+      email: 'ae-admin@kartseek.com',
+      regionCode: 'AE',
+      regionLocked: true,
+    });
+    const global = buildStaffCreate({ ...form, regionCode: null, regionLocked: false });
+    // CreateStaffDto's regionCode is a two-letter string or absent — never null.
+    expect(global).not.toHaveProperty('regionCode');
+    expect(global.email).toBe('ae-admin@kartseek.com');
+  });
+
+  it('omits phone when it is blank rather than sending an empty string', () => {
+    expect(buildStaffCreate({ ...form, phone: undefined })).not.toHaveProperty('phone');
+    expect(buildStaffUpdate({ ...form, phone: '' })).not.toHaveProperty('phone');
   });
 });
