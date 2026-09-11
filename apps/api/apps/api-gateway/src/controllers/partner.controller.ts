@@ -25,6 +25,7 @@ import { EntityManager } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { JwtAuthGuard } from '@app/security';
+import { isStaffRole } from '@app/common';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import {
@@ -91,6 +92,32 @@ export class PartnerController {
 
   /** Roles a partner may hold; anything else in the column is ignored. */
   private static readonly PARTNER_ROLES = ['TAXI_DRIVER', 'DELIVERY_PARTNER'] as const;
+
+  /**
+   * The role the partner's signed token will carry.
+   *
+   * `activeRole` becomes the `role` claim at sign-in, and the partner flow
+   * clears an SMS code only — there is no second factor here. `allowedRoles`
+   * was already filtered against `PARTNER_ROLES`; `activeRole` was not, so a
+   * `partner_users.active_role` of `ADMIN` or `SUPER_ADMIN` would have minted a
+   * staff-role session past the staff MFA gate entirely. It carries no
+   * `adminPermissions`, so `perm:`-gated routes would still refuse it — but the
+   * large role-only admin surface would not. This was the one remaining route
+   * in the gateway that could sign a staff role.
+   *
+   * Refused rather than downgraded: a partner row holding a staff role is
+   * either a mistake or an attempt, and quietly signing `TAXI_DRIVER` instead
+   * would hide both. Staff sign in through `/auth/login` and its second factor.
+   */
+  private static partnerRoleOrRefuse(activeRole: string | null | undefined): string {
+    const role = activeRole ?? 'TAXI_DRIVER';
+    if (isStaffRole(role)) {
+      throw new ForbiddenException(
+        'This partner account carries an administrative role. Sign in through the admin console.',
+      );
+    }
+    return role;
+  }
 
   /**
    * The EntityManager, or a clear failure if there isn't one.
@@ -202,7 +229,7 @@ export class PartnerController {
       allowedRoles: (pUser.allowedRoles ?? []).filter((role) =>
         (PartnerController.PARTNER_ROLES as readonly string[]).includes(role),
       ),
-      activeRole: pUser.activeRole ?? 'TAXI_DRIVER',
+      activeRole: PartnerController.partnerRoleOrRefuse(pUser.activeRole),
       complianceStatus: partner.status,
     };
   }

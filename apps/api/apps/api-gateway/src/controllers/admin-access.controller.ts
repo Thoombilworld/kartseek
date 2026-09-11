@@ -32,6 +32,7 @@ import {
   unknownPermissionKeys,
 } from '@app/common';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
+import { RedisService } from '@app/redis';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
@@ -47,6 +48,17 @@ import {
 
 /** Never let a caller page through the whole staff directory in one request. */
 const MAX_PAGE_SIZE = 100;
+
+/**
+ * How long a revocation marker has to outlive the token it revokes.
+ *
+ * An access token is signed for `AuthController.ACCESS_TTL_SECONDS` (3600), and
+ * this controller cannot see the deactivated account's token to read its actual
+ * `exp` — so the marker is written for a full token lifetime, which covers the
+ * freshest token that could exist. `resetPassword` writes the same key with the
+ * same 3600 for the same reason (`gateway.controller.ts`).
+ */
+const REVOCATION_TTL_SECONDS = 3600;
 
 /**
  * Roles & staff — SUPER_ADMIN to write, and never a market-locked account.
@@ -84,7 +96,68 @@ export class AdminAccessController {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     private readonly kafka: KafkaProducerService,
     private readonly encryption: EncryptionService,
+    private readonly redis: RedisService,
   ) {}
+
+  /**
+   * End every live session belonging to a staff account that was just
+   * deactivated.
+   *
+   * Flipping `isActive` alone did not do it. `/auth/refresh` re-reads the
+   * account and refuses a deactivated one, so renewal stopped — but the access
+   * token already in the browser is self-contained and stayed valid for the
+   * rest of its hour, which made "revoke this administrator" a decision that
+   * took up to sixty minutes to happen, with nothing in the console saying so.
+   *
+   * The mechanism is the one `resetPassword` already uses: `JwtAuthGuard`
+   * checks `revoked-users:<id>` after the signature verifies and answers 401,
+   * so the token dies on the next request rather than at its own expiry.
+   * Per-user rather than per-`jti` on purpose — a deactivation should end every
+   * device, which is exactly the difference from sign-out.
+   *
+   * Redis failures are logged, not thrown: the guard's own revocation check
+   * already fails open when Redis is unreachable (`jwt-auth.guard.ts` logs and
+   * continues), so throwing here would buy no security and would instead make
+   * the `isActive:false` write — the durable half of the decision, which
+   * `/auth/refresh` enforces from Postgres — fail with it.
+   */
+  private async endSessions(userId: string): Promise<boolean> {
+    try {
+      await this.redis.set(`revoked-users:${userId}`, 'staff-deactivated', REVOCATION_TTL_SECONDS);
+      await this.redis.del(`refresh:${userId}`);
+      await this.redis.del(`session:${userId}`);
+      return true;
+    } catch (e) {
+      this.logger.error(
+        `Deactivated ${userId} but could not revoke its live session: ${(e as Error).message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Undo this controller's own revocation when an account is switched back on.
+   *
+   * Without it, "deactivate, then think better of it" locks the account out for
+   * the marker's full hour — `revoked-users:` is per *user*, so even a fresh
+   * sign-in with a fresh token is refused, and nothing in the console would say
+   * why.
+   *
+   * Only this controller's marker is cleared. A `password-reset` revocation,
+   * written by `gateway.controller.ts` for a different reason, is left where it
+   * is: deleting it would make tokens minted before the reset valid again.
+   */
+  private async restoreSessions(userId: string): Promise<void> {
+    try {
+      if ((await this.redis.get(`revoked-users:${userId}`)) === 'staff-deactivated') {
+        await this.redis.del(`revoked-users:${userId}`);
+      }
+    } catch (e) {
+      this.logger.error(
+        `Reactivated ${userId} but could not clear its revocation marker: ${(e as Error).message}`,
+      );
+    }
+  }
 
   /** The acting administrator, from the verified token — recorded on mutations. */
   private actorId(req: any): string {
@@ -396,6 +469,18 @@ export class AdminAccessController {
       user.status = dto.isActive ? 'active' : 'suspended';
     }
     const saved = await this.userRepo.save(user);
+    // Order matters: the account is deactivated in Postgres first, so a Redis
+    // outage cannot leave a live session behind an account that still reads as
+    // active. Only once the durable half is written is the live half ended.
+    if (dto.isActive === false) {
+      const revoked = await this.endSessions(id);
+      this.logger.log(
+        `Staff account deactivated: ${id} by ${this.actorId(req)} — ` +
+          (revoked ? 'live session revoked' : 'live session NOT revoked (see error above)'),
+      );
+    } else if (dto.isActive === true) {
+      await this.restoreSessions(id);
+    }
     await this.kafka.publish('admin.staff.updated', {
       userId: id,
       actorId: this.actorId(req),

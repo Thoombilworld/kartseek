@@ -50,17 +50,24 @@ function build(roles: any[] = [], users: any[] = []) {
   };
   const kafka = { publish: vi.fn(async () => undefined) };
   const encryption = { encrypt: vi.fn((v: string) => `enc:${v}`) };
+  const redis = {
+    set: vi.fn(async () => undefined),
+    del: vi.fn(async () => undefined),
+    get: vi.fn(async () => null),
+  };
   return {
     ctrl: new AdminAccessController(
       roleRepo as any,
       userRepo as any,
       kafka as any,
       encryption as any,
+      redis as any,
     ),
     roleRepo,
     userRepo,
     kafka,
     encryption,
+    redis,
   };
 }
 
@@ -312,6 +319,78 @@ describe('AdminAccessController', () => {
       status: 'suspended',
     });
     expect(res.data.isActive).toBe(false);
+  });
+
+  /**
+   * Deactivation used to be a database write and nothing else. `/auth/refresh`
+   * refuses a deactivated account, so renewal stopped — but the access token
+   * already in the browser is self-contained and stayed valid for the rest of
+   * its hour, which made revoking a compromised administrator a decision that
+   * took up to sixty minutes to take effect. `JwtAuthGuard` reads
+   * `revoked-users:<id>` after the signature verifies, so writing that key is
+   * what makes the console's decision immediate.
+   */
+  it('revokes the live session when a staff account is deactivated', async () => {
+    const other = { id: 'u-other', role: 'ADMIN', adminRoleId: 'r-reg', isActive: true };
+    const { ctrl, redis } = build([regionalRole], [other]);
+    await ctrl.updateStaff(req(superAdmin), 'u-other', { isActive: false } as any);
+
+    // The key JwtAuthGuard checks, for a full access-token lifetime.
+    expect(redis.set).toHaveBeenCalledWith('revoked-users:u-other', 'staff-deactivated', 3600);
+    // …and the stored session and refresh slots, so renewal has nothing left.
+    expect(redis.del).toHaveBeenCalledWith('refresh:u-other');
+    expect(redis.del).toHaveBeenCalledWith('session:u-other');
+  });
+
+  it('revokes nothing when the patch does not deactivate', async () => {
+    const other = { id: 'u-other', role: 'ADMIN', adminRoleId: 'r-reg', isActive: true };
+    const { ctrl, redis } = build([regionalRole], [other]);
+    await ctrl.updateStaff(req(superAdmin), 'u-other', { firstName: 'Ada' } as any);
+    expect(redis.set).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
+    expect(redis.get).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The marker is per *user*, so leaving it behind would refuse even a fresh
+   * sign-in with a fresh token — "deactivate, then think better of it" would
+   * lock the account out for the marker's full hour with nothing saying why.
+   */
+  it('clears its own revocation when the account is switched back on', async () => {
+    const other = { id: 'u-other', role: 'ADMIN', adminRoleId: 'r-reg', isActive: false };
+    const { ctrl, redis } = build([regionalRole], [other]);
+    redis.get.mockResolvedValueOnce('staff-deactivated' as any);
+    await ctrl.updateStaff(req(superAdmin), 'u-other', { isActive: true } as any);
+    expect(redis.get).toHaveBeenCalledWith('revoked-users:u-other');
+    expect(redis.del).toHaveBeenCalledWith('revoked-users:u-other');
+    // Reactivation revokes nothing, and does not delete the session slots.
+    expect(redis.set).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalledWith('refresh:u-other');
+  });
+
+  it('leaves a password-reset revocation alone when reactivating', async () => {
+    // Written by `resetPassword` for a different reason. Deleting it would make
+    // tokens minted before the password change valid again.
+    const other = { id: 'u-other', role: 'ADMIN', adminRoleId: 'r-reg', isActive: false };
+    const { ctrl, redis } = build([regionalRole], [other]);
+    redis.get.mockResolvedValueOnce('password-reset' as any);
+    await ctrl.updateStaff(req(superAdmin), 'u-other', { isActive: true } as any);
+    expect(redis.del).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The durable half of the decision is the Postgres write, which
+   * `/auth/refresh` enforces on its own. A Redis outage must not roll it back —
+   * and `JwtAuthGuard`'s own revocation check already fails open when Redis is
+   * unreachable, so throwing here would buy nothing and lose the deactivation.
+   */
+  it('still deactivates when redis is down, and says so in the log', async () => {
+    const other = { id: 'u-other', role: 'ADMIN', adminRoleId: 'r-reg', isActive: true };
+    const { ctrl, userRepo, redis } = build([regionalRole], [other]);
+    redis.set.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    const res = await ctrl.updateStaff(req(superAdmin), 'u-other', { isActive: false } as any);
+    expect(res.data.isActive).toBe(false);
+    expect(userRepo.save.mock.calls[0][0]).toMatchObject({ isActive: false });
   });
 
   it('clears the market when regionCode is null', async () => {

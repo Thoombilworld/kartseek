@@ -160,3 +160,80 @@ describe('JwtAuthGuard token type', () => {
     await expect(new JwtAuthGuard(notPublic).canActivate(ctx)).resolves.toBe(true);
   });
 });
+
+/**
+ * Per-user revocation — what makes "deactivate this administrator" immediate.
+ *
+ * An access token is self-contained and signed for an hour, so nothing in the
+ * token itself can end a session early. `AdminAccessController.updateStaff`
+ * writes `revoked-users:<id>` on `isActive:false` and `resetPassword` writes the
+ * same key; this check is the half that makes either one bite, on the very next
+ * request rather than at the token's own expiry.
+ */
+describe('JwtAuthGuard user revocation', () => {
+  const parentProto = Object.getPrototypeOf(JwtAuthGuard.prototype);
+  const realCanActivate = parentProto.canActivate;
+  const env = process.env;
+
+  const authenticateAs = (user: Record<string, unknown>) => {
+    parentProto.canActivate = function (ctx: any) {
+      ctx.switchToHttp().getRequest().user = user;
+      return true;
+    };
+  };
+
+  /** A Redis stub answering from a plain map of key → value. */
+  const redisWith = (keys: Record<string, string>) => ({
+    get: async (k: string) => keys[k] ?? null,
+  });
+
+  const staffToken = { sub: 'u-adm', userId: 'u-adm', role: 'ADMIN', type: 'access', jti: 'j1' };
+
+  beforeEach(() => {
+    process.env = { ...env, NODE_ENV: 'test', DEV_AUTH_BYPASS: 'false' };
+    authenticateAs(staffToken);
+  });
+  afterEach(() => {
+    parentProto.canActivate = realCanActivate;
+    process.env = env;
+  });
+
+  it('refuses a still-fresh access token once its user is revoked', async () => {
+    const redis = redisWith({ 'revoked-users:u-adm': 'staff-deactivated' });
+    const { ctx } = contextFor({ authorization: 'Bearer fresh.access.token' });
+    await expect(new JwtAuthGuard(notPublic, redis as any).canActivate(ctx)).rejects.toThrow(
+      'Session revoked. Please log in again.',
+    );
+  });
+
+  it('admits the same token when no revocation is recorded', async () => {
+    const { ctx } = contextFor({ authorization: 'Bearer fresh.access.token' });
+    await expect(new JwtAuthGuard(notPublic, redisWith({}) as any).canActivate(ctx)).resolves.toBe(
+      true,
+    );
+  });
+
+  it('revokes by user id, not by jti — every device, which is the point', async () => {
+    // A second device holds a different `jti` under the same subject.
+    authenticateAs({ ...staffToken, jti: 'j2' });
+    const redis = redisWith({ 'revoked-users:u-adm': 'staff-deactivated' });
+    const { ctx } = contextFor({ authorization: 'Bearer other.device.token' });
+    await expect(new JwtAuthGuard(notPublic, redis as any).canActivate(ctx)).rejects.toThrow(
+      'Session revoked. Please log in again.',
+    );
+  });
+
+  it('fails open when redis is unreachable, matching the revoked-tokens check beside it', async () => {
+    // Stated deliberately: an unreachable Redis must not lock every
+    // authenticated caller out of the platform. The durable half of a
+    // deactivation is `users.isActive`, which `/auth/refresh` reads from
+    // Postgres, so the session still cannot be renewed past the hour.
+    const redis = {
+      get: async () => {
+        throw new Error('ECONNREFUSED');
+      },
+    };
+    const { ctx } = contextFor({ authorization: 'Bearer fresh.access.token' });
+    await expect(new JwtAuthGuard(notPublic, redis as any).canActivate(ctx)).resolves.toBe(true);
+  });
+});
