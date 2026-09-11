@@ -8,7 +8,7 @@ import {
   UsePipes,
   ValidationPipe,
   UseFilters,
-  ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { HotelService } from '../hotel.service';
@@ -17,6 +17,7 @@ import {
   type EmptyMessage,
   type IdMessage,
   RpcAwareExceptionsFilter,
+  refuseUnattributable,
   requireId,
 } from '@app/common';
 
@@ -24,6 +25,8 @@ import {
 @Controller('admin')
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class HotelAdminController {
+  private readonly logger = new Logger(HotelAdminController.name);
+
   constructor(private readonly svc: HotelService) {}
 
   @Get('hotels')
@@ -103,7 +106,12 @@ export class HotelAdminController {
    */
   @MessagePattern({ cmd: 'admin_hotel_stats' })
   msgStats(@Payload() d: EmptyMessage) {
-    if (d?.scope) throw new ForbiddenException('This report cannot be attributed to a market yet.');
+    refuseUnattributable(
+      d?.scope,
+      'report',
+      this.logger,
+      'This report cannot be attributed to a market yet.',
+    );
     return this.svc.getAdminAnalytics();
   }
 
@@ -114,12 +122,12 @@ export class HotelAdminController {
 
   @MessagePattern({ cmd: 'admin_approve_hotel' })
   msgApprove(@Payload() d: EmptyMessage) {
-    return this.svc.approveHotel(d.hotelId, d?.scope);
+    return this.svc.approveHotel(requireId(d?.hotelId, 'hotel'), d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_suspend_hotel' })
   msgSuspend(@Payload() d: EmptyMessage) {
-    return this.svc.suspendHotel(d.hotelId, d.reason, d?.scope);
+    return this.svc.suspendHotel(requireId(d?.hotelId, 'hotel'), d.reason, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_fraud_flags' })
@@ -135,7 +143,12 @@ export class HotelAdminController {
   /** Reads the same unattributable analytics as `admin_hotel_stats`. */
   @MessagePattern({ cmd: 'admin_revenue' })
   msgRevenue(@Payload() d: EmptyMessage) {
-    if (d?.scope) throw new ForbiddenException('This report cannot be attributed to a market yet.');
+    refuseUnattributable(
+      d?.scope,
+      'report',
+      this.logger,
+      'This report cannot be attributed to a market yet.',
+    );
     return this.svc.getAdminAnalytics();
   }
 
