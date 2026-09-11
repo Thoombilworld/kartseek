@@ -7,6 +7,19 @@ const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`(
 const SCOPED = /resolveMarket\(|marketScopeOf\(|assertRecordInScope\(|this\.scopeOf\(/;
 const GLOBAL = /@GlobalEntity\(/;
 
+/** The handler's own signature line: two-space indent, optional async, a name, an open paren. */
+const SIGNATURE = /^ {2}(?:async\s+)?[A-Za-z_]\w*\s*\(/;
+/**
+ * Where a handler block ends: the next class member at two-space indent (its
+ * first decorator, an access modifier or the constructor) or the class's
+ * closing brace. Never end-of-file — that folded trailing helpers into the
+ * last route and let a `scopeOf(` inside a helper stand in for a call the
+ * handler never made. Parameter decorators sit at four-space indent and the
+ * scan starts after the signature, so a handler's own decorators and
+ * parameters never end its block.
+ */
+const MEMBER_START = /^ {2}(?:@|private\b|protected\b|public\b|static\b|readonly\b|constructor\b)|^}/;
+
 /**
  * Routes that are market-free by nature. Anything else under /admin must
  * resolve a market in its handler body. Add here only with a reason.
@@ -37,17 +50,30 @@ function stripComments(s: string): string {
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
+const parserGaps: string[] = [];
+
 function collect(): AdminRoute[] {
   const out: AdminRoute[] = [];
   for (const file of fs
     .readdirSync(CONTROLLERS)
     .filter((f) => /^(admin-.*|ddos-admin)\.controller\.ts$/.test(f))) {
     const src = stripComments(fs.readFileSync(path.join(CONTROLLERS, file), 'utf8')).split('\n');
+    const declared = (src.join('\n').match(/@(?:Get|Post|Put|Patch|Delete|All)\(/g) ?? []).length;
     const base = (src.join('\n').match(/@Controller\(\s*['"`]([^'"`]*)['"`]/) || [])[1] ?? '';
     const routeLines = src.map((l, i) => ({ l, i })).filter(({ l }) => HTTP.test(l));
     routeLines.forEach(({ l, i }, idx) => {
       const m = l.match(HTTP)!;
-      const end = idx + 1 < routeLines.length ? routeLines[idx + 1].i : src.length;
+      const nextRoute = idx + 1 < routeLines.length ? routeLines[idx + 1].i : src.length;
+      // Walk to the handler's signature first, then to the next member start.
+      let sig = i;
+      while (sig + 1 < nextRoute && !SIGNATURE.test(src[sig])) sig++;
+      let end = nextRoute;
+      for (let k = sig + 1; k < nextRoute; k++) {
+        if (MEMBER_START.test(src[k])) {
+          end = k;
+          break;
+        }
+      }
       // decorator block above + handler body until the next route decorator
       let a = i;
       while (a > 0 && /^\s*(@|\)|\*|\/\/)/.test(src[a - 1])) a--;
@@ -61,6 +87,11 @@ function collect(): AdminRoute[] {
         global: GLOBAL.test(block),
       });
     });
+    if (declared !== routeLines.length) {
+      parserGaps.push(
+        `${file}: ${declared} route decorators declared, ${routeLines.length} parsed (multi-line decorator?)`,
+      );
+    }
   }
   return out;
 }
@@ -87,5 +118,28 @@ describe('admin market scope regression', () => {
     const offenders = routes.filter((r) => r.global && r.verb !== 'GET');
     const report = offenders.map((r) => `  ${r.verb} ${r.path}   (${r.file})`).join('\n');
     expect(report).toBe('');
+  });
+
+  it('sees every route decorator it counts — a multi-line decorator must fail here, not vanish', () => {
+    expect(parserGaps.join('\n')).toBe('');
+  });
+
+  it('does not let a helper declared after the last route stand in for that route', () => {
+    // A trailing private helper that calls resolveMarket must not make the
+    // preceding route count as scoped.
+    const src = stripComments(
+      "  @Get('x')\n  async lastRoute() {\n    return 1;\n  }\n\n  private scopeOf(req: any) {\n    return resolveMarket(req);\n  }\n}\n",
+    ).split('\n');
+    const routeLine = src.findIndex((l) => HTTP.test(l));
+    let sig = routeLine;
+    while (sig + 1 < src.length && !SIGNATURE.test(src[sig])) sig++;
+    let end = src.length;
+    for (let k = sig + 1; k < src.length; k++) {
+      if (MEMBER_START.test(src[k])) {
+        end = k;
+        break;
+      }
+    }
+    expect(SCOPED.test(src.slice(routeLine, end).join('\n'))).toBe(false);
   });
 });
