@@ -5,11 +5,14 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
 import {
-  PharmacyStore, PharmacyStoreStatus,
+  PharmacyStore,
+  PharmacyStoreStatus,
   PharmacyCategory,
   PharmacyItem,
-  PharmacyOrder, PharmacyOrderStatus,
-  Prescription, PrescriptionStatus,
+  PharmacyOrder,
+  PharmacyOrderStatus,
+  Prescription,
+  PrescriptionStatus,
   PharmacyReview,
   PharmacyStaff,
   PharmacyPromotion,
@@ -57,11 +60,17 @@ export class PharmacyService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async listStores(params: {
-    page?: number; limit?: number; is24hr?: boolean; search?: string;
-    lat?: number; lng?: number; radius?: number;
+    page?: number;
+    limit?: number;
+    is24hr?: boolean;
+    search?: string;
+    lat?: number;
+    lng?: number;
+    radius?: number;
   }) {
     const { page = 1, limit = 20, is24hr, search, lat, lng, radius = 10 } = params;
-    const qb = this.storeRepo.createQueryBuilder('s')
+    const qb = this.storeRepo
+      .createQueryBuilder('s')
       .where('s.status = :status', { status: PharmacyStoreStatus.APPROVED });
 
     if (is24hr !== undefined) qb.andWhere('s.is24hr = :is24hr', { is24hr });
@@ -108,13 +117,19 @@ export class PharmacyService {
   }
 
   async getStoreById(id: string) {
-    const store = await this.storeRepo.findOne({ where: { id }, relations: ['staff', 'promotions'] });
+    const store = await this.storeRepo.findOne({
+      where: { id },
+      relations: ['staff', 'promotions'],
+    });
     if (!store) throw new NotFoundException(`Pharmacy store ${id} not found`);
     return store;
   }
 
   async getStoreBySlug(slug: string) {
-    const store = await this.storeRepo.findOne({ where: { slug }, relations: ['staff', 'promotions'] });
+    const store = await this.storeRepo.findOne({
+      where: { slug },
+      relations: ['staff', 'promotions'],
+    });
     if (!store) throw new NotFoundException(`Pharmacy store '${slug}' not found`);
     return store;
   }
@@ -123,7 +138,8 @@ export class PharmacyService {
     const [data, total] = await this.storeRepo.findAndCount({
       where: [{ name: ILike(`%${q}%`) }, { city: ILike(`%${q}%`) }],
       order: { rating: 'DESC' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
@@ -146,14 +162,24 @@ export class PharmacyService {
   //  Customer — Medicines / Items
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async getMedicines(storeId: string, params: { categoryId?: string; search?: string; page?: number; limit?: number }) {
+  async getMedicines(
+    storeId: string,
+    params: { categoryId?: string; search?: string; page?: number; limit?: number },
+  ) {
     const { categoryId, search, page = 1, limit = 20 } = params;
-    const qb = this.itemRepo.createQueryBuilder('i')
+    const qb = this.itemRepo
+      .createQueryBuilder('i')
       .where('i.store_id = :storeId', { storeId })
       .andWhere('i.isAvailable = true');
     if (categoryId) qb.andWhere('i.categoryId = :categoryId', { categoryId });
-    if (search) qb.andWhere('(i.name ILIKE :q OR i.genericName ILIKE :q OR i.composition ILIKE :q)', { q: `%${search}%` });
-    qb.orderBy('i.sortOrder', 'ASC').addOrderBy('i.name', 'ASC').skip((page - 1) * limit).take(limit);
+    if (search)
+      qb.andWhere('(i.name ILIKE :q OR i.genericName ILIKE :q OR i.composition ILIKE :q)', {
+        q: `%${search}%`,
+      });
+    qb.orderBy('i.sortOrder', 'ASC')
+      .addOrderBy('i.name', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
     const [data, total] = await qb.getManyAndCount();
     return { data, total, page, limit };
   }
@@ -173,7 +199,8 @@ export class PharmacyService {
       ],
       relations: ['store'],
       order: { orderCount: 'DESC' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
@@ -221,7 +248,14 @@ export class PharmacyService {
   //  Customer — Prescriptions
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async uploadPrescription(dto: { customerId: string; patientName: string; patientAge?: number; fileUrl: string; storeId?: string; notes?: string }) {
+  async uploadPrescription(dto: {
+    customerId: string;
+    patientName: string;
+    patientAge?: number;
+    fileUrl: string;
+    storeId?: string;
+    notes?: string;
+  }) {
     const presc = this.prescriptionRepo.create({
       customerId: dto.customerId,
       patientName: dto.patientName,
@@ -232,7 +266,10 @@ export class PharmacyService {
       status: PrescriptionStatus.PENDING_VERIFICATION,
     });
     const saved = await this.prescriptionRepo.save(presc);
-    await this.kafka.publish('pharmacy.prescription.uploaded', { id: saved.id, customerId: dto.customerId });
+    await this.kafka.publish('pharmacy.prescription.uploaded', {
+      id: saved.id,
+      customerId: dto.customerId,
+    });
     this.logger.log(`📋 Prescription ${saved.id} uploaded by customer ${dto.customerId}`);
     return { success: true, prescription: saved };
   }
@@ -273,7 +310,8 @@ export class PharmacyService {
     if (!store) throw new NotFoundException(`Pharmacy store ${dto.storeId} not found`);
 
     const requested: any[] = Array.isArray(dto.items) ? dto.items : [];
-    if (requested.length === 0) throw new BadRequestException('An order must contain at least one item');
+    if (requested.length === 0)
+      throw new BadRequestException('An order must contain at least one item');
 
     const catalogue = await this.itemRepo.find({
       where: { id: In(requested.map((i) => i.itemId).filter(Boolean)), storeId: dto.storeId },
@@ -290,18 +328,21 @@ export class PharmacyService {
       const item = byId.get(requestedItem.itemId);
       // An item the store does not stock is refused rather than being priced at
       // whatever the caller said it costs.
-      if (!item) throw new BadRequestException(`Item ${requestedItem.itemId} is not sold by this pharmacy`);
+      if (!item)
+        throw new BadRequestException(`Item ${requestedItem.itemId} is not sold by this pharmacy`);
       if (!item.isAvailable) throw new BadRequestException(`${item.name} is currently unavailable`);
 
       const quantity = Math.max(1, Math.trunc(Number(requestedItem.quantity) || 0));
       if (item.maxQuantityPerOrder && quantity > item.maxQuantityPerOrder) {
-        throw new BadRequestException(`${item.name} is limited to ${item.maxQuantityPerOrder} per order`);
+        throw new BadRequestException(
+          `${item.name} is limited to ${item.maxQuantityPerOrder} per order`,
+        );
       }
 
       const price = Number(item.price);
       const lineTotal = price * quantity;
       itemTotal += lineTotal;
-      taxAmount += lineTotal * (Number(item.taxPercent) || 0) / 100;
+      taxAmount += (lineTotal * (Number(item.taxPercent) || 0)) / 100;
 
       if (item.requiresPrescription) requiresRx = true;
       if (item.isScheduleHDrug) hasScheduleH = true;
@@ -319,9 +360,10 @@ export class PharmacyService {
 
     itemTotal = +itemTotal.toFixed(2);
     taxAmount = +taxAmount.toFixed(2);
-    const deliveryFee = String(dto.orderType ?? 'DELIVERY').toUpperCase() === 'PICKUP'
-      ? 0
-      : Number(store.deliveryFee) || 0;
+    const deliveryFee =
+      String(dto.orderType ?? 'DELIVERY').toUpperCase() === 'PICKUP'
+        ? 0
+        : Number(store.deliveryFee) || 0;
     const grandTotal = +(itemTotal + deliveryFee + taxAmount).toFixed(2);
 
     const orderNumber = `PHM-${Date.now().toString(36).toUpperCase()}`;
@@ -350,9 +392,12 @@ export class PharmacyService {
       status: requiresRx ? PharmacyOrderStatus.PRESCRIPTION_PENDING : PharmacyOrderStatus.PLACED,
     } as any);
 
-    const saved = await this.orderRepo.save(order) as any as PharmacyOrder;
+    const saved = (await this.orderRepo.save(order)) as any as PharmacyOrder;
     await this.kafka.publish('pharmacy.order.created', {
-      id: saved.id, orderNumber: saved.orderNumber, storeId: saved.storeId, customerId: saved.customerId,
+      id: saved.id,
+      orderNumber: saved.orderNumber,
+      storeId: saved.storeId,
+      customerId: saved.customerId,
     });
     this.logger.log(`🛒 Order ${saved.orderNumber} placed for store ${store.name}`);
     return { success: true, order: saved };
@@ -374,7 +419,8 @@ export class PharmacyService {
       where: { customerId },
       relations: ['store'],
       order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
@@ -396,8 +442,9 @@ export class PharmacyService {
    * they did not place, so their reads are not narrowed.
    */
   async getOrderById(orderId: string, requester?: { id?: string; role?: string }) {
-    const privileged = ['admin', 'super_admin', 'seller', 'pharmacy_staff']
-      .includes(String(requester?.role ?? '').toLowerCase());
+    const privileged = ['admin', 'super_admin', 'seller', 'pharmacy_staff'].includes(
+      String(requester?.role ?? '').toLowerCase(),
+    );
 
     // Fail closed. An unidentified caller is refused rather than served an
     // unscoped lookup, so a future caller that forgets to pass the requester
@@ -421,12 +468,20 @@ export class PharmacyService {
     const [data, total] = await this.reviewRepo.findAndCount({
       where: { storeId, isVisible: true },
       order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
 
-  async submitReview(dto: { storeId: string; customerId: string; customerName?: string; rating: number; comment?: string; orderId?: string }) {
+  async submitReview(dto: {
+    storeId: string;
+    customerId: string;
+    customerName?: string;
+    rating: number;
+    comment?: string;
+    orderId?: string;
+  }) {
     const review = this.reviewRepo.create({
       storeId: dto.storeId,
       customerId: dto.customerId,
@@ -437,7 +492,8 @@ export class PharmacyService {
     });
     const saved = await this.reviewRepo.save(review);
     // Update store rating aggregate
-    const { avg } = await this.reviewRepo.createQueryBuilder('r')
+    const { avg } = await this.reviewRepo
+      .createQueryBuilder('r')
       .select('AVG(r.rating)', 'avg')
       .where('r.store_id = :sid', { sid: dto.storeId })
       .getRawOne();
@@ -465,23 +521,33 @@ export class PharmacyService {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
     const totalOrders = await this.orderRepo.count({ where: { storeId } });
-    const pendingOrders = await this.orderRepo.count({ where: { storeId, status: PharmacyOrderStatus.PLACED } });
-    const prescPending = await this.orderRepo.count({ where: { storeId, status: PharmacyOrderStatus.PRESCRIPTION_PENDING } });
+    const pendingOrders = await this.orderRepo.count({
+      where: { storeId, status: PharmacyOrderStatus.PLACED },
+    });
+    const prescPending = await this.orderRepo.count({
+      where: { storeId, status: PharmacyOrderStatus.PRESCRIPTION_PENDING },
+    });
     const totalItems = await this.itemRepo.count({ where: { storeId } });
-    const lowStock = await this.itemRepo.createQueryBuilder('i')
+    const lowStock = await this.itemRepo
+      .createQueryBuilder('i')
       .where('i.store_id = :storeId', { storeId })
       .andWhere('i."stockLevel" <= i."reorderLevel"')
       .getCount();
     return { store, totalOrders, pendingOrders, prescPending, totalItems, lowStock };
   }
 
-  async getSellerOrders(storeId: string, params: { status?: string; page?: number; limit?: number }) {
+  async getSellerOrders(
+    storeId: string,
+    params: { status?: string; page?: number; limit?: number },
+  ) {
     const { status, page = 1, limit = 20 } = params;
     const where: any = { storeId };
     if (status) where.status = status;
     const [data, total] = await this.orderRepo.findAndCount({
-      where, order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit, take: limit,
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
@@ -497,7 +563,12 @@ export class PharmacyService {
     if (status === PharmacyOrderStatus.DELIVERED) order.deliveredAt = new Date();
     if (status === PharmacyOrderStatus.COMPLETED) order.completedAt = new Date();
     const saved = await this.orderRepo.save(order);
-    await this.kafka.publish('pharmacy.order.status_updated', { id: saved.id, orderNumber: saved.orderNumber, status, storeId: saved.storeId });
+    await this.kafka.publish('pharmacy.order.status_updated', {
+      id: saved.id,
+      orderNumber: saved.orderNumber,
+      status,
+      storeId: saved.storeId,
+    });
     return saved;
   }
 
@@ -532,7 +603,12 @@ export class PharmacyService {
     item.stockLevel = stockLevel;
     const saved = await this.itemRepo.save(item);
     if (stockLevel <= item.reorderLevel) {
-      await this.kafka.publish('pharmacy.low_stock', { itemId, name: item.name, storeId: item.storeId, stockLevel });
+      await this.kafka.publish('pharmacy.low_stock', {
+        itemId,
+        name: item.name,
+        storeId: item.storeId,
+        stockLevel,
+      });
     }
     return saved;
   }
@@ -590,13 +666,17 @@ export class PharmacyService {
   async getPayouts(storeId: string) {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
-    const totalRevenue = await this.orderRepo.createQueryBuilder('o')
+    const totalRevenue = await this.orderRepo
+      .createQueryBuilder('o')
       .select('SUM(o."grandTotal")', 'total')
       .where('o.store_id = :sid', { sid: storeId })
-      .andWhere('o.status IN (:...statuses)', { statuses: [PharmacyOrderStatus.COMPLETED, PharmacyOrderStatus.DELIVERED] })
+      .andWhere('o.status IN (:...statuses)', {
+        statuses: [PharmacyOrderStatus.COMPLETED, PharmacyOrderStatus.DELIVERED],
+      })
       .getRawOne();
     return {
-      storeId, totalRevenue: parseFloat(totalRevenue?.total ?? '0'),
+      storeId,
+      totalRevenue: parseFloat(totalRevenue?.total ?? '0'),
       commissionRate: store.commissionRate,
       commission: parseFloat(totalRevenue?.total ?? '0') * (store.commissionRate / 100),
       netPayout: parseFloat(totalRevenue?.total ?? '0') * (1 - store.commissionRate / 100),
@@ -615,7 +695,9 @@ export class PharmacyService {
   async getAnalytics(storeId: string) {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     const totalOrders = await this.orderRepo.count({ where: { storeId } });
-    const completedOrders = await this.orderRepo.count({ where: { storeId, status: PharmacyOrderStatus.COMPLETED } });
+    const completedOrders = await this.orderRepo.count({
+      where: { storeId, status: PharmacyOrderStatus.COMPLETED },
+    });
     const totalReviews = await this.reviewRepo.count({ where: { storeId } });
     const totalItems = await this.itemRepo.count({ where: { storeId } });
     return { store, totalOrders, completedOrders, totalReviews, totalItems };
@@ -625,7 +707,15 @@ export class PharmacyService {
   //  Admin — Prescription Verification
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async verifyPrescription(prescId: string, dto: { status: PrescriptionStatus; adminId: string; rejectionReason?: string; pharmacistNotes?: string }) {
+  async verifyPrescription(
+    prescId: string,
+    dto: {
+      status: PrescriptionStatus;
+      adminId: string;
+      rejectionReason?: string;
+      pharmacistNotes?: string;
+    },
+  ) {
     const presc = await this.prescriptionRepo.findOneBy({ id: prescId });
     if (!presc) throw new NotFoundException(`Prescription ${prescId} not found`);
     presc.status = dto.status;
@@ -639,12 +729,19 @@ export class PharmacyService {
     if (dto.status === PrescriptionStatus.VERIFIED_APPROVED && presc.orderId) {
       await this.updateOrderStatus(presc.orderId, PharmacyOrderStatus.PRESCRIPTION_VERIFIED);
     }
-    if (dto.status === PrescriptionStatus.REJECTED_INVALID || dto.status === PrescriptionStatus.REJECTED_EXPIRED || dto.status === PrescriptionStatus.REJECTED_UNREADABLE) {
+    if (
+      dto.status === PrescriptionStatus.REJECTED_INVALID ||
+      dto.status === PrescriptionStatus.REJECTED_EXPIRED ||
+      dto.status === PrescriptionStatus.REJECTED_UNREADABLE
+    ) {
       if (presc.orderId) {
         await this.updateOrderStatus(presc.orderId, PharmacyOrderStatus.PRESCRIPTION_REJECTED);
       }
     }
-    await this.kafka.publish('pharmacy.prescription.verified', { id: saved.id, status: dto.status });
+    await this.kafka.publish('pharmacy.prescription.verified', {
+      id: saved.id,
+      status: dto.status,
+    });
     return saved;
   }
 
@@ -652,7 +749,8 @@ export class PharmacyService {
     return this.prescriptionRepo.findAndCount({
       where: { status: PrescriptionStatus.PENDING_VERIFICATION },
       order: { createdAt: 'ASC' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (page - 1) * limit,
+      take: limit,
     });
   }
 
@@ -680,11 +778,28 @@ export class PharmacyService {
     return this.storeRepo.save(store);
   }
 
-  async getAdminStoreList(params: { status?: string; page?: number; limit?: number }) {
-    const { status, page = 1, limit = 50 } = params;
+  /**
+   * `countryCode` is the caller's market, forwarded by the gateway as `scope`
+   * for a region-locked administrator and left undefined for a global one.
+   * Without it the Qatar admin's Stores screen listed every market's
+   * pharmacies.
+   */
+  async getAdminStoreList(params: {
+    status?: string;
+    page?: number;
+    limit?: number;
+    countryCode?: string;
+  }) {
+    const { status, page = 1, limit = 50, countryCode } = params;
     const where: any = {};
     if (status) where.status = status;
-    return this.storeRepo.findAndCount({ where, order: { createdAt: 'DESC' }, skip: (page - 1) * limit, take: limit });
+    if (countryCode) where.countryCode = countryCode;
+    return this.storeRepo.findAndCount({
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
   }
 
   async setCommission(storeId: string, rate: number) {
