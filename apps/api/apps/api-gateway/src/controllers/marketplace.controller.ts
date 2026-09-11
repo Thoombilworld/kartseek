@@ -69,6 +69,7 @@ import {
   ForwardedBrandUpdateDto,
 } from '../dto/gateway.dto';
 import { MARKETPLACE_PATTERNS } from '../contracts';
+import { marketScopeOf } from '../guards/market-scope';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
 import { MarketplaceOrderService } from '../services/marketplace-order.service';
@@ -127,8 +128,15 @@ export class MarketplaceGatewayController {
    * it travels under the reserved `_actor` key so it cannot be confused with an
    * ordinary payload field the requester chose.
    */
-  private actor(req: any): { ownerId?: string; role?: string } {
-    return { ownerId: this.userId(req), role: req?.user?.role };
+  private actor(req: any): { ownerId?: string; role?: string; regionCode?: string } {
+    // `regionCode` is present only for a region-locked admin: the backend then
+    // forces every coupon they write into that market and refuses the rest.
+    const { region } = marketScopeOf(req);
+    return {
+      ownerId: this.userId(req),
+      role: req?.user?.role,
+      ...(region ? { regionCode: region } : {}),
+    };
   }
 
   /**
@@ -807,8 +815,11 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Create a coupon (seller/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async createCoupon(@Body() payload: ForwardedCouponDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_COUPON, payload);
+  async createCoupon(@Req() req: any, @Body() payload: ForwardedCouponDto) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_COUPON, {
+      ...(payload as any),
+      _actor: this.actor(req),
+    });
   }
 
   @Put('coupons/:id')
@@ -1186,12 +1197,14 @@ export class MarketplaceGatewayController {
     description: 'Filter by applicable product category',
   })
   @ApiOkResponse({ description: 'Active bank offers' })
-  async getActiveBankOffers(@Query('category') category?: string) {
+  async getActiveBankOffers(@Req() req: any, @Query('category') category?: string) {
     // The live-window and category filtering moved with the data; the gateway
-    // held its own query builder against a table it no longer owns.
+    // held its own query builder against a table it no longer owns. Scoped to
+    // the market being browsed: a bank offer is a deal with one country's banks.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_BANK_OFFERS, {
       activeOnly: true,
       category,
+      region: this.region(req),
     });
   }
 
@@ -1205,10 +1218,12 @@ export class MarketplaceGatewayController {
     description: 'Filter by target product category',
   })
   @ApiOkResponse({ description: 'Active exchange offers' })
-  async getActiveExchangeOffers(@Query('targetCategory') targetCategory?: string) {
+  async getActiveExchangeOffers(@Req() req: any, @Query('targetCategory') targetCategory?: string) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, {
       activeOnly: true,
       targetCategory,
+      // Only trade-in programmes that run in the market being browsed.
+      region: this.region(req),
     });
   }
 
@@ -1836,10 +1851,12 @@ export class MarketplaceGatewayController {
     @Param('itemId') itemId: string,
     @Body() payload: ForwardedCartItemDto,
   ) {
+    // The line lives in the market being browsed; the same product may sit in
+    // the cart once per market.
     return lastValueFrom(
       this.cartClient.send(
         { cmd: 'update_cart_item' },
-        { userId: this.userId(req), itemId, ...payload },
+        { userId: this.userId(req), itemId, ...payload, regionCode: this.region(req) },
       ),
     ).catch(() => {
       throw new HttpException('Cart service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
@@ -1860,7 +1877,12 @@ export class MarketplaceGatewayController {
     return lastValueFrom(
       this.cartClient.send(
         { cmd: 'remove_cart_item' },
-        { userId: this.userId(req), itemId, variantId: body?.variantId },
+        {
+          userId: this.userId(req),
+          itemId,
+          variantId: body?.variantId,
+          regionCode: this.region(req),
+        },
       ),
     ).catch(() => {
       throw new HttpException('Cart service unavailable', HttpStatus.SERVICE_UNAVAILABLE);

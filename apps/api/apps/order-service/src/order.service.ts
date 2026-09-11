@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { Order } from './entities/order.entity';
+import { getRegionConfig } from '@app/region';
 
 export enum OrderStatus {
   PENDING = 'PENDING',
@@ -98,6 +99,13 @@ export class OrderService {
     const totalAmount =
       Math.round((subtotal + deliveryFee - discount - walletDeduction) * 100) / 100;
 
+    // The market and currency this order is denominated in, kept on the row.
+    const market =
+      String(payload.regionCode ?? '')
+        .trim()
+        .toUpperCase() || null;
+    const currency = market ? (getRegionConfig(market)?.currencyCode ?? null) : null;
+
     // Written to Postgres first — this row is the record of a payment taken, and
     // it must exist before the event that tells the rest of the platform so.
     // Orders used to live only in `redis.setJson(..., 86400)`, so every order
@@ -113,6 +121,8 @@ export class OrderService {
         discount,
         couponCode: payload.couponCode ?? null,
         couponId: payload.couponId ?? null,
+        regionCode: market,
+        currency,
         walletDeduction,
         totalAmount,
         deliveryAddress: payload.deliveryAddress,
@@ -164,6 +174,8 @@ export class OrderService {
       totalAmount: Number(row.totalAmount) || 0,
       couponCode: row.couponCode ?? null,
       couponId: row.couponId ?? null,
+      regionCode: row.regionCode ?? null,
+      currency: row.currency ?? null,
       deliveryAddress: row.deliveryAddress,
       serviceType: row.serviceType,
       paymentMethod: row.paymentMethod,

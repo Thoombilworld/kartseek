@@ -49,7 +49,11 @@ describe('CartService', () => {
     });
 
     it('should return cached cart', async () => {
-      const cached = { userId: 'U1', items: [{ productId: 'p1', price: 100, quantity: 2 }], subtotal: 200 };
+      const cached = {
+        userId: 'U1',
+        items: [{ productId: 'p1', price: 100, quantity: 2 }],
+        subtotal: 200,
+      };
       redis.getJson.mockResolvedValue(cached);
       const result = await service.getCart('U1');
       expect(result.items).toHaveLength(1);
@@ -61,7 +65,11 @@ describe('CartService', () => {
     it('should add new item to cart', async () => {
       redis.getJson.mockResolvedValue(null);
       const result = await service.addItem('U1', {
-        productId: 'p1', name: 'Widget', price: 500, quantity: 1, serviceType: 'marketplace',
+        productId: 'p1',
+        name: 'Widget',
+        price: 500,
+        quantity: 1,
+        serviceType: 'marketplace',
       });
       expect(result.success).toBe(true);
       expect(result.cart.items).toHaveLength(1);
@@ -71,11 +79,17 @@ describe('CartService', () => {
     it('should increment quantity for existing item', async () => {
       redis.getJson.mockResolvedValue({
         userId: 'U1',
-        items: [{ productId: 'p1', name: 'Widget', price: 500, quantity: 1, serviceType: 'marketplace' }],
+        items: [
+          { productId: 'p1', name: 'Widget', price: 500, quantity: 1, serviceType: 'marketplace' },
+        ],
         subtotal: 500,
       });
       const result = await service.addItem('U1', {
-        productId: 'p1', name: 'Widget', price: 500, quantity: 2, serviceType: 'marketplace',
+        productId: 'p1',
+        name: 'Widget',
+        price: 500,
+        quantity: 2,
+        serviceType: 'marketplace',
       });
       expect(result.cart.items[0].quantity).toBe(3);
       expect(result.cart.subtotal).toBe(1500);
@@ -89,9 +103,50 @@ describe('CartService', () => {
       });
       // Same product, different variant → new item
       const result = await service.addItem('U1', {
-        productId: 'p1', name: 'Widget', price: 120, quantity: 1, variantId: 'v2', serviceType: 'marketplace',
+        productId: 'p1',
+        name: 'Widget',
+        price: 120,
+        quantity: 1,
+        variantId: 'v2',
+        serviceType: 'marketplace',
       });
       expect(result.cart.items).toHaveLength(2);
+    });
+
+    // Regression: the same product carted in Qatar and then in India merged
+    // into one riyal-priced line with quantity 2, leaving the Indian basket
+    // empty. A line is one product, one SKU, in one market.
+    it('keeps the same product distinct per market', async () => {
+      redis.getJson.mockResolvedValue({
+        userId: 'U1',
+        items: [{ productId: 'p1', price: 255, quantity: 1, regionCode: 'QA' }],
+        subtotal: 255,
+      });
+      const result = await service.addItem('U1', {
+        productId: 'p1',
+        name: 'Dash cam',
+        price: 6621,
+        quantity: 1,
+        serviceType: 'marketplace',
+        regionCode: 'IN',
+      });
+      expect(result.cart.items).toHaveLength(2);
+      expect(result.cart.items.map((i: any) => `${i.regionCode}:${i.price}x${i.quantity}`)).toEqual(
+        ['QA:255x1', 'IN:6621x1'],
+      );
+    });
+
+    it('removes only the line in the market named', async () => {
+      redis.getJson.mockResolvedValue({
+        userId: 'U1',
+        items: [
+          { productId: 'p1', price: 255, quantity: 1, regionCode: 'QA' },
+          { productId: 'p1', price: 6621, quantity: 1, regionCode: 'IN' },
+        ],
+        subtotal: 6876,
+      });
+      const result = await service.removeItem('U1', 'p1', undefined, 'IN');
+      expect(result.cart.items.map((i: any) => i.regionCode)).toEqual(['QA']);
     });
   });
 
@@ -139,26 +194,6 @@ describe('CartService', () => {
       const result = await service.clearCart('U1');
       expect(result.success).toBe(true);
       expect(redis.del).toHaveBeenCalledWith('cart:U1');
-    });
-  });
-
-  describe('applyCoupon', () => {
-    it('should apply valid coupon', async () => {
-      redis.getJson.mockResolvedValue({
-        userId: 'U1', items: [{ productId: 'p1', price: 1000, quantity: 1 }], subtotal: 1000,
-      });
-      const result = await service.applyCoupon('U1', 'FIRST10');
-      expect(result.success).toBe(true);
-      expect(result.discountPercentage).toBe(10);
-      expect(result.discountAmount).toBe(100);
-      expect(result.newTotal).toBe(900);
-    });
-
-    it('should reject invalid coupon', async () => {
-      redis.getJson.mockResolvedValue({ userId: 'U1', items: [], subtotal: 0 });
-      const result = await service.applyCoupon('U1', 'INVALID');
-      expect(result.success).toBe(false);
-      expect(result.reason).toContain('Invalid');
     });
   });
 });

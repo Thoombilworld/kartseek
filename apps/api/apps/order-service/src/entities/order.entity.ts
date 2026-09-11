@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 export enum OrderStatus {
   PENDING = 'PENDING',
@@ -88,6 +95,18 @@ export class Order {
 
   @Column({ type: 'uuid', nullable: true })
   couponId: string | null;
+
+  /**
+   * The market the order was placed in and the currency every amount on this
+   * row is in. Recorded at placement so an invoice, a refund or an audit reads
+   * the order in its own market rather than in whichever market the reader is
+   * browsing; before these columns an order carried no market at all.
+   */
+  @Column({ name: 'region_code', type: 'varchar', nullable: true })
+  regionCode: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  currency: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   notes: string | null;

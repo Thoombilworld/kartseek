@@ -84,13 +84,18 @@ describe('OrderService', () => {
         deliveryAddress: '123 Main St',
         serviceType: 'marketplace' as const,
         paymentMethod: 'card',
+        // The delivery rule is per market: India charges ₹60 under ₹2,000.
+        regionCode: 'IN',
       };
 
       const result = await service.placeOrder(payload);
 
       expect(result.success).toBe(true);
       expect(result.order.customerId).toBe('cust-1');
-      expect(result.order.totalAmount).toBe(260); // 200 + 60 marketplace delivery - 0 discount
+      expect(result.order.totalAmount).toBe(260); // 200 + 60 India marketplace delivery - 0 discount
+      // The order records the market and currency it was placed in.
+      expect(result.order.regionCode).toBe('IN');
+      expect(result.order.currency).toBe('INR');
       expect(result.order.status).toBe(OrderStatus.PENDING);
       expect(redis.setJson).toHaveBeenCalledWith(
         expect.stringContaining('order:'),
@@ -242,8 +247,8 @@ describe('OrderService', () => {
   describe('getOrderTracking', () => {
     it('should return tracking data with timeline', async () => {
       redis.getJson
-        .mockResolvedValueOnce(MOCK_ORDER)   // order:ORD-123
-        .mockResolvedValueOnce(null);          // tracking:ORD-123 (no GPS yet)
+        .mockResolvedValueOnce(MOCK_ORDER) // order:ORD-123
+        .mockResolvedValueOnce(null); // tracking:ORD-123 (no GPS yet)
 
       const result = await service.getOrderTracking('ORD-123');
 

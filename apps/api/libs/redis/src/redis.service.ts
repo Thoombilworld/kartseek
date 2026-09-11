@@ -32,7 +32,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.isSkipped = this.config.get<string>('SKIP_REDIS') === 'true';
 
     if (this.isSkipped) {
-      this.logger.warn('⚠️ Redis is SKIPPED (SKIP_REDIS=true). Running with in-memory fallback emulator.');
+      this.logger.warn(
+        '⚠️ Redis is SKIPPED (SKIP_REDIS=true). Running with in-memory fallback emulator.',
+      );
       return;
     }
 
@@ -150,6 +152,27 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Delete every key matching a glob, by SCAN rather than KEYS so a large
+   * keyspace is never blocked. Catalogue caches carry a market suffix
+   * (`product:<id>:<market>`, `marketplace:featured:<region>`); an
+   * invalidation that names only the prefix deletes nothing, and the
+   * storefront then serves the old price until the TTL runs out.
+   */
+  async delPattern(pattern: string): Promise<number> {
+    let removed = 0;
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.scan(cursor, 'MATCH', pattern, 'COUNT', '500');
+      cursor = next;
+      for (const key of keys) {
+        await this.del(key);
+        removed += 1;
+      }
+    } while (cursor !== '0');
+    return removed;
+  }
+
   async keys(pattern: string): Promise<string[]> {
     if (this.useMemory()) {
       const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
@@ -217,12 +240,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async mget(keys: string[]): Promise<(string | null)[]> {
     if (keys.length === 0) return [];
     if (this.useMemory()) {
-      return keys.map(k => this.memoryDb.get(k) || null);
+      return keys.map((k) => this.memoryDb.get(k) || null);
     }
     try {
       return await this.client!.mget(...keys);
     } catch {
-      return keys.map(k => this.memoryDb.get(k) || null);
+      return keys.map((k) => this.memoryDb.get(k) || null);
     }
   }
 
@@ -232,9 +255,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
   async mgetJson<T>(keys: string[]): Promise<(T | null)[]> {
     const raw = await this.mget(keys);
-    return raw.map(r => {
+    return raw.map((r) => {
       if (!r) return null;
-      try { return JSON.parse(r) as T; } catch { return null; }
+      try {
+        return JSON.parse(r) as T;
+      } catch {
+        return null;
+      }
     });
   }
 
@@ -246,13 +273,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (fields.length === 0) return [];
     if (this.useMemory()) {
       const hash = this.hashDb.get(key);
-      return fields.map(f => hash?.get(f) || null);
+      return fields.map((f) => hash?.get(f) || null);
     }
     try {
       return await this.client!.hmget(key, ...fields);
     } catch {
       const hash = this.hashDb.get(key);
-      return fields.map(f => hash?.get(f) || null);
+      return fields.map((f) => hash?.get(f) || null);
     }
   }
 
@@ -612,7 +639,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Replaces the deprecated ZREVRANGE command removed in Redis 8.
    * Uses `ZRANGE key start stop REV` (available since Redis 6.2).
    */
-  async zrangeRev(key: string, start: number, stop: number, withScores?: boolean): Promise<string[]> {
+  async zrangeRev(
+    key: string,
+    start: number,
+    stop: number,
+    withScores?: boolean,
+  ): Promise<string[]> {
     if (this.useMemory()) {
       const map = this.zsetDb.get(key);
       if (!map) return [];
@@ -630,7 +662,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       // ZRANGE with REV flag replaces deprecated ZREVRANGE (Redis 6.2+, Redis 8 compatible)
-      if (withScores) return await (this.client as any).zrange(key, start, stop, 'REV', 'WITHSCORES');
+      if (withScores)
+        return await (this.client as any).zrange(key, start, stop, 'REV', 'WITHSCORES');
       return await (this.client as any).zrange(key, start, stop, 'REV');
     } catch {
       const map = this.zsetDb.get(key);
@@ -650,7 +683,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** @deprecated Use zrangeRev() — ZREVRANGE was removed in Redis 8. */
-  async zrevrange(key: string, start: number, stop: number, withScores?: boolean): Promise<string[]> {
+  async zrevrange(
+    key: string,
+    start: number,
+    stop: number,
+    withScores?: boolean,
+  ): Promise<string[]> {
     return this.zrangeRev(key, start, stop, withScores);
   }
 
@@ -746,7 +784,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async geodist(key: string, member1: string, member2: string, unit: 'm' | 'km' | 'ft' | 'mi' = 'km'): Promise<number | null> {
+  async geodist(
+    key: string,
+    member1: string,
+    member2: string,
+    unit: 'm' | 'km' | 'ft' | 'mi' = 'km',
+  ): Promise<number | null> {
     if (this.useMemory()) {
       const pos1 = await this.geopos(key, member1);
       const pos2 = await this.geopos(key, member2);
@@ -771,7 +814,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return distKm;
     }
     try {
-      const d = await (this.client as any).geodist(key, member1, member2, unit) as string | null;
+      const d = (await (this.client as any).geodist(key, member1, member2, unit)) as string | null;
       return d ? parseFloat(d) : null;
     } catch {
       return null;
@@ -819,10 +862,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       // GEOSEARCH replaces GEORADIUS (removed in Redis 8) — Redis 6.2+ compatible
       const raw = await (this.client as any).geosearch(
         key,
-        'FROMLONLAT', longitude, latitude,
-        'BYRADIUS', radiusKm, 'km',
+        'FROMLONLAT',
+        longitude,
+        latitude,
+        'BYRADIUS',
+        radiusKm,
+        'km',
         'ASC',
-        'COUNT', 50,
+        'COUNT',
+        50,
         'WITHCOORD',
         'WITHDIST',
       );
@@ -891,9 +939,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         // Typed so the file compiles under `noImplicitAny`; ioredis' real
         // `exec` resolves to `[Error | null, unknown][]`.
         exec: async (): Promise<[Error | null, unknown][]> => [],
-        set: function() { return this; },
-        get: function() { return this; },
-        del: function() { return this; },
+        set: function () {
+          return this;
+        },
+        get: function () {
+          return this;
+        },
+        del: function () {
+          return this;
+        },
       };
       return mockPipe as any;
     }
@@ -906,9 +960,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         // Typed so the file compiles under `noImplicitAny`; ioredis' real
         // `exec` resolves to `[Error | null, unknown][]`.
         exec: async (): Promise<[Error | null, unknown][]> => [],
-        set: function() { return this; },
-        get: function() { return this; },
-        del: function() { return this; },
+        set: function () {
+          return this;
+        },
+        get: function () {
+          return this;
+        },
+        del: function () {
+          return this;
+        },
       };
       return mockMulti as any;
     }

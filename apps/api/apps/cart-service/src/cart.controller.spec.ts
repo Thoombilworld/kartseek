@@ -38,7 +38,7 @@ describe('CartController — RPC surface', () => {
   it('update_cart_item forwards the product id and a numeric quantity', async () => {
     await controller.msgUpdate({ userId: 'u1', itemId: 'p1', quantity: 3 as any });
 
-    expect(svc.updateItemQuantity).toHaveBeenCalledWith('u1', 'p1', 3, undefined);
+    expect(svc.updateItemQuantity).toHaveBeenCalledWith('u1', 'p1', 3, undefined, undefined);
   });
 
   it('update_cart_item coerces a string quantity', async () => {
@@ -46,19 +46,19 @@ describe('CartController — RPC surface', () => {
     // as a string and would silently fail the >0 check in the service.
     await controller.msgUpdate({ userId: 'u1', itemId: 'p1', quantity: '2' as any });
 
-    expect(svc.updateItemQuantity).toHaveBeenCalledWith('u1', 'p1', 2, undefined);
+    expect(svc.updateItemQuantity).toHaveBeenCalledWith('u1', 'p1', 2, undefined, undefined);
   });
 
   it('update_cart_item keeps variants distinct', async () => {
     await controller.msgUpdate({ userId: 'u1', itemId: 'p1', quantity: 1, variantId: 'v9' });
 
-    expect(svc.updateItemQuantity).toHaveBeenCalledWith('u1', 'p1', 1, 'v9');
+    expect(svc.updateItemQuantity).toHaveBeenCalledWith('u1', 'p1', 1, 'v9', undefined);
   });
 
   it('remove_cart_item forwards the product id', async () => {
     await controller.msgRemove({ userId: 'u1', itemId: 'p1' });
 
-    expect(svc.removeItem).toHaveBeenCalledWith('u1', 'p1', undefined);
+    expect(svc.removeItem).toHaveBeenCalledWith('u1', 'p1', undefined, undefined);
   });
 
   it('rejects a payload with no user or item rather than mutating the wrong cart', () => {

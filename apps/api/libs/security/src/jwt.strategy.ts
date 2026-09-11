@@ -14,7 +14,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     if (!secret) {
       const logger = new Logger('JwtStrategy');
-      logger.warn('⚠️  JWT_SECRET not set — using hardcoded dev secret. NEVER use this in production!');
+      logger.warn(
+        '⚠️  JWT_SECRET not set — using hardcoded dev secret. NEVER use this in production!',
+      );
     }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -28,7 +30,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid token payload: missing subject');
     }
     if (!payload.role) {
-      this.logger.warn(`JWT token for user ${payload.sub} is missing role claim — defaulting to CUSTOMER`);
+      this.logger.warn(
+        `JWT token for user ${payload.sub} is missing role claim — defaulting to CUSTOMER`,
+      );
     }
     return {
       userId: payload.sub,
@@ -39,6 +43,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       // Which seller portal this account may open. Absent for non-sellers, which
       // server-side guards must read as "no portal access" rather than "any".
       sellerType: payload.sellerType,
+      // Staff market scope, straight from the signed claim; the gateway's
+      // market-scope helper reads these to confine a regional admin.
+      regionCode: payload.regionCode,
+      regionLocked: payload.regionLocked === true,
       // Carried through for JwtAuthGuard and the logout handler: `type` keeps a
       // refresh token from being used as a Bearer credential, and `jti`/`exp` are
       // what let a single session be revoked for exactly its remaining lifetime.
@@ -48,4 +56,3 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     };
   }
 }
-

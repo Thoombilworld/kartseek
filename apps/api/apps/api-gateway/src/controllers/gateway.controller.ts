@@ -1,12 +1,31 @@
 import {
-  Controller, Post, Get, Body, Req,
-  HttpCode, HttpStatus, UseGuards, BadRequestException, UnauthorizedException, ConflictException, Inject,
-  ForbiddenException, UsePipes, ValidationPipe, Logger, HttpException,
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  BadRequestException,
+  UnauthorizedException,
+  ConflictException,
+  Inject,
+  ForbiddenException,
+  UsePipes,
+  ValidationPipe,
+  Logger,
+  HttpException,
 } from '@nestjs/common';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiBody, ApiOkResponse, ApiCreatedResponse,
-  ApiBadRequestResponse, ApiUnauthorizedResponse,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiBadRequestResponse,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -18,7 +37,16 @@ import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { JwtAuthGuard, AccountLockoutService, EncryptionService } from '@app/security';
 import { User } from '../entities/user.entity';
 import { UserRole, sellerTypeFromRole, type SellerType } from '@app/common';
-import { LoginDto, RegisterDto, SellerRegisterDto, ResetPasswordDto, OtpSendDto, OtpVerifyDto, RefreshTokenDto, ForgotPasswordDto } from '../dto/gateway.dto';
+import {
+  LoginDto,
+  RegisterDto,
+  SellerRegisterDto,
+  ResetPasswordDto,
+  OtpSendDto,
+  OtpVerifyDto,
+  RefreshTokenDto,
+  ForgotPasswordDto,
+} from '../dto/gateway.dto';
 
 /**
  * Auth Controller — Registration, Login, OTP, Token Refresh
@@ -57,7 +85,7 @@ export class AuthController {
   /** Password-reset links are deliberately short-lived. */
   private static readonly RESET_TTL_SECONDS = 1800; // 30 minutes
   /** One-time codes expire fast and cannot be requested without limit. */
-  private static readonly OTP_TTL_SECONDS = 300;    // 5 minutes
+  private static readonly OTP_TTL_SECONDS = 300; // 5 minutes
   private static readonly OTP_MAX_PER_WINDOW = 5;
   private static readonly OTP_THROTTLE_WINDOW_SECONDS = 900; // 15 minutes
 
@@ -80,7 +108,13 @@ export class AuthController {
     // *or* phone, and the entity types both as nullable. Declaring them
     // `string | undefined` forced every caller to launder a real column
     // through a cast, which is how a `null` email reached the claim below.
-    id: string; email?: string | null; phone?: string | null; role: string; sellerType?: string | null;
+    id: string;
+    email?: string | null;
+    phone?: string | null;
+    role: string;
+    sellerType?: string | null;
+    regionCode?: string | null;
+    regionLocked?: boolean | null;
   }) {
     // `sellerType` rides in the token so portal isolation can be enforced from a
     // signed claim. Omitted entirely for non-sellers rather than sent as null, so
@@ -95,6 +129,10 @@ export class AuthController {
       ...(user.phone ? { phone: user.phone } : {}),
       role: user.role,
       ...(sellerType ? { sellerType } : {}),
+      // Staff market scope (market-scope.ts). Omitted when unset so a customer's
+      // token carries no claim to misread; `regionLocked` only ever appears as true.
+      ...(user.regionCode ? { regionCode: String(user.regionCode).toUpperCase() } : {}),
+      ...(user.regionLocked ? { regionLocked: true } : {}),
     };
     const accessToken = this.jwtService.sign(
       { ...identity, type: 'access', jti: crypto.randomUUID() },
@@ -136,7 +174,12 @@ export class AuthController {
     schema: {
       example: {
         success: true,
-        user: { id: 'USR-001', name: 'Jane Customer', email: 'customer@kartseek.com', role: 'CUSTOMER' },
+        user: {
+          id: 'USR-001',
+          name: 'Jane Customer',
+          email: 'customer@kartseek.com',
+          role: 'CUSTOMER',
+        },
         accessToken: 'eyJhbGciOiJIUzI1NiJ9...',
         refreshToken: 'ref_tok_abc123...',
         expiresIn: 3600,
@@ -199,7 +242,7 @@ export class AuthController {
       if (result.locked) {
         throw new ForbiddenException(
           `Account locked after ${result.totalAttempts} failed attempts. ` +
-          `Try again in ${Math.ceil(result.lockoutDuration / 60)} minute(s).`,
+            `Try again in ${Math.ceil(result.lockoutDuration / 60)} minute(s).`,
         );
       }
       throw new UnauthorizedException(
@@ -214,12 +257,16 @@ export class AuthController {
     const { accessToken, refreshToken } = this.issueTokens(user);
 
     // Cache session in Redis (1 hour TTL)
-    await this.redis.setJson(`session:${user.id}`, {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      loginAt: new Date().toISOString(),
-    }, 3600);
+    await this.redis.setJson(
+      `session:${user.id}`,
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        loginAt: new Date().toISOString(),
+      },
+      3600,
+    );
 
     // Store refresh token HASH for validation (never store raw tokens)
     await this.redis.set(`refresh:${user.id}`, this.hashToken(refreshToken), 2592000); // 30 days
@@ -234,8 +281,11 @@ export class AuthController {
         // local part only for accounts that genuinely have no name on file.
         // Phone-only accounts have no email at all, so the local-part fallback
         // has to tolerate its absence rather than throw mid-login.
-        name: [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
-              || user.email?.split('@')[0] || user.phone || 'Customer',
+        name:
+          [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+          user.email?.split('@')[0] ||
+          user.phone ||
+          'Customer',
         email: user.email,
         role: user.role,
         // Which portal this seller may open. The client persists it to a cookie
@@ -245,6 +295,10 @@ export class AuthController {
         // A seller awaiting approval signs in fine but must not be sent to the
         // portal, so the client needs to know the difference.
         status: user.status ?? 'active',
+        // The console draws its market context from these, and the gateway
+        // enforces the same values from the token.
+        regionCode: user.regionCode ?? null,
+        regionLocked: user.regionLocked === true,
         avatar: null as unknown,
       },
       accessToken,
@@ -305,12 +359,19 @@ export class AuthController {
     const savedUser = await this.userRepo.save(user);
 
     // Emit registration event
-    await this.kafka.publish(KAFKA_TOPICS.USER_REGISTERED || 'user.registered', { userId: savedUser.id, email: body.email });
+    await this.kafka.publish(KAFKA_TOPICS.USER_REGISTERED || 'user.registered', {
+      userId: savedUser.id,
+      email: body.email,
+    });
 
     // Issue JWT tokens
     const { accessToken, refreshToken } = this.issueTokens(savedUser);
 
-    await this.redis.set(`refresh:${savedUser.id}`, this.hashToken(refreshToken), AuthController.REFRESH_TTL_SECONDS);
+    await this.redis.set(
+      `refresh:${savedUser.id}`,
+      this.hashToken(refreshToken),
+      AuthController.REFRESH_TTL_SECONDS,
+    );
 
     return {
       success: true,
@@ -376,7 +437,11 @@ export class AuthController {
     // Signed in immediately so they can watch their own approval progress; the
     // guard still keeps them out of the portal until the status flips to active.
     const { accessToken, refreshToken } = this.issueTokens(saved);
-    await this.redis.set(`refresh:${saved.id}`, this.hashToken(refreshToken), AuthController.REFRESH_TTL_SECONDS);
+    await this.redis.set(
+      `refresh:${saved.id}`,
+      this.hashToken(refreshToken),
+      AuthController.REFRESH_TTL_SECONDS,
+    );
 
     return {
       success: true,
@@ -401,7 +466,12 @@ export class AuthController {
     summary: 'Send a one-time code by SMS',
     description: 'Issues a 6-digit code valid for 5 minutes. Rate limited per phone number.',
   })
-  @ApiBody({ schema: { properties: { phone: { type: 'string', example: '+919800000000' } }, required: ['phone'] } })
+  @ApiBody({
+    schema: {
+      properties: { phone: { type: 'string', example: '+919800000000' } },
+      required: ['phone'],
+    },
+  })
   @ApiOkResponse({ description: 'Code sent if the number is valid' })
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   async sendOtp(@Body() body: OtpSendDto) {
@@ -452,7 +522,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Verify OTP (phone/email)',
-    description: 'Verifies a one-time password sent via SMS or email. Static OTP "1234" is accepted for development.',
+    description:
+      'Verifies a one-time password sent via SMS or email. Static OTP "1234" is accepted for development.',
   })
   @ApiBody({
     schema: {
@@ -464,7 +535,6 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'OTP verified successfully' })
   async verifyOtp(@Body() body: OtpVerifyDto) {
-
     // Validate OTP from Redis.
     //
     // The static '1234' escape hatch is gated on an explicit opt-in, not on
@@ -478,7 +548,9 @@ export class AuthController {
       process.env.ALLOW_STATIC_DEV_OTP === 'true' && process.env.NODE_ENV !== 'production';
     const isDevOtp = staticOtpEnabled && body.otp === '1234';
     if (isDevOtp) {
-      this.logger.warn(`⚠️  Static dev OTP accepted for ${body.phone} — ALLOW_STATIC_DEV_OTP is on`);
+      this.logger.warn(
+        `⚠️  Static dev OTP accepted for ${body.phone} — ALLOW_STATIC_DEV_OTP is on`,
+      );
     }
     const cached = await this.redis.get(`otp:${body.phone}`);
     if (!isDevOtp && cached !== body.otp) {
@@ -537,7 +609,6 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'New access token issued' })
   async refreshToken(@Body() body: RefreshTokenDto) {
-
     try {
       // Verify the refresh token signature
       const decoded = this.jwtService.verify(body.refreshToken);
@@ -560,16 +631,21 @@ export class AuthController {
       // token silently loses it: a seller who stayed signed in past the access
       // token's hour would come back without a portal claim and be locked out of
       // their own module.
-      const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
-        this.issueTokens({
-          id: userId,
-          email: decoded.email,
-          role: decoded.role,
-          sellerType: decoded.sellerType,
-        });
+      const { accessToken: newAccessToken, refreshToken: newRefreshToken } = this.issueTokens({
+        id: userId,
+        email: decoded.email,
+        role: decoded.role,
+        sellerType: decoded.sellerType,
+        regionCode: decoded.regionCode,
+        regionLocked: decoded.regionLocked === true,
+      });
 
       // Rotate refresh token hash
-      await this.redis.set(`refresh:${userId}`, this.hashToken(newRefreshToken), AuthController.REFRESH_TTL_SECONDS);
+      await this.redis.set(
+        `refresh:${userId}`,
+        this.hashToken(newRefreshToken),
+        AuthController.REFRESH_TTL_SECONDS,
+      );
 
       return {
         success: true,
@@ -636,7 +712,10 @@ export class AuthController {
 
     // Identical answer either way, so the endpoint cannot be used to discover
     // which addresses have accounts.
-    return { success: true, message: 'If an account with that email exists, a reset link has been sent.' };
+    return {
+      success: true,
+      message: 'If an account with that email exists, a reset link has been sent.',
+    };
   }
 
   // ── Reset Password ─────────────────────────────────────────────────────────
@@ -737,6 +816,8 @@ export class AuthController {
       // status and defaulted to approved — a pending seller was routed into a
       // portal that then refused them.
       status: user.status,
+      regionCode: user.regionCode ?? null,
+      regionLocked: user.regionLocked === true,
       name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
       isActive: user.isActive,
       createdAt: user.createdAt,
@@ -769,7 +850,9 @@ export class AuthController {
     const jti = req.user?.jti;
     const exp = req.user?.exp;
     if (jti) {
-      const remaining = exp ? exp - Math.floor(Date.now() / 1000) : AuthController.ACCESS_TTL_SECONDS;
+      const remaining = exp
+        ? exp - Math.floor(Date.now() / 1000)
+        : AuthController.ACCESS_TTL_SECONDS;
       if (remaining > 0) {
         await this.redis.set(`revoked-tokens:${jti}`, 'logout', remaining);
       }

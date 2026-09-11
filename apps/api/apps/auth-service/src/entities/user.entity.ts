@@ -1,4 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 export enum UserRole {
   CUSTOMER = 'CUSTOMER',
@@ -38,6 +44,13 @@ export class User {
 
   @Column({ default: true })
   isActive: boolean;
+
+  /** Staff market scope — see the gateway's user entity and market-scope.ts. */
+  @Column({ name: 'region_code', type: 'varchar', nullable: true })
+  regionCode: string | null;
+
+  @Column({ name: 'region_locked', type: 'boolean', default: false })
+  regionLocked: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

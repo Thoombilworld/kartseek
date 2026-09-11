@@ -1,9 +1,30 @@
-import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, UseGuards, Inject, Req, Logger, ServiceUnavailableException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  Inject,
+  Req,
+  Logger,
+  ServiceUnavailableException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiParam, ApiQuery, ApiBody,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+  ApiBody,
   ApiOkResponse,
 } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,6 +34,7 @@ import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { marketScopeOf, resolveMarket, assertRecordInScope } from '../guards/market-scope';
 import { UserRole, rpcCatch } from '@app/common';
 import { User } from '../entities/user.entity';
 import { MARKETPLACE_PATTERNS } from '../contracts';
@@ -54,16 +76,21 @@ export class AdminMarketplaceController {
     // Orders and refunds belong to their own services. The admin routes for
     // both answered with the outcome they were named after and asked nobody.
     @Inject('ORDER_SERVICE_TCP') private readonly orderClient: ClientProxy,
-    @Inject('REFUND_SERVICE') private readonly refundClient: ClientProxy) {}
+    @Inject('REFUND_SERVICE') private readonly refundClient: ClientProxy,
+  ) {}
 
   /** Forward to a named service, preserving the failure rather than inventing a result. */
-  private async sendTo<T = any>(client: ClientProxy, service: string, cmd: string, payload: object): Promise<T> {
+  private async sendTo<T = any>(
+    client: ClientProxy,
+    service: string,
+    cmd: string,
+    payload: object,
+  ): Promise<T> {
     try {
       return await lastValueFrom(
-        client.send<T>({ cmd }, payload).pipe(
-          timeout(10000),
-          catchError(rpcCatch(`${service} unavailable`)),
-        ),
+        client
+          .send<T>({ cmd }, payload)
+          .pipe(timeout(10000), catchError(rpcCatch(`${service} unavailable`))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -83,21 +110,21 @@ export class AdminMarketplaceController {
    * which is exactly how these surfaces used to lie.
    */
   private async sendToCommission<T = any>(cmd: string, payload: object): Promise<T | null> {
-    return lastValueFrom(
-      this.commissionClient.send<T>({ cmd }, payload).pipe(timeout(8000)),
-    ).catch((err): null => {
-      this.logger.error(`commission-service [${cmd}] unreachable: ${err?.message}`);
-      return null;
-    });
+    return lastValueFrom(this.commissionClient.send<T>({ cmd }, payload).pipe(timeout(8000))).catch(
+      (err): null => {
+        this.logger.error(`commission-service [${cmd}] unreachable: ${err?.message}`);
+        return null;
+      },
+    );
   }
 
   private async sendToPayout<T = any>(cmd: string, payload: object): Promise<T | null> {
-    return lastValueFrom(
-      this.payoutClient.send<T>({ cmd }, payload).pipe(timeout(8000)),
-    ).catch((err): null => {
-      this.logger.error(`payout-service [${cmd}] unreachable: ${err?.message}`);
-      return null;
-    });
+    return lastValueFrom(this.payoutClient.send<T>({ cmd }, payload).pipe(timeout(8000))).catch(
+      (err): null => {
+        this.logger.error(`payout-service [${cmd}] unreachable: ${err?.message}`);
+        return null;
+      },
+    );
   }
 
   /**
@@ -119,20 +146,16 @@ export class AdminMarketplaceController {
     const payload = args.length <= 1 ? (args[0] ?? {}) : args;
     try {
       return await lastValueFrom(
-        this.marketplaceClient.send<T>({ cmd }, payload).pipe(
-          timeout(10000),
-          catchError(rpcCatch('Marketplace service unavailable')),
-        ),
+        this.marketplaceClient
+          .send<T>({ cmd }, payload)
+          .pipe(timeout(10000), catchError(rpcCatch('Marketplace service unavailable'))),
       );
     } catch (error) {
       // Re-thrown, not swallowed: `rpcCatch` has already reconstructed the
       // service's own HttpException where there was one, and that status is
       // what the caller needs. Anything else really is the channel being down.
       if (error instanceof HttpException) throw error;
-      throw new HttpException(
-        'Marketplace service unavailable',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
+      throw new HttpException('Marketplace service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 
@@ -149,36 +172,40 @@ export class AdminMarketplaceController {
    * closed here, synchronously, so the decision takes effect on the admin's own
    * request rather than depending on a consumer nobody wrote.
    */
-  private async applySellerDecision(sellerId: string, userStatus: 'active' | 'suspended' | 'rejected') {
+  private async applySellerDecision(
+    sellerId: string,
+    userStatus: 'active' | 'suspended' | 'rejected',
+  ) {
     // The seller row is authoritative for who owns it.
     let ownerId: string | null = null;
     try {
-    const owner = await this.sendToMarketplace<{ ownerId: string | null }>(
-      'get_seller_owner',
-      { sellerId },
-    );
-    ownerId = owner?.ownerId ?? null;
+      const owner = await this.sendToMarketplace<{ ownerId: string | null }>('get_seller_owner', {
+        sellerId,
+      });
+      ownerId = owner?.ownerId ?? null;
     } catch (err) {
-    this.logger.warn(`Could not resolve owner for seller=${sellerId}: ${(err as Error).message}`);
+      this.logger.warn(`Could not resolve owner for seller=${sellerId}: ${(err as Error).message}`);
     }
 
     if (ownerId) {
-    try {
-      await this.userRepo.update({ id: ownerId }, { status: userStatus });
-    } catch (err) {
-      this.logger.error(`Failed to set users.status=${userStatus} for user=${ownerId}: ${(err as Error).message}`);
-    }
+      try {
+        await this.userRepo.update({ id: ownerId }, { status: userStatus });
+      } catch (err) {
+        this.logger.error(
+          `Failed to set users.status=${userStatus} for user=${ownerId}: ${(err as Error).message}`,
+        );
+      }
     } else {
-    this.logger.warn(
-      `Seller ${sellerId} has no owner_id — portal access cannot follow this decision until it is backfilled.`,
-    );
+      this.logger.warn(
+        `Seller ${sellerId} has no owner_id — portal access cannot follow this decision until it is backfilled.`,
+      );
     }
 
     // Both guards cache per seller id; without this the old decision stays live
     // for the remainder of the TTL.
     await Promise.all([
-    this.redis.del(`seller-approval:${sellerId}`).catch((): undefined => undefined),
-    this.redis.del(`seller-owner:${sellerId}`).catch((): undefined => undefined),
+      this.redis.del(`seller-approval:${sellerId}`).catch((): undefined => undefined),
+      this.redis.del(`seller-owner:${sellerId}`).catch((): undefined => undefined),
     ]);
   }
 
@@ -187,10 +214,24 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Admin marketplace dashboard stats' })
   async getDashboard() {
     try {
-    const stats = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_DASHBOARD);
-    return { data: stats };
+      const stats = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_DASHBOARD);
+      return { data: stats };
     } catch {
-    return { data: { totalSellers: 0, activeSellers: 0, pendingSellers: 0, totalProducts: 0, pendingProducts: 0, todayOrders: 0, todayRevenue: 0, monthlyRevenue: 0, totalCustomers: 0, disputesOpen: 0, currency: 'INR' } };
+      return {
+        data: {
+          totalSellers: 0,
+          activeSellers: 0,
+          pendingSellers: 0,
+          totalProducts: 0,
+          pendingProducts: 0,
+          todayOrders: 0,
+          todayRevenue: 0,
+          monthlyRevenue: 0,
+          totalCustomers: 0,
+          disputesOpen: 0,
+          currency: 'INR',
+        },
+      };
     }
   }
 
@@ -200,17 +241,27 @@ export class AdminMarketplaceController {
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'search', required: false })
-  @ApiQuery({ name: 'status', required: false, enum: ['ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED'],
+  })
   async getSellers(
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('search') search?: string,
-    @Query('status') status?: string) {
+    @Query('status') status?: string,
+  ) {
     try {
-    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS);
-    return { ...(result as any), page: Number(page), limit: Number(limit), hasMore: (result as any).total > Number(page) * Number(limit) };
+      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS);
+      return {
+        ...(result as any),
+        page: Number(page),
+        limit: Number(limit),
+        hasMore: (result as any).total > Number(page) * Number(limit),
+      };
     } catch {
-    return { data: [], total: 0, page: Number(page), limit: Number(limit), hasMore: false };
+      return { data: [], total: 0, page: Number(page), limit: Number(limit), hasMore: false };
     }
   }
 
@@ -237,10 +288,10 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Get seller detail' })
   async getSellerById(@Param('id') id: string) {
     try {
-    const seller = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_BY_ID, id);
-    return { data: seller };
+      const seller = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_BY_ID, id);
+      return { data: seller };
     } catch {
-    return { data: { id, name: '', status: 'UNKNOWN' } };
+      return { data: { id, name: '', status: 'UNKNOWN' } };
     }
   }
 
@@ -248,16 +299,27 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Approve a seller' })
   async approveSeller(@Param('id') id: string, @Body() body?: { reason?: string }) {
     try {
-    // Sent as an object. This passed `(id, UserRole.ADMIN)`, which
-    // `sendToMarketplace` packs into an ARRAY, so the handler's `data?.id` was
-    // undefined — and `where: { id: undefined }` matches the first row, so
-    // approving one seller silently approved a different one.
-    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_SELLER, { id, adminId: UserRole.ADMIN });
-    await this.applySellerDecision(id, 'active');
-    await this.kafka.publish(KAFKA_TOPICS.SELLER_APPROVED || 'seller.approved', { sellerId: id });
-    return { data: { success: true, message: `Seller ${id} approved`, status: 'ACTIVE', seller: result } };
+      // Sent as an object. This passed `(id, UserRole.ADMIN)`, which
+      // `sendToMarketplace` packs into an ARRAY, so the handler's `data?.id` was
+      // undefined — and `where: { id: undefined }` matches the first row, so
+      // approving one seller silently approved a different one.
+      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_SELLER, {
+        id,
+        adminId: UserRole.ADMIN,
+      });
+      await this.applySellerDecision(id, 'active');
+      await this.kafka.publish(KAFKA_TOPICS.SELLER_APPROVED || 'seller.approved', { sellerId: id });
+      return {
+        data: { success: true, message: `Seller ${id} approved`, status: 'ACTIVE', seller: result },
+      };
     } catch (err: unknown) {
-    return { data: { success: false, message: `Failed to approve seller ${id}`, error: (err as Error)?.message } };
+      return {
+        data: {
+          success: false,
+          message: `Failed to approve seller ${id}`,
+          error: (err as Error)?.message,
+        },
+      };
     }
   }
 
@@ -265,12 +327,32 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Reject a seller' })
   async rejectSeller(@Param('id') id: string, @Body() body: { reason: string }) {
     try {
-    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_SELLER, { id, reason: body.reason, adminId: UserRole.ADMIN });
-    await this.applySellerDecision(id, 'rejected');
-    await this.kafka.publish(KAFKA_TOPICS.SELLER_REJECTED || 'seller.rejected', { sellerId: id, reason: body.reason });
-    return { data: { success: true, message: `Seller ${id} rejected`, reason: body.reason, seller: result } };
+      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_SELLER, {
+        id,
+        reason: body.reason,
+        adminId: UserRole.ADMIN,
+      });
+      await this.applySellerDecision(id, 'rejected');
+      await this.kafka.publish(KAFKA_TOPICS.SELLER_REJECTED || 'seller.rejected', {
+        sellerId: id,
+        reason: body.reason,
+      });
+      return {
+        data: {
+          success: true,
+          message: `Seller ${id} rejected`,
+          reason: body.reason,
+          seller: result,
+        },
+      };
     } catch (err: unknown) {
-    return { data: { success: false, message: `Failed to reject seller ${id}`, error: (err as Error)?.message } };
+      return {
+        data: {
+          success: false,
+          message: `Failed to reject seller ${id}`,
+          error: (err as Error)?.message,
+        },
+      };
     }
   }
 
@@ -278,12 +360,31 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Suspend a seller' })
   async suspendSeller(@Param('id') id: string, @Body() body: { reason: string }) {
     try {
-    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_SELLER, { id, adminId: UserRole.ADMIN });
-    await this.applySellerDecision(id, 'suspended');
-    await this.kafka.publish(KAFKA_TOPICS.SELLER_SUSPENDED || 'seller.suspended', { sellerId: id, reason: body.reason });
-    return { data: { success: true, message: `Seller ${id} suspended`, reason: body.reason, seller: result } };
+      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_SELLER, {
+        id,
+        adminId: UserRole.ADMIN,
+      });
+      await this.applySellerDecision(id, 'suspended');
+      await this.kafka.publish(KAFKA_TOPICS.SELLER_SUSPENDED || 'seller.suspended', {
+        sellerId: id,
+        reason: body.reason,
+      });
+      return {
+        data: {
+          success: true,
+          message: `Seller ${id} suspended`,
+          reason: body.reason,
+          seller: result,
+        },
+      };
     } catch (err: unknown) {
-    return { data: { success: false, message: `Failed to suspend seller ${id}`, error: (err as Error)?.message } };
+      return {
+        data: {
+          success: false,
+          message: `Failed to suspend seller ${id}`,
+          error: (err as Error)?.message,
+        },
+      };
     }
   }
 
@@ -291,24 +392,49 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Reactivate a suspended seller' })
   async reactivateSeller(@Param('id') id: string) {
     try {
-    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REACTIVATE_SELLER, { id });
-    await this.applySellerDecision(id, 'active');
-    await this.kafka.publish(KAFKA_TOPICS.SELLER_REACTIVATED || 'seller.reactivated', { sellerId: id });
-    return { data: { success: true, message: `Seller ${id} reactivated`, status: 'ACTIVE', seller: result } };
+      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REACTIVATE_SELLER, {
+        id,
+      });
+      await this.applySellerDecision(id, 'active');
+      await this.kafka.publish(KAFKA_TOPICS.SELLER_REACTIVATED || 'seller.reactivated', {
+        sellerId: id,
+      });
+      return {
+        data: {
+          success: true,
+          message: `Seller ${id} reactivated`,
+          status: 'ACTIVE',
+          seller: result,
+        },
+      };
     } catch (err: unknown) {
-    return { data: { success: false, message: `Failed to reactivate seller ${id}`, error: (err as Error)?.message } };
+      return {
+        data: {
+          success: false,
+          message: `Failed to reactivate seller ${id}`,
+          error: (err as Error)?.message,
+        },
+      };
     }
   }
 
   // ── Products ───────────────────────────────────────────────────────────────
   @Get('products')
   @ApiOperation({ summary: 'List all products across sellers' })
-  async getProducts(@Query('page', ParsePagePipe) page = 1, @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE, @Query('status') status?: string) {
+  async getProducts(
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('status') status?: string,
+  ) {
     try {
-    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, Number(page), Number(limit));
-    return { ...(result as any), hasMore: (result as any).total > Number(page) * Number(limit) };
+      const result = await this.sendToMarketplace(
+        MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS,
+        Number(page),
+        Number(limit),
+      );
+      return { ...(result as any), hasMore: (result as any).total > Number(page) * Number(limit) };
     } catch {
-    return { data: [], total: 0, page: Number(page), limit: Number(limit), hasMore: false };
+      return { data: [], total: 0, page: Number(page), limit: Number(limit), hasMore: false };
     }
   }
 
@@ -318,9 +444,13 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Products awaiting approval, with queue counts' })
   async getPendingProducts() {
     try {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PENDING_PRODUCTS);
+      return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PENDING_PRODUCTS);
     } catch {
-    return { data: [], count: 0, stats: { pending: 0, approved: 0, rejected: 0, correctionRequested: 0 } };
+      return {
+        data: [],
+        count: 0,
+        stats: { pending: 0, approved: 0, rejected: 0, correctionRequested: 0 },
+      };
     }
   }
 
@@ -328,10 +458,13 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Get product detail for admin review' })
   async getProductById(@Param('id') id: string) {
     try {
-    const product = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCT_BY_ID, id);
-    return { data: product };
+      const product = await this.sendToMarketplace(
+        MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCT_BY_ID,
+        id,
+      );
+      return { data: product };
     } catch {
-    return { data: { id, name: '', seller: '', status: 'UNKNOWN' } };
+      return { data: { id, name: '', seller: '', status: 'UNKNOWN' } };
     }
   }
 
@@ -342,10 +475,10 @@ export class AdminMarketplaceController {
   @Patch('products/:id/approve')
   @ApiOperation({ summary: 'Approve a product' })
   async approveProduct(@Param('id') id: string, @Req() req: any) {
-    const data = await this.sendToMarketplace(
-    MARKETPLACE_PATTERNS.ADMIN_APPROVE_PRODUCT,
-    { id, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' },
-    );
+    const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_PRODUCT, {
+      id,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
     return { data };
   }
 
@@ -367,68 +500,89 @@ export class AdminMarketplaceController {
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
-    const data = await this.sendToMarketplace(
-    MARKETPLACE_PATTERNS.ADMIN_PENDING_LISTINGS, { page: +page, limit: +limit },
-    );
+    const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_PENDING_LISTINGS, {
+      page: +page,
+      limit: +limit,
+    });
     return { data };
   }
 
   @Patch('listings/:id/approve')
   @ApiOperation({ summary: 'Approve one seller’s offer' })
   async approveListing(@Param('id') id: string, @Req() req: any) {
-    const data = await this.sendToMarketplace(
-    MARKETPLACE_PATTERNS.ADMIN_APPROVE_LISTING,
-    { id, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' },
-    );
+    const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_LISTING, {
+      id,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
     return { data };
   }
 
   @Patch('listings/:id/reject')
   @ApiOperation({ summary: 'Reject one seller’s offer' })
   async rejectListing(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
-    const data = await this.sendToMarketplace(
-    MARKETPLACE_PATTERNS.ADMIN_REJECT_LISTING,
-    { id, reason: body?.reason, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' },
-    );
+    const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_LISTING, {
+      id,
+      reason: body?.reason,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
     return { data };
   }
 
   @Patch('products/:id/reject')
   @ApiOperation({ summary: 'Reject a product' })
   async rejectProduct(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
-    const data = await this.sendToMarketplace(
-    MARKETPLACE_PATTERNS.ADMIN_REJECT_PRODUCT,
-    { id, reason: body?.reason, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' },
-    );
+    const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_PRODUCT, {
+      id,
+      reason: body?.reason,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
     return { data };
   }
 
   @Patch('products/:id/request-correction')
   @ApiOperation({ summary: 'Request product correction from seller' })
-  async requestCorrection(@Param('id') id: string, @Body() body: { notes: string }, @Req() req: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REQUEST_PRODUCT_CORRECTION,
-    { id, notes: body?.notes, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
+  async requestCorrection(
+    @Param('id') id: string,
+    @Body() body: { notes: string },
+    @Req() req: any,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REQUEST_PRODUCT_CORRECTION, {
+      id,
+      notes: body?.notes,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
   }
 
   @Patch('products/:id/publish')
   @ApiOperation({ summary: 'Publish a product' })
   async publishProduct(@Param('id') id: string, @Req() req: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_PUBLISH_PRODUCT,
-    { id, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_PUBLISH_PRODUCT, {
+      id,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
   }
 
   @Patch('products/:id/unpublish')
   @ApiOperation({ summary: 'Unpublish a product' })
-  async unpublishProduct(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UNPUBLISH_PRODUCT,
-    { id, reason: body?.reason, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
+  async unpublishProduct(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req: any,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UNPUBLISH_PRODUCT, {
+      id,
+      reason: body?.reason,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
   }
 
   @Patch('products/:id/suspend')
   @ApiOperation({ summary: 'Suspend a product' })
   async suspendProduct(@Param('id') id: string, @Req() req: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_PRODUCT,
-    { id, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_PRODUCT, {
+      id,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
   }
 
   @Patch('products/:id/feature')
@@ -448,9 +602,9 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'List admin-managed categories' })
   async getCategories() {
     try {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CATEGORIES);
+      return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CATEGORIES);
     } catch {
-    return { data: [], total: 0 };
+      return { data: [], total: 0 };
     }
   }
 
@@ -523,9 +677,12 @@ export class AdminMarketplaceController {
   // wrote the row and this GET reported the table empty.
   @Get('attributes')
   @ApiOperation({ summary: 'List product attributes' })
-  async getAttributes(@Query('categoryId') categoryId?: string, @Query('category') category?: string) {
+  async getAttributes(
+    @Query('categoryId') categoryId?: string,
+    @Query('category') category?: string,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_ATTRIBUTES, {
-    categoryId: categoryId ?? category,
+      categoryId: categoryId ?? category,
     });
   }
 
@@ -561,9 +718,9 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'List brands' })
   async getBrands() {
     try {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_BRANDS);
+      return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_BRANDS);
     } catch {
-    return { data: [], total: 0 };
+      return { data: [], total: 0 };
     }
   }
 
@@ -604,13 +761,20 @@ export class AdminMarketplaceController {
   @Patch('brands/:id/reject')
   @ApiOperation({ summary: 'Reject a brand' })
   async rejectBrand(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_BRAND,
-    { id, reason: body?.reason, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_BRAND, {
+      id,
+      reason: body?.reason,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
   }
 
   @Patch('brands/:id/request-correction')
   @ApiOperation({ summary: 'Request brand correction' })
-  async requestBrandCorrection(@Param('id') id: string, @Body() body: { notes: string }, @Req() req: any) {
+  async requestBrandCorrection(
+    @Param('id') id: string,
+    @Body() body: { notes: string },
+    @Req() req: any,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, {
       id,
       dto: {
@@ -624,8 +788,10 @@ export class AdminMarketplaceController {
   @Patch('brands/:id/suspend')
   @ApiOperation({ summary: 'Suspend a brand' })
   async suspendBrand(@Param('id') id: string, @Req() req: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_BRAND,
-    { id, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_BRAND, {
+      id,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
   }
 
   // ── Campaigns ──────────────────────────────────────────────────────────────
@@ -655,7 +821,12 @@ export class AdminMarketplaceController {
   // campaign all day; the row never moved, and the seller kept seeing whatever
   // state it was actually in. They are all one write on the campaign, which
   // `admin_update_campaign` already performs.
-  private campaignStatus(id: string, status: string, req: any, extra: Record<string, unknown> = {}) {
+  private campaignStatus(
+    id: string,
+    status: string,
+    req: any,
+    extra: Record<string, unknown> = {},
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_CAMPAIGN, {
       id,
       dto: { status, ...extra, reviewedBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
@@ -701,12 +872,19 @@ export class AdminMarketplaceController {
 
   @Put('orders/:id')
   @ApiOperation({ summary: 'Update order status/details' })
-  async updateOrder(@Req() req: any, @Param('id') id: string, @Body() dto: { action: string; reason?: string }) {
+  async updateOrder(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: { action: string; reason?: string },
+  ) {
     // `action` is the target status. Echoing it back without asking
     // order-service meant an admin could move an order through any state and
     // the customer's order never changed.
     return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
-      orderId: id, status: dto.action, reason: dto.reason, updatedBy: this.actor(req),
+      orderId: id,
+      status: dto.action,
+      reason: dto.reason,
+      updatedBy: this.actor(req),
     });
   }
 
@@ -714,7 +892,9 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Cancel an order' })
   async cancelOrder(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
     return this.sendTo(this.orderClient, 'Order service', 'cancel_order', {
-      orderId: id, reason: body?.reason, cancelledBy: this.actor(req),
+      orderId: id,
+      reason: body?.reason,
+      cancelledBy: this.actor(req),
     });
   }
 
@@ -727,14 +907,20 @@ export class AdminMarketplaceController {
   @Post('returns/:id/approve')
   @ApiOperation({ summary: 'Approve a return request' })
   async approveReturn(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, { id, status: 'APPROVED' });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, {
+      id,
+      status: 'APPROVED',
+    });
   }
 
   @Post('returns/:id/reject')
   @ApiOperation({ summary: 'Reject a return request' })
   async rejectReturn(@Param('id') id: string, @Body() body: { reason: string }) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS,
-    { id, status: 'REJECTED', rejectionReason: body?.reason });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, {
+      id,
+      status: 'REJECTED',
+      rejectionReason: body?.reason,
+    });
   }
 
   @Get('refunds')
@@ -746,7 +932,8 @@ export class AdminMarketplaceController {
     // Returned an empty list inline, so the refunds queue was always empty and
     // an admin had no way to tell that from "nothing is pending".
     return this.sendTo(this.refundClient, 'Refund service', 'get_pending_refunds', {
-      page: +page, limit: +limit,
+      page: +page,
+      limit: +limit,
     });
   }
 
@@ -756,17 +943,30 @@ export class AdminMarketplaceController {
   // the admin panel while the customer was never paid.
   @Post('refunds/:id/approve')
   @ApiOperation({ summary: 'Approve a refund' })
-  async approveRefund(@Req() req: any, @Param('id') id: string, @Body() body?: { remarks?: string }) {
+  async approveRefund(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body?: { remarks?: string },
+  ) {
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
-      id, adminId: this.actor(req), decision: 'APPROVED', remarks: body?.remarks,
+      id,
+      adminId: this.actor(req),
+      decision: 'APPROVED',
+      remarks: body?.remarks,
     });
   }
 
   @Post('refunds/:id/process')
   @ApiOperation({ summary: 'Process an approved refund' })
-  async processRefund(@Req() req: any, @Param('id') id: string, @Body() body: { amount?: number; reason?: string; note?: string }) {
+  async processRefund(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { amount?: number; reason?: string; note?: string },
+  ) {
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
-      id, adminId: this.actor(req), decision: 'APPROVED',
+      id,
+      adminId: this.actor(req),
+      decision: 'APPROVED',
       remarks: body?.note ?? body?.reason,
     });
   }
@@ -775,7 +975,10 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Reject a refund' })
   async rejectRefund(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
-      id, adminId: this.actor(req), decision: 'REJECTED', remarks: body?.reason,
+      id,
+      adminId: this.actor(req),
+      decision: 'REJECTED',
+      remarks: body?.reason,
     });
   }
 
@@ -801,17 +1004,20 @@ export class AdminMarketplaceController {
   ) {
     // A single seller's ledger, or the platform-wide totals.
     if (sellerId) {
-    const history = await this.sendToCommission('get_seller_commission_history',
-      { sellerId, page: Number(page), limit: DEFAULT_PAGE_SIZE });
-    return history ?? { data: [], total: 0 };
+      const history = await this.sendToCommission('get_seller_commission_history', {
+        sellerId,
+        page: Number(page),
+        limit: DEFAULT_PAGE_SIZE,
+      });
+      return history ?? { data: [], total: 0 };
     }
 
     const [totals, summary] = await Promise.all([
-    this.sendToCommission('get_commission_totals', {
-      startDate: startDate ?? new Date(Date.now() - 30 * 86400_000).toISOString(),
-      endDate: endDate ?? new Date().toISOString(),
-    }),
-    this.sendToCommission('get_platform_revenue_summary', {}),
+      this.sendToCommission('get_commission_totals', {
+        startDate: startDate ?? new Date(Date.now() - 30 * 86400_000).toISOString(),
+        endDate: endDate ?? new Date().toISOString(),
+      }),
+      this.sendToCommission('get_platform_revenue_summary', {}),
     ]);
 
     return { totals: totals ?? null, summary: summary ?? null };
@@ -825,24 +1031,49 @@ export class AdminMarketplaceController {
 
   @Put('commissions/rate-card')
   @ApiOperation({ summary: 'Change a category commission rate' })
-  async updateCommissionRateCard(@Body() body: { category: string; subCategory?: string; updates: any }) {
-    return (await this.sendToCommission('update_category_rate', body))
-    ?? { success: false, message: 'Commission service unavailable' };
+  async updateCommissionRateCard(
+    @Body() body: { category: string; subCategory?: string; updates: any },
+  ) {
+    return (
+      (await this.sendToCommission('update_category_rate', body)) ?? {
+        success: false,
+        message: 'Commission service unavailable',
+      }
+    );
   }
 
   @Post('commissions/overrides')
   @ApiOperation({ summary: 'Give a seller a negotiated commission rate' })
-  async setCommissionOverride(@Body() body: { sellerId: string; serviceType?: string; rate: number; reason: string; expiresAt?: string }) {
-    return (await this.sendToCommission('set_seller_commission_override', {
-    ...body, serviceType: body.serviceType ?? 'marketplace',
-    })) ?? { success: false, message: 'Commission service unavailable' };
+  async setCommissionOverride(
+    @Body()
+    body: {
+      sellerId: string;
+      serviceType?: string;
+      rate: number;
+      reason: string;
+      expiresAt?: string;
+    },
+  ) {
+    return (
+      (await this.sendToCommission('set_seller_commission_override', {
+        ...body,
+        serviceType: body.serviceType ?? 'marketplace',
+      })) ?? { success: false, message: 'Commission service unavailable' }
+    );
   }
 
   @Delete('commissions/overrides/:sellerId')
   @ApiOperation({ summary: 'Remove a seller’s negotiated rate' })
-  async removeCommissionOverride(@Param('sellerId') sellerId: string, @Query('serviceType') serviceType = 'marketplace') {
-    return (await this.sendToCommission('remove_seller_commission_override', { sellerId, serviceType }))
-    ?? { success: false, message: 'Commission service unavailable' };
+  async removeCommissionOverride(
+    @Param('sellerId') sellerId: string,
+    @Query('serviceType') serviceType = 'marketplace',
+  ) {
+    return (
+      (await this.sendToCommission('remove_seller_commission_override', {
+        sellerId,
+        serviceType,
+      })) ?? { success: false, message: 'Commission service unavailable' }
+    );
   }
 
   @Patch('commissions/:id')
@@ -867,7 +1098,9 @@ export class AdminMarketplaceController {
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
     const cmd = sellerId ? 'get_seller_payouts' : 'get_pending_payouts';
-    const payload = sellerId ? { sellerId, page: Number(page), limit: Number(limit) } : { page: Number(page), limit: Number(limit) };
+    const payload = sellerId
+      ? { sellerId, page: Number(page), limit: Number(limit) }
+      : { page: Number(page), limit: Number(limit) };
 
     return (await this.sendToPayout(cmd, payload)) ?? { data: [], total: 0, totalAmount: 0 };
   }
@@ -933,33 +1166,71 @@ export class AdminMarketplaceController {
    * not to have taken effect until the 120-second TTL expired.
    */
   private static readonly CACHED_HOME_REGIONS = [
-    'global', 'QA', 'IN', 'AE', 'SA', 'BH', 'KW', 'OM', 'GB', 'US', 'SG',
+    'global',
+    'QA',
+    'IN',
+    'AE',
+    'SA',
+    'BH',
+    'KW',
+    'OM',
+    'GB',
+    'US',
+    'SG',
   ] as const;
 
-  private async invalidateHomeFeeds() {
-    await Promise.all(
-    AdminMarketplaceController.CACHED_HOME_REGIONS.map((r) =>
-      this.redis.del(`marketplace:home:${r}`),
-    ),
-    );
+  /**
+   * Drop the cached home feeds a banner change can have altered: the banner's
+   * own markets plus the unscoped feed. Only an untargeted banner (runs
+   * everywhere) purges every market — a Qatari campaign edit used to empty
+   * India's home cache too, a regional change acting globally.
+   */
+  private async invalidateHomeFeeds(regions?: string[] | null) {
+    const targets: string[] =
+      Array.isArray(regions) && regions.length
+        ? ['global', ...regions.map((r) => String(r).toUpperCase())]
+        : [...AdminMarketplaceController.CACHED_HOME_REGIONS];
+    await Promise.all(targets.map((r) => this.redis.del(`marketplace:home:${r}`)));
+  }
+
+  /** The one market a banner is scoped to, or null when it runs in several or everywhere. */
+  private static bannerMarket(banner: any): string | null {
+    const regions = Array.isArray(banner?.regions) ? banner.regions : [];
+    return regions.length === 1 ? String(regions[0]).toUpperCase() : null;
   }
 
   @Get('banners/:type')
   @ApiOperation({ summary: 'Get banners by type (hero, campaign, country)' })
   @ApiParam({ name: 'type', enum: ['hero', 'campaign', 'country'] })
-  @ApiQuery({ name: 'country', required: false, description: 'Only banners targeted at this market' })
-  async getBanners(@Param('type') type: string, @Query('country') country?: string) {
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    description: 'Only banners targeted at this market',
+  })
+  async getBanners(
+    @Req() req: any,
+    @Param('type') type: string,
+    @Query('country') country?: string,
+  ) {
     const key = `marketplace:${type}-banners`;
-    const data = (await this.redis.getJson<any[]>(key)) || [];
-    if (!country) return { data, total: data.length };
+    const scope = marketScopeOf(req);
+    // A locked admin always gets their own market, whatever was asked for.
+    const code = resolveMarket(req, country, 'that market');
+    const all = (await this.redis.getJson<any[]>(key)) || [];
+    // Global banners run in the market too, so they are listed — but a locked
+    // admin may only edit banners scoped to exactly their market.
+    const data = all.map((b: any) => ({
+      ...b,
+      editable: !scope.locked || AdminMarketplaceController.bannerMarket(b) === scope.region,
+    }));
+    if (!code) return { data, total: data.length };
 
     // A banner with no `regions` runs everywhere — that is the shape every
     // banner had before regional targeting, so untargeted ones keep showing.
-    const code = country.toUpperCase();
     const filtered = data.filter((b: any) => {
-    const regions: unknown = b?.regions;
-    if (!Array.isArray(regions) || regions.length === 0) return true;
-    return regions.map((r) => String(r).toUpperCase()).includes(code);
+      const regions: unknown = b?.regions;
+      if (!Array.isArray(regions) || regions.length === 0) return true;
+      return regions.map((r) => String(r).toUpperCase()).includes(code);
     });
     return { data: filtered, total: filtered.length, country: code };
   }
@@ -968,54 +1239,105 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Create or update a banner' })
   @ApiParam({ name: 'type', enum: ['hero', 'campaign', 'country'] })
   async saveBanner(
+    @Req() req: any,
     @Param('type') type: string,
-    @Body() body: { id?: string; regions?: string[]; [key: string]: any }) {
+    @Body() body: { id?: string; regions?: string[]; [key: string]: any },
+  ) {
     const id = body.id || `${type}-${Date.now()}`;
     const key = `marketplace:${type}-banners`;
     const existing: any[] = (await this.redis.getJson(key)) || [];
     const idx = existing.findIndex((b: any) => b.id === id);
+    const previousRegions: string[] | undefined =
+      idx >= 0 && Array.isArray(existing[idx]?.regions) ? existing[idx].regions : undefined;
 
     // Normalise the market list once on write, so the read path can compare
     // codes directly instead of case-folding on every home-feed request.
-    const regions = Array.isArray(body.regions)
-    ? [...new Set(body.regions.map((r) => String(r).trim().toUpperCase()).filter(Boolean))]
-    : undefined;
+    let regions = Array.isArray(body.regions)
+      ? [...new Set(body.regions.map((r) => String(r).trim().toUpperCase()).filter(Boolean))]
+      : undefined;
+    // A locked admin's banner is their market's: any other market named in
+    // the body is refused, an absent list is filled in, and a banner they did
+    // not scope to their market is not theirs to overwrite.
+    const scope = marketScopeOf(req);
+    if (scope.locked) {
+      for (const r of regions ?? []) resolveMarket(req, r, 'this banner');
+      regions = [scope.region!];
+      if (idx >= 0)
+        assertRecordInScope(
+          req,
+          AdminMarketplaceController.bannerMarket(existing[idx]),
+          'this banner',
+        );
+    }
     const payload = { ...body, ...(regions ? { regions } : {}) };
 
     if (idx >= 0) {
-    existing[idx] = { ...existing[idx], ...payload, id, updatedAt: new Date().toISOString() };
+      existing[idx] = { ...existing[idx], ...payload, id, updatedAt: new Date().toISOString() };
     } else {
-    existing.push({ ...payload, id, createdAt: new Date().toISOString() });
+      existing.push({ ...payload, id, createdAt: new Date().toISOString() });
     }
     await this.redis.setJson(key, existing, 0);
-    await this.invalidateHomeFeeds();
+    // Only the markets the banner ran in before and runs in now go stale; a
+    // banner that is (or was) untargeted touches every feed.
+    const after: string[] | undefined = Array.isArray(
+      existing[idx >= 0 ? idx : existing.length - 1]?.regions,
+    )
+      ? existing[idx >= 0 ? idx : existing.length - 1].regions
+      : undefined;
+    const untargeted =
+      !after ||
+      after.length === 0 ||
+      (idx >= 0 && (!previousRegions || previousRegions.length === 0));
+    await this.invalidateHomeFeeds(
+      untargeted ? null : [...new Set([...(after ?? []), ...(previousRegions ?? [])])],
+    );
     // Broadcast change via Kafka for Socket.IO propagation
     await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type, id, regions: regions ?? null,
-    action: idx >= 0 ? 'updated' : 'created', timestamp: new Date().toISOString(),
+      type,
+      id,
+      regions: regions ?? null,
+      action: idx >= 0 ? 'updated' : 'created',
+      timestamp: new Date().toISOString(),
     });
-    return { data: { success: true, id, regions: regions ?? null, action: idx >= 0 ? 'updated' : 'created' } };
+    return {
+      data: {
+        success: true,
+        id,
+        regions: regions ?? null,
+        action: idx >= 0 ? 'updated' : 'created',
+      },
+    };
   }
 
   @Patch('banners/:type/:id')
   @ApiOperation({ summary: 'Update a specific banner' })
   async updateBanner(
+    @Req() req: any,
     @Param('type') type: string,
     @Param('id') id: string,
-    @Body() body: any) {
-    return this.saveBanner(type, { ...body, id });
+    @Body() body: any,
+  ) {
+    return this.saveBanner(req, type, { ...body, id });
   }
 
   @Post('banners/:type/:id/delete')
   @ApiOperation({ summary: 'Delete a banner' })
-  async deleteBanner(@Param('type') type: string, @Param('id') id: string) {
+  async deleteBanner(@Req() req: any, @Param('type') type: string, @Param('id') id: string) {
     const key = `marketplace:${type}-banners`;
     const existing: any[] = (await this.redis.getJson(key)) || [];
+    const target = existing.find((b: any) => b.id === id);
+    if (target)
+      assertRecordInScope(req, AdminMarketplaceController.bannerMarket(target), 'this banner');
     const filtered = existing.filter((b: any) => b.id !== id);
     await this.redis.setJson(key, filtered, 0);
-    await this.invalidateHomeFeeds();
+    await this.invalidateHomeFeeds(
+      Array.isArray(target?.regions) && target.regions.length ? target.regions : null,
+    );
     await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    type, id, action: 'deleted', timestamp: new Date().toISOString(),
+      type,
+      id,
+      action: 'deleted',
+      timestamp: new Date().toISOString(),
     });
     return { data: { success: true, id } };
   }
@@ -1026,10 +1348,11 @@ export class AdminMarketplaceController {
   async invalidateHomeCache() {
     const regions = ['global', 'IN', 'AE', 'SA', 'QA', 'GB', 'KW', 'OM', 'US', 'IN'];
     for (const r of regions) {
-    await this.redis.del(`marketplace:home:${r}`);
+      await this.redis.del(`marketplace:home:${r}`);
     }
     await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
-    action: 'cache_invalidated', timestamp: new Date().toISOString(),
+      action: 'cache_invalidated',
+      timestamp: new Date().toISOString(),
     });
     return { data: { success: true, message: 'Home cache invalidated for all regions' } };
   }
@@ -1051,91 +1374,183 @@ export class AdminMarketplaceController {
 
   @Get('bank-offers')
   @ApiOperation({ summary: 'List all bank offers' })
-  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'EXPIRED', 'ARCHIVED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'EXPIRED', 'ARCHIVED'],
+  })
   @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
-  async getBankOffers(@Query('activeOnly') activeOnly?: string, @Query('status') status?: string) {
+  @ApiQuery({ name: 'country', required: false, description: 'Offers valid in one market' })
+  async getBankOffers(
+    @Req() req: any,
+    @Query('activeOnly') activeOnly?: string,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_BANK_OFFERS, {
       activeOnly: activeOnly === 'true' || status === 'ACTIVE',
+      region: resolveMarket(req, country, 'that market'),
+      regionStrict: marketScopeOf(req).locked,
     });
   }
 
   @Post('bank-offers')
   @ApiOperation({ summary: 'Create a bank offer' })
-  async createBankOffer(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_BANK_OFFER, { dto });
+  async createBankOffer(@Req() req: any, @Body() dto: any) {
+    const regionCode =
+      resolveMarket(req, dto?.regionCode ?? dto?.country, 'this bank offer') ?? null;
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_BANK_OFFER, {
+      dto: { ...dto, regionCode },
+    });
   }
 
   @Patch('bank-offers/:id')
   @ApiOperation({ summary: 'Update a bank offer' })
-  async updateBankOffer(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, { id, dto });
+  async updateBankOffer(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const patch = { ...dto };
+    if (patch.regionCode !== undefined || patch.country !== undefined) {
+      patch.regionCode =
+        resolveMarket(req, patch.regionCode ?? patch.country, 'this bank offer') ?? null;
+    }
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, {
+      id,
+      dto: patch,
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Patch('bank-offers/:id/status')
   @ApiOperation({ summary: 'Change bank offer status (activate, pause, archive)' })
-  @ApiBody({ schema: { type: 'object', properties: { status: { type: 'string', enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'ARCHIVED'] } } } })
-  async updateBankOfferStatus(@Param('id') id: string, @Body('status') status: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, { id, dto: { status } });
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { status: { type: 'string', enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'ARCHIVED'] } },
+    },
+  })
+  async updateBankOfferStatus(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, {
+      id,
+      dto: { status },
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Patch('bank-offers/:id/feature')
   @ApiOperation({ summary: 'Set the bank offer featured flag' })
   @ApiBody({ schema: { type: 'object', properties: { isFeatured: { type: 'boolean' } } } })
-  async setBankOfferFeatured(@Param('id') id: string, @Body('isFeatured') isFeatured?: boolean) {
+  async setBankOfferFeatured(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('isFeatured') isFeatured?: boolean,
+  ) {
     // Takes the value rather than toggling. Read-then-flip in the gateway raced
     // with itself: two admins on the offers page each read the same value and
     // wrote the same flip, so the second click undid the first.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANK_OFFER, {
-      id, dto: { isFeatured: isFeatured !== false },
+      id,
+      dto: { isFeatured: isFeatured !== false },
+      region: marketScopeOf(req).region,
     });
   }
 
   @Delete('bank-offers/:id')
   @ApiOperation({ summary: 'Delete a bank offer permanently' })
-  async deleteBankOffer(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_BANK_OFFER, { id });
+  async deleteBankOffer(@Req() req: any, @Param('id') id: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_BANK_OFFER, {
+      id,
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Get('exchange-offers')
   @ApiOperation({ summary: 'List all exchange offers' })
   @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
-  async getExchangeOffers(@Query('activeOnly') activeOnly?: string, @Query('status') status?: string) {
+  @ApiQuery({ name: 'country', required: false, description: 'Offers available in one market' })
+  async getExchangeOffers(
+    @Req() req: any,
+    @Query('activeOnly') activeOnly?: string,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_LIST_EXCHANGE_OFFERS, {
       activeOnly: activeOnly === 'true' || status === 'ACTIVE',
+      region: resolveMarket(req, country, 'that market'),
+      regionStrict: marketScopeOf(req).locked,
     });
   }
 
   @Post('exchange-offers')
   @ApiOperation({ summary: 'Create an exchange offer' })
-  async createExchangeOffer(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_EXCHANGE_OFFER, { dto });
+  async createExchangeOffer(@Req() req: any, @Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_EXCHANGE_OFFER, {
+      dto: this.scopeExchangeOffer(req, dto),
+    });
+  }
+
+  /**
+   * An exchange offer's markets are its `applicableCountries`. A locked admin
+   * may only create one for their market: any other market named is refused
+   * and an absent list is filled in.
+   */
+  private scopeExchangeOffer(req: any, dto: any) {
+    const scope = marketScopeOf(req);
+    if (!scope.locked) return dto;
+    const named: string[] = Array.isArray(dto?.applicableCountries) ? dto.applicableCountries : [];
+    for (const c of named) resolveMarket(req, c, 'this exchange offer');
+    return { ...dto, applicableCountries: [scope.region] };
   }
 
   @Patch('exchange-offers/:id')
   @ApiOperation({ summary: 'Update an exchange offer' })
-  async updateExchangeOffer(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, { id, dto });
+  async updateExchangeOffer(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const patch = dto?.applicableCountries !== undefined ? this.scopeExchangeOffer(req, dto) : dto;
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, {
+      id,
+      dto: patch,
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Patch('exchange-offers/:id/status')
   @ApiOperation({ summary: 'Change exchange offer status' })
-  async updateExchangeOfferStatus(@Param('id') id: string, @Body('status') status: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, { id, dto: { status } });
+  async updateExchangeOfferStatus(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, {
+      id,
+      dto: { status },
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Patch('exchange-offers/:id/feature')
   @ApiOperation({ summary: 'Set the exchange offer featured flag' })
   @ApiBody({ schema: { type: 'object', properties: { isFeatured: { type: 'boolean' } } } })
-  async setExchangeOfferFeatured(@Param('id') id: string, @Body('isFeatured') isFeatured?: boolean) {
+  async setExchangeOfferFeatured(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('isFeatured') isFeatured?: boolean,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, {
-      id, dto: { isFeatured: isFeatured !== false },
+      id,
+      dto: { isFeatured: isFeatured !== false },
+      region: marketScopeOf(req).region,
     });
   }
 
   @Delete('exchange-offers/:id')
   @ApiOperation({ summary: 'Delete an exchange offer permanently' })
-  async deleteExchangeOffer(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_EXCHANGE_OFFER, { id });
+  async deleteExchangeOffer(@Req() req: any, @Param('id') id: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_EXCHANGE_OFFER, {
+      id,
+      region: marketScopeOf(req).region,
+    });
   }
 
   // ── Page Layout ─────────────────────────────────────────────────────────────
@@ -1175,8 +1590,10 @@ export class AdminMarketplaceController {
     // with `{ success: false }` buried two levels down, which the console renders
     // as a success — the same "reports done, did nothing" failure mode this fix
     // exists to remove. A block that did not happen must surface as an error.
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_BLOCK_SELLER,
-    { id, adminId: req?.user?.id ?? req?.user?.sub ?? 'admin' });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_BLOCK_SELLER, {
+      id,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+    });
   }
 
   // ── Settings ────────────────────────────────────────────────────────────────
@@ -1207,60 +1624,112 @@ export class AdminMarketplaceController {
 
   @Get('flash-deals')
   @ApiOperation({ summary: 'List flash deals' })
-  async getFlashDeals(@Query('status') status?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_FLASH_DEALS, { status });
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    description: 'One market; a region-locked admin always gets their own',
+  })
+  async getFlashDeals(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_FLASH_DEALS, {
+      status,
+      region: resolveMarket(req, country, 'that market'),
+    });
   }
 
   @Post('flash-deals')
   @ApiOperation({ summary: 'Create flash deal' })
   async createFlashDeal(@Req() req: any, @Body() dto: any) {
+    // A locked admin's campaign is their market's, whatever the body says.
+    const regionCode =
+      resolveMarket(req, dto?.regionCode ?? dto?.country, 'this flash deal') ?? null;
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_FLASH_DEAL, {
-    dto: { ...dto, createdBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
+      dto: { ...dto, regionCode, createdBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
     });
   }
 
   @Patch('flash-deals/:id')
   @ApiOperation({ summary: 'Update flash deal' })
-  async updateFlashDeal(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_FLASH_DEAL, { id, dto });
+  async updateFlashDeal(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const patch = { ...dto };
+    if (patch.regionCode !== undefined || patch.country !== undefined) {
+      patch.regionCode =
+        resolveMarket(req, patch.regionCode ?? patch.country, 'this flash deal') ?? null;
+    }
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_FLASH_DEAL, {
+      id,
+      dto: patch,
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Delete('flash-deals/:id')
   @ApiOperation({ summary: 'Cancel flash deal' })
-  async deleteFlashDeal(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_FLASH_DEAL, { id });
+  async deleteFlashDeal(@Req() req: any, @Param('id') id: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_FLASH_DEAL, {
+      id,
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Get('flash-deals/nominations')
   @ApiOperation({ summary: 'List all seller nominations' })
-  async getNominations(@Query('status') status?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOMINATIONS, { status });
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    description: "Nominations in one market's campaigns",
+  })
+  async getNominations(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOMINATIONS, {
+      status,
+      region: resolveMarket(req, country, 'that market'),
+    });
   }
 
   @Patch('flash-deals/nominations/:nominationId/approve')
   @ApiOperation({ summary: 'Approve a seller nomination' })
   async approveNomination(@Req() req: any, @Param('nominationId') nominationId: string) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_NOMINATION, {
-    nominationId,
-    adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      nominationId,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      region: marketScopeOf(req).region,
     });
   }
 
   @Patch('flash-deals/nominations/:nominationId/reject')
   @ApiOperation({ summary: 'Reject a seller nomination' })
-  async rejectNomination(@Req() req: any, @Param('nominationId') nominationId: string, @Body() body: any) {
+  async rejectNomination(
+    @Req() req: any,
+    @Param('nominationId') nominationId: string,
+    @Body() body: any,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_NOMINATION, {
-    nominationId,
-    reason: body?.reason,
-    adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      nominationId,
+      reason: body?.reason,
+      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      region: marketScopeOf(req).region,
     });
   }
 
   // ── Promotions ──────────────────────────────────────────────────────────────
   @Get('promotions')
   @ApiOperation({ summary: 'List promotions' })
-  async getPromotions() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PROMOTIONS, {});
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    description: 'Promotions run by sellers in one market',
+  })
+  async getPromotions(@Req() req: any, @Query('country') country?: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PROMOTIONS, {
+      region: resolveMarket(req, country, 'that market'),
+    });
   }
 
   @Post('promotions')
@@ -1271,8 +1740,12 @@ export class AdminMarketplaceController {
 
   @Patch('promotions/:id')
   @ApiOperation({ summary: 'Update promotion' })
-  async updatePromotion(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_PROMOTION, { id, dto });
+  async updatePromotion(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_PROMOTION, {
+      id,
+      dto,
+      region: marketScopeOf(req).region,
+    });
   }
 
   // ── Notifications ───────────────────────────────────────────────────────────
@@ -1355,13 +1828,20 @@ export class AdminMarketplaceController {
   @Get('reviews')
   @ApiOperation({ summary: 'List reviews for moderation' })
   async getReviews(@Query('status') status?: string, @Query('rating') rating?: number) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, status, rating ? Number(rating) : undefined);
+    return await this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS,
+      status,
+      rating ? Number(rating) : undefined,
+    );
   }
 
   @Patch('reviews/:id/flag')
   @ApiOperation({ summary: 'Flag a review for moderation' })
   async flagReview(@Param('id') id: string, @Body() body: { reason: string }) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_FLAG_REVIEW, { id, reason: body?.reason });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_FLAG_REVIEW, {
+      id,
+      reason: body?.reason,
+    });
   }
 
   @Patch('reviews/:id/hide')
@@ -1406,7 +1886,10 @@ export class AdminMarketplaceController {
   @Patch('compliance/countries/:code')
   @ApiOperation({ summary: 'Update country compliance' })
   async updateComplianceCountry(@Param('code') code: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_COMPLIANCE_COUNTRY, { code, dto });
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_COMPLIANCE_COUNTRY, {
+      code,
+      dto,
+    });
   }
 
   // ── Customers ───────────────────────────────────────────────────────────────
@@ -1431,8 +1914,15 @@ export class AdminMarketplaceController {
 
   @Post('seller-wallets/:id/adjust')
   @ApiOperation({ summary: 'Adjust seller wallet balance' })
-  async adjustSellerWallet(@Param('id') id: string, @Body() dto: { amount: number; reason: string }) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_ADJUST_SELLER_WALLET, { sellerId: id, amount: dto?.amount, reason: dto?.reason });
+  async adjustSellerWallet(
+    @Param('id') id: string,
+    @Body() dto: { amount: number; reason: string },
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_ADJUST_SELLER_WALLET, {
+      sellerId: id,
+      amount: dto?.amount,
+      reason: dto?.reason,
+    });
   }
 
   // ── India Operations ────────────────────────────────────────────────────────
@@ -1465,7 +1955,8 @@ export class AdminMarketplaceController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('page', ParsePagePipe) page = 1,
-    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE) {
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+  ) {
     const cached = await this.redis.getJson<any>(`admin:wallet:search:${userId || 'all'}:${page}`);
     if (cached) return cached;
 
@@ -1481,16 +1972,28 @@ export class AdminMarketplaceController {
     // wallet-service does expose a search pattern now; the comment above
     // predates it. Forwarded rather than refused.
     return this.sendTo(this.walletClient, 'Wallet service', 'wallet_search_transactions', {
-      userId, type, module, startDate, endDate, page: +page, limit: +limit,
+      userId,
+      type,
+      module,
+      startDate,
+      endDate,
+      page: +page,
+      limit: +limit,
     });
   }
 
   @Post('wallet/adjust')
   @ApiOperation({ summary: 'Manually adjust a user wallet balance (admin)' })
-  @ApiBody({ schema: { properties: {
-    userId: { type: 'string' }, amount: { type: 'number' },
-    reason: { type: 'string' }, type: { type: 'string', enum: ['CREDIT', 'DEBIT'] },
-  }}})
+  @ApiBody({
+    schema: {
+      properties: {
+        userId: { type: 'string' },
+        amount: { type: 'number' },
+        reason: { type: 'string' },
+        type: { type: 'string', enum: ['CREDIT', 'DEBIT'] },
+      },
+    },
+  })
   async adjustWalletBalance(
     @Req() req: any,
     @Body() dto: { userId: string; amount: number; reason: string; type: 'CREDIT' | 'DEBIT' },
@@ -1499,7 +2002,8 @@ export class AdminMarketplaceController {
     // adjustment actually landed — logging it first recorded credits that never
     // happened and made the log the least trustworthy record of the two.
     const result = await this.sendTo(
-      this.walletClient, 'Wallet service',
+      this.walletClient,
+      'Wallet service',
       dto.type === 'DEBIT' ? 'wallet_debit' : 'wallet_credit',
       {
         userId: dto.userId,
@@ -1511,37 +2015,55 @@ export class AdminMarketplaceController {
     );
 
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'wallet.admin_adjust', target: dto.userId, actor: this.actor(req),
+      action: 'wallet.admin_adjust',
+      target: dto.userId,
+      actor: this.actor(req),
       details: { amount: dto.amount, type: dto.type, reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
-    return { success: true, userId: dto.userId, type: dto.type, reason: dto.reason, wallet: result };
+    return {
+      success: true,
+      userId: dto.userId,
+      type: dto.type,
+      reason: dto.reason,
+      wallet: result,
+    };
   }
 
   @Post('wallet/freeze')
   @ApiOperation({ summary: 'Freeze a user wallet (fraud prevention)' })
-  @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } }}})
+  @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async freezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
     const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_freeze', {
-      userId: dto.userId, reason: dto.reason, adminId: this.actor(req),
+      userId: dto.userId,
+      reason: dto.reason,
+      adminId: this.actor(req),
     });
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'wallet.freeze', target: dto.userId, actor: this.actor(req),
-      details: { reason: dto.reason }, timestamp: new Date().toISOString(),
+      action: 'wallet.freeze',
+      target: dto.userId,
+      actor: this.actor(req),
+      details: { reason: dto.reason },
+      timestamp: new Date().toISOString(),
     });
     return { success: true, userId: dto.userId, frozen: true, reason: dto.reason, wallet: result };
   }
 
   @Post('wallet/unfreeze')
   @ApiOperation({ summary: 'Unfreeze a user wallet' })
-  @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } }}})
+  @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async unfreezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
     const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_unfreeze', {
-      userId: dto.userId, reason: dto.reason, adminId: this.actor(req),
+      userId: dto.userId,
+      reason: dto.reason,
+      adminId: this.actor(req),
     });
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'wallet.unfreeze', target: dto.userId, actor: this.actor(req),
-      details: { reason: dto.reason }, timestamp: new Date().toISOString(),
+      action: 'wallet.unfreeze',
+      target: dto.userId,
+      actor: this.actor(req),
+      details: { reason: dto.reason },
+      timestamp: new Date().toISOString(),
     });
     return { success: true, userId: dto.userId, frozen: false, reason: dto.reason, wallet: result };
   }
@@ -1554,22 +2076,36 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Get loyalty program configuration' })
   async getLoyaltyConfig() {
     const cached = await this.redis.getJson<any>('admin:loyalty:config');
-    return cached || {
-      tiers: {
-        Bronze:   { threshold: 0,    multiplier: 1,   benefits: ['Basic rewards'] },
-        Silver:   { threshold: 200,  multiplier: 1.5, benefits: ['Free delivery on orders > ₹500', 'Early sale access'] },
-        Gold:     { threshold: 1000, multiplier: 2,   benefits: ['Priority support', 'Exclusive deals', 'Free delivery'] },
-        Platinum: { threshold: 5000, multiplier: 3,   benefits: ['Personal account manager', 'Birthday bonus', 'All Gold benefits'] },
-      },
-      earnRules: {
-        pointsPerHundred: 1,
-        completionBonus: 5,
-        ratingBonus: 2,
-        maxPointsPerOrder: 500,
-      },
-      redemption: { pointsPerUnit: 10, currencyUnit: 'INR', minRedeemable: 100 },
-      expiry: { enabled: false, months: 12 },
-    };
+    return (
+      cached || {
+        tiers: {
+          Bronze: { threshold: 0, multiplier: 1, benefits: ['Basic rewards'] },
+          Silver: {
+            threshold: 200,
+            multiplier: 1.5,
+            benefits: ['Free delivery on orders > ₹500', 'Early sale access'],
+          },
+          Gold: {
+            threshold: 1000,
+            multiplier: 2,
+            benefits: ['Priority support', 'Exclusive deals', 'Free delivery'],
+          },
+          Platinum: {
+            threshold: 5000,
+            multiplier: 3,
+            benefits: ['Personal account manager', 'Birthday bonus', 'All Gold benefits'],
+          },
+        },
+        earnRules: {
+          pointsPerHundred: 1,
+          completionBonus: 5,
+          ratingBonus: 2,
+          maxPointsPerOrder: 500,
+        },
+        redemption: { pointsPerUnit: 10, currencyUnit: 'INR', minRedeemable: 100 },
+        expiry: { enabled: false, months: 12 },
+      }
+    );
   }
 
   @Patch('loyalty/config')
@@ -1577,7 +2113,9 @@ export class AdminMarketplaceController {
   async updateLoyaltyConfig(@Body() dto: any) {
     await this.redis.setJson('admin:loyalty:config', dto, 0); // No TTL — persistent config
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'loyalty.config_updated', details: dto, timestamp: new Date().toISOString(),
+      action: 'loyalty.config_updated',
+      details: dto,
+      timestamp: new Date().toISOString(),
     });
     return { success: true, config: dto };
   }
@@ -1592,21 +2130,44 @@ export class AdminMarketplaceController {
 
   @Post('loyalty/adjust')
   @ApiOperation({ summary: 'Manually adjust user loyalty points (admin)' })
-  @ApiBody({ schema: { properties: {
-    userId: { type: 'string' }, points: { type: 'number', description: 'Positive to grant, negative to revoke' },
-    reason: { type: 'string' },
-  }}})
-  async adjustLoyaltyPoints(@Req() req: any, @Body() dto: { userId: string; points: number; reason: string }) {
-    const result = await this.sendTo(this.loyaltyClient, 'Loyalty service', 'adjust_loyalty_points', {
-      userId: dto.userId, points: Number(dto.points) || 0,
-      reason: dto.reason, adminId: this.actor(req),
-    });
+  @ApiBody({
+    schema: {
+      properties: {
+        userId: { type: 'string' },
+        points: { type: 'number', description: 'Positive to grant, negative to revoke' },
+        reason: { type: 'string' },
+      },
+    },
+  })
+  async adjustLoyaltyPoints(
+    @Req() req: any,
+    @Body() dto: { userId: string; points: number; reason: string },
+  ) {
+    const result = await this.sendTo(
+      this.loyaltyClient,
+      'Loyalty service',
+      'adjust_loyalty_points',
+      {
+        userId: dto.userId,
+        points: Number(dto.points) || 0,
+        reason: dto.reason,
+        adminId: this.actor(req),
+      },
+    );
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
-      action: 'loyalty.admin_adjust', target: dto.userId, actor: this.actor(req),
+      action: 'loyalty.admin_adjust',
+      target: dto.userId,
+      actor: this.actor(req),
       details: { points: dto.points, reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
-    return { success: true, userId: dto.userId, adjustment: dto.points, reason: dto.reason, loyalty: result };
+    return {
+      success: true,
+      userId: dto.userId,
+      adjustment: dto.points,
+      reason: dto.reason,
+      loyalty: result,
+    };
   }
 
   @Get('loyalty/analytics')
@@ -1644,7 +2205,11 @@ export class AdminMarketplaceController {
 
   @Get('analytics/seller-rankings')
   @ApiOperation({ summary: 'Seller performance leaderboard' })
-  @ApiQuery({ name: 'sortBy', required: false, enum: ['revenue', 'rating', 'orders', 'fulfillment'] })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['revenue', 'rating', 'orders', 'fulfillment'],
+  })
   async getSellerRankings(@Query('sortBy') sortBy?: string) {
     return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_RANKINGS, sortBy);
   }
@@ -1711,7 +2276,8 @@ export class AdminMarketplaceController {
   async getSellerApprovals(@Req() req: any, @Query('country') country?: string) {
     const region = (country || req?.regionCode || '').toUpperCase() || undefined;
     return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS, {
-      status: 'PENDING', ...(region ? { country: region } : {}),
+      status: 'PENDING',
+      ...(region ? { country: region } : {}),
     });
   }
 
@@ -1721,7 +2287,10 @@ export class AdminMarketplaceController {
   async getProductApprovals(@Req() req: any, @Query('country') country?: string) {
     const region = (country || req?.regionCode || '').toUpperCase() || undefined;
     return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, {
-      page: 1, limit: 50, status: 'PENDING', ...(region ? { country: region } : {}),
+      page: 1,
+      limit: 50,
+      status: 'PENDING',
+      ...(region ? { country: region } : {}),
     });
   }
 
@@ -1761,16 +2330,29 @@ export class AdminMarketplaceController {
   @Get('coupons')
   @ApiOperation({ summary: 'List all platform coupons' })
   @ApiQuery({ name: 'isActive', required: false })
-  async getAdminCoupons(@Query('isActive') isActive?: string) {
-    try {
-      return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_COUPONS, {
-        isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
-        page: 1, limit: 50,
-      });
-    }
-    catch { return { data: [], total: 0 }; }
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    description: 'Coupons issued for one market (plus market-agnostic ones)',
+  })
+  async getAdminCoupons(
+    @Req() req: any,
+    @Query('isActive') isActive?: string,
+    @Query('country') country?: string,
+  ) {
+    // A locked admin sees only their market's coupons — a market-agnostic code
+    // is the platform's, not theirs to list or edit. Errors are no longer
+    // swallowed into an empty list: an unreachable service must look like one.
+    const scope = marketScopeOf(req);
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_COUPONS, {
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      page: 1,
+      limit: 100,
+      publicOnly: false,
+      region: resolveMarket(req, country, 'that market'),
+      regionStrict: scope.locked,
+    });
   }
-
 
   @Get('gift-cards')
   @ApiOperation({ summary: 'List platform gift cards' })
@@ -1795,8 +2377,11 @@ export class AdminMarketplaceController {
   // cache and is left alone.
   @Post('banners')
   @ApiOperation({ summary: 'Create a homepage banner' })
-  async createBanner(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_BANNER, { dto });
+  async createBanner(@Req() req: any, @Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_BANNER, {
+      dto,
+      region: marketScopeOf(req).region,
+    });
   }
 
   // Named `*HomepageBanner`, not `*Banner`: the `/banners/:type/:id` handlers
@@ -1804,20 +2389,27 @@ export class AdminMarketplaceController {
   // feed cache, and two methods of the same name silently collapse into one.
   @Put('banners/:id')
   @ApiOperation({ summary: 'Update a homepage banner' })
-  async updateHomepageBanner(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANNER, { id, dto });
+  async updateHomepageBanner(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BANNER, {
+      id,
+      dto,
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Patch('banners/:id')
   @ApiOperation({ summary: 'Update a homepage banner (PATCH alias)' })
-  async patchHomepageBanner(@Param('id') id: string, @Body() dto: any) {
-    return this.updateHomepageBanner(id, dto);
+  async patchHomepageBanner(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    return this.updateHomepageBanner(req, id, dto);
   }
 
   @Delete('banners/:id')
   @ApiOperation({ summary: 'Delete a homepage banner' })
-  async deleteHomepageBanner(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_BANNER, { id });
+  async deleteHomepageBanner(@Req() req: any, @Param('id') id: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_BANNER, {
+      id,
+      region: marketScopeOf(req).region,
+    });
   }
 
   @Get('inventory')
@@ -1884,7 +2476,12 @@ export class AdminMarketplaceController {
   @Get('abandoned-carts')
   @ApiOperation({ summary: 'Abandoned cart recovery management' })
   async getAbandonedCarts() {
-    return { data: [] as unknown[], total: 0, recoveryRate: 0, message: 'Cart recovery management' };
+    return {
+      data: [] as unknown[],
+      total: 0,
+      recoveryRate: 0,
+      message: 'Cart recovery management',
+    };
   }
 
   @Get('ip-violations')
@@ -1923,8 +2520,8 @@ export class AdminMarketplaceController {
   // canonical handler.
   @Put('promotions/:id')
   @ApiOperation({ summary: 'Update promotion (PUT alias)' })
-  async putPromotion(@Param('id') id: string, @Body() dto: any) {
-    return this.updatePromotion(id, dto);
+  async putPromotion(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    return this.updatePromotion(req, id, dto);
   }
 
   @Put('complaints/:id')
@@ -1965,14 +2562,14 @@ export class AdminMarketplaceController {
 
   @Put('bank-offers/:id')
   @ApiOperation({ summary: 'Update bank offer (PUT alias)' })
-  async putBankOffer(@Param('id') id: string, @Body() body: any) {
-    return this.updateBankOffer(id, body);
+  async putBankOffer(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.updateBankOffer(req, id, body);
   }
 
   @Put('exchange-offers/:id')
   @ApiOperation({ summary: 'Update exchange offer (PUT alias)' })
-  async putExchangeOffer(@Param('id') id: string, @Body() body: any) {
-    return this.updateExchangeOffer(id, body);
+  async putExchangeOffer(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.updateExchangeOffer(req, id, body);
   }
 
   @Put('sponsored/:id')
@@ -1995,8 +2592,8 @@ export class AdminMarketplaceController {
 
   @Put('flash-deals/:id')
   @ApiOperation({ summary: 'Update flash deal (PUT alias)' })
-  async putFlashDeal(@Param('id') id: string, @Body() dto: any) {
-    return this.updateFlashDeal(id, dto);
+  async putFlashDeal(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    return this.updateFlashDeal(req, id, dto);
   }
 
   @Post('payouts/:id/process')

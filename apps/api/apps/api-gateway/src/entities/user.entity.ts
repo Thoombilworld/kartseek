@@ -6,7 +6,13 @@
  * cross-module imports from auth-service. Both the gateway and
  * auth-service share the same database in dev mode.
  */
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { UserRole, type SellerType } from '@app/common';
 
 @Entity('users')
@@ -50,6 +56,21 @@ export class User {
    */
   @Column({ name: 'seller_type', type: 'varchar', nullable: true })
   sellerType: SellerType | null;
+
+  /**
+   * The market a staff account administers and whether it is confined to it.
+   * A region-locked ADMIN is the "regional admin": every promotion, banner,
+   * coupon and flash deal they touch is forced into this market and anything
+   * belonging to another one answers 403. SUPER_ADMIN is global whatever these
+   * say. Both ride in the JWT so the gateway enforces them from a signed claim
+   * rather than from the admin console's own state — which is where the lock
+   * used to live, as a demo table in the login page.
+   */
+  @Column({ name: 'region_code', type: 'varchar', nullable: true })
+  regionCode: string | null;
+
+  @Column({ name: 'region_locked', type: 'boolean', default: false })
+  regionLocked: boolean;
 
   @Column({ type: 'varchar', nullable: true, default: '' })
   firstName: string | null;

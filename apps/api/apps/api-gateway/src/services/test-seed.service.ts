@@ -23,12 +23,57 @@ export class TestSeedService implements OnApplicationBootstrap {
    * but never get past the portal gate.
    */
   private readonly testUsers: Array<{
-    email: string; password: string; role: UserRole;
-    firstName: string; lastName: string; sellerType?: SellerType;
+    email: string;
+    password: string;
+    role: UserRole;
+    firstName: string;
+    lastName: string;
+    sellerType?: SellerType;
+    regionCode?: string;
+    regionLocked?: boolean;
   }> = [
-    { email: 'testcustomer@kartseek.com', password: 'TestPass123!', role: UserRole.CUSTOMER, firstName: 'Test', lastName: 'Customer' },
-    { email: 'seller@kartseek.com', password: 'SellerPass123!', role: UserRole.SELLER, firstName: 'Test', lastName: 'Seller', sellerType: 'marketplace' },
-    { email: 'admin@kartseek.com', password: 'AdminPass123!', role: UserRole.ADMIN, firstName: 'Test', lastName: 'Admin' },
+    {
+      email: 'testcustomer@kartseek.com',
+      password: 'TestPass123!',
+      role: UserRole.CUSTOMER,
+      firstName: 'Test',
+      lastName: 'Customer',
+    },
+    {
+      email: 'seller@kartseek.com',
+      password: 'SellerPass123!',
+      role: UserRole.SELLER,
+      firstName: 'Test',
+      lastName: 'Seller',
+      sellerType: 'marketplace',
+    },
+    {
+      email: 'admin@kartseek.com',
+      password: 'AdminPass123!',
+      role: UserRole.ADMIN,
+      firstName: 'Test',
+      lastName: 'Admin',
+    },
+    // Regional admins: confined to one market by a signed claim, so the
+    // cross-market authorisation tests have a real account to run as.
+    {
+      email: 'qa-admin@kartseek.com',
+      password: 'AdminPass123!',
+      role: UserRole.ADMIN,
+      firstName: 'Qatar',
+      lastName: 'Admin',
+      regionCode: 'QA',
+      regionLocked: true,
+    },
+    {
+      email: 'india-admin@kartseek.com',
+      password: 'AdminPass123!',
+      role: UserRole.ADMIN,
+      firstName: 'India',
+      lastName: 'Admin',
+      regionCode: 'IN',
+      regionLocked: true,
+    },
   ];
 
   constructor(
@@ -53,10 +98,23 @@ export class TestSeedService implements OnApplicationBootstrap {
           // `seller_type` existed keeps a NULL forever otherwise, which reads to
           // the portal as "not assigned to a portal yet".
           const fixes: string[] = [];
-          if (existing.role !== testUser.role) { existing.role = testUser.role; fixes.push(`role → ${testUser.role}`); }
+          if (existing.role !== testUser.role) {
+            existing.role = testUser.role;
+            fixes.push(`role → ${testUser.role}`);
+          }
           if (testUser.sellerType && existing.sellerType !== testUser.sellerType) {
             existing.sellerType = testUser.sellerType;
             fixes.push(`sellerType → ${testUser.sellerType}`);
+          }
+          const wantRegion = testUser.regionCode ?? null;
+          const wantLocked = testUser.regionLocked === true;
+          if (
+            (existing.regionCode ?? null) !== wantRegion ||
+            existing.regionLocked !== wantLocked
+          ) {
+            existing.regionCode = wantRegion;
+            existing.regionLocked = wantLocked;
+            fixes.push(`market scope → ${wantRegion ?? 'global'}${wantLocked ? ' (locked)' : ''}`);
           }
           if (fixes.length) {
             await this.userRepo.save(existing);
@@ -75,6 +133,8 @@ export class TestSeedService implements OnApplicationBootstrap {
           firstName: testUser.firstName,
           lastName: testUser.lastName,
           sellerType: testUser.sellerType ?? null,
+          regionCode: testUser.regionCode ?? null,
+          regionLocked: testUser.regionLocked === true,
           isActive: true,
         });
         await this.userRepo.save(user);
