@@ -25,17 +25,17 @@ States: Not Started → In Progress → Complete → Tested. "Tested" requires t
 
 ### Plan A — authorization & isolation
 
-| Task | Deliverable                                                                                                                            | Test                                                   | Status      |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------- |
-| A1   | `/admin/security/*` requires `ADMIN\|SUPER_ADMIN`; exposure spec asserts every `/admin` route has `@Roles`                             | `route-exposure.regression.spec.ts`                    | Not Started |
-| A2   | `assertInMarket` in `@app/common`; `market-scope.spec.ts`; dead `RegionGuard`/`RegionIsolationGuard`/`@RequireRegion` deleted          | `market-scope.spec.ts`                                 | Not Started |
-| A3   | admin-core users/KYC/audit/revenue scoped; admin-service enforces scope                                                                | `admin-core.controller.spec.ts`, admin-service spec    | Not Started |
-| A4   | marketplace sellers/products/approvals/customers/complaints/reviews/orders scoped; filter payload bugs fixed; no placeholder on outage | `admin-marketplace.scope.spec.ts`                      | Not Started |
-| A5   | taxi admin routes scoped; backend filters by `countryCode`; suspend command name fixed                                                 | `admin-taxi.controller.spec.ts`, taxi backend spec     | Not Started |
-| A6   | grocery admin routes scoped; backend filters through store `regionCode`                                                                | `admin-grocery.controller.spec.ts`, grocery admin spec | Not Started |
-| A7   | hotel/restaurant/pharmacy/doctor existing routes scoped                                                                                | controller specs                                       | Not Started |
-| A8   | `admin-market-scope.regression.spec.ts`: every `/admin` route scoped or allowlisted with a reason                                      | the spec                                               | Not Started |
-| A9   | `regional-isolation-authz.mjs` extended (users, sellers, products, taxi, grocery); run as QA/IN/global admins                          | live script ≥ 36 + new checks green                    | Not Started |
+| Task | Deliverable                                                                                                                            | Test                                                   | Status                                          |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| A1   | `/admin/security/*` requires `ADMIN\|SUPER_ADMIN`; exposure spec asserts every `/admin` route has `@Roles`                             | `route-exposure.regression.spec.ts`                    | Tested — 7f749ae; probe customer 403, admin 200 |
+| A2   | `assertInMarket` in `@app/common`; `market-scope.spec.ts`; dead `RegionGuard`/`RegionIsolationGuard`/`@RequireRegion` deleted          | `market-scope.spec.ts`                                 | Not Started                                     |
+| A3   | admin-core users/KYC/audit/revenue scoped; admin-service enforces scope                                                                | `admin-core.controller.spec.ts`, admin-service spec    | Not Started                                     |
+| A4   | marketplace sellers/products/approvals/customers/complaints/reviews/orders scoped; filter payload bugs fixed; no placeholder on outage | `admin-marketplace.scope.spec.ts`                      | Not Started                                     |
+| A5   | taxi admin routes scoped; backend filters by `countryCode`; suspend command name fixed                                                 | `admin-taxi.controller.spec.ts`, taxi backend spec     | Not Started                                     |
+| A6   | grocery admin routes scoped; backend filters through store `regionCode`                                                                | `admin-grocery.controller.spec.ts`, grocery admin spec | Not Started                                     |
+| A7   | hotel/restaurant/pharmacy/doctor existing routes scoped                                                                                | controller specs                                       | Not Started                                     |
+| A8   | `admin-market-scope.regression.spec.ts`: every `/admin` route scoped or allowlisted with a reason                                      | the spec                                               | Not Started                                     |
+| A9   | `regional-isolation-authz.mjs` extended (users, sellers, products, taxi, grocery); run as QA/IN/global admins                          | live script ≥ 36 + new checks green                    | Not Started                                     |
 
 ### Plan B — identity, RBAC, audit, validation
 
