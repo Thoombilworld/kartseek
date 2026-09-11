@@ -46,6 +46,54 @@ function service(hotel: { id: string; countryCode: string } | null = null) {
   return { svc, hotelRepo, bookingRepo, redis, kafka, qbWhere };
 }
 
+/**
+ * The detail read has two exits — a Redis cache hit and a repository query —
+ * and the market has to be asserted on both. Guarding only the query leaves the
+ * cached copy readable across markets, which is the same leak with a warm-up
+ * request in front of it.
+ */
+function detailService(hotel: { id: string; countryCode: string }, cached: boolean) {
+  const hotelRepo = { findOne: vi.fn(async () => (cached ? null : hotel)) };
+  const redis = {
+    getJson: vi.fn(async () => (cached ? hotel : null)),
+    setJson: vi.fn(async () => undefined),
+    del: vi.fn(async () => undefined),
+  };
+  const svc = Object.create(HotelService.prototype) as HotelService;
+  Object.assign(svc, {
+    hotelRepo,
+    redis,
+    logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  });
+  return { svc, hotelRepo, redis };
+}
+
+describe('HotelService.getHotelById asserts the market on both exits', () => {
+  it('refuses a QA-scoped read of an IN hotel served from the cache', async () => {
+    const { svc, redis } = detailService({ id: 'h-in', countryCode: 'IN' }, true);
+    await expect(svc.getHotelById('h-in', 'QA')).rejects.toThrow(ForbiddenException);
+    expect(redis.getJson).toHaveBeenCalled();
+  });
+
+  it('refuses a QA-scoped read of an IN hotel served from the repository', async () => {
+    const { svc, hotelRepo } = detailService({ id: 'h-in', countryCode: 'IN' }, false);
+    await expect(svc.getHotelById('h-in', 'QA')).rejects.toThrow(ForbiddenException);
+    expect(hotelRepo.findOne).toHaveBeenCalled();
+  });
+
+  it('returns the hotel to a QA-scoped read of a QA hotel', async () => {
+    const { svc } = detailService({ id: 'h-qa', countryCode: 'QA' }, false);
+    await expect(svc.getHotelById('h-qa', 'QA')).resolves.toMatchObject({ id: 'h-qa' });
+  });
+
+  it('leaves the unscoped public detail read untouched', async () => {
+    const fromDb = detailService({ id: 'h-in', countryCode: 'IN' }, false);
+    await expect(fromDb.svc.getHotelById('h-in')).resolves.toMatchObject({ id: 'h-in' });
+    const fromCache = detailService({ id: 'h-in', countryCode: 'IN' }, true);
+    await expect(fromCache.svc.getHotelById('h-in')).resolves.toMatchObject({ id: 'h-in' });
+  });
+});
+
 describe('HotelService.getAllHotels narrows to the caller market', () => {
   it('adds the country predicate when a market is given', async () => {
     const { svc, hotelRepo } = service();

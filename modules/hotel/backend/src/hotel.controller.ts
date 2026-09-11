@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UsePipes, ValidationPipe, UseFilters } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  Query,
+  UsePipes,
+  ValidationPipe,
+  UseFilters,
+} from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { HotelService } from './hotel.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -14,7 +25,9 @@ export class HotelController {
   constructor(private readonly svc: HotelService) {}
 
   @Get('health')
-  health() { return this.svc.healthCheck(); }
+  health() {
+    return this.svc.healthCheck();
+  }
 
   @Get()
   search(@Query() dto: SearchHotelsDto) {
@@ -22,13 +35,19 @@ export class HotelController {
   }
 
   @Get(':id')
-  getById(@Param('id') id: string) { return this.svc.getHotelById(id); }
+  getById(@Param('id') id: string) {
+    return this.svc.getHotelById(id);
+  }
 
   @Get(':id/rooms')
   getRoomAvailability(
     @Param('id') id: string,
-    @Query('checkin') checkin: string, @Query('checkout') checkout: string, @Query('guests') guests = 2,
-  ) { return this.svc.getRoomAvailability(id, checkin, checkout, +guests); }
+    @Query('checkin') checkin: string,
+    @Query('checkout') checkout: string,
+    @Query('guests') guests = 2,
+  ) {
+    return this.svc.getRoomAvailability(id, checkin, checkout, +guests);
+  }
 
   @Post(':id/bookings')
   createBooking(@Param('id') hotelId: string, @Body() dto: CreateBookingDto) {
@@ -41,10 +60,16 @@ export class HotelController {
   }
 
   @Get('bookings/:bookingId')
-  getBooking(@Param('bookingId') id: string) { return this.svc.getBookingById(id); }
+  getBooking(@Param('bookingId') id: string) {
+    return this.svc.getBookingById(id);
+  }
 
   @Get('bookings/user/:userId')
-  getUserBookings(@Param('userId') userId: string, @Query('page') page = 1, @Query('limit') limit = 10) {
+  getUserBookings(
+    @Param('userId') userId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
     return this.svc.getUserBookings(userId, +page, +limit);
   }
 
@@ -60,35 +85,60 @@ export class HotelController {
 
   // ── Microservice MessagePatterns ──────────────────────────────────────────
   @MessagePattern({ cmd: 'hotel_health' })
-  msgHealth() { return this.svc.healthCheck(); }
+  msgHealth() {
+    return this.svc.healthCheck();
+  }
 
   @MessagePattern({ cmd: 'search_hotels' })
-  msgSearch(@Payload() d: EmptyMessage) { return this.svc.searchHotels(d); }
+  msgSearch(@Payload() d: EmptyMessage) {
+    return this.svc.searchHotels(d);
+  }
 
+  // `scope` is the caller's market when the gateway resolved one for a
+  // region-locked administrator — the admin console's hotel detail route sends
+  // it — and undefined for the public detail page.
   @MessagePattern({ cmd: 'get_hotel' })
-  msgGetHotel(@Payload() d: EmptyMessage) { return this.svc.getHotelById(d.id); }
+  msgGetHotel(@Payload() d: { id: string; scope?: string }) {
+    return this.svc.getHotelById(d?.id, d?.scope);
+  }
 
   @MessagePattern({ cmd: 'create_hotel_booking' })
-  msgCreateBooking(@Payload() d: EmptyMessage) { return this.svc.createBooking(d.hotelId, d); }
+  msgCreateBooking(@Payload() d: EmptyMessage) {
+    return this.svc.createBooking(d.hotelId, d);
+  }
 
   @MessagePattern({ cmd: 'get_room_availability' })
-  msgGetRoomAvailability(@Payload() d: EmptyMessage) { return this.svc.getRoomAvailability(d.hotelId, d.checkin, d.checkout, d.guests); }
+  msgGetRoomAvailability(@Payload() d: EmptyMessage) {
+    return this.svc.getRoomAvailability(d.hotelId, d.checkin, d.checkout, d.guests);
+  }
 
   @MessagePattern({ cmd: 'get_hotel_booking' })
-  msgGetBooking(@Payload() d: EmptyMessage) { return this.svc.getBookingById(d.bookingId, d); }
+  msgGetBooking(@Payload() d: EmptyMessage) {
+    return this.svc.getBookingById(d.bookingId, d);
+  }
 
   @MessagePattern({ cmd: 'get_user_bookings' })
-  msgGetUserBookings(@Payload() d: EmptyMessage) { return this.svc.getUserBookings(d.userId, d.page, d.limit); }
+  msgGetUserBookings(@Payload() d: EmptyMessage) {
+    return this.svc.getUserBookings(d.userId, d.page, d.limit);
+  }
 
   @MessagePattern({ cmd: 'cancel_hotel_booking' })
-  msgCancelBooking(@Payload() d: EmptyMessage) { return this.svc.cancelBooking(d.bookingId, d.reason, d); }
+  msgCancelBooking(@Payload() d: EmptyMessage) {
+    return this.svc.cancelBooking(d.bookingId, d.reason, d);
+  }
 
   @MessagePattern({ cmd: 'modify_hotel_booking' })
-  msgModifyBooking(@Payload() d: EmptyMessage) { return this.svc.modifyBooking(d.bookingId, d, d); }
+  msgModifyBooking(@Payload() d: EmptyMessage) {
+    return this.svc.modifyBooking(d.bookingId, d, d);
+  }
 
   @MessagePattern({ cmd: 'submit_hotel_review' })
-  msgSubmitReview(@Payload() d: EmptyMessage) { return this.svc.submitReview(d.hotelId, d); }
+  msgSubmitReview(@Payload() d: EmptyMessage) {
+    return this.svc.submitReview(d.hotelId, d);
+  }
 
   @MessagePattern({ cmd: 'get_hotel_reviews' })
-  msgGetReviews(@Payload() d: EmptyMessage) { return this.svc.getHotelReviews(d.hotelId, d.page, d.limit); }
+  msgGetReviews(@Payload() d: EmptyMessage) {
+    return this.svc.getHotelReviews(d.hotelId, d.page, d.limit);
+  }
 }

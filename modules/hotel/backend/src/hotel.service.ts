@@ -152,16 +152,31 @@ export class HotelService {
     return { data, total, page, limit };
   }
 
-  async getHotelById(id: string) {
+  /**
+   * `scope` is set only for a market-locked administrator; the public detail
+   * page passes nothing and `assertInMarket` returns early on an undefined
+   * scope, so that path is unchanged.
+   *
+   * The assertion sits on **both** exits. Guarding only the repository query
+   * would leave the cached copy readable across markets: any request — the
+   * public page included — warms `hotel:detail:<id>`, and a locked admin asking
+   * for another market's hotel would then be served the whole record, rooms and
+   * reviews included, without the query ever running.
+   */
+  async getHotelById(id: string, scope?: string) {
     // Cache-first
     const cached = await this.redis.getJson<Hotel>(`hotel:detail:${id}`);
-    if (cached) return cached;
+    if (cached) {
+      assertInMarket(cached.countryCode, scope, 'hotel', this.logger);
+      return cached;
+    }
 
     const hotel = await this.hotelRepo.findOne({
       where: { id },
       relations: { rooms: true, reviews: true },
     });
     if (!hotel) throw new NotFoundException(`Hotel ${id} not found`);
+    assertInMarket(hotel.countryCode, scope, 'hotel', this.logger);
 
     await this.redis.setJson(`hotel:detail:${id}`, hotel, 600); // 10-min cache
     return hotel;
