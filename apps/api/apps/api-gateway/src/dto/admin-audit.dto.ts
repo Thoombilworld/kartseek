@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -12,13 +12,35 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * as somebody else, or file their action under another market.
  */
 export class AuditEntryDto {
+  /**
+   * A machine key, not a sentence.
+   *
+   * The console was sending `Auth.Admin signed in`, which the controller stored
+   * as `console.Auth.Admin signed in`: a value that cannot be filtered by
+   * prefix, grouped, or matched against the `http.<verb>.<path>` keys the
+   * gateway's interceptor writes, and that splits one action across as many
+   * spellings as there are callers. The trail is queried by this field, so its
+   * shape is enforced here rather than trusted to each call site.
+   *
+   * Lower-case, starting with a letter, then letters, digits, `_`, `.` or `-`,
+   * at least three characters — `@MaxLength(80)` above is the upper bound the
+   * pipe actually applies. Dots separate the surface from the action
+   * (`auth.signed_in`, `seller.approved`).
+   */
   @ApiProperty({
-    description: "What happened, recorded as `console.<action>` (e.g. 'seller.approved')",
+    description:
+      "Machine key for what happened, stored as `console.<action>` (e.g. 'seller.approved'). Lower-case slug: must match /^[a-z][a-z0-9_.-]{2,80}$/.",
     maxLength: 80,
+    pattern: '^[a-z][a-z0-9_.-]{2,80}$',
+    example: 'auth.signed_in',
   })
   @IsString()
   @IsNotEmpty()
   @MaxLength(80)
+  @Matches(/^[a-z][a-z0-9_.-]{2,80}$/, {
+    message:
+      'action must be a lower-case machine key such as "seller.approved" — letters, digits, _ . - only, starting with a letter',
+  })
   action: string;
 
   @ApiPropertyOptional({ description: "The kind of record acted on, e.g. 'sellers'" })

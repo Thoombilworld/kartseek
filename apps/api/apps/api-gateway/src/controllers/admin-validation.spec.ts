@@ -363,6 +363,34 @@ describe('audit entry DTO', () => {
       await rejectionOf(AuditEntryDto, { action: 'seller.approved', actorId: 'someone-else' }),
     ).toContain('property actorId should not exist');
   });
+
+  /**
+   * The trail is *queried* by `actionType`, by prefix. The console was posting
+   * `Auth.Admin signed in`, which the controller stored as
+   * `console.Auth.Admin signed in` — unfilterable, unsortable, and a different
+   * key for every caller who capitalised differently. A sentence belongs in
+   * `details`; the key is a slug.
+   */
+  it.each([
+    ['a sentence with spaces', 'Admin signed in'],
+    ['capitals', 'Auth.SignedIn'],
+    ['a leading dot', '.signed_in'],
+    ['a leading digit', '2fa.enabled'],
+    ['punctuation the query cannot escape', 'seller:*'],
+    ['too short to mean anything', 'ab'],
+  ])('refuses %s as an action key', async (_label, action) => {
+    expect(await rejectionOf(AuditEntryDto, { action })).toContain(
+      'action must be a lower-case machine key such as "seller.approved" — letters, digits, _ . - only, starting with a letter',
+    );
+  });
+
+  it.each(['auth.signed_in', 'auth.signed_out', 'seller.approved', 'kyc.rejected', 'role-updated'])(
+    'accepts the machine key %s',
+    async (action) => {
+      const out = (await run(AuditEntryDto, { action })) as AuditEntryDto;
+      expect(out.action).toBe(action);
+    },
+  );
 });
 
 // ── 3. No DTO drifts away from its table ─────────────────────────────────────
