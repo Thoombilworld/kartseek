@@ -1,35 +1,76 @@
 'use client';
-import { useTaxiRegionFilter } from '@/hooks/useTaxiRegionFilter';
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState } from 'react';
 import {
-  Users, Search, Star, Eye, Ban, CheckCircle, Clock, XCircle,
-  Phone, MapPin, FileText, AlertTriangle, Car, Building2,
-  Shield, Download, Filter, ChevronDown, ChevronUp,
+  Users,
+  Search,
+  Star,
+  Ban,
+  CheckCircle,
+  Clock,
+  Phone,
+  FileText,
+  Car,
+  Building2,
+  Shield,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { adminTaxiApi } from '@/lib/api/admin-taxi';
-import { API_BASE_URL } from '@/lib/config/api-base';
-
+import type { TaxiDriverRow } from '@/lib/api/admin-taxi';
+import { useAdminData } from '@/hooks/useAdminData';
 import { activateOnKey } from '@/lib/a11y/activate-on-key';
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
+import {
+  AdminForbidden,
+  AdminLoading,
+  AdminNotConnected,
+  classifyApiFailure,
+  type ApiFailureKind,
+} from '@/components/admin/api-states';
 
-interface Driver {
-  id: string;
-  name: string;
-  vendorName: string | null;
-  countryCode: string;
-  city: string;
-  phone: string;
-  email: string;
-  vehicleType: string;
-  vehiclePlate: string;
-  vehicleModel: string;
-  status: 'pending' | 'onboarding' | 'active' | 'suspended' | 'blocked';
-  rating: number;
-  totalTrips: number;
-  earnings: string;
-  onboardingProgress: number;
-  docsPending: number;
-  lastActive: string;
+/**
+ * Driver management — the `taxi_drivers` rows `GET /admin/taxi/drivers` returns.
+ *
+ * What was here before: `mockDrivers`, eight invented drivers (Ravi Kumar,
+ * Fatima Okonkwo, Ahmed Hassan, …) with earnings, cities and "last active"
+ * strings, seeded into state. The list fetch that was supposed to replace them
+ * asked for `/taxi/admin/drivers` — the segments reversed, a route that does not
+ * exist — with no `Authorization` header, so it never replaced anything.
+ *
+ * The three status actions were one `POST /admin/taxi/drivers/:id/<action>`:
+ * `approve` and `suspend` are `@Patch` routes, so those two 404'd, and `block`
+ * carried no body at all against a handler whose `ReasonDto` requires one — a
+ * 400 the page swallowed before applying the status change locally anyway. Each
+ * action now uses its own verb, block and suspend collect the reason the
+ * platform records, and nothing moves on screen unless the server accepted it.
+ */
+
+// ─── Data ─────────────────────────────────────────────────────────────────────
+
+export const DRIVERS_ROUTE = 'GET /admin/taxi/drivers';
+
+export type DriversResult =
+  | { ok: true; rows: TaxiDriverRow[]; total: number }
+  | { ok: false; kind: ApiFailureKind; message: string };
+
+export async function loadDrivers(params: {
+  status?: string;
+  countryCode?: string;
+  search?: string;
+}): Promise<DriversResult> {
+  const res = await adminTaxiApi.getDrivers({
+    limit: 100,
+    status: params.status,
+    countryCode: params.countryCode,
+    search: params.search,
+  });
+  if (!res.success) {
+    const message = res.error || 'The driver list did not answer';
+    return { ok: false, kind: classifyApiFailure(message), message };
+  }
+  const rows = res.data?.data ?? [];
+  return { ok: true, rows, total: res.data?.total ?? rows.length };
 }
 
 const sCfg: Record<string, { bg: string; l: string }> = {
@@ -38,147 +79,294 @@ const sCfg: Record<string, { bg: string; l: string }> = {
   suspended: { bg: 'bg-amber-100 text-amber-700', l: 'Suspended' },
   blocked: { bg: 'bg-red-100 text-red-700', l: 'Blocked' },
   pending: { bg: 'bg-blue-100 text-blue-700', l: 'Pending' },
+  rejected: { bg: 'bg-slate-200 text-slate-600', l: 'Rejected' },
 };
 
-const FLAGS: Record<string, string> = { IN: '🇮🇳', US: '🇺🇸', NG: '🇳🇬', GB: '🇬🇧', AE: '🇦🇪' };
-const VEHICLE_ICONS: Record<string, string> = { economy: '🚗', comfort: '🚙', premium: '🏎️', bike: '🏍️', suv: '🚐' };
+const VEHICLE_ICONS: Record<string, string> = {
+  economy: '🚗',
+  comfort: '🚙',
+  premium: '🏎️',
+  bike: '🏍️',
+  suv: '🚐',
+};
 
-const mockDrivers: Driver[] = [
-  { id: 'DRV-101', name: 'Ravi Kumar', vendorName: 'QuickRide Fleet', countryCode: 'IN', city: 'Bangalore', phone: '+91 98765 43220', email: 'ravi@email.com', vehicleType: 'comfort', vehiclePlate: 'KA01-1234', vehicleModel: 'Swift Dzire', status: 'active', rating: 4.8, totalTrips: 1240, earnings: '₹42K', onboardingProgress: 100, docsPending: 0, lastActive: 'Now' },
-  { id: 'DRV-102', name: 'Amit Singh', vendorName: 'QuickRide Fleet', countryCode: 'IN', city: 'Mumbai', phone: '+91 98765 43221', email: 'amit@email.com', vehicleType: 'suv', vehiclePlate: 'MH01-5678', vehicleModel: 'Innova', status: 'active', rating: 4.5, totalTrips: 890, earnings: '₹28K', onboardingProgress: 100, docsPending: 0, lastActive: 'On Trip' },
-  { id: 'DRV-103', name: 'James Mwangi', vendorName: null, countryCode: 'IN', city: 'Mumbai', phone: '+91 712 345678', email: 'james@email.com', vehicleType: 'economy', vehiclePlate: 'KCA 123A', vehicleModel: 'Toyota Vitz', status: 'active', rating: 4.6, totalTrips: 3200, earnings: '180K', onboardingProgress: 100, docsPending: 0, lastActive: '5 min ago' },
-  { id: 'DRV-104', name: 'Fatima Okonkwo', vendorName: 'Lagos City Rides', countryCode: 'NG', city: 'Lagos', phone: '+234 812 345678', email: 'fatima@email.com', vehicleType: 'economy', vehiclePlate: 'LAG-1234', vehicleModel: 'Corolla', status: 'pending', rating: 0, totalTrips: 0, earnings: '₦0', onboardingProgress: 25, docsPending: 4, lastActive: 'New' },
-  { id: 'DRV-105', name: 'Deepak R.', vendorName: null, countryCode: 'IN', city: 'Delhi', phone: '+91 98765 43222', email: 'deepak@email.com', vehicleType: 'bike', vehiclePlate: 'DL01-9999', vehicleModel: 'Honda Activa', status: 'suspended', rating: 3.1, totalTrips: 210, earnings: '₹8K', onboardingProgress: 100, docsPending: 0, lastActive: '1 week' },
-  { id: 'DRV-106', name: 'Ahmed Hassan', vendorName: 'Desert Express', countryCode: 'AE', city: 'Dubai', phone: '+971 55 123 4567', email: 'ahmed@email.com', vehicleType: 'premium', vehiclePlate: 'DXB-5678', vehicleModel: 'Lexus ES', status: 'active', rating: 4.9, totalTrips: 4500, earnings: 'AED 85K', onboardingProgress: 100, docsPending: 0, lastActive: '2 min ago' },
-  { id: 'DRV-107', name: 'Sarah Johnson', vendorName: 'PremiumRide UK', countryCode: 'GB', city: 'London', phone: '+44 7700 900456', email: 'sarah@email.com', vehicleType: 'premium', vehiclePlate: 'AB12 CDE', vehicleModel: 'Mercedes E-Class', status: 'active', rating: 4.7, totalTrips: 2800, earnings: '£32K', onboardingProgress: 100, docsPending: 0, lastActive: 'Now' },
-  { id: 'DRV-108', name: 'Prakash B.', vendorName: null, countryCode: 'IN', city: 'Hyderabad', phone: '+91 98765 43223', email: 'prakash@email.com', vehicleType: 'economy', vehiclePlate: 'TS01-1234', vehicleModel: 'WagonR', status: 'blocked', rating: 2.0, totalTrips: 45, earnings: '₹2K', onboardingProgress: 100, docsPending: 0, lastActive: 'Blocked' },
-];
+const fullName = (d: TaxiDriverRow) => `${d.firstName ?? ''} ${d.lastName ?? ''}`.trim() || d.id;
+const ratingOf = (d: TaxiDriverRow) => {
+  const n = typeof d.rating === 'string' ? Number(d.rating) : d.rating;
+  return Number.isFinite(n) ? n : 0;
+};
 
-// ─── Page ───────────────────────────────────────────────────────────────────
+// ─── Reason prompt ────────────────────────────────────────────────────────────
+
+/**
+ * Suspending and blocking both post `ReasonDto`, whose `reason` is required and
+ * 3–500 characters. There is no default to fall back on — inventing one would
+ * put a sentence no administrator wrote onto a driver's record.
+ */
+function ReasonDialog({
+  title,
+  confirmLabel,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  confirmLabel: string;
+  busy: boolean;
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <DismissOnEscape onDismiss={onCancel} />
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4">
+        <h3 className="font-bold text-slate-900">{title}</h3>
+        <label className="block text-xs font-bold text-slate-500" htmlFor="driver-reason">
+          Reason (3–500 characters, stored on the driver record)
+        </label>
+        <textarea
+          id="driver-reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={500}
+          rows={4}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="Expired insurance certificate, repeated no-shows, …"
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm font-bold border border-slate-200 text-slate-600"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={reason.trim().length < 3 || busy}
+            onClick={() => onConfirm(reason.trim())}
+            className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 text-white disabled:opacity-50"
+          >
+            {busy ? 'Working…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+type DriverAction = { kind: 'approve' | 'suspend' | 'block'; driver: TaxiDriverRow };
 
 export default function TaxiDriversPage() {
-  const { regionLabel, isFiltered, formatPrice } = useTaxiRegionFilter([]);
   const [search, setSearch] = useState('');
+  const [applied, setApplied] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [countryFilter, setCountryFilter] = useState('All');
-  const [vendorFilter, setVendorFilter] = useState('All');
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [driverData, setDriverData] = useState(mockDrivers);
+  const [pending, setPending] = useState<DriverAction | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNote, setActionNote] = useState<string | null>(null);
 
-  // Fetch live driver data from API with fallback to mock
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/taxi/admin/drivers`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.drivers?.length) setDriverData(data.drivers);
-        }
-      } catch { /* Keep mock data */ }
-    })();
-  }, []);
+  const { data, loading, error, refetch } = useAdminData<DriversResult>(
+    () =>
+      loadDrivers({
+        status: statusFilter === 'All' ? undefined : statusFilter,
+        countryCode: countryFilter === 'All' ? undefined : countryFilter,
+        search: applied || undefined,
+      }),
+    [statusFilter, countryFilter, applied],
+  );
 
-  const filtered = driverData.filter(d => {
-    const ms = d.name.toLowerCase().includes(search.toLowerCase()) || d.id.toLowerCase().includes(search.toLowerCase());
-    const mst = statusFilter === 'All' || d.status === statusFilter;
-    const mc = countryFilter === 'All' || d.countryCode === countryFilter;
-    const mv = vendorFilter === 'All' || (vendorFilter === 'independent' ? !d.vendorName : d.vendorName === vendorFilter);
-    return ms && mst && mc && mv;
-  });
+  const result = data ?? null;
+  const board = result?.ok ? result : null;
+  const failure = result?.ok
+    ? null
+    : result
+      ? { kind: result.kind, message: result.message }
+      : error
+        ? { kind: classifyApiFailure(error), message: error }
+        : null;
 
-  const updateStatus = async (id: string, status: Driver['status']) => {
-    // Call API for status change
-    const action = status === 'active' ? 'approve' : status === 'suspended' ? 'suspend' : 'block';
-    try {
-      await fetch(`${API_BASE_URL}/admin/taxi/drivers/${id}/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(5000),
-      });
-    } catch { /* Continue with optimistic update */ }
-    setDriverData(prev => prev.map(d => d.id === id ? { ...d, status } : d));
+  const drivers = board?.rows ?? [];
+
+  const run = async (action: DriverAction, reason?: string) => {
+    setBusy(true);
+    setActionError(null);
+    setActionNote(null);
+    const { kind, driver } = action;
+    const res =
+      kind === 'approve'
+        ? await adminTaxiApi.approveDriver(driver.id)
+        : kind === 'suspend'
+          ? await adminTaxiApi.suspendDriver(driver.id, reason ?? '')
+          : await adminTaxiApi.blockDriver(driver.id, reason ?? '');
+    setBusy(false);
+    setPending(null);
+    if (!res.success) {
+      // The status used to change on screen whether or not the call worked.
+      setActionError(res.error || `The ${kind} call did not answer`);
+      return;
+    }
+    setActionNote(`${fullName(driver)}: ${kind} accepted.`);
+    await refetch();
+  };
+
+  const onAction = (action: DriverAction) => {
+    if (action.kind === 'approve') void run(action);
+    else setPending(action);
   };
 
   const stats = {
-    total: driverData.length,
-    active: driverData.filter(d => d.status === 'active').length,
-    pending: driverData.filter(d => d.status === 'pending' || d.status === 'onboarding').length,
-    independent: driverData.filter(d => !d.vendorName).length,
-    vendorManaged: driverData.filter(d => d.vendorName).length,
+    total: board?.total ?? 0,
+    active: drivers.filter((d) => d.status === 'active').length,
+    pending: drivers.filter((d) => d.status === 'pending' || d.status === 'onboarding').length,
+    independent: drivers.filter((d) => !d.vendorId).length,
+    vendorManaged: drivers.filter((d) => d.vendorId).length,
   };
 
-  const vendors = [...new Set(driverData.filter(d => d.vendorName).map(d => d.vendorName!))];
+  const countries = [...new Set(drivers.map((d) => d.countryCode).filter(Boolean))];
+
+  const header = (
+    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <Users className="w-6 h-6 text-indigo-600" />
+          Driver management
+        </h1>
+        <p className="text-slate-500 text-sm mt-1">
+          Drivers across vendors and independents, as taxi-service records them.
+        </p>
+      </div>
+    </div>
+  );
+
+  if (loading && !board) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6">
+        {header}
+        <AdminLoading rows={6} />
+      </div>
+    );
+  }
+
+  if (failure) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6">
+        {header}
+        {failure.kind === 'forbidden' ? (
+          <AdminForbidden what="the driver list" route={DRIVERS_ROUTE} message={failure.message} />
+        ) : (
+          <AdminNotConnected
+            what="The driver list"
+            route={DRIVERS_ROUTE}
+            error={failure.message}
+            onRetry={() => void refetch()}
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (!board) return null;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Users className="w-6 h-6 text-indigo-600" />
-            Driver Management
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">All drivers across vendors and independents. Review onboarding, documents, and performance.</p>
-        </div>
-        <button className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-colors" id="export-drivers-btn">
-          <Download className="w-3.5 h-3.5" /> Export
-        </button>
-      </div>
+      {header}
 
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <Users className="w-5 h-5 text-indigo-500" />
-          <p className="text-2xl font-black text-slate-900 mt-2">{stats.total}</p>
-          <p className="text-xs text-slate-500 font-medium">Total Drivers</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <CheckCircle className="w-5 h-5 text-emerald-500" />
-          <p className="text-2xl font-black text-slate-900 mt-2">{stats.active}</p>
-          <p className="text-xs text-slate-500 font-medium">Active</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <Clock className="w-5 h-5 text-blue-500" />
-          <p className="text-2xl font-black text-slate-900 mt-2">{stats.pending}</p>
-          <p className="text-xs text-slate-500 font-medium">Pending/Onboarding</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <Shield className="w-5 h-5 text-amber-500" />
-          <p className="text-2xl font-black text-slate-900 mt-2">{stats.independent}</p>
-          <p className="text-xs text-slate-500 font-medium">Independent</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <Building2 className="w-5 h-5 text-purple-500" />
-          <p className="text-2xl font-black text-slate-900 mt-2">{stats.vendorManaged}</p>
-          <p className="text-xs text-slate-500 font-medium">Vendor-Managed</p>
-        </div>
+        {[
+          { icon: Users, color: 'text-indigo-500', value: stats.total, label: 'Matching drivers' },
+          {
+            icon: CheckCircle,
+            color: 'text-emerald-500',
+            value: stats.active,
+            label: 'Active, on this page',
+          },
+          {
+            icon: Clock,
+            color: 'text-blue-500',
+            value: stats.pending,
+            label: 'Pending/onboarding',
+          },
+          { icon: Shield, color: 'text-amber-500', value: stats.independent, label: 'Independent' },
+          {
+            icon: Building2,
+            color: 'text-purple-500',
+            value: stats.vendorManaged,
+            label: 'Vendor-managed',
+          },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"
+          >
+            <card.icon className={`w-5 h-5 ${card.color}`} />
+            <p className="text-2xl font-black text-slate-900 mt-2">{card.value}</p>
+            <p className="text-xs text-slate-500 font-medium">{card.label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Filters */}
+      {actionError && (
+        <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          {actionError}
+        </p>
+      )}
+      {actionNote && (
+        <p className="text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+          {actionNote}
+        </p>
+      )}
+
       <div className="flex flex-col md:flex-row gap-3">
-        <div className="flex-1 relative">
+        <form
+          className="flex-1 relative"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setApplied(search.trim());
+          }}
+        >
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input placeholder="Search drivers by name or ID..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" id="search-drivers" />
-        </div>
-        <select title="Filter by country" value={countryFilter} onChange={e => setCountryFilter(e.target.value)} className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium bg-white" id="filter-country-drivers">
-          <option value="All">🌍 All Countries</option>
-          {Object.entries(FLAGS).map(([code, flag]) => <option key={code} value={code}>{flag} {code}</option>)}
+          <input
+            placeholder="Search name, email or plate, then press Enter…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+            id="search-drivers"
+          />
+        </form>
+        <select
+          title="Filter by country"
+          value={countryFilter}
+          onChange={(e) => setCountryFilter(e.target.value)}
+          className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium bg-white"
+          id="filter-country-drivers"
+        >
+          <option value="All">All markets</option>
+          {countries.map((code) => (
+            <option key={code} value={code}>
+              {code}
+            </option>
+          ))}
         </select>
-        <select title="Filter by vendor" value={vendorFilter} onChange={e => setVendorFilter(e.target.value)} className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium bg-white" id="filter-vendor-drivers">
-          <option value="All">All (Vendor & Independent)</option>
-          <option value="independent">🆓 Independent Only</option>
-          {vendors.map(v => <option key={v} value={v}>🏢 {v}</option>)}
-        </select>
-        <select title="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium bg-white" id="filter-status-drivers">
-          <option value="All">All Status</option>
-          {Object.entries(sCfg).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}
+        <select
+          title="Filter by status"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium bg-white"
+          id="filter-status-drivers"
+        >
+          <option value="All">All statuses</option>
+          {Object.entries(sCfg).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v.l}
+            </option>
+          ))}
         </select>
       </div>
 
-      {/* Table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -190,28 +378,30 @@ export default function TaxiDriversPage() {
                 <th className="px-4 py-3.5 font-semibold text-center">Rating</th>
                 <th className="px-4 py-3.5 font-semibold text-right">Trips</th>
                 <th className="px-4 py-3.5 font-semibold text-center">Onboarding</th>
-                <th className="px-4 py-3.5 font-semibold text-center">Docs</th>
                 <th className="px-4 py-3.5 font-semibold text-center">Status</th>
                 <th className="px-4 py-3.5 font-semibold text-center"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map(d => (
+              {drivers.map((d) => (
                 <React.Fragment key={d.id}>
-                  <tr className={`hover:bg-slate-50/50 cursor-pointer ${d.status === 'blocked' ? 'opacity-50' : ''}`} onClick={() => setExpanded(expanded === d.id ? null : d.id)} tabIndex={0} onKeyDown={activateOnKey(() => setExpanded(expanded === d.id ? null : d.id))}>
+                  <tr
+                    className={`hover:bg-slate-50/50 cursor-pointer ${d.status === 'blocked' ? 'opacity-50' : ''}`}
+                    onClick={() => setExpanded(expanded === d.id ? null : d.id)}
+                    tabIndex={0}
+                    onKeyDown={activateOnKey(() => setExpanded(expanded === d.id ? null : d.id))}
+                  >
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{FLAGS[d.countryCode]}</span>
-                        <div>
-                          <p className="font-bold text-slate-900">{d.name}</p>
-                          <p className="text-[10px] text-slate-400">{d.id} • {d.city}</p>
-                        </div>
-                      </div>
+                      <p className="font-bold text-slate-900">{fullName(d)}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {d.id} • {d.countryCode}
+                      </p>
                     </td>
                     <td className="px-4 py-3">
-                      {d.vendorName ? (
+                      {d.vendor?.name ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-[10px] font-bold">
-                          <Building2 className="w-3 h-3" />{d.vendorName}
+                          <Building2 className="w-3 h-3" />
+                          {d.vendor.name}
                         </span>
                       ) : (
                         <span className="text-xs text-slate-400 font-medium">Independent</span>
@@ -219,59 +409,114 @@ export default function TaxiDriversPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm">{VEHICLE_ICONS[d.vehicleType] || '🚗'}</span>
-                      <span className="text-xs text-slate-600 font-medium ml-1">{d.vehicleModel}</span>
-                      <p className="text-[10px] text-slate-400 font-mono">{d.vehiclePlate}</p>
+                      <span className="text-xs text-slate-600 font-medium ml-1">
+                        {d.vehicleModel ?? d.vehicleType}
+                      </span>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {d.vehiclePlate ?? 'no plate recorded'}
+                      </p>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {d.rating > 0 ? <span className="inline-flex items-center gap-0.5"><Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /><span className="font-bold">{d.rating}</span></span> : <span className="text-slate-400 text-xs">—</span>}
+                      {ratingOf(d) > 0 ? (
+                        <span className="inline-flex items-center gap-0.5">
+                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                          <span className="font-bold">{ratingOf(d).toFixed(1)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-right font-bold">{d.totalTrips.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-bold">
+                      {(d.totalTrips ?? 0).toLocaleString()}
+                    </td>
                     <td className="px-4 py-3 text-center">
                       <div className="w-full bg-slate-100 rounded-full h-1.5 max-w-[50px] mx-auto">
-                        <div className={`h-1.5 rounded-full ${d.onboardingProgress === 100 ? 'bg-emerald-500' : d.onboardingProgress >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} {...{ style: { width: `${d.onboardingProgress}%` } }} />
+                        <div
+                          className={`h-1.5 rounded-full ${d.onboardingProgress === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                          {...{ style: { width: `${d.onboardingProgress ?? 0}%` } }}
+                        />
                       </div>
-                      <span className="text-[10px] text-slate-400 font-bold">{d.onboardingProgress}%</span>
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        {d.onboardingProgress ?? 0}%
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {d.docsPending > 0 ? (
-                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">
-                          <FileText className="w-3 h-3" />{d.docsPending}
-                        </span>
-                      ) : <CheckCircle className="w-4 h-4 text-emerald-500 inline" />}
+                      <span
+                        className={`${sCfg[d.status]?.bg ?? 'bg-slate-100 text-slate-600'} px-2.5 py-1 rounded-full text-[10px] font-bold`}
+                      >
+                        {sCfg[d.status]?.l ?? d.status}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`${sCfg[d.status].bg} px-2.5 py-1 rounded-full text-[10px] font-bold`}>{sCfg[d.status].l}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {expanded === d.id ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                      {expanded === d.id ? (
+                        <ChevronUp className="w-4 h-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      )}
                     </td>
                   </tr>
                   {expanded === d.id && (
                     <tr className="bg-slate-50/80">
-                      <td colSpan={9} className="px-5 py-4">
+                      <td colSpan={8} className="px-5 py-4">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
                           <div>
                             <p className="text-slate-400 text-xs font-medium mb-0.5">Contact</p>
-                            <p className="text-xs font-bold text-slate-700 flex items-center gap-1"><Phone className="w-3 h-3" />{d.phone}</p>
+                            <p className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {d.phone}
+                            </p>
                             <p className="text-xs text-slate-500">{d.email}</p>
                           </div>
                           <div>
-                            <p className="text-slate-400 text-xs font-medium mb-0.5">Earnings</p>
-                            <p className="font-bold text-slate-900">{d.earnings}</p>
+                            <p className="text-slate-400 text-xs font-medium mb-0.5">Vehicle</p>
+                            <p className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                              <Car className="w-3 h-3" />
+                              {d.vehicleType}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-slate-400 text-xs font-medium mb-0.5">Last Active</p>
-                            <p className="font-bold text-slate-700">{d.lastActive}</p>
+                            <p className="text-slate-400 text-xs font-medium mb-0.5">Registered</p>
+                            <p className="font-bold text-slate-700 text-xs">
+                              {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}
+                            </p>
                           </div>
+                          {d.suspensionReason && (
+                            <div>
+                              <p className="text-slate-400 text-xs font-medium mb-0.5">
+                                Last enforcement reason
+                              </p>
+                              <p className="text-xs text-slate-700">{d.suspensionReason}</p>
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
-                          {d.status === 'pending' && <button onClick={() => updateStatus(d.id, 'active')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Approve</button>}
-                          {d.status === 'active' && <button onClick={() => updateStatus(d.id, 'suspended')} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Suspend</button>}
-                          {d.status === 'suspended' && <button onClick={() => updateStatus(d.id, 'active')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Reactivate</button>}
-                          {d.status !== 'blocked' && <button onClick={() => updateStatus(d.id, 'blocked')} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><Ban className="w-3.5 h-3.5" /> Block</button>}
-                          {d.status === 'blocked' && <button onClick={() => updateStatus(d.id, 'active')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Unblock</button>}
-                          <button className="bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Documents</button>
-                          <button className="bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Trip History</button>
+                          {(d.status === 'pending' || d.status === 'onboarding') && (
+                            <button
+                              onClick={() => onAction({ kind: 'approve', driver: d })}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Approve
+                            </button>
+                          )}
+                          {d.status === 'active' && (
+                            <button
+                              onClick={() => onAction({ kind: 'suspend', driver: d })}
+                              className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"
+                            >
+                              <Clock className="w-3.5 h-3.5" /> Suspend
+                            </button>
+                          )}
+                          {d.status !== 'blocked' && (
+                            <button
+                              onClick={() => onAction({ kind: 'block', driver: d })}
+                              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"
+                            >
+                              <Ban className="w-3.5 h-3.5" /> Block
+                            </button>
+                          )}
+                          <span className="text-[11px] text-slate-400 self-center">
+                            Reinstating a blocked driver is not a route the gateway exposes yet.
+                          </span>
                         </div>
                       </td>
                     </tr>
@@ -281,13 +526,23 @@ export default function TaxiDriversPage() {
             </tbody>
           </table>
         </div>
-        {filtered.length === 0 && (
+        {drivers.length === 0 && (
           <div className="py-12 text-center text-slate-400">
-            <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm font-medium">No drivers match your filters</p>
+            <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm font-medium">No driver matches these filters.</p>
           </div>
         )}
       </div>
+
+      {pending && (
+        <ReasonDialog
+          title={`${pending.kind === 'block' ? 'Block' : 'Suspend'} ${fullName(pending.driver)}`}
+          confirmLabel={pending.kind === 'block' ? 'Block driver' : 'Suspend driver'}
+          busy={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={(reason) => void run(pending, reason)}
+        />
+      )}
     </div>
   );
 }
