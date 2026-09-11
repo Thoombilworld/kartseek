@@ -10,7 +10,7 @@ import {
   UseGuards,
   UseFilters,
   BadRequestException,
-  ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
@@ -20,7 +20,12 @@ import { VendorManagementService } from './services/vendor-management.service';
 import { DriverOnboardingService } from './services/driver-onboarding.service';
 import { TaxiConfigService } from './services/taxi-config.service';
 import { TaxiPayoutService } from './services/taxi-payout.service';
-import { type EmptyMessage, RpcAwareExceptionsFilter, assertInMarket } from '@app/common';
+import {
+  type EmptyMessage,
+  RpcAwareExceptionsFilter,
+  assertInMarket,
+  refuseUnattributable,
+} from '@app/common';
 import {
   EstimateFareDto,
   RequestRideDto,
@@ -65,6 +70,8 @@ import {
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('taxi')
 export class TaxiController {
+  private readonly logger = new Logger(TaxiController.name);
+
   constructor(
     private readonly svc: TaxiService,
     private readonly vendors: VendorManagementService,
@@ -779,9 +786,12 @@ export class TaxiController {
     // admin cannot be shown a filtered view — there is nothing to filter on.
     // Fail closed rather than silently serving every market's surge data to
     // a regional admin.
-    if (d?.scope) {
-      throw new ForbiddenException('Surge zones cannot be attributed to a market yet.');
-    }
+    refuseUnattributable(
+      d?.scope,
+      'surge zone',
+      this.logger,
+      'Surge zones cannot be attributed to a market yet.',
+    );
     return this.svc.getSurgeMultiplier(d?.lat, d?.lng);
   }
 }
