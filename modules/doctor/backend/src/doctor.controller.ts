@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Param,
-  Body,
-  Query,
-  UseFilters,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query, UseFilters, Logger } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DoctorService } from './doctor.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
@@ -17,6 +7,7 @@ import {
   type EmptyMessage,
   type PaginatedMessage,
   RpcAwareExceptionsFilter,
+  refuseUnattributable,
   requireId,
 } from '@app/common';
 import {
@@ -34,6 +25,8 @@ import {
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('doctors')
 export class DoctorController {
+  private readonly logger = new Logger(DoctorController.name);
+
   constructor(
     private readonly svc: DoctorService,
     private readonly franchiseView: FranchiseViewService,
@@ -555,7 +548,12 @@ export class DoctorController {
    */
   @MessagePattern({ cmd: 'admin.doctor.doctors' })
   tcpAdminGetDoctors(@Payload() d: PaginatedMessage & { specialty?: string; scope?: string }) {
-    if (d?.scope) throw new ForbiddenException('Doctors cannot be attributed to a market yet.');
+    refuseUnattributable(
+      d?.scope,
+      'doctor',
+      this.logger,
+      'Doctors cannot be attributed to a market yet.',
+    );
     return this.svc.getDoctors(d?.specialty, d?.page ?? 1, d?.limit ?? 20);
   }
 
