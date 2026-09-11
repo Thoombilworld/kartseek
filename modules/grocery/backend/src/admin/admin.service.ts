@@ -1,8 +1,15 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, ILike } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
+import { assertInMarket } from '@app/common';
 
 import { GroceryStore } from '../entities/grocery-store.entity';
 import { GroceryItem } from '../entities/grocery-item.entity';
@@ -34,8 +41,10 @@ export class GroceryAdminService {
     @InjectRepository(GroceryStore) private readonly storeRepo: Repository<GroceryStore>,
     @InjectRepository(GroceryItem) private readonly itemRepo: Repository<GroceryItem>,
     @InjectRepository(GroceryOrder) private readonly orderRepo: Repository<GroceryOrder>,
-    @InjectRepository(GroceryFlashDeal) private readonly flashDealRepo: Repository<GroceryFlashDeal>,
-    @InjectRepository(GroceryDeliveryZone) private readonly zoneRepo: Repository<GroceryDeliveryZone>,
+    @InjectRepository(GroceryFlashDeal)
+    private readonly flashDealRepo: Repository<GroceryFlashDeal>,
+    @InjectRepository(GroceryDeliveryZone)
+    private readonly zoneRepo: Repository<GroceryDeliveryZone>,
     @InjectRepository(GrocerySetting) private readonly settingRepo: Repository<GrocerySetting>,
     private readonly kafka: KafkaProducerService,
     private readonly redis: RedisService,
@@ -43,47 +52,96 @@ export class GroceryAdminService {
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
 
-  /** Headline counters for the admin landing page. */
-  async getDashboard() {
-    const [totalStores, approvedStores, pendingStores, suspendedStores, totalProducts, pendingProducts] =
-      await Promise.all([
-        this.storeRepo.count(),
-        this.storeRepo.count({ where: { status: 'APPROVED' } }),
-        this.storeRepo.count({ where: { status: 'PENDING_KYC' } }),
-        this.storeRepo.count({ where: { status: 'SUSPENDED' } }),
+  /**
+   * Headline counters for the admin landing page.
+   *
+   * `scope` is set for a market-locked admin: every count and sum below is
+   * attributed to that market's own stores (directly for stores, through the
+   * `store` relation for orders/flash deals, through the item's own store for
+   * products) rather than the platform total.
+   */
+  async getDashboard(scope?: string) {
+    const storeWhere = (extra: Record<string, unknown> = {}) =>
+      scope ? { ...extra, regionCode: scope } : extra;
+
+    const [totalStores, approvedStores, pendingStores, suspendedStores] = await Promise.all([
+      this.storeRepo.count({ where: storeWhere() }),
+      this.storeRepo.count({ where: storeWhere({ status: 'APPROVED' }) }),
+      this.storeRepo.count({ where: storeWhere({ status: 'PENDING_KYC' }) }),
+      this.storeRepo.count({ where: storeWhere({ status: 'SUSPENDED' }) }),
+    ]);
+
+    // Listings waiting on a moderation decision. Absent from this block until
+    // now, so the admin landing page reported "nothing to moderate" while a
+    // seller's new product sat in the queue at
+    // GET /grocery/admin/products/pending — the queue was only visible to an
+    // admin who already knew to open that screen.
+    let totalProducts: number;
+    let pendingProducts: number;
+    if (scope) {
+      const productsQb = () =>
+        this.itemRepo
+          .createQueryBuilder('item')
+          .innerJoin('item.store', 'store')
+          .andWhere('store.regionCode = :scope', { scope });
+      totalProducts = await productsQb().getCount();
+      pendingProducts = await productsQb()
+        .andWhere('item.approvalStatus = :pending', { pending: 'PENDING' })
+        .getCount();
+    } else {
+      [totalProducts, pendingProducts] = await Promise.all([
         this.itemRepo.count(),
-        // Listings waiting on a moderation decision. Absent from this block until
-        // now, so the admin landing page reported "nothing to moderate" while a
-        // seller's new product sat in the queue at
-        // GET /grocery/admin/products/pending — the queue was only visible to an
-        // admin who already knew to open that screen.
         this.itemRepo.count({ where: { approvalStatus: 'PENDING' } }),
       ]);
+    }
 
     const since = new Date(Date.now() - 30 * 86_400_000);
-    const revenueRow = await this.orderRepo
+    const revenueQb = this.orderRepo
       .createQueryBuilder('o')
+      .where('o.createdAt >= :since', { since });
+    if (scope)
+      revenueQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+    const revenueRow = await revenueQb
       .select('COALESCE(SUM(o.grandTotal), 0)', 'revenue')
       .addSelect('COUNT(o.id)', 'orders')
-      .where('o.createdAt >= :since', { since })
       .getRawOne<{ revenue: string; orders: string }>();
 
-    const [totalOrders, pendingFlashDeals] = await Promise.all([
-      this.orderRepo.count(),
-      this.flashDealRepo.count({ where: { status: FlashDealStatus.PENDING } }),
-    ]);
+    const totalOrders = scope
+      ? await this.orderRepo
+          .createQueryBuilder('o')
+          .innerJoin('o.store', 'store')
+          .andWhere('store.regionCode = :scope', { scope })
+          .getCount()
+      : await this.orderRepo.count();
+
+    const pendingFlashDeals = scope
+      ? await this.flashDealRepo
+          .createQueryBuilder('d')
+          .innerJoin('d.store', 'store')
+          .where('d.status = :status', { status: FlashDealStatus.PENDING })
+          .andWhere('store.regionCode = :scope', { scope })
+          .getCount()
+      : await this.flashDealRepo.count({ where: { status: FlashDealStatus.PENDING } });
 
     // One grouped query rather than one per status — the status breakdown is what
     // the dashboard's queue tiles read.
-    const byStatus = await this.orderRepo
+    const byStatusQb = this.orderRepo
       .createQueryBuilder('o')
       .select('o.status', 'status')
-      .addSelect('COUNT(o.id)', 'count')
+      .addSelect('COUNT(o.id)', 'count');
+    if (scope)
+      byStatusQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+    const byStatus = await byStatusQb
       .groupBy('o.status')
       .getRawMany<{ status: string; count: string }>();
 
     return {
-      stores: { total: totalStores, approved: approvedStores, pending: pendingStores, suspended: suspendedStores },
+      stores: {
+        total: totalStores,
+        approved: approvedStores,
+        pending: pendingStores,
+        suspended: suspendedStores,
+      },
       products: { total: totalProducts, pending: pendingProducts },
       orders: {
         total: totalOrders,
@@ -98,16 +156,29 @@ export class GroceryAdminService {
 
   // ── Stores ─────────────────────────────────────────────────────────────────
 
-  async listStores(opts: { page?: number; limit?: number; status?: string; search?: string } = {}) {
+  async listStores(
+    opts: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      search?: string;
+      regionCode?: string;
+    } = {},
+  ) {
     const page = Math.max(1, Number(opts.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(opts.limit) || 20));
 
     const qb = this.storeRepo.createQueryBuilder('s');
+    if (opts.regionCode) {
+      qb.andWhere('s.regionCode = :regionCode', { regionCode: opts.regionCode.toUpperCase() });
+    }
     if (opts.status && opts.status !== 'All') {
       qb.andWhere('s.status = :status', { status: opts.status });
     }
     if (opts.search) {
-      qb.andWhere('(s.name ILIKE :q OR s.address ILIKE :q OR s.phone ILIKE :q)', { q: `%${opts.search}%` });
+      qb.andWhere('(s.name ILIKE :q OR s.address ILIKE :q OR s.phone ILIKE :q)', {
+        q: `%${opts.search}%`,
+      });
     }
 
     const [data, total] = await qb
@@ -120,9 +191,10 @@ export class GroceryAdminService {
   }
 
   /** Store detail plus the counters the admin drawer shows. */
-  async getStoreDetail(id: string) {
+  async getStoreDetail(id: string, scope?: string) {
     const store = await this.storeRepo.findOne({ where: { id } });
     if (!store) throw new NotFoundException(`Store ${id} not found`);
+    assertInMarket(store.regionCode, scope, 'store', this.logger);
 
     const [productCount, orderCount, revenueRow] = await Promise.all([
       this.itemRepo.count({ where: { storeId: id } }),
@@ -149,14 +221,23 @@ export class GroceryAdminService {
    * resulting error and reported success — so no store was ever actually approved,
    * suspended or blocked.
    */
-  async setStoreStatus(id: string, status: 'PENDING_KYC' | 'APPROVED' | 'SUSPENDED', reason?: string, actorId?: string) {
+  async setStoreStatus(
+    id: string,
+    status: 'PENDING_KYC' | 'APPROVED' | 'SUSPENDED',
+    reason?: string,
+    actorId?: string,
+    scope?: string,
+  ) {
     const allowed = ['PENDING_KYC', 'APPROVED', 'SUSPENDED'];
     if (!allowed.includes(status)) {
-      throw new BadRequestException(`Invalid status "${status}". Expected one of ${allowed.join(', ')}.`);
+      throw new BadRequestException(
+        `Invalid status "${status}". Expected one of ${allowed.join(', ')}.`,
+      );
     }
 
     const store = await this.storeRepo.findOne({ where: { id } });
     if (!store) throw new NotFoundException(`Store ${id} not found`);
+    assertInMarket(store.regionCode, scope, 'store', this.logger);
 
     const previous = store.status;
     store.status = status;
@@ -167,16 +248,27 @@ export class GroceryAdminService {
     await this.redis.del(`grocery:store:${id}`);
 
     await this.kafka.publish('grocery.store.status_changed', {
-      storeId: id, storeName: store.name, ownerId: store.ownerId,
-      previousStatus: previous, newStatus: status, reason: reason ?? null, actorId: actorId ?? null,
+      storeId: id,
+      storeName: store.name,
+      ownerId: store.ownerId,
+      previousStatus: previous,
+      newStatus: status,
+      reason: reason ?? null,
+      actorId: actorId ?? null,
     });
     if (store.ownerId) {
       await this.kafka.publish('notification.push', {
         userId: store.ownerId,
-        title: status === 'APPROVED' ? 'Store approved ✅' : status === 'SUSPENDED' ? 'Store suspended' : 'Store under review',
-        body: status === 'APPROVED'
-          ? `${store.name} is live and can start taking orders.`
-          : `${store.name}: ${reason ?? 'contact support for details'}`,
+        title:
+          status === 'APPROVED'
+            ? 'Store approved ✅'
+            : status === 'SUSPENDED'
+              ? 'Store suspended'
+              : 'Store under review',
+        body:
+          status === 'APPROVED'
+            ? `${store.name} is live and can start taking orders.`
+            : `${store.name}: ${reason ?? 'contact support for details'}`,
         data: { type: 'grocery_store_status', storeId: id, status },
       });
     }
@@ -187,12 +279,25 @@ export class GroceryAdminService {
 
   // ── Orders ─────────────────────────────────────────────────────────────────
 
-  async listOrders(opts: { page?: number; limit?: number; status?: string; storeId?: string; search?: string } = {}) {
+  async listOrders(
+    opts: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      storeId?: string;
+      search?: string;
+      regionCode?: string;
+    } = {},
+  ) {
     const page = Math.max(1, Number(opts.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(opts.limit) || 20));
 
     const qb = this.orderRepo.createQueryBuilder('o').leftJoinAndSelect('o.store', 'store');
-    if (opts.status && opts.status !== 'All') qb.andWhere('o.status = :status', { status: opts.status });
+    if (opts.regionCode) {
+      qb.andWhere('store.regionCode = :regionCode', { regionCode: opts.regionCode.toUpperCase() });
+    }
+    if (opts.status && opts.status !== 'All')
+      qb.andWhere('o.status = :status', { status: opts.status });
     if (opts.storeId) qb.andWhere('o.storeId = :storeId', { storeId: opts.storeId });
     if (opts.search) {
       qb.andWhere('(o.orderNumber ILIKE :q OR o.customerId ILIKE :q)', { q: `%${opts.search}%` });
@@ -215,16 +320,25 @@ export class GroceryAdminService {
     return { data, total };
   }
 
-  async createDeliveryZone(body: Partial<GroceryDeliveryZone>) {
+  async createDeliveryZone(body: Partial<GroceryDeliveryZone>, scope?: string) {
     if (!body?.name?.trim()) throw new BadRequestException('Zone name is required');
+    // A locked admin cannot create a zone outside their own market, whatever the
+    // request body says — the scope always wins.
+    if (scope) body.regionCode = scope;
     const zone = this.zoneRepo.create({
       ...body,
       // `simple-array` stores a comma-joined string; accept the array the console
       // sends as well as a pasted comma-separated list.
       pincodes: Array.isArray(body.pincodes)
-        ? body.pincodes.map(String).map((p) => p.trim()).filter(Boolean)
+        ? body.pincodes
+            .map(String)
+            .map((p) => p.trim())
+            .filter(Boolean)
         : typeof body.pincodes === 'string'
-          ? String(body.pincodes).split(',').map((p) => p.trim()).filter(Boolean)
+          ? String(body.pincodes)
+              .split(',')
+              .map((p) => p.trim())
+              .filter(Boolean)
           : [],
       isActive: body.isActive ?? true,
     });
@@ -233,14 +347,20 @@ export class GroceryAdminService {
     return { success: true, zone: saved };
   }
 
-  async updateDeliveryZone(id: string, body: Partial<GroceryDeliveryZone>) {
+  async updateDeliveryZone(id: string, body: Partial<GroceryDeliveryZone>, scope?: string) {
     const zone = await this.zoneRepo.findOne({ where: { id } });
     if (!zone) throw new NotFoundException(`Delivery zone ${id} not found`);
+    assertInMarket(zone.regionCode, scope, 'delivery zone', this.logger);
+    // Same rule as create: a locked admin cannot move a zone into another market.
+    if (scope) body.regionCode = scope;
     Object.assign(zone, body, { id: zone.id });
     return { success: true, zone: await this.zoneRepo.save(zone) };
   }
 
-  async deleteDeliveryZone(id: string) {
+  async deleteDeliveryZone(id: string, scope?: string) {
+    const zone = await this.zoneRepo.findOne({ where: { id } });
+    if (!zone) throw new NotFoundException(`Delivery zone ${id} not found`);
+    assertInMarket(zone.regionCode, scope, 'delivery zone', this.logger);
     const result = await this.zoneRepo.delete({ id });
     if (!result.affected) throw new NotFoundException(`Delivery zone ${id} not found`);
     return { success: true, deletedId: id };
@@ -256,68 +376,122 @@ export class GroceryAdminService {
    * the queue of deals awaiting approval was permanently empty and no deal could
    * ever be approved.
    */
-  async listFlashDeals(opts: { status?: string; storeId?: string; page?: number; limit?: number } = {}) {
+  async listFlashDeals(
+    opts: {
+      status?: string;
+      storeId?: string;
+      page?: number;
+      limit?: number;
+      regionCode?: string;
+    } = {},
+  ) {
     const page = Math.max(1, Number(opts.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(opts.limit) || 20));
 
     const where: Record<string, unknown> = {};
     if (opts.storeId) where.storeId = opts.storeId;
+    let status: FlashDealStatus | undefined;
     if (opts.status && opts.status !== 'All') {
-      const status = String(opts.status).toLowerCase() as FlashDealStatus;
+      status = String(opts.status).toLowerCase() as FlashDealStatus;
       if (!Object.values(FlashDealStatus).includes(status)) {
         throw new BadRequestException(`Unknown flash deal status "${opts.status}"`);
       }
       where.status = status;
     }
 
-    const [data, total] = await this.flashDealRepo.findAndCount({
-      where, order: { createdAt: 'DESC' }, skip: (page - 1) * limit, take: limit,
-    });
+    // No market filter: the plain repository query the moderation queue has
+    // always used. A market-locked admin's request always carries a
+    // `regionCode` (see `AdminGroceryController.scopeOf`), which needs a join
+    // to the deal's store — `grocery_flash_deals` does not itself carry a
+    // market column.
+    if (!opts.regionCode) {
+      const [data, total] = await this.flashDealRepo.findAndCount({
+        where,
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+      return { data, total, page, limit };
+    }
+
+    const qb = this.flashDealRepo
+      .createQueryBuilder('d')
+      .leftJoin('d.store', 'store')
+      .andWhere('store.regionCode = :regionCode', { regionCode: opts.regionCode.toUpperCase() });
+    if (opts.storeId) qb.andWhere('d.storeId = :storeId', { storeId: opts.storeId });
+    if (status) qb.andWhere('d.status = :status', { status });
+
+    const [data, total] = await qb
+      .orderBy('d.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
     return { data, total, page, limit };
   }
 
   // ── Reports ────────────────────────────────────────────────────────────────
 
-  async getReports(period = '30d') {
+  async getReports(period = '30d', scope?: string) {
     const days = period === '7d' ? 7 : period === '90d' ? 90 : period === '365d' ? 365 : 30;
     const since = new Date(Date.now() - days * 86_400_000);
 
+    // A locked admin's report is attributed to their own market only — every
+    // order aggregate joins to the order's store, every product aggregate to
+    // the item's store, and both filter on `store.regionCode`.
+    const dailyQb = this.orderRepo
+      .createQueryBuilder('o')
+      .where('o.createdAt >= :since', { since });
+    if (scope)
+      dailyQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+
+    const topStoresQb = this.orderRepo.createQueryBuilder('o').leftJoin('o.store', 'store');
+    topStoresQb.where('o.createdAt >= :since', { since });
+    if (scope) topStoresQb.andWhere('store.regionCode = :scope', { scope });
+
+    const byCategoryQb = this.itemRepo.createQueryBuilder('item');
+    if (scope)
+      byCategoryQb
+        .innerJoin('item.store', 'store')
+        .andWhere('store.regionCode = :scope', { scope });
+
+    const totalsQb = this.orderRepo
+      .createQueryBuilder('o')
+      .where('o.createdAt >= :since', { since });
+    if (scope)
+      totalsQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+
     const [daily, topStores, byCategory, totals] = await Promise.all([
-      this.orderRepo.createQueryBuilder('o')
+      dailyQb
         .select('DATE(o.createdAt)', 'date')
         .addSelect('COUNT(o.id)', 'orders')
         .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'revenue')
-        .where('o.createdAt >= :since', { since })
         .groupBy('DATE(o.createdAt)')
         .orderBy('DATE(o.createdAt)', 'ASC')
         .getRawMany<{ date: string; orders: string; revenue: string }>(),
 
-      this.orderRepo.createQueryBuilder('o')
-        .leftJoin('o.store', 'store')
+      topStoresQb
         .select('o.storeId', 'storeId')
         .addSelect('MAX(store.name)', 'storeName')
         .addSelect('COUNT(o.id)', 'orders')
         .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'revenue')
-        .where('o.createdAt >= :since', { since })
         .groupBy('o.storeId')
         .orderBy('COALESCE(SUM(o.grandTotal), 0)', 'DESC')
         .limit(10)
         .getRawMany<{ storeId: string; storeName: string; orders: string; revenue: string }>(),
 
-      this.itemRepo.createQueryBuilder('item')
+      byCategoryQb
         .select('item.category', 'category')
         .addSelect('COUNT(item.id)', 'products')
         .groupBy('item.category')
         .orderBy('COUNT(item.id)', 'DESC')
         .getRawMany<{ category: string; products: string }>(),
 
-      this.orderRepo.createQueryBuilder('o')
+      totalsQb
         .select('COUNT(o.id)', 'orders')
         .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'revenue')
         .addSelect('COALESCE(AVG(o.grandTotal), 0)', 'aov')
         .addSelect(`COUNT(CASE WHEN o.status = 'CANCELLED' THEN 1 END)`, 'cancelled')
         .addSelect(`COUNT(CASE WHEN o.status = 'DELIVERED' THEN 1 END)`, 'delivered')
-        .where('o.createdAt >= :since', { since })
         .getRawOne<Record<string, string>>(),
     ]);
 
@@ -331,13 +505,25 @@ export class GroceryAdminService {
         averageOrderValue: Math.round(Number(totals?.aov ?? 0) * 100) / 100,
         delivered: Number(totals?.delivered ?? 0),
         cancelled: Number(totals?.cancelled ?? 0),
-        cancellationRate: orders ? Math.round((Number(totals?.cancelled ?? 0) / orders) * 1000) / 10 : 0,
+        cancellationRate: orders
+          ? Math.round((Number(totals?.cancelled ?? 0) / orders) * 1000) / 10
+          : 0,
       },
-      daily: daily.map((d) => ({ date: d.date, orders: Number(d.orders), revenue: Number(d.revenue) })),
-      topStores: topStores.map((s) => ({
-        storeId: s.storeId, storeName: s.storeName, orders: Number(s.orders), revenue: Number(s.revenue),
+      daily: daily.map((d) => ({
+        date: d.date,
+        orders: Number(d.orders),
+        revenue: Number(d.revenue),
       })),
-      productsByCategory: byCategory.map((c) => ({ category: c.category, products: Number(c.products) })),
+      topStores: topStores.map((s) => ({
+        storeId: s.storeId,
+        storeName: s.storeName,
+        orders: Number(s.orders),
+        revenue: Number(s.revenue),
+      })),
+      productsByCategory: byCategory.map((c) => ({
+        category: c.category,
+        products: Number(c.products),
+      })),
     };
   }
 
@@ -352,7 +538,8 @@ export class GroceryAdminService {
       defaults: GROCERY_SETTING_DEFAULTS,
       overridden: rows.map((r) => r.key),
       updatedAt: rows.reduce<string | null>(
-        (latest, r) => (!latest || r.updatedAt > new Date(latest) ? r.updatedAt.toISOString() : latest),
+        (latest, r) =>
+          !latest || r.updatedAt > new Date(latest) ? r.updatedAt.toISOString() : latest,
         null,
       ),
     };
@@ -363,7 +550,16 @@ export class GroceryAdminService {
    * rather than stored, so a typo cannot look saved and then be silently ignored
    * by every reader.
    */
-  async updateSettings(body: Record<string, unknown>, actorId?: string) {
+  async updateSettings(body: Record<string, unknown>, actorId?: string, scope?: string) {
+    // Grocery settings apply to the whole platform — a market-locked admin has
+    // no market of their own to write them into, so the write is refused
+    // outright rather than silently applied to every market.
+    if (scope) {
+      this.logger.warn(
+        `[region-scope-denied] grocery settings write refused for a ${scope}-scoped admin`,
+      );
+      throw new ForbiddenException('Grocery settings are managed globally.');
+    }
     const entries = Object.entries(body ?? {}).filter(([k]) => k !== 'actorId');
     if (!entries.length) throw new BadRequestException('No settings supplied');
 
@@ -377,13 +573,17 @@ export class GroceryAdminService {
     for (const [key, value] of entries) {
       const expected = typeof GROCERY_SETTING_DEFAULTS[key];
       if (typeof value !== expected) {
-        throw new BadRequestException(`Setting "${key}" must be a ${expected}, received ${typeof value}`);
+        throw new BadRequestException(
+          `Setting "${key}" must be a ${expected}, received ${typeof value}`,
+        );
       }
       await this.settingRepo.save(this.settingRepo.create({ key, value, updatedBy: actorId }));
     }
 
     await this.kafka.publish('grocery.settings.updated', {
-      keys: entries.map(([k]) => k), actorId: actorId ?? null, updatedAt: new Date().toISOString(),
+      keys: entries.map(([k]) => k),
+      actorId: actorId ?? null,
+      updatedAt: new Date().toISOString(),
     });
     this.logger.log(`Grocery settings updated: ${entries.map(([k]) => k).join(', ')}`);
     return this.getSettings();

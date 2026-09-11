@@ -1,4 +1,10 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository, ILike, In, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
@@ -9,10 +15,18 @@ import { GroceryCategory } from './entities/grocery-category.entity';
 import { GroceryStore } from './entities/grocery-store.entity';
 import { GroceryBrand } from './entities/grocery-brand.entity';
 import { GroceryProductVariant } from './entities/grocery-product-variant.entity';
-import { GroceryStockMovement, type StockMovementType } from './entities/grocery-stock-movement.entity';
+import {
+  GroceryStockMovement,
+  type StockMovementType,
+} from './entities/grocery-stock-movement.entity';
 import { GroceryWarehouse, type WarehouseType } from './entities/grocery-warehouse.entity';
 import { GroceryVariantStock } from './entities/grocery-variant-stock.entity';
-import { GROCERY_TAXONOMY, LEGACY_CATEGORY_MAP, ALL_MARKETS, taxonomyId } from './catalog/catalog-tree';
+import {
+  GROCERY_TAXONOMY,
+  LEGACY_CATEGORY_MAP,
+  ALL_MARKETS,
+  taxonomyId,
+} from './catalog/catalog-tree';
 import { GroceryItem } from './entities/grocery-item.entity';
 import {
   GroceryOrder,
@@ -25,44 +39,235 @@ import { GroceryReview } from './entities/grocery-review.entity';
 import { GroceryWishlist } from './entities/grocery-wishlist.entity';
 import { CreateGroceryOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
-import { CreateFlashDealDto, RejectFlashDealDto, CreateReviewDto, AddToWishlistDto, ReorderDto, ProductTranslationDto } from './dto/flash-deal.dto';
-import { requireId, requireUuid } from '@app/common';
+import {
+  CreateFlashDealDto,
+  RejectFlashDealDto,
+  CreateReviewDto,
+  AddToWishlistDto,
+  ReorderDto,
+  ProductTranslationDto,
+} from './dto/flash-deal.dto';
+import { requireId, requireUuid, assertInMarket } from '@app/common';
 
 // ── Canonical categories — used ONLY for initial DB seeding ─────────────────
 // After seeding, all reads go through the grocery_categories table.
 const CANONICAL_CATEGORIES = [
-  { id: 'fruits-vegetables', name: 'Fruits & Vegetables', emoji: '🥬', gradient: 'from-green-600 to-emerald-500', description: 'Farm-fresh produce delivered daily', productCount: 240, subcategoryCount: 2 },
-  { id: 'fresh-meat', name: 'Fresh Meat', emoji: '🥩', gradient: 'from-red-600 to-rose-500', description: 'Premium quality, hygienically processed', productCount: 120, subcategoryCount: 3 },
-  { id: 'fresh-fish', name: 'Fresh Fish', emoji: '🐟', gradient: 'from-blue-600 to-cyan-500', description: 'Coastal catch, delivered on ice', productCount: 85, subcategoryCount: 1 },
-  { id: 'dairy-bread-eggs', name: 'Dairy, Bread & Eggs', emoji: '🥛', gradient: 'from-yellow-500 to-amber-400', description: 'Farm-fresh dairy and bakery', productCount: 180, subcategoryCount: 6 },
-  { id: 'rice-flour-pulses', name: 'Rice, Flour & Pulses', emoji: '🌾', gradient: 'from-amber-600 to-orange-500', description: 'Staples for every kitchen', productCount: 150, subcategoryCount: 3 },
-  { id: 'cooking-oil-ghee', name: 'Cooking Oil & Ghee', emoji: '🫒', gradient: 'from-lime-600 to-green-500', description: 'Pure oils and premium ghee', productCount: 65, subcategoryCount: 2 },
-  { id: 'masala-spices', name: 'Masala & Spices', emoji: '🌶️', gradient: 'from-orange-600 to-red-500', description: 'Authentic flavors for every dish', productCount: 110, subcategoryCount: 2 },
-  { id: 'snacks-packaged', name: 'Snacks & Packaged Food', emoji: '🍪', gradient: 'from-purple-600 to-violet-500', description: 'Munchies, biscuits, and namkeen', productCount: 320, subcategoryCount: 5 },
-  { id: 'beverages', name: 'Beverages', emoji: '☕', gradient: 'from-amber-600 to-orange-500', description: 'Tea, coffee, juices, and more', productCount: 190, subcategoryCount: 6 },
-  { id: 'frozen-food', name: 'Frozen Food', emoji: '🧊', gradient: 'from-cyan-600 to-sky-500', description: 'Ready-to-cook meals and ice cream', productCount: 95, subcategoryCount: 5 },
-  { id: 'bakery', name: 'Bakery', emoji: '🥐', gradient: 'from-orange-500 to-amber-400', description: 'Fresh bread, cakes, and pastries', productCount: 75, subcategoryCount: 3 },
-  { id: 'breakfast', name: 'Breakfast Items', emoji: '🥣', gradient: 'from-yellow-500 to-orange-400', description: 'Cereals, oats, cornflakes, and more', productCount: 80, subcategoryCount: 3 },
-  { id: 'household-cleaning', name: 'Household Cleaning', emoji: '🧹', gradient: 'from-teal-600 to-emerald-500', description: 'Detergents, cleaners, and supplies', productCount: 140, subcategoryCount: 6 },
-  { id: 'personal-care', name: 'Personal Care', emoji: '🧴', gradient: 'from-pink-500 to-rose-400', description: 'Skincare, haircare, and grooming', productCount: 210, subcategoryCount: 6 },
-  { id: 'baby-care', name: 'Baby Care', emoji: '👶', gradient: 'from-pink-500 to-rose-400', description: 'Diapers, food, and essentials', productCount: 90, subcategoryCount: 4 },
-  { id: 'pet-care', name: 'Pet Care', emoji: '🐾', gradient: 'from-amber-500 to-yellow-400', description: 'Food, toys, and accessories', productCount: 60, subcategoryCount: 4 },
-  { id: 'organic', name: 'Organic Products', emoji: '🌱', gradient: 'from-emerald-600 to-green-500', description: 'Certified organic and natural', productCount: 110, subcategoryCount: 3 },
-  { id: 'international-foods', name: 'International Foods', emoji: '🌍', gradient: 'from-indigo-600 to-violet-500', description: 'Thai, Korean, Italian, and more', productCount: 70, subcategoryCount: 3 },
-  { id: 'ready-to-cook', name: 'Ready-to-Cook', emoji: '🍳', gradient: 'from-orange-600 to-amber-500', description: 'Marinated, pre-cut & ready to cook', productCount: 65, subcategoryCount: 3 },
-  { id: 'dry-fruits-nuts', name: 'Dry Fruits & Nuts', emoji: '🥜', gradient: 'from-amber-700 to-orange-500', description: 'Premium almonds, cashews, walnuts & more', productCount: 80, subcategoryCount: 4 },
-  { id: 'chocolates-sweets', name: 'Chocolates & Sweets', emoji: '🍫', gradient: 'from-yellow-800 to-amber-600', description: 'Cadbury, Ferrero, Indian mithai & more', productCount: 120, subcategoryCount: 3 },
-  { id: 'tea-coffee-health', name: 'Tea, Coffee & Health Drinks', emoji: '🍵', gradient: 'from-green-800 to-emerald-600', description: 'Premium teas, artisan coffee & health drinks', productCount: 90, subcategoryCount: 3 },
-  { id: 'health-wellness', name: 'Health & Wellness', emoji: '💊', gradient: 'from-teal-600 to-cyan-500', description: 'Vitamins, supplements & wellness products', productCount: 85, subcategoryCount: 4 },
+  {
+    id: 'fruits-vegetables',
+    name: 'Fruits & Vegetables',
+    emoji: '🥬',
+    gradient: 'from-green-600 to-emerald-500',
+    description: 'Farm-fresh produce delivered daily',
+    productCount: 240,
+    subcategoryCount: 2,
+  },
+  {
+    id: 'fresh-meat',
+    name: 'Fresh Meat',
+    emoji: '🥩',
+    gradient: 'from-red-600 to-rose-500',
+    description: 'Premium quality, hygienically processed',
+    productCount: 120,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'fresh-fish',
+    name: 'Fresh Fish',
+    emoji: '🐟',
+    gradient: 'from-blue-600 to-cyan-500',
+    description: 'Coastal catch, delivered on ice',
+    productCount: 85,
+    subcategoryCount: 1,
+  },
+  {
+    id: 'dairy-bread-eggs',
+    name: 'Dairy, Bread & Eggs',
+    emoji: '🥛',
+    gradient: 'from-yellow-500 to-amber-400',
+    description: 'Farm-fresh dairy and bakery',
+    productCount: 180,
+    subcategoryCount: 6,
+  },
+  {
+    id: 'rice-flour-pulses',
+    name: 'Rice, Flour & Pulses',
+    emoji: '🌾',
+    gradient: 'from-amber-600 to-orange-500',
+    description: 'Staples for every kitchen',
+    productCount: 150,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'cooking-oil-ghee',
+    name: 'Cooking Oil & Ghee',
+    emoji: '🫒',
+    gradient: 'from-lime-600 to-green-500',
+    description: 'Pure oils and premium ghee',
+    productCount: 65,
+    subcategoryCount: 2,
+  },
+  {
+    id: 'masala-spices',
+    name: 'Masala & Spices',
+    emoji: '🌶️',
+    gradient: 'from-orange-600 to-red-500',
+    description: 'Authentic flavors for every dish',
+    productCount: 110,
+    subcategoryCount: 2,
+  },
+  {
+    id: 'snacks-packaged',
+    name: 'Snacks & Packaged Food',
+    emoji: '🍪',
+    gradient: 'from-purple-600 to-violet-500',
+    description: 'Munchies, biscuits, and namkeen',
+    productCount: 320,
+    subcategoryCount: 5,
+  },
+  {
+    id: 'beverages',
+    name: 'Beverages',
+    emoji: '☕',
+    gradient: 'from-amber-600 to-orange-500',
+    description: 'Tea, coffee, juices, and more',
+    productCount: 190,
+    subcategoryCount: 6,
+  },
+  {
+    id: 'frozen-food',
+    name: 'Frozen Food',
+    emoji: '🧊',
+    gradient: 'from-cyan-600 to-sky-500',
+    description: 'Ready-to-cook meals and ice cream',
+    productCount: 95,
+    subcategoryCount: 5,
+  },
+  {
+    id: 'bakery',
+    name: 'Bakery',
+    emoji: '🥐',
+    gradient: 'from-orange-500 to-amber-400',
+    description: 'Fresh bread, cakes, and pastries',
+    productCount: 75,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'breakfast',
+    name: 'Breakfast Items',
+    emoji: '🥣',
+    gradient: 'from-yellow-500 to-orange-400',
+    description: 'Cereals, oats, cornflakes, and more',
+    productCount: 80,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'household-cleaning',
+    name: 'Household Cleaning',
+    emoji: '🧹',
+    gradient: 'from-teal-600 to-emerald-500',
+    description: 'Detergents, cleaners, and supplies',
+    productCount: 140,
+    subcategoryCount: 6,
+  },
+  {
+    id: 'personal-care',
+    name: 'Personal Care',
+    emoji: '🧴',
+    gradient: 'from-pink-500 to-rose-400',
+    description: 'Skincare, haircare, and grooming',
+    productCount: 210,
+    subcategoryCount: 6,
+  },
+  {
+    id: 'baby-care',
+    name: 'Baby Care',
+    emoji: '👶',
+    gradient: 'from-pink-500 to-rose-400',
+    description: 'Diapers, food, and essentials',
+    productCount: 90,
+    subcategoryCount: 4,
+  },
+  {
+    id: 'pet-care',
+    name: 'Pet Care',
+    emoji: '🐾',
+    gradient: 'from-amber-500 to-yellow-400',
+    description: 'Food, toys, and accessories',
+    productCount: 60,
+    subcategoryCount: 4,
+  },
+  {
+    id: 'organic',
+    name: 'Organic Products',
+    emoji: '🌱',
+    gradient: 'from-emerald-600 to-green-500',
+    description: 'Certified organic and natural',
+    productCount: 110,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'international-foods',
+    name: 'International Foods',
+    emoji: '🌍',
+    gradient: 'from-indigo-600 to-violet-500',
+    description: 'Thai, Korean, Italian, and more',
+    productCount: 70,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'ready-to-cook',
+    name: 'Ready-to-Cook',
+    emoji: '🍳',
+    gradient: 'from-orange-600 to-amber-500',
+    description: 'Marinated, pre-cut & ready to cook',
+    productCount: 65,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'dry-fruits-nuts',
+    name: 'Dry Fruits & Nuts',
+    emoji: '🥜',
+    gradient: 'from-amber-700 to-orange-500',
+    description: 'Premium almonds, cashews, walnuts & more',
+    productCount: 80,
+    subcategoryCount: 4,
+  },
+  {
+    id: 'chocolates-sweets',
+    name: 'Chocolates & Sweets',
+    emoji: '🍫',
+    gradient: 'from-yellow-800 to-amber-600',
+    description: 'Cadbury, Ferrero, Indian mithai & more',
+    productCount: 120,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'tea-coffee-health',
+    name: 'Tea, Coffee & Health Drinks',
+    emoji: '🍵',
+    gradient: 'from-green-800 to-emerald-600',
+    description: 'Premium teas, artisan coffee & health drinks',
+    productCount: 90,
+    subcategoryCount: 3,
+  },
+  {
+    id: 'health-wellness',
+    name: 'Health & Wellness',
+    emoji: '💊',
+    gradient: 'from-teal-600 to-cyan-500',
+    description: 'Vitamins, supplements & wellness products',
+    productCount: 85,
+    subcategoryCount: 4,
+  },
 ];
 
 const CACHE_TTL = {
-  CATEGORIES: 300,  // 5 minutes
-  PRODUCTS: 120,    // 2 minutes
-  STORE: 180,       // 3 minutes
-  ORDER: 86400,     // 24 hours
+  CATEGORIES: 300, // 5 minutes
+  PRODUCTS: 120, // 2 minutes
+  STORE: 180, // 3 minutes
+  ORDER: 86400, // 24 hours
   // Short: a deal that lapses mid-window should leave the rail promptly.
-  FLASH_DEALS: 60,  // 1 minute
+  FLASH_DEALS: 60, // 1 minute
 };
 
 /**
@@ -111,14 +316,19 @@ export class GroceryService {
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(GroceryCategory) private readonly categoryRepo: Repository<GroceryCategory>,
     @InjectRepository(GroceryBrand) private readonly brandRepo: Repository<GroceryBrand>,
-    @InjectRepository(GroceryProductVariant) private readonly variantRepo: Repository<GroceryProductVariant>,
-    @InjectRepository(GroceryStockMovement) private readonly movementRepo: Repository<GroceryStockMovement>,
-    @InjectRepository(GroceryWarehouse) private readonly warehouseRepo: Repository<GroceryWarehouse>,
-    @InjectRepository(GroceryVariantStock) private readonly variantStockRepo: Repository<GroceryVariantStock>,
+    @InjectRepository(GroceryProductVariant)
+    private readonly variantRepo: Repository<GroceryProductVariant>,
+    @InjectRepository(GroceryStockMovement)
+    private readonly movementRepo: Repository<GroceryStockMovement>,
+    @InjectRepository(GroceryWarehouse)
+    private readonly warehouseRepo: Repository<GroceryWarehouse>,
+    @InjectRepository(GroceryVariantStock)
+    private readonly variantStockRepo: Repository<GroceryVariantStock>,
     @InjectRepository(GroceryStore) private readonly storeRepo: Repository<GroceryStore>,
     @InjectRepository(GroceryItem) private readonly itemRepo: Repository<GroceryItem>,
     @InjectRepository(GroceryOrder) private readonly orderRepo: Repository<GroceryOrder>,
-    @InjectRepository(GroceryFlashDeal) private readonly flashDealRepo: Repository<GroceryFlashDeal>,
+    @InjectRepository(GroceryFlashDeal)
+    private readonly flashDealRepo: Repository<GroceryFlashDeal>,
     @InjectRepository(GroceryReview) private readonly reviewRepo: Repository<GroceryReview>,
     @InjectRepository(GroceryWishlist) private readonly wishlistRepo: Repository<GroceryWishlist>,
     private readonly redis: RedisService,
@@ -228,14 +438,24 @@ export class GroceryService {
     } catch {
       // DB not ready — fall back to canonical list
       this.logger.warn('Category DB query failed, using canonical fallback');
-      const result = { categories: CANONICAL_CATEGORIES, total: CANONICAL_CATEGORIES.length, cachedAt: new Date().toISOString(), source: 'canonical' };
+      const result = {
+        categories: CANONICAL_CATEGORIES,
+        total: CANONICAL_CATEGORIES.length,
+        cachedAt: new Date().toISOString(),
+        source: 'canonical',
+      };
       await this.redis.setJson(cacheKey, result, CACHE_TTL.CATEGORIES);
       return result;
     }
 
     // If DB is empty, use canonical
     if (!categories.length) {
-      const result = { categories: CANONICAL_CATEGORIES, total: CANONICAL_CATEGORIES.length, cachedAt: new Date().toISOString(), source: 'canonical' };
+      const result = {
+        categories: CANONICAL_CATEGORIES,
+        total: CANONICAL_CATEGORIES.length,
+        cachedAt: new Date().toISOString(),
+        source: 'canonical',
+      };
       await this.redis.setJson(cacheKey, result, CACHE_TTL.CATEGORIES);
       return result;
     }
@@ -267,7 +487,12 @@ export class GroceryService {
       categories = categories.filter((c) => stocked.has(c.id));
     }
 
-    const result = { categories, total: categories.length, cachedAt: new Date().toISOString(), source: 'database' };
+    const result = {
+      categories,
+      total: categories.length,
+      cachedAt: new Date().toISOString(),
+      source: 'database',
+    };
     await this.redis.setJson(cacheKey, result, CACHE_TTL.CATEGORIES);
     return result;
   }
@@ -308,9 +533,15 @@ export class GroceryService {
     // Ids are slugs (`fruits-vegetables`) and are the join key on `grocery_items.category`,
     // so derive one rather than letting the caller omit it.
     const id = (data.id ?? data.name)
-      .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
       .slice(0, 64);
-    if (!id) throw new BadRequestException('Category name must contain at least one alphanumeric character');
+    if (!id)
+      throw new BadRequestException(
+        'Category name must contain at least one alphanumeric character',
+      );
 
     const existing = await this.categoryRepo.findOne({ where: { id } });
     if (existing) throw new BadRequestException(`Category "${id}" already exists`);
@@ -334,7 +565,9 @@ export class GroceryService {
       throw new BadRequestException(`${inUse} product(s) still use "${id}" — reassign them first`);
     }
     if (cat.children?.length) {
-      throw new BadRequestException(`"${id}" has ${cat.children.length} subcategor(y/ies) — delete those first`);
+      throw new BadRequestException(
+        `"${id}" has ${cat.children.length} subcategor(y/ies) — delete those first`,
+      );
     }
 
     await this.categoryRepo.delete({ id });
@@ -365,9 +598,13 @@ export class GroceryService {
       for (const c of dbCats) {
         await this.redis.del(`grocery:category:${c.id}`);
       }
-    } catch { /* DB not available — canonical keys already cleared */ }
+    } catch {
+      /* DB not available — canonical keys already cleared */
+    }
 
-    await this.kafka.publish('grocery.category.updated', { invalidatedAt: new Date().toISOString() });
+    await this.kafka.publish('grocery.category.updated', {
+      invalidatedAt: new Date().toISOString(),
+    });
     this.logger.log('Category cache invalidated and Kafka event published');
     return { success: true };
   }
@@ -379,12 +616,20 @@ export class GroceryService {
    * Uses PostGIS ST_DWithin for geospatial filtering when lat/lng provided.
    * Falls back to simple paginated listing otherwise.
    */
-  async getStores(lat?: number, lng?: number, page = 1, limit = 20, regionCode?: string, category?: string) {
+  async getStores(
+    lat?: number,
+    lng?: number,
+    page = 1,
+    limit = 20,
+    regionCode?: string,
+    category?: string,
+  ) {
     let offset: number;
     ({ page, limit, offset } = paginate(page, limit, 20));
 
     try {
-      let qb = this.storeRepo.createQueryBuilder('s')
+      let qb = this.storeRepo
+        .createQueryBuilder('s')
         .where('s.status = :status', { status: 'APPROVED' })
         .andWhere('s.isOnline = :online', { online: true });
 
@@ -439,10 +684,7 @@ export class GroceryService {
         qb = qb.orderBy('s.rating', 'DESC');
       }
 
-      const [data, total] = await qb
-        .skip(offset)
-        .take(limit)
-        .getManyAndCount();
+      const [data, total] = await qb.skip(offset).take(limit).getManyAndCount();
 
       /**
        * The offer badge, from the store's live promotions.
@@ -472,10 +714,12 @@ export class GroceryService {
           .andWhere('d.endTime > NOW()')
           .groupBy('d.storeId')
           .getRawMany<{ storeId: string; maxDiscount: string; dealCount: string }>();
-        rows.forEach((r) => offers.set(r.storeId, {
-          maxDiscount: Math.round(Number(r.maxDiscount)),
-          dealCount: Number(r.dealCount),
-        }));
+        rows.forEach((r) =>
+          offers.set(r.storeId, {
+            maxDiscount: Math.round(Number(r.maxDiscount)),
+            dealCount: Number(r.dealCount),
+          }),
+        );
       }
 
       const withOffers = data.map((s) => {
@@ -594,7 +838,10 @@ export class GroceryService {
         });
       } else {
         // No items yet — return all active categories
-        categories = await this.categoryRepo.find({ where: { isActive: true }, order: { sortOrder: 'ASC' } });
+        categories = await this.categoryRepo.find({
+          where: { isActive: true },
+          order: { sortOrder: 'ASC' },
+        });
       }
 
       const result = { storeId, categories, total: categories.length };
@@ -602,12 +849,15 @@ export class GroceryService {
       return result;
     } catch {
       // Fallback to canonical
-      const result = { storeId, categories: CANONICAL_CATEGORIES, total: CANONICAL_CATEGORIES.length };
+      const result = {
+        storeId,
+        categories: CANONICAL_CATEGORIES,
+        total: CANONICAL_CATEGORIES.length,
+      };
       await this.redis.setJson(cacheKey, result, CACHE_TTL.CATEGORIES);
       return result;
     }
   }
-
 
   // ── Catalogue tree ─────────────────────────────────────────────────────────
 
@@ -622,7 +872,14 @@ export class GroceryService {
    * it is recomputed here from actual children.
    */
   async rebuildCatalogTree() {
-    const stats = { departments: 0, categories: 0, subcategories: 0, updated: 0, productsMigrated: 0, pruned: 0 };
+    const stats = {
+      departments: 0,
+      categories: 0,
+      subcategories: 0,
+      updated: 0,
+      productsMigrated: 0,
+      pruned: 0,
+    };
 
     // The taxonomy is ~800 nodes. Doing findOne+save per node is ~1600 round
     // trips and blew the 10s RPC timeout, leaving a half-built tree behind — so
@@ -656,7 +913,13 @@ export class GroceryService {
       }
       toSave.push(
         this.categoryRepo.create({
-          id, name: node.name, level, parentId, countries, sortOrder, isActive: true,
+          id,
+          name: node.name,
+          level,
+          parentId,
+          countries,
+          sortOrder,
+          isActive: true,
         }),
       );
       if (level === 'department') stats.departments += 1;
@@ -674,14 +937,23 @@ export class GroceryService {
         const catId = taxonomyId(cat.name, deptId);
         // A category with no countries of its own inherits its department's.
         wanted.add(catId);
-        upsert({ name: cat.name, countries: cat.countries ?? dept.countries }, catId, 'category', deptId, ci);
+        upsert(
+          { name: cat.name, countries: cat.countries ?? dept.countries },
+          catId,
+          'category',
+          deptId,
+          ci,
+        );
 
         for (const [si, sc] of (cat.children ?? []).entries()) {
           const scId = taxonomyId(sc.name, catId);
           wanted.add(scId);
           upsert(
             { name: sc.name, countries: sc.countries ?? cat.countries ?? dept.countries },
-            scId, 'subcategory', catId, si,
+            scId,
+            'subcategory',
+            catId,
+            si,
           );
         }
       }
@@ -717,7 +989,10 @@ export class GroceryService {
     const kept: string[] = [];
     for (const node of stale) {
       const inUse = await this.itemRepo.count({ where: { category: node.id } });
-      if (inUse > 0) { kept.push(`${node.id} (${inUse} products)`); continue; }
+      if (inUse > 0) {
+        kept.push(`${node.id} (${inUse} products)`);
+        continue;
+      }
       await this.categoryRepo.delete({ id: node.id });
       stats.pruned += 1;
     }
@@ -822,7 +1097,6 @@ export class GroceryService {
     return { ok: true };
   }
 
-
   // ── Brands ─────────────────────────────────────────────────────────────────
 
   /**
@@ -833,11 +1107,16 @@ export class GroceryService {
    * "Al-Rawabi" and "al rawabi" were three brands as far as browsing was
    * concerned.
    */
-  async requestBrand(dto: { name?: string; manufacturer?: string; logoUrl?: string; description?: string },
-                     sellerId?: string) {
+  async requestBrand(
+    dto: { name?: string; manufacturer?: string; logoUrl?: string; description?: string },
+    sellerId?: string,
+  ) {
     const name = String(dto?.name ?? '').trim();
     if (!name) throw new BadRequestException('A brand name is required.');
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
 
     const existing = await this.brandRepo.findOne({ where: { slug } });
     if (existing) {
@@ -851,7 +1130,8 @@ export class GroceryService {
 
     const brand = await this.brandRepo.save(
       this.brandRepo.create({
-        slug, name,
+        slug,
+        name,
         manufacturer: dto?.manufacturer?.trim() || null,
         logoUrl: dto?.logoUrl?.trim() || null,
         description: dto?.description?.trim() || null,
@@ -872,16 +1152,25 @@ export class GroceryService {
     brand.approvalStatus = status;
     brand.rejectionReason = status === 'REJECTED' ? (reason ?? null) : null;
     const saved = await this.brandRepo.save(brand);
-    await this.kafka.publish(`grocery.brand.${status.toLowerCase()}`, { brandId, status, reason: reason ?? null });
+    await this.kafka.publish(`grocery.brand.${status.toLowerCase()}`, {
+      brandId,
+      status,
+      reason: reason ?? null,
+    });
     return { success: true, brand: saved };
   }
 
   /** Brands a seller may list under. Unapproved ones are not offered. */
   async getBrands2(status?: string, page = 1, limit = 50) {
     ({ page, limit } = paginate(page, limit, 50));
-    const where = status ? { approvalStatus: status.toUpperCase() as any } : { approvalStatus: 'APPROVED' as any };
+    const where = status
+      ? { approvalStatus: status.toUpperCase() as any }
+      : { approvalStatus: 'APPROVED' as any };
     const [data, total] = await this.brandRepo.findAndCount({
-      where, order: { name: 'ASC' }, skip: (page - 1) * limit, take: limit,
+      where,
+      order: { name: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
     return { data, total, page, limit };
   }
@@ -908,13 +1197,17 @@ export class GroceryService {
       .getRawMany();
 
     for (const { brand } of rows) {
-      const slug = brand.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const slug = brand
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
       if (!slug) continue;
       let row = await this.brandRepo.findOne({ where: { slug } });
       if (!row) {
         row = await this.brandRepo.save(
           this.brandRepo.create({
-            slug, name: brand,
+            slug,
+            name: brand,
             // Approved explicitly: these are products already trading. Leaving
             // them PENDING would pull a live catalogue out of the storefront.
             approvalStatus: 'APPROVED',
@@ -926,15 +1219,16 @@ export class GroceryService {
       // `IsNull()`, not `undefined`. TypeORM drops an undefined condition rather
       // than matching NULL, and this silently linked nothing at all — 11 brands
       // and 420 variants created, 0 products pointed at a brand.
-      const linked = await this.itemRepo.update(
-        { brand, brandId: IsNull() } as any,
-        { brandId: row.id },
-      );
+      const linked = await this.itemRepo.update({ brand, brandId: IsNull() } as any, {
+        brandId: row.id,
+      });
       stats.brandsLinked += linked.affected ?? 0;
     }
 
     // 2. Variants from the jsonb blob.
-    const products = await this.itemRepo.find({ select: ['id', 'name', 'sku', 'weightVariants', 'storeId'] });
+    const products = await this.itemRepo.find({
+      select: ['id', 'name', 'sku', 'weightVariants', 'storeId'],
+    });
     for (const product of products) {
       const already = await this.variantRepo.count({ where: { productId: product.id } });
 
@@ -975,8 +1269,6 @@ export class GroceryService {
     return { success: true, ...stats };
   }
 
-
-
   // ── Warehouses ─────────────────────────────────────────────────────────────
 
   /**
@@ -996,7 +1288,9 @@ export class GroceryService {
 
     const stores = await this.storeRepo.find({ select: ['id', 'name'] });
     for (const store of stores) {
-      let defaultWh = await this.warehouseRepo.findOne({ where: { storeId: store.id, isDefault: true } });
+      let defaultWh = await this.warehouseRepo.findOne({
+        where: { storeId: store.id, isDefault: true },
+      });
       if (!defaultWh) {
         defaultWh = await this.warehouseRepo.save(
           this.warehouseRepo.create({
@@ -1020,7 +1314,10 @@ export class GroceryService {
 
       for (const v of variants) {
         const placed = await this.variantStockRepo.count({ where: { variantId: v.id } });
-        if (placed > 0) { stats.alreadyPlaced += 1; continue; }
+        if (placed > 0) {
+          stats.alreadyPlaced += 1;
+          continue;
+        }
         await this.variantStockRepo.save(
           this.variantStockRepo.create({
             variantId: v.id,
@@ -1037,30 +1334,42 @@ export class GroceryService {
     return { success: true, ...stats };
   }
 
-
-
   /** Locations a store holds stock in. */
   async listWarehouses(storeId: string, includeInactive = false) {
     const id = requireUuid(storeId, 'store');
     const where: any = { storeId: id };
     if (!includeInactive) where.isActive = true;
     const data = await this.warehouseRepo.find({
-      where, order: { isDefault: 'DESC', name: 'ASC' },
+      where,
+      order: { isDefault: 'DESC', name: 'ASC' },
     });
     return { storeId: id, total: data.length, data };
   }
 
-  async createWarehouse(storeId: string, dto: {
-    name?: string; code?: string; type?: WarehouseType;
-    address?: string; latitude?: number; longitude?: number; isDefault?: boolean;
-  }) {
+  async createWarehouse(
+    storeId: string,
+    dto: {
+      name?: string;
+      code?: string;
+      type?: WarehouseType;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
+      isDefault?: boolean;
+    },
+  ) {
     const id = requireUuid(storeId, 'store');
     const name = String(dto?.name ?? '').trim();
     if (!name) throw new BadRequestException('A warehouse name is required.');
 
-    const code = String(dto?.code ?? name).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').slice(0, 32);
+    const code = String(dto?.code ?? name)
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .slice(0, 32);
     const clash = await this.warehouseRepo.findOne({ where: { storeId: id, code } });
-    if (clash) throw new BadRequestException(`A location with code "${code}" already exists in this store.`);
+    if (clash)
+      throw new BadRequestException(`A location with code "${code}" already exists in this store.`);
 
     return this.dataSource.transaction(async (mgr) => {
       const repo = mgr.getRepository(GroceryWarehouse);
@@ -1072,7 +1381,9 @@ export class GroceryService {
       const existing = await repo.count({ where: { storeId: id } });
       const warehouse = await repo.save(
         repo.create({
-          storeId: id, name, code,
+          storeId: id,
+          name,
+          code,
           type: (dto?.type ?? 'WAREHOUSE') as WarehouseType,
           address: dto?.address?.trim() || null,
           latitude: dto?.latitude !== undefined ? String(dto.latitude) : null,
@@ -1096,10 +1407,16 @@ export class GroceryService {
     if (any) return any;
     // Every store gets a STORE_FRONT during backfill; a store created since
     // then gets one on first use rather than failing the movement.
-    return repo.save(repo.create({
-      storeId, name: 'Store front', code: 'STORE-FRONT',
-      type: 'STORE_FRONT', isDefault: true, isActive: true,
-    }));
+    return repo.save(
+      repo.create({
+        storeId,
+        name: 'Store front',
+        code: 'STORE-FRONT',
+        type: 'STORE_FRONT',
+        isDefault: true,
+        isActive: true,
+      }),
+    );
   }
 
   /**
@@ -1109,12 +1426,18 @@ export class GroceryService {
    * total can be driven negative by a concurrent movement.
    */
   private async applyLocationDelta(
-    mgr: EntityManager, variantId: string, storeId: string, warehouseId: string, qty: number,
+    mgr: EntityManager,
+    variantId: string,
+    storeId: string,
+    warehouseId: string,
+    qty: number,
   ) {
     const repo = mgr.getRepository(GroceryVariantStock);
     let row = await repo.findOne({ where: { variantId, warehouseId } });
     if (!row) {
-      row = await repo.save(repo.create({ variantId, warehouseId, storeId, stock: 0, reserved: 0 }));
+      row = await repo.save(
+        repo.create({ variantId, warehouseId, storeId, stock: 0, reserved: 0 }),
+      );
     }
 
     const res = await repo
@@ -1142,24 +1465,32 @@ export class GroceryService {
    * deliberately untouched: the seller still holds the same goods.
    */
   async transferStock(input: {
-    variantId: string; fromWarehouseId: string; toWarehouseId: string;
-    quantity: number; reason?: string; actorId?: string;
+    variantId: string;
+    fromWarehouseId: string;
+    toWarehouseId: string;
+    quantity: number;
+    reason?: string;
+    actorId?: string;
   }) {
     const variantId = requireUuid(input?.variantId, 'variant');
     const from = requireUuid(input?.fromWarehouseId, 'source warehouse');
     const to = requireUuid(input?.toWarehouseId, 'destination warehouse');
     const qty = Number(input?.quantity);
 
-    if (from === to) throw new BadRequestException('Source and destination must be different locations.');
+    if (from === to)
+      throw new BadRequestException('Source and destination must be different locations.');
     if (!Number.isInteger(qty) || qty <= 0) {
       throw new BadRequestException('Transfer quantity must be a positive whole number.');
     }
 
     return this.dataSource.transaction(async (mgr) => {
-      const variant = await mgr.getRepository(GroceryProductVariant).findOne({ where: { id: variantId } });
+      const variant = await mgr
+        .getRepository(GroceryProductVariant)
+        .findOne({ where: { id: variantId } });
       if (!variant) throw new NotFoundException(`Variant ${variantId} not found`);
       const product = await mgr.getRepository(GroceryItem).findOne({
-        where: { id: variant.productId }, select: ['id', 'storeId'],
+        where: { id: variant.productId },
+        select: ['id', 'storeId'],
       });
       const storeId = product?.storeId as string;
 
@@ -1172,27 +1503,41 @@ export class GroceryService {
       // Both ends must belong to the store that owns the product, or a transfer
       // becomes a way to push stock into somebody else's warehouse.
       if (src.storeId !== storeId || dst.storeId !== storeId) {
-        throw new BadRequestException('Both locations must belong to the store that owns this product.');
+        throw new BadRequestException(
+          'Both locations must belong to the store that owns this product.',
+        );
       }
 
       await this.applyLocationDelta(mgr, variantId, storeId, from, -qty);
       await this.applyLocationDelta(mgr, variantId, storeId, to, qty);
 
       const moveRepo = mgr.getRepository(GroceryStockMovement);
-      const out = await moveRepo.save(moveRepo.create({
-        variantId, productId: variant.productId, storeId,
-        type: 'TRANSFER_OUT', quantity: -qty,
-        stockAfter: variant.stock, warehouseId: from,
-        reason: input.reason?.trim() || `Transfer to ${dst.name}`,
-        actorId: input.actorId ?? null,
-      }));
-      const incoming = await moveRepo.save(moveRepo.create({
-        variantId, productId: variant.productId, storeId,
-        type: 'TRANSFER_IN', quantity: qty,
-        stockAfter: variant.stock, warehouseId: to,
-        reason: input.reason?.trim() || `Transfer from ${src.name}`,
-        actorId: input.actorId ?? null,
-      }));
+      const out = await moveRepo.save(
+        moveRepo.create({
+          variantId,
+          productId: variant.productId,
+          storeId,
+          type: 'TRANSFER_OUT',
+          quantity: -qty,
+          stockAfter: variant.stock,
+          warehouseId: from,
+          reason: input.reason?.trim() || `Transfer to ${dst.name}`,
+          actorId: input.actorId ?? null,
+        }),
+      );
+      const incoming = await moveRepo.save(
+        moveRepo.create({
+          variantId,
+          productId: variant.productId,
+          storeId,
+          type: 'TRANSFER_IN',
+          quantity: qty,
+          stockAfter: variant.stock,
+          warehouseId: to,
+          reason: input.reason?.trim() || `Transfer from ${src.name}`,
+          actorId: input.actorId ?? null,
+        }),
+      );
 
       return { success: true, movements: [out, incoming], total: variant.stock };
     });
@@ -1205,9 +1550,12 @@ export class GroceryService {
       .createQueryBuilder('vs')
       .innerJoin(GroceryWarehouse, 'w', 'w.id = vs."warehouseId"')
       .select([
-        'vs."warehouseId" AS "warehouseId"', 'w.name AS "warehouseName"',
-        'w.code AS "warehouseCode"', 'w.type AS "warehouseType"',
-        'vs.stock AS stock', 'vs.reserved AS reserved',
+        'vs."warehouseId" AS "warehouseId"',
+        'w.name AS "warehouseName"',
+        'w.code AS "warehouseCode"',
+        'w.type AS "warehouseType"',
+        'vs.stock AS stock',
+        'vs.reserved AS reserved',
       ])
       .where('vs."variantId" = :id', { id })
       .orderBy('w.name', 'ASC')
@@ -1222,7 +1570,9 @@ export class GroceryService {
       /** Non-zero means the per-location rows and the total have drifted. */
       unallocated: (variant?.stock ?? 0) - located,
       locations: rows.map((r) => ({
-        ...r, stock: Number(r.stock), reserved: Number(r.reserved),
+        ...r,
+        stock: Number(r.stock),
+        reserved: Number(r.reserved),
         sellable: Number(r.stock) - Number(r.reserved),
       })),
     };
@@ -1243,7 +1593,8 @@ export class GroceryService {
   }) {
     const warehouseId = requireUuid(input?.warehouseId, 'warehouse');
     const counts = Array.isArray(input?.counts) ? input.counts : [];
-    if (!counts.length) throw new BadRequestException('An audit needs at least one counted variant.');
+    if (!counts.length)
+      throw new BadRequestException('An audit needs at least one counted variant.');
 
     const warehouse = await this.warehouseRepo.findOne({ where: { id: warehouseId } });
     if (!warehouse) throw new NotFoundException(`Warehouse ${warehouseId} not found`);
@@ -1267,8 +1618,9 @@ export class GroceryService {
         quantity: delta,
         warehouseId,
         actorId: input.actorId,
-        reason: input.reason?.trim()
-          || `Stock audit at ${warehouse.name}: counted ${counted}, system had ${onRecord}`,
+        reason:
+          input.reason?.trim() ||
+          `Stock audit at ${warehouse.name}: counted ${counted}, system had ${onRecord}`,
       });
       adjustments.push({ variantId, onRecord, counted, delta, stock: movement.stock });
     }
@@ -1545,7 +1897,8 @@ export class GroceryService {
     // return `{ data: [], total: 0 }` **and cache it** — so one transient database
     // failure served an empty catalogue for the whole TTL, and the screen showed
     // "no products" rather than an error. A failure here must reach the caller.
-    const qb = this.itemRepo.createQueryBuilder('item')
+    const qb = this.itemRepo
+      .createQueryBuilder('item')
       .where('item.isAvailable = :avail', { avail: true });
 
     // Moderation gate. `isAvailable` is the seller's stock switch; this is the
@@ -1576,10 +1929,20 @@ export class GroceryService {
      * how `getStores` decides what exists in a market.
      */
     if (regionCode) {
-      qb.innerJoin(GroceryStore, 'rs', 'rs.id = item."storeId"')
-        .andWhere('rs.region_code = :regionCode', { regionCode })
-        .andWhere("rs.status = 'APPROVED'")
-        .andWhere('rs."isOnline" = true');
+      qb.innerJoin(GroceryStore, 'rs', 'rs.id = item."storeId"').andWhere(
+        'rs.region_code = :regionCode',
+        {
+          regionCode,
+        },
+      );
+      // The storefront only ever shows approved, online shops — a shopper
+      // browsing a market should not see a suspended store's catalogue. A
+      // moderator scoped to the same market needs the opposite: every store in
+      // that market, whatever its status, because that is what "products in my
+      // market" means on the admin moderation screen.
+      if (!privileged) {
+        qb.andWhere("rs.status = 'APPROVED'").andWhere('rs."isOnline" = true');
+      }
     }
 
     const [data, total] = await qb
@@ -1601,12 +1964,27 @@ export class GroceryService {
     const storeIds = [...new Set(data.map((i) => i.storeId).filter(Boolean))];
     const names = new Map<string, string>();
     if (storeIds.length) {
-      const rows = await this.storeRepo.find({ where: { id: In(storeIds) }, select: ['id', 'name'] });
-      rows.forEach((r) => { if (r.name) names.set(r.id, r.name); });
+      const rows = await this.storeRepo.find({
+        where: { id: In(storeIds) },
+        select: ['id', 'name'],
+      });
+      rows.forEach((r) => {
+        if (r.name) names.set(r.id, r.name);
+      });
     }
-    const withStore = data.map((i) => Object.assign(i, { storeName: names.get(i.storeId) ?? null }));
+    const withStore = data.map((i) =>
+      Object.assign(i, { storeName: names.get(i.storeId) ?? null }),
+    );
 
-    const result = { storeId: storeId ?? null, category, regionCode: regionCode ?? null, data: withStore, total, page, limit };
+    const result = {
+      storeId: storeId ?? null,
+      category,
+      regionCode: regionCode ?? null,
+      data: withStore,
+      total,
+      page,
+      limit,
+    };
     await this.redis.setJson(cacheKey, result, CACHE_TTL.PRODUCTS);
     return result;
   }
@@ -1650,7 +2028,11 @@ export class GroceryService {
 
     if (regionCode) qb.andWhere('s.region_code = :regionCode', { regionCode });
 
-    const rows = await qb.getRawMany<{ brand: string; productCount: number; imageUrl: string | null }>();
+    const rows = await qb.getRawMany<{
+      brand: string;
+      productCount: number;
+      imageUrl: string | null;
+    }>();
 
     const brands = rows.map((r) => ({
       // A slug the storefront can put in a URL and this service can resolve back.
@@ -1684,7 +2066,9 @@ export class GroceryService {
      * to `nestle` for the URL to round-trip. Doing it here keeps the match exact
      * and the query portable; the brand list is small and cached.
      */
-    const known = (await this.getBrands(regionCode, 100)) as { brands: { id: string; name: string }[] };
+    const known = (await this.getBrands(regionCode, 100)) as {
+      brands: { id: string; name: string }[];
+    };
     const match = known.brands.find((b) => b.id === slugify(wanted));
     if (!match) return { brand: null, data: [], total: 0, page, limit };
 
@@ -1783,7 +2167,8 @@ export class GroceryService {
   async searchProducts(query: string, storeId?: string, categoryId?: string, page = 1, limit = 30) {
     ({ page, limit } = paginate(page, limit, 30));
     try {
-      const qb = this.itemRepo.createQueryBuilder('item')
+      const qb = this.itemRepo
+        .createQueryBuilder('item')
         .where('item.isAvailable = :avail', { avail: true })
         // Search has no seller view — it is the shopper's entry point — so it is
         // always restricted to approved listings. A product created a second ago
@@ -1865,14 +2250,17 @@ export class GroceryService {
     // 1. Store must exist, be approved and be open.
     const store = await this.storeRepo.findOne({ where: { id: storeId } });
     if (!store) throw new NotFoundException(`Store ${dto.storeId} not found`);
-    if (store.status !== 'APPROVED') throw new BadRequestException(`Store ${store.name} is not accepting orders`);
+    if (store.status !== 'APPROVED')
+      throw new BadRequestException(`Store ${store.name} is not accepting orders`);
     if (!store.isOnline) throw new BadRequestException(`Store ${store.name} is currently offline`);
     if (!dto.items?.length) throw new BadRequestException('An order needs at least one item');
 
     // 2. Load the catalogue rows for this order, scoped to the store so a product
     //    id from a different store cannot be smuggled in.
     const productIds = [...new Set(dto.items.map((i) => i.productId))];
-    const products = await this.itemRepo.find({ where: { id: In(productIds), storeId: dto.storeId } });
+    const products = await this.itemRepo.find({
+      where: { id: In(productIds), storeId: dto.storeId },
+    });
     const byId = new Map(products.map((p) => [p.id, p]));
 
     // 3. Active flash deals for this store, keyed by product.
@@ -1882,20 +2270,30 @@ export class GroceryService {
     });
     const dealByProduct = new Map(
       liveDeals
-        .filter((d) => new Date(d.startTime) <= now && new Date(d.endTime) > now && d.soldCount < d.stockLimit)
+        .filter(
+          (d) =>
+            new Date(d.startTime) <= now && new Date(d.endTime) > now && d.soldCount < d.stockLimit,
+        )
         .map((d) => [d.productId, d]),
     );
 
     // 4. Re-price every line and check stock.
     const pricedItems: Array<{
-      productId: string; name: string; weight: string; price: number;
-      quantity: number; preparationNote?: string; flashDealId?: string;
+      productId: string;
+      name: string;
+      weight: string;
+      price: number;
+      quantity: number;
+      preparationNote?: string;
+      flashDealId?: string;
     }> = [];
 
     for (const line of dto.items) {
       const product = byId.get(line.productId);
-      if (!product) throw new BadRequestException(`Product ${line.productId} is not sold by this store`);
-      if (!product.isAvailable) throw new BadRequestException(`${product.name} is currently unavailable`);
+      if (!product)
+        throw new BadRequestException(`Product ${line.productId} is not sold by this store`);
+      if (!product.isAvailable)
+        throw new BadRequestException(`${product.name} is currently unavailable`);
       if (!Number.isInteger(line.quantity) || line.quantity < 1) {
         throw new BadRequestException(`Invalid quantity for ${product.name}`);
       }
@@ -1908,7 +2306,9 @@ export class GroceryService {
         );
       }
       if (Number(variant.stock ?? 0) < line.quantity) {
-        throw new BadRequestException(`Only ${variant.stock ?? 0} × ${line.weight} left of ${product.name}`);
+        throw new BadRequestException(
+          `Only ${variant.stock ?? 0} × ${line.weight} left of ${product.name}`,
+        );
       }
 
       const deal = dealByProduct.get(product.id);
@@ -1954,16 +2354,15 @@ export class GroceryService {
     const region = getRegionConfig(store.regionCode ?? '');
     const taxRate = Number(region?.tax?.rate ?? 0);
     const taxName = region?.tax?.name ?? null;
-    const taxAmount = taxRate > 0
-      ? round2((grandTotal * taxRate) / (100 + taxRate))
-      : 0;
+    const taxAmount = taxRate > 0 ? round2((grandTotal * taxRate) / (100 + taxRate)) : 0;
 
     // 6. Delivery slot for scheduled orders.
     let deliverySlot: { date: string; startTime: string; endTime: string } | null = null;
     let scheduledAt: Date | null = null;
     if (dto.scheduledAt) {
       const dt = new Date(dto.scheduledAt);
-      if (Number.isNaN(dt.getTime())) throw new BadRequestException('scheduledAt is not a valid date');
+      if (Number.isNaN(dt.getTime()))
+        throw new BadRequestException('scheduledAt is not a valid date');
       if (dt.getTime() < Date.now()) throw new BadRequestException('scheduledAt is in the past');
       scheduledAt = dt;
       deliverySlot = {
@@ -2008,7 +2407,11 @@ export class GroceryService {
                 ? { ...v, stock: Math.max(0, Number(v.stock ?? 0) - line.quantity) }
                 : v,
             );
-            await mgr.update(GroceryItem, { id: line.productId }, { weightVariants: variants as any });
+            await mgr.update(
+              GroceryItem,
+              { id: line.productId },
+              { weightVariants: variants as any },
+            );
             product.weightVariants = variants as any;
           }
 
@@ -2112,7 +2515,10 @@ export class GroceryService {
     await this.invalidateProductCache(product.storeId).catch(() => undefined);
 
     await this.kafka.publish(`grocery.product.${status.toLowerCase()}`, {
-      productId, storeId: product.storeId, status, reason: reason ?? null,
+      productId,
+      storeId: product.storeId,
+      status,
+      reason: reason ?? null,
       actorId: actor?.actorId ?? null,
       previousStatus: previous.approvalStatus,
       decidedAt: new Date().toISOString(),
@@ -2141,7 +2547,9 @@ export class GroceryService {
         service: 'grocery-service',
       })
       .catch((err) =>
-        this.logger.warn(`audit publish failed for product ${productId}: ${(err as Error)?.message}`),
+        this.logger.warn(
+          `audit publish failed for product ${productId}: ${(err as Error)?.message}`,
+        ),
       );
 
     return { success: true, product: saved };
@@ -2150,7 +2558,8 @@ export class GroceryService {
   /** Listings awaiting a moderation decision, newest first. */
   async getPendingProducts(page = 1, limit = 30, storeId?: string) {
     ({ page, limit } = paginate(page, limit, 30));
-    const qb = this.itemRepo.createQueryBuilder('item')
+    const qb = this.itemRepo
+      .createQueryBuilder('item')
       .where('item.approvalStatus = :status', { status: 'PENDING' });
     if (storeId) qb.andWhere('item.storeId = :storeId', { storeId });
 
@@ -2169,7 +2578,10 @@ export class GroceryService {
   ): Promise<boolean> {
     if (GroceryService.ADMIN_ROLES.has(String(actor?.role ?? '').toUpperCase())) return true;
     if (!actor?.id || !storeId) return false;
-    const store = await this.storeRepo.findOne({ where: { id: storeId }, select: ['id', 'ownerId'] });
+    const store = await this.storeRepo.findOne({
+      where: { id: storeId },
+      select: ['id', 'ownerId'],
+    });
     return !!store?.ownerId && store.ownerId === actor.id;
   }
 
@@ -2184,12 +2596,14 @@ export class GroceryService {
     if (!storeId) {
       throw new ForbiddenException('You do not have access to this store.');
     }
-    const store = await this.storeRepo.findOne({ where: { id: storeId }, select: ['id', 'ownerId'] });
+    const store = await this.storeRepo.findOne({
+      where: { id: storeId },
+      select: ['id', 'ownerId'],
+    });
     if (!store?.ownerId || store.ownerId !== actor.id) {
       throw new ForbiddenException('You do not have access to this store.');
     }
   }
-
 
   /**
    * Confirms the requester may see this order.
@@ -2200,7 +2614,11 @@ export class GroceryService {
    * they placed the order, own the store fulfilling it, or hold an admin role.
    * Callers with no requester (internal RPC from another service) are unaffected.
    */
-  private assertOrderVisible(order: GroceryOrder & { store?: GroceryStore }, requesterId?: string, requesterRole?: string) {
+  private assertOrderVisible(
+    order: GroceryOrder & { store?: GroceryStore },
+    requesterId?: string,
+    requesterRole?: string,
+  ) {
     if (!requesterId) return;
     if (GroceryService.ADMIN_ROLES.has(String(requesterRole ?? '').toUpperCase())) return;
     if (order.customerId === requesterId) return;
@@ -2431,9 +2849,11 @@ export class GroceryService {
 
     for (const [i, v] of variants.entries()) {
       const bad =
-        !v || typeof v !== 'object' ||
+        !v ||
+        typeof v !== 'object' ||
         !String((v as any).weight ?? '').trim() ||
-        !Number.isFinite(Number((v as any).price)) || Number((v as any).price) < 0;
+        !Number.isFinite(Number((v as any).price)) ||
+        Number((v as any).price) < 0;
       if (bad) {
         throw new BadRequestException(
           `Weight variant ${i + 1} needs a "weight" label and a non-negative numeric "price".`,
@@ -2490,7 +2910,8 @@ export class GroceryService {
   async updateProduct(storeId: string, productId: string, data: Partial<GroceryItem>) {
     try {
       const product = await this.itemRepo.findOne({ where: { id: productId, storeId } });
-      if (!product) throw new NotFoundException(`Product ${productId} not found in store ${storeId}`);
+      if (!product)
+        throw new NotFoundException(`Product ${productId} not found in store ${storeId}`);
 
       // Same check as create, but only when the edit actually moves the product.
       if (data.category !== undefined || data.subCategory !== undefined) {
@@ -2526,7 +2947,8 @@ export class GroceryService {
   async deleteProduct(storeId: string, productId: string) {
     try {
       const product = await this.itemRepo.findOne({ where: { id: productId, storeId } });
-      if (!product) throw new NotFoundException(`Product ${productId} not found in store ${storeId}`);
+      if (!product)
+        throw new NotFoundException(`Product ${productId} not found in store ${storeId}`);
 
       await this.itemRepo.remove(product);
       await this.bumpProductCount(storeId, -1);
@@ -2570,7 +2992,12 @@ export class GroceryService {
       await this.bumpProductCount(storeId, imported);
       await this.invalidateProductCache(storeId);
 
-      return { uploaded: imported, errors: errors.length, errorDetails: errors, total: products.length };
+      return {
+        uploaded: imported,
+        errors: errors.length,
+        errorDetails: errors,
+        total: products.length,
+      };
     } catch (err: any) {
       if (err instanceof NotFoundException) throw err;
       // Only reachable now if the store lookup itself failed — the per-row loop
@@ -2594,7 +3021,8 @@ export class GroceryService {
       since.setDate(since.getDate() - days);
 
       // Aggregate order stats
-      const stats = await this.orderRepo.createQueryBuilder('o')
+      const stats = await this.orderRepo
+        .createQueryBuilder('o')
         .select('COUNT(o.id)', 'totalOrders')
         .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'totalRevenue')
         .addSelect('COALESCE(AVG(o.grandTotal), 0)', 'avgOrderValue')
@@ -2605,7 +3033,8 @@ export class GroceryService {
         .getRawOne();
 
       // Daily breakdown
-      const dailyStats = await this.orderRepo.createQueryBuilder('o')
+      const dailyStats = await this.orderRepo
+        .createQueryBuilder('o')
         .select(`DATE(o.createdAt)`, 'date')
         .addSelect('COUNT(o.id)', 'orders')
         .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'revenue')
@@ -2628,12 +3057,19 @@ export class GroceryService {
           avgOrderValue: Number(Number(stats?.avgOrderValue ?? 0).toFixed(2)),
           deliveredOrders: Number(stats?.deliveredOrders ?? 0),
           cancelledOrders: Number(stats?.cancelledOrders ?? 0),
-          fulfillmentRate: stats?.totalOrders > 0 ? Number(((stats.deliveredOrders / stats.totalOrders) * 100).toFixed(1)) : 0,
+          fulfillmentRate:
+            stats?.totalOrders > 0
+              ? Number(((stats.deliveredOrders / stats.totalOrders) * 100).toFixed(1))
+              : 0,
           productCount,
           rating: Number(store.rating),
           totalRatings: store.totalOrders,
         },
-        dailyStats: dailyStats.map(d => ({ date: d.date, orders: Number(d.orders), revenue: Number(d.revenue) })),
+        dailyStats: dailyStats.map((d) => ({
+          date: d.date,
+          orders: Number(d.orders),
+          revenue: Number(d.revenue),
+        })),
       };
     } catch (err: any) {
       if (err instanceof NotFoundException) throw err;
@@ -2651,7 +3087,18 @@ export class GroceryService {
       if (!store) throw new NotFoundException(`Store ${storeId} not found`);
 
       // Only allow specific fields to be updated
-      const allowed = ['name', 'address', 'phone', 'openingHours', 'deliveryRadius', 'minOrderAmount', 'deliveryFee', 'tags', 'logoUrl', 'bannerUrl'];
+      const allowed = [
+        'name',
+        'address',
+        'phone',
+        'openingHours',
+        'deliveryRadius',
+        'minOrderAmount',
+        'deliveryFee',
+        'tags',
+        'logoUrl',
+        'bannerUrl',
+      ];
       for (const key of allowed) {
         if ((settings as any)[key] !== undefined) {
           (store as any)[key] = (settings as any)[key];
@@ -2680,7 +3127,7 @@ export class GroceryService {
 
       return {
         storeId,
-        promotions: promoted.map(p => ({
+        promotions: promoted.map((p) => ({
           productId: p.id,
           name: p.name,
           category: p.category,
@@ -2710,7 +3157,9 @@ export class GroceryService {
       return { success: true, productId, isPromoted: promoted };
     } catch (err: any) {
       if (err instanceof NotFoundException) throw err;
-      this.logger.error(`toggleProductPromotion failed for ${storeId}/${productId}: ${err.message}`);
+      this.logger.error(
+        `toggleProductPromotion failed for ${storeId}/${productId}: ${err.message}`,
+      );
       throw err;
     }
   }
@@ -2724,7 +3173,7 @@ export class GroceryService {
         order: { name: 'ASC' },
       });
 
-      const lowStock = items.filter(item => {
+      const lowStock = items.filter((item) => {
         if (!item.weightVariants || !Array.isArray(item.weightVariants)) return false;
         return item.weightVariants.some((v: any) => v.stock !== undefined && v.stock <= threshold);
       });
@@ -2732,12 +3181,14 @@ export class GroceryService {
       return {
         storeId,
         threshold,
-        items: lowStock.map(i => ({
+        items: lowStock.map((i) => ({
           id: i.id,
           name: i.name,
           category: i.category,
           weightVariants: i.weightVariants,
-          lowestStock: Math.min(...(i.weightVariants as any[]).filter(v => v.stock !== undefined).map(v => v.stock)),
+          lowestStock: Math.min(
+            ...(i.weightVariants as any[]).filter((v) => v.stock !== undefined).map((v) => v.stock),
+          ),
         })),
         total: lowStock.length,
       };
@@ -2756,17 +3207,21 @@ export class GroceryService {
     if (!product.weightVariants || !Array.isArray(product.weightVariants)) return;
 
     const lowThreshold = 5;
-    const lowVariants = (product.weightVariants as any[]).filter(v => v.stock !== undefined && v.stock <= lowThreshold);
+    const lowVariants = (product.weightVariants as any[]).filter(
+      (v) => v.stock !== undefined && v.stock <= lowThreshold,
+    );
 
     if (lowVariants.length > 0) {
       await this.kafka.publish('grocery.inventory.low_stock', {
         storeId: product.storeId,
         productId: product.id,
         productName: product.name ?? '',
-        variants: lowVariants.map(v => ({ weight: v.weight, stock: v.stock })),
+        variants: lowVariants.map((v) => ({ weight: v.weight, stock: v.stock })),
         alertedAt: new Date().toISOString(),
       });
-      this.logger.warn(`Low stock alert: ${product.name} (${product.id}) in store ${product.storeId}`);
+      this.logger.warn(
+        `Low stock alert: ${product.name} (${product.id}) in store ${product.storeId}`,
+      );
     }
   }
 
@@ -2775,7 +3230,11 @@ export class GroceryService {
   // ══════════════════════════════════════════════════════════════════════════
 
   /** Seller creates a flash deal (draft) */
-  async createFlashDeal(dto: CreateFlashDealDto, actor?: { id?: string; role?: string }) {
+  async createFlashDeal(
+    dto: CreateFlashDealDto,
+    actor?: { id?: string; role?: string },
+    scope?: string,
+  ) {
     // Validated before the lookups, not after.
     //
     // `findOne({ where: { id: undefined } })` does not match nothing — TypeORM
@@ -2797,8 +3256,14 @@ export class GroceryService {
 
     const store = await this.storeRepo.findOne({ where: { id: storeId } });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
+    // The admin console calls this too (`admin.grocery.createFlashDeal`), where a
+    // market-locked admin must not be able to create a deal against a store
+    // outside their own market.
+    assertInMarket(store.regionCode, scope, 'store', this.logger);
     if (product.storeId !== dto.storeId) {
-      throw new BadRequestException(`Product ${dto.productId} does not belong to store ${dto.storeId}`);
+      throw new BadRequestException(
+        `Product ${dto.productId} does not belong to store ${dto.storeId}`,
+      );
     }
 
     const start = new Date(dto.startTime);
@@ -2816,11 +3281,14 @@ export class GroceryService {
       throw new BadRequestException(`${product.name} has no priced weight variant to discount`);
     }
     if (dto.flashPrice >= originalPrice) {
-      throw new BadRequestException(`Flash price must be below the current price of ${originalPrice}`);
+      throw new BadRequestException(
+        `Flash price must be below the current price of ${originalPrice}`,
+      );
     }
 
     const discountPercent = Math.round(((originalPrice - dto.flashPrice) / originalPrice) * 100);
-    if (discountPercent < 30) throw new BadRequestException('Flash deals require a minimum 30% discount');
+    if (discountPercent < 30)
+      throw new BadRequestException('Flash deals require a minimum 30% discount');
 
     const deal = this.flashDealRepo.create({
       storeId: dto.storeId,
@@ -2857,16 +3325,19 @@ export class GroceryService {
     const saved = await this.flashDealRepo.save(deal);
 
     await this.kafka.publish('grocery.flash_deal.submitted', {
-      dealId: saved.id, storeId: saved.storeId, productName: saved.productName,
+      dealId: saved.id,
+      storeId: saved.storeId,
+      productName: saved.productName,
     });
 
     return { success: true, flashDeal: saved };
   }
 
   /** Admin approves a flash deal */
-  async approveFlashDeal(dealId: string, approvedBy?: string) {
-    const deal = await this.flashDealRepo.findOne({ where: { id: dealId } });
+  async approveFlashDeal(dealId: string, approvedBy?: string, scope?: string) {
+    const deal = await this.flashDealRepo.findOne({ where: { id: dealId }, relations: ['store'] });
     if (!deal) throw new NotFoundException(`Flash deal ${dealId} not found`);
+    assertInMarket(deal.store?.regionCode ?? null, scope, 'flash deal', this.logger);
     if (deal.status !== FlashDealStatus.PENDING) {
       throw new BadRequestException(`Can only approve deals in pending status`);
     }
@@ -2883,17 +3354,21 @@ export class GroceryService {
     const saved = await this.flashDealRepo.save(deal);
 
     await this.kafka.publish('grocery.flash_deal.approved', {
-      dealId: saved.id, storeId: saved.storeId, storeName: saved.storeName,
-      productName: saved.productName, flashPrice: saved.flashPrice,
+      dealId: saved.id,
+      storeId: saved.storeId,
+      storeName: saved.storeName,
+      productName: saved.productName,
+      flashPrice: saved.flashPrice,
     });
 
     return { success: true, flashDeal: saved };
   }
 
   /** Admin rejects a flash deal */
-  async rejectFlashDeal(dealId: string, dto: RejectFlashDealDto) {
-    const deal = await this.flashDealRepo.findOne({ where: { id: dealId } });
+  async rejectFlashDeal(dealId: string, dto: RejectFlashDealDto, scope?: string) {
+    const deal = await this.flashDealRepo.findOne({ where: { id: dealId }, relations: ['store'] });
     if (!deal) throw new NotFoundException(`Flash deal ${dealId} not found`);
+    assertInMarket(deal.store?.regionCode ?? null, scope, 'flash deal', this.logger);
     if (deal.status !== FlashDealStatus.PENDING) {
       throw new BadRequestException(`Can only reject deals in pending status`);
     }
@@ -2903,7 +3378,10 @@ export class GroceryService {
     const saved = await this.flashDealRepo.save(deal);
 
     await this.kafka.publish('grocery.flash_deal.rejected', {
-      dealId: saved.id, storeId: saved.storeId, productName: saved.productName, reason: dto.reason,
+      dealId: saved.id,
+      storeId: saved.storeId,
+      productName: saved.productName,
+      reason: dto.reason,
     });
 
     return { success: true, flashDeal: saved };
@@ -2914,7 +3392,8 @@ export class GroceryService {
     const deal = await this.flashDealRepo.findOne({ where: { id: dealId } });
     if (!deal) throw new NotFoundException(`Flash deal ${dealId} not found`);
     await this.assertStoreActor(deal.storeId, actor);
-    if (deal.status !== FlashDealStatus.ACTIVE) throw new BadRequestException('Can only pause active deals');
+    if (deal.status !== FlashDealStatus.ACTIVE)
+      throw new BadRequestException('Can only pause active deals');
 
     deal.status = FlashDealStatus.PAUSED;
     return { success: true, flashDeal: await this.flashDealRepo.save(deal) };
@@ -2925,14 +3404,20 @@ export class GroceryService {
     const deal = await this.flashDealRepo.findOne({ where: { id: dealId } });
     if (!deal) throw new NotFoundException(`Flash deal ${dealId} not found`);
     await this.assertStoreActor(deal.storeId, actor);
-    if (deal.status !== FlashDealStatus.PAUSED) throw new BadRequestException('Can only resume paused deals');
+    if (deal.status !== FlashDealStatus.PAUSED)
+      throw new BadRequestException('Can only resume paused deals');
 
     deal.status = FlashDealStatus.ACTIVE;
     return { success: true, flashDeal: await this.flashDealRepo.save(deal) };
   }
 
   /** List flash deals with filters (admin/seller) */
-  async getFlashDeals(filters: { storeId?: string; status?: FlashDealStatus; page?: number; limit?: number }) {
+  async getFlashDeals(filters: {
+    storeId?: string;
+    status?: FlashDealStatus;
+    page?: number;
+    limit?: number;
+  }) {
     const { storeId, status } = filters;
     const { page, limit } = paginate(filters.page, filters.limit, 20);
     const where: any = {};
@@ -2940,7 +3425,10 @@ export class GroceryService {
     if (status) where.status = status;
 
     const [data, total] = await this.flashDealRepo.findAndCount({
-      where, order: { createdAt: 'DESC' }, skip: (page - 1) * limit, take: limit,
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
     return { data, total, page, limit };
@@ -2997,7 +3485,10 @@ export class GroceryService {
     const productIds = [...new Set(active.map((d) => d.productId).filter(Boolean))];
     const images = new Map<string, string | null>();
     if (productIds.length) {
-      const rows = await this.itemRepo.find({ where: { id: In(productIds) }, select: ['id', 'imageUrl'] });
+      const rows = await this.itemRepo.find({
+        where: { id: In(productIds) },
+        select: ['id', 'imageUrl'],
+      });
       rows.forEach((r) => images.set(r.id, r.imageUrl ?? null));
     }
 
@@ -3105,7 +3596,8 @@ export class GroceryService {
     });
 
     const review = this.reviewRepo.create({
-      productId, storeId,
+      productId,
+      storeId,
       customerId: dto.customerId,
       customerName: dto.customerName,
       rating: dto.rating,
@@ -3258,13 +3750,18 @@ export class GroceryService {
    * actually buy, and anything that has gone is reported rather than silently kept.
    */
   async reorderFromHistory(orderId: string, dto: ReorderDto) {
-    const order = await this.orderRepo.findOne({ where: { id: orderId, customerId: dto.customerId } });
+    const order = await this.orderRepo.findOne({
+      where: { id: orderId, customerId: dto.customerId },
+    });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
 
     const historical = (order.items as any[]) ?? [];
     const products = historical.length
       ? await this.itemRepo.find({
-          where: { id: In([...new Set(historical.map((i) => i.productId))]), storeId: order.storeId },
+          where: {
+            id: In([...new Set(historical.map((i) => i.productId))]),
+            storeId: order.storeId,
+          },
         })
       : [];
     const byId = new Map(products.map((p) => [p.id, p]));
@@ -3278,14 +3775,24 @@ export class GroceryService {
         unavailable.push({ productId: line.productId, name: line.name, reason: 'no longer sold' });
         continue;
       }
-      const variant = ((product.weightVariants as any[]) ?? []).find((v) => v.weight === line.weight);
+      const variant = ((product.weightVariants as any[]) ?? []).find(
+        (v) => v.weight === line.weight,
+      );
       if (!variant) {
-        unavailable.push({ productId: line.productId, name: product.name ?? '', reason: `"${line.weight}" discontinued` });
+        unavailable.push({
+          productId: line.productId,
+          name: product.name ?? '',
+          reason: `"${line.weight}" discontinued`,
+        });
         continue;
       }
       const stock = Number(variant.stock ?? 0);
       if (stock < 1) {
-        unavailable.push({ productId: line.productId, name: product.name ?? '', reason: 'out of stock' });
+        unavailable.push({
+          productId: line.productId,
+          name: product.name ?? '',
+          reason: 'out of stock',
+        });
         continue;
       }
       items.push({
@@ -3349,7 +3856,10 @@ export class GroceryService {
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
     this.assertOrderVisible(order, requesterId, requesterRole);
 
-    const live = (await this.redis.getJson(`grocery:tracking:${orderId}`)) as Record<string, unknown> | null;
+    const live = (await this.redis.getJson(`grocery:tracking:${orderId}`)) as Record<
+      string,
+      unknown
+    > | null;
 
     return {
       orderId,
@@ -3358,7 +3868,9 @@ export class GroceryService {
       estimatedDeliveryAt: order.estimatedDeliveryAt,
       deliveredAt: order.deliveredAt,
       storeName: order.store?.name ?? null,
-      storeLocation: order.store ? { lat: Number(order.store.latitude), lng: Number(order.store.longitude) } : null,
+      storeLocation: order.store
+        ? { lat: Number(order.store.latitude), lng: Number(order.store.longitude) }
+        : null,
       dropLocation: order.deliveryAddress
         ? { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng }
         : null,
@@ -3390,24 +3902,42 @@ export class GroceryService {
   /** Export all products for a store as CSV */
   async exportProductsCsv(storeId: string) {
     try {
-      const headers = ['ID', 'Name', 'Category', 'SubCategory', 'Brand', 'Available', 'Rating', 'Barcode', 'Variants'];
+      const headers = [
+        'ID',
+        'Name',
+        'Category',
+        'SubCategory',
+        'Brand',
+        'Available',
+        'Rating',
+        'Barcode',
+        'Variants',
+      ];
       const products = await this.itemRepo.find({ where: { storeId } });
       if (!products.length) {
         // Header-only CSV rather than a 404 — an empty catalogue is a valid export.
-        return { csv: headers.join(','), filename: `products-${storeId}-${Date.now()}.csv`, rowCount: 0 };
+        return {
+          csv: headers.join(','),
+          filename: `products-${storeId}-${Date.now()}.csv`,
+          rowCount: 0,
+        };
       }
 
-      const rows = products.map(p => [
-        p.id,
-        p.name,
-        p.category,
-        p.subCategory || '',
-        p.brand || '',
-        p.isAvailable ? 'Yes' : 'No',
-        p.rating?.toString() || '',
-        p.barcode || '',
-        JSON.stringify(p.weightVariants || []),
-      ].map(f => this.csvField(f)).join(','));
+      const rows = products.map((p) =>
+        [
+          p.id,
+          p.name,
+          p.category,
+          p.subCategory || '',
+          p.brand || '',
+          p.isAvailable ? 'Yes' : 'No',
+          p.rating?.toString() || '',
+          p.barcode || '',
+          JSON.stringify(p.weightVariants || []),
+        ]
+          .map((f) => this.csvField(f))
+          .join(','),
+      );
 
       const csv = [headers.join(','), ...rows].join('\n');
       return { csv, filename: `products-${storeId}-${Date.now()}.csv`, rowCount: products.length };
@@ -3450,4 +3980,3 @@ export class GroceryService {
     return product;
   }
 }
-
