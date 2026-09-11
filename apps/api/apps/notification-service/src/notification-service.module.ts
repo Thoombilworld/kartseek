@@ -5,6 +5,7 @@ import { KafkaModule } from '@app/kafka';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
 import { PasswordResetConsumer } from './password-reset.consumer';
+import { NotificationEventsConsumer } from './notification-events.consumer';
 
 // Note this is the module `main.ts` bootstraps — the similarly named
 // `NotificationModule` in notification.module.ts is imported by nothing and has
@@ -12,6 +13,6 @@ import { PasswordResetConsumer } from './password-reset.consumer';
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), RedisModule, KafkaModule],
   controllers: [NotificationController],
-  providers: [NotificationService, PasswordResetConsumer],
+  providers: [NotificationService, PasswordResetConsumer, NotificationEventsConsumer],
 })
 export class NotificationServiceModule {}
