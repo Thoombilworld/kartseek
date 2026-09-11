@@ -5,6 +5,32 @@ import { RedisService } from '@app/redis';
 import { AuditLog, type AuditLogDocument } from './schemas/audit-log.schema';
 
 /**
+ * One filter value, or nothing.
+ *
+ * `query` is reached over TCP, where the payload is whatever the caller
+ * serialised — this service, not the gateway, is the enforcement point for its
+ * own scoping, and that has to cover the *types* of its inputs too. A non-string
+ * here used to reach Mongo unchanged, so `{ entityType: { $ne: 'x' } }` would
+ * have become a field-level operator, and `f.actorEmail.toLowerCase()` on a
+ * number threw a TypeError the gateway reported as a 503. Anything that is not a
+ * non-empty string is dropped, which is the safe reading of "no filter".
+ */
+function str(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/** One end of the `createdAt` range, dropped unless it parses to a real date. */
+function dateBound(op: '$gte' | '$lte', value: unknown): Record<string, Date> {
+  const text = str(value);
+  if (!text) return {};
+  const date = new Date(text);
+  // `new Date('nonsense')` is an Invalid Date, and Mongo matches *nothing*
+  // against one — a typo in the date box would empty the table and read as "no
+  // administrative activity" rather than "that is not a date".
+  return Number.isNaN(date.getTime()) ? {} : { [op]: date };
+}
+
+/**
  * The platform's audit trail.
  *
  * `AuditLog` (Mongo, `audit_logs`) is the system of record: the schema blocks
@@ -63,7 +89,9 @@ export class AuditLogService {
     const entry = {
       actionType: dto.actionType ?? dto.action ?? 'unknown',
       actorId: String(dto.actorId ?? dto.userId ?? 'anonymous'),
-      actorEmail: dto.actorEmail,
+      // Lower-cased to match how `query` filters, for the same reason `country`
+      // is upper-cased below.
+      actorEmail: dto.actorEmail ? String(dto.actorEmail).toLowerCase() : undefined,
       actorRole: dto.actorRole,
       actorIp: dto.actorIp ?? dto.ipAddress,
       entityType: dto.entityType ?? dto.resource,
@@ -85,7 +113,15 @@ export class AuditLogService {
         ...(dto.requestId ? { requestId: dto.requestId } : {}),
       },
       isSensitive: Boolean(dto.isSensitive),
-      country: dto.country ?? dto.regionCode ?? 'UNKNOWN',
+      // Normalised on the way in, because `query` filters on the upper-cased
+      // form. A writer that sent `x-region-code: qa` stored `country: 'qa'`,
+      // which matches neither `{ $in: ['QA', 'ALL'] }` nor `'QA'` — the row was
+      // written, durable, and invisible to every scoped query, which on an audit
+      // trail is indistinguishable from never having been written. Doing it here
+      // rather than at each caller closes it for all three writers at once: the
+      // gateway interceptor, the Kafka events other services publish, and the
+      // console's `audit.record`.
+      country: String(dto.country ?? dto.regionCode ?? 'UNKNOWN').toUpperCase(),
       service: dto.service ?? 'api-gateway',
     };
 
@@ -180,28 +216,32 @@ export class AuditLogService {
     to?: string;
     scope?: string;
   }) {
-    const { page, limit } = this.paginate(f.page ?? 1, f.limit ?? 50);
+    const { page, limit } = this.paginate(Number(f?.page ?? 1), Number(f?.limit ?? 50));
 
     const filter: Record<string, unknown> = {};
-    if (f.scope) filter.country = { $in: [f.scope.toUpperCase(), 'ALL'] };
-    else if (f.country) filter.country = f.country.toUpperCase();
-    if (f.actorId) filter.actorId = f.actorId;
-    if (f.actorEmail) filter.actorEmail = f.actorEmail.toLowerCase();
-    if (f.entityType) filter.entityType = f.entityType;
-    if (f.entityId) filter.entityId = f.entityId;
+    const scope = str(f?.scope);
+    const country = str(f?.country);
+    const actorEmail = str(f?.actorEmail);
+    const actionType = str(f?.actionType);
+
+    if (scope) filter.country = { $in: [scope.toUpperCase(), 'ALL'] };
+    else if (country) filter.country = country.toUpperCase();
+    if (str(f?.actorId)) filter.actorId = str(f?.actorId);
+    if (actorEmail) filter.actorEmail = actorEmail.toLowerCase();
+    if (str(f?.entityType)) filter.entityType = str(f?.entityType);
+    if (str(f?.entityId)) filter.entityId = str(f?.entityId);
     // A prefix match, so `http.post.` narrows to mutations and
     // `http.post./admin/marketplace` to one module. The action types the
     // gateway writes are dotted paths, so every metacharacter is escaped —
     // an unescaped `.` would match any character and quietly widen the filter.
-    if (f.actionType) {
-      filter.actionType = { $regex: `^${f.actionType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` };
+    if (actionType) {
+      filter.actionType = { $regex: `^${actionType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` };
     }
-    if (f.from || f.to) {
-      filter.createdAt = {
-        ...(f.from ? { $gte: new Date(f.from) } : {}),
-        ...(f.to ? { $lte: new Date(f.to) } : {}),
-      };
-    }
+    const range = {
+      ...dateBound('$gte', f?.from),
+      ...dateBound('$lte', f?.to),
+    };
+    if (Object.keys(range).length) filter.createdAt = range;
 
     const [data, total] = await Promise.all([
       this.auditModel
