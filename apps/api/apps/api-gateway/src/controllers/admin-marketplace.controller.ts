@@ -13,6 +13,9 @@ import {
   Req,
   Logger,
   ServiceUnavailableException,
+  ForbiddenException,
+  NotFoundException,
+  ParseUUIDPipe,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
@@ -34,6 +37,7 @@ import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { GlobalEntity } from '../decorators/global-entity.decorator';
 import { marketScopeOf, resolveMarket, assertRecordInScope } from '../guards/market-scope';
 import { UserRole, rpcCatch } from '@app/common';
 import { User } from '../entities/user.entity';
@@ -98,9 +102,42 @@ export class AdminMarketplaceController {
     }
   }
 
-  private actor(req: any): string {
-    return req?.user?.id ?? req?.user?.sub ?? 'admin';
+  /**
+   * The acting administrator, from the verified token — recorded on mutations.
+   *
+   * One helper, and the fallback is `unknown` rather than `admin`: an action
+   * whose actor could not be identified must not be recorded as if a generic
+   * "admin" had taken it. Half these routes used to send `UserRole.ADMIN` — the
+   * literal string `"ADMIN"` — as the admin id.
+   */
+  private actorId(req: any): string {
+    return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
   }
+
+  /**
+   * The market this request may act in.
+   *
+   * `scope` is set only when the caller is region-locked — it is what the
+   * backend asserts the record against. `market` is the filter to apply: a
+   * locked admin's own market, or whatever a global admin asked for (possibly
+   * nothing, meaning every market). Naming another market as a locked admin is
+   * refused here, before the service is called.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
+  }
+
+  // Catalogue taxonomy — categories, subcategories, attributes, brands, HSN
+  // codes — is one tree shared by every market. A regional admin reads it (the
+  // GET routes carry `@GlobalEntity`) and may not edit it: a Qatari admin
+  // renaming a category would rename it for India too. Each write refuses the
+  // lock inline, where a reviewer reading the handler can see it.
 
   /**
    * Finance reads that must never invent a number.
@@ -211,58 +248,56 @@ export class AdminMarketplaceController {
 
   // ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――― Dashboard ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
   @Get('dashboard')
-  @ApiOperation({ summary: 'Admin marketplace dashboard stats' })
-  async getDashboard() {
-    try {
-      const stats = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_DASHBOARD);
-      return { data: stats };
-    } catch {
-      return {
-        data: {
-          totalSellers: 0,
-          activeSellers: 0,
-          pendingSellers: 0,
-          totalProducts: 0,
-          pendingProducts: 0,
-          todayOrders: 0,
-          todayRevenue: 0,
-          monthlyRevenue: 0,
-          totalCustomers: 0,
-          disputesOpen: 0,
-          currency: 'INR',
-        },
-      };
-    }
+  @ApiOperation({ summary: "Admin marketplace dashboard stats for the caller's market" })
+  @ApiQuery({ name: 'country', required: false })
+  async getDashboard(@Req() req: any, @Query('country') country?: string) {
+    // No catch: a dashboard of zeroes is indistinguishable from a platform that
+    // has stopped trading, and that is exactly what an outage used to look like.
+    const { scope, market } = this.scopeOf(req, country, 'that dashboard');
+    const stats = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_DASHBOARD, {
+      region: market,
+      scope,
+    });
+    return { data: stats };
   }
 
   // ── Sellers ────────────────────────────────────────────────────────────────
   @Get('sellers')
-  @ApiOperation({ summary: 'List all sellers with filters' })
+  @ApiOperation({ summary: "List sellers with filters, confined to the caller's market" })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED'],
+    enum: ['ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED', 'VERIFIED'],
   })
+  @ApiQuery({ name: 'country', required: false })
   async getSellers(
+    @Req() req: any,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('country') country?: string,
   ) {
-    try {
-      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS);
-      return {
-        ...(result as any),
-        page: Number(page),
-        limit: Number(limit),
-        hasMore: (result as any).total > Number(page) * Number(limit),
-      };
-    } catch {
-      return { data: [], total: 0, page: Number(page), limit: Number(limit), hasMore: false };
-    }
+    // The filters used to be dropped on the floor: this sent no payload at all,
+    // so every admin got the whole seller directory whatever they searched for.
+    const { scope, market } = this.scopeOf(req, country, 'those sellers');
+    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS, {
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      status,
+      region: market,
+      scope,
+    });
+    return {
+      ...(result as any),
+      page: Number(page),
+      limit: Number(limit),
+      hasMore: (result as any).total > Number(page) * Number(limit),
+    };
   }
 
   // ── Literal routes, declared before the `:slug` catch-all ──────────────
@@ -275,9 +310,19 @@ export class AdminMarketplaceController {
   // gateway fallback. Keep literal paths above parameterised ones.
 
   @Get('sellers/pending')
-  @ApiOperation({ summary: 'List pending seller approvals' })
-  async getPendingSellers() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS);
+  @ApiOperation({ summary: "Sellers awaiting approval in the caller's market" })
+  @ApiQuery({ name: 'country', required: false })
+  async getPendingSellers(@Req() req: any, @Query('country') country?: string) {
+    // `status: 'PENDING'` was missing, so the "pending approvals" queue listed
+    // every seller on the platform, approved and rejected ones included.
+    const { scope, market } = this.scopeOf(req, country, 'those sellers');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS, {
+      status: 'PENDING',
+      region: market,
+      scope,
+      page: 1,
+      limit: 100,
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -285,187 +330,192 @@ export class AdminMarketplaceController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Get('sellers/:id')
-  @ApiOperation({ summary: 'Get seller detail' })
-  async getSellerById(@Param('id') id: string) {
-    try {
-      const seller = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_BY_ID, id);
-      return { data: seller };
-    } catch {
-      return { data: { id, name: '', status: 'UNKNOWN' } };
-    }
+  @ApiOperation({ summary: 'Seller detail' })
+  async getSellerById(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    // No catch: an unreachable service is a 503, not a seller called "".
+    const seller = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_BY_ID, id);
+    if (!seller) throw new NotFoundException('Seller not found');
+    assertRecordInScope(
+      req,
+      (seller as any).regionCode ?? (seller as any).region_code,
+      'that seller',
+    );
+    return { data: seller };
   }
 
   @Patch('sellers/:id/approve')
   @ApiOperation({ summary: 'Approve a seller' })
-  async approveSeller(@Param('id') id: string, @Body() body?: { reason?: string }) {
-    try {
-      // Sent as an object. This passed `(id, UserRole.ADMIN)`, which
-      // `sendToMarketplace` packs into an ARRAY, so the handler's `data?.id` was
-      // undefined — and `where: { id: undefined }` matches the first row, so
-      // approving one seller silently approved a different one.
-      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_SELLER, {
-        id,
-        adminId: UserRole.ADMIN,
-      });
-      await this.applySellerDecision(id, 'active');
-      await this.kafka.publish(KAFKA_TOPICS.SELLER_APPROVED || 'seller.approved', { sellerId: id });
-      return {
-        data: { success: true, message: `Seller ${id} approved`, status: 'ACTIVE', seller: result },
-      };
-    } catch (err: unknown) {
-      return {
-        data: {
-          success: false,
-          message: `Failed to approve seller ${id}`,
-          error: (err as Error)?.message,
-        },
-      };
-    }
+  async approveSeller(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body?: { reason?: string },
+  ) {
+    // Sent as an object. This passed `(id, UserRole.ADMIN)`, which
+    // `sendToMarketplace` packs into an ARRAY, so the handler's `data?.id` was
+    // undefined — and `where: { id: undefined }` matches the first row, so
+    // approving one seller silently approved a different one. The admin id was
+    // the literal string "ADMIN" rather than the person who clicked.
+    //
+    // No catch: a failed approval used to answer 200 with `success: false`
+    // buried two levels down, which the console renders as a success.
+    const { scope } = this.scopeOf(req, undefined, 'that seller');
+    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_SELLER, {
+      id,
+      adminId: this.actorId(req),
+      scope,
+    });
+    await this.applySellerDecision(id, 'active');
+    await this.kafka.publish(KAFKA_TOPICS.SELLER_APPROVED || 'seller.approved', {
+      sellerId: id,
+      actorId: this.actorId(req),
+      regionCode: scope ?? (result as any)?.regionCode ?? null,
+    });
+    return {
+      data: { success: true, message: `Seller ${id} approved`, status: 'ACTIVE', seller: result },
+    };
   }
 
   @Patch('sellers/:id/reject')
   @ApiOperation({ summary: 'Reject a seller' })
-  async rejectSeller(@Param('id') id: string, @Body() body: { reason: string }) {
-    try {
-      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_SELLER, {
-        id,
-        reason: body.reason,
-        adminId: UserRole.ADMIN,
-      });
-      await this.applySellerDecision(id, 'rejected');
-      await this.kafka.publish(KAFKA_TOPICS.SELLER_REJECTED || 'seller.rejected', {
-        sellerId: id,
-        reason: body.reason,
-      });
-      return {
-        data: {
-          success: true,
-          message: `Seller ${id} rejected`,
-          reason: body.reason,
-          seller: result,
-        },
-      };
-    } catch (err: unknown) {
-      return {
-        data: {
-          success: false,
-          message: `Failed to reject seller ${id}`,
-          error: (err as Error)?.message,
-        },
-      };
-    }
+  async rejectSeller(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that seller');
+    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_SELLER, {
+      id,
+      reason: body?.reason,
+      adminId: this.actorId(req),
+      scope,
+    });
+    await this.applySellerDecision(id, 'rejected');
+    await this.kafka.publish(KAFKA_TOPICS.SELLER_REJECTED || 'seller.rejected', {
+      sellerId: id,
+      reason: body?.reason,
+      actorId: this.actorId(req),
+      regionCode: scope ?? (result as any)?.regionCode ?? null,
+    });
+    return {
+      data: {
+        success: true,
+        message: `Seller ${id} rejected`,
+        reason: body?.reason,
+        seller: result,
+      },
+    };
   }
 
   @Patch('sellers/:id/suspend')
   @ApiOperation({ summary: 'Suspend a seller' })
-  async suspendSeller(@Param('id') id: string, @Body() body: { reason: string }) {
-    try {
-      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_SELLER, {
-        id,
-        adminId: UserRole.ADMIN,
-      });
-      await this.applySellerDecision(id, 'suspended');
-      await this.kafka.publish(KAFKA_TOPICS.SELLER_SUSPENDED || 'seller.suspended', {
-        sellerId: id,
-        reason: body.reason,
-      });
-      return {
-        data: {
-          success: true,
-          message: `Seller ${id} suspended`,
-          reason: body.reason,
-          seller: result,
-        },
-      };
-    } catch (err: unknown) {
-      return {
-        data: {
-          success: false,
-          message: `Failed to suspend seller ${id}`,
-          error: (err as Error)?.message,
-        },
-      };
-    }
+  async suspendSeller(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that seller');
+    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_SELLER, {
+      id,
+      adminId: this.actorId(req),
+      scope,
+    });
+    await this.applySellerDecision(id, 'suspended');
+    await this.kafka.publish(KAFKA_TOPICS.SELLER_SUSPENDED || 'seller.suspended', {
+      sellerId: id,
+      reason: body?.reason,
+      actorId: this.actorId(req),
+      regionCode: scope ?? (result as any)?.regionCode ?? null,
+    });
+    return {
+      data: {
+        success: true,
+        message: `Seller ${id} suspended`,
+        reason: body?.reason,
+        seller: result,
+      },
+    };
   }
 
   @Patch('sellers/:id/reactivate')
   @ApiOperation({ summary: 'Reactivate a suspended seller' })
-  async reactivateSeller(@Param('id') id: string) {
-    try {
-      const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REACTIVATE_SELLER, {
-        id,
-      });
-      await this.applySellerDecision(id, 'active');
-      await this.kafka.publish(KAFKA_TOPICS.SELLER_REACTIVATED || 'seller.reactivated', {
-        sellerId: id,
-      });
-      return {
-        data: {
-          success: true,
-          message: `Seller ${id} reactivated`,
-          status: 'ACTIVE',
-          seller: result,
-        },
-      };
-    } catch (err: unknown) {
-      return {
-        data: {
-          success: false,
-          message: `Failed to reactivate seller ${id}`,
-          error: (err as Error)?.message,
-        },
-      };
-    }
+  async reactivateSeller(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that seller');
+    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REACTIVATE_SELLER, {
+      id,
+      adminId: this.actorId(req),
+      scope,
+    });
+    await this.applySellerDecision(id, 'active');
+    await this.kafka.publish(KAFKA_TOPICS.SELLER_REACTIVATED || 'seller.reactivated', {
+      sellerId: id,
+      actorId: this.actorId(req),
+      regionCode: scope ?? (result as any)?.regionCode ?? null,
+    });
+    return {
+      data: {
+        success: true,
+        message: `Seller ${id} reactivated`,
+        status: 'ACTIVE',
+        seller: result,
+      },
+    };
   }
 
   // ── Products ───────────────────────────────────────────────────────────────
   @Get('products')
-  @ApiOperation({ summary: 'List all products across sellers' })
+  @ApiOperation({ summary: "Products across sellers, confined to the caller's market" })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'country', required: false })
   async getProducts(
+    @Req() req: any,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('status') status?: string,
+    @Query('country') country?: string,
   ) {
-    try {
-      const result = await this.sendToMarketplace(
-        MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS,
-        Number(page),
-        Number(limit),
-      );
-      return { ...(result as any), hasMore: (result as any).total > Number(page) * Number(limit) };
-    } catch {
-      return { data: [], total: 0, page: Number(page), limit: Number(limit), hasMore: false };
-    }
+    // Sent as `(page, limit)` — two positional arguments, which
+    // `sendToMarketplace` packs into an ARRAY — so `status` never reached the
+    // service and the payload had no shape the handler could read.
+    const { scope, market } = this.scopeOf(req, country, 'those products');
+    const result = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, {
+      page: Number(page),
+      limit: Number(limit),
+      status,
+      region: market,
+      scope,
+    });
+    return { ...(result as any), hasMore: (result as any).total > Number(page) * Number(limit) };
   }
 
   // MUST stay above `products/:id` — a parametric route declared first would
   // capture "pending" as an id.
   @Get('products/pending')
-  @ApiOperation({ summary: 'Products awaiting approval, with queue counts' })
-  async getPendingProducts() {
-    try {
-      return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PENDING_PRODUCTS);
-    } catch {
-      return {
-        data: [],
-        count: 0,
-        stats: { pending: 0, approved: 0, rejected: 0, correctionRequested: 0 },
-      };
-    }
+  @ApiOperation({
+    summary: "Products awaiting approval, with queue counts, in the caller's market",
+  })
+  @ApiQuery({ name: 'country', required: false })
+  async getPendingProducts(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those products');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PENDING_PRODUCTS, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('products/:id')
-  @ApiOperation({ summary: 'Get product detail for admin review' })
-  async getProductById(@Param('id') id: string) {
-    try {
-      const product = await this.sendToMarketplace(
-        MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCT_BY_ID,
-        id,
-      );
-      return { data: product };
-    } catch {
-      return { data: { id, name: '', seller: '', status: 'UNKNOWN' } };
-    }
+  @ApiOperation({ summary: 'Product detail for admin review' })
+  async getProductById(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const product = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCT_BY_ID, id);
+    if (!product) throw new NotFoundException('Product not found');
+    // A product's market is its seller's: the catalogue row carries none.
+    assertRecordInScope(
+      req,
+      (product as any).sellerRegionCode ?? (product as any).seller?.regionCode,
+      'that product',
+    );
+    return { data: product };
   }
 
   // Product moderation is a real state change: it writes `approval_status` and emits
@@ -474,10 +524,12 @@ export class AdminMarketplaceController {
   // admin panel changed nothing. See audit 2026-07-27 (H1).
   @Patch('products/:id/approve')
   @ApiOperation({ summary: 'Approve a product' })
-  async approveProduct(@Param('id') id: string, @Req() req: any) {
+  async approveProduct(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
     const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_PRODUCT, {
       id,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
     return { data };
   }
@@ -493,48 +545,64 @@ export class AdminMarketplaceController {
   // What is being reviewed here is the *offer*: this seller's price, condition,
   // stock and fulfilment promise on someone else's catalogue entry.
   @Get('listings/pending')
-  @ApiOperation({ summary: 'Offers awaiting approval' })
+  @ApiOperation({ summary: "Offers awaiting approval in the caller's market" })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'country', required: false })
   async getPendingListings(
+    @Req() req: any,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('country') country?: string,
   ) {
+    const { scope, market } = this.scopeOf(req, country, 'those offers');
     const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_PENDING_LISTINGS, {
       page: +page,
       limit: +limit,
+      region: market,
+      scope,
     });
     return { data };
   }
 
   @Patch('listings/:id/approve')
   @ApiOperation({ summary: 'Approve one seller’s offer' })
-  async approveListing(@Param('id') id: string, @Req() req: any) {
+  async approveListing(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that offer');
     const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_APPROVE_LISTING, {
       id,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
     return { data };
   }
 
   @Patch('listings/:id/reject')
   @ApiOperation({ summary: 'Reject one seller’s offer' })
-  async rejectListing(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
+  async rejectListing(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that offer');
     const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_LISTING, {
       id,
       reason: body?.reason,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
     return { data };
   }
 
   @Patch('products/:id/reject')
   @ApiOperation({ summary: 'Reject a product' })
-  async rejectProduct(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
+  async rejectProduct(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
     const data = await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_PRODUCT, {
       id,
       reason: body?.reason,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
     return { data };
   }
@@ -542,75 +610,95 @@ export class AdminMarketplaceController {
   @Patch('products/:id/request-correction')
   @ApiOperation({ summary: 'Request product correction from seller' })
   async requestCorrection(
-    @Param('id') id: string,
-    @Body() body: { notes: string },
     @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { notes: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REQUEST_PRODUCT_CORRECTION, {
       id,
       notes: body?.notes,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Patch('products/:id/publish')
   @ApiOperation({ summary: 'Publish a product' })
-  async publishProduct(@Param('id') id: string, @Req() req: any) {
+  async publishProduct(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_PUBLISH_PRODUCT, {
       id,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Patch('products/:id/unpublish')
   @ApiOperation({ summary: 'Unpublish a product' })
   async unpublishProduct(
-    @Param('id') id: string,
-    @Body() body: { reason?: string },
     @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason?: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UNPUBLISH_PRODUCT, {
       id,
       reason: body?.reason,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Patch('products/:id/suspend')
   @ApiOperation({ summary: 'Suspend a product' })
-  async suspendProduct(@Param('id') id: string, @Req() req: any) {
+  async suspendProduct(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_PRODUCT, {
       id,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Patch('products/:id/feature')
   @ApiOperation({ summary: 'Feature a product on homepage' })
-  async featureProduct(@Param('id') id: string, @Body() body: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_FEATURE_PRODUCT, { id, ...body });
+  async featureProduct(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() body: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_FEATURE_PRODUCT, {
+      id,
+      ...body,
+      adminId: this.actorId(req),
+      scope,
+    });
   }
 
   @Patch('products/:id/unfeature')
   @ApiOperation({ summary: 'Remove product from featured' })
-  async unfeatureProduct(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UNFEATURE_PRODUCT, { id });
+  async unfeatureProduct(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UNFEATURE_PRODUCT, {
+      id,
+      adminId: this.actorId(req),
+      scope,
+    });
   }
 
   // ── Categories ─────────────────────────────────────────────────────────────
   @Get('categories')
-  @ApiOperation({ summary: 'List admin-managed categories' })
+  @GlobalEntity('catalogue taxonomy is shared by every market')
+  @ApiOperation({ summary: 'List admin-managed categories (shared by every market)' })
   async getCategories() {
-    try {
-      return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CATEGORIES);
-    } catch {
-      return { data: [], total: 0 };
-    }
+    // No catch: an empty taxonomy would send an admin looking for the category
+    // someone "deleted" when the service was simply unreachable.
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CATEGORIES, {});
   }
 
   @Post('categories')
   @ApiOperation({ summary: 'Create a new category' })
-  async createCategory(@Body() data: any) {
+  async createCategory(@Req() req: any, @Body() data: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_CATEGORY, { dto: data });
   }
 
@@ -619,19 +707,24 @@ export class AdminMarketplaceController {
   // still 404'd. Both delegate to the same implementation.
   @Patch('categories/:id')
   @ApiOperation({ summary: 'Update a category' })
-  async updateCategory(@Param('id') id: string, @Body() data: any) {
+  async updateCategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_CATEGORY, { id, dto: data });
   }
 
   @Put('categories/:id')
   @ApiOperation({ summary: 'Update a category (PUT alias)' })
-  async putCategory(@Param('id') id: string, @Body() data: any) {
-    return this.updateCategory(id, data);
+  async putCategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    this.scopeOf(req, undefined, 'that taxonomy');
+    return this.updateCategory(req, id, data);
   }
 
   @Delete('categories/:id')
   @ApiOperation({ summary: 'Delete a category (deactivates it when products exist)' })
-  async deleteCategory(@Param('id') id: string) {
+  async deleteCategory(@Req() req: any, @Param('id') id: string) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_CATEGORY, { id });
   }
 
@@ -640,20 +733,25 @@ export class AdminMarketplaceController {
   // for `attributes` below. The Subcategories screen could therefore never show
   // a subcategory anyone created.
   @Get('subcategories')
-  @ApiOperation({ summary: 'List subcategories' })
+  @GlobalEntity('catalogue taxonomy is shared by every market')
+  @ApiOperation({ summary: 'List subcategories (shared by every market)' })
   async getSubcategories(@Query('categoryId') categoryId?: string) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_SUBCATEGORIES, { categoryId });
   }
 
   @Post('subcategories')
   @ApiOperation({ summary: 'Create subcategory' })
-  async createSubcategory(@Body() data: any) {
+  async createSubcategory(@Req() req: any, @Body() data: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_SUBCATEGORY, { dto: data });
   }
 
   @Patch('subcategories/:id')
   @ApiOperation({ summary: 'Update subcategory' })
-  async updateSubcategory(@Param('id') id: string, @Body() data: any) {
+  async updateSubcategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SUBCATEGORY, { id, dto: data });
   }
 
@@ -661,13 +759,16 @@ export class AdminMarketplaceController {
   // method registers only the last verb, and the admin client sends PUT.
   @Put('subcategories/:id')
   @ApiOperation({ summary: 'Update subcategory (PUT alias)' })
-  async putSubcategory(@Param('id') id: string, @Body() data: any) {
-    return this.updateSubcategory(id, data);
+  async putSubcategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    this.scopeOf(req, undefined, 'that taxonomy');
+    return this.updateSubcategory(req, id, data);
   }
 
   @Delete('subcategories/:id')
   @ApiOperation({ summary: 'Delete subcategory (deactivates it when products exist)' })
-  async deleteSubcategory(@Param('id') id: string) {
+  async deleteSubcategory(@Req() req: any, @Param('id') id: string) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_SUBCATEGORY, { id });
   }
 
@@ -676,7 +777,8 @@ export class AdminMarketplaceController {
   // screen therefore never saw an attribute anyone created — the POST below
   // wrote the row and this GET reported the table empty.
   @Get('attributes')
-  @ApiOperation({ summary: 'List product attributes' })
+  @GlobalEntity('catalogue taxonomy is shared by every market')
+  @ApiOperation({ summary: 'List product attributes (shared by every market)' })
   async getAttributes(
     @Query('categoryId') categoryId?: string,
     @Query('category') category?: string,
@@ -688,7 +790,9 @@ export class AdminMarketplaceController {
 
   @Post('attributes')
   @ApiOperation({ summary: 'Create attribute' })
-  async createAttribute(@Body() data: any) {
+  async createAttribute(@Req() req: any, @Body() data: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_ATTRIBUTE, { dto: data });
   }
 
@@ -697,36 +801,43 @@ export class AdminMarketplaceController {
   // decorators: only the last-applied verb decorator survives on one method.
   @Patch('attributes/:id')
   @ApiOperation({ summary: 'Update attribute' })
-  async updateAttribute(@Param('id') id: string, @Body() data: any) {
+  async updateAttribute(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_ATTRIBUTE, { id, dto: data });
   }
 
   @Put('attributes/:id')
   @ApiOperation({ summary: 'Update attribute (PUT alias)' })
-  async putAttribute(@Param('id') id: string, @Body() data: any) {
-    return this.updateAttribute(id, data);
+  async putAttribute(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    this.scopeOf(req, undefined, 'that taxonomy');
+    return this.updateAttribute(req, id, data);
   }
 
   @Delete('attributes/:id')
   @ApiOperation({ summary: 'Deactivate an attribute' })
-  async deleteAttribute(@Param('id') id: string) {
+  async deleteAttribute(@Req() req: any, @Param('id') id: string) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_DELETE_ATTRIBUTE, { id });
   }
 
   // ── Brands ─────────────────────────────────────────────────────────────────
   @Get('brands')
-  @ApiOperation({ summary: 'List brands' })
+  @GlobalEntity('catalogue taxonomy is shared by every market')
+  @ApiOperation({ summary: 'List brands (shared by every market)' })
   async getBrands() {
-    try {
-      return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_BRANDS);
-    } catch {
-      return { data: [], total: 0 };
-    }
+    // No catch: an unreachable service used to read as "this platform has no
+    // brands", and the Brands screen showed an empty table with no error.
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_BRANDS, {});
   }
 
   @Get('brand-center')
+  @GlobalEntity('catalogue taxonomy is shared by every market')
   @ApiOperation({ summary: 'Brand center overview' })
   async getBrandCenter() {
+    // Still a stub — marketplace-service has no brand-centre read. Left as one
+    // rather than given an implementation it does not have.
     return { data: [] as unknown[], total: 0 };
   }
 
@@ -736,68 +847,84 @@ export class AdminMarketplaceController {
   // absent deliberately — the service implements no handler for either.
   @Put('brands/:id')
   @ApiOperation({ summary: 'Update a brand' })
-  async updateBrand(@Param('id') id: string, @Body() dto: any) {
+  async updateBrand(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, { id, dto });
   }
 
   @Patch('brands/:id')
   @ApiOperation({ summary: 'Update a brand (PATCH alias)' })
-  async patchBrand(@Param('id') id: string, @Body() dto: any) {
-    return this.updateBrand(id, dto);
+  async patchBrand(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that taxonomy');
+    return this.updateBrand(req, id, dto);
   }
 
   @Patch('brands/:id/approve')
   @ApiOperation({ summary: 'Approve a brand' })
-  async approveBrand(@Param('id') id: string, @Req() req: any) {
+  async approveBrand(@Req() req: any, @Param('id') id: string) {
     // Reported `status: 'APPROVED'` without asking marketplace-service, so a
     // brand approved in the admin panel stayed pending everywhere else. Its
     // sibling `rejectBrand` two handlers down always forwarded correctly.
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, {
       id,
-      dto: { status: 'APPROVED', approvedBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
+      dto: { status: 'APPROVED', approvedBy: this.actorId(req) },
     });
   }
 
   @Patch('brands/:id/reject')
   @ApiOperation({ summary: 'Reject a brand' })
-  async rejectBrand(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
+  async rejectBrand(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REJECT_BRAND, {
       id,
       reason: body?.reason,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
     });
   }
 
   @Patch('brands/:id/request-correction')
   @ApiOperation({ summary: 'Request brand correction' })
   async requestBrandCorrection(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() body: { notes: string },
-    @Req() req: any,
   ) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_BRAND, {
       id,
       dto: {
         status: 'CORRECTION_REQUESTED',
         correctionNotes: body?.notes ?? '',
-        reviewedBy: req?.user?.id ?? req?.user?.sub ?? 'admin',
+        reviewedBy: this.actorId(req),
       },
     });
   }
 
   @Patch('brands/:id/suspend')
   @ApiOperation({ summary: 'Suspend a brand' })
-  async suspendBrand(@Param('id') id: string, @Req() req: any) {
+  async suspendBrand(@Req() req: any, @Param('id') id: string) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SUSPEND_BRAND, {
       id,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
     });
   }
 
   // ── Campaigns ──────────────────────────────────────────────────────────────
   @Get('campaigns')
   @ApiOperation({ summary: 'List marketing campaigns' })
-  async getCampaigns() {
+  @ApiQuery({ name: 'country', required: false })
+  async getCampaigns(@Req() req: any, @Query('country') country?: string) {
+    // Still a stub — marketplace-service has no campaign list. The scope call
+    // stays and its refusal is the point: a locked admin naming another market
+    // is refused here rather than handed an empty list that looks like an answer.
+    this.scopeOf(req, country, 'those campaigns');
     return { data: [] as unknown[], total: 0 };
   }
 
@@ -806,14 +933,16 @@ export class AdminMarketplaceController {
   // because no handler exists for them.
   @Put('campaigns/:id')
   @ApiOperation({ summary: 'Update a campaign' })
-  async updateCampaign(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_CAMPAIGN, { id, dto });
+  async updateCampaign(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that campaign');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_CAMPAIGN, { id, dto, scope });
   }
 
   @Patch('campaigns/:id')
   @ApiOperation({ summary: 'Update a campaign (PATCH alias)' })
-  async patchCampaign(@Param('id') id: string, @Body() dto: any) {
-    return this.updateCampaign(id, dto);
+  async patchCampaign(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that campaign');
+    return this.updateCampaign(req, id, dto);
   }
 
   // The four campaign lifecycle routes each returned the status they were named
@@ -827,46 +956,64 @@ export class AdminMarketplaceController {
     req: any,
     extra: Record<string, unknown> = {},
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that campaign');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_CAMPAIGN, {
       id,
-      dto: { status, ...extra, reviewedBy: req?.user?.id ?? req?.user?.sub ?? 'admin' },
+      dto: { status, ...extra, reviewedBy: this.actorId(req) },
+      scope,
     });
   }
 
   @Patch('campaigns/:id/approve')
   @ApiOperation({ summary: 'Approve a campaign' })
-  async approveCampaign(@Param('id') id: string, @Req() req: any) {
+  async approveCampaign(@Req() req: any, @Param('id') id: string) {
+    this.scopeOf(req, undefined, 'that campaign');
     return this.campaignStatus(id, 'APPROVED', req);
   }
 
   @Patch('campaigns/:id/reject')
   @ApiOperation({ summary: 'Reject a campaign' })
-  async rejectCampaign(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: any) {
+  async rejectCampaign(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    this.scopeOf(req, undefined, 'that campaign');
     return this.campaignStatus(id, 'REJECTED', req, { rejectionReason: body?.reason ?? '' });
   }
 
   @Patch('campaigns/:id/pause')
   @ApiOperation({ summary: 'Pause a campaign' })
-  async pauseCampaign(@Param('id') id: string, @Req() req: any) {
+  async pauseCampaign(@Req() req: any, @Param('id') id: string) {
+    this.scopeOf(req, undefined, 'that campaign');
     return this.campaignStatus(id, 'PAUSED', req);
   }
 
   @Patch('campaigns/:id/resume')
   @ApiOperation({ summary: 'Resume a paused campaign' })
-  async resumeCampaign(@Param('id') id: string, @Req() req: any) {
+  async resumeCampaign(@Req() req: any, @Param('id') id: string) {
+    this.scopeOf(req, undefined, 'that campaign');
     return this.campaignStatus(id, 'ACTIVE', req);
   }
 
   // ── Orders / Returns / Refunds ─────────────────────────────────────────────
   @Get('orders')
   @ApiOperation({ summary: 'List all marketplace orders (admin view)' })
-  async getOrders(@Query('page', ParsePagePipe) page = 1) {
+  @ApiQuery({ name: 'country', required: false })
+  async getOrders(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('country') country?: string,
+  ) {
+    // Still a stub — order-service has no admin list pattern. The scope call
+    // refuses a locked admin reaching for another market rather than handing
+    // them an empty page that reads as an answer.
+    this.scopeOf(req, country, 'those orders');
     return { data: [] as unknown[], total: 0, page: Number(page), limit: 20, hasMore: false };
   }
 
   @Get('orders/:id')
   @ApiOperation({ summary: 'Get order details by ID' })
-  async getOrderById(@Param('id') id: string) {
+  async getOrderById(@Req() req: any, @Param('id') id: string) {
+    // Still a stub, and deliberately not "improved": inventing a status for an
+    // order nobody read is how this surface used to lie.
+    this.scopeOf(req, undefined, 'that order');
     return { data: { id, status: 'PENDING' } };
   }
 
@@ -880,60 +1027,79 @@ export class AdminMarketplaceController {
     // `action` is the target status. Echoing it back without asking
     // order-service meant an admin could move an order through any state and
     // the customer's order never changed.
+    const { scope } = this.scopeOf(req, undefined, 'that order');
     return this.sendTo(this.orderClient, 'Order service', 'update_order_status', {
       orderId: id,
       status: dto.action,
       reason: dto.reason,
-      updatedBy: this.actor(req),
+      updatedBy: this.actorId(req),
+      scope,
     });
   }
 
   @Put('orders/:id/cancel')
   @ApiOperation({ summary: 'Cancel an order' })
   async cancelOrder(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that order');
     return this.sendTo(this.orderClient, 'Order service', 'cancel_order', {
       orderId: id,
       reason: body?.reason,
-      cancelledBy: this.actor(req),
+      cancelledBy: this.actorId(req),
+      scope,
     });
   }
 
   @Get('returns')
   @ApiOperation({ summary: 'List return requests' })
-  async getReturns() {
+  @ApiQuery({ name: 'country', required: false })
+  async getReturns(@Req() req: any, @Query('country') country?: string) {
+    // Still a stub — no admin returns list exists to call. Left as one.
+    this.scopeOf(req, country, 'those returns');
     return { data: [] as unknown[], total: 0 };
   }
 
   @Post('returns/:id/approve')
   @ApiOperation({ summary: 'Approve a return request' })
-  async approveReturn(@Param('id') id: string) {
+  async approveReturn(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that return');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, {
       id,
       status: 'APPROVED',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Post('returns/:id/reject')
   @ApiOperation({ summary: 'Reject a return request' })
-  async rejectReturn(@Param('id') id: string, @Body() body: { reason: string }) {
+  async rejectReturn(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that return');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_RETURN_STATUS, {
       id,
       status: 'REJECTED',
       rejectionReason: body?.reason,
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Get('refunds')
   @ApiOperation({ summary: 'List refund requests awaiting a decision' })
+  @ApiQuery({ name: 'country', required: false })
   async getRefunds(
+    @Req() req: any,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('country') country?: string,
   ) {
     // Returned an empty list inline, so the refunds queue was always empty and
     // an admin had no way to tell that from "nothing is pending".
+    const { scope, market } = this.scopeOf(req, country, 'those refunds');
     return this.sendTo(this.refundClient, 'Refund service', 'get_pending_refunds', {
       page: +page,
       limit: +limit,
+      region: market,
+      scope,
     });
   }
 
@@ -948,11 +1114,13 @@ export class AdminMarketplaceController {
     @Param('id') id: string,
     @Body() body?: { remarks?: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that refund');
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
       id,
-      adminId: this.actor(req),
+      adminId: this.actorId(req),
       decision: 'APPROVED',
       remarks: body?.remarks,
+      scope,
     });
   }
 
@@ -963,22 +1131,26 @@ export class AdminMarketplaceController {
     @Param('id') id: string,
     @Body() body: { amount?: number; reason?: string; note?: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that refund');
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
       id,
-      adminId: this.actor(req),
+      adminId: this.actorId(req),
       decision: 'APPROVED',
       remarks: body?.note ?? body?.reason,
+      scope,
     });
   }
 
   @Put('refunds/:id/reject')
   @ApiOperation({ summary: 'Reject a refund' })
   async rejectRefund(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that refund');
     return this.sendTo(this.refundClient, 'Refund service', 'process_refund', {
       id,
-      adminId: this.actor(req),
+      adminId: this.actorId(req),
       decision: 'REJECTED',
       remarks: body?.reason,
+      scope,
     });
   }
 
@@ -997,17 +1169,21 @@ export class AdminMarketplaceController {
   @ApiQuery({ name: 'startDate', required: false })
   @ApiQuery({ name: 'endDate', required: false })
   async getCommissions(
+    @Req() req: any,
     @Query('sellerId') sellerId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('page', ParsePagePipe) page = 1,
+    @Query('country') country?: string,
   ) {
+    const { scope, market } = this.scopeOf(req, country, 'that commission');
     // A single seller's ledger, or the platform-wide totals.
     if (sellerId) {
       const history = await this.sendToCommission('get_seller_commission_history', {
         sellerId,
         page: Number(page),
         limit: DEFAULT_PAGE_SIZE,
+        scope,
       });
       return history ?? { data: [], total: 0 };
     }
@@ -1016,8 +1192,10 @@ export class AdminMarketplaceController {
       this.sendToCommission('get_commission_totals', {
         startDate: startDate ?? new Date(Date.now() - 30 * 86400_000).toISOString(),
         endDate: endDate ?? new Date().toISOString(),
+        region: market,
+        scope,
       }),
-      this.sendToCommission('get_platform_revenue_summary', {}),
+      this.sendToCommission('get_platform_revenue_summary', { region: market, scope }),
     ]);
 
     return { totals: totals ?? null, summary: summary ?? null };
@@ -1025,17 +1203,25 @@ export class AdminMarketplaceController {
 
   @Get('commissions/rate-card')
   @ApiOperation({ summary: 'Category commission rate card' })
-  async getCommissionRateCard() {
-    return (await this.sendToCommission('get_category_rate_card', {})) ?? { data: [] };
+  @ApiQuery({ name: 'country', required: false })
+  async getCommissionRateCard(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that rate card');
+    return (
+      (await this.sendToCommission('get_category_rate_card', { region: market, scope })) ?? {
+        data: [],
+      }
+    );
   }
 
   @Put('commissions/rate-card')
   @ApiOperation({ summary: 'Change a category commission rate' })
   async updateCommissionRateCard(
+    @Req() req: any,
     @Body() body: { category: string; subCategory?: string; updates: any },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that rate card');
     return (
-      (await this.sendToCommission('update_category_rate', body)) ?? {
+      (await this.sendToCommission('update_category_rate', { ...body, scope })) ?? {
         success: false,
         message: 'Commission service unavailable',
       }
@@ -1045,6 +1231,7 @@ export class AdminMarketplaceController {
   @Post('commissions/overrides')
   @ApiOperation({ summary: 'Give a seller a negotiated commission rate' })
   async setCommissionOverride(
+    @Req() req: any,
     @Body()
     body: {
       sellerId: string;
@@ -1054,10 +1241,12 @@ export class AdminMarketplaceController {
       expiresAt?: string;
     },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that commission');
     return (
       (await this.sendToCommission('set_seller_commission_override', {
         ...body,
         serviceType: body.serviceType ?? 'marketplace',
+        scope,
       })) ?? { success: false, message: 'Commission service unavailable' }
     );
   }
@@ -1065,21 +1254,29 @@ export class AdminMarketplaceController {
   @Delete('commissions/overrides/:sellerId')
   @ApiOperation({ summary: 'Remove a seller’s negotiated rate' })
   async removeCommissionOverride(
+    @Req() req: any,
     @Param('sellerId') sellerId: string,
     @Query('serviceType') serviceType = 'marketplace',
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that commission');
     return (
       (await this.sendToCommission('remove_seller_commission_override', {
         sellerId,
         serviceType,
+        scope,
       })) ?? { success: false, message: 'Commission service unavailable' }
     );
   }
 
   @Patch('commissions/:id')
   @ApiOperation({ summary: 'Update commission rate for a module' })
-  async updateCommission(@Param('id') id: string, @Body() body: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_COMMISSION, { id, dto: body });
+  async updateCommission(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that commission');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_COMMISSION, {
+      id,
+      dto: body,
+      scope,
+    });
   }
 
   /**
@@ -1092,39 +1289,53 @@ export class AdminMarketplaceController {
   @Get('payouts')
   @ApiOperation({ summary: 'Seller payout requests awaiting action' })
   @ApiQuery({ name: 'sellerId', required: false })
+  @ApiQuery({ name: 'country', required: false })
   async getPayouts(
+    @Req() req: any,
     @Query('sellerId') sellerId?: string,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('country') country?: string,
   ) {
+    const { scope, market } = this.scopeOf(req, country, 'those payouts');
     const cmd = sellerId ? 'get_seller_payouts' : 'get_pending_payouts';
     const payload = sellerId
-      ? { sellerId, page: Number(page), limit: Number(limit) }
-      : { page: Number(page), limit: Number(limit) };
+      ? { sellerId, page: Number(page), limit: Number(limit), region: market, scope }
+      : { page: Number(page), limit: Number(limit), region: market, scope };
 
     return (await this.sendToPayout(cmd, payload)) ?? { data: [], total: 0, totalAmount: 0 };
   }
 
   @Get('payouts/stats')
   @ApiOperation({ summary: 'Payout volume and success rate' })
-  async getPayoutStats() {
-    return (await this.sendToPayout('get_payout_stats', {})) ?? null;
+  @ApiQuery({ name: 'country', required: false })
+  async getPayoutStats(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return (await this.sendToPayout('get_payout_stats', { region: market, scope })) ?? null;
   }
 
   @Patch('payouts/:id/approve')
   @ApiOperation({ summary: 'Approve a payout request' })
-  async approvePayout(@Param('id') id: string, @Req() req: any) {
-    const adminId = req?.user?.id ?? req?.user?.sub ?? 'admin';
-    const result = await this.sendToPayout('approve_payout', { payoutId: id, adminId });
+  async approvePayout(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that payout');
+    const result = await this.sendToPayout('approve_payout', {
+      payoutId: id,
+      adminId: this.actorId(req),
+      scope,
+    });
     if (!result) throw new ServiceUnavailableException('Payouts are temporarily unavailable.');
     return result;
   }
 
   @Patch('payouts/:id/process')
   @ApiOperation({ summary: 'Execute an approved payout' })
-  async processPayout(@Param('id') id: string, @Req() req: any) {
-    const adminId = req?.user?.id ?? req?.user?.sub ?? 'admin';
-    const result = await this.sendToPayout('process_payout', { payoutId: id, adminId });
+  async processPayout(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that payout');
+    const result = await this.sendToPayout('process_payout', {
+      payoutId: id,
+      adminId: this.actorId(req),
+      scope,
+    });
     if (!result) throw new ServiceUnavailableException('Payouts are temporarily unavailable.');
     return result;
   }
@@ -1135,10 +1346,15 @@ export class AdminMarketplaceController {
 
   @Post('payouts/:id/retry')
   @ApiOperation({ summary: 'Retry a failed payout' })
-  async retryPayout(@Param('id') id: string) {
+  async retryPayout(@Req() req: any, @Param('id') id: string) {
     // Was `return { success: true, status: 'processing' }` — it reported a retry
     // it had not started, so a stuck payout looked as though it had been requeued.
-    const result = await this.sendToPayout('retry_payout', { payoutId: id });
+    const { scope } = this.scopeOf(req, undefined, 'that payout');
+    const result = await this.sendToPayout('retry_payout', {
+      payoutId: id,
+      adminId: this.actorId(req),
+      scope,
+    });
     if (!result) throw new ServiceUnavailableException('Payouts are temporarily unavailable.');
     return result;
   }
@@ -1146,13 +1362,20 @@ export class AdminMarketplaceController {
   // ── Reports / Audit ────────────────────────────────────────────────────────
   @Get('reports')
   @ApiOperation({ summary: 'Get marketplace reports' })
-  async getReports() {
+  @ApiQuery({ name: 'country', required: false })
+  async getReports(@Req() req: any, @Query('country') country?: string) {
+    // Still a stub — there is no report generator behind this. Left as one.
+    this.scopeOf(req, country, 'that report');
     return { data: [] as unknown[], total: 0 };
   }
 
   @Get('audit-logs')
   @ApiOperation({ summary: 'Get admin audit logs' })
-  async getAuditLogs() {
+  @ApiQuery({ name: 'country', required: false })
+  async getAuditLogs(@Req() req: any, @Query('country') country?: string) {
+    // Still a stub. The real audit trail is `GET /admin/audit-logs` on
+    // admin-core, which is scoped there; this alias was never wired to it.
+    this.scopeOf(req, country, 'that audit trail');
     return { data: [] as unknown[], total: 0 };
   }
 
@@ -1317,6 +1540,7 @@ export class AdminMarketplaceController {
     @Param('id') id: string,
     @Body() body: any,
   ) {
+    this.scopeOf(req, undefined, 'this banner');
     return this.saveBanner(req, type, { ...body, id });
   }
 
@@ -1344,9 +1568,15 @@ export class AdminMarketplaceController {
 
   // ── Home Cache Invalidation ───────────────────────────────────────────────
   @Post('invalidate-home-cache')
-  @ApiOperation({ summary: 'Force invalidate marketplace home cache for all regions' })
-  async invalidateHomeCache() {
-    const regions = ['global', 'IN', 'AE', 'SA', 'QA', 'GB', 'KW', 'OM', 'US', 'IN'];
+  @ApiOperation({ summary: "Force invalidate the marketplace home cache for the caller's markets" })
+  @ApiQuery({ name: 'country', required: false })
+  async invalidateHomeCache(@Req() req: any, @Query('country') country?: string) {
+    // A locked admin drops their own market's feed only: emptying every market's
+    // home cache from a regional console is a global act.
+    const { market } = this.scopeOf(req, country, 'that home cache');
+    const regions = market
+      ? ['global', market]
+      : [...AdminMarketplaceController.CACHED_HOME_REGIONS];
     for (const r of regions) {
       await this.redis.del(`marketplace:home:${r}`);
     }
@@ -1486,6 +1716,7 @@ export class AdminMarketplaceController {
   @Post('exchange-offers')
   @ApiOperation({ summary: 'Create an exchange offer' })
   async createExchangeOffer(@Req() req: any, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'this exchange offer');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_EXCHANGE_OFFER, {
       dto: this.scopeExchangeOffer(req, dto),
     });
@@ -1556,32 +1787,44 @@ export class AdminMarketplaceController {
   // ── Page Layout ─────────────────────────────────────────────────────────────
   @Get('page-layout')
   @ApiOperation({ summary: 'Get marketplace page layout' })
-  async getPageLayout(@Query('country') country?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PAGE_LAYOUT, { country });
+  @ApiQuery({ name: 'country', required: false })
+  async getPageLayout(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that page layout');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PAGE_LAYOUT, {
+      country: market,
+      scope,
+    });
   }
 
   @Patch('page-layout')
   @ApiOperation({ summary: 'Update marketplace page layout' })
-  async updatePageLayout(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_PAGE_LAYOUT, { dto });
+  async updatePageLayout(@Req() req: any, @Body() dto: any) {
+    const { scope, market } = this.scopeOf(req, dto?.country, 'that page layout');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_PAGE_LAYOUT, {
+      dto: { ...dto, ...(market ? { country: market } : {}) },
+      scope,
+    });
   }
 
   // ── SEO ──────────────────────────────────────────────────────────────────────
   @Get('seo')
   @ApiOperation({ summary: 'Get marketplace SEO settings' })
-  async getSeoSettings() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SEO, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getSeoSettings(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those SEO settings');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SEO, { region: market, scope });
   }
 
   @Patch('seo')
   @ApiOperation({ summary: 'Update marketplace SEO settings' })
-  async updateSeoSettings(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SEO, { dto });
+  async updateSeoSettings(@Req() req: any, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, dto?.country ?? dto?.regionCode, 'those SEO settings');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SEO, { dto, scope });
   }
 
   @Patch('sellers/:id/block')
   @ApiOperation({ summary: 'Permanently block a seller' })
-  async blockSeller(@Param('id') id: string, @Req() req: any) {
+  async blockSeller(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     // Publishing the Kafka event was all this used to do — nothing wrote the
     // seller's status, so the block was announced but never applied.
     // `blockSeller()` on the service performs the write (and emits its own event).
@@ -1590,23 +1833,31 @@ export class AdminMarketplaceController {
     // with `{ success: false }` buried two levels down, which the console renders
     // as a success — the same "reports done, did nothing" failure mode this fix
     // exists to remove. A block that did not happen must surface as an error.
+    const { scope } = this.scopeOf(req, undefined, 'that seller');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_BLOCK_SELLER, {
       id,
-      adminId: req?.user?.id ?? req?.user?.sub ?? 'admin',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   // ── Settings ────────────────────────────────────────────────────────────────
   @Get('settings')
   @ApiOperation({ summary: 'Get marketplace settings' })
-  async getSettings() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SETTINGS, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getSettings(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those settings');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SETTINGS, {
+      region: market,
+      scope,
+    });
   }
 
   @Patch('settings')
   @ApiOperation({ summary: 'Update marketplace settings' })
-  async updateSettings(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SETTINGS, { dto });
+  async updateSettings(@Req() req: any, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, dto?.country ?? dto?.regionCode, 'those settings');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SETTINGS, { dto, scope });
   }
 
   // ── Flash Deals ─────────────────────────────────────────────────────────────
@@ -1734,8 +1985,12 @@ export class AdminMarketplaceController {
 
   @Post('promotions')
   @ApiOperation({ summary: 'Create promotion' })
-  async createPromotion(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_PROMOTION, { dto });
+  async createPromotion(@Req() req: any, @Body() dto: any) {
+    const { scope, market } = this.scopeOf(req, dto?.regionCode ?? dto?.country, 'this promotion');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_PROMOTION, {
+      dto: { ...dto, ...(market ? { regionCode: market } : {}) },
+      scope,
+    });
   }
 
   @Patch('promotions/:id')
@@ -1751,191 +2006,323 @@ export class AdminMarketplaceController {
   // ── Notifications ───────────────────────────────────────────────────────────
   @Get('notifications')
   @ApiOperation({ summary: 'List admin notifications' })
-  async getNotifications() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getNotifications(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those notifications');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS, {
+      region: market,
+      scope,
+    });
   }
 
   @Post('notifications')
   @ApiOperation({ summary: 'Send notification' })
-  async sendNotification(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SEND_NOTIFICATION, { dto });
+  async sendNotification(@Req() req: any, @Body() dto: any) {
+    const { scope, market } = this.scopeOf(
+      req,
+      dto?.regionCode ?? dto?.country,
+      'that notification',
+    );
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_SEND_NOTIFICATION, {
+      dto: { ...dto, ...(market ? { regionCode: market } : {}) },
+      scope,
+    });
   }
 
   // ── HSN / Tax Master ────────────────────────────────────────────────────────
   @Get('hsn-codes')
-  @ApiOperation({ summary: 'List HSN/tax codes' })
+  @GlobalEntity('catalogue taxonomy is shared by every market')
+  @ApiOperation({ summary: 'List HSN/tax codes (shared by every market)' })
   async getHsnCodes(@Query('search') search?: string) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, search);
+    // Sent `search` as a bare positional argument to the *products* pattern,
+    // which is neither an HSN read nor a shape any handler could parse.
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_HSN_CODES, { search });
   }
 
   @Post('hsn-codes')
   @ApiOperation({ summary: 'Create HSN code' })
-  async createHsnCode(@Body() dto: any) {
+  async createHsnCode(@Req() req: any, @Body() dto: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_HSN_CODE, { dto });
   }
 
   @Patch('hsn-codes/:id')
   @ApiOperation({ summary: 'Update HSN code' })
-  async updateHsnCode(@Param('id') id: string, @Body() dto: any) {
+  async updateHsnCode(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_HSN_CODE, { id, dto });
   }
 
   // ── Featured Products ───────────────────────────────────────────────────────
   @Get('featured')
   @ApiOperation({ summary: 'List featured products' })
-  async getFeaturedProducts() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_FEATURED, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getFeaturedProducts(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those products');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_FEATURED, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('featured-products')
   @ApiOperation({ summary: 'List featured products (alias)' })
-  async getFeaturedProductsAlias() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_FEATURED, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getFeaturedProductsAlias(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, undefined, 'those products');
+    return this.getFeaturedProducts(req, country);
   }
 
   @Post('featured')
   @ApiOperation({ summary: 'Add featured product' })
-  async addFeaturedProduct(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_ADD_FEATURED, { dto });
+  async addFeaturedProduct(@Req() req: any, @Body() dto: any) {
+    const { scope, market } = this.scopeOf(req, dto?.regionCode ?? dto?.country, 'that product');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_ADD_FEATURED, {
+      dto: { ...dto, ...(market ? { regionCode: market } : {}) },
+      scope,
+    });
   }
 
   @Delete('featured/:id')
   @ApiOperation({ summary: 'Remove featured product' })
-  async removeFeaturedProduct(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REMOVE_FEATURED, { id });
+  async removeFeaturedProduct(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_REMOVE_FEATURED, { id, scope });
   }
 
   // ── Sponsored Products ──────────────────────────────────────────────────────
   @Get('sponsored')
   @ApiOperation({ summary: 'List sponsored products' })
-  async getSponsoredProducts(@Query('status') status?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SPONSORED, { status });
+  @ApiQuery({ name: 'country', required: false })
+  async getSponsoredProducts(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'those products');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SPONSORED, {
+      status,
+      region: market,
+      scope,
+    });
   }
 
   @Get('sponsored-products')
   @ApiOperation({ summary: 'List sponsored products (alias)' })
-  async getSponsoredProductsAlias(@Query('status') status?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SPONSORED, { status });
+  @ApiQuery({ name: 'country', required: false })
+  async getSponsoredProductsAlias(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    this.scopeOf(req, undefined, 'those products');
+    return this.getSponsoredProducts(req, status, country);
   }
 
   @Patch('sponsored/:id')
   @ApiOperation({ summary: 'Update sponsored product' })
-  async updateSponsoredProduct(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SPONSORED, { id, dto });
+  async updateSponsoredProduct(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that product');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_SPONSORED, { id, dto, scope });
   }
 
   // ── Reviews ─────────────────────────────────────────────────────────────────
   @Get('reviews')
   @ApiOperation({ summary: 'List reviews for moderation' })
-  async getReviews(@Query('status') status?: string, @Query('rating') rating?: number) {
-    return await this.sendToMarketplace(
-      MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS,
+  @ApiQuery({ name: 'country', required: false })
+  async getReviews(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('rating') rating?: number,
+    @Query('country') country?: string,
+  ) {
+    // Still pointed at the *products* pattern: marketplace-service has no
+    // `admin_get_reviews` handler to call, so re-pointing it would 503 rather
+    // than list reviews. What is fixed here is the payload — `(status, rating)`
+    // went as positional arguments, which `sendToMarketplace` packs into an
+    // array no handler can read — and the market the caller may see.
+    // The queue itself still needs its own pattern; that is not this change.
+    const { scope, market } = this.scopeOf(req, country, 'those reviews');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, {
       status,
-      rating ? Number(rating) : undefined,
-    );
+      rating: rating ? Number(rating) : undefined,
+      region: market,
+      scope,
+    });
   }
 
   @Patch('reviews/:id/flag')
   @ApiOperation({ summary: 'Flag a review for moderation' })
-  async flagReview(@Param('id') id: string, @Body() body: { reason: string }) {
+  async flagReview(@Req() req: any, @Param('id') id: string, @Body() body: { reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that review');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_FLAG_REVIEW, {
       id,
       reason: body?.reason,
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Patch('reviews/:id/hide')
   @ApiOperation({ summary: 'Hide a review from public view' })
-  async hideReview(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_HIDE_REVIEW, { id });
+  async hideReview(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that review');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_HIDE_REVIEW, {
+      id,
+      adminId: this.actorId(req),
+      scope,
+    });
   }
 
   // ── QA Moderation ───────────────────────────────────────────────────────────
   @Get('qa-moderation')
   @ApiOperation({ summary: 'List Q&A items for moderation' })
-  async getQAItems(@Query('status') status?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_QA, { status });
+  @ApiQuery({ name: 'country', required: false })
+  async getQAItems(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'those questions');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_QA, {
+      status,
+      region: market,
+      scope,
+    });
   }
 
   @Patch('qa-moderation/:id')
   @ApiOperation({ summary: 'Moderate Q&A item' })
-  async moderateQAItem(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_MODERATE_QA, { id, dto });
+  async moderateQAItem(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that question');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_MODERATE_QA, { id, dto, scope });
   }
 
   // ── Complaints ──────────────────────────────────────────────────────────────
   @Get('complaints')
   @ApiOperation({ summary: 'List complaints' })
-  async getComplaints(@Query('status') status?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_COMPLAINTS, { status });
+  @ApiQuery({ name: 'country', required: false })
+  async getComplaints(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'those complaints');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_COMPLAINTS, {
+      status,
+      region: market,
+      scope,
+    });
   }
 
   @Patch('complaints/:id')
   @ApiOperation({ summary: 'Update complaint' })
-  async updateComplaint(@Param('id') id: string, @Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_COMPLAINT, { id, dto });
+  async updateComplaint(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that complaint');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_COMPLAINT, { id, dto, scope });
   }
 
   // ── Compliance / Countries ──────────────────────────────────────────────────
   @Get('compliance/countries')
   @ApiOperation({ summary: 'List compliance countries' })
-  async getComplianceCountries() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_COMPLIANCE_COUNTRIES, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getComplianceCountries(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that compliance profile');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_COMPLIANCE_COUNTRIES, {
+      region: market,
+      scope,
+    });
   }
 
   @Patch('compliance/countries/:code')
   @ApiOperation({ summary: 'Update country compliance' })
-  async updateComplianceCountry(@Param('code') code: string, @Body() dto: any) {
+  async updateComplianceCountry(@Req() req: any, @Param('code') code: string, @Body() dto: any) {
+    // The country in the path IS the market: a Qatari admin editing India's
+    // compliance profile is the clearest form of this whole class of bug.
+    const { scope, market } = this.scopeOf(req, code, 'that compliance profile');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_COMPLIANCE_COUNTRY, {
-      code,
+      code: market ?? code,
       dto,
+      scope,
     });
   }
 
   // ── Customers ───────────────────────────────────────────────────────────────
   @Get('customers')
   @ApiOperation({ summary: 'List customers' })
-  async getCustomers(@Query('search') search?: string, @Query('page') page?: number) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CUSTOMERS, { search, page });
+  @ApiQuery({ name: 'country', required: false })
+  async getCustomers(
+    @Req() req: any,
+    @Query('search') search?: string,
+    @Query('page') page?: number,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'those customers');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CUSTOMERS, {
+      search,
+      page,
+      region: market,
+      scope,
+    });
   }
 
   @Patch('customers/:id/block')
   @ApiOperation({ summary: 'Block customer' })
-  async blockCustomer(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_BLOCK_CUSTOMER, { id });
+  async blockCustomer(@Req() req: any, @Param('id') id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that customer');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_BLOCK_CUSTOMER, {
+      id,
+      adminId: this.actorId(req),
+      scope,
+    });
   }
 
   // ── Seller Wallets ──────────────────────────────────────────────────────────
   @Get('seller-wallets')
   @ApiOperation({ summary: 'List seller wallets' })
-  async getSellerWallets() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_WALLETS, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getSellerWallets(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those wallets');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_WALLETS, {
+      region: market,
+      scope,
+    });
   }
 
   @Post('seller-wallets/:id/adjust')
   @ApiOperation({ summary: 'Adjust seller wallet balance' })
   async adjustSellerWallet(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() dto: { amount: number; reason: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that wallet');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_ADJUST_SELLER_WALLET, {
       sellerId: id,
       amount: dto?.amount,
       reason: dto?.reason,
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   // ── India Operations ────────────────────────────────────────────────────────
   @Get('india-ops')
   @ApiOperation({ summary: 'Get India operations config' })
-  async getIndiaOpsConfig() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_INDIA_OPS, {});
+  async getIndiaOpsConfig(@Req() req: any) {
+    // This config IS India's: a locked admin may only read it if they are
+    // India's, which `scopeOf` decides by comparing their market with IN.
+    const { scope } = this.scopeOf(req, 'IN', 'that configuration');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_INDIA_OPS, { scope });
   }
 
   @Patch('india-ops')
   @ApiOperation({ summary: 'Update India operations config' })
-  async updateIndiaOpsConfig(@Body() dto: any) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_INDIA_OPS, { dto });
+  async updateIndiaOpsConfig(@Req() req: any, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, 'IN', 'that configuration');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_INDIA_OPS, { dto, scope });
   }
 
   // ── Sellers Pending ─────────────────────────────────────────────────────────
@@ -1948,7 +2335,9 @@ export class AdminMarketplaceController {
   @ApiQuery({ name: 'endDate', required: false })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'country', required: false })
   async searchWalletTransactions(
+    @Req() req: any,
     @Query('userId') userId?: string,
     @Query('type') type?: string,
     @Query('module') module?: string,
@@ -1956,8 +2345,14 @@ export class AdminMarketplaceController {
     @Query('endDate') endDate?: string,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('country') country?: string,
   ) {
-    const cached = await this.redis.getJson<any>(`admin:wallet:search:${userId || 'all'}:${page}`);
+    const { scope, market } = this.scopeOf(req, country, 'those transactions');
+    // Cached per market as well as per user: one shared key would have served a
+    // Qatari admin's page to an Indian one.
+    const cached = await this.redis.getJson<any>(
+      `admin:wallet:search:${market ?? 'all'}:${userId || 'all'}:${page}`,
+    );
     if (cached) return cached;
 
     /**
@@ -1979,6 +2374,8 @@ export class AdminMarketplaceController {
       endDate,
       page: +page,
       limit: +limit,
+      region: market,
+      scope,
     });
   }
 
@@ -2001,6 +2398,7 @@ export class AdminMarketplaceController {
     // The money moves first. The audit entry is written after, and only if the
     // adjustment actually landed — logging it first recorded credits that never
     // happened and made the log the least trustworthy record of the two.
+    const { scope } = this.scopeOf(req, undefined, 'that wallet');
     const result = await this.sendTo(
       this.walletClient,
       'Wallet service',
@@ -2011,13 +2409,14 @@ export class AdminMarketplaceController {
         reason: dto.reason,
         module: 'admin',
         referenceId: `admin-adjust-${Date.now()}`,
+        scope,
       },
     );
 
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
       action: 'wallet.admin_adjust',
       target: dto.userId,
-      actor: this.actor(req),
+      actor: this.actorId(req),
       details: { amount: dto.amount, type: dto.type, reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
@@ -2034,15 +2433,17 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Freeze a user wallet (fraud prevention)' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async freezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that wallet');
     const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_freeze', {
       userId: dto.userId,
       reason: dto.reason,
-      adminId: this.actor(req),
+      adminId: this.actorId(req),
+      scope,
     });
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
       action: 'wallet.freeze',
       target: dto.userId,
-      actor: this.actor(req),
+      actor: this.actorId(req),
       details: { reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
@@ -2053,15 +2454,17 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Unfreeze a user wallet' })
   @ApiBody({ schema: { properties: { userId: { type: 'string' }, reason: { type: 'string' } } } })
   async unfreezeWallet(@Req() req: any, @Body() dto: { userId: string; reason: string }) {
+    const { scope } = this.scopeOf(req, undefined, 'that wallet');
     const result = await this.sendTo(this.walletClient, 'Wallet service', 'wallet_unfreeze', {
       userId: dto.userId,
       reason: dto.reason,
-      adminId: this.actor(req),
+      adminId: this.actorId(req),
+      scope,
     });
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
       action: 'wallet.unfreeze',
       target: dto.userId,
-      actor: this.actor(req),
+      actor: this.actorId(req),
       details: { reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
@@ -2074,7 +2477,10 @@ export class AdminMarketplaceController {
 
   @Get('loyalty/config')
   @ApiOperation({ summary: 'Get loyalty program configuration' })
-  async getLoyaltyConfig() {
+  async getLoyaltyConfig(@Req() req: any) {
+    // One programme for the whole platform: a locked admin reads it, and the
+    // PATCH below refuses them, the same shape as the shared taxonomy.
+    this.scopeOf(req, undefined, 'that configuration');
     const cached = await this.redis.getJson<any>('admin:loyalty:config');
     return (
       cached || {
@@ -2110,10 +2516,15 @@ export class AdminMarketplaceController {
 
   @Patch('loyalty/config')
   @ApiOperation({ summary: 'Update loyalty program configuration' })
-  async updateLoyaltyConfig(@Body() dto: any) {
+  async updateLoyaltyConfig(@Req() req: any, @Body() dto: any) {
+    // The tiers, earn rules and redemption rate are one platform-wide config:
+    // a regional admin editing them would reprice loyalty in every market.
+    if (marketScopeOf(req).locked)
+      throw new ForbiddenException('The loyalty programme is configured globally.');
     await this.redis.setJson('admin:loyalty:config', dto, 0); // No TTL — persistent config
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
       action: 'loyalty.config_updated',
+      actor: this.actorId(req),
       details: dto,
       timestamp: new Date().toISOString(),
     });
@@ -2123,7 +2534,14 @@ export class AdminMarketplaceController {
   @Get('loyalty/users/:userId')
   @ApiOperation({ summary: 'Get user loyalty detail (admin view)' })
   @ApiParam({ name: 'userId' })
-  async getUserLoyalty(@Param('userId') userId: string) {
+  async getUserLoyalty(@Req() req: any, @Param('userId') userId: string) {
+    // A points balance a locked admin may not attribute to their own market is
+    // not theirs to read. The user's market is loyalty-service's to answer, and
+    // it has no read that returns it yet, so this refuses rather than guessing.
+    const { scope } = this.scopeOf(req, undefined, 'that loyalty account');
+    if (scope) {
+      throw new ForbiddenException('This loyalty account cannot be attributed to a market yet.');
+    }
     const cached = await this.redis.getJson<any>(`loyalty:${userId}`);
     return cached || { userId, points: 0, tier: 'Bronze', totalEarned: 0, totalReversed: 0 };
   }
@@ -2143,6 +2561,7 @@ export class AdminMarketplaceController {
     @Req() req: any,
     @Body() dto: { userId: string; points: number; reason: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that loyalty account');
     const result = await this.sendTo(
       this.loyaltyClient,
       'Loyalty service',
@@ -2151,13 +2570,14 @@ export class AdminMarketplaceController {
         userId: dto.userId,
         points: Number(dto.points) || 0,
         reason: dto.reason,
-        adminId: this.actor(req),
+        adminId: this.actorId(req),
+        scope,
       },
     );
     await this.kafka.publish(KAFKA_TOPICS.AUDIT_LOG, {
       action: 'loyalty.admin_adjust',
       target: dto.userId,
-      actor: this.actor(req),
+      actor: this.actorId(req),
       details: { points: dto.points, reason: dto.reason },
       timestamp: new Date().toISOString(),
     });
@@ -2172,7 +2592,15 @@ export class AdminMarketplaceController {
 
   @Get('loyalty/analytics')
   @ApiOperation({ summary: 'Get loyalty program analytics' })
-  async getLoyaltyAnalytics() {
+  @ApiQuery({ name: 'country', required: false })
+  async getLoyaltyAnalytics(@Req() req: any, @Query('country') country?: string) {
+    // Every number below is a literal. It is left as one — inventing a read
+    // would be worse — but it is at least no longer served to a locked admin
+    // as though it were their market's.
+    const { scope } = this.scopeOf(req, country, 'that report');
+    if (scope) {
+      throw new ForbiddenException('This report cannot be attributed to a market yet.');
+    }
     return {
       totalPointsInCirculation: 285000,
       totalPointsAwarded: 420000,
@@ -2189,18 +2617,42 @@ export class AdminMarketplaceController {
   // ██ PHASE 2 — Admin Analytics (Gateway Proxies)
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // Every read below used to send a bare positional argument (`period`,
+  // `sortBy`, `sellerId`) — `sendToMarketplace` forwards a single argument
+  // as-is, so the handler received a string where it expected a payload and the
+  // filter was silently dropped. They send objects now, carrying the market.
   @Get('analytics/revenue')
   @ApiOperation({ summary: 'Revenue analytics with daily breakdown' })
   @ApiQuery({ name: 'period', required: false, enum: ['week', 'month', 'quarter'] })
-  async getRevenueAnalytics(@Query('period') period?: string) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_REVENUE_ANALYTICS, period);
+  @ApiQuery({ name: 'country', required: false })
+  async getRevenueAnalytics(
+    @Req() req: any,
+    @Query('period') period?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_REVENUE_ANALYTICS, {
+      period,
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/funnel')
   @ApiOperation({ summary: 'Conversion funnel metrics' })
   @ApiQuery({ name: 'period', required: false })
-  async getConversionFunnel(@Query('period') period?: string) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CONVERSION_FUNNEL, period);
+  @ApiQuery({ name: 'country', required: false })
+  async getConversionFunnel(
+    @Req() req: any,
+    @Query('period') period?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CONVERSION_FUNNEL, {
+      period,
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/seller-rankings')
@@ -2210,52 +2662,107 @@ export class AdminMarketplaceController {
     required: false,
     enum: ['revenue', 'rating', 'orders', 'fulfillment'],
   })
-  async getSellerRankings(@Query('sortBy') sortBy?: string) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_RANKINGS, sortBy);
+  @ApiQuery({ name: 'country', required: false })
+  async getSellerRankings(
+    @Req() req: any,
+    @Query('sortBy') sortBy?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_RANKINGS, {
+      sortBy,
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/category-performance')
   @ApiOperation({ summary: 'Per-category sales and return metrics' })
-  async getCategoryPerformance() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CATEGORY_PERFORMANCE);
+  @ApiQuery({ name: 'country', required: false })
+  async getCategoryPerformance(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CATEGORY_PERFORMANCE, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/regional')
   @ApiOperation({ summary: 'State/city-wise order distribution' })
-  async getRegionalPerformance() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_REGIONAL_PERFORMANCE);
+  @ApiQuery({ name: 'country', required: false })
+  async getRegionalPerformance(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_REGIONAL_PERFORMANCE, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/inventory-aging')
   @ApiOperation({ summary: 'Slow-moving stock analysis by age bucket' })
-  async getInventoryAging() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_INVENTORY_AGING);
+  @ApiQuery({ name: 'country', required: false })
+  async getInventoryAging(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_INVENTORY_AGING, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/return-analysis')
   @ApiOperation({ summary: 'Return rate breakdown by reason and category' })
-  async getReturnRateAnalysis() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_RETURN_ANALYSIS);
+  @ApiQuery({ name: 'country', required: false })
+  async getReturnRateAnalysis(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_RETURN_ANALYSIS, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/fraud-alerts')
   @ApiOperation({ summary: 'Suspicious order pattern detection' })
-  async getFraudAlerts() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_FRAUD_ALERTS);
+  @ApiQuery({ name: 'country', required: false })
+  async getFraudAlerts(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_FRAUD_ALERTS, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/sla-compliance')
   @ApiOperation({ summary: 'SLA compliance metrics for all sellers' })
   @ApiQuery({ name: 'sellerId', required: false })
-  async getSLACompliance(@Query('sellerId') sellerId?: string) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SLA_COMPLIANCE, sellerId);
+  @ApiQuery({ name: 'country', required: false })
+  async getSLACompliance(
+    @Req() req: any,
+    @Query('sellerId') sellerId?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SLA_COMPLIANCE, {
+      sellerId,
+      region: market,
+      scope,
+    });
   }
 
   @Get('analytics/penalty-ledger')
   @ApiOperation({ summary: 'Penalty ledger for SLA violations' })
   @ApiQuery({ name: 'sellerId', required: false })
-  async getPenaltyLedger(@Query('sellerId') sellerId?: string) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PENALTY_LEDGER, sellerId);
+  @ApiQuery({ name: 'country', required: false })
+  async getPenaltyLedger(
+    @Req() req: any,
+    @Query('sellerId') sellerId?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PENALTY_LEDGER, {
+      sellerId,
+      region: market,
+      scope,
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2274,10 +2781,14 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'List pending seller applications (alias for sellers/pending)' })
   @ApiQuery({ name: 'country', required: false, description: 'Scope the queue to one market' })
   async getSellerApprovals(@Req() req: any, @Query('country') country?: string) {
-    const region = (country || req?.regionCode || '').toUpperCase() || undefined;
+    // Read the market off `req.regionCode` — a property nothing sets on the
+    // request — so a regional admin's queue was every market's, and `country`
+    // was whatever the caller typed. The token decides now.
+    const { scope, market } = this.scopeOf(req, country, 'those approvals');
     return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLERS, {
       status: 'PENDING',
-      ...(region ? { country: region } : {}),
+      region: market,
+      scope,
     });
   }
 
@@ -2285,12 +2796,13 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'List products pending approval' })
   @ApiQuery({ name: 'country', required: false, description: 'Scope the queue to one market' })
   async getProductApprovals(@Req() req: any, @Query('country') country?: string) {
-    const region = (country || req?.regionCode || '').toUpperCase() || undefined;
+    const { scope, market } = this.scopeOf(req, country, 'those approvals');
     return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, {
       page: 1,
       limit: 50,
       status: 'PENDING',
-      ...(region ? { country: region } : {}),
+      region: market,
+      scope,
     });
   }
 
@@ -2303,11 +2815,16 @@ export class AdminMarketplaceController {
    */
   @Get('seller-approvals/counts')
   @ApiOperation({ summary: 'Pending seller applications per market' })
-  async getSellerApprovalCounts() {
+  @ApiQuery({ name: 'country', required: false })
+  async getSellerApprovalCounts(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those approvals');
     const counts = await this.sendToMarketplace<Record<string, number>>(
       MARKETPLACE_PATTERNS.ADMIN_PENDING_SELLER_COUNTS,
+      { region: market, scope },
     );
-    const byRegion = counts ?? {};
+    // A locked admin sees their own market's line, not the platform breakdown:
+    // the backlog in India is not information a Qatari admin is owed.
+    const byRegion = scope ? { [scope]: Number((counts ?? {})[scope] ?? 0) } : (counts ?? {});
     return {
       data: byRegion,
       total: Object.values(byRegion).reduce((sum, n) => sum + (Number(n) || 0), 0),
@@ -2317,14 +2834,29 @@ export class AdminMarketplaceController {
   @Get('disputes')
   @ApiOperation({ summary: 'List buyer-seller disputes' })
   @ApiQuery({ name: 'status', required: false })
-  async getDisputes(@Query('status') status?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_DISPUTES, { status });
+  @ApiQuery({ name: 'country', required: false })
+  async getDisputes(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'those disputes');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_DISPUTES, {
+      status,
+      region: market,
+      scope,
+    });
   }
 
   @Get('customer-segments')
   @ApiOperation({ summary: 'List customer RFM segments' })
-  async getCustomerSegments() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CUSTOMER_SEGMENTS, {});
+  @ApiQuery({ name: 'country', required: false })
+  async getCustomerSegments(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those customers');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_CUSTOMER_SEGMENTS, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('coupons')
@@ -2354,15 +2886,24 @@ export class AdminMarketplaceController {
     });
   }
 
+  // The nine reads below are still stubs: nothing behind the gateway implements
+  // them, and giving them an invented implementation is the failure mode this
+  // whole pass exists to remove. What each one gains is the scope call — a
+  // locked admin asking for another market is refused rather than handed an
+  // empty list that reads as an answer about that market.
   @Get('gift-cards')
   @ApiOperation({ summary: 'List platform gift cards' })
-  async getAdminGiftCards() {
+  @ApiQuery({ name: 'country', required: false })
+  async getAdminGiftCards(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those gift cards');
     return { data: [] as unknown[], total: 0, message: 'Gift card management' };
   }
 
   @Get('banners')
   @ApiOperation({ summary: 'List all homepage banners' })
-  async getAllBanners() {
+  @ApiQuery({ name: 'country', required: false })
+  async getAllBanners(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those banners');
     return { data: [] as unknown[], total: 0, message: 'Banner management' };
   }
 
@@ -2378,9 +2919,10 @@ export class AdminMarketplaceController {
   @Post('banners')
   @ApiOperation({ summary: 'Create a homepage banner' })
   async createBanner(@Req() req: any, @Body() dto: any) {
+    const { market } = this.scopeOf(req, dto?.regionCode ?? dto?.country, 'this banner');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_BANNER, {
       dto,
-      region: marketScopeOf(req).region,
+      region: marketScopeOf(req).region ?? market,
     });
   }
 
@@ -2400,6 +2942,7 @@ export class AdminMarketplaceController {
   @Patch('banners/:id')
   @ApiOperation({ summary: 'Update a homepage banner (PATCH alias)' })
   async patchHomepageBanner(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'this banner');
     return this.updateHomepageBanner(req, id, dto);
   }
 
@@ -2414,68 +2957,101 @@ export class AdminMarketplaceController {
 
   @Get('inventory')
   @ApiOperation({ summary: 'Global inventory overview' })
-  async getGlobalInventory() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_INVENTORY_AGING);
+  @ApiQuery({ name: 'country', required: false })
+  async getGlobalInventory(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_INVENTORY_AGING, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('listing-quality')
   @ApiOperation({ summary: 'Listing quality score dashboard' })
-  async getListingQuality() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, 1, 50);
+  @ApiQuery({ name: 'country', required: false })
+  async getListingQuality(@Req() req: any, @Query('country') country?: string) {
+    // Sent `(1, 50)` positionally, which arrives as an array no handler reads.
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, {
+      page: 1,
+      limit: 50,
+      region: market,
+      scope,
+    });
   }
 
   @Get('seller-health')
   @ApiOperation({ summary: 'Seller health metrics dashboard' })
-  async getSellerHealth() {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SLA_COMPLIANCE);
+  @ApiQuery({ name: 'country', required: false })
+  async getSellerHealth(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that report');
+    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SLA_COMPLIANCE, {
+      region: market,
+      scope,
+    });
   }
 
   @Get('logistics')
   @ApiOperation({ summary: 'Logistics partner management' })
-  async getLogistics() {
+  @ApiQuery({ name: 'country', required: false })
+  async getLogistics(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those partners');
     return { data: [] as unknown[], total: 0, message: 'Logistics integrations' };
   }
 
   @Get('delivery-partners')
   @ApiOperation({ summary: 'Delivery partner management' })
-  async getDeliveryPartners() {
+  @ApiQuery({ name: 'country', required: false })
+  async getDeliveryPartners(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those partners');
     return { data: [] as unknown[], total: 0, message: 'Delivery partner list' };
   }
 
   @Get('delivery-zones')
   @ApiOperation({ summary: 'Delivery zone configuration' })
-  async getDeliveryZones() {
+  @ApiQuery({ name: 'country', required: false })
+  async getDeliveryZones(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those zones');
     return { data: [] as unknown[], total: 0, message: 'Zone configuration' };
   }
 
   @Get('shipping-rates')
   @ApiOperation({ summary: 'Shipping rate cards' })
-  async getShippingRates() {
+  @ApiQuery({ name: 'country', required: false })
+  async getShippingRates(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those rates');
     return { data: [] as unknown[], total: 0, message: 'Rate card management' };
   }
 
   @Get('payments')
   @ApiOperation({ summary: 'Payment gateway management' })
-  async getPayments() {
+  @ApiQuery({ name: 'country', required: false })
+  async getPayments(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those payment methods');
     return { data: [] as unknown[], total: 0, message: 'Payment gateway config' };
   }
 
   @Get('hsn-tax-master')
+  @GlobalEntity('catalogue taxonomy is shared by every market')
   @ApiOperation({ summary: 'HSN/SAC tax rate master (alias for hsn-codes)' })
   @ApiQuery({ name: 'search', required: false })
   async getHsnTaxMaster(@Query('search') search?: string) {
-    return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_PRODUCTS, search);
+    return await this.getHsnCodes(search);
   }
 
   @Get('gst-invoicing')
   @ApiOperation({ summary: 'GST invoicing management' })
-  async getGstInvoicing() {
+  async getGstInvoicing(@Req() req: any) {
+    // GST is India's tax regime: this surface is IN's, whoever opens it.
+    this.scopeOf(req, 'IN', 'that configuration');
     return { data: [] as unknown[], total: 0, message: 'GST invoice management' };
   }
 
   @Get('abandoned-carts')
   @ApiOperation({ summary: 'Abandoned cart recovery management' })
-  async getAbandonedCarts() {
+  @ApiQuery({ name: 'country', required: false })
+  async getAbandonedCarts(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those carts');
     return {
       data: [] as unknown[],
       total: 0,
@@ -2486,11 +3062,14 @@ export class AdminMarketplaceController {
 
   @Get('ip-violations')
   @ApiOperation({ summary: 'IP/counterfeit violation reports' })
-  async getIpViolations() {
+  @ApiQuery({ name: 'country', required: false })
+  async getIpViolations(@Req() req: any, @Query('country') country?: string) {
+    this.scopeOf(req, country, 'those reports');
     return { data: [] as unknown[], total: 0, message: 'IP violation management' };
   }
 
   @Get('system-health')
+  @GlobalEntity('platform health is the same fleet in every market')
   @ApiOperation({ summary: 'Microservice health monitor' })
   async getSystemHealth() {
     return {
@@ -2518,88 +3097,107 @@ export class AdminMarketplaceController {
   // @Patch and @Put on a single method does NOT work — only the last-applied
   // verb decorator registers — so each alias is its own method delegating to the
   // canonical handler.
+  //
+  // Each alias resolves the caller's market itself before delegating. The
+  // canonical handler resolves it again, which is free; what it buys is that
+  // every route on this controller can be shown to be scoped by reading its own
+  // body, rather than by following a delegation chain.
   @Put('promotions/:id')
   @ApiOperation({ summary: 'Update promotion (PUT alias)' })
   async putPromotion(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that promotion');
     return this.updatePromotion(req, id, dto);
   }
 
   @Put('complaints/:id')
   @ApiOperation({ summary: 'Update complaint (PUT alias)' })
-  async putComplaint(@Param('id') id: string, @Body() dto: any) {
-    return this.updateComplaint(id, dto);
+  async putComplaint(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that complaint');
+    return this.updateComplaint(req, id, dto);
   }
 
   @Put('qa-moderation/:id')
   @ApiOperation({ summary: 'Moderate Q&A item (PUT alias)' })
-  async putQAItem(@Param('id') id: string, @Body() dto: any) {
-    return this.moderateQAItem(id, dto);
+  async putQAItem(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that question');
+    return this.moderateQAItem(req, id, dto);
   }
 
   @Put('settings')
   @ApiOperation({ summary: 'Update marketplace settings (PUT alias)' })
-  async putSettings(@Body() dto: any) {
-    return this.updateSettings(dto);
+  async putSettings(@Req() req: any, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'those settings');
+    return this.updateSettings(req, dto);
   }
 
   @Put('page-layout')
   @ApiOperation({ summary: 'Update page layout (PUT alias)' })
-  async putPageLayout(@Body() dto: any) {
-    return this.updatePageLayout(dto);
+  async putPageLayout(@Req() req: any, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that page layout');
+    return this.updatePageLayout(req, dto);
   }
 
   @Put('seo')
   @ApiOperation({ summary: 'Update SEO settings (PUT alias)' })
-  async putSeoSettings(@Body() dto: any) {
-    return this.updateSeoSettings(dto);
+  async putSeoSettings(@Req() req: any, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'those SEO settings');
+    return this.updateSeoSettings(req, dto);
   }
 
   @Put('hsn-codes/:id')
   @ApiOperation({ summary: 'Update HSN code (PUT alias)' })
-  async putHsnCode(@Param('id') id: string, @Body() dto: any) {
-    return this.updateHsnCode(id, dto);
+  async putHsnCode(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that taxonomy');
+    return this.updateHsnCode(req, id, dto);
   }
 
   @Put('bank-offers/:id')
   @ApiOperation({ summary: 'Update bank offer (PUT alias)' })
   async putBankOffer(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    this.scopeOf(req, undefined, 'this bank offer');
     return this.updateBankOffer(req, id, body);
   }
 
   @Put('exchange-offers/:id')
   @ApiOperation({ summary: 'Update exchange offer (PUT alias)' })
   async putExchangeOffer(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    this.scopeOf(req, undefined, 'this exchange offer');
     return this.updateExchangeOffer(req, id, body);
   }
 
   @Put('sponsored/:id')
   @ApiOperation({ summary: 'Update sponsored product (PUT alias)' })
-  async putSponsoredProduct(@Param('id') id: string, @Body() dto: any) {
-    return this.updateSponsoredProduct(id, dto);
+  async putSponsoredProduct(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that product');
+    return this.updateSponsoredProduct(req, id, dto);
   }
 
   @Put('compliance/countries/:code')
   @ApiOperation({ summary: 'Update country compliance (PUT alias)' })
-  async putComplianceCountry(@Param('code') code: string, @Body() dto: any) {
-    return this.updateComplianceCountry(code, dto);
+  async putComplianceCountry(@Req() req: any, @Param('code') code: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that compliance profile');
+    return this.updateComplianceCountry(req, code, dto);
   }
 
   @Put('india-ops')
   @ApiOperation({ summary: 'Update India ops config (PUT alias)' })
-  async putIndiaOpsConfig(@Body() dto: any) {
-    return this.updateIndiaOpsConfig(dto);
+  async putIndiaOpsConfig(@Req() req: any, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'that configuration');
+    return this.updateIndiaOpsConfig(req, dto);
   }
 
   @Put('flash-deals/:id')
   @ApiOperation({ summary: 'Update flash deal (PUT alias)' })
   async putFlashDeal(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    this.scopeOf(req, undefined, 'this flash deal');
     return this.updateFlashDeal(req, id, dto);
   }
 
   @Post('payouts/:id/process')
   @ApiOperation({ summary: 'Execute an approved payout (POST alias)' })
-  async postProcessPayout(@Param('id') id: string, @Req() req: any) {
-    return this.processPayout(id, req);
+  async postProcessPayout(@Req() req: any, @Param('id') id: string) {
+    this.scopeOf(req, undefined, 'that payout');
+    return this.processPayout(req, id);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2617,13 +3215,15 @@ export class AdminMarketplaceController {
 
   @Put('commissions/:id')
   @ApiOperation({ summary: 'Update a commission rule (PUT alias)' })
-  async putCommission(@Param('id') id: string, @Body() body: any) {
-    return this.updateCommission(id, body);
+  async putCommission(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    this.scopeOf(req, undefined, 'that commission');
+    return this.updateCommission(req, id, body);
   }
 
   @Put('customers/:id/block')
   @ApiOperation({ summary: 'Block a customer (PUT alias)' })
-  async putBlockCustomer(@Param('id') id: string) {
-    return this.blockCustomer(id);
+  async putBlockCustomer(@Req() req: any, @Param('id') id: string) {
+    this.scopeOf(req, undefined, 'that customer');
+    return this.blockCustomer(req, id);
   }
 }
