@@ -1,0 +1,151 @@
+# KARTSEEK Admin Platform Upgrade — Program Roadmap, Checklist and Test Matrices
+
+Date: 2026-09-11 · Audit: `docs/audits/2026-09-11-admin-platform-audit.md` · Design: `docs/superpowers/specs/2026-09-11-admin-platform-design.md`
+
+This document is deliverable 8 (implementation checklist), the templates for deliverables 9 (E2E test report) and 10 (final regression report), and the map of the executable plans. It is the single place where task status is tracked. Update the status column here as tasks land; the per-plan files hold the code and steps.
+
+## 1. Plan sequence
+
+Each plan is independently executable and leaves the platform working. Later plans are expanded into the same bite-sized format only after the previous plan lands, because their code depends on what lands (the skill's scope rule).
+
+| Plan                                         | File                                                                                 | Scope                                                                                                                                                                                                                                                                                             | Status                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| A — Admin authorization & regional isolation | `2026-09-11-admin-authz-isolation-plan.md` · kickoff: `2026-09-11-plan-a-kickoff.md` | P0 role hole, shared scope helper + spec, scope on core/marketplace/taxi/grocery/other-module routes, regression spec, live authz script extension                                                                                                                                                | **Written, Not Started** (subagent-driven, start at A1) |
+| B — Admin identity, RBAC, audit & validation | `2026-09-11-admin-identity-rbac-audit-plan.md`                                       | Truthful console role, server MFA, admin roles/staff persistence + permission claim, audit read path, DTO validation, fixture removal where the API exists                                                                                                                                        | **Written, Not Started**                                |
+| C — Module admin backends                    | to be written after A+B land                                                         | 76 missing handlers (taxi 22, pharmacy 17, restaurant 13, doctor 12, hotel 12), 45 literal marketplace routes made real or 501, market columns on the entities in audit §9, cache namespaces, per-module DTOs, `check-admin-commands.mjs` in CI, orders/payments/refunds admin via their services | Outlined (§3)                                           |
+| D — Taxi operations platform                 | after C                                                                              | Entities (vehicle, service area, surge zone, trip event, dispute), 30+ handlers, `/admin-fleet` namespace, live map, trip monitoring, fares/surge/geofence, disputes, fraud views, reports; console taxi pages rebuilt                                                                            | Outlined (§3)                                           |
+| E — Console design system & UX               | can start after B (design system) and proceeds page by page                          | `packages/shared-ui/src/admin/*`, navigation registry, breadcrumbs, global search, notifications, `Money`, `DataTable` adoption, fixture removal for the remaining pages, responsive pass with the 11-width harness                                                                               | Outlined (§3)                                           |
+| F — Verification & release                   | after each plan and at the end                                                       | Playwright admin journeys per market, Postman contract update, live authz + e2e scripts per market, regression run over every surface, final reports                                                                                                                                              | Outlined (§3)                                           |
+
+Branching: create `feat/admin-platform-upgrade` from `fix/system-check-2026-09-06` (the audit base). One commit per task, `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. lint-staged fails when one commit mixes `apps/api` and zone/web files (`project_marketplace_customer_audit_2026-09-06`): commit API and web changes separately within a task.
+
+## 2. Implementation checklist (deliverable 8)
+
+States: Not Started → In Progress → Complete → Tested. "Tested" requires the named test green **and** the live probe where one is listed.
+
+### Plan A — authorization & isolation
+
+| Task | Deliverable                                                                                                                            | Test                                                   | Status      |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------- |
+| A1   | `/admin/security/*` requires `ADMIN\|SUPER_ADMIN`; exposure spec asserts every `/admin` route has `@Roles`                             | `route-exposure.regression.spec.ts`                    | Not Started |
+| A2   | `assertInMarket` in `@app/common`; `market-scope.spec.ts`; dead `RegionGuard`/`RegionIsolationGuard`/`@RequireRegion` deleted          | `market-scope.spec.ts`                                 | Not Started |
+| A3   | admin-core users/KYC/audit/revenue scoped; admin-service enforces scope                                                                | `admin-core.controller.spec.ts`, admin-service spec    | Not Started |
+| A4   | marketplace sellers/products/approvals/customers/complaints/reviews/orders scoped; filter payload bugs fixed; no placeholder on outage | `admin-marketplace.scope.spec.ts`                      | Not Started |
+| A5   | taxi admin routes scoped; backend filters by `countryCode`; suspend command name fixed                                                 | `admin-taxi.controller.spec.ts`, taxi backend spec     | Not Started |
+| A6   | grocery admin routes scoped; backend filters through store `regionCode`                                                                | `admin-grocery.controller.spec.ts`, grocery admin spec | Not Started |
+| A7   | hotel/restaurant/pharmacy/doctor existing routes scoped                                                                                | controller specs                                       | Not Started |
+| A8   | `admin-market-scope.regression.spec.ts`: every `/admin` route scoped or allowlisted with a reason                                      | the spec                                               | Not Started |
+| A9   | `regional-isolation-authz.mjs` extended (users, sellers, products, taxi, grocery); run as QA/IN/global admins                          | live script ≥ 36 + new checks green                    | Not Started |
+
+### Plan B — identity, RBAC, audit, validation
+
+| Task | Deliverable                                                                                                                                                    | Test                                                 | Status      |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------- |
+| B1   | Console role from the token; `proxy.ts` accepts staff roles; `hasPermission` no longer defaults true; `ADMIN_ACCOUNTS` deleted                                 | jest `admin-login.test.tsx`, `proxy.test.ts`         | Not Started |
+| B2   | Server MFA: login returns challenge for staff; `/auth/mfa/verify`; `@Throttle` on login/verify; console stores token only after verify                         | `auth-mfa.spec.ts`; live login as `qa-admin@`        | Not Started |
+| B3   | `admin.admin_roles` + `users.admin_role_id`; admin-service role/staff handlers; gateway `/admin/roles`, `/admin/staff` (SUPER_ADMIN)                           | `admin-roles.spec.ts`                                | Not Started |
+| B4   | `adminPermissions` claim; `RolesGuard` `'*'`; first `perm:` routes (finance, staff, security)                                                                  | `roles.guard.spec.ts` additions; `jwt.strategy` spec | Not Started |
+| B5   | Audit read path: audit-log-service TCP `audit.query` (scoped); `GET /admin/audit-logs` → Mongo; actor ids on seller decisions; Redis audit deprecated to Kafka | `audit-query.spec.ts`; page test                     | Not Started |
+| B6   | DTOs for admin-core and admin-taxi bodies; `ParseUUIDPipe` on ids                                                                                              | validation specs (400 on unknown field)              | Not Started |
+| B7   | Fixture removal where the API exists: security, kyc-verification, sellers, dashboard widgets, header notifications, dead nav link                              | jest page tests                                      | Not Started |
+
+### Plan C — module admin backends (task inventory; expand after A+B)
+
+| Task | Deliverable                                                                                                                                               | Status      |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| C1   | Marketplace: orders/returns/refunds/payments admin via order-, refund-, payment-service with scope; campaigns real; PUT aliases removed; 501 for the rest | Not Started |
+| C2   | Pharmacy: 17 handlers + `region_code` on order/prescription (from store) + DTOs                                                                           | Not Started |
+| C3   | Restaurant: 13 handlers + `region_code` on order/reservation + DTOs                                                                                       | Not Started |
+| C4   | Hotel: 12 handlers, command names aligned, room/review/payout scoped via hotel                                                                            | Not Started |
+| C5   | Doctor: 12 handlers, `country_code` on doctor, appointment/prescription via clinic                                                                        | Not Started |
+| C6   | Grocery: flash-deal/warehouse/setting market columns; the four stub pages' backends or removal                                                            | Not Started |
+| C7   | Cache namespaces per §2.3 of the design; purge helpers per market                                                                                         | Not Started |
+| C8   | `scripts/check-admin-commands.mjs` in `npm test`; events carry actor + market                                                                             | Not Started |
+| C9   | Countries & Markets: `admin.market_settings`, `getActiveRegionCodes()` reads it, `/admin/markets` routes                                                  | Not Started |
+
+### Plan D — taxi operations
+
+| Task | Deliverable                                                                                                                                                                      | Status      |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| D1   | Entities: vehicle, service-area, surge-zone, trip-event, dispute (+ migrations, seeds for QA/IN/AE/SA)                                                                           | Not Started |
+| D2   | Handlers: dashboard, drivers, vendors, vehicles, trips, fares, surge, areas, promotions, payouts/earnings, disputes, ratings, complaints, fraud, reports, settings — all `scope` | Not Started |
+| D3   | `/admin-fleet` namespace with per-market rooms; location fan-out                                                                                                                 | Not Started |
+| D4   | Console taxi pages rebuilt on the design system; six dead pages removed                                                                                                          | Not Started |
+| D5   | Taxi E2E journey per market (driver registration → … → reports)                                                                                                                  | Not Started |
+
+### Plan E — console UX
+
+| Task | Deliverable                                                                                             | Status      |
+| ---- | ------------------------------------------------------------------------------------------------------- | ----------- |
+| E1   | `admin-navigation.ts` registry + nav test; breadcrumbs; module selector; account menu from token        | Not Started |
+| E2   | `packages/shared-ui/src/admin/*` components (§5.1 of the design) with jest tests                        | Not Started |
+| E3   | `Money` + lint rule; remove `₹` from 111 files                                                          | Not Started |
+| E4   | Global search route + `Ctrl+K`; notifications real                                                      | Not Started |
+| E5   | `DataTable` adoption per module (marketplace, grocery, taxi, hotel, restaurant, pharmacy, doctor, core) | Not Started |
+| E6   | Remaining fixture/no-API pages resolved (rebuild or remove)                                             | Not Started |
+| E7   | Responsive + a11y pass at 375/768/1024/1440 with the sweep harness                                      | Not Started |
+
+### Plan F — verification
+
+| Task | Deliverable                                                                     | Status      |
+| ---- | ------------------------------------------------------------------------------- | ----------- |
+| F1   | Playwright admin journeys (marketplace, taxi) per market as QA/IN/global admins | Not Started |
+| F2   | Postman `05-admin-panel` updated; critical path green                           | Not Started |
+| F3   | Live scripts (`regional-isolation-authz`, `-e2e`) green per market              | Not Started |
+| F4   | Full regression (§4) and final reports                                          | Not Started |
+
+## 3. Outline of plans C–F (to expand into executable plans)
+
+Written as scoped statements so the next author can expand them without re-auditing.
+
+- **C1 Marketplace money paths.** `GET /admin/marketplace/orders` → `order-service` `list_orders_admin { scope, status, page, limit, search }` (order-service already persists `region_code`); `orders/:id` → `get_order_admin`; `orders/:id/cancel` → `cancel_order_admin { reason, actorId }` and must release stock + deal allocation (closes B-10); returns → marketplace `return_request` (has `region_code`); refunds → refund-service (`refund.approved` is consumed by two services already); payments → payment-service `list_payments_admin { scope }` (payment has `region_code`). Campaign approve/reject/pause/resume need a `campaigns` table (does not exist) — decide: build (Plan C) or return 501 and hide the page. PUT aliases: delete the 20 echo routes; the console clients use PATCH.
+- **C2–C5.** Each backend gets `src/admin/<module>-admin.controller.ts` + `.service.ts` + `dto/admin/`. Handlers take `{ scope, actorId, ...dto }`. Lists filter through the owner's market (order → store/restaurant/clinic). Migrations add `region_code` denormalised at write time (trigger-free: set in the service's create path, backfilled by a one-off script per table). Each handler publishes `<module>.<entity>.<verb>` with actor + market.
+- **C7 Cache.** Grocery: `grocery:categories:<market>`; taxi: rename to `taxi:driver:loc:<id>`, `taxi:ride:<id>`, `taxi:surge:<cc>:<zone>`, `taxi:zone:demand:<cc>:<zone>`; a spec parses each backend for `redis.` keys and fails on a prefix outside the module's namespace.
+- **C9 Markets.** `admin.market_settings` seeded from `ACTIVE_REGIONS`; `getActiveRegionCodes()` reads Redis `admin:markets` (5 min) → table → env; gateway `X-Region-Code` validation uses it; `/admin/markets` CRUD is SUPER_ADMIN only.
+- **D.** See design §4. Order of work: entities → handlers → gateway routes → namespace → console. Every handler is written with `scope` from day one; the market-scope regression spec (A8) will otherwise fail the build.
+- **E.** Build the components first (E2), migrate marketplace pages (the most numerous, and already partly on a toolkit) second, then taxi as part of D4, then the rest. `Money` and the lint rule (E3) can land any time after B.
+- **F.** The E2E journeys are listed in §5; the regression surfaces in §6.
+
+## 4. Global constraints (apply to every plan)
+
+- Node 26, Nest on rspack (`nest build --all` is the gate, `tsc` is not — `project_rspack_builder_migration`); TypeORM entities listed explicitly, never globs; `T | null` columns need an explicit `type:`.
+- Main DB (`kartseek_db`) does not synchronize: every new column on `users`, `orders` or schema `admin` ships as a migration in `apps/api/migrations` and is applied by hand in dev.
+- `DEV_AUTH_BYPASS` makes anonymous local requests SUPER_ADMIN: every authorization test sends an `Authorization` header.
+- Gateway registers no global auth guard: every new controller carries `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles(...)`; the exposure spec enforces it.
+- Currency, language, address: through the localization registry only; no literal `₹`.
+- Copy rule for denials: "Your account is restricted to the QA market; <what> belongs to IN." (existing wording in `market-scope.ts`).
+- Naming: RPC `admin.<module>.<entity>.<verb>`; cache `<module>:<entity>:<market>`; events `<module>.<entity>.<verb>`; permission keys `<area>.<verb>`.
+- Tests: `apps/api` → `npx vitest run <file>`; `apps/web` → `npx jest <file>`; live scripts from `apps/api` with the fleet up (`npm run dev:all` from `apps/api`, plus each module backend's `dev`).
+
+## 5. E2E test matrix (deliverable 9 template)
+
+Run per market (QA, IN, AE, SA) and per actor (global admin, that market's regional admin, the _other_ market's regional admin who must be refused). Fill Result with pass/fail and the run id.
+
+| #      | Journey                                                                                                                                                                                                                        | Steps                                                                                                                                                                                                                                                                                             | Expected for the market's admin                               | Expected for the other market's admin                                | Result |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------- | ------ |
+| E2E-M1 | Marketplace: seller → product → approvals → publish → customer sees → cart → checkout → order → seller order → fulfilment → delivery → completion → commission → report                                                        | seller registers in market; admin approves seller (KYC) and product; product visible on the market's storefront only; COD checkout at deal price; order persisted with `region_code`; seller order projected; admin marks delivered; commission charged; revenue report shows it under the market | every admin step succeeds                                     | every admin step 403 with `[region-scope-denied]` in the gateway log | —      |
+| E2E-M2 | Marketplace returns/refunds                                                                                                                                                                                                    | customer requests return; admin approves; refund processed                                                                                                                                                                                                                                        | succeeds                                                      | 403                                                                  | —      |
+| E2E-T1 | Taxi: driver registration → document approval → vehicle approval → driver online → booking → matching → acceptance → trip start → live tracking → completion → fare → payment → commission → driver earnings → rating → report | as listed                                                                                                                                                                                                                                                                                         | succeeds; live map shows the trip in `fleet:<cc>`             | 403; cannot join `fleet:<other>`                                     | —      |
+| E2E-T2 | Taxi fares & surge                                                                                                                                                                                                             | admin edits rate card and a surge zone; estimate reflects it                                                                                                                                                                                                                                      | succeeds                                                      | 403                                                                  | —      |
+| E2E-G1 | Grocery: store approval → product → order → refund                                                                                                                                                                             | as listed                                                                                                                                                                                                                                                                                         | succeeds                                                      | 403                                                                  | —      |
+| E2E-C1 | Core: create regional admin (locked to market), login with MFA, nav shows only permitted items, audit log shows the actions with actor + market                                                                                | as listed                                                                                                                                                                                                                                                                                         | succeeds                                                      | n/a                                                                  | —      |
+| E2E-C2 | Audit: every mutation above appears in `/admin/audit-logs` with actor, entity, market, request id                                                                                                                              |                                                                                                                                                                                                                                                                                                   | visible to global and to the market's admin; not to the other |                                                                      | —      |
+
+## 6. Regression matrix (deliverable 10 template)
+
+Run after each plan lands and at the end. "Suite" is the existing gate; nothing here is new work except the admin-specific rows.
+
+| Surface                                                         | Suite / probe                                                      | Baseline (2026-09-06)            | After A | After B | After C | After D | After E | Final |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------- | ------- | ------- | ------- | ------- | ------- | ----- |
+| API unit/regression                                             | `apps/api` `npm test` (incl. guards, route-exposure, market-scope) | 18/18 green                      | —       | —       | —       | —       | —       | —     |
+| Marketplace integration specs                                   | 23 specs                                                           | 23/23                            | —       | —       | —       | —       | —       | —     |
+| Postman critical path                                           | `tests/postman`                                                    | 924/975 (bypass off)             | —       | —       | —       | —       | —       | —     |
+| Customer journeys per market                                    | `regional-isolation-e2e.mjs`                                       | 67/67                            | —       | —       | —       | —       | —       | —     |
+| Regional authz                                                  | `regional-isolation-authz.mjs`                                     | 36/36                            | —       | —       | —       | —       | —       | —     |
+| Web build + lint                                                | `apps/web` `next build`, `eslint`                                  | green (245 advisory hook errors) | —       | —       | —       | —       | —       | —     |
+| Customer web sweep                                              | 678-page crawl                                                     | 0 errors                         | —       | —       | —       | —       | —       | —     |
+| Seller portal                                                   | Playwright + Postman seller collection                             | —                                | —       | —       | —       | —       | —       | —     |
+| Partner portal                                                  | Postman partner flows                                              | —                                | —       | —       | —       | —       | —       | —     |
+| Grocery / Restaurant / Pharmacy / Doctor / Hotel customer flows | Postman `03-customer-app`                                          | —                                | —       | —       | —       | —       | —       | —     |
+| Franchise / Wallet / Loyalty                                    | Postman + unit                                                     | —                                | —       | —       | —       | —       | —       | —     |
+| Mobile (Flutter analyze)                                        | customer 0 issues / shared-mobile 1 warning                        | baseline                         | —       | —       | —       | —       | —       | —     |
