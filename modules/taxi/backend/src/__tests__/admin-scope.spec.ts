@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import { DriverOnboardingService } from '../services/driver-onboarding.service';
 import { TaxiPayoutService } from '../services/taxi-payout.service';
+import { TaxiController } from '../taxi.controller';
 
 describe('DriverOnboardingService.getDrivers scopes by country', () => {
   function service() {
@@ -124,6 +125,68 @@ describe('DriverOnboardingService.reviewDocument resolves the market through the
   });
 });
 
+describe('DriverOnboardingService.reviewDocument resolves a vendor-owned document through the vendor repository', () => {
+  function service(vendorCountry: string | null) {
+    const doc = { id: 'doc-2', ownerType: 'vendor', ownerId: 'ven-1', status: 'pending' };
+    const documentRepo = {
+      findOne: vi.fn(async () => doc),
+      save: vi.fn(async (d: any) => d),
+    };
+    const vendorRepo = {
+      findOne: vi.fn(async () =>
+        vendorCountry ? { id: 'ven-1', countryCode: vendorCountry } : null,
+      ),
+    };
+    const driverRepo = {
+      findOne: vi.fn(),
+      manager: { getRepository: vi.fn(() => vendorRepo) },
+    };
+    const kafka = { publish: vi.fn(async () => undefined) };
+    const svc = Object.create(DriverOnboardingService.prototype) as DriverOnboardingService;
+    Object.assign(svc, {
+      driverRepo,
+      documentRepo,
+      configRepo: {},
+      kafka,
+      logger: { log: vi.fn(), warn: vi.fn() },
+    });
+    return { svc, documentRepo, driverRepo, vendorRepo, kafka };
+  }
+
+  it('refuses to review a vendor-owned document whose vendor is in another market, before any write', async () => {
+    const { svc, documentRepo, vendorRepo, kafka } = service('IN');
+    await expect(
+      svc.reviewDocument('doc-2', 'admin-qa', 'approved', undefined, 'QA'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(documentRepo.save).not.toHaveBeenCalled();
+    expect(kafka.publish).not.toHaveBeenCalled();
+    // The owner is resolved through the vendor repository reached via
+    // driverRepo.manager.getRepository — the onboarding service has no
+    // vendor repository of its own injected.
+    expect(vendorRepo.findOne).toHaveBeenCalledWith({
+      where: { id: 'ven-1' },
+      select: ['id', 'countryCode'],
+    });
+  });
+
+  it('approves a vendor-owned document whose vendor is in the caller market', async () => {
+    const { svc, documentRepo } = service('QA');
+    await expect(
+      svc.reviewDocument('doc-2', 'admin-qa', 'approved', undefined, 'QA'),
+    ).resolves.toMatchObject({ status: 'approved' });
+    expect(documentRepo.save).toHaveBeenCalled();
+  });
+
+  it('refuses a scoped admin when the owner row cannot be found at all', async () => {
+    const { svc, documentRepo, kafka } = service(null);
+    await expect(
+      svc.reviewDocument('doc-2', 'admin-qa', 'approved', undefined, 'QA'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(documentRepo.save).not.toHaveBeenCalled();
+    expect(kafka.publish).not.toHaveBeenCalled();
+  });
+});
+
 describe('DriverOnboardingService.getPendingDocuments joins the owner for the market predicate', () => {
   function service() {
     const joins: { alias: string; on: string }[] = [];
@@ -198,5 +261,32 @@ describe('TaxiPayoutService.processPayouts asserts every row in the batch', () =
       failed: 0,
     });
     expect(payoutRepo.save).toHaveBeenCalled();
+  });
+});
+
+describe('TaxiController.tcpSurge refuses a locked admin — surge has no market yet', () => {
+  function controller() {
+    const svc = { getSurgeMultiplier: vi.fn(async () => ({ multiplier: 1.2 })) };
+    const ctrl = Object.create(TaxiController.prototype) as TaxiController;
+    Object.assign(ctrl, { svc });
+    return { ctrl, svc };
+  }
+
+  it('refuses a scoped request without ever reading the surge model', () => {
+    const { ctrl, svc } = controller();
+    // tcpSurge is synchronous and throws directly rather than returning a
+    // rejected promise, so the call must be wrapped for `.toThrow` to catch it.
+    expect(() => ctrl.tcpSurge({ lat: 25.2, lng: 51.5, scope: 'QA' } as any)).toThrow(
+      ForbiddenException,
+    );
+    expect(svc.getSurgeMultiplier).not.toHaveBeenCalled();
+  });
+
+  it('lets an unscoped (global admin) request through', async () => {
+    const { ctrl, svc } = controller();
+    await expect(ctrl.tcpSurge({ lat: 25.2, lng: 51.5 } as any)).resolves.toMatchObject({
+      multiplier: 1.2,
+    });
+    expect(svc.getSurgeMultiplier).toHaveBeenCalledWith(25.2, 51.5);
   });
 });

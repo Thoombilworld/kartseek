@@ -10,6 +10,7 @@ import {
   UseGuards,
   UseFilters,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
@@ -773,9 +774,14 @@ export class TaxiController {
   }
 
   @MessagePattern({ cmd: 'admin.taxi.surge' })
-  tcpSurge(@Payload() d: { lat: number; lng: number }) {
-    // No market on the surge model yet — see Plan D. The gateway still
-    // resolves and forwards `scope`; this handler does not read it.
+  tcpSurge(@Payload() d: { lat: number; lng: number; scope?: string }) {
+    // Surge zones carry no market of their own yet (see Plan D), so a locked
+    // admin cannot be shown a filtered view — there is nothing to filter on.
+    // Fail closed rather than silently serving every market's surge data to
+    // a regional admin.
+    if (d?.scope) {
+      throw new ForbiddenException('Surge zones cannot be attributed to a market yet.');
+    }
     return this.svc.getSurgeMultiplier(d?.lat, d?.lng);
   }
 }
