@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository, ILike, In, MoreThanOrEqual, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
@@ -564,37 +570,107 @@ export class MarketplaceAdminService {
    * Verifying the row first also means a bad id fails instead of being reported
    * as a successful block of a seller that does not exist.
    */
-  async blockSeller(sellerId: string, adminId: string) {
+  async blockSeller(sellerId: string, adminId: string, scope?: string) {
+    if (!sellerId) throw new BadRequestException('A seller id is required.');
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     if (!seller) throw new NotFoundException(`Seller ${sellerId} not found`);
+    // Asserted before the write and before the event: a refused block leaves
+    // the seller trading and announces nothing.
+    this.assertInMarket(seller.regionCode, scope, 'seller');
 
     seller.verificationStatus = 'SUSPENDED';
     seller.isActive = false;
     await this.sellerRepo.save(seller);
 
-    await this.kafka.publish('seller.blocked', { id: sellerId, blockedBy: adminId });
+    await this.kafka.publish('seller.blocked', {
+      id: sellerId,
+      blockedBy: adminId,
+      regionCode: seller.regionCode,
+    });
     this.logger.log(`Seller ${sellerId} blocked by ${adminId}`);
-    return { success: true, sellerId, status: 'SUSPENDED' };
+    return { success: true, sellerId, status: 'SUSPENDED', regionCode: seller.regionCode };
   }
 
-  async getPendingSellers() {
+  /**
+   * The market a seller trades in, or null when the row has none.
+   *
+   * Used to attribute records that have no market column of their own — a
+   * product, an offer — to the seller who owns them, so the gateway has a field
+   * to refuse on.
+   */
+  async sellerMarket(sellerId: string): Promise<string | null> {
+    if (!sellerId) return null;
+    const seller = await this.sellerRepo.findOne({
+      where: { id: sellerId },
+      select: ['id', 'regionCode'],
+    });
+    return seller?.regionCode ?? null;
+  }
+
+  async getPendingSellers(scope?: string) {
+    const where: Record<string, unknown> = { verificationStatus: 'PENDING' };
+    if (scope) where.regionCode = scope.toUpperCase();
     const [data, total] = await this.sellerRepo.findAndCount({
-      where: { verificationStatus: 'PENDING' },
+      where,
       order: { createdAt: 'DESC' },
     });
     return { data, total };
   }
 
-  async getPendingProducts() {
-    const products = await this.productRepo.find({ where: { approval_status: 'PENDING' } });
-    const count = await this.productRepo.count();
+  /**
+   * Products joined to their seller, so the market predicate applies to every
+   * admin product list.
+   *
+   * The join goes through the `Seller` entity class rather than a bare
+   * `'sellers'` table name: the marketplace database carries `public.*` copies
+   * of these tables shadowing the real ones, and a string table name resolves
+   * against the search path — the decoy — while the entity resolves against the
+   * schema TypeORM was configured with.
+   *
+   * Both sides are cast to text on purpose. `Product.seller_id` is declared as
+   * a string and documented as a text column, but the live
+   * `marketplace.products.seller_id` is a `uuid`; casting only the seller side
+   * (`s.id::text = p.seller_id`) therefore fails outright with
+   * `operator does not exist: text = uuid`. Casting both compares equal whether
+   * the column is text or uuid, so this does not depend on which of the two the
+   * schema happens to carry.
+   */
+  private adminProductQuery(region?: string) {
+    const qb = this.productRepo
+      .createQueryBuilder('p')
+      .innerJoin(Seller, 's', 's.id::text = p.seller_id::text');
+    if (region) qb.andWhere('s.region_code = :region', { region: region.toUpperCase() });
+    return qb;
+  }
+
+  async getProductsForAdmin(
+    opts: { region?: string; status?: string; page?: number; limit?: number } = {},
+  ) {
+    const page = Math.max(1, opts.page ?? 1);
+    const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+    const qb = this.adminProductQuery(opts.region);
+    if (opts.status)
+      qb.andWhere('p.approval_status = :status', { status: opts.status.toUpperCase() });
+    const [data, total] = await qb
+      .orderBy('p.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+    return { data, total, page, limit, region: opts.region ?? null, hasMore: total > page * limit };
+  }
+
+  async getPendingProducts(scope?: string) {
+    const region = scope?.toUpperCase();
+    const products = await this.adminProductQuery(region)
+      .andWhere("p.approval_status = 'PENDING'")
+      .getMany();
+    const count = (status: string) =>
+      this.adminProductQuery(region).andWhere('p.approval_status = :status', { status }).getCount();
     const stats = {
       pending: products.length,
-      approved: await this.productRepo.count({ where: { approval_status: 'APPROVED' } }),
-      rejected: await this.productRepo.count({ where: { approval_status: 'REJECTED' } }),
-      correctionRequested: await this.productRepo.count({
-        where: { approval_status: 'CORRECTION_REQUESTED' },
-      }),
+      approved: await count('APPROVED'),
+      rejected: await count('REJECTED'),
+      correctionRequested: await count('CORRECTION_REQUESTED'),
     };
     return { data: products, count: products.length, stats };
   }
@@ -683,6 +759,43 @@ export class MarketplaceAdminService {
     what: string,
   ): void {
     assertInMarketShared(recordRegion, scope, what, this.logger);
+  }
+
+  /**
+   * Refuse a record this service cannot place in a market at all.
+   *
+   * Some rows still have no market column and no owner to join to — a blocked
+   * customer, for instance, is a platform identity with no marketplace row that
+   * carries a region. A regional admin acting on one of those would be acting
+   * platform-wide, so it is refused rather than allowed through: "we could not
+   * work out whose this is" must never read as "yours". A global admin (no
+   * scope) is unaffected. Plan C adds the columns that make these resolvable.
+   */
+  private refuseUnattributable(scope: string | undefined, what: string): void {
+    if (!scope) return;
+    this.logger.warn(`[region-scope-denied] ${what} has no market for a ${scope}-scoped admin`);
+    throw new ForbiddenException(`This ${what} cannot be attributed to a market yet.`);
+  }
+
+  /**
+   * The market a review belongs to: its product's seller's.
+   *
+   * `Review` carries only `product_id` and `customer_id`; the product carries
+   * only `seller_id`. So the path is two reads, and a review whose product or
+   * seller has gone is unattributable rather than global.
+   */
+  private async reviewMarket(reviewId: string): Promise<string | null> {
+    const review = await this.reviewRepo.findOne({
+      where: { id: reviewId },
+      select: ['id', 'productId'],
+    });
+    if (!review?.productId) return null;
+    const product = await this.productRepo.findOne({
+      where: { id: review.productId },
+      select: ['id', 'seller_id'],
+    });
+    if (!product?.seller_id) return null;
+    return this.sellerMarket(product.seller_id);
   }
 
   /** The one market a banner is scoped to; null when it runs in several or everywhere. */
@@ -1261,9 +1374,10 @@ export class MarketplaceAdminService {
   // changing `review.status`, so a flagged or hidden review stayed publicly
   // visible. `status` is what the storefront read filters on.
 
-  async flagReview(id: string, reason: string) {
+  async flagReview(id: string, reason: string, scope?: string) {
     const review = await this.reviewRepo.findOne({ where: { id } });
     if (!review) throw new NotFoundException(`Review ${id} not found`);
+    if (scope) this.assertInMarket(await this.reviewMarket(id), scope, 'review');
     review.status = 'FLAGGED';
     await this.reviewRepo.save(review);
 
@@ -1271,9 +1385,10 @@ export class MarketplaceAdminService {
     return { success: true, id, status: 'FLAGGED' };
   }
 
-  async hideReview(id: string) {
+  async hideReview(id: string, scope?: string) {
     const review = await this.reviewRepo.findOne({ where: { id } });
     if (!review) throw new NotFoundException(`Review ${id} not found`);
+    if (scope) this.assertInMarket(await this.reviewMarket(id), scope, 'review');
     review.status = 'HIDDEN';
     await this.reviewRepo.save(review);
 
@@ -1281,14 +1396,18 @@ export class MarketplaceAdminService {
     return { success: true, id, status: 'HIDDEN' };
   }
 
-  async getComplaints(status?: string) {
-    const cacheKey = `admin:complaints:${status || 'all'}`;
+  async getComplaints(status?: string, scope?: string) {
+    const region = scope?.toUpperCase();
+    // Keyed by market as well as status: one shared key served a Qatari admin's
+    // complaints list to an Indian one for the rest of its 60-second TTL.
+    const cacheKey = `admin:complaints:${region ?? 'all'}:${status || 'all'}`;
     const cached = await this.redis.getJson(cacheKey);
     if (cached) return cached;
     // Aggregate from returns and support tickets
     const returnWhere: any = {};
     if (status === 'open') returnWhere.status = In(['REQUESTED', 'APPROVED', 'PICKUP_SCHEDULED']);
     else if (status === 'resolved') returnWhere.status = In(['REFUND_COMPLETED', 'CLOSED']);
+    if (region) returnWhere.regionCode = region;
     const returns = await this.returnRepo.find({
       where: returnWhere,
       order: { createdAt: 'DESC' },
@@ -1305,12 +1424,18 @@ export class MarketplaceAdminService {
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
-    const result = { data: complaints, total: complaints.length, status };
+    const result = { data: complaints, total: complaints.length, status, region: region ?? null };
     await this.redis.setJson(cacheKey, result, 60);
     return result;
   }
 
-  async updateComplaint(id: string, dto: any) {
+  async updateComplaint(id: string, dto: any, scope?: string) {
+    // A complaint is a return request, and a return carries its own market.
+    if (scope) {
+      const request = await this.returnRepo.findOne({ where: { id } });
+      if (!request) throw new NotFoundException(`Complaint ${id} not found`);
+      this.assertInMarket(request.regionCode, scope, 'complaint');
+    }
     await this.kafka.publish('complaint.updated', { id, ...dto });
     return { success: true, id };
   }
@@ -1599,8 +1724,8 @@ export class MarketplaceAdminService {
    * ticket raised against an order — so this reads the same two sources
    * `getComplaints` does, narrowed to the ones actually in contention.
    */
-  async getDisputes(status?: string) {
-    const complaints = (await this.getComplaints(status)) as { data?: any[] };
+  async getDisputes(status?: string, scope?: string) {
+    const complaints = (await this.getComplaints(status, scope)) as { data?: any[] };
     const rows = (complaints?.data ?? []).filter(
       (c: any) => c.type === 'return' || c.escalated === true,
     );
@@ -1897,7 +2022,7 @@ export class MarketplaceAdminService {
     return { success: true, code };
   }
 
-  async getAdminCustomers(search?: string, page = 1) {
+  async getAdminCustomers(search?: string, page = 1, scope?: string) {
     // Aggregate unique customers from orders
     const qb = this.orderRepo
       .createQueryBuilder('o')
@@ -1907,6 +2032,10 @@ export class MarketplaceAdminService {
       .addSelect('SUM(o.grandTotal)', 'totalSpent')
       .addSelect('MAX(o.createdAt)', 'lastOrderAt')
       .groupBy('o.customerId');
+    // A customer belongs to the market they ordered in. Scoping the orders
+    // rather than the identity also keeps the spend totals honest: a regional
+    // admin sees what this customer spent in their market, not everywhere.
+    if (scope) qb.andWhere('o.region_code = :region', { region: scope.toUpperCase() });
     if (search) {
       qb.andWhere('(o.customerName ILIKE :s OR o.customerId ILIKE :s)', { s: `%${search}%` });
     }
@@ -1933,13 +2062,19 @@ export class MarketplaceAdminService {
     };
   }
 
-  async blockCustomer(id: string) {
+  async blockCustomer(id: string, scope?: string) {
+    // A customer is a platform identity: no marketplace row carries their
+    // market, so a regional admin blocking one would be blocking them
+    // everywhere. Refused until the column exists rather than silently allowed.
+    this.refuseUnattributable(scope, 'customer');
     await this.kafka.publish('customer.blocked', { id });
     return { success: true, id };
   }
 
-  async getSellerWallets() {
-    const sellers = await this.sellerRepo.find();
+  async getSellerWallets(scope?: string) {
+    const sellers = await this.sellerRepo.find(
+      scope ? { where: { regionCode: scope.toUpperCase() } } : {},
+    );
     const wallets = await Promise.all(
       sellers.map(async (s) => {
         // `marketplace_orders_status_enum` is upper-case. Postgres rejects a
@@ -1988,7 +2123,8 @@ export class MarketplaceAdminService {
     };
   }
 
-  async adjustSellerWallet(sellerId: string, amount: number, reason: string) {
+  async adjustSellerWallet(sellerId: string, amount: number, reason: string, scope?: string) {
+    if (scope) this.assertInMarket(await this.sellerMarket(sellerId), scope, 'seller wallet');
     await this.kafka.publish('seller-wallet.adjusted', { sellerId, amount, reason });
     this.logger.log(`Seller wallet ${sellerId} adjusted by ${amount}: ${reason}`);
     return { success: true, sellerId, amount };

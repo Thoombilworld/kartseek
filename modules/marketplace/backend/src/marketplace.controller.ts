@@ -1556,12 +1556,12 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_complaints' })
   tcpAdminGetComplaints(@Payload() d: any) {
-    return this.admin.getComplaints(d?.status);
+    return this.admin.getComplaints(d?.status, d?.scope ?? this.payloadRegion(d));
   }
 
   @MessagePattern({ cmd: 'admin_update_complaint' })
   tcpAdminUpdateComplaint(@Payload() d: any) {
-    return this.admin.updateComplaint(d?.id, d?.dto ?? d);
+    return this.admin.updateComplaint(d?.id, d?.dto ?? d, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_compliance_countries' })
@@ -1576,17 +1576,17 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_customers' })
   tcpAdminGetCustomers(@Payload() d: any) {
-    return this.admin.getAdminCustomers(d?.search, d?.page ?? 1);
+    return this.admin.getAdminCustomers(d?.search, d?.page ?? 1, d?.scope ?? this.payloadRegion(d));
   }
 
   @MessagePattern({ cmd: 'admin_block_customer' })
   tcpAdminBlockCustomer(@Payload() d: any) {
-    return this.admin.blockCustomer(d?.id);
+    return this.admin.blockCustomer(d?.id, d?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_get_seller_wallets' })
   tcpAdminGetSellerWallets(@Payload() d: any) {
-    return this.admin.getSellerWallets();
+    return this.admin.getSellerWallets(d?.scope ?? this.payloadRegion(d));
   }
 
   @MessagePattern({ cmd: 'admin_get_india_ops' })
@@ -1601,7 +1601,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_disputes' })
   tcpAdminGetDisputes(@Payload() d: any) {
-    return this.admin.getDisputes(d?.status);
+    return this.admin.getDisputes(d?.status, d?.scope ?? this.payloadRegion(d));
   }
 
   @MessagePattern({ cmd: 'admin_get_customer_segments' })
@@ -1618,8 +1618,13 @@ export class MarketplaceController {
   // market, approved ones included.
   @MessagePattern({ cmd: 'admin_get_sellers' })
   tcpAdminGetSellers(@Payload() data: any) {
+    // `scope` wins over anything the payload asked for: it is the market the
+    // gateway proved the caller is locked to, not a filter they chose.
+    // `search` is carried on the payload but `getSellersForAdmin` has no search
+    // predicate yet, so it is deliberately not passed: silently accepting it
+    // would make an unfiltered list look like a search result.
     return this.catalog.getSellersForAdmin({
-      region: this.payloadRegion(data),
+      region: data?.scope ?? this.payloadRegion(data),
       status: data?.status,
       page: data?.page,
       limit: data?.limit,
@@ -1663,22 +1668,34 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_approve_seller' })
   tcpAdminApproveSeller(@Payload() data: any) {
-    return this.svc.approveSeller(MarketplaceController.sellerIdOf(data), data?.adminId || 'admin');
+    return this.svc.approveSeller(
+      MarketplaceController.sellerIdOf(data),
+      data?.adminId || 'admin',
+      data?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_reject_seller' })
   tcpAdminRejectSeller(@Payload() data: any) {
-    return this.svc.rejectSeller(MarketplaceController.sellerIdOf(data), data);
+    return this.svc.rejectSeller(MarketplaceController.sellerIdOf(data), data, data?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_suspend_seller' })
   tcpAdminSuspendSeller(@Payload() data: any) {
-    return this.svc.suspendSeller(MarketplaceController.sellerIdOf(data), data?.adminId || 'admin');
+    return this.svc.suspendSeller(
+      MarketplaceController.sellerIdOf(data),
+      data?.adminId || 'admin',
+      data?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_reactivate_seller' })
   tcpAdminReactivateSeller(@Payload() data: any) {
-    return this.svc.reactivateSeller(MarketplaceController.sellerIdOf(data));
+    return this.svc.reactivateSeller(
+      MarketplaceController.sellerIdOf(data),
+      data?.adminId || 'admin',
+      data?.scope,
+    );
   }
 
   // ── Admin governance over TCP ───────────────────────────────────────────────
@@ -1752,17 +1769,25 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_block_seller' })
   tcpAdminBlockSeller(@Payload() d: IdMessage & DtoMessage) {
-    return this.admin.blockSeller(requireId(d?.id, 'record'), d?.adminId || 'admin');
+    return this.admin.blockSeller(
+      requireId(d?.id, 'record'),
+      d?.adminId || 'admin',
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_flag_review' })
   tcpAdminFlagReview(@Payload() d: IdMessage & DtoMessage) {
-    return this.admin.flagReview(requireId(d?.id, 'record'), d?.reason || '');
+    return this.admin.flagReview(
+      requireId(d?.id, 'record'),
+      d?.reason || '',
+      (d as { scope?: string })?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_hide_review' })
   tcpAdminHideReview(@Payload() d: IdMessage) {
-    return this.admin.hideReview(requireId(d?.id, 'record'));
+    return this.admin.hideReview(requireId(d?.id, 'record'), (d as { scope?: string })?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_update_commission' })
@@ -1916,6 +1941,7 @@ export class MarketplaceController {
       requireId(d?.sellerId, 'seller'),
       Number(d?.amount) || 0,
       d?.reason || '',
+      (d as { scope?: string })?.scope,
     );
   }
 
@@ -1960,27 +1986,50 @@ export class MarketplaceController {
     return this.catalog.releaseListingStock(data?.items ?? data?.lines ?? []);
   }
 
+  // Served the storefront catalogue read, which filters to APPROVED and active
+  // products — so the admin product list could not show the pending or rejected
+  // ones it exists to moderate, and had no market predicate at all.
   @MessagePattern({ cmd: 'admin_get_products' })
   tcpAdminGetProducts(@Payload() data: any) {
-    return this.catalog.getProducts(data?.page || 1, data?.limit || 20, data);
+    return this.admin.getProductsForAdmin({
+      region: data?.scope ?? this.payloadRegion(data),
+      status: data?.status,
+      page: data?.page,
+      limit: data?.limit,
+    });
   }
 
   // The approvals queue. `getPendingProducts` already existed but was reachable
   // only over this service's own HTTP route, so the gateway could not call it
   // and the queue was wired to the APPROVED-only catalogue read instead.
   @MessagePattern({ cmd: 'admin_get_pending_products' })
-  tcpAdminGetPendingProducts() {
-    return this.admin.getPendingProducts();
+  tcpAdminGetPendingProducts(@Payload() data?: any) {
+    return this.admin.getPendingProducts(data?.scope ?? this.payloadRegion(data));
   }
 
+  /**
+   * Product detail for admin review, with the one field the gateway needs to
+   * scope it: the seller's market.
+   *
+   * `products` has no market column, so a product detail carried nothing the
+   * gateway could check `assertRecordInScope` against — a regional admin could
+   * open any product in the platform by id. The owner lookup is a second read
+   * rather than a join because `getProductById` is the storefront's own cached
+   * read and is not this surface's to reshape.
+   */
   @MessagePattern({ cmd: 'admin_get_product_by_id' })
-  tcpAdminGetProductById(@Payload() id: string) {
-    return this.catalog.getProductById(id);
+  async tcpAdminGetProductById(@Payload() id: string) {
+    const product = (await this.catalog.getProductById(id)) as {
+      seller_id?: string | null;
+    } | null;
+    if (!product) return product;
+    const owner = product.seller_id ? await this.admin.sellerMarket(product.seller_id) : null;
+    return { ...product, sellerRegionCode: owner };
   }
 
   @MessagePattern({ cmd: 'admin_approve_product' })
   tcpAdminApproveProduct(@Payload() data: any) {
-    return this.svc.approveProduct(data?.id, data?.adminId || 'admin');
+    return this.svc.approveProduct(data?.id, data?.adminId || 'admin', data?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_reject_product' })
@@ -1989,6 +2038,7 @@ export class MarketplaceController {
       data?.id,
       data?.adminId || 'admin',
       data?.reason || 'Violates policy',
+      data?.scope,
     );
   }
 

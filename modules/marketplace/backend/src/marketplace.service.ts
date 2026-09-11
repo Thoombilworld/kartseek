@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { assertInMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
@@ -106,6 +107,32 @@ export class MarketplaceService {
   }
 
   /**
+   * A product's market is its seller's.
+   *
+   * `products` carries no market column of its own — the catalogue entry is
+   * shared — so the only thing that can place a product in a market is the
+   * seller who submitted it. The link is the snake-case `seller_id` the entity
+   * declares (a text column compared against `sellers.id::text`), not a
+   * camel-case `sellerId` that does not exist.
+   *
+   * Fails closed: a product whose seller cannot be found has no market, and a
+   * regional admin does not get to decide on a record nobody can attribute.
+   */
+  private async assertProductInMarket(
+    product: { seller_id?: string | null },
+    scope?: string,
+  ): Promise<void> {
+    if (!scope) return;
+    const owner = product.seller_id
+      ? await this.sellerRepo.findOne({
+          where: { id: product.seller_id },
+          select: ['id', 'regionCode'],
+        })
+      : null;
+    assertInMarket(owner?.regionCode ?? null, scope, 'product', this.logger);
+  }
+
+  /**
    * Approve a listing and put it on sale.
    *
    * Approval has to activate three things or the product still cannot be bought:
@@ -115,9 +142,11 @@ export class MarketplaceService {
    * product and it remained invisible and unbuyable — the seller saw "Approved"
    * and no orders.
    */
-  async approveProduct(productId: string, adminId: string) {
+  async approveProduct(productId: string, adminId: string, scope?: string) {
+    if (!productId) throw new BadRequestException('A product id is required.');
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
+    await this.assertProductInMarket(product, scope);
 
     product.approval_status = 'APPROVED';
     product.is_active = true;
@@ -393,9 +422,11 @@ export class MarketplaceService {
     };
   }
 
-  async rejectProduct(productId: string, adminId: string, reason: string) {
+  async rejectProduct(productId: string, adminId: string, reason: string, scope?: string) {
+    if (!productId) throw new BadRequestException('A product id is required.');
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
+    await this.assertProductInMarket(product, scope);
 
     product.approval_status = 'REJECTED';
     // Rejection has to take the product off sale, not just relabel it.
@@ -456,7 +487,17 @@ export class MarketplaceService {
 
   // ── Sellers ───────────────────────────────────────────────────────────────
 
-  async approveSeller(sellerId: string, adminId: string) {
+  /**
+   * Every seller decision below takes the caller's market as `scope`.
+   *
+   * The gateway already refuses a regional admin who *names* another market,
+   * but a decision is taken on a record, and the record's own market is the
+   * only thing that can settle whether it was theirs to take. `assertInMarket`
+   * runs after the row is loaded and before anything is written or published:
+   * a refused decision leaves no row changed and no event emitted. `scope` is
+   * undefined for a global admin, and the assertion is then a no-op.
+   */
+  async approveSeller(sellerId: string, adminId: string, scope?: string) {
     // Refused rather than queried. `findOne({ where: { id: undefined } })` drops
     // the condition entirely and returns the first row in the table, so a
     // missing id does not fail — it silently retargets the decision at an
@@ -465,15 +506,20 @@ export class MarketplaceService {
 
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     if (!seller) throw new NotFoundException('Seller not found');
+    assertInMarket(seller.regionCode, scope, 'seller', this.logger);
     seller.verificationStatus = 'VERIFIED';
     await this.sellerRepo.save(seller);
 
-    await this.kafka.publish('seller.approved', { id: sellerId, approvedBy: adminId });
+    await this.kafka.publish('seller.approved', {
+      id: sellerId,
+      approvedBy: adminId,
+      regionCode: seller.regionCode,
+    });
     this.logger.log(`Seller ${sellerId} approved by ${adminId}`);
-    return { success: true, sellerId };
+    return { success: true, sellerId, regionCode: seller.regionCode };
   }
 
-  async suspendSeller(sellerId: string, adminId: string) {
+  async suspendSeller(sellerId: string, adminId: string, scope?: string) {
     // Refused rather than queried. `findOne({ where: { id: undefined } })` drops
     // the condition entirely and returns the first row in the table, so a
     // missing id does not fail — it silently retargets the decision at an
@@ -482,14 +528,19 @@ export class MarketplaceService {
 
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     if (!seller) throw new NotFoundException('Seller not found');
+    assertInMarket(seller.regionCode, scope, 'seller', this.logger);
     seller.verificationStatus = 'SUSPENDED';
     await this.sellerRepo.save(seller);
 
-    await this.kafka.publish('seller.suspended', { id: sellerId, suspendedBy: adminId });
-    return { success: true, sellerId };
+    await this.kafka.publish('seller.suspended', {
+      id: sellerId,
+      suspendedBy: adminId,
+      regionCode: seller.regionCode,
+    });
+    return { success: true, sellerId, regionCode: seller.regionCode };
   }
 
-  async rejectSeller(sellerId: string, data: any) {
+  async rejectSeller(sellerId: string, data: any, scope?: string) {
     // Refused rather than queried. `findOne({ where: { id: undefined } })` drops
     // the condition entirely and returns the first row in the table, so a
     // missing id does not fail — it silently retargets the decision at an
@@ -498,17 +549,19 @@ export class MarketplaceService {
 
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     if (!seller) throw new NotFoundException('Seller not found');
+    assertInMarket(seller.regionCode, scope, 'seller', this.logger);
     seller.verificationStatus = 'REJECTED';
     await this.sellerRepo.save(seller);
     await this.kafka.publish('seller.rejected', {
       id: sellerId,
       rejectedBy: data?.adminId || 'admin',
       reason: data?.reason,
+      regionCode: seller.regionCode,
     });
-    return { success: true, sellerId };
+    return { success: true, sellerId, regionCode: seller.regionCode };
   }
 
-  async reactivateSeller(sellerId: string) {
+  async reactivateSeller(sellerId: string, adminId = 'admin', scope?: string) {
     // Refused rather than queried. `findOne({ where: { id: undefined } })` drops
     // the condition entirely and returns the first row in the table, so a
     // missing id does not fail — it silently retargets the decision at an
@@ -517,10 +570,15 @@ export class MarketplaceService {
 
     const seller = await this.sellerRepo.findOne({ where: { id: sellerId } });
     if (!seller) throw new NotFoundException('Seller not found');
+    assertInMarket(seller.regionCode, scope, 'seller', this.logger);
     seller.verificationStatus = 'VERIFIED';
     await this.sellerRepo.save(seller);
-    await this.kafka.publish('seller.reactivated', { id: sellerId });
-    return { success: true, sellerId };
+    await this.kafka.publish('seller.reactivated', {
+      id: sellerId,
+      reactivatedBy: adminId,
+      regionCode: seller.regionCode,
+    });
+    return { success: true, sellerId, regionCode: seller.regionCode };
   }
 
   // ── Cart ──────────────────────────────────────────────────────────────────
