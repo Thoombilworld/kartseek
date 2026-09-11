@@ -17,6 +17,7 @@ import {
   ParseUUIDPipe,
   HttpException,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
@@ -2090,18 +2091,33 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: "List the signed-in administrator's notifications" })
   @ApiQuery({ name: 'country', required: false })
   async getNotifications(@Req() req: any, @Query('country') country?: string) {
-    // Notification rows carry no market, so this list is the platform's.
-    refuseLockedAdmin(req, 'platform notifications');
-    const { scope, market } = this.scopeOf(req, country, 'those notifications');
-    // The actor, from the verified token — never from the caller. The rows are
-    // addressed to a user (`marketplace_notifications.userId` is NOT NULL), and
-    // without one the service could only ever return nothing, which is why it
-    // used to substitute four invented rows instead.
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS, {
-      region: market,
-      scope,
-      userId: this.actorId(req),
-    });
+    /**
+     * The actor is the whole scope.
+     *
+     * This route used to `refuseLockedAdmin(req, 'platform notifications')`
+     * because the list really was the platform's — rows with no user attached.
+     * It is now each administrator's own inbox
+     * (`marketplace_notifications.userId`), so refusing a market-locked admin
+     * would deny them *their own* messages; there is no market dimension left to
+     * confine them to. `scopeOf` still resolves the caller's market, which
+     * refuses a locked admin who names someone else's, but the result is not
+     * sent on: filtering a personal inbox by market would hide rows addressed to
+     * the reader.
+     */
+    this.scopeOf(req, country, 'those notifications');
+
+    // From the verified token, never from the caller — the route accepts no
+    // `userId` in query, body or header, so nobody can read another
+    // administrator's inbox. Refused outright when the token carries no id:
+    // `actorId()` would otherwise substitute the string `'unknown'` and return
+    // the (empty) inbox of a user by that name, which reads as "nothing to
+    // report" rather than "we do not know who you are".
+    const userId = req?.user?.id ?? req?.user?.userId ?? req?.user?.sub;
+    if (!userId) {
+      throw new UnauthorizedException('Your session does not identify you; sign in again.');
+    }
+
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS, { userId });
   }
 
   @Post('notifications')

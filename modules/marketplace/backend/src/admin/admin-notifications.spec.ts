@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { MarketplaceAdminService } from './admin.service';
 
 /**
@@ -44,7 +44,7 @@ const ROW = {
 describe('getAdminNotifications', () => {
   it("asks for the signed-in administrator's rows, newest first", async () => {
     const { svc, notificationRepo } = admin([ROW], 1);
-    const out = await svc.getAdminNotifications(undefined, 'u-super');
+    const out = await svc.getAdminNotifications('u-super');
 
     expect(notificationRepo.findAndCount).toHaveBeenCalledWith({
       where: { userId: 'u-super' },
@@ -59,7 +59,7 @@ describe('getAdminNotifications', () => {
     // 50 rows is the page; an unread row older than that still has to reach the
     // header's badge, so the count is its own query.
     const { svc, notificationRepo } = admin([ROW], 7);
-    expect((await svc.getAdminNotifications(undefined, 'u-super')).unreadCount).toBe(7);
+    expect((await svc.getAdminNotifications('u-super')).unreadCount).toBe(7);
     expect(notificationRepo.count).toHaveBeenCalledWith({
       where: { userId: 'u-super', isRead: false },
     });
@@ -67,7 +67,7 @@ describe('getAdminNotifications', () => {
 
   it('returns an empty list rather than inventing one', async () => {
     const { svc } = admin([], 0);
-    const out = await svc.getAdminNotifications(undefined, 'u-super');
+    const out = await svc.getAdminNotifications('u-super');
     expect(out).toEqual({ data: [], total: 0, unreadCount: 0 });
   });
 
@@ -82,21 +82,42 @@ describe('getAdminNotifications', () => {
     'sn-1',
   ])('never fabricates the row %s for an empty table', async (needle) => {
     const { svc } = admin([], 0);
-    const out = await svc.getAdminNotifications(undefined, 'u-super');
+    const out = await svc.getAdminNotifications('u-super');
     expect(JSON.stringify(out)).not.toContain(needle);
   });
 
   it('refuses an actorless request loudly instead of answering "you have none"', async () => {
     const { svc, notificationRepo } = admin([ROW], 1);
-    await expect(svc.getAdminNotifications(undefined, undefined)).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(svc.getAdminNotifications(undefined)).rejects.toThrow(BadRequestException);
     expect(notificationRepo.findAndCount).not.toHaveBeenCalled();
   });
 
-  it('still refuses a market-locked admin — the rows carry no market', async () => {
-    const { svc, notificationRepo } = admin([ROW], 1);
-    await expect(svc.getAdminNotifications('QA', 'u-qa')).rejects.toThrow(ForbiddenException);
-    expect(notificationRepo.findAndCount).not.toHaveBeenCalled();
+  /**
+   * A market-locked administrator reads their own inbox.
+   *
+   * The method used to call `refuseUnattributable(scope, 'platform
+   * notification')`, which was right while the list was the platform's and
+   * wrong the moment it became personal: it denied a regional admin the
+   * messages addressed to them. There is no market dimension left to confine —
+   * `userId` is the whole scope — so there is no `scope` parameter either.
+   */
+  it('answers a market-locked administrator with their own rows', async () => {
+    const { svc, notificationRepo } = admin([{ ...ROW, userId: 'u-qa' }], 1);
+    const out = await svc.getAdminNotifications('u-qa');
+    expect(out.total).toBe(1);
+    expect(notificationRepo.findAndCount).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'u-qa' } }),
+    );
+  });
+
+  it('takes no market argument at all, so no caller can filter the inbox by one', () => {
+    // One parameter. A second would be a market filter on a personal feed,
+    // which could only hide rows addressed to the reader.
+    expect(svcMethodArity()).toBe(1);
   });
 });
+
+/** `getAdminNotifications`'s declared parameter count, read off the prototype. */
+function svcMethodArity(): number {
+  return MarketplaceAdminService.prototype.getAdminNotifications.length;
+}

@@ -1479,11 +1479,13 @@ export class MarketplaceAdminService {
    * the header's badge is right even when the unread rows are older than the
    * page.
    */
-  async getAdminNotifications(scope?: string, userId?: string) {
-    // The rows carry no market column, so a market-locked admin cannot be shown
-    // this list as theirs. Refused rather than relabelled — the gateway refuses
-    // it first, and this is the backstop for any other caller.
-    this.refuseUnattributable(scope, 'platform notification');
+  async getAdminNotifications(userId?: string) {
+    // No market check, and no `scope` parameter to run one with: the rows are
+    // addressed to a single administrator, so `userId` *is* the scope. It used
+    // to call `refuseUnattributable(scope, 'platform notification')`, correct
+    // while the list was the platform's and wrong the moment it became personal
+    // — it denied a market-locked admin their own inbox. Filtering a personal
+    // inbox by market could only ever hide rows addressed to the reader.
 
     // Without an actor there is nobody to answer for. Loud rather than an empty
     // list, which would be indistinguishable from "you have none".

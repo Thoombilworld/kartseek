@@ -420,7 +420,11 @@ describe('handlers with nothing to attribute fail closed for a scoped admin', ()
       (s: MarketplaceAdminService) => s.updateCommission('r-1', {}, 'QA'),
       (s: MarketplaceAdminService) => s.updateSponsoredProduct('s-1', {}, 'QA'),
       (s: MarketplaceAdminService) => s.sendNotification({ title: 'x' }, 'QA'),
-      (s: MarketplaceAdminService) => s.getAdminNotifications('QA'),
+      // `getAdminNotifications` was here and no longer belongs: it returns the
+      // caller's *own* rows, so there is no platform-wide list to mis-attribute
+      // and nothing for a market to confine. Refusing it denied a regional admin
+      // their own inbox. Its behaviour is pinned in `admin-notifications.spec.ts`
+      // — including that a scoped caller gets their rows rather than a 403.
       (s: MarketplaceAdminService) => s.getComplianceCountries('QA'),
       (s: MarketplaceAdminService) => s.getCustomerSegments('QA'),
       (s: MarketplaceAdminService) => s.updateMarketplaceSettings({}, 'QA'),

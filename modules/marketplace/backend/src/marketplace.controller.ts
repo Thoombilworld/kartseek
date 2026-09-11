@@ -889,7 +889,7 @@ export class MarketplaceController {
   getAdminNotifications(@Req() req: any) {
     // Same contract as the TCP handler: the actor comes from the verified
     // token, never from the caller.
-    return this.admin.getAdminNotifications(undefined, req?.user?.id ?? req?.user?.userId);
+    return this.admin.getAdminNotifications(req?.user?.id ?? req?.user?.userId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -1507,7 +1507,7 @@ export class MarketplaceController {
     // by the gateway. Notifications are addressed to a user — the list used to
     // ask for rows with no user at all, which the NOT NULL column made
     // impossible, so it always fell through to four invented rows.
-    return this.admin.getAdminNotifications(d?.scope, d?.userId);
+    return this.admin.getAdminNotifications(d?.userId);
   }
 
   @MessagePattern({ cmd: 'admin_send_notification' })

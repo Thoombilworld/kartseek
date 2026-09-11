@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ForbiddenException, HttpException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { of, throwError } from 'rxjs';
 import { AdminMarketplaceController } from './admin-marketplace.controller';
 import { MARKETPLACE_PATTERNS } from '../contracts/marketplace.patterns';
@@ -214,7 +219,8 @@ describe('AdminMarketplaceController — sellers and products', () => {
 });
 
 /**
- * Notifications are addressed to a user, so the request has to carry one.
+ * Notifications are addressed to a user, so the request has to carry one — and
+ * that user is the whole scope.
  *
  * `marketplace_notifications.userId` is NOT NULL, and the service used to ask
  * for rows with no user at all — a query that could never match, which is why it
@@ -222,18 +228,61 @@ describe('AdminMarketplaceController — sellers and products', () => {
  * verified token here, never from the caller.
  */
 describe('AdminMarketplaceController — notifications', () => {
-  it('sends the acting administrator as the owner of the list', async () => {
+  it('sends the acting administrator as the owner of the list, and nothing else', async () => {
     const { ctrl, client } = build(() => ({ data: [], total: 0, unreadCount: 0 }));
     await ctrl.getNotifications(req(globalAdmin));
     expect(client.send).toHaveBeenCalledWith(
       { cmd: MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS },
-      expect.objectContaining({ userId: 'u-g' }),
+      // No `scope` and no `region`: filtering a personal inbox by market could
+      // only ever hide rows addressed to the reader.
+      { userId: 'u-g' },
     );
   });
 
-  it('refuses a market-locked admin before asking — the rows carry no market', async () => {
+  /**
+   * The route used to `refuseLockedAdmin(req, 'platform notifications')`, which
+   * was right while the list was the platform's. Once it became each
+   * administrator's own inbox, that refusal denied a regional admin their own
+   * messages — and the console told them the rows "belong to every market",
+   * which by then was false.
+   */
+  it('answers a market-locked administrator with their own inbox', async () => {
+    const { ctrl, client } = build(() => ({ data: [], total: 0, unreadCount: 0 }));
+    await expect(ctrl.getNotifications(req(qaAdmin))).resolves.toMatchObject({
+      data: [],
+      total: 0,
+      unreadCount: 0,
+    });
+    expect(client.send).toHaveBeenCalledWith(
+      { cmd: MARKETPLACE_PATTERNS.ADMIN_GET_NOTIFICATIONS },
+      { userId: 'u-qa' },
+    );
+  });
+
+  it('still refuses a locked admin who names another market', async () => {
+    // `scopeOf` is still called — it is how a locked caller asking for someone
+    // else's market is refused, and the market-scope regression scan requires
+    // every /admin handler to resolve one.
     const { ctrl, client } = build(() => ({ data: [], total: 0 }));
-    await expect(ctrl.getNotifications(req(qaAdmin))).rejects.toThrow(ForbiddenException);
+    await expect(ctrl.getNotifications(req(qaAdmin), 'IN')).rejects.toThrow(ForbiddenException);
+    expect(client.send).not.toHaveBeenCalled();
+  });
+
+  /**
+   * `actorId()` falls back to the string `'unknown'`, so forwarding it would
+   * fetch the (empty) inbox of a user by that name — "nothing to report" where
+   * the truth is "we do not know who you are". The service's own
+   * `BadRequestException` is unreachable from here, so the refusal is the
+   * gateway's.
+   */
+  it.each([
+    ['no user at all', undefined],
+    ['a user with no id', { role: 'ADMIN' }],
+  ])('refuses a token that does not identify anyone (%s)', async (_label, user) => {
+    const { ctrl, client } = build(() => ({ data: [], total: 0 }));
+    await expect(
+      ctrl.getNotifications({ user, method: 'GET', originalUrl: '/x', headers: {} }),
+    ).rejects.toThrow(UnauthorizedException);
     expect(client.send).not.toHaveBeenCalled();
   });
 });
