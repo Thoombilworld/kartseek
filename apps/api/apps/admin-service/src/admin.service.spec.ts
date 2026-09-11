@@ -45,7 +45,9 @@ describe('AdminService', () => {
     kafka = module.get(KafkaProducerService);
   });
 
-  afterEach(() => { delete process.env.SKIP_DB; });
+  afterEach(() => {
+    delete process.env.SKIP_DB;
+  });
 
   describe('healthCheck', () => {
     it('should return ok', async () => {
@@ -100,16 +102,25 @@ describe('AdminService', () => {
         const module: TestingModule = await Test.createTestingModule({
           providers: [
             AdminService,
-            { provide: RedisService, useValue: {
-              setJson: jest.fn().mockResolvedValue('OK'),
-              getJson: jest.fn().mockResolvedValue(null),
-              del: jest.fn().mockResolvedValue(1),
-              set: jest.fn().mockResolvedValue('OK'),
-              get: jest.fn().mockResolvedValue('0'),
-              keys: jest.fn().mockResolvedValue([]),
-            } },
-            { provide: KafkaProducerService, useValue: { publish: jest.fn().mockResolvedValue(undefined) } },
-            { provide: getRepositoryToken(PageLayout), useValue: { findOne: jest.fn(), create: jest.fn(), save: jest.fn() } },
+            {
+              provide: RedisService,
+              useValue: {
+                setJson: jest.fn().mockResolvedValue('OK'),
+                getJson: jest.fn().mockResolvedValue(null),
+                del: jest.fn().mockResolvedValue(1),
+                set: jest.fn().mockResolvedValue('OK'),
+                get: jest.fn().mockResolvedValue('0'),
+                keys: jest.fn().mockResolvedValue([]),
+              },
+            },
+            {
+              provide: KafkaProducerService,
+              useValue: { publish: jest.fn().mockResolvedValue(undefined) },
+            },
+            {
+              provide: getRepositoryToken(PageLayout),
+              useValue: { findOne: jest.fn(), create: jest.fn(), save: jest.fn() },
+            },
             { provide: EntityManager, useValue: { query } },
           ],
         }).compile();
@@ -127,7 +138,9 @@ describe('AdminService', () => {
 
       it('fails loudly when the update matches no user', async () => {
         query.mockResolvedValue([]);
-        await expect(dbService.banUser('GHOST', 'Fraud', 'ADMIN-001')).rejects.toThrow(/not found/i);
+        await expect(dbService.banUser('GHOST', 'Fraud', 'ADMIN-001')).rejects.toThrow(
+          /not found/i,
+        );
       });
 
       it('fails loudly when the update throws', async () => {
@@ -145,6 +158,11 @@ describe('AdminService', () => {
   describe('approveKyc / rejectKyc', () => {
     it('should approve KYC and decrement pending counter', async () => {
       redis.get.mockResolvedValue('5');
+      // approveKyc now looks up the pending record before mutating it — a
+      // decision with no matching entry must not report success (see
+      // admin.scope.spec.ts for the market-scope check this same lookup
+      // enables); this test's entity id needs a record to find.
+      redis.getJson.mockResolvedValue({ id: 'SELLER-001', submittedAt: new Date().toISOString() });
       const result = await service.approveKyc('SELLER-001', 'seller', 'ADMIN-001');
       expect(result.success).toBe(true);
       expect(result.status).toBe('APPROVED');
@@ -153,9 +171,22 @@ describe('AdminService', () => {
 
     it('should reject KYC with reason', async () => {
       redis.get.mockResolvedValue('3');
-      const result = await service.rejectKyc('SELLER-002', 'seller', 'ADMIN-001', 'Invalid documents');
+      redis.getJson.mockResolvedValue({ id: 'SELLER-002', submittedAt: new Date().toISOString() });
+      const result = await service.rejectKyc(
+        'SELLER-002',
+        'seller',
+        'ADMIN-001',
+        'Invalid documents',
+      );
       expect(result.success).toBe(true);
       expect(result.status).toBe('REJECTED');
+    });
+
+    it('reports not found rather than a fabricated success when nothing is pending', async () => {
+      redis.getJson.mockResolvedValue(null);
+      await expect(service.approveKyc('GHOST', 'seller', 'ADMIN-001')).rejects.toThrow(
+        /not found|no pending/i,
+      );
     });
   });
 
@@ -181,8 +212,10 @@ describe('AdminService', () => {
     it('should create audit log entry', async () => {
       redis.getJson.mockResolvedValue([]);
       const result = await service.addAuditLog({
-        action: 'BAN_USER', adminId: 'ADMIN-001',
-        entityType: 'user', entityId: 'USER-001',
+        action: 'BAN_USER',
+        adminId: 'ADMIN-001',
+        entityType: 'user',
+        entityId: 'USER-001',
       });
       expect(result.success).toBe(true);
       expect(result.logId).toMatch(/^AUDIT-/);

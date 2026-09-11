@@ -1,7 +1,20 @@
 import {
-  Controller, Get, Post, Put, Param, Query, Body, Req,
-  UseGuards, Inject, Logger, HttpException, HttpStatus,
-  DefaultValuePipe, ParseIntPipe,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Query,
+  Body,
+  Req,
+  UseGuards,
+  Inject,
+  Logger,
+  HttpException,
+  HttpStatus,
+  DefaultValuePipe,
+  ParseIntPipe,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
@@ -10,6 +23,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
+import { marketScopeOf, resolveMarket } from '../guards/market-scope';
 
 /**
  * Admin Core — the platform-wide admin surface.
@@ -62,12 +76,30 @@ export class AdminCoreController {
     return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
   }
 
+  /**
+   * The market this request may act in, as `scope` for the backend. A locked
+   * admin gets their market (and any other market they name is refused and
+   * logged); a global admin gets undefined — every market — or the market they
+   * filtered on.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
+  }
+
   // ── Overview ───────────────────────────────────────────────────────────────
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Platform-wide admin dashboard counters' })
-  dashboard() {
-    return this.send('get_admin_dashboard', {});
+  @ApiQuery({ name: 'country', required: false })
+  async dashboard(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'that dashboard');
+    return this.send('get_admin_dashboard', { country: market, scope });
   }
 
   @Get('platform/health')
@@ -83,61 +115,84 @@ export class AdminCoreController {
   @ApiQuery({ name: 'role', required: false })
   @ApiQuery({ name: 'country', required: false })
   @ApiQuery({ name: 'search', required: false })
-  users(
+  async users(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('role') role?: string,
     @Query('country') country?: string,
     @Query('search') search?: string,
   ) {
-    return this.send('admin_users_list', { page, limit, role, country, search });
+    const { scope, market } = this.scopeOf(req, country, 'those users');
+    return this.send('admin_users_list', { page, limit, role, country: market, search, scope });
   }
 
   @Put('users/:userId/ban')
   @ApiOperation({ summary: 'Ban a user' })
-  banUser(@Req() req: any, @Param('userId') userId: string, @Body() dto: { reason?: string }) {
+  async banUser(
+    @Req() req: any,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: { reason?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that user');
     return this.send('admin_ban_user', {
-      userId, reason: dto?.reason ?? '', adminId: this.actorId(req),
+      userId,
+      reason: dto?.reason ?? '',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Put('users/:userId/unban')
   @ApiOperation({ summary: 'Lift a ban' })
-  unbanUser(@Req() req: any, @Param('userId') userId: string) {
-    return this.send('admin_unban_user', { userId, adminId: this.actorId(req) });
+  async unbanUser(@Req() req: any, @Param('userId', ParseUUIDPipe) userId: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that user');
+    return this.send('admin_unban_user', { userId, adminId: this.actorId(req), scope });
   }
 
   // ── KYC queue ──────────────────────────────────────────────────────────────
 
   @Get('kyc/pending')
   @ApiOperation({ summary: 'Identity checks awaiting a decision' })
-  pendingKyc(
+  async pendingKyc(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    return this.send('admin_kyc_pending', { page, limit });
+    const { scope } = this.scopeOf(req, undefined, 'that queue');
+    return this.send('admin_kyc_pending', { page, limit, scope });
   }
 
   @Post('kyc/:entityId/approve')
   @ApiOperation({ summary: 'Approve an identity check' })
-  approveKyc(@Req() req: any, @Param('entityId') entityId: string, @Body() dto: { entityType?: string }) {
+  async approveKyc(
+    @Req() req: any,
+    @Param('entityId') entityId: string,
+    @Body() dto: { entityType?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that identity check');
     return this.send('admin_kyc_approve', {
-      entityId, entityType: dto?.entityType ?? 'seller', adminId: this.actorId(req),
+      entityId,
+      entityType: dto?.entityType ?? 'seller',
+      adminId: this.actorId(req),
+      scope,
     });
   }
 
   @Post('kyc/:entityId/reject')
   @ApiOperation({ summary: 'Reject an identity check, with a reason' })
-  rejectKyc(
+  async rejectKyc(
     @Req() req: any,
     @Param('entityId') entityId: string,
     @Body() dto: { entityType?: string; reason?: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that identity check');
     return this.send('admin_kyc_reject', {
       entityId,
       entityType: dto?.entityType ?? 'seller',
       adminId: this.actorId(req),
       reason: dto?.reason ?? '',
+      scope,
     });
   }
 
@@ -147,7 +202,8 @@ export class AdminCoreController {
   @ApiOperation({ summary: 'Administrative actions, newest first' })
   @ApiQuery({ name: 'action', required: false })
   @ApiQuery({ name: 'adminId', required: false })
-  auditLogs(
+  async auditLogs(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('action') action?: string,
@@ -155,18 +211,32 @@ export class AdminCoreController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.send('admin_audit_logs', { page, limit, action, adminId, startDate, endDate });
+    const { scope } = this.scopeOf(req, undefined, 'that audit trail');
+    return this.send('admin_audit_logs', {
+      page,
+      limit,
+      action,
+      adminId,
+      startDate,
+      endDate,
+      scope,
+    });
   }
 
   @Post('audit-logs')
   @ApiOperation({ summary: 'Record an administrative action' })
-  addAuditLog(
+  async addAuditLog(
     @Req() req: any,
     @Body() dto: { action: string; entityType: string; entityId: string; details?: unknown },
   ) {
     // The actor comes from the verified token, never from the request body —
     // otherwise the audit trail records whoever the caller claims to be.
-    return this.send('admin_audit_log_add', { ...dto, adminId: this.actorId(req) });
+    const { scope } = this.scopeOf(req, undefined, 'that audit trail');
+    return this.send('admin_audit_log_add', {
+      ...dto,
+      adminId: this.actorId(req),
+      country: scope ?? 'ALL',
+    });
   }
 
   // ── Reporting ──────────────────────────────────────────────────────────────
@@ -176,16 +246,23 @@ export class AdminCoreController {
   @ApiQuery({ name: 'startDate', required: false })
   @ApiQuery({ name: 'endDate', required: false })
   @ApiQuery({ name: 'groupBy', required: false, enum: ['day', 'week', 'month'] })
-  revenueReport(
+  @ApiQuery({ name: 'country', required: false })
+  async revenueReport(
+    @Req() req: any,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('groupBy') groupBy?: 'day' | 'week' | 'month',
+    @Query('country') country?: string,
   ) {
-    // Defaulted rather than required: the dashboard calls this with no range on
-    // first paint, and a 400 there reads as a broken page.
+    const { scope, market } = this.scopeOf(req, country, 'that report');
     const end = endDate ?? new Date().toISOString().slice(0, 10);
-    const start =
-      startDate ?? new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-    return this.send('admin_revenue_report', { startDate: start, endDate: end, groupBy: groupBy ?? 'day' });
+    const start = startDate ?? new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    return this.send('admin_revenue_report', {
+      startDate: start,
+      endDate: end,
+      groupBy: groupBy ?? 'day',
+      country: market,
+      scope,
+    });
   }
 }

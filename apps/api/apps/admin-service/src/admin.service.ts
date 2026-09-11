@@ -1,12 +1,18 @@
 import {
-  Injectable, Logger, Optional, Inject,
-  InternalServerErrorException, NotFoundException,
+  Injectable,
+  Logger,
+  Optional,
+  Inject,
+  InternalServerErrorException,
+  NotFoundException,
+  NotImplementedException,
 } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { PageLayout } from './entities/page-layout.entity';
+import { assertInMarket, marketPredicate } from '@app/common';
 
 @Injectable()
 export class AdminService {
@@ -84,8 +90,8 @@ export class AdminService {
    * the same thing as a module with nothing in it, and the dashboard should not
    * present the two identically.
    */
-  async getDashboardStats() {
-    const cacheKey = 'admin:dashboard:stats';
+  async getDashboardStats(scope?: string) {
+    const cacheKey = `admin:dashboard:stats:${scope ?? 'ALL'}`;
     const cached = await this.redis.getJson<any>(cacheKey);
     if (cached) return cached;
 
@@ -104,8 +110,8 @@ export class AdminService {
              COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE status = 'active')::int AS active,
              COUNT(*) FILTER (WHERE "createdAt"::date = $1)::int AS new_today
-           FROM public.users`,
-          [today],
+           FROM public.users${scope ? ' WHERE country = $2' : ''}`,
+          scope ? [today, scope] : [today],
         );
         users = { total: u?.total ?? 0, active: u?.active ?? 0, newToday: u?.new_today ?? 0 };
 
@@ -119,8 +125,8 @@ export class AdminService {
              COUNT(*) FILTER (WHERE status::text IN ('PENDING','PLACED','CONFIRMED'))::int AS pending,
              COALESCE(SUM("totalAmount"), 0)::float AS revenue_total,
              COALESCE(SUM("totalAmount") FILTER (WHERE "placedAt"::date = $1), 0)::float AS revenue_today
-           FROM "order".orders`,
-          [today],
+           FROM "order".orders${scope ? ' WHERE region_code = $2' : ''}`,
+          scope ? [today, scope] : [today],
         );
         orders = { total: o?.total ?? 0, today: o?.today ?? 0, pending: o?.pending ?? 0 };
         revenue = { total: o?.revenue_total ?? 0, today: o?.revenue_today ?? 0 };
@@ -193,10 +199,21 @@ export class AdminService {
 
     // Service-level checks from Redis heartbeats
     const serviceNames = [
-      'api-gateway', 'auth-service', 'marketplace-service', 'grocery-service',
-      'restaurant-service', 'pharmacy-service', 'doctor-service', 'taxi-service',
-      'hotel-service', 'order-service', 'payment-service', 'delivery-service',
-      'notification-service', 'search-service', 'wallet-service',
+      'api-gateway',
+      'auth-service',
+      'marketplace-service',
+      'grocery-service',
+      'restaurant-service',
+      'pharmacy-service',
+      'doctor-service',
+      'taxi-service',
+      'hotel-service',
+      'order-service',
+      'payment-service',
+      'delivery-service',
+      'notification-service',
+      'search-service',
+      'wallet-service',
     ];
 
     for (const name of serviceNames) {
@@ -213,16 +230,23 @@ export class AdminService {
   }
 
   // ── Users List (Real Query) ────────────────────────────────────────────────
-  async getUsersList(page = 1, limit = 20, role?: string, country?: string, search?: string) {
+  async getUsersList(
+    page = 1,
+    limit = 20,
+    role?: string,
+    country?: string,
+    search?: string,
+    scope?: string,
+  ) {
     // Try DB query first, fallback to Redis index
     if (this.isDbActive()) {
       try {
-        const qb = this.em!.createQueryBuilder()
-          .select('u')
-          .from('users', 'u');
+        const qb = this.em!.createQueryBuilder().select('u').from('users', 'u');
 
         if (role) qb.andWhere('u.role = :role', { role });
-        if (country) qb.andWhere('u.country = :country', { country });
+        const market = marketPredicate(scope, country);
+        if (scope) qb.andWhere('u.country = :scope', { scope: market });
+        else if (market) qb.andWhere('u.country = :country', { country: market });
         if (search) {
           qb.andWhere('(u.name ILIKE :search OR u.email ILIKE :search OR u.phone ILIKE :search)', {
             search: `%${search}%`,
@@ -247,8 +271,8 @@ export class AdminService {
     if (country) filtered = filtered.filter((u) => u.country === country);
     if (search) {
       const s = search.toLowerCase();
-      filtered = filtered.filter((u) =>
-        u.name?.toLowerCase().includes(s) || u.email?.toLowerCase().includes(s),
+      filtered = filtered.filter(
+        (u) => u.name?.toLowerCase().includes(s) || u.email?.toLowerCase().includes(s),
       );
     }
 
@@ -297,8 +321,22 @@ export class AdminService {
     }
   }
 
+  /** The market a user belongs to, for the scope check on ban/unban. */
+  private async userMarket(userId: string): Promise<string | null> {
+    if (!this.isDbActive() || !this.em) return null;
+    const row = await this.em
+      .createQueryBuilder()
+      .select(['u.id', 'u.country'])
+      .from('users', 'u')
+      .where('u.id = :id', { id: userId })
+      .getRawOne<{ u_id: string; u_country: string | null }>();
+    if (!row) throw new NotFoundException('User not found');
+    return row.u_country ?? null;
+  }
+
   // ── Ban User ───────────────────────────────────────────────────────────────
-  async banUser(userId: string, reason: string, adminId: string) {
+  async banUser(userId: string, reason: string, adminId: string, scope?: string) {
+    if (scope) assertInMarket(await this.userMarket(userId), scope, 'user', this.logger);
     await this.applyUserStatus(
       userId,
       `UPDATE users SET status = 'BANNED', banned_reason = $1 WHERE id = $2 RETURNING id`,
@@ -306,17 +344,30 @@ export class AdminService {
     );
 
     // Redis marker
-    await this.redis.setJson(`admin:banned:${userId}`, {
-      userId, reason, adminId, bannedAt: new Date().toISOString(),
-    }, 86400 * 365);
+    await this.redis.setJson(
+      `admin:banned:${userId}`,
+      {
+        userId,
+        reason,
+        adminId,
+        bannedAt: new Date().toISOString(),
+      },
+      86400 * 365,
+    );
 
-    await this.kafka.publish('admin.user.banned', { userId, reason, adminId, bannedAt: new Date().toISOString() });
+    await this.kafka.publish('admin.user.banned', {
+      userId,
+      reason,
+      adminId,
+      bannedAt: new Date().toISOString(),
+    });
     this.logger.warn(`User BANNED: ${userId} by admin ${adminId} — ${reason}`);
     return { success: true, userId, status: 'BANNED' };
   }
 
   // ── Unban User ─────────────────────────────────────────────────────────────
-  async unbanUser(userId: string, adminId: string) {
+  async unbanUser(userId: string, adminId: string, scope?: string) {
+    if (scope) assertInMarket(await this.userMarket(userId), scope, 'user', this.logger);
     await this.applyUserStatus(
       userId,
       `UPDATE users SET status = 'ACTIVE', banned_reason = NULL WHERE id = $1 RETURNING id`,
@@ -324,12 +375,16 @@ export class AdminService {
     );
 
     await this.redis.del(`admin:banned:${userId}`);
-    await this.kafka.publish('admin.user.unbanned', { userId, adminId, unbannedAt: new Date().toISOString() });
+    await this.kafka.publish('admin.user.unbanned', {
+      userId,
+      adminId,
+      unbannedAt: new Date().toISOString(),
+    });
     return { success: true, userId, status: 'ACTIVE' };
   }
 
   // ── KYC Management ─────────────────────────────────────────────────────────
-  async getPendingKyc(page = 1, limit = 20) {
+  async getPendingKyc(page = 1, limit = 20, scope?: string) {
     // Scan Redis for pending KYC records
     const keys = await this.redis.keys('admin:kyc:pending:*');
     const pendingRecords: any[] = [];
@@ -339,59 +394,127 @@ export class AdminService {
       if (record) pendingRecords.push(record);
     }
 
-    pendingRecords.sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+    const market = marketPredicate(scope);
+    const inScope = market
+      ? pendingRecords.filter(
+          (r) => marketPredicate(undefined, r.country ?? r.countryCode ?? r.regionCode) === market,
+        )
+      : pendingRecords;
+
+    inScope.sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
     const start = (page - 1) * limit;
 
     return {
-      data: pendingRecords.slice(start, start + limit),
-      total: pendingRecords.length,
+      data: inScope.slice(start, start + limit),
+      total: inScope.length,
       page,
       limit,
     };
   }
 
-  async approveKyc(entityId: string, entityType: string, adminId: string) {
+  async approveKyc(entityId: string, entityType: string, adminId: string, scope?: string) {
+    const key = `admin:kyc:pending:${entityType}:${entityId}`;
+    const pending = await this.redis.getJson<any>(key);
+    if (!pending) throw new NotFoundException('No pending identity check with that id');
+    assertInMarket(
+      pending.country ?? pending.countryCode ?? pending.regionCode ?? null,
+      scope,
+      'identity check',
+      this.logger,
+    );
+
     // Remove from pending queue
     await this.redis.del(`admin:kyc:pending:${entityType}:${entityId}`);
 
     // Mark as verified
-    await this.redis.setJson(`admin:kyc:verified:${entityType}:${entityId}`, {
-      entityId, entityType, verifiedBy: adminId, verifiedAt: new Date().toISOString(),
-    }, 86400 * 365);
+    await this.redis.setJson(
+      `admin:kyc:verified:${entityType}:${entityId}`,
+      {
+        entityId,
+        entityType,
+        verifiedBy: adminId,
+        verifiedAt: new Date().toISOString(),
+      },
+      86400 * 365,
+    );
 
     // Update counter
-    const pending = parseInt(await this.redis.get('admin:counter:pending_kyc') ?? '0', 10);
-    if (pending > 0) await this.redis.set('admin:counter:pending_kyc', String(pending - 1));
+    const pendingCount = parseInt((await this.redis.get('admin:counter:pending_kyc')) ?? '0', 10);
+    if (pendingCount > 0)
+      await this.redis.set('admin:counter:pending_kyc', String(pendingCount - 1));
 
     await this.kafka.publish('admin.kyc.approved', { entityId, entityType, adminId });
     this.logger.log(`KYC approved: ${entityType}/${entityId} by admin ${adminId}`);
     return { success: true, entityId, entityType, status: 'APPROVED' };
   }
 
-  async rejectKyc(entityId: string, entityType: string, adminId: string, reason: string) {
+  async rejectKyc(
+    entityId: string,
+    entityType: string,
+    adminId: string,
+    reason: string,
+    scope?: string,
+  ) {
+    const key = `admin:kyc:pending:${entityType}:${entityId}`;
+    const pending = await this.redis.getJson<any>(key);
+    if (!pending) throw new NotFoundException('No pending identity check with that id');
+    assertInMarket(
+      pending.country ?? pending.countryCode ?? pending.regionCode ?? null,
+      scope,
+      'identity check',
+      this.logger,
+    );
+
     await this.redis.del(`admin:kyc:pending:${entityType}:${entityId}`);
 
-    await this.redis.setJson(`admin:kyc:rejected:${entityType}:${entityId}`, {
-      entityId, entityType, rejectedBy: adminId, reason, rejectedAt: new Date().toISOString(),
-    }, 86400 * 30);
+    await this.redis.setJson(
+      `admin:kyc:rejected:${entityType}:${entityId}`,
+      {
+        entityId,
+        entityType,
+        rejectedBy: adminId,
+        reason,
+        rejectedAt: new Date().toISOString(),
+      },
+      86400 * 30,
+    );
 
-    const pending = parseInt(await this.redis.get('admin:counter:pending_kyc') ?? '0', 10);
-    if (pending > 0) await this.redis.set('admin:counter:pending_kyc', String(pending - 1));
+    const pendingCount = parseInt((await this.redis.get('admin:counter:pending_kyc')) ?? '0', 10);
+    if (pendingCount > 0)
+      await this.redis.set('admin:counter:pending_kyc', String(pendingCount - 1));
 
     await this.kafka.publish('admin.kyc.rejected', { entityId, entityType, adminId, reason });
     return { success: true, entityId, entityType, status: 'REJECTED' };
   }
 
   // ── Audit Logs ─────────────────────────────────────────────────────────────
-  async getAuditLogs(page = 1, limit = 50, filters?: { action?: string; adminId?: string; startDate?: string; endDate?: string }) {
+  async getAuditLogs(
+    page = 1,
+    limit = 50,
+    filters?: {
+      action?: string;
+      adminId?: string;
+      startDate?: string;
+      endDate?: string;
+      scope?: string;
+    },
+  ) {
     // Try Redis-based audit log storage
     const allLogs = (await this.redis.getJson<any[]>('admin:audit:logs')) ?? [];
 
     let filtered = allLogs;
     if (filters?.action) filtered = filtered.filter((l) => l.action === filters.action);
     if (filters?.adminId) filtered = filtered.filter((l) => l.adminId === filters.adminId);
-    if (filters?.startDate) filtered = filtered.filter((l) => new Date(l.timestamp) >= new Date(filters.startDate!));
-    if (filters?.endDate) filtered = filtered.filter((l) => new Date(l.timestamp) <= new Date(filters.endDate!));
+    if (filters?.startDate)
+      filtered = filtered.filter((l) => new Date(l.timestamp) >= new Date(filters.startDate!));
+    if (filters?.endDate)
+      filtered = filtered.filter((l) => new Date(l.timestamp) <= new Date(filters.endDate!));
+    if (filters?.scope) {
+      const market = marketPredicate(filters.scope);
+      filtered = filtered.filter(
+        (l) => marketPredicate(undefined, l.country) === market || l.country === 'ALL',
+      );
+    }
 
     filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const start = (page - 1) * limit;
@@ -404,10 +527,18 @@ export class AdminService {
     };
   }
 
-  async addAuditLog(entry: { action: string; adminId: string; entityType: string; entityId: string; details?: any }) {
+  async addAuditLog(entry: {
+    action: string;
+    adminId: string;
+    entityType: string;
+    entityId: string;
+    details?: any;
+    country?: string;
+  }) {
     const log = {
       id: `AUDIT-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       ...entry,
+      country: entry.country ?? 'ALL',
       timestamp: new Date().toISOString(),
     };
 
@@ -419,7 +550,25 @@ export class AdminService {
   }
 
   // ── Revenue Report ─────────────────────────────────────────────────────────
-  async getRevenueReport(startDate: string, endDate: string, groupBy: 'day' | 'week' | 'month' = 'day') {
+  //
+  // Sums global per-day Redis counters (`admin:counter:revenue:<date>`,
+  // `admin:counter:orders:<date>`), which carry no market dimension — there is
+  // no query here to add a market predicate to. A scoped admin is refused
+  // outright rather than shown a platform-wide total under their market's
+  // name; Plan C1 routes this report to order-service, where orders carry
+  // their own region_code, and per-market revenue becomes possible.
+  async getRevenueReport(
+    startDate: string,
+    endDate: string,
+    groupBy: 'day' | 'week' | 'month' = 'day',
+    scope?: string,
+    country?: string,
+  ) {
+    if (scope || country) {
+      throw new NotImplementedException(
+        'Revenue is not tracked per market yet; Plan C1 routes this report to order-service.',
+      );
+    }
     const start = new Date(startDate);
     const end = new Date(endDate);
     const revenue: any[] = [];
@@ -427,8 +576,13 @@ export class AdminService {
     const current = new Date(start);
     while (current <= end) {
       const dateKey = current.toISOString().split('T')[0];
-      const dayRevenue = parseFloat(await this.redis.get(`admin:counter:revenue:${dateKey}`) ?? '0');
-      const dayOrders = parseInt(await this.redis.get(`admin:counter:orders:${dateKey}`) ?? '0', 10);
+      const dayRevenue = parseFloat(
+        (await this.redis.get(`admin:counter:revenue:${dateKey}`)) ?? '0',
+      );
+      const dayOrders = parseInt(
+        (await this.redis.get(`admin:counter:orders:${dateKey}`)) ?? '0',
+        10,
+      );
 
       revenue.push({
         date: dateKey,
@@ -457,7 +611,7 @@ export class AdminService {
   // ── Increment Counter (called by other services via Kafka) ─────────────────
   async incrementCounter(counter: string, value = 1) {
     const key = `admin:counter:${counter}`;
-    const current = parseInt(await this.redis.get(key) ?? '0', 10);
+    const current = parseInt((await this.redis.get(key)) ?? '0', 10);
     await this.redis.set(key, String(current + value), 86400 * 365);
   }
 }
