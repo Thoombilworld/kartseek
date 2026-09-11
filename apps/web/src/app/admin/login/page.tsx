@@ -24,249 +24,13 @@ import {
 } from 'lucide-react';
 import { KartseekLoader } from '@/components/kartseek-loader';
 import { authApi, ApiError, type AuthApiUser } from '@/lib/api-endpoints';
+import { toAdminUser, type StaffSessionUser } from '@/auth/admin-session';
 
-/* ── All permission keys (mirrors roles/page.tsx) ─────────────────────────── */
-const ALL_PERMS = [
-  'dashboard.view',
-  'users.view',
-  'users.manage',
-  'users.delete',
-  'sellers.view',
-  'sellers.manage',
-  'sellers.approve',
-  'orders.view',
-  'orders.manage',
-  'orders.refund',
-  'finance.view',
-  'finance.payouts',
-  'finance.reports',
-  'kyc.view',
-  'kyc.approve',
-  'content.view',
-  'content.manage',
-  'promotions.manage',
-  'system.settings',
-  'system.health',
-  'audit.logs',
-  'franchise.view',
-  'franchise.manage',
-  'delivery.view',
-  'delivery.manage',
-  'support.view',
-  'support.respond',
-  'modules.marketplace',
-  'modules.grocery',
-  'modules.restaurant',
-  'modules.pharmacy',
-  'modules.doctor',
-  'modules.taxi',
-  'staff.view',
-  'staff.manage',
-  'staff.invite',
-  'loyalty.config',
-  'loyalty.adjust',
-  'loyalty.view',
-  'wallet.audit',
-  'wallet.adjust',
-  'wallet.freeze',
-];
-
-/* ── Demo admin accounts with RBAC metadata ──────────────────────────────── */
-interface AdminAccount {
-  password: string;
-  name: string;
-  adminRoleId: string;
-  adminRoleName: string;
-  adminPermissions: string[];
-  regionCode: string;
-  regionLocked: boolean;
-  phone: string;
-}
-
-const ADMIN_ACCOUNTS: Record<string, AdminAccount> = {
-  [process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@kartseek.com']: {
-    password: process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'KartAdmin@2026',
-    name: 'Super Admin',
-    adminRoleId: 'R-01',
-    adminRoleName: 'Super Admin',
-    adminPermissions: ALL_PERMS,
-    regionCode: 'ALL',
-    regionLocked: false,
-    phone: '+91 98765 43210',
-  },
-  [process.env.NEXT_PUBLIC_OPS_EMAIL || 'ops@kartseek.com']: {
-    password: process.env.NEXT_PUBLIC_OPS_PASSWORD || 'KartAdmin@2026',
-    name: 'Operations Admin',
-    adminRoleId: 'R-02',
-    adminRoleName: 'Admin',
-    adminPermissions: ALL_PERMS.filter((p) => !['users.delete', 'system.settings'].includes(p)),
-    regionCode: 'ALL',
-    regionLocked: false,
-    phone: '+91 87654 32109',
-  },
-  'uae@kartseek.com': {
-    password: 'KartAdmin@2026',
-    name: 'Sarah Al-Rashid',
-    adminRoleId: 'R-03',
-    adminRoleName: 'Country Manager',
-    adminPermissions: [
-      'dashboard.view',
-      'users.view',
-      'users.manage',
-      'sellers.view',
-      'sellers.manage',
-      'sellers.approve',
-      'orders.view',
-      'orders.manage',
-      'finance.view',
-      'finance.reports',
-      'kyc.view',
-      'kyc.approve',
-      'franchise.view',
-      'franchise.manage',
-      'delivery.view',
-      'delivery.manage',
-      'support.view',
-      'staff.view',
-      'modules.marketplace',
-      'modules.grocery',
-      'modules.restaurant',
-      'modules.pharmacy',
-      'modules.doctor',
-      'modules.taxi',
-      'loyalty.view',
-      'wallet.audit',
-    ],
-    regionCode: 'AE',
-    regionLocked: true,
-    phone: '+971 50 123 4567',
-  },
-  'saudi@kartseek.com': {
-    password: 'KartAdmin@2026',
-    name: 'Fatima Noor',
-    adminRoleId: 'R-03',
-    adminRoleName: 'Country Manager',
-    adminPermissions: [
-      'dashboard.view',
-      'users.view',
-      'users.manage',
-      'sellers.view',
-      'sellers.manage',
-      'sellers.approve',
-      'orders.view',
-      'orders.manage',
-      'finance.view',
-      'finance.reports',
-      'kyc.view',
-      'kyc.approve',
-      'franchise.view',
-      'franchise.manage',
-      'delivery.view',
-      'delivery.manage',
-      'support.view',
-      'staff.view',
-      'modules.marketplace',
-      'modules.grocery',
-      'modules.restaurant',
-      'modules.pharmacy',
-      'modules.doctor',
-      'modules.taxi',
-      'loyalty.view',
-      'wallet.audit',
-    ],
-    regionCode: 'SA',
-    regionLocked: true,
-    phone: '+966 55 987 6543',
-  },
-  'india@kartseek.com': {
-    password: 'KartAdmin@2026',
-    name: 'Vikram Singh',
-    adminRoleId: 'R-04',
-    adminRoleName: 'State/District Manager',
-    adminPermissions: [
-      'dashboard.view',
-      'sellers.view',
-      'sellers.manage',
-      'orders.view',
-      'orders.manage',
-      'kyc.view',
-      'kyc.approve',
-      'franchise.view',
-      'delivery.view',
-      'delivery.manage',
-      'support.view',
-      'support.respond',
-      'modules.marketplace',
-      'modules.grocery',
-      'modules.restaurant',
-      'modules.pharmacy',
-      'modules.doctor',
-      'modules.taxi',
-      'loyalty.view',
-    ],
-    regionCode: 'IN',
-    regionLocked: true,
-    phone: '+91 76543 21098',
-  },
-  'finance@kartseek.com': {
-    password: 'KartAdmin@2026',
-    name: 'Priya Sharma',
-    adminRoleId: 'R-15',
-    adminRoleName: 'Finance Manager',
-    adminPermissions: [
-      'dashboard.view',
-      'finance.view',
-      'finance.payouts',
-      'finance.reports',
-      'orders.view',
-      'wallet.audit',
-      'loyalty.view',
-    ],
-    regionCode: 'ALL',
-    regionLocked: false,
-    phone: '+91 87654 32109',
-  },
-  'support@kartseek.com': {
-    password: 'KartAdmin@2026',
-    name: 'Maria Garcia',
-    adminRoleId: 'R-14',
-    adminRoleName: 'Customer Support Agent',
-    adminPermissions: [
-      'dashboard.view',
-      'users.view',
-      'orders.view',
-      'orders.refund',
-      'support.view',
-      'support.respond',
-    ],
-    regionCode: 'ALL',
-    regionLocked: false,
-    phone: '+1 555 456 7890',
-  },
-};
-
+// B2 replaces the OTP phase with a real challenge flow; until then these stay
+// hard-coded (no demo account map backs them — the credential step below is
+// the only thing that decides who signs in).
 const VALID_OTP = process.env.NEXT_PUBLIC_ADMIN_OTP || '123456';
 const VALID_BACKUP_PREFIX = 'BACKUP-';
-
-function makeAdminUser(email: string, account: AdminAccount): AuthUser {
-  return {
-    id: `adm_${email.split('@')[0]}`,
-    name: account.name,
-    email,
-    phone: account.phone,
-    role: 'SUPER_ADMIN',
-    isVerified: true,
-    walletBalance: 0,
-    loyaltyPoints: 0,
-    regionCode: account.regionCode === 'ALL' ? undefined : account.regionCode,
-    twoFactorEnabled: true,
-    twoFactorMethod: 'authenticator',
-    adminRoleId: account.adminRoleId,
-    adminRoleName: account.adminRoleName,
-    adminPermissions: account.adminPermissions,
-    regionLocked: account.regionLocked,
-  };
-}
 
 export default function AdminLoginPage() {
   return (
@@ -481,36 +245,18 @@ function AdminLoginForm() {
       return;
     }
 
-    // The role comes from the signed token, never from the form. Someone with a
-    // customer account must not reach the admin console by knowing its URL.
-    const role = String(session.user?.role ?? '').toUpperCase();
-    if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+    // The role, market lock and permissions come from the signed token, never
+    // from the form or a client-side table. Someone with a customer account
+    // must not reach the admin console by knowing its URL, and what a staff
+    // account can see must be what the token actually grants.
+    let user: AuthUser;
+    try {
+      user = toAdminUser(session as { user: StaffSessionUser });
+    } catch {
       setError('This account does not have admin access.');
       setLoading(false);
       return;
     }
-
-    // Presentation only — labels and permission chips for the console. Access is
-    // decided by the token's role, and by the API on every request.
-    const known = ADMIN_ACCOUNTS[email.toLowerCase()];
-    const account = known ?? ADMIN_ACCOUNTS[Object.keys(ADMIN_ACCOUNTS)[0]];
-    // Market scope comes from the signed session, never from the demo table:
-    // the API enforces the same claim on every request, so the console has to
-    // show the lock the token actually carries.
-    const regionLocked = session.user?.regionLocked === true;
-    const user = {
-      ...makeAdminUser(email, account),
-      id: session.user?.id ?? email,
-      name: session.user?.name ?? account.name,
-      regionCode: session.user?.regionCode ?? undefined,
-      regionLocked,
-      ...(known
-        ? {}
-        : {
-            adminRoleId: regionLocked ? 'R-REGIONAL' : 'R-02',
-            adminRoleName: regionLocked ? 'Regional Admin' : 'Admin',
-          }),
-    };
     const token = session.accessToken;
     login(user, token, session.refreshToken);
     set2FARequired();

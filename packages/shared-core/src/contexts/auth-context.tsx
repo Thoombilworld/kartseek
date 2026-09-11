@@ -402,16 +402,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = useCallback(
     (...perms: string[]) => {
-      if (!state.user?.adminPermissions) return state.user?.role === 'SUPER_ADMIN';
-      return perms.every((p) => state.user!.adminPermissions!.includes(p));
+      const granted = state.user?.adminPermissions ?? [];
+      if (granted.includes('*')) return true;
+      return perms.every((p) => granted.includes(p));
     },
     [state.user],
   );
 
   const hasAnyPermission = useCallback(
     (...perms: string[]) => {
-      if (!state.user?.adminPermissions) return state.user?.role === 'SUPER_ADMIN';
-      return perms.some((p) => state.user!.adminPermissions!.includes(p));
+      const granted = state.user?.adminPermissions ?? [];
+      if (granted.includes('*')) return true;
+      return perms.some((p) => granted.includes(p));
     },
     [state.user],
   );
