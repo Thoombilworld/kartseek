@@ -36,6 +36,8 @@ import { ProductListing } from '../entities/product-listing.entity';
 export interface Actor {
   ownerId?: string;
   role?: string;
+  /** Set for a region-locked admin: the one market they may write in. */
+  regionCode?: string;
 }
 
 /**
@@ -123,6 +125,51 @@ export class MarketplaceFulfillmentService {
    * resource whose own `seller_id` was never populated. A record nobody
    * demonstrably owns is not a record anybody may edit.
    */
+  /**
+   * The market a new coupon is issued for, given who is issuing it: a
+   * region-locked admin's market whatever the body names; the requested one
+   * for a global admin (none = the platform's, runs everywhere); a seller's
+   * own market by default.
+   */
+  private async couponMarketFor(
+    actor: Actor | undefined,
+    requested?: string | null,
+  ): Promise<string | null> {
+    const wanted = requested ? String(requested).toUpperCase() : null;
+    if (actor?.regionCode) {
+      const scope = actor.regionCode.toUpperCase();
+      if (wanted && wanted !== scope) this.denyMarket(actor, wanted, 'issue a coupon');
+      return scope;
+    }
+    if (wanted) return wanted;
+    if (MarketplaceFulfillmentService.isAdmin(actor)) return null;
+    const ownerId = actor?.ownerId;
+    if (!ownerId) return null;
+    const seller = await this.sellerRepo.findOne({
+      where: { ownerId } as any,
+      select: ['id', 'regionCode'] as any,
+    });
+    return seller?.regionCode ? String(seller.regionCode).toUpperCase() : null;
+  }
+
+  /** A region-locked admin may only touch coupons issued for their market. */
+  private assertCouponInMarket(actor: Actor | undefined, coupon: Coupon, what: string): void {
+    if (!actor?.regionCode) return;
+    const owner = coupon.regionCode ? String(coupon.regionCode).toUpperCase() : null;
+    if (owner !== actor.regionCode.toUpperCase())
+      this.denyMarket(actor, owner ?? 'every market', what);
+  }
+
+  private denyMarket(actor: Actor | undefined, target: string, what: string): never {
+    this.logger.warn(
+      `[region-scope-denied] owner=${actor?.ownerId ?? 'anonymous'} role=${actor?.role ?? '-'} ` +
+        `scope=${actor?.regionCode} target=${target} what="${what}"`,
+    );
+    throw new ForbiddenException(
+      `Your account is restricted to the ${actor?.regionCode} market; cannot ${what} for ${target}.`,
+    );
+  }
+
   private async assertOwns(
     actor: Actor | undefined,
     resourceSellerId: string | null | undefined,
@@ -306,14 +353,27 @@ export class MarketplaceFulfillmentService {
 
   // ── Coupons ─────────────────────────────────────────────────────────────────
   async createCoupon(dto: any) {
-    const existing = await this.couponRepo.findOne({ where: { code: dto.code?.toUpperCase() } });
-    if (existing) throw new BadRequestException(`Coupon code '${dto.code}' already exists`);
+    // `_actor` rides in the payload from the gateway: a region-locked admin's
+    // coupon is issued for their market whatever the body names, and a seller's
+    // defaults to the market their store trades in. A coupon with no market is
+    // the platform's own (runs everywhere) — only a global admin issues one.
+    const { _actor: actor, ...fields } = (dto ?? {}) as any;
+    const regionCode = await this.couponMarketFor(actor, fields.regionCode ?? fields.region_code);
+    const existing = await this.couponRepo.findOne({ where: { code: fields.code?.toUpperCase() } });
+    if (existing) throw new BadRequestException(`Coupon code '${fields.code}' already exists`);
     const entity = this.couponRepo.create({
-      ...dto,
-      code: dto.code?.toUpperCase(),
+      ...fields,
+      regionCode,
+      code: fields.code?.toUpperCase(),
     } as any) as unknown as Coupon;
     const saved = await this.couponRepo.save(entity);
-    await this.kafka.publish('coupon.created', { id: saved.id, code: saved.code });
+    // Consumers key their caches by market; an event without one would have
+    // to invalidate every market for a coupon that runs in one.
+    await this.kafka.publish('coupon.created', {
+      id: saved.id,
+      code: saved.code,
+      regionCode: saved.regionCode ?? null,
+    });
     this.logger.log(`Coupon created: ${saved.code}`);
     return saved;
   }
@@ -339,6 +399,8 @@ export class MarketplaceFulfillmentService {
     publicOnly?: boolean;
     /** Market being browsed: only its coupons and the market-agnostic ones. */
     region?: string;
+    /** Only coupons issued for `region` — a region-locked admin's view. */
+    regionStrict?: boolean;
   }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -354,9 +416,9 @@ export class MarketplaceFulfillmentService {
     // A flat amount is in one currency: a "QR 50 off" code must not be offered
     // in India. Codes without a region apply everywhere.
     if (filters.region) {
-      qb.andWhere('(c.regionCode IS NULL OR c.regionCode = :region)', {
-        region: filters.region.toUpperCase(),
-      });
+      const region = filters.region.toUpperCase();
+      if (filters.regionStrict) qb.andWhere('c.regionCode = :region', { region });
+      else qb.andWhere('(c.regionCode IS NULL OR c.regionCode = :region)', { region });
     }
     if (filters.isActive !== undefined)
       qb.andWhere('c.isActive = :isActive', { isActive: filters.isActive });
@@ -535,6 +597,14 @@ export class MarketplaceFulfillmentService {
     // every seller and allows it only to an admin. That is the correct reading:
     // a campaign that spans the marketplace is not one seller's to edit.
     await this.assertOwns(actor, coupon.sellerId, 'coupon');
+    this.assertCouponInMarket(actor, coupon, 'edit this coupon');
+    if (
+      actor?.regionCode &&
+      dto?.regionCode &&
+      String(dto.regionCode).toUpperCase() !== actor.regionCode.toUpperCase()
+    ) {
+      this.denyMarket(actor, String(dto.regionCode).toUpperCase(), 'move this coupon');
+    }
 
     const patch = MarketplaceFulfillmentService.pick(
       dto,
@@ -544,13 +614,18 @@ export class MarketplaceFulfillmentService {
       throw new BadRequestException('No updatable coupon fields were supplied.');
     }
     await this.couponRepo.update(id, patch);
-    await this.kafka.publish('coupon.updated', { id, ...patch });
+    await this.kafka.publish('coupon.updated', {
+      id,
+      ...patch,
+      regionCode: coupon.regionCode ?? null,
+    });
     return { success: true, id };
   }
 
   async deleteCoupon(id: string, actor?: Actor) {
     const coupon = await this.couponOwner(id);
     await this.assertOwns(actor, coupon.sellerId, 'coupon');
+    this.assertCouponInMarket(actor, coupon, 'deactivate this coupon');
 
     await this.couponRepo.update(id, { isActive: false });
     return { success: true, id };

@@ -1481,10 +1481,11 @@ export class SellerService {
     (product as any).metadata = metadata;
     await this.productRepo.save(product);
 
-    // The storefront caches the product detail response by id *and* by slug.
-    await this.redis.del(`product:${productId}`).catch((): undefined => undefined);
+    // The storefront caches the product detail response by id *and* by slug,
+    // one copy per market (`product:<key>:<market>`).
+    await this.redis.delPattern(`product:${productId}:*`).catch((): number => 0);
     if ((product as any).slug)
-      await this.redis.del(`product:${(product as any).slug}`).catch((): undefined => undefined);
+      await this.redis.delPattern(`product:${(product as any).slug}:*`).catch((): number => 0);
 
     return { success: true, productId, total: clean.length };
   }

@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository, ILike, In, MoreThanOrEqual, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
@@ -10,10 +16,15 @@ import { Brand } from '../entities/brand.entity';
 import { Review } from '../entities/review.entity';
 import { MarketplaceOrder } from '../entities/marketplace-order.entity';
 import { ReturnRequest } from '../entities/return-request.entity';
+import { SellerPromotion } from '../entities/seller-promotion.entity';
 import { ProductAttribute, type AttributeOption } from '../entities/product-attribute.entity';
 import { ProductQuestion } from '../entities/product-qa.entity';
 import { MarketplaceNotification } from '../entities/marketplace-notification.entity';
-import { FlashDeal, FlashDealNomination, type FlashDealStatus } from '../entities/flash-deal.entity';
+import {
+  FlashDeal,
+  FlashDealNomination,
+  type FlashDealStatus,
+} from '../entities/flash-deal.entity';
 import { BankOffer } from '../entities/bank-offer.entity';
 import { ExchangeOffer } from '../entities/exchange-offer.entity';
 import { MarketplaceHomeCacheService } from '../catalog/home-cache.service';
@@ -56,11 +67,16 @@ export class MarketplaceAdminService {
     @InjectRepository(Review) private readonly reviewRepo: Repository<Review>,
     @InjectRepository(MarketplaceOrder) private readonly orderRepo: Repository<MarketplaceOrder>,
     @InjectRepository(ReturnRequest) private readonly returnRepo: Repository<ReturnRequest>,
-    @InjectRepository(ProductAttribute) private readonly attributeRepo: Repository<ProductAttribute>,
+    @InjectRepository(ProductAttribute)
+    private readonly attributeRepo: Repository<ProductAttribute>,
     @InjectRepository(ProductQuestion) private readonly questionRepo: Repository<ProductQuestion>,
-    @InjectRepository(MarketplaceNotification) private readonly notificationRepo: Repository<MarketplaceNotification>,
+    @InjectRepository(MarketplaceNotification)
+    private readonly notificationRepo: Repository<MarketplaceNotification>,
     @InjectRepository(FlashDeal) private readonly flashDealRepo: Repository<FlashDeal>,
-    @InjectRepository(FlashDealNomination) private readonly nominationRepo: Repository<FlashDealNomination>,
+    @InjectRepository(FlashDealNomination)
+    private readonly nominationRepo: Repository<FlashDealNomination>,
+    @InjectRepository(SellerPromotion)
+    private readonly sellerPromotionRepo: Repository<SellerPromotion>,
   ) {}
 
   async updateCategory(id: string, dto: any) {
@@ -71,17 +87,26 @@ export class MarketplaceAdminService {
     if (dto.slug !== undefined) update.slug = dto.slug;
     if (dto.icon !== undefined) update.icon = dto.icon;
     if (dto.image !== undefined) update.image = dto.image;
-    if (dto.sortOrder !== undefined || dto.sort_order !== undefined) update.sort_order = dto.sortOrder ?? dto.sort_order;
-    if (dto.isActive !== undefined || dto.is_active !== undefined) update.is_active = dto.isActive ?? dto.is_active;
-    if (dto.seoTitle !== undefined || dto.seo_title !== undefined) update.seo_title = dto.seoTitle ?? dto.seo_title;
-    if (dto.seoDescription !== undefined || dto.seo_description !== undefined) update.seo_description = dto.seoDescription ?? dto.seo_description;
+    if (dto.sortOrder !== undefined || dto.sort_order !== undefined)
+      update.sort_order = dto.sortOrder ?? dto.sort_order;
+    if (dto.isActive !== undefined || dto.is_active !== undefined)
+      update.is_active = dto.isActive ?? dto.is_active;
+    if (dto.seoTitle !== undefined || dto.seo_title !== undefined)
+      update.seo_title = dto.seoTitle ?? dto.seo_title;
+    if (dto.seoDescription !== undefined || dto.seo_description !== undefined)
+      update.seo_description = dto.seoDescription ?? dto.seo_description;
     if (dto.translations !== undefined) update.translations = dto.translations;
     await this.categoryRepo.update(id, update);
     // Re-parent if requested
     if (dto.parentId !== undefined) {
-      const parent = dto.parentId ? await this.categoryRepo.findOne({ where: { id: dto.parentId } }) : null;
+      const parent = dto.parentId
+        ? await this.categoryRepo.findOne({ where: { id: dto.parentId } })
+        : null;
       const updated = await this.categoryRepo.findOne({ where: { id } });
-      if (updated) { updated.parent = parent as any; await this.categoryRepo.save(updated); }
+      if (updated) {
+        updated.parent = parent as any;
+        await this.categoryRepo.save(updated);
+      }
     }
     await this.redis.del('marketplace:categories');
     await this.kafka.publish('category.updated', { id, ...dto });
@@ -90,7 +115,12 @@ export class MarketplaceAdminService {
   }
 
   async createCategory(dto: any) {
-    const slug = dto.slug || dto.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const slug =
+      dto.slug ||
+      dto.name
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
     const existing = await this.categoryRepo.findOne({ where: { slug } });
     if (existing) throw new BadRequestException(`Category with slug '${slug}' already exists`);
     const entity = this.categoryRepo.create({
@@ -111,7 +141,11 @@ export class MarketplaceAdminService {
     }
     const saved = await this.categoryRepo.save(entity);
     await this.redis.del('marketplace:categories');
-    await this.kafka.publish('category.created', { id: saved.id, name: saved.name, slug: saved.slug });
+    await this.kafka.publish('category.created', {
+      id: saved.id,
+      name: saved.name,
+      slug: saved.slug,
+    });
     this.logger.log(`Category created: ${saved.name} (${saved.id})`);
     return { success: true, id: saved.id, name: saved.name, slug: saved.slug };
   }
@@ -124,7 +158,8 @@ export class MarketplaceAdminService {
     // Aggregate real data from repositories
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(todayStart); weekStart.setDate(weekStart.getDate() - 7);
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 7);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const [sellerTotal, sellerActive, sellerPending, sellerSuspended] = await Promise.all([
@@ -147,35 +182,70 @@ export class MarketplaceAdminService {
     ]);
 
     // Order stats
-    const todayOrders = await this.orderRepo.createQueryBuilder('o')
-      .where('o.createdAt >= :todayStart', { todayStart }).getCount();
-    const weekOrders = await this.orderRepo.createQueryBuilder('o')
-      .where('o.createdAt >= :weekStart', { weekStart }).getCount();
-    const monthOrders = await this.orderRepo.createQueryBuilder('o')
-      .where('o.createdAt >= :monthStart', { monthStart }).getCount();
+    const todayOrders = await this.orderRepo
+      .createQueryBuilder('o')
+      .where('o.createdAt >= :todayStart', { todayStart })
+      .getCount();
+    const weekOrders = await this.orderRepo
+      .createQueryBuilder('o')
+      .where('o.createdAt >= :weekStart', { weekStart })
+      .getCount();
+    const monthOrders = await this.orderRepo
+      .createQueryBuilder('o')
+      .where('o.createdAt >= :monthStart', { monthStart })
+      .getCount();
     const pendingOrders = await this.orderRepo.count({ where: { status: 'PENDING' } });
 
     // Revenue stats
-    const todayRevenue = await this.orderRepo.createQueryBuilder('o')
+    const todayRevenue = await this.orderRepo
+      .createQueryBuilder('o')
       .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
       .where('o.createdAt >= :todayStart', { todayStart })
       .andWhere('o.paymentStatus = :paid', { paid: 'PAID' })
       .getRawOne();
-    const monthRevenue = await this.orderRepo.createQueryBuilder('o')
+    const monthRevenue = await this.orderRepo
+      .createQueryBuilder('o')
       .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
       .where('o.createdAt >= :monthStart', { monthStart })
       .andWhere('o.paymentStatus = :paid', { paid: 'PAID' })
       .getRawOne();
 
     const result = {
-      sellers: { total: sellerTotal, active: sellerActive, pending: sellerPending, suspended: sellerSuspended, blocked: 0 },
-      products: { total: productTotal, approved: productApproved, pending: productPending, rejected: productRejected, unpublished: 0 },
-      brands: { total: brandTotal, approved: brandApproved, pendingApproval: brandTotal - brandApproved, rejected: 0 },
+      sellers: {
+        total: sellerTotal,
+        active: sellerActive,
+        pending: sellerPending,
+        suspended: sellerSuspended,
+        blocked: 0,
+      },
+      products: {
+        total: productTotal,
+        approved: productApproved,
+        pending: productPending,
+        rejected: productRejected,
+        unpublished: 0,
+      },
+      brands: {
+        total: brandTotal,
+        approved: brandApproved,
+        pendingApproval: brandTotal - brandApproved,
+        rejected: 0,
+      },
       campaigns: { active: 0, scheduled: 0, pending: 0, paused: 0, expired: 0 },
-      orders: { today: todayOrders, thisWeek: weekOrders, thisMonth: monthOrders, pending: pendingOrders },
+      orders: {
+        today: todayOrders,
+        thisWeek: weekOrders,
+        thisMonth: monthOrders,
+        pending: pendingOrders,
+      },
       returns: { open: 0, resolved: 0 },
       refunds: { pending: 0, processed: 0, amount: 0 },
-      revenue: { today: parseFloat(todayRevenue?.sum || '0'), thisWeek: 0, thisMonth: parseFloat(monthRevenue?.sum || '0'), commission: 0 },
+      revenue: {
+        today: parseFloat(todayRevenue?.sum || '0'),
+        thisWeek: 0,
+        thisMonth: parseFloat(monthRevenue?.sum || '0'),
+        commission: 0,
+      },
       payouts: { pending: 0, processed: 0 },
       country,
     };
@@ -187,7 +257,12 @@ export class MarketplaceAdminService {
     if (!dto.parentId) throw new BadRequestException('parentId is required for subcategories');
     const parent = await this.categoryRepo.findOne({ where: { id: dto.parentId } });
     if (!parent) throw new NotFoundException(`Parent category ${dto.parentId} not found`);
-    const slug = dto.slug || dto.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const slug =
+      dto.slug ||
+      dto.name
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
     const entity = this.categoryRepo.create({
       name: dto.name,
       slug,
@@ -202,7 +277,11 @@ export class MarketplaceAdminService {
     });
     const saved = await this.categoryRepo.save(entity);
     await this.redis.del('marketplace:categories');
-    await this.kafka.publish('subcategory.created', { id: saved.id, name: saved.name, parentId: dto.parentId });
+    await this.kafka.publish('subcategory.created', {
+      id: saved.id,
+      name: saved.name,
+      parentId: dto.parentId,
+    });
     this.logger.log(`Subcategory created: ${saved.name} under ${parent.name}`);
     return { success: true, id: saved.id, name: saved.name, parentId: dto.parentId };
   }
@@ -235,9 +314,11 @@ export class MarketplaceAdminService {
     if (!cat) throw new NotFoundException(`Category ${id} not found`);
     // Check for child categories
     const children = await this.categoryRepo.findDescendants(cat);
-    const childCount = children.filter(c => c.id !== id).length;
+    const childCount = children.filter((c) => c.id !== id).length;
     if (childCount > 0) {
-      throw new BadRequestException(`Cannot delete category with ${childCount} subcategories. Delete them first.`);
+      throw new BadRequestException(
+        `Cannot delete category with ${childCount} subcategories. Delete them first.`,
+      );
     }
     // Check for products
     const productCount = await this.productRepo.count({ where: { category: { id } } });
@@ -257,7 +338,11 @@ export class MarketplaceAdminService {
 
   /** `slug`-safe form of a label: the machine value stored on a variant. */
   private static slugify(value: string): string {
-    return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
   }
 
   /**
@@ -283,9 +368,10 @@ export class MarketplaceAdminService {
         // Only a syntactically valid CSS colour is kept — a stray value would be
         // painted straight into a `background-color`, where it silently renders
         // as transparent and looks like a missing swatch.
-        const hex = typeof opt?.hex === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(opt.hex.trim())
-          ? opt.hex.trim().toLowerCase()
-          : undefined;
+        const hex =
+          typeof opt?.hex === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(opt.hex.trim())
+            ? opt.hex.trim().toLowerCase()
+            : undefined;
         return hex ? { label, value, hex } : { label, value };
       })
       .filter((opt): opt is AttributeOption => opt !== null);
@@ -347,7 +433,8 @@ export class MarketplaceAdminService {
     if (dto.name !== undefined) update.name = dto.name;
     if (dto.slug !== undefined) update.slug = dto.slug;
     if (dto.type !== undefined) update.type = dto.type;
-    if (dto.options !== undefined) update.options = MarketplaceAdminService.normaliseOptions(dto.options);
+    if (dto.options !== undefined)
+      update.options = MarketplaceAdminService.normaliseOptions(dto.options);
     if (dto.unit !== undefined) update.unit = dto.unit;
     if (dto.isRequired !== undefined) update.isRequired = dto.isRequired;
     if (dto.isFilterable !== undefined) update.isFilterable = dto.isFilterable;
@@ -393,11 +480,18 @@ export class MarketplaceAdminService {
       keys.add(`admin:attributes:${categoryId}`);
       keys.add(`marketplace:category-attributes:${categoryId}`);
     }
-    await Promise.all([...keys].map((key) => this.redis.del(key).catch((): undefined => undefined)));
+    await Promise.all(
+      [...keys].map((key) => this.redis.del(key).catch((): undefined => undefined)),
+    );
   }
 
   async createBrand(dto: any) {
-    const slug = dto.slug || dto.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const slug =
+      dto.slug ||
+      dto.name
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
     const existing = await this.brandRepo.findOne({ where: { slug } });
     if (existing) throw new BadRequestException(`Brand with slug '${slug}' already exists`);
     const entity = this.brandRepo.create({
@@ -419,7 +513,8 @@ export class MarketplaceAdminService {
     const update: any = {};
     if (dto.name !== undefined) update.name = dto.name;
     if (dto.slug !== undefined) update.slug = dto.slug;
-    if (dto.logoUrl !== undefined || dto.logo !== undefined) update.logoUrl = dto.logoUrl ?? dto.logo;
+    if (dto.logoUrl !== undefined || dto.logo !== undefined)
+      update.logoUrl = dto.logoUrl ?? dto.logo;
     if (dto.isVerified !== undefined) update.isVerified = dto.isVerified;
     await this.brandRepo.update(id, update);
     await this.redis.del('marketplace:brands:top');
@@ -502,7 +597,9 @@ export class MarketplaceAdminService {
       pending: products.length,
       approved: await this.productRepo.count({ where: { approval_status: 'APPROVED' } }),
       rejected: await this.productRepo.count({ where: { approval_status: 'REJECTED' } }),
-      correctionRequested: await this.productRepo.count({ where: { approval_status: 'CORRECTION_REQUESTED' } }),
+      correctionRequested: await this.productRepo.count({
+        where: { approval_status: 'CORRECTION_REQUESTED' },
+      }),
     };
     return { data: products, count: products.length, stats };
   }
@@ -514,8 +611,19 @@ export class MarketplaceAdminService {
     const returns = await this.returnRepo.count({ where: { sellerId } as any });
     const returnRate = orders > 0 ? Math.round((returns / orders) * 100) : 0;
     const acceptanceRate = orders > 0 ? Math.max(85, 100 - returnRate) : 0;
-    const overallScore = Math.round((acceptanceRate * 0.3 + (avgRating * 20) * 0.3 + (100 - returnRate) * 0.2 + 80 * 0.2));
-    return { sellerId, acceptanceRate, shippingSLA: 92, reviewScore: Math.round(avgRating * 10) / 10, returnRate, overallScore, totalOrders: orders, totalReviews: reviewStats.count };
+    const overallScore = Math.round(
+      acceptanceRate * 0.3 + avgRating * 20 * 0.3 + (100 - returnRate) * 0.2 + 80 * 0.2,
+    );
+    return {
+      sellerId,
+      acceptanceRate,
+      shippingSLA: 92,
+      reviewScore: Math.round(avgRating * 10) / 10,
+      returnRate,
+      overallScore,
+      totalOrders: orders,
+      totalReviews: reviewStats.count,
+    };
   }
 
   /**
@@ -533,15 +641,25 @@ export class MarketplaceAdminService {
   async getAdminBanners(type?: string, country?: string) {
     const types = type ? [type] : ['hero', 'campaign'];
     const collected = (
-      await Promise.all(types.map(t => this.home.getBanners(t).then(rows => rows.map(b => ({ ...b, type: t })))))
+      await Promise.all(
+        types.map((t) =>
+          this.home.getBanners(t).then((rows) => rows.map((b) => ({ ...b, type: t }))),
+        ),
+      )
     ).flat();
 
     const data = country
-      ? collected.filter(b => {
+      ? collected.filter((b) => {
           const regions = Array.isArray(b.regions) ? b.regions : [];
           // No region list means the banner runs everywhere, so it belongs in
           // every market's view rather than none.
-          return regions.length === 0 || regions.map(String).map(r => r.toUpperCase()).includes(country.toUpperCase());
+          return (
+            regions.length === 0 ||
+            regions
+              .map(String)
+              .map((r) => r.toUpperCase())
+              .includes(country.toUpperCase())
+          );
         })
       : collected;
 
@@ -557,6 +675,50 @@ export class MarketplaceAdminService {
    * banners over its fallback whenever the array is non-empty, they replaced
    * the entire hero with blank slides above the fold.
    */
+  /**
+   * Refuse a record outside the caller's market. `scope` is the market a
+   * region-locked admin is confined to (undefined for a global admin); a
+   * record with no market of its own — a platform-wide campaign — is not a
+   * locked admin's either. Logged so a Qatari admin reaching for an Indian
+   * campaign is visible, not just refused.
+   */
+  private assertInMarket(
+    recordRegion: string | null | undefined,
+    scope: string | undefined,
+    what: string,
+  ): void {
+    if (!scope) return;
+    const owner = recordRegion ? String(recordRegion).toUpperCase() : null;
+    if (owner === scope.toUpperCase()) return;
+    this.logger.warn(
+      `[region-scope-denied] ${what} in ${owner ?? 'every market'} refused for a ${scope}-scoped admin`,
+    );
+    throw new ForbiddenException(
+      `This ${what} belongs to ${owner ?? 'every market'}, not to the ${scope} market.`,
+    );
+  }
+
+  /** The one market a banner is scoped to; null when it runs in several or everywhere. */
+  private static bannerMarket(banner: any): string | null {
+    const regions = Array.isArray(banner?.regions) ? banner.regions : [];
+    return regions.length === 1 ? String(regions[0]).toUpperCase() : null;
+  }
+
+  /** A locked admin's banner runs in their market only; other markets named are refused. */
+  private scopeBanner(dto: any, scope?: string) {
+    if (!scope) return dto;
+    const named: string[] = Array.isArray(dto?.regions)
+      ? dto.regions.map((r: unknown) => String(r).toUpperCase())
+      : [];
+    for (const r of named) this.assertInMarket(r, scope, 'banner');
+    return { ...dto, regions: [scope.toUpperCase()] };
+  }
+
+  /** The one market an exchange offer runs in; null when it runs in several or everywhere. */
+  private static soleCountry(list: unknown): string | null {
+    return Array.isArray(list) && list.length === 1 ? String(list[0]).toUpperCase() : null;
+  }
+
   private static assertRenderableBanner(dto: any): void {
     if (!dto || typeof dto !== 'object') {
       throw new BadRequestException('A banner payload is required.');
@@ -576,21 +738,28 @@ export class MarketplaceAdminService {
     }
   }
 
-  async createAdminBanner(dto: any) {
+  async createAdminBanner(dto: any, scope?: string) {
     MarketplaceAdminService.assertRenderableBanner(dto);
     const id = `banner-${Date.now()}`;
-    await this.home.saveBanner(dto.type || 'hero', id, dto);
+    await this.home.saveBanner(dto.type || 'hero', id, this.scopeBanner(dto, scope));
     return { success: true, id };
   }
 
-  async updateAdminBanner(id: string, dto: any) {
+  async updateAdminBanner(id: string, dto: any, scope?: string) {
     MarketplaceAdminService.assertRenderableBanner(dto);
-    await this.home.saveBanner(dto.type || 'hero', id, dto);
+    const type = dto.type || 'hero';
+    const existing = (await this.home.getBanners(type)).find((b) => b.id === id);
+    if (existing)
+      this.assertInMarket(MarketplaceAdminService.bannerMarket(existing), scope, 'banner');
+    await this.home.saveBanner(type, id, this.scopeBanner(dto, scope));
     return { success: true, id };
   }
 
-  async deleteAdminBanner(id: string) {
-    await this.home.deleteBanner('hero', id);
+  async deleteAdminBanner(id: string, scope?: string, type = 'hero') {
+    const existing = (await this.home.getBanners(type)).find((b) => b.id === id);
+    if (existing)
+      this.assertInMarket(MarketplaceAdminService.bannerMarket(existing), scope, 'banner');
+    await this.home.deleteBanner(type, id);
     return { success: true, id };
   }
 
@@ -603,8 +772,12 @@ export class MarketplaceAdminService {
   // customer query read neither key. See flash-deal.entity.ts for the full note.
 
   /** Campaigns for the admin console, newest window first. */
-  async getAdminFlashDeals(status?: string) {
-    const where = status && status !== 'all' ? { status: status.toUpperCase() as FlashDealStatus } : {};
+  async getAdminFlashDeals(status?: string, region?: string) {
+    const where = {
+      ...(status && status !== 'all' ? { status: status.toUpperCase() as FlashDealStatus } : {}),
+      // One market's campaigns; a global admin without a market sees them all.
+      ...(region ? { regionCode: region.toUpperCase() } : {}),
+    };
     const [data, total] = await this.flashDealRepo.findAndCount({
       where,
       order: { windowStart: 'DESC' },
@@ -622,35 +795,42 @@ export class MarketplaceAdminService {
       throw new BadRequestException('The flash deal window must end after it starts.');
     }
 
-    const deal = await this.flashDealRepo.save(this.flashDealRepo.create({
-      name: dto?.name,
-      description: dto?.description ?? null,
-      status: (dto?.status?.toUpperCase() as FlashDealStatus) ?? 'SCHEDULED',
-      windowStart,
-      windowEnd,
-      minDiscountPercent: Number(dto?.minDiscountPercent ?? dto?.minDiscount ?? 0),
-      stockLimit: Number(dto?.stockLimit ?? 0),
-      priority: Number(dto?.priority ?? 5),
-      regionCode: dto?.regionCode ?? dto?.country ?? null,
-      createdBy: dto?.createdBy ?? null,
-    }));
+    const deal = await this.flashDealRepo.save(
+      this.flashDealRepo.create({
+        name: dto?.name,
+        description: dto?.description ?? null,
+        status: (dto?.status?.toUpperCase() as FlashDealStatus) ?? 'SCHEDULED',
+        windowStart,
+        windowEnd,
+        minDiscountPercent: Number(dto?.minDiscountPercent ?? dto?.minDiscount ?? 0),
+        stockLimit: Number(dto?.stockLimit ?? 0),
+        priority: Number(dto?.priority ?? 5),
+        regionCode: dto?.regionCode ?? dto?.country ?? null,
+        createdBy: dto?.createdBy ?? null,
+      }),
+    );
 
     await this.kafka.publish(KAFKA_TOPICS.FLASH_DEAL_CREATED, { ...deal });
     return { success: true, id: deal.id, deal };
   }
 
-  async updateFlashDeal(id: string, dto: any) {
+  async updateFlashDeal(id: string, dto: any, scope?: string) {
     const deal = await this.flashDealRepo.findOne({ where: { id } });
     if (!deal) throw new NotFoundException(`Flash deal ${id} not found`);
+    this.assertInMarket(deal.regionCode, scope, 'flash deal');
 
     if (dto?.name !== undefined) deal.name = dto.name;
     if (dto?.description !== undefined) deal.description = dto.description;
-    if (dto?.status !== undefined) deal.status = String(dto.status).toUpperCase() as FlashDealStatus;
+    if (dto?.status !== undefined)
+      deal.status = String(dto.status).toUpperCase() as FlashDealStatus;
     if (dto?.windowStart ?? dto?.start) deal.windowStart = new Date(dto.windowStart ?? dto.start);
     if (dto?.windowEnd ?? dto?.end) deal.windowEnd = new Date(dto.windowEnd ?? dto.end);
-    if (dto?.minDiscountPercent !== undefined) deal.minDiscountPercent = Number(dto.minDiscountPercent);
+    if (dto?.minDiscountPercent !== undefined)
+      deal.minDiscountPercent = Number(dto.minDiscountPercent);
     if (dto?.stockLimit !== undefined) deal.stockLimit = Number(dto.stockLimit);
     if (dto?.priority !== undefined) deal.priority = Number(dto.priority);
+    if (dto?.regionCode !== undefined)
+      deal.regionCode = dto.regionCode ? String(dto.regionCode).toUpperCase() : null;
     if (deal.windowEnd <= deal.windowStart) {
       throw new BadRequestException('The flash deal window must end after it starts.');
     }
@@ -668,9 +848,10 @@ export class MarketplaceAdminService {
    * moves it to CANCELLED — which `isLive()` treats as off-storefront
    * immediately.
    */
-  async deleteFlashDeal(id: string) {
+  async deleteFlashDeal(id: string, scope?: string) {
     const deal = await this.flashDealRepo.findOne({ where: { id } });
     if (!deal) throw new NotFoundException(`Flash deal ${id} not found`);
+    this.assertInMarket(deal.regionCode, scope, 'flash deal');
 
     deal.status = 'CANCELLED';
     await this.flashDealRepo.save(deal);
@@ -699,7 +880,8 @@ export class MarketplaceAdminService {
     });
     const joinedIds = joined.map((n) => n.dealId);
 
-    const qb = this.flashDealRepo.createQueryBuilder('d')
+    const qb = this.flashDealRepo
+      .createQueryBuilder('d')
       .where('d.status IN (:...open)', { open: ['SCHEDULED', 'ACTIVE'] })
       .andWhere('d.window_end > :now', { now: new Date() })
       .orderBy('d.priority', 'ASC')
@@ -722,10 +904,18 @@ export class MarketplaceAdminService {
    */
   async submitNomination(
     sellerId: string,
-    dto: { dealId: string; productId: string; dealPrice?: number; proposedDiscount?: number; stockAllocated?: number; note?: string },
+    dto: {
+      dealId: string;
+      productId: string;
+      dealPrice?: number;
+      proposedDiscount?: number;
+      stockAllocated?: number;
+      note?: string;
+    },
   ) {
     if (!sellerId) throw new BadRequestException('sellerId is required');
-    if (!dto?.dealId || !dto?.productId) throw new BadRequestException('dealId and productId are required');
+    if (!dto?.dealId || !dto?.productId)
+      throw new BadRequestException('dealId and productId are required');
 
     const deal = await this.flashDealRepo.findOne({ where: { id: dto.dealId } });
     if (!deal) throw new NotFoundException(`Flash deal ${dto.dealId} not found`);
@@ -750,11 +940,13 @@ export class MarketplaceAdminService {
       throw new BadRequestException('You have already nominated this product for this deal.');
     }
 
-    const row = existing ?? this.nominationRepo.create({
-      dealId: dto.dealId,
-      sellerId,
-      productId: dto.productId,
-    });
+    const row =
+      existing ??
+      this.nominationRepo.create({
+        dealId: dto.dealId,
+        sellerId,
+        productId: dto.productId,
+      });
     row.dealPrice = Number(dto.dealPrice ?? 0);
     row.proposedDiscountPercent = discount;
     row.stockAllocated = Number(dto.stockAllocated ?? 0);
@@ -785,10 +977,14 @@ export class MarketplaceAdminService {
    * products, specific prices — on first call, so an admin's queue was populated
    * with offers nobody had made.
    */
-  async getAllNominations(status?: string) {
-    const where = status && status !== 'all'
-      ? { status: status.toUpperCase() as FlashDealNomination['status'] }
-      : {};
+  async getAllNominations(status?: string, region?: string) {
+    const where: any = {
+      ...(status && status !== 'all'
+        ? { status: status.toUpperCase() as FlashDealNomination['status'] }
+        : {}),
+      // Through the campaign: a nomination belongs to the market its deal runs in.
+      ...(region ? { deal: { regionCode: region.toUpperCase() } } : {}),
+    };
     const [data, total] = await this.nominationRepo.findAndCount({
       where,
       relations: ['deal', 'product', 'seller'],
@@ -797,12 +993,13 @@ export class MarketplaceAdminService {
     return { data, total };
   }
 
-  async approveNomination(nominationId: string, adminId?: string) {
+  async approveNomination(nominationId: string, adminId?: string, scope?: string) {
     const nomination = await this.nominationRepo.findOne({
       where: { id: nominationId },
       relations: ['deal'],
     });
     if (!nomination) throw new NotFoundException(`Flash deal nomination ${nominationId} not found`);
+    this.assertInMarket(nomination.deal?.regionCode, scope, 'flash deal nomination');
     if (nomination.status === 'WITHDRAWN') {
       throw new BadRequestException('That nomination was withdrawn by the seller.');
     }
@@ -816,9 +1013,13 @@ export class MarketplaceAdminService {
     return { success: true, nominationId, nomination: saved };
   }
 
-  async rejectNomination(nominationId: string, reason?: string, adminId?: string) {
-    const nomination = await this.nominationRepo.findOne({ where: { id: nominationId } });
+  async rejectNomination(nominationId: string, reason?: string, adminId?: string, scope?: string) {
+    const nomination = await this.nominationRepo.findOne({
+      where: { id: nominationId },
+      relations: ['deal'],
+    });
     if (!nomination) throw new NotFoundException(`Flash deal nomination ${nominationId} not found`);
+    this.assertInMarket(nomination.deal?.regionCode, scope, 'flash deal nomination');
 
     nomination.status = 'REJECTED';
     nomination.decisionReason = reason || 'Does not meet flash deal criteria';
@@ -867,30 +1068,80 @@ export class MarketplaceAdminService {
     return { success: true, id };
   }
 
-  async getAdminPromotions() {
-    const cacheKey = 'admin:promotions';
-    const cached = await this.redis.getJson(cacheKey);
-    if (cached) return cached;
-    // Structured promotion catalog with realistic data
-    const promotions = [
-      { id: 'promo-1', name: 'Summer Sale 2026', type: 'percentage', discountValue: 20, status: 'active', startDate: new Date(Date.now() - 7 * 86400000).toISOString(), endDate: new Date(Date.now() + 23 * 86400000).toISOString(), applicableCategories: ['electronics', 'fashion'], minOrderValue: 999, maxDiscount: 5000, usageCount: 1247 },
-      { id: 'promo-2', name: 'New User Welcome', type: 'flat', discountValue: 200, status: 'active', startDate: new Date(Date.now() - 30 * 86400000).toISOString(), endDate: new Date(Date.now() + 60 * 86400000).toISOString(), applicableCategories: ['all'], minOrderValue: 500, maxDiscount: 200, usageCount: 3560 },
-      { id: 'promo-3', name: 'Diwali Mega Sale', type: 'percentage', discountValue: 30, status: 'scheduled', startDate: new Date(Date.now() + 30 * 86400000).toISOString(), endDate: new Date(Date.now() + 37 * 86400000).toISOString(), applicableCategories: ['all'], minOrderValue: 1499, maxDiscount: 8000, usageCount: 0 },
-      { id: 'promo-4', name: 'Flash Friday', type: 'percentage', discountValue: 15, status: 'expired', startDate: new Date(Date.now() - 14 * 86400000).toISOString(), endDate: new Date(Date.now() - 7 * 86400000).toISOString(), applicableCategories: ['electronics'], minOrderValue: 2000, maxDiscount: 3000, usageCount: 892 },
-    ];
-    const result = { data: promotions, total: promotions.length };
-    await this.redis.setJson(cacheKey, result, 300);
-    return result;
+  /**
+   * Promotions sellers run on their own listings, for the admin console —
+   * real rows, scoped to a market through the seller who owns them. This
+   * used to return a fabricated four-item catalogue ("Summer Sale 2026",
+   * "Diwali Mega Sale") cached for five minutes, so the console reported
+   * campaigns nobody had created and no market could tell from another.
+   */
+  async getAdminPromotions(region?: string) {
+    const qb = this.sellerPromotionRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.seller', 's')
+      .orderBy('p.createdAt', 'DESC');
+    if (region) qb.andWhere('s.regionCode = :region', { region: region.toUpperCase() });
+    const rows = await qb.getMany();
+    const data = rows.map((p) => MarketplaceAdminService.promotionRow(p));
+    return { data, total: data.length };
   }
 
-  async createPromotion(dto: any) {
-    await this.kafka.publish('promotion.created', dto);
-    return { success: true, id: `promo-${Date.now()}` };
+  private static promotionRow(p: SellerPromotion) {
+    const seller: any = (p as any).seller ?? null;
+    return {
+      id: p.id,
+      name: p.name,
+      code: p.code,
+      type: p.type,
+      discountValue: Number(p.value) || 0,
+      maxDiscount: p.maxDiscount == null ? null : Number(p.maxDiscount),
+      minOrderValue: Number(p.minOrderValue) || 0,
+      usageCount: p.usageCount,
+      usageLimit: p.usageLimit,
+      status: p.status,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      sellerId: p.sellerId,
+      sellerName: seller?.businessName ?? null,
+      regionCode: seller?.regionCode ?? null,
+    };
   }
 
-  async updatePromotion(id: string, dto: any) {
-    await this.kafka.publish('promotion.updated', { id, ...dto });
-    return { success: true, id };
+  /**
+   * Promotions belong to sellers and are created from the seller portal; a
+   * platform-wide offer is a coupon. This used to publish a Kafka event and
+   * answer success with an invented id — a "created" promotion that existed
+   * nowhere.
+   */
+  async createPromotion(_dto: any) {
+    throw new BadRequestException(
+      'Promotions are created by sellers from their portal. For a platform-wide offer, create a coupon (POST /marketplace/coupons).',
+    );
+  }
+
+  /** Status and terms of a seller promotion, within the caller's market. */
+  async updatePromotion(id: string, dto: any, scope?: string) {
+    const promo = await this.sellerPromotionRepo.findOne({ where: { id }, relations: ['seller'] });
+    if (!promo) throw new NotFoundException(`Promotion ${id} not found`);
+    const sellerRegion = (promo as any).seller?.regionCode ?? null;
+    this.assertInMarket(sellerRegion, scope, 'promotion');
+
+    if (dto?.status !== undefined) promo.status = String(dto.status).toLowerCase();
+    if (dto?.name !== undefined) promo.name = String(dto.name);
+    if (dto?.value !== undefined || dto?.discountValue !== undefined)
+      promo.value = Number(dto.value ?? dto.discountValue) || 0;
+    if (dto?.maxDiscount !== undefined)
+      promo.maxDiscount = dto.maxDiscount == null ? null : Number(dto.maxDiscount);
+    if (dto?.minOrderValue !== undefined) promo.minOrderValue = Number(dto.minOrderValue) || 0;
+    if (dto?.endDate !== undefined) promo.endDate = dto.endDate ? new Date(dto.endDate) : null;
+    const saved = await this.sellerPromotionRepo.save(promo);
+    await this.kafka.publish('promotion.updated', {
+      id,
+      sellerId: saved.sellerId,
+      status: saved.status,
+      regionCode: sellerRegion,
+    });
+    return { success: true, id, promotion: MarketplaceAdminService.promotionRow(saved) };
   }
 
   async getCommissions() {
@@ -899,7 +1150,7 @@ export class MarketplaceAdminService {
     if (cached) return cached;
     // Per-category commission rates
     const categories = await this.categoryRepo.find();
-    const commissions = categories.map(c => ({
+    const commissions = categories.map((c) => ({
       id: `comm-${c.id}`,
       categoryId: c.id,
       categoryName: c.name,
@@ -914,7 +1165,15 @@ export class MarketplaceAdminService {
   }
 
   private _defaultCommission(name: string): number {
-    const map: Record<string, number> = { electronics: 8, fashion: 15, books: 5, home: 12, beauty: 18, sports: 10, grocery: 3 };
+    const map: Record<string, number> = {
+      electronics: 8,
+      fashion: 15,
+      books: 5,
+      home: 12,
+      beauty: 18,
+      sports: 10,
+      grocery: 3,
+    };
     return map[name?.toLowerCase()] || 10;
   }
 
@@ -930,21 +1189,46 @@ export class MarketplaceAdminService {
 
   async getAdminPayouts(status?: string) {
     const sellers = await this.sellerRepo.find();
-    const payouts = await Promise.all(sellers.map(async (s) => {
-      // `marketplace_orders_status_enum` is upper-case. Postgres rejects a
-      // lower-case literal outright — `invalid input value for enum ... "delivered"`
-      // — so this did not return zero rows, it made the whole request 500.
-      const orders = await this.orderRepo.find({ where: { sellerId: s.id, status: 'DELIVERED' as any } });
-      const totalRevenue = orders.reduce((sum, o) => sum + Number(o.grandTotal || 0), 0);
-      const commission = Math.round(totalRevenue * 0.1);
-      const payout = totalRevenue - commission;
-      // Amounts are real (from delivered orders); paid/pending status is owned by
-      // payout-service, so default to 'pending' here rather than fabricating it.
-      const payoutStatus = payout > 0 ? 'pending' : 'no_orders';
-      return { id: `pay-${s.id}`, sellerId: s.id, sellerName: s.businessName || 'Seller', totalRevenue, commission, payoutAmount: payout, status: payoutStatus, period: 'weekly', lastPaidAt: null as unknown };
-    }));
-    const filtered = status ? payouts.filter(p => p.status === status) : payouts;
-    return { data: filtered, total: filtered.length, summary: { totalPending: filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.payoutAmount, 0), totalProcessed: filtered.filter(p => p.status === 'processed').reduce((s, p) => s + p.payoutAmount, 0) } };
+    const payouts = await Promise.all(
+      sellers.map(async (s) => {
+        // `marketplace_orders_status_enum` is upper-case. Postgres rejects a
+        // lower-case literal outright — `invalid input value for enum ... "delivered"`
+        // — so this did not return zero rows, it made the whole request 500.
+        const orders = await this.orderRepo.find({
+          where: { sellerId: s.id, status: 'DELIVERED' as any },
+        });
+        const totalRevenue = orders.reduce((sum, o) => sum + Number(o.grandTotal || 0), 0);
+        const commission = Math.round(totalRevenue * 0.1);
+        const payout = totalRevenue - commission;
+        // Amounts are real (from delivered orders); paid/pending status is owned by
+        // payout-service, so default to 'pending' here rather than fabricating it.
+        const payoutStatus = payout > 0 ? 'pending' : 'no_orders';
+        return {
+          id: `pay-${s.id}`,
+          sellerId: s.id,
+          sellerName: s.businessName || 'Seller',
+          totalRevenue,
+          commission,
+          payoutAmount: payout,
+          status: payoutStatus,
+          period: 'weekly',
+          lastPaidAt: null as unknown,
+        };
+      }),
+    );
+    const filtered = status ? payouts.filter((p) => p.status === status) : payouts;
+    return {
+      data: filtered,
+      total: filtered.length,
+      summary: {
+        totalPending: filtered
+          .filter((p) => p.status === 'pending')
+          .reduce((s, p) => s + p.payoutAmount, 0),
+        totalProcessed: filtered
+          .filter((p) => p.status === 'processed')
+          .reduce((s, p) => s + p.payoutAmount, 0),
+      },
+    };
   }
 
   /**
@@ -969,8 +1253,21 @@ export class MarketplaceAdminService {
     const where: any = {};
     if (status) where.status = status;
     if (rating) where.rating = rating;
-    const [reviews, total] = await this.reviewRepo.findAndCount({ where, order: { createdAt: 'DESC' }, take: 50, relations: ['product'] as any });
-    return { data: reviews.map(r => ({ ...r, productName: (r as any).product?.name || 'Product', status: (r as any).status || 'published' })), total, filters: { status, rating } };
+    const [reviews, total] = await this.reviewRepo.findAndCount({
+      where,
+      order: { createdAt: 'DESC' },
+      take: 50,
+      relations: ['product'] as any,
+    });
+    return {
+      data: reviews.map((r) => ({
+        ...r,
+        productName: (r as any).product?.name || 'Product',
+        status: (r as any).status || 'published',
+      })),
+      total,
+      filters: { status, rating },
+    };
   }
 
   // Both of these previously emitted an event and returned success without
@@ -1005,11 +1302,21 @@ export class MarketplaceAdminService {
     const returnWhere: any = {};
     if (status === 'open') returnWhere.status = In(['REQUESTED', 'APPROVED', 'PICKUP_SCHEDULED']);
     else if (status === 'resolved') returnWhere.status = In(['REFUND_COMPLETED', 'CLOSED']);
-    const returns = await this.returnRepo.find({ where: returnWhere, order: { createdAt: 'DESC' }, take: 30 });
-    const complaints = returns.map(r => ({
-      id: r.id, type: 'return', orderId: (r as any).orderId, customerId: (r as any).customerId,
-      reason: (r as any).reason || 'Product issue', status: r.status, priority: (r as any).reason?.includes('defective') ? 'high' : 'medium',
-      createdAt: r.createdAt, updatedAt: r.updatedAt,
+    const returns = await this.returnRepo.find({
+      where: returnWhere,
+      order: { createdAt: 'DESC' },
+      take: 30,
+    });
+    const complaints = returns.map((r) => ({
+      id: r.id,
+      type: 'return',
+      orderId: (r as any).orderId,
+      customerId: (r as any).customerId,
+      reason: (r as any).reason || 'Product issue',
+      status: r.status,
+      priority: (r as any).reason?.includes('defective') ? 'high' : 'medium',
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
     }));
     const result = { data: complaints, total: complaints.length, status };
     await this.redis.setJson(cacheKey, result, 60);
@@ -1035,10 +1342,42 @@ export class MarketplaceAdminService {
     if (notifications.length > 0) return { data: notifications, total: notifications.length };
     // If no DB records, return system-generated admin notifications
     const systemNotifs = [
-      { id: 'sn-1', title: 'New Seller Registration', message: '3 new sellers awaiting approval', type: 'seller_approval', priority: 'high', isRead: false, createdAt: new Date(Date.now() - 3600000).toISOString() },
-      { id: 'sn-2', title: 'Low Stock Alert', message: '12 products below reorder threshold', type: 'inventory', priority: 'medium', isRead: false, createdAt: new Date(Date.now() - 7200000).toISOString() },
-      { id: 'sn-3', title: 'Return Spike Detected', message: 'Return rate increased 15% in Electronics category', type: 'analytics', priority: 'high', isRead: true, createdAt: new Date(Date.now() - 86400000).toISOString() },
-      { id: 'sn-4', title: 'Payout Batch Ready', message: 'Weekly payout batch of ₹2.3L ready for processing', type: 'payout', priority: 'medium', isRead: true, createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
+      {
+        id: 'sn-1',
+        title: 'New Seller Registration',
+        message: '3 new sellers awaiting approval',
+        type: 'seller_approval',
+        priority: 'high',
+        isRead: false,
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+      },
+      {
+        id: 'sn-2',
+        title: 'Low Stock Alert',
+        message: '12 products below reorder threshold',
+        type: 'inventory',
+        priority: 'medium',
+        isRead: false,
+        createdAt: new Date(Date.now() - 7200000).toISOString(),
+      },
+      {
+        id: 'sn-3',
+        title: 'Return Spike Detected',
+        message: 'Return rate increased 15% in Electronics category',
+        type: 'analytics',
+        priority: 'high',
+        isRead: true,
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+      },
+      {
+        id: 'sn-4',
+        title: 'Payout Batch Ready',
+        message: 'Weekly payout batch of ₹2.3L ready for processing',
+        type: 'payout',
+        priority: 'medium',
+        isRead: true,
+        createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+      },
     ];
     return { data: systemNotifs, total: systemNotifs.length };
   }
@@ -1054,11 +1393,16 @@ export class MarketplaceAdminService {
     // install of the admin panel presented Asia/Kolkata and INR as the
     // platform's settings. They come from the home market's registry entry now.
     const home = getRegionConfig(DEFAULT_REGION);
-    return cached || {
-      currency: home?.currencyCode ?? null,
-      timezone: home?.timezone ?? null,
-      autoCancel: 24, returnWindow: 7, payoutFrequency: 'weekly', minPayout: 500,
-    };
+    return (
+      cached || {
+        currency: home?.currencyCode ?? null,
+        timezone: home?.timezone ?? null,
+        autoCancel: 24,
+        returnWindow: 7,
+        payoutFrequency: 'weekly',
+        minPayout: 500,
+      }
+    );
   }
 
   async updateMarketplaceSettings(dto: any) {
@@ -1090,7 +1434,16 @@ export class MarketplaceAdminService {
 
   async getSeoSettings() {
     const cached = await this.redis.getJson('admin:seo');
-    return cached || { metaTitle: '', metaDescription: '', keywords: '', ogImage: '', robotsTxt: '', sitemapEnabled: true };
+    return (
+      cached || {
+        metaTitle: '',
+        metaDescription: '',
+        keywords: '',
+        ogImage: '',
+        robotsTxt: '',
+        sitemapEnabled: true,
+      }
+    );
   }
 
   async updateSeoSettings(dto: any) {
@@ -1102,20 +1455,93 @@ export class MarketplaceAdminService {
   async getHsnCodes(search?: string) {
     // HSN (Harmonized System of Nomenclature) master data for GST compliance
     const hsnMaster = [
-      { id: 'hsn-1', code: '8517', description: 'Telephone sets; smartphones', gstRate: 18, category: 'Electronics' },
-      { id: 'hsn-2', code: '8471', description: 'Computers and peripherals', gstRate: 18, category: 'Electronics' },
-      { id: 'hsn-3', code: '6109', description: 'T-shirts, singlets, vests', gstRate: 5, category: 'Fashion' },
-      { id: 'hsn-4', code: '6203', description: 'Suits, ensembles, jackets', gstRate: 12, category: 'Fashion' },
-      { id: 'hsn-5', code: '4901', description: 'Printed books, brochures', gstRate: 0, category: 'Books' },
-      { id: 'hsn-6', code: '3304', description: 'Beauty, make-up preparations', gstRate: 28, category: 'Beauty' },
-      { id: 'hsn-7', code: '9401', description: 'Seats and furniture', gstRate: 18, category: 'Home' },
-      { id: 'hsn-8', code: '9506', description: 'Sports equipment', gstRate: 12, category: 'Sports' },
-      { id: 'hsn-9', code: '8528', description: 'Monitors, projectors, TVs', gstRate: 18, category: 'Electronics' },
+      {
+        id: 'hsn-1',
+        code: '8517',
+        description: 'Telephone sets; smartphones',
+        gstRate: 18,
+        category: 'Electronics',
+      },
+      {
+        id: 'hsn-2',
+        code: '8471',
+        description: 'Computers and peripherals',
+        gstRate: 18,
+        category: 'Electronics',
+      },
+      {
+        id: 'hsn-3',
+        code: '6109',
+        description: 'T-shirts, singlets, vests',
+        gstRate: 5,
+        category: 'Fashion',
+      },
+      {
+        id: 'hsn-4',
+        code: '6203',
+        description: 'Suits, ensembles, jackets',
+        gstRate: 12,
+        category: 'Fashion',
+      },
+      {
+        id: 'hsn-5',
+        code: '4901',
+        description: 'Printed books, brochures',
+        gstRate: 0,
+        category: 'Books',
+      },
+      {
+        id: 'hsn-6',
+        code: '3304',
+        description: 'Beauty, make-up preparations',
+        gstRate: 28,
+        category: 'Beauty',
+      },
+      {
+        id: 'hsn-7',
+        code: '9401',
+        description: 'Seats and furniture',
+        gstRate: 18,
+        category: 'Home',
+      },
+      {
+        id: 'hsn-8',
+        code: '9506',
+        description: 'Sports equipment',
+        gstRate: 12,
+        category: 'Sports',
+      },
+      {
+        id: 'hsn-9',
+        code: '8528',
+        description: 'Monitors, projectors, TVs',
+        gstRate: 18,
+        category: 'Electronics',
+      },
       { id: 'hsn-10', code: '6404', description: 'Footwear', gstRate: 12, category: 'Fashion' },
-      { id: 'hsn-11', code: '0402', description: 'Milk and cream', gstRate: 5, category: 'Grocery' },
-      { id: 'hsn-12', code: '8523', description: 'Discs, tapes, storage media', gstRate: 18, category: 'Electronics' },
+      {
+        id: 'hsn-11',
+        code: '0402',
+        description: 'Milk and cream',
+        gstRate: 5,
+        category: 'Grocery',
+      },
+      {
+        id: 'hsn-12',
+        code: '8523',
+        description: 'Discs, tapes, storage media',
+        gstRate: 18,
+        category: 'Electronics',
+      },
     ];
-    const filtered = search ? hsnMaster.filter(h => h.code.includes(search) || h.description.toLowerCase().includes(search.toLowerCase()) || h.category.toLowerCase().includes(search.toLowerCase())) : hsnMaster;
+    const filtered = search
+      ? hsnMaster.filter(
+          (h) =>
+            h.code.includes(search) ||
+            h.description.toLowerCase().includes(search.toLowerCase()) ||
+            h.category.toLowerCase().includes(search.toLowerCase()),
+        )
+      : hsnMaster;
     return { data: filtered, total: filtered.length, search };
   }
 
@@ -1187,7 +1613,7 @@ export class MarketplaceAdminService {
    * `getComplaints` does, narrowed to the ones actually in contention.
    */
   async getDisputes(status?: string) {
-    const complaints = await this.getComplaints(status) as { data?: any[] };
+    const complaints = (await this.getComplaints(status)) as { data?: any[] };
     const rows = (complaints?.data ?? []).filter(
       (c: any) => c.type === 'return' || c.escalated === true,
     );
@@ -1204,15 +1630,14 @@ export class MarketplaceAdminService {
    * behavioural cohorts nothing computed.
    */
   async getCustomerSegments() {
-    const rows: { customer_id: string; orders: string; spend: string }[] =
-      await this.orderRepo
-        .createQueryBuilder('o')
-        .select('o.customerId', 'customer_id')
-        .addSelect('COUNT(*)', 'orders')
-        .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'spend')
-        .where('o.customerId IS NOT NULL')
-        .groupBy('o.customerId')
-        .getRawMany();
+    const rows: { customer_id: string; orders: string; spend: string }[] = await this.orderRepo
+      .createQueryBuilder('o')
+      .select('o.customerId', 'customer_id')
+      .addSelect('COUNT(*)', 'orders')
+      .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'spend')
+      .where('o.customerId IS NOT NULL')
+      .groupBy('o.customerId')
+      .getRawMany();
 
     const oneTime = rows.filter((r) => Number(r.orders) === 1).length;
     const repeat = rows.filter((r) => Number(r.orders) > 1 && Number(r.orders) < 10).length;
@@ -1235,10 +1660,58 @@ export class MarketplaceAdminService {
     const cached = await this.redis.getJson(cacheKey);
     if (cached) return cached;
     const offers = [
-      { id: 'bo-1', bank: 'HDFC Bank', cardType: 'Credit Card', discountType: 'percentage', discountValue: 10, maxDiscount: 2000, minOrderValue: 5000, startDate: new Date(Date.now() - 7 * 86400000).toISOString(), endDate: new Date(Date.now() + 23 * 86400000).toISOString(), status: 'active', categories: ['electronics', 'fashion'] },
-      { id: 'bo-2', bank: 'ICICI Bank', cardType: 'Debit Card', discountType: 'flat', discountValue: 500, maxDiscount: 500, minOrderValue: 3000, startDate: new Date(Date.now() - 3 * 86400000).toISOString(), endDate: new Date(Date.now() + 27 * 86400000).toISOString(), status: 'active', categories: ['all'] },
-      { id: 'bo-3', bank: 'SBI', cardType: 'Credit Card', discountType: 'percentage', discountValue: 5, maxDiscount: 1500, minOrderValue: 2000, startDate: new Date().toISOString(), endDate: new Date(Date.now() + 30 * 86400000).toISOString(), status: 'active', categories: ['all'] },
-      { id: 'bo-4', bank: 'Kotak', cardType: 'All Cards', discountType: 'cashback', discountValue: 15, maxDiscount: 3000, minOrderValue: 8000, startDate: new Date(Date.now() + 5 * 86400000).toISOString(), endDate: new Date(Date.now() + 12 * 86400000).toISOString(), status: 'scheduled', categories: ['electronics'] },
+      {
+        id: 'bo-1',
+        bank: 'HDFC Bank',
+        cardType: 'Credit Card',
+        discountType: 'percentage',
+        discountValue: 10,
+        maxDiscount: 2000,
+        minOrderValue: 5000,
+        startDate: new Date(Date.now() - 7 * 86400000).toISOString(),
+        endDate: new Date(Date.now() + 23 * 86400000).toISOString(),
+        status: 'active',
+        categories: ['electronics', 'fashion'],
+      },
+      {
+        id: 'bo-2',
+        bank: 'ICICI Bank',
+        cardType: 'Debit Card',
+        discountType: 'flat',
+        discountValue: 500,
+        maxDiscount: 500,
+        minOrderValue: 3000,
+        startDate: new Date(Date.now() - 3 * 86400000).toISOString(),
+        endDate: new Date(Date.now() + 27 * 86400000).toISOString(),
+        status: 'active',
+        categories: ['all'],
+      },
+      {
+        id: 'bo-3',
+        bank: 'SBI',
+        cardType: 'Credit Card',
+        discountType: 'percentage',
+        discountValue: 5,
+        maxDiscount: 1500,
+        minOrderValue: 2000,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 30 * 86400000).toISOString(),
+        status: 'active',
+        categories: ['all'],
+      },
+      {
+        id: 'bo-4',
+        bank: 'Kotak',
+        cardType: 'All Cards',
+        discountType: 'cashback',
+        discountValue: 15,
+        maxDiscount: 3000,
+        minOrderValue: 8000,
+        startDate: new Date(Date.now() + 5 * 86400000).toISOString(),
+        endDate: new Date(Date.now() + 12 * 86400000).toISOString(),
+        status: 'scheduled',
+        categories: ['electronics'],
+      },
     ];
     const result = { data: offers, total: offers.length };
     await this.redis.setJson(cacheKey, result, 600);
@@ -1263,10 +1736,23 @@ export class MarketplaceAdminService {
    * window has closed is still ACTIVE in the row. The storefront asks for the
    * live set; the admin list asks for everything.
    */
-  async listBankOffers(activeOnly = false, category?: string) {
-    const qb = this.bankOfferRepo.createQueryBuilder('bo')
+  async listBankOffers(
+    activeOnly = false,
+    category?: string,
+    region?: string,
+    regionStrict = false,
+  ) {
+    const qb = this.bankOfferRepo
+      .createQueryBuilder('bo')
       .orderBy('bo.isFeatured', 'DESC')
       .addOrderBy('bo.priority', 'ASC');
+    if (region) {
+      const code = region.toUpperCase();
+      // A locked admin sees only their market's offers; the storefront and a
+      // global admin filtering by market also get the market-agnostic ones.
+      if (regionStrict) qb.andWhere('bo.regionCode = :region', { region: code });
+      else qb.andWhere('(bo.regionCode IS NULL OR bo.regionCode = :region)', { region: code });
+    }
     if (activeOnly) {
       const now = new Date();
       qb.where('bo.status = :status', { status: 'ACTIVE' })
@@ -1274,7 +1760,9 @@ export class MarketplaceAdminService {
         .andWhere('bo.expiresAt >= :now', { now });
     }
     if (category) {
-      qb.andWhere('(:cat = ANY(bo.applicableCategories) OR bo.applicableCategories IS NULL)', { cat: category });
+      qb.andWhere('(:cat = ANY(bo.applicableCategories) OR bo.applicableCategories IS NULL)', {
+        cat: category,
+      });
     }
     const [data, total] = await qb.getManyAndCount();
     return { data, total };
@@ -1288,7 +1776,10 @@ export class MarketplaceAdminService {
     return { success: true, id: row.id, offer: row };
   }
 
-  async updateBankOffer(id: string, dto: any) {
+  async updateBankOffer(id: string, dto: any, scope?: string) {
+    const current = await this.bankOfferRepo.findOne({ where: { id } });
+    if (!current) throw new NotFoundException(`Bank offer ${id} not found`);
+    this.assertInMarket(current.regionCode, scope, 'bank offer');
     const result = await this.bankOfferRepo.update(id, dto);
     if (!result.affected) throw new NotFoundException(`Bank offer ${id} not found`);
     const offer = await this.bankOfferRepo.findOne({ where: { id } });
@@ -1297,7 +1788,10 @@ export class MarketplaceAdminService {
     return { success: true, id, offer };
   }
 
-  async deleteBankOffer(id: string) {
+  async deleteBankOffer(id: string, scope?: string) {
+    const current = await this.bankOfferRepo.findOne({ where: { id } });
+    if (!current) throw new NotFoundException(`Bank offer ${id} not found`);
+    this.assertInMarket(current.regionCode, scope, 'bank offer');
     const result = await this.bankOfferRepo.delete(id);
     if (!result.affected) throw new NotFoundException(`Bank offer ${id} not found`);
     await this.invalidateOfferCaches();
@@ -1305,10 +1799,28 @@ export class MarketplaceAdminService {
     return { success: true, id };
   }
 
-  async listExchangeOffers(activeOnly = false, targetCategory?: string) {
-    const qb = this.exchangeOfferRepo.createQueryBuilder('eo')
+  async listExchangeOffers(
+    activeOnly = false,
+    targetCategory?: string,
+    region?: string,
+    regionStrict = false,
+  ) {
+    const qb = this.exchangeOfferRepo
+      .createQueryBuilder('eo')
       .orderBy('eo.isFeatured', 'DESC')
       .addOrderBy('eo.priority', 'ASC');
+    if (region) {
+      const code = region.toUpperCase();
+      // `applicableCountries` is a simple-array (comma-joined text): empty or
+      // NULL runs everywhere. Strict means scoped to exactly this market.
+      if (regionStrict) qb.andWhere('eo.applicableCountries = :region', { region: code });
+      else {
+        qb.andWhere(
+          "(eo.applicableCountries IS NULL OR eo.applicableCountries = '' OR :region = ANY(string_to_array(eo.applicableCountries, ',')))",
+          { region: code },
+        );
+      }
+    }
     if (activeOnly) {
       const now = new Date();
       qb.where('eo.status = :status', { status: 'ACTIVE' })
@@ -1339,7 +1851,14 @@ export class MarketplaceAdminService {
     return { success: true, id: row.id, offer: row };
   }
 
-  async updateExchangeOffer(id: string, dto: any) {
+  async updateExchangeOffer(id: string, dto: any, scope?: string) {
+    const current = await this.exchangeOfferRepo.findOne({ where: { id } });
+    if (!current) throw new NotFoundException(`Exchange offer ${id} not found`);
+    this.assertInMarket(
+      MarketplaceAdminService.soleCountry(current.applicableCountries),
+      scope,
+      'exchange offer',
+    );
     const result = await this.exchangeOfferRepo.update(id, dto);
     if (!result.affected) throw new NotFoundException(`Exchange offer ${id} not found`);
     const offer = await this.exchangeOfferRepo.findOne({ where: { id } });
@@ -1348,7 +1867,14 @@ export class MarketplaceAdminService {
     return { success: true, id, offer };
   }
 
-  async deleteExchangeOffer(id: string) {
+  async deleteExchangeOffer(id: string, scope?: string) {
+    const current = await this.exchangeOfferRepo.findOne({ where: { id } });
+    if (!current) throw new NotFoundException(`Exchange offer ${id} not found`);
+    this.assertInMarket(
+      MarketplaceAdminService.soleCountry(current.applicableCountries),
+      scope,
+      'exchange offer',
+    );
     const result = await this.exchangeOfferRepo.delete(id);
     if (!result.affected) throw new NotFoundException(`Exchange offer ${id} not found`);
     await this.invalidateOfferCaches();
@@ -1358,9 +1884,9 @@ export class MarketplaceAdminService {
 
   /** Offers appear on the home feed and every product page, so both go stale. */
   private async invalidateOfferCaches() {
-    await this.redis.del('marketplace:bank-offers');
-    await this.redis.del('marketplace:exchange-offers');
-    await this.redis.del('marketplace:featured');
+    await this.redis.delPattern('marketplace:bank-offers*');
+    await this.redis.delPattern('marketplace:exchange-offers*');
+    await this.redis.delPattern('marketplace:featured:*');
   }
 
   async getSponsoredProducts(status?: string) {
@@ -1386,7 +1912,8 @@ export class MarketplaceAdminService {
 
   async getAdminCustomers(search?: string, page = 1) {
     // Aggregate unique customers from orders
-    const qb = this.orderRepo.createQueryBuilder('o')
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       .select('o.customerId', 'customerId')
       .addSelect('MIN(o.customerName)', 'name')
       .addSelect('COUNT(*)', 'orderCount')
@@ -1397,16 +1924,25 @@ export class MarketplaceAdminService {
       qb.andWhere('(o.customerName ILIKE :s OR o.customerId ILIKE :s)', { s: `%${search}%` });
     }
     const limit = 20;
-    const customers = await qb.orderBy('"totalSpent"', 'DESC').offset((page - 1) * limit).limit(limit).getRawMany();
+    const customers = await qb
+      .orderBy('"totalSpent"', 'DESC')
+      .offset((page - 1) * limit)
+      .limit(limit)
+      .getRawMany();
     const total = await qb.getCount();
     return {
-      data: customers.map(c => ({
-        id: c.customerId, name: c.name || 'Customer', email: '',
+      data: customers.map((c) => ({
+        id: c.customerId,
+        name: c.name || 'Customer',
+        email: '',
         orderCount: parseInt(c.orderCount) || 0,
         totalSpent: parseFloat(c.totalSpent) || 0,
-        lastOrderAt: c.lastOrderAt, status: 'active',
+        lastOrderAt: c.lastOrderAt,
+        status: 'active',
       })),
-      total, page, limit,
+      total,
+      page,
+      limit,
     };
   }
 
@@ -1417,24 +1953,52 @@ export class MarketplaceAdminService {
 
   async getSellerWallets() {
     const sellers = await this.sellerRepo.find();
-    const wallets = await Promise.all(sellers.map(async (s) => {
-      // `marketplace_orders_status_enum` is upper-case. Postgres rejects a
-      // lower-case literal outright — `invalid input value for enum ... "delivered"`
-      // — so this did not return zero rows, it made the whole request 500.
-      const orders = await this.orderRepo.find({ where: { sellerId: s.id, status: 'DELIVERED' as any } });
-      const totalEarnings = orders.reduce((sum, o) => sum + Number(o.grandTotal || 0), 0);
-      const commission = Math.round(totalEarnings * 0.1);
-      const pendingOrders = await this.orderRepo.count({ where: { sellerId: s.id, status: In(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'OUT_FOR_DELIVERY']) } });
-      return {
-        sellerId: s.id, sellerName: s.businessName || 'Seller',
-        totalEarnings, commission, netBalance: totalEarnings - commission,
-        pendingSettlement: Math.round(totalEarnings * 0.15),
-        totalWithdrawn: Math.round((totalEarnings - commission) * 0.7),
-        availableBalance: Math.round((totalEarnings - commission) * 0.3),
-        pendingOrders, lastPayoutAt: orders.length > 0 ? new Date(Date.now() - 5 * 86400000).toISOString() : null,
-      };
-    }));
-    return { data: wallets, total: wallets.length, summary: { totalBalance: wallets.reduce((s, w) => s + w.availableBalance, 0), totalPending: wallets.reduce((s, w) => s + w.pendingSettlement, 0) } };
+    const wallets = await Promise.all(
+      sellers.map(async (s) => {
+        // `marketplace_orders_status_enum` is upper-case. Postgres rejects a
+        // lower-case literal outright — `invalid input value for enum ... "delivered"`
+        // — so this did not return zero rows, it made the whole request 500.
+        const orders = await this.orderRepo.find({
+          where: { sellerId: s.id, status: 'DELIVERED' as any },
+        });
+        const totalEarnings = orders.reduce((sum, o) => sum + Number(o.grandTotal || 0), 0);
+        const commission = Math.round(totalEarnings * 0.1);
+        const pendingOrders = await this.orderRepo.count({
+          where: {
+            sellerId: s.id,
+            status: In([
+              'PENDING',
+              'CONFIRMED',
+              'PREPARING',
+              'READY',
+              'SHIPPED',
+              'OUT_FOR_DELIVERY',
+            ]),
+          },
+        });
+        return {
+          sellerId: s.id,
+          sellerName: s.businessName || 'Seller',
+          totalEarnings,
+          commission,
+          netBalance: totalEarnings - commission,
+          pendingSettlement: Math.round(totalEarnings * 0.15),
+          totalWithdrawn: Math.round((totalEarnings - commission) * 0.7),
+          availableBalance: Math.round((totalEarnings - commission) * 0.3),
+          pendingOrders,
+          lastPayoutAt:
+            orders.length > 0 ? new Date(Date.now() - 5 * 86400000).toISOString() : null,
+        };
+      }),
+    );
+    return {
+      data: wallets,
+      total: wallets.length,
+      summary: {
+        totalBalance: wallets.reduce((s, w) => s + w.availableBalance, 0),
+        totalPending: wallets.reduce((s, w) => s + w.pendingSettlement, 0),
+      },
+    };
   }
 
   async adjustSellerWallet(sellerId: string, amount: number, reason: string) {
@@ -1444,15 +2008,23 @@ export class MarketplaceAdminService {
   }
 
   async getQAItems(status?: string) {
-    const questions = await this.questionRepo.find({ order: { createdAt: 'DESC' }, take: 50, relations: ['product'] as any });
-    const items = questions.map(q => ({
-      id: q.id, type: 'question', productId: q.productId,
+    const questions = await this.questionRepo.find({
+      order: { createdAt: 'DESC' },
+      take: 50,
+      relations: ['product'] as any,
+    });
+    const items = questions.map((q) => ({
+      id: q.id,
+      type: 'question',
+      productId: q.productId,
       productName: (q as any).product?.name || 'Product',
-      text: q.questionText, authorName: q.customerName || 'Customer',
+      text: q.questionText,
+      authorName: q.customerName || 'Customer',
       status: (q as any).status || 'pending',
-      reportCount: 0, createdAt: q.createdAt,
+      reportCount: 0,
+      createdAt: q.createdAt,
     }));
-    const filtered = status ? items.filter(i => i.status === status) : items;
+    const filtered = status ? items.filter((i) => i.status === status) : items;
     return { data: filtered, total: filtered.length, status };
   }
 
@@ -1501,5 +2073,4 @@ export class MarketplaceAdminService {
       avgRating: Math.round((Number(row?.avg ?? 0) || 0) * 10) / 10,
     };
   }
-
 }

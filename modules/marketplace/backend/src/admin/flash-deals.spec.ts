@@ -6,6 +6,7 @@ import { MarketplaceHomeCacheService } from '../catalog/home-cache.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { FlashDeal, FlashDealNomination } from '../entities/flash-deal.entity';
+import { SellerPromotion } from '../entities/seller-promotion.entity';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
 import { Category } from '../entities/category.entity';
@@ -61,28 +62,43 @@ describe('MarketplaceAdminService — flash deals', () => {
   });
 
   /** A campaign that is open right now, so "closed" is never why a test fails. */
-  const openDeal = (over: Partial<FlashDeal> = {}) => ({
-    id: 'deal-1',
-    name: 'Weekend Electronics',
-    status: 'ACTIVE',
-    windowStart: new Date(Date.now() - 3600_000),
-    windowEnd: new Date(Date.now() + 3600_000),
-    minDiscountPercent: 20,
-    stockLimit: 0,
-    unitsSold: 0,
-    priority: 1,
-    ...over,
-  }) as FlashDeal;
+  const openDeal = (over: Partial<FlashDeal> = {}) =>
+    ({
+      id: 'deal-1',
+      name: 'Weekend Electronics',
+      status: 'ACTIVE',
+      windowStart: new Date(Date.now() - 3600_000),
+      windowEnd: new Date(Date.now() + 3600_000),
+      minDiscountPercent: 20,
+      stockLimit: 0,
+      unitsSold: 0,
+      priority: 1,
+      ...over,
+    }) as FlashDeal;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MarketplaceAdminService,
-        { provide: RedisService, useValue: { getJson: jest.fn().mockResolvedValue(null), setJson: jest.fn(), del: jest.fn() } },
-        { provide: KafkaProducerService, useValue: { publish: jest.fn().mockResolvedValue(undefined) } },
-        { provide: MarketplaceHomeCacheService, useValue: { deleteBanner: jest.fn(), invalidate: jest.fn() } },
+        {
+          provide: RedisService,
+          useValue: {
+            getJson: jest.fn().mockResolvedValue(null),
+            setJson: jest.fn(),
+            del: jest.fn(),
+          },
+        },
+        {
+          provide: KafkaProducerService,
+          useValue: { publish: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: MarketplaceHomeCacheService,
+          useValue: { deleteBanner: jest.fn(), invalidate: jest.fn() },
+        },
         { provide: getRepositoryToken(FlashDeal), useValue: repoStub() },
         { provide: getRepositoryToken(FlashDealNomination), useValue: repoStub() },
+        { provide: getRepositoryToken(SellerPromotion), useValue: repoStub() },
         { provide: getRepositoryToken(Product), useValue: repoStub() },
         { provide: getRepositoryToken(Seller), useValue: repoStub() },
         // Bank and exchange offers moved into this service from the API gateway.
@@ -116,38 +132,41 @@ describe('MarketplaceAdminService — flash deals', () => {
 
   describe('mutating a campaign that does not exist', () => {
     it('rejects an update instead of confirming it', async () => {
-      await expect(service.updateFlashDeal('missing', { name: 'x' }))
-        .rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.updateFlashDeal('missing', { name: 'x' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('rejects a cancel instead of confirming it', async () => {
-      await expect(service.deleteFlashDeal('missing'))
-        .rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.deleteFlashDeal('missing')).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('rejects an approval instead of confirming it', async () => {
-      await expect(service.approveNomination('missing'))
-        .rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.approveNomination('missing')).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('rejects a rejection instead of confirming it', async () => {
-      await expect(service.rejectNomination('missing', 'no'))
-        .rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.rejectNomination('missing', 'no')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
   describe('creating a campaign', () => {
     it('refuses a window that ends before it starts', async () => {
-      await expect(service.createFlashDeal({
-        name: 'Backwards',
-        windowStart: new Date(Date.now() + 7200_000).toISOString(),
-        windowEnd: new Date(Date.now() + 3600_000).toISOString(),
-      })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.createFlashDeal({
+          name: 'Backwards',
+          windowStart: new Date(Date.now() + 7200_000).toISOString(),
+          windowEnd: new Date(Date.now() + 3600_000).toISOString(),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('refuses a missing window rather than storing an invalid date', async () => {
-      await expect(service.createFlashDeal({ name: 'No window' }))
-        .rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.createFlashDeal({ name: 'No window' })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
   });
 
@@ -159,42 +178,67 @@ describe('MarketplaceAdminService — flash deals', () => {
 
     it('accepts an offer that clears the campaign floor', async () => {
       const res = await service.submitNomination('seller-1', {
-        dealId: 'deal-1', productId: 'prod-1', dealPrice: 7999, proposedDiscount: 25, stockAllocated: 40,
+        dealId: 'deal-1',
+        productId: 'prod-1',
+        dealPrice: 7999,
+        proposedDiscount: 25,
+        stockAllocated: 40,
       });
       expect(res.success).toBe(true);
       expect(nominationRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'PENDING', dealPrice: 7999, proposedDiscountPercent: 25 }),
+        expect.objectContaining({
+          status: 'PENDING',
+          dealPrice: 7999,
+          proposedDiscountPercent: 25,
+        }),
       );
     });
 
     it('refuses a discount below the campaign floor', async () => {
-      await expect(service.submitNomination('seller-1', {
-        dealId: 'deal-1', productId: 'prod-1', proposedDiscount: 5,
-      })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.submitNomination('seller-1', {
+          dealId: 'deal-1',
+          productId: 'prod-1',
+          proposedDiscount: 5,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(nominationRepo.save).not.toHaveBeenCalled();
     });
 
     it('refuses a campaign whose window has closed', async () => {
-      flashDealRepo.findOne.mockResolvedValue(openDeal({
-        windowStart: new Date(Date.now() - 7200_000),
-        windowEnd: new Date(Date.now() - 3600_000),
-      }));
-      await expect(service.submitNomination('seller-1', {
-        dealId: 'deal-1', productId: 'prod-1', proposedDiscount: 50,
-      })).rejects.toBeInstanceOf(BadRequestException);
+      flashDealRepo.findOne.mockResolvedValue(
+        openDeal({
+          windowStart: new Date(Date.now() - 7200_000),
+          windowEnd: new Date(Date.now() - 3600_000),
+        }),
+      );
+      await expect(
+        service.submitNomination('seller-1', {
+          dealId: 'deal-1',
+          productId: 'prod-1',
+          proposedDiscount: 50,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('refuses a second offer for a product already nominated', async () => {
       nominationRepo.findOne.mockResolvedValue({ id: 'nom-1', status: 'PENDING' });
-      await expect(service.submitNomination('seller-1', {
-        dealId: 'deal-1', productId: 'prod-1', proposedDiscount: 25,
-      })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.submitNomination('seller-1', {
+          dealId: 'deal-1',
+          productId: 'prod-1',
+          proposedDiscount: 25,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('lets a seller re-enter a product they had withdrawn', async () => {
       nominationRepo.findOne.mockResolvedValue({ id: 'nom-1', status: 'WITHDRAWN' });
       const res = await service.submitNomination('seller-1', {
-        dealId: 'deal-1', productId: 'prod-1', dealPrice: 6999, proposedDiscount: 30,
+        dealId: 'deal-1',
+        productId: 'prod-1',
+        dealPrice: 6999,
+        proposedDiscount: 30,
       });
       expect(res.success).toBe(true);
       expect(nominationRepo.save).toHaveBeenCalledWith(
@@ -204,9 +248,13 @@ describe('MarketplaceAdminService — flash deals', () => {
 
     it('refuses a product that does not exist', async () => {
       productRepo.findOne.mockResolvedValue(null);
-      await expect(service.submitNomination('seller-1', {
-        dealId: 'deal-1', productId: 'ghost', proposedDiscount: 25,
-      })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.submitNomination('seller-1', {
+          dealId: 'deal-1',
+          productId: 'ghost',
+          proposedDiscount: 25,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -221,8 +269,7 @@ describe('MarketplaceAdminService — flash deals', () => {
 
     it('will not approve one the seller has withdrawn', async () => {
       nominationRepo.findOne.mockResolvedValue({ id: 'nom-1', status: 'WITHDRAWN' });
-      await expect(service.approveNomination('nom-1'))
-        .rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.approveNomination('nom-1')).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('keeps the reason a rejection was given', async () => {
@@ -246,18 +293,22 @@ describe('MarketplaceAdminService — flash deals', () => {
 
     it('reports when there was nothing to withdraw', async () => {
       nominationRepo.find.mockResolvedValue([]);
-      await expect(service.withdrawFromDeal('seller-1', 'deal-1'))
-        .rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.withdrawFromDeal('seller-1', 'deal-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
   describe('isLive()', () => {
     it('keeps a campaign off the storefront once its window closes, whatever the stored status says', () => {
-      const stale = Object.assign(new FlashDeal(), openDeal({
-        status: 'ACTIVE',
-        windowStart: new Date(Date.now() - 7200_000),
-        windowEnd: new Date(Date.now() - 60_000),
-      }));
+      const stale = Object.assign(
+        new FlashDeal(),
+        openDeal({
+          status: 'ACTIVE',
+          windowStart: new Date(Date.now() - 7200_000),
+          windowEnd: new Date(Date.now() - 60_000),
+        }),
+      );
       expect(stale.isLive()).toBe(false);
     });
 

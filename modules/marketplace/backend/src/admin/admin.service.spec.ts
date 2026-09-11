@@ -15,6 +15,7 @@ import { ProductAttribute } from '../entities/product-attribute.entity';
 import { ProductQuestion } from '../entities/product-qa.entity';
 import { MarketplaceNotification } from '../entities/marketplace-notification.entity';
 import { FlashDeal, FlashDealNomination } from '../entities/flash-deal.entity';
+import { SellerPromotion } from '../entities/seller-promotion.entity';
 import { BankOffer } from '../entities/bank-offer.entity';
 import { ExchangeOffer } from '../entities/exchange-offer.entity';
 
@@ -43,24 +44,36 @@ describe('MarketplaceAdminService', () => {
     findTrees: jest.fn().mockResolvedValue([]),
     findDescendants: jest.fn().mockResolvedValue([]),
     createQueryBuilder: jest.fn().mockReturnValue({
-      where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(),
-      leftJoinAndSelect: jest.fn().mockReturnThis(), leftJoin: jest.fn().mockReturnThis(),
-      innerJoin: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(),
-      addSelect: jest.fn().mockReturnThis(), setParameter: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
       groupBy: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(), addOrderBy: jest.fn().mockReturnThis(),
-      skip: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(), clone: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(null), getMany: jest.fn().mockResolvedValue([]),
-      getCount: jest.fn().mockResolvedValue(0), getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
-      getRawOne: jest.fn().mockResolvedValue({}), getRawMany: jest.fn().mockResolvedValue([]),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      clone: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(null),
+      getMany: jest.fn().mockResolvedValue([]),
+      getCount: jest.fn().mockResolvedValue(0),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      getRawOne: jest.fn().mockResolvedValue({}),
+      getRawMany: jest.fn().mockResolvedValue([]),
     }),
   });
 
   beforeEach(async () => {
     const redisMock: Partial<jest.Mocked<RedisService>> = {
-      get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue('OK'),
-      getJson: jest.fn().mockResolvedValue(null), setJson: jest.fn().mockResolvedValue('OK'),
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+      getJson: jest.fn().mockResolvedValue(null),
+      setJson: jest.fn().mockResolvedValue('OK'),
       del: jest.fn().mockResolvedValue(1),
     };
     const kafkaMock: Partial<jest.Mocked<KafkaProducerService>> = {
@@ -72,11 +85,14 @@ describe('MarketplaceAdminService', () => {
         MarketplaceAdminService,
         { provide: RedisService, useValue: redisMock },
         { provide: KafkaProducerService, useValue: kafkaMock },
-        { provide: MarketplaceHomeCacheService, useValue: {
-          saveBanner: jest.fn().mockResolvedValue({ success: true }),
-          deleteBanner: jest.fn().mockResolvedValue({ success: true }),
-          invalidateHomeCache: jest.fn().mockResolvedValue(undefined),
-        } },
+        {
+          provide: MarketplaceHomeCacheService,
+          useValue: {
+            saveBanner: jest.fn().mockResolvedValue({ success: true }),
+            deleteBanner: jest.fn().mockResolvedValue({ success: true }),
+            invalidateHomeCache: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         { provide: getRepositoryToken(Product), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Seller), useFactory: mockRepoFactory },
         // Bank and exchange offers moved into this service from the gateway.
@@ -92,6 +108,7 @@ describe('MarketplaceAdminService', () => {
         { provide: getRepositoryToken(MarketplaceNotification), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(FlashDeal), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(FlashDealNomination), useFactory: mockRepoFactory },
+        { provide: getRepositoryToken(SellerPromotion), useFactory: mockRepoFactory },
       ],
     }).compile();
 

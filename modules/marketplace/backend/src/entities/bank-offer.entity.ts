@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 /**
  * Bank Offer Entity
@@ -94,6 +100,13 @@ export class BankOffer {
   /** Whether this offer is highlighted/featured */
   @Column({ default: false })
   isFeatured: boolean;
+
+  /**
+   * The market this offer runs in — a bank's cards are one country's. NULL is
+   * every market, the shape every row had before offers were scoped.
+   */
+  @Column({ name: 'region_code', type: 'varchar', nullable: true })
+  regionCode: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

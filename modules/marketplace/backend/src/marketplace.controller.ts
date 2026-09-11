@@ -111,10 +111,10 @@ import { AdminForwardingValidationPipe } from './dto/forwarding-validation.pipe'
  *
  * Absent `_actor`, the service sees an anonymous actor and fails closed.
  */
-function actorOf(data: any): { ownerId?: string; role?: string } | undefined {
+function actorOf(data: any): { ownerId?: string; role?: string; regionCode?: string } | undefined {
   const actor = data?._actor;
   if (!actor || typeof actor !== 'object') return undefined;
-  return { ownerId: actor.ownerId, role: actor.role };
+  return { ownerId: actor.ownerId, role: actor.role, regionCode: actor.regionCode };
 }
 
 // RPC error shaping. Without this, Nest replaces any exception a @MessagePattern
@@ -1382,7 +1382,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_flash_deals' })
   tcpAdminGetFlashDeals(@Payload() d: any) {
-    return this.admin.getAdminFlashDeals(d?.status);
+    return this.admin.getAdminFlashDeals(d?.status, d?.region);
   }
 
   @MessagePattern({ cmd: 'admin_create_flash_deal' })
@@ -1392,27 +1392,27 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_update_flash_deal' })
   tcpAdminUpdateFlashDeal(@Payload() d: any) {
-    return this.admin.updateFlashDeal(d?.id, d?.dto ?? d);
+    return this.admin.updateFlashDeal(d?.id, d?.dto ?? d, d?.region);
   }
 
   @MessagePattern({ cmd: 'admin_delete_flash_deal' })
   tcpAdminDeleteFlashDeal(@Payload() d: any) {
-    return this.admin.deleteFlashDeal(d?.id);
+    return this.admin.deleteFlashDeal(d?.id, d?.region);
   }
 
   @MessagePattern({ cmd: 'admin_get_nominations' })
   tcpAdminGetNominations(@Payload() d: any) {
-    return this.admin.getAllNominations(d?.status);
+    return this.admin.getAllNominations(d?.status, d?.region);
   }
 
   @MessagePattern({ cmd: 'admin_approve_nomination' })
   tcpAdminApproveNomination(@Payload() d: any) {
-    return this.admin.approveNomination(d?.nominationId, d?.adminId);
+    return this.admin.approveNomination(d?.nominationId, d?.adminId, d?.region);
   }
 
   @MessagePattern({ cmd: 'admin_reject_nomination' })
   tcpAdminRejectNomination(@Payload() d: any) {
-    return this.admin.rejectNomination(d?.nominationId, d?.reason, d?.adminId);
+    return this.admin.rejectNomination(d?.nominationId, d?.reason, d?.adminId, d?.region);
   }
 
   @MessagePattern({ cmd: 'get_brands' })
@@ -1481,7 +1481,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_get_promotions' })
   tcpAdminGetPromotions(@Payload() d: any) {
-    return this.admin.getAdminPromotions();
+    return this.admin.getAdminPromotions(d?.region);
   }
 
   @MessagePattern({ cmd: 'admin_create_promotion' })
@@ -1491,7 +1491,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_update_promotion' })
   tcpAdminUpdatePromotion(@Payload() d: any) {
-    return this.admin.updatePromotion(d?.id, d?.dto ?? d);
+    return this.admin.updatePromotion(d?.id, d?.dto ?? d, d?.region);
   }
 
   @MessagePattern({ cmd: 'admin_get_notifications' })
@@ -1832,22 +1832,26 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_create_banner' })
   tcpAdminCreateBanner(@Payload() d: DtoMessage) {
-    return this.admin.createAdminBanner(d?.dto ?? d);
+    return this.admin.createAdminBanner(d?.dto ?? d, (d as any)?.region);
   }
 
   @MessagePattern({ cmd: 'admin_update_banner' })
   tcpAdminUpdateBanner(@Payload() d: IdMessage & DtoMessage) {
-    return this.admin.updateAdminBanner(requireId(d?.id, 'record'), d?.dto ?? d);
+    return this.admin.updateAdminBanner(
+      requireId(d?.id, 'record'),
+      d?.dto ?? d,
+      (d as any)?.region,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_delete_banner' })
   tcpAdminDeleteBanner(@Payload() d: IdMessage) {
-    return this.admin.deleteAdminBanner(requireId(d?.id, 'record'));
+    return this.admin.deleteAdminBanner(requireId(d?.id, 'record'), (d as any)?.region);
   }
 
   @MessagePattern({ cmd: 'admin_update_bank_offer' })
   tcpAdminUpdateBankOffer(@Payload() d: IdMessage & DtoMessage) {
-    return this.admin.updateBankOffer(requireId(d?.id, 'record'), d?.dto ?? d);
+    return this.admin.updateBankOffer(requireId(d?.id, 'record'), d?.dto ?? d, (d as any)?.region);
   }
 
   // Listing and deleting exchange offers had no pattern at all, so the gateway
@@ -1869,27 +1873,41 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_list_bank_offers' })
   tcpAdminListBankOffers(@Payload() d: EmptyMessage) {
-    return this.admin.listBankOffers(!!d?.activeOnly, d?.category);
+    return this.admin.listBankOffers(
+      !!d?.activeOnly,
+      d?.category,
+      (d as any)?.region,
+      !!(d as any)?.regionStrict,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_list_exchange_offers' })
   tcpAdminListExchangeOffers(@Payload() d: EmptyMessage) {
-    return this.admin.listExchangeOffers(!!d?.activeOnly, d?.targetCategory);
+    return this.admin.listExchangeOffers(
+      !!d?.activeOnly,
+      d?.targetCategory,
+      (d as any)?.region,
+      !!(d as any)?.regionStrict,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_delete_exchange_offer' })
   tcpAdminDeleteExchangeOffer(@Payload() d: IdMessage) {
-    return this.admin.deleteExchangeOffer(requireId(d?.id, 'record'));
+    return this.admin.deleteExchangeOffer(requireId(d?.id, 'record'), (d as any)?.region);
   }
 
   @MessagePattern({ cmd: 'admin_delete_bank_offer' })
   tcpAdminDeleteBankOffer(@Payload() d: IdMessage) {
-    return this.admin.deleteBankOffer(requireId(d?.id, 'record'));
+    return this.admin.deleteBankOffer(requireId(d?.id, 'record'), (d as any)?.region);
   }
 
   @MessagePattern({ cmd: 'admin_update_exchange_offer' })
   tcpAdminUpdateExchangeOffer(@Payload() d: IdMessage & DtoMessage) {
-    return this.admin.updateExchangeOffer(requireId(d?.id, 'record'), d?.dto ?? d);
+    return this.admin.updateExchangeOffer(
+      requireId(d?.id, 'record'),
+      d?.dto ?? d,
+      (d as any)?.region,
+    );
   }
 
   @MessagePattern({ cmd: 'admin_adjust_seller_wallet' })

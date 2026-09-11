@@ -3,7 +3,19 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
 /** Regions whose home feed is cached separately. */
-const CACHED_REGIONS = ['global', 'IN', 'AE', 'SA', 'QA', 'BH', 'GB', 'KW', 'OM', 'US', 'SG'] as const;
+const CACHED_REGIONS = [
+  'global',
+  'IN',
+  'AE',
+  'SA',
+  'QA',
+  'BH',
+  'GB',
+  'KW',
+  'OM',
+  'US',
+  'SG',
+] as const;
 
 /** Banner as stored — `regions` is what scopes it to a market. */
 export interface StoredBanner {
@@ -109,29 +121,69 @@ export class MarketplaceHomeCacheService {
     const key = `marketplace:${type}-banners`;
     const existing: StoredBanner[] = (await this.redis.getJson(key)) || [];
     const idx = existing.findIndex((b: any) => b.id === id);
+    const previous = idx >= 0 ? existing[idx]?.regions : undefined;
     if (idx >= 0) {
       existing[idx] = { ...existing[idx], ...data, updatedAt: new Date().toISOString() };
     } else {
-      existing.push({ ...data, id: id || `${type}-${Date.now()}`, createdAt: new Date().toISOString() });
+      existing.push({
+        ...data,
+        id: id || `${type}-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      });
     }
     await this.redis.setJson(key, existing, 0);
-    await this.invalidateHomeCache();
-    await this.kafka.publish('marketplace.home.updated', { type, id, action: idx >= 0 ? 'updated' : 'created' });
+    const regions = MarketplaceHomeCacheService.touchedMarkets(data?.regions, previous);
+    await this.invalidateHomeCache(regions);
+    // Consumers invalidate only the markets named; none means everywhere.
+    await this.kafka.publish('marketplace.home.updated', {
+      type,
+      id,
+      action: idx >= 0 ? 'updated' : 'created',
+      regions,
+    });
     return { success: true, id };
   }
 
   async deleteBanner(type: string, id: string) {
     const key = `marketplace:${type}-banners`;
     const existing: StoredBanner[] = (await this.redis.getJson(key)) || [];
-    await this.redis.setJson(key, existing.filter((b: any) => b.id !== id), 0);
-    await this.invalidateHomeCache();
-    await this.kafka.publish('marketplace.home.updated', { type, id, action: 'deleted' });
+    const target = existing.find((b: any) => b.id === id);
+    await this.redis.setJson(
+      key,
+      existing.filter((b: any) => b.id !== id),
+      0,
+    );
+    const regions = MarketplaceHomeCacheService.touchedMarkets(target?.regions, undefined);
+    await this.invalidateHomeCache(regions);
+    await this.kafka.publish('marketplace.home.updated', { type, id, action: 'deleted', regions });
     return { success: true, id };
   }
 
-  /** Drops every region's cached home feed. Called after any banner or feed edit. */
-  async invalidateHomeCache() {
-    await Promise.all(CACHED_REGIONS.map((r) => this.redis.del(`marketplace:home:${r}`)));
-    this.logger.log('Marketplace home cache invalidated');
+  /**
+   * The markets a banner edit can have changed, or null for every market:
+   * a banner that is or was untargeted ran everywhere.
+   */
+  private static touchedMarkets(next: unknown, previous: unknown): string[] | null {
+    const nextList = Array.isArray(next) ? next : undefined;
+    const prevList = Array.isArray(previous) ? previous : undefined;
+    if (!nextList && !prevList) return null;
+    if ((nextList && nextList.length === 0) || (prevList && prevList.length === 0)) return null;
+    return [
+      ...new Set([...(nextList ?? []), ...(prevList ?? [])].map((r) => String(r).toUpperCase())),
+    ];
+  }
+
+  /**
+   * Drop cached home feeds: the markets given plus the unscoped feed, or every
+   * market when none are given. A Qatari banner edit used to empty India's
+   * cache as well — a regional change acting as a global purge.
+   */
+  async invalidateHomeCache(regions?: string[] | null) {
+    const targets: string[] =
+      Array.isArray(regions) && regions.length
+        ? ['global', ...regions.map((r) => String(r).toUpperCase())]
+        : [...CACHED_REGIONS];
+    await Promise.all(targets.map((r) => this.redis.del(`marketplace:home:${r}`)));
+    this.logger.log(`Marketplace home cache invalidated: ${targets.join(', ')}`);
   }
 }

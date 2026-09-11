@@ -46,13 +46,17 @@ export class MarketplaceService {
     @InjectRepository(ReturnRequest) private readonly returnRepo: Repository<ReturnRequest>,
     @InjectRepository(Coupon) private readonly couponRepo: Repository<Coupon>,
     @InjectRepository(CouponUsage) private readonly couponUsageRepo: Repository<CouponUsage>,
-    @InjectRepository(ShipmentTrackingEvent) private readonly trackingRepo: Repository<ShipmentTrackingEvent>,
+    @InjectRepository(ShipmentTrackingEvent)
+    private readonly trackingRepo: Repository<ShipmentTrackingEvent>,
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(ProductQuestion) private readonly questionRepo: Repository<ProductQuestion>,
     @InjectRepository(ProductAnswer) private readonly answerRepo: Repository<ProductAnswer>,
-    @InjectRepository(DeliveryAssignment) private readonly deliveryAssignmentRepo: Repository<DeliveryAssignment>,
-    @InjectRepository(ProductAttribute) private readonly attributeRepo: Repository<ProductAttribute>,
-    @InjectRepository(MarketplaceNotification) private readonly notificationRepo: Repository<MarketplaceNotification>,
+    @InjectRepository(DeliveryAssignment)
+    private readonly deliveryAssignmentRepo: Repository<DeliveryAssignment>,
+    @InjectRepository(ProductAttribute)
+    private readonly attributeRepo: Repository<ProductAttribute>,
+    @InjectRepository(MarketplaceNotification)
+    private readonly notificationRepo: Repository<MarketplaceNotification>,
     @InjectRepository(GiftCard) private readonly giftCardRepo: Repository<GiftCard>,
     @InjectDataSource() private readonly dataSource: DataSource,
     // Public catalogue reads live in CatalogService; getHome() composes them.
@@ -83,7 +87,7 @@ export class MarketplaceService {
     const product = this.productRepo.create(dto as any);
     const saved = await this.productRepo.save(product);
     const entity: any = Array.isArray(saved) ? saved[0] : saved;
-    await this.redis.del('marketplace:featured');
+    await this.redis.delPattern('marketplace:featured:*');
     await this.kafka.publish('product.created', { id: entity.id, name: entity.name });
     this.logger.log(`Product created: ${entity.name ?? entity.id}`);
     return { success: true, productId: entity.id };
@@ -93,7 +97,10 @@ export class MarketplaceService {
     const product = await this.productRepo.findOne({ where: { id } });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
     await this.productRepo.update(id, dto);
-    await this.redis.del(`product:${id}`);
+    // Detail responses are cached per market and under both the id and the
+    // slug (`product:<key>:<market>`); a bare `product:<id>` matched nothing.
+    await this.redis.delPattern(`product:${id}:*`);
+    if ((product as any).slug) await this.redis.delPattern(`product:${(product as any).slug}:*`);
     await this.kafka.publish('product.updated', { id, ...dto });
     return { success: true, id };
   }
@@ -150,11 +157,14 @@ export class MarketplaceService {
       if (listingCount > 1) {
         this.logger.warn(
           `Product ${productId} has no seller_id and ${listingCount} offers — approving the product ` +
-          'activated none of them; approve each offer individually.',
+            'activated none of them; approve each offer individually.',
         );
         await this.catalog.recomputeBuyBox(productId);
         await this.invalidateCatalogueCaches(productId);
-        await this.kafka.publish('product.approved', { ...this.indexPayload(product), approvedBy: adminId });
+        await this.kafka.publish('product.approved', {
+          ...this.indexPayload(product),
+          approvedBy: adminId,
+        });
         return { success: true, productId, listingsActivated: 0 };
       }
     }
@@ -164,8 +174,13 @@ export class MarketplaceService {
     await this.catalog.recomputeBuyBox(productId);
 
     await this.invalidateCatalogueCaches(productId);
-        await this.kafka.publish('product.approved', { ...this.indexPayload(product), approvedBy: adminId });
-    this.logger.log(`Product ${productId} approved by ${adminId} — ${activated.affected ?? 0} listing(s) live`);
+    await this.kafka.publish('product.approved', {
+      ...this.indexPayload(product),
+      approvedBy: adminId,
+    });
+    this.logger.log(
+      `Product ${productId} approved by ${adminId} — ${activated.affected ?? 0} listing(s) live`,
+    );
     return { success: true, productId, listingsActivated: activated.affected ?? 0 };
   }
 
@@ -202,9 +217,14 @@ export class MarketplaceService {
     const buyBox = await this.catalog.recomputeBuyBox(product.id);
 
     await this.kafka.publish('listing.approved', {
-      listingId, productId: product.id, sellerId: (listing as any).seller?.id, approvedBy: adminId,
+      listingId,
+      productId: product.id,
+      sellerId: (listing as any).seller?.id,
+      approvedBy: adminId,
     });
-    this.logger.log(`Listing ${listingId} approved by ${adminId} (buy box: ${buyBox.winnerId ?? 'none'})`);
+    this.logger.log(
+      `Listing ${listingId} approved by ${adminId} (buy box: ${buyBox.winnerId ?? 'none'})`,
+    );
     return { success: true, listingId, productId: product.id, buyBoxWinnerId: buyBox.winnerId };
   }
 
@@ -217,7 +237,7 @@ export class MarketplaceService {
     if (!listing) throw new NotFoundException('Listing not found');
 
     listing.approvalStatus = 'REJECTED';
-    listing.rejectionReason = reason || null as any;
+    listing.rejectionReason = reason || (null as any);
     listing.isActive = false;
     await this.listingRepo.save(listing);
 
@@ -226,7 +246,11 @@ export class MarketplaceService {
     if (productId) await this.catalog.recomputeBuyBox(productId);
 
     await this.kafka.publish('listing.rejected', {
-      listingId, productId, sellerId: (listing as any).seller?.id, rejectedBy: adminId, reason,
+      listingId,
+      productId,
+      sellerId: (listing as any).seller?.id,
+      rejectedBy: adminId,
+      reason,
     });
     this.logger.log(`Listing ${listingId} rejected by ${adminId}: ${reason}`);
     return { success: true, listingId, productId, reason };
@@ -268,7 +292,11 @@ export class MarketplaceService {
     product.approval_status = 'CORRECTION_REQUESTED';
     await this.productRepo.save(product);
 
-    await this.kafka.publish('product.correction_requested', { id: productId, requestedBy: adminId, notes });
+    await this.kafka.publish('product.correction_requested', {
+      id: productId,
+      requestedBy: adminId,
+      notes,
+    });
     this.logger.log(`Product ${productId} correction requested by ${adminId}: ${notes}`);
     return { success: true, productId, notes };
   }
@@ -281,16 +309,25 @@ export class MarketplaceService {
    * must not require a second approval. Suspension is the same mechanic with an
    * enforcement reason attached, which is why it is a separate event.
    */
-  async setProductPublished(productId: string, adminId: string, published: boolean, reason?: string) {
+  async setProductPublished(
+    productId: string,
+    adminId: string,
+    published: boolean,
+    reason?: string,
+  ) {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
     product.is_active = published;
     await this.productRepo.save(product);
 
     await this.kafka.publish(published ? 'product.published' : 'product.unpublished', {
-      id: productId, actorId: adminId, reason,
+      id: productId,
+      actorId: adminId,
+      reason,
     });
-    this.logger.log(`Product ${productId} ${published ? 'published' : 'unpublished'} by ${adminId}`);
+    this.logger.log(
+      `Product ${productId} ${published ? 'published' : 'unpublished'} by ${adminId}`,
+    );
     return { success: true, productId, isActive: published };
   }
 
@@ -320,8 +357,17 @@ export class MarketplaceService {
    * decision is trying to publish.
    */
   private async invalidateCatalogueCaches(productId: string) {
-    await this.redis.del(`product:${productId}`);
-    await this.redis.del('marketplace:featured');
+    // Every market's copy: detail is cached per market under id and slug, and
+    // the featured / deals / flash-deal rails are cached per region.
+    await this.redis.delPattern(`product:${productId}:*`);
+    const row = await this.productRepo.findOne({
+      where: { id: productId },
+      select: ['id', 'slug'] as any,
+    });
+    if (row?.slug) await this.redis.delPattern(`product:${row.slug}:*`);
+    await this.redis.delPattern('marketplace:featured:*');
+    await this.redis.delPattern('marketplace:deals:*');
+    await this.redis.delPattern('marketplace:flash-deals:*');
 
     const stale = [
       ...(await this.redis.keys('products:*')),
@@ -329,7 +375,9 @@ export class MarketplaceService {
     ];
     await Promise.all(stale.map((k) => this.redis.del(k)));
     if (stale.length) {
-      this.logger.log(`Invalidated ${stale.length} cached listing/search result(s) for ${productId}`);
+      this.logger.log(
+        `Invalidated ${stale.length} cached listing/search result(s) for ${productId}`,
+      );
     }
   }
 
@@ -373,7 +421,7 @@ export class MarketplaceService {
     await this.kafka.publish('product.rejected', { id: productId, rejectedBy: adminId, reason });
     this.logger.log(
       `Product ${productId} rejected by ${adminId}: ${reason} ` +
-      `(${deactivated.affected ?? 0} listing(s) taken off sale)`,
+        `(${deactivated.affected ?? 0} listing(s) taken off sale)`,
     );
     return { success: true, productId, reason, listingsDeactivated: deactivated.affected ?? 0 };
   }
@@ -452,7 +500,11 @@ export class MarketplaceService {
     if (!seller) throw new NotFoundException('Seller not found');
     seller.verificationStatus = 'REJECTED';
     await this.sellerRepo.save(seller);
-    await this.kafka.publish('seller.rejected', { id: sellerId, rejectedBy: data?.adminId || 'admin', reason: data?.reason });
+    await this.kafka.publish('seller.rejected', {
+      id: sellerId,
+      rejectedBy: data?.adminId || 'admin',
+      reason: data?.reason,
+    });
     return { success: true, sellerId };
   }
 
@@ -478,9 +530,19 @@ export class MarketplaceService {
     return cartData;
   }
 
-  async addToCart(dto: { userId: string; productId: string; quantity: number; variantId?: string }) {
+  async addToCart(dto: {
+    userId: string;
+    productId: string;
+    quantity: number;
+    variantId?: string;
+  }) {
     const cartKey = `cart:${dto.userId}`;
-    const cart: any = (await this.redis.getJson(cartKey)) || { userId: dto.userId, items: [], subtotal: 0, itemCount: 0 };
+    const cart: any = (await this.redis.getJson(cartKey)) || {
+      userId: dto.userId,
+      items: [],
+      subtotal: 0,
+      itemCount: 0,
+    };
 
     // Fetch product/listing info to snapshot into cart
     const product = await this.productRepo.findOne({ where: { id: dto.productId } });
@@ -553,7 +615,7 @@ export class MarketplaceService {
       relations: { product: { brand: true, images: true, listings: true } },
       order: { createdAt: 'DESC' },
     });
-    return { userId, products: items.map(w => w.product), total: items.length };
+    return { userId, products: items.map((w) => w.product), total: items.length };
   }
 
   async addToWishlist(dto: { userId: string; productId: string }) {
@@ -573,8 +635,15 @@ export class MarketplaceService {
   }
 
   // ── Orders ────────────────────────────────────────────────────────────────
-  async getOrders(filter: { userId?: string; sellerId?: string; status?: string; page?: number; limit?: number }) {
-    const qb = this.orderRepo.createQueryBuilder('o')
+  async getOrders(filter: {
+    userId?: string;
+    sellerId?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
       // `leftJoinAndSelect` here returned the entire seller row on every order —
       // bank account number, IFSC, PAN, GST, KYC documents, the seller's private
       // email and phone, and their `ownerId`. Join, then name the columns.
@@ -598,10 +667,18 @@ export class MarketplaceService {
     // `relations: { seller: true }` loads every seller column, banking included.
     // Projected down to what a caller may see — see PUBLIC_SELLER_FIELDS.
     const select = { seller: { ...PUBLIC_SELLER_FIELDS } } as any;
-    const order = await this.orderRepo.findOne({ where: { id }, relations: { seller: true }, select });
+    const order = await this.orderRepo.findOne({
+      where: { id },
+      relations: { seller: true },
+      select,
+    });
     if (!order) {
       // Try by orderNumber
-      const byNumber = await this.orderRepo.findOne({ where: { orderNumber: id }, relations: { seller: true }, select });
+      const byNumber = await this.orderRepo.findOne({
+        where: { orderNumber: id },
+        relations: { seller: true },
+        select,
+      });
       if (!byNumber) throw new NotFoundException(`Order ${id} not found`);
       return byNumber;
     }
@@ -694,7 +771,9 @@ export class MarketplaceService {
     const where: any = {};
     if (sellerId) where.sellerId = sellerId;
     const [data, total] = await this.returnRepo.findAndCount({
-      where, order: { createdAt: 'DESC' }, take: 50,
+      where,
+      order: { createdAt: 'DESC' },
+      take: 50,
     });
     return { data, total, sellerId };
   }
@@ -719,7 +798,9 @@ export class MarketplaceService {
     const where: any = { status: 'REFUNDED' };
     if (sellerId) where.sellerId = sellerId;
     const [data, total] = await this.returnRepo.findAndCount({
-      where, order: { refundedAt: 'DESC' }, take: 50,
+      where,
+      order: { refundedAt: 'DESC' },
+      take: 50,
     });
     return { data, total, sellerId };
   }
@@ -742,7 +823,8 @@ export class MarketplaceService {
     });
 
     // Compute aggregate rating
-    const avgResult = await this.reviewRepo.createQueryBuilder('r')
+    const avgResult = await this.reviewRepo
+      .createQueryBuilder('r')
       .select('AVG(r.rating)', 'avg')
       .addSelect('COUNT(*)', 'count')
       .where('r.productId = :productId', { productId })
@@ -805,7 +887,8 @@ export class MarketplaceService {
     const saved = await this.reviewRepo.save(review);
 
     // Update product aggregate rating
-    const avgResult = await this.reviewRepo.createQueryBuilder('r')
+    const avgResult = await this.reviewRepo
+      .createQueryBuilder('r')
       .select('AVG(r.rating)', 'avg')
       .addSelect('COUNT(*)', 'count')
       .where('r.productId = :productId', { productId })
@@ -822,7 +905,7 @@ export class MarketplaceService {
 
   // ── Recently Viewed ───────────────────────────────────────────────────────
   async getRecentlyViewed(userId: string) {
-    const cached = await this.redis.getJson(`recently-viewed:${userId}`) as string[] | null;
+    const cached = (await this.redis.getJson(`recently-viewed:${userId}`)) as string[] | null;
     if (!cached || !cached.length) return { userId, products: [], data: [], total: 0 };
     const products = await this.productRepo.find({
       where: { id: In(cached) },
@@ -903,25 +986,49 @@ export class MarketplaceService {
       // put all 113 rows on the page — "Mobiles & Tablets" next to
       // "Smartphones", "Cases & Covers" and "Diapers" — under a heading that
       // promised 20. Subcategories are reached from their parent's page.
-      categories: await safe('categories', async () => {
-        const all = ((await this.catalog.getCategories()) as DataList).data || [];
-        const roots = (all as any[]).filter((c) => !c?.parentId);
-        // If nothing carries a parent the hierarchy is not populated on this
-        // deployment; an empty rail would be worse than a flat one.
-        return roots.length > 0 ? roots : all;
-      }, []),
-      flashDeals: await safe('flashDeals', async () => ((await this.catalog.getFlashDeals(region)) as DataList).data || [], []),
-      dealsOfDay: await safe('dealsOfDay', async () => ((await this.catalog.getDeals(region)) as DataList).data || [], []),
+      categories: await safe(
+        'categories',
+        async () => {
+          const all = ((await this.catalog.getCategories()) as DataList).data || [];
+          const roots = (all as any[]).filter((c) => !c?.parentId);
+          // If nothing carries a parent the hierarchy is not populated on this
+          // deployment; an empty rail would be worse than a flat one.
+          return roots.length > 0 ? roots : all;
+        },
+        [],
+      ),
+      flashDeals: await safe(
+        'flashDeals',
+        async () => ((await this.catalog.getFlashDeals(region)) as DataList).data || [],
+        [],
+      ),
+      dealsOfDay: await safe(
+        'dealsOfDay',
+        async () => ((await this.catalog.getDeals(region)) as DataList).data || [],
+        [],
+      ),
       newArrivals: await safe('newArrivals', () => this.getNewArrivals(region), []),
       bestSellers: await safe('bestSellers', () => this.getBestSellers(region), []),
-      trending: await safe('trending', async () => ((await this.catalog.getFeaturedProducts(region)) as DataList).data || [], []),
+      trending: await safe(
+        'trending',
+        async () => ((await this.catalog.getFeaturedProducts(region)) as DataList).data || [],
+        [],
+      ),
       recommended: await safe('recommended', () => this.getRecommended(region), []),
       sponsored: await safe('sponsored', () => this.getSponsored(region), []),
       // Resolved against the brands table, so a card can only advertise a brand
       // the catalogue actually has. `safe` keeps a brand-lookup failure from
       // taking down the whole feed.
-      brandPromos: await safe('brandPromos', () => this.getBrandPromos(), {} as Record<string, any[]>),
-      verifiedSellers: await safe('verifiedSellers', async () => ((await this.catalog.getVerifiedSellers(region)) as DataList).data || [], []),
+      brandPromos: await safe(
+        'brandPromos',
+        () => this.getBrandPromos(),
+        {} as Record<string, any[]>,
+      ),
+      verifiedSellers: await safe(
+        'verifiedSellers',
+        async () => ((await this.catalog.getVerifiedSellers(region)) as DataList).data || [],
+        [],
+      ),
       faq: this.getMarketplaceFAQ(),
       updatedAt: new Date().toISOString(),
     };
@@ -949,7 +1056,9 @@ export class MarketplaceService {
     const key = `marketplace:new-arrivals:${region || 'global'}`;
     const cached = await this.redis.getJson(key);
     if (cached) return cached as any[];
-    const data = ((await this.catalog.getProducts(1, 10, { country: region, sort: 'newest' })) as DataList).data || [];
+    const data =
+      ((await this.catalog.getProducts(1, 10, { country: region, sort: 'newest' })) as DataList)
+        .data || [];
     await this.redis.setJson(key, data, 120);
     return data as any[];
   }
@@ -960,7 +1069,8 @@ export class MarketplaceService {
     if (cached) return cached as any[];
     // Default sort is rating then review count — the closest proxy the catalogue
     // has for "best selling" until order volume is denormalised onto products.
-    const data = ((await this.catalog.getProducts(1, 10, { country: region })) as DataList).data || [];
+    const data =
+      ((await this.catalog.getProducts(1, 10, { country: region })) as DataList).data || [];
     await this.redis.setJson(key, data, 120);
     return data as any[];
   }
@@ -969,7 +1079,9 @@ export class MarketplaceService {
     const key = `marketplace:recommended:${region || 'global'}`;
     const cached = await this.redis.getJson(key);
     if (cached) return cached as any[];
-    const data = ((await this.catalog.getProducts(1, 10, { country: region, sort: 'rating' })) as DataList).data || [];
+    const data =
+      ((await this.catalog.getProducts(1, 10, { country: region, sort: 'rating' })) as DataList)
+        .data || [];
     await this.redis.setJson(key, data, 120);
     return data as any[];
   }
@@ -980,7 +1092,9 @@ export class MarketplaceService {
     if (cached) return cached as any[];
     // Until a dedicated sponsored_products table exists, promote the highest-value
     // products a seller in this region actually offers.
-    const data = ((await this.catalog.getProducts(1, 8, { country: region, sort: 'price_desc' })) as DataList).data || [];
+    const data =
+      ((await this.catalog.getProducts(1, 8, { country: region, sort: 'price_desc' })) as DataList)
+        .data || [];
     await this.redis.setJson(key, data, 300);
     return data as any[];
   }
@@ -994,8 +1108,16 @@ export class MarketplaceService {
    * figure to a customer paying in riyals.
    */
   private static readonly FREE_DELIVERY_THRESHOLD: Record<string, string> = {
-    QA: 'QR 100', IN: '₹499', AE: 'AED 100', SA: 'SAR 100', BH: 'BD 10',
-    KW: 'KD 10', OM: 'OMR 10', GB: '£35', US: '$35', SG: 'S$40',
+    QA: 'QR 100',
+    IN: '₹499',
+    AE: 'AED 100',
+    SA: 'SAR 100',
+    BH: 'BD 10',
+    KW: 'KD 10',
+    OM: 'OMR 10',
+    GB: '£35',
+    US: '$35',
+    SG: 'S$40',
   };
 
   private getTrustBadges(region?: string) {
@@ -1003,14 +1125,40 @@ export class MarketplaceService {
 
     return [
       {
-        id: 'tb-1', icon: 'Truck', title: 'Free Delivery',
+        id: 'tb-1',
+        icon: 'Truck',
+        title: 'Free Delivery',
         subtitle: threshold ? `On orders above ${threshold}` : 'On qualifying orders',
         color: 'text-blue-600',
       },
-      { id: 'tb-2', icon: 'ShieldCheck', title: 'Secure Payments', subtitle: 'SSL encrypted checkout', color: 'text-emerald-600' },
-      { id: 'tb-3', icon: 'RotateCcw', title: 'Easy Returns', subtitle: '7-day return policy', color: 'text-orange-600' },
-      { id: 'tb-4', icon: 'Headphones', title: '24/7 Support', subtitle: 'Chat, email & phone', color: 'text-purple-600' },
-      { id: 'tb-5', icon: 'BadgeCheck', title: 'Genuine Products', subtitle: '100% authentic items', color: 'text-rose-600' },
+      {
+        id: 'tb-2',
+        icon: 'ShieldCheck',
+        title: 'Secure Payments',
+        subtitle: 'SSL encrypted checkout',
+        color: 'text-emerald-600',
+      },
+      {
+        id: 'tb-3',
+        icon: 'RotateCcw',
+        title: 'Easy Returns',
+        subtitle: '7-day return policy',
+        color: 'text-orange-600',
+      },
+      {
+        id: 'tb-4',
+        icon: 'Headphones',
+        title: '24/7 Support',
+        subtitle: 'Chat, email & phone',
+        color: 'text-purple-600',
+      },
+      {
+        id: 'tb-5',
+        icon: 'BadgeCheck',
+        title: 'Genuine Products',
+        subtitle: '100% authentic items',
+        color: 'text-rose-600',
+      },
     ];
   }
 
@@ -1022,37 +1170,160 @@ export class MarketplaceService {
    * entry the catalogue does not carry. Adding a brand here does not make it
    * appear on the homepage; seeding the brand does.
    */
-  private static readonly BRAND_PROMO_STYLES: Record<string, { name: string; tagline: string; discount: string; color: string; textColor: string }[]> = {
-      electronics: [
-        { name: 'Apple', tagline: 'Think Different', discount: 'Up to 25% Off', color: 'bg-gradient-to-br from-slate-900 to-slate-700', textColor: 'text-white' },
-        { name: 'Samsung', tagline: 'Galaxy of Innovation', discount: 'Up to 35% Off', color: 'bg-gradient-to-br from-blue-900 to-blue-700', textColor: 'text-white' },
-        { name: 'Sony', tagline: 'Be Moved', discount: 'Up to 30% Off', color: 'bg-gradient-to-br from-amber-900 to-amber-700', textColor: 'text-white' },
-        { name: 'OnePlus', tagline: 'Never Settle', discount: 'Up to 20% Off', color: 'bg-gradient-to-br from-red-900 to-red-700', textColor: 'text-white' },
-      ],
-      fashion: [
-        { name: 'Nike', tagline: 'Just Do It', discount: 'Up to 40% Off', color: 'bg-gradient-to-br from-orange-600 to-amber-500', textColor: 'text-white' },
-        { name: 'Adidas', tagline: 'Impossible Is Nothing', discount: 'Up to 35% Off', color: 'bg-gradient-to-br from-slate-900 to-slate-600', textColor: 'text-white' },
-        { name: 'Zara', tagline: 'Love Your Curves', discount: 'Up to 50% Off', color: 'bg-gradient-to-br from-rose-800 to-pink-600', textColor: 'text-white' },
-        { name: 'H&M', tagline: 'Fashion & Quality', discount: 'Up to 60% Off', color: 'bg-gradient-to-br from-emerald-800 to-teal-600', textColor: 'text-white' },
-      ],
-      home: [
-        { name: 'IKEA', tagline: 'Make More of Your Home', discount: 'Up to 30% Off', color: 'bg-gradient-to-br from-blue-700 to-yellow-500', textColor: 'text-white' },
-        { name: 'Dyson', tagline: 'Engineered Better', discount: 'Up to 20% Off', color: 'bg-gradient-to-br from-violet-900 to-purple-700', textColor: 'text-white' },
-        { name: 'Philips', tagline: 'Innovation for You', discount: 'Up to 25% Off', color: 'bg-gradient-to-br from-cyan-800 to-blue-600', textColor: 'text-white' },
-        { name: 'Bosch', tagline: 'Invented for Life', discount: 'Up to 35% Off', color: 'bg-gradient-to-br from-slate-700 to-slate-500', textColor: 'text-white' },
-      ],
-      beauty: [
-        { name: 'L\'Oréal', tagline: 'Because You\'re Worth It', discount: 'Up to 30% Off', color: 'bg-gradient-to-br from-pink-700 to-rose-500', textColor: 'text-white' },
-        { name: 'MAC', tagline: 'All Ages, All Races', discount: 'Up to 25% Off', color: 'bg-gradient-to-br from-slate-900 to-gray-700', textColor: 'text-white' },
-        { name: 'Maybelline', tagline: 'Maybe It\'s Maybelline', discount: 'Up to 40% Off', color: 'bg-gradient-to-br from-fuchsia-700 to-pink-500', textColor: 'text-white' },
-        { name: 'Nivea', tagline: 'Touch of Care', discount: 'Up to 35% Off', color: 'bg-gradient-to-br from-blue-800 to-indigo-600', textColor: 'text-white' },
-      ],
-      sports: [
-        { name: 'Puma', tagline: 'Forever Faster', discount: 'Up to 45% Off', color: 'bg-gradient-to-br from-green-800 to-emerald-600', textColor: 'text-white' },
-        { name: 'Under Armour', tagline: 'Protect This House', discount: 'Up to 30% Off', color: 'bg-gradient-to-br from-red-700 to-orange-500', textColor: 'text-white' },
-        { name: 'Reebok', tagline: 'Be More Human', discount: 'Up to 40% Off', color: 'bg-gradient-to-br from-blue-700 to-sky-500', textColor: 'text-white' },
-        { name: 'Decathlon', tagline: 'Sport for All', discount: 'Up to 50% Off', color: 'bg-gradient-to-br from-cyan-700 to-teal-500', textColor: 'text-white' },
-      ],
+  private static readonly BRAND_PROMO_STYLES: Record<
+    string,
+    { name: string; tagline: string; discount: string; color: string; textColor: string }[]
+  > = {
+    electronics: [
+      {
+        name: 'Apple',
+        tagline: 'Think Different',
+        discount: 'Up to 25% Off',
+        color: 'bg-gradient-to-br from-slate-900 to-slate-700',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Samsung',
+        tagline: 'Galaxy of Innovation',
+        discount: 'Up to 35% Off',
+        color: 'bg-gradient-to-br from-blue-900 to-blue-700',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Sony',
+        tagline: 'Be Moved',
+        discount: 'Up to 30% Off',
+        color: 'bg-gradient-to-br from-amber-900 to-amber-700',
+        textColor: 'text-white',
+      },
+      {
+        name: 'OnePlus',
+        tagline: 'Never Settle',
+        discount: 'Up to 20% Off',
+        color: 'bg-gradient-to-br from-red-900 to-red-700',
+        textColor: 'text-white',
+      },
+    ],
+    fashion: [
+      {
+        name: 'Nike',
+        tagline: 'Just Do It',
+        discount: 'Up to 40% Off',
+        color: 'bg-gradient-to-br from-orange-600 to-amber-500',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Adidas',
+        tagline: 'Impossible Is Nothing',
+        discount: 'Up to 35% Off',
+        color: 'bg-gradient-to-br from-slate-900 to-slate-600',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Zara',
+        tagline: 'Love Your Curves',
+        discount: 'Up to 50% Off',
+        color: 'bg-gradient-to-br from-rose-800 to-pink-600',
+        textColor: 'text-white',
+      },
+      {
+        name: 'H&M',
+        tagline: 'Fashion & Quality',
+        discount: 'Up to 60% Off',
+        color: 'bg-gradient-to-br from-emerald-800 to-teal-600',
+        textColor: 'text-white',
+      },
+    ],
+    home: [
+      {
+        name: 'IKEA',
+        tagline: 'Make More of Your Home',
+        discount: 'Up to 30% Off',
+        color: 'bg-gradient-to-br from-blue-700 to-yellow-500',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Dyson',
+        tagline: 'Engineered Better',
+        discount: 'Up to 20% Off',
+        color: 'bg-gradient-to-br from-violet-900 to-purple-700',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Philips',
+        tagline: 'Innovation for You',
+        discount: 'Up to 25% Off',
+        color: 'bg-gradient-to-br from-cyan-800 to-blue-600',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Bosch',
+        tagline: 'Invented for Life',
+        discount: 'Up to 35% Off',
+        color: 'bg-gradient-to-br from-slate-700 to-slate-500',
+        textColor: 'text-white',
+      },
+    ],
+    beauty: [
+      {
+        name: "L'Oréal",
+        tagline: "Because You're Worth It",
+        discount: 'Up to 30% Off',
+        color: 'bg-gradient-to-br from-pink-700 to-rose-500',
+        textColor: 'text-white',
+      },
+      {
+        name: 'MAC',
+        tagline: 'All Ages, All Races',
+        discount: 'Up to 25% Off',
+        color: 'bg-gradient-to-br from-slate-900 to-gray-700',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Maybelline',
+        tagline: "Maybe It's Maybelline",
+        discount: 'Up to 40% Off',
+        color: 'bg-gradient-to-br from-fuchsia-700 to-pink-500',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Nivea',
+        tagline: 'Touch of Care',
+        discount: 'Up to 35% Off',
+        color: 'bg-gradient-to-br from-blue-800 to-indigo-600',
+        textColor: 'text-white',
+      },
+    ],
+    sports: [
+      {
+        name: 'Puma',
+        tagline: 'Forever Faster',
+        discount: 'Up to 45% Off',
+        color: 'bg-gradient-to-br from-green-800 to-emerald-600',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Under Armour',
+        tagline: 'Protect This House',
+        discount: 'Up to 30% Off',
+        color: 'bg-gradient-to-br from-red-700 to-orange-500',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Reebok',
+        tagline: 'Be More Human',
+        discount: 'Up to 40% Off',
+        color: 'bg-gradient-to-br from-blue-700 to-sky-500',
+        textColor: 'text-white',
+      },
+      {
+        name: 'Decathlon',
+        tagline: 'Sport for All',
+        discount: 'Up to 50% Off',
+        color: 'bg-gradient-to-br from-cyan-700 to-teal-500',
+        textColor: 'text-white',
+      },
+    ],
   };
 
   /**
@@ -1076,7 +1347,13 @@ export class MarketplaceService {
    */
   private async getBrandPromos(): Promise<Record<string, any[]>> {
     const styles = MarketplaceService.BRAND_PROMO_STYLES;
-    const wanted = [...new Set(Object.values(styles).flat().map((s) => s.name))];
+    const wanted = [
+      ...new Set(
+        Object.values(styles)
+          .flat()
+          .map((s) => s.name),
+      ),
+    ];
 
     let rows: Brand[];
     try {
@@ -1093,18 +1370,20 @@ export class MarketplaceService {
       const resolved = entries.flatMap((entry) => {
         const brand = byName.get(entry.name.toLowerCase());
         if (!brand) return [];
-        return [{
-          // Both keys travel: the storefront routes on `slug`, the follow
-          // button and updates feed need the uuid.
-          id: brand.id,
-          slug: brand.slug,
-          name: brand.name,
-          logoUrl: brand.logoUrl ?? null,
-          tagline: entry.tagline,
-          discount: entry.discount,
-          color: entry.color,
-          textColor: entry.textColor,
-        }];
+        return [
+          {
+            // Both keys travel: the storefront routes on `slug`, the follow
+            // button and updates feed need the uuid.
+            id: brand.id,
+            slug: brand.slug,
+            name: brand.name,
+            logoUrl: brand.logoUrl ?? null,
+            tagline: entry.tagline,
+            discount: entry.discount,
+            color: entry.color,
+            textColor: entry.textColor,
+          },
+        ];
       });
       if (resolved.length > 0) out[category] = resolved;
     }
@@ -1113,11 +1392,26 @@ export class MarketplaceService {
 
   private getMarketplaceFAQ() {
     return [
-      { q: 'How do I return a product?', a: 'You can initiate a return within 7 days of delivery from your order history. Go to Orders → Select Order → Request Return.' },
-      { q: 'Is COD available?', a: 'Cash on Delivery is available for most products under ₹50,000. COD availability depends on your location and the seller.' },
-      { q: 'How long does delivery take?', a: 'Standard delivery takes 3-7 business days. Express delivery (1-2 days) is available for select products and locations.' },
-      { q: 'Are products genuine?', a: 'All products on KARTSEEK are from verified sellers. We have a strict seller verification process and a 100% authenticity guarantee.' },
-      { q: 'How do refunds work?', a: 'Refunds are processed within 5-7 business days after the return is received and inspected. Refund is credited to your original payment method.' },
+      {
+        q: 'How do I return a product?',
+        a: 'You can initiate a return within 7 days of delivery from your order history. Go to Orders → Select Order → Request Return.',
+      },
+      {
+        q: 'Is COD available?',
+        a: 'Cash on Delivery is available for most products under ₹50,000. COD availability depends on your location and the seller.',
+      },
+      {
+        q: 'How long does delivery take?',
+        a: 'Standard delivery takes 3-7 business days. Express delivery (1-2 days) is available for select products and locations.',
+      },
+      {
+        q: 'Are products genuine?',
+        a: 'All products on KARTSEEK are from verified sellers. We have a strict seller verification process and a 100% authenticity guarantee.',
+      },
+      {
+        q: 'How do refunds work?',
+        a: 'Refunds are processed within 5-7 business days after the return is received and inspected. Refund is credited to your original payment method.',
+      },
     ];
   }
 
@@ -1150,7 +1444,7 @@ export class MarketplaceService {
     if (!review) throw new NotFoundException(`Review ${reviewId} not found`);
 
     const voteKey = `review:${reviewId}:voters`;
-    const voters = (await this.redis.getJson(voteKey) as string[] | null) ?? [];
+    const voters = ((await this.redis.getJson(voteKey)) as string[] | null) ?? [];
     if (voters.includes(customerId)) {
       return { success: true, alreadyVoted: true, helpfulCount: review.helpfulCount };
     }
@@ -1281,7 +1575,11 @@ export class MarketplaceService {
       averageRating: parseFloat(stats.avg) || 0,
       reviewCount: parseInt(stats.count) || 0,
     });
-    await this.kafka.publish('product.review.created', { id: saved.id, productId, rating: dto.rating });
+    await this.kafka.publish('product.review.created', {
+      id: saved.id,
+      productId,
+      rating: dto.rating,
+    });
     return { success: true, id: saved.id, rating: dto.rating };
   }
 
@@ -1291,10 +1589,30 @@ export class MarketplaceService {
     // Generate exchange offer tiers based on product price
     const basePrice = Number(product.mrp) || 0;
     const tiers = [
-      { condition: 'Excellent', discountPercent: 25, estimatedValue: Math.round(basePrice * 0.25), label: 'Like new, fully functional, no scratches' },
-      { condition: 'Good', discountPercent: 18, estimatedValue: Math.round(basePrice * 0.18), label: 'Minor scratches, fully functional' },
-      { condition: 'Fair', discountPercent: 10, estimatedValue: Math.round(basePrice * 0.10), label: 'Visible wear, functional with minor issues' },
-      { condition: 'Poor', discountPercent: 5, estimatedValue: Math.round(basePrice * 0.05), label: 'Heavy wear, partially functional' },
+      {
+        condition: 'Excellent',
+        discountPercent: 25,
+        estimatedValue: Math.round(basePrice * 0.25),
+        label: 'Like new, fully functional, no scratches',
+      },
+      {
+        condition: 'Good',
+        discountPercent: 18,
+        estimatedValue: Math.round(basePrice * 0.18),
+        label: 'Minor scratches, fully functional',
+      },
+      {
+        condition: 'Fair',
+        discountPercent: 10,
+        estimatedValue: Math.round(basePrice * 0.1),
+        label: 'Visible wear, functional with minor issues',
+      },
+      {
+        condition: 'Poor',
+        discountPercent: 5,
+        estimatedValue: Math.round(basePrice * 0.05),
+        label: 'Heavy wear, partially functional',
+      },
     ];
     return { productId, productName: product.name, tiers, currency: 'INR' };
   }
@@ -1303,14 +1621,57 @@ export class MarketplaceService {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
     const price = Number(product.mrp) || 0;
-    if (price < 3000) return { productId, eligible: false, reason: 'EMI available on orders above ₹3,000' };
+    if (price < 3000)
+      return { productId, eligible: false, reason: 'EMI available on orders above ₹3,000' };
     const plans = [
-      { tenure: 3, bank: 'All Banks', interestRate: 0, monthlyEmi: Math.round(price / 3), totalCost: price, label: 'No Cost EMI' },
-      { tenure: 6, bank: 'HDFC/ICICI/SBI', interestRate: 12, monthlyEmi: Math.round((price * 1.06) / 6), totalCost: Math.round(price * 1.06), label: 'Low Interest' },
-      { tenure: 9, bank: 'HDFC/ICICI', interestRate: 14, monthlyEmi: Math.round((price * 1.105) / 9), totalCost: Math.round(price * 1.105), label: 'Standard EMI' },
-      { tenure: 12, bank: 'All Banks', interestRate: 16, monthlyEmi: Math.round((price * 1.16) / 12), totalCost: Math.round(price * 1.16), label: 'Easy 12-Month' },
-      { tenure: 18, bank: 'HDFC/SBI', interestRate: 18, monthlyEmi: Math.round((price * 1.27) / 18), totalCost: Math.round(price * 1.27), label: 'Extended EMI' },
-      { tenure: 24, bank: 'HDFC', interestRate: 18, monthlyEmi: Math.round((price * 1.36) / 24), totalCost: Math.round(price * 1.36), label: 'Max Tenure' },
+      {
+        tenure: 3,
+        bank: 'All Banks',
+        interestRate: 0,
+        monthlyEmi: Math.round(price / 3),
+        totalCost: price,
+        label: 'No Cost EMI',
+      },
+      {
+        tenure: 6,
+        bank: 'HDFC/ICICI/SBI',
+        interestRate: 12,
+        monthlyEmi: Math.round((price * 1.06) / 6),
+        totalCost: Math.round(price * 1.06),
+        label: 'Low Interest',
+      },
+      {
+        tenure: 9,
+        bank: 'HDFC/ICICI',
+        interestRate: 14,
+        monthlyEmi: Math.round((price * 1.105) / 9),
+        totalCost: Math.round(price * 1.105),
+        label: 'Standard EMI',
+      },
+      {
+        tenure: 12,
+        bank: 'All Banks',
+        interestRate: 16,
+        monthlyEmi: Math.round((price * 1.16) / 12),
+        totalCost: Math.round(price * 1.16),
+        label: 'Easy 12-Month',
+      },
+      {
+        tenure: 18,
+        bank: 'HDFC/SBI',
+        interestRate: 18,
+        monthlyEmi: Math.round((price * 1.27) / 18),
+        totalCost: Math.round(price * 1.27),
+        label: 'Extended EMI',
+      },
+      {
+        tenure: 24,
+        bank: 'HDFC',
+        interestRate: 18,
+        monthlyEmi: Math.round((price * 1.36) / 24),
+        totalCost: Math.round(price * 1.36),
+        label: 'Max Tenure',
+      },
     ];
     return { productId, eligible: true, price, currency: 'INR', plans };
   }
@@ -1368,7 +1729,12 @@ export class MarketplaceService {
   }
 
   /** A customer's own marketplace order history. */
-  async getCustomerOrders(filters: { userId?: string; status?: string; page?: number; limit?: number }) {
+  async getCustomerOrders(filters: {
+    userId?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const page = filters?.page ?? 1;
     const limit = filters?.limit ?? 20;
     if (!filters?.userId) return { data: [], total: 0, page, limit };
@@ -1386,8 +1752,10 @@ export class MarketplaceService {
   async getGiftCardBalance(code: string) {
     const card = await this.giftCardRepo.findOne({ where: { code: code.toUpperCase() } });
     if (!card) throw new NotFoundException(`Gift card with code '${code}' not found`);
-    if (card.status === GiftCardStatus.EXPIRED) throw new BadRequestException('This gift card has expired');
-    if (card.status === GiftCardStatus.DISABLED) throw new BadRequestException('This gift card has been disabled');
+    if (card.status === GiftCardStatus.EXPIRED)
+      throw new BadRequestException('This gift card has expired');
+    if (card.status === GiftCardStatus.DISABLED)
+      throw new BadRequestException('This gift card has been disabled');
     if (card.expiresAt && new Date(card.expiresAt) < new Date()) {
       await this.giftCardRepo.update(card.id, { status: GiftCardStatus.EXPIRED });
       throw new BadRequestException('This gift card has expired');
@@ -1423,9 +1791,13 @@ export class MarketplaceService {
     // Lock the gift-card row so two concurrent redemptions can't double-spend the balance.
     const result = await this.dataSource.transaction(async (mgr) => {
       const repo = mgr.getRepository(GiftCard);
-      const card = await repo.findOne({ where: { code: code.toUpperCase() }, lock: { mode: 'pessimistic_write' } });
+      const card = await repo.findOne({
+        where: { code: code.toUpperCase() },
+        lock: { mode: 'pessimistic_write' },
+      });
       if (!card) throw new NotFoundException(`Gift card with code '${code}' not found`);
-      if (card.status !== GiftCardStatus.ACTIVE) throw new BadRequestException(`Gift card is ${card.status}`);
+      if (card.status !== GiftCardStatus.ACTIVE)
+        throw new BadRequestException(`Gift card is ${card.status}`);
       if (card.expiresAt && new Date(card.expiresAt) < new Date()) {
         await repo.update(card.id, { status: GiftCardStatus.EXPIRED });
         throw new BadRequestException('This gift card has expired');
@@ -1448,8 +1820,18 @@ export class MarketplaceService {
       });
       return { redeemAmount, newBalance, currency: card.currency };
     });
-    await this.kafka.publish('gift-card.redeemed', { code, orderId, amount: result.redeemAmount, userId });
-    return { success: true, redeemed: result.redeemAmount, remainingBalance: result.newBalance, currency: result.currency };
+    await this.kafka.publish('gift-card.redeemed', {
+      code,
+      orderId,
+      amount: result.redeemAmount,
+      userId,
+    });
+    return {
+      success: true,
+      redeemed: result.redeemAmount,
+      remainingBalance: result.newBalance,
+      currency: result.currency,
+    };
   }
 
   /**
@@ -1551,7 +1933,9 @@ export class MarketplaceService {
     const coupon = this.couponRepo.create({
       ...dto,
       sellerId,
-      code: dto.code || `${sellerId.substring(0, 4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
+      code:
+        dto.code ||
+        `${sellerId.substring(0, 4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
       isActive: true,
       usedCount: 0,
       createdAt: new Date(),
@@ -1592,21 +1976,35 @@ export class MarketplaceService {
 
     const qb = this.orderRepo.createQueryBuilder('o').select(['o.id', 'o.items', 'o.seller_id']);
     if (sellerId) qb.where('o.seller_id = :sellerId', { sellerId });
-    const orders = await qb.orderBy('o.createdAt', 'DESC').take(500).getMany().catch(() => [] as any[]);
+    const orders = await qb
+      .orderBy('o.createdAt', 'DESC')
+      .take(500)
+      .getMany()
+      .catch(() => [] as any[]);
 
     // Count co-occurrence per unordered product pair.
-    const pairCounts = new Map<string, { a: string; b: string; count: number; sellerId?: string }>();
+    const pairCounts = new Map<
+      string,
+      { a: string; b: string; count: number; sellerId?: string }
+    >();
     for (const order of orders) {
-      const ids: string[] = Array.from(new Set(
-        (Array.isArray((order as any).items) ? (order as any).items : [])
-          .map((i: any) => i?.productId)
-          .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
-      ));
+      const ids: string[] = Array.from(
+        new Set(
+          (Array.isArray((order as any).items) ? (order as any).items : [])
+            .map((i: any) => i?.productId)
+            .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      );
       for (let i = 0; i < ids.length; i++) {
         for (let j = i + 1; j < ids.length; j++) {
           const [a, b] = ids[i] < ids[j] ? [ids[i], ids[j]] : [ids[j], ids[i]];
           const key = `${a}|${b}`;
-          const entry = pairCounts.get(key) ?? { a, b, count: 0, sellerId: (order as any).seller_id };
+          const entry = pairCounts.get(key) ?? {
+            a,
+            b,
+            count: 0,
+            sellerId: (order as any).seller_id,
+          };
           entry.count += 1;
           pairCounts.set(key, entry);
         }
@@ -1703,46 +2101,76 @@ export class MarketplaceService {
     // seller who had orders in all four states. Normalised rather than rewritten
     // as literals, so a row written in either case still counts.
     const statusOf = (o: { status?: string }) => String(o.status ?? '').toUpperCase();
-    const delivered = orders.filter(o => statusOf(o) === 'DELIVERED');
-    const pending = orders.filter(o => ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'].includes(statusOf(o)));
-    const shipped = orders.filter(o => ['SHIPPED', 'OUT_FOR_DELIVERY'].includes(statusOf(o)));
-    const cancelled = orders.filter(o => statusOf(o) === 'CANCELLED');
+    const delivered = orders.filter((o) => statusOf(o) === 'DELIVERED');
+    const pending = orders.filter((o) =>
+      ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'].includes(statusOf(o)),
+    );
+    const shipped = orders.filter((o) => ['SHIPPED', 'OUT_FOR_DELIVERY'].includes(statusOf(o)));
+    const cancelled = orders.filter((o) => statusOf(o) === 'CANCELLED');
 
     const reviewStats = await this.sellerReviewStats(sellerId);
     const avgRating = reviewStats.avgRating;
 
     const returns = await this.returnRepo.count({ where: { sellerId } });
     const products = await this.productRepo.count({ where: { seller_id: sellerId } });
-    const activeProducts = await this.productRepo.count({ where: { seller_id: sellerId, is_active: true } });
-    const lowStockVariants = await this.variantRepo.createQueryBuilder('v')
+    const activeProducts = await this.productRepo.count({
+      where: { seller_id: sellerId, is_active: true },
+    });
+    const lowStockVariants = await this.variantRepo
+      .createQueryBuilder('v')
       .innerJoin('v.product', 'p')
       .where('p.seller_id = :sellerId', { sellerId })
       .andWhere('v.stockQuantity < v.lowStockThreshold')
-      .getCount().catch(() => 0);
+      .getCount()
+      .catch(() => 0);
 
     const commission = Math.round(totalRevenue * 0.1);
     const now = new Date();
-    const todayOrders = orders.filter(o => new Date(o.createdAt).toDateString() === now.toDateString()).length;
-    const todayRevenue = orders.filter(o => new Date(o.createdAt).toDateString() === now.toDateString()).reduce((s, o) => s + Number(o.grandTotal || 0), 0);
+    const todayOrders = orders.filter(
+      (o) => new Date(o.createdAt).toDateString() === now.toDateString(),
+    ).length;
+    const todayRevenue = orders
+      .filter((o) => new Date(o.createdAt).toDateString() === now.toDateString())
+      .reduce((s, o) => s + Number(o.grandTotal || 0), 0);
 
     // 7-day trend
     const weeklyTrend = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now.getTime() - (6 - i) * 86400000);
       const dayStr = d.toISOString().split('T')[0];
-      const dayOrders = orders.filter(o => new Date(o.createdAt).toDateString() === d.toDateString());
-      return { date: dayStr, orders: dayOrders.length, revenue: dayOrders.reduce((s, o) => s + Number(o.grandTotal || 0), 0) };
+      const dayOrders = orders.filter(
+        (o) => new Date(o.createdAt).toDateString() === d.toDateString(),
+      );
+      return {
+        date: dayStr,
+        orders: dayOrders.length,
+        revenue: dayOrders.reduce((s, o) => s + Number(o.grandTotal || 0), 0),
+      };
     });
 
     const result = {
-      seller: { id: seller.id, name: seller.businessName, isVerified: seller.verificationStatus === 'VERIFIED' },
+      seller: {
+        id: seller.id,
+        name: seller.businessName,
+        isVerified: seller.verificationStatus === 'VERIFIED',
+      },
       summary: {
-        totalRevenue, commission, netEarnings: totalRevenue - commission,
-        todayOrders, todayRevenue,
-        totalOrders: orders.length, pendingOrders: pending.length, shippedOrders: shipped.length,
-        deliveredOrders: delivered.length, cancelledOrders: cancelled.length,
-        avgRating, reviewCount: reviewStats.count,
-        returnCount: returns, returnRate: orders.length > 0 ? Math.round((returns / orders.length) * 100) : 0,
-        totalProducts: products, activeProducts, lowStockAlerts: lowStockVariants,
+        totalRevenue,
+        commission,
+        netEarnings: totalRevenue - commission,
+        todayOrders,
+        todayRevenue,
+        totalOrders: orders.length,
+        pendingOrders: pending.length,
+        shippedOrders: shipped.length,
+        deliveredOrders: delivered.length,
+        cancelledOrders: cancelled.length,
+        avgRating,
+        reviewCount: reviewStats.count,
+        returnCount: returns,
+        returnRate: orders.length > 0 ? Math.round((returns / orders.length) * 100) : 0,
+        totalProducts: products,
+        activeProducts,
+        lowStockAlerts: lowStockVariants,
       },
       weeklyTrend,
       lastUpdated: now.toISOString(),
@@ -1781,5 +2209,4 @@ export class MarketplaceService {
       avgRating: Math.round((Number(row?.avg ?? 0) || 0) * 10) / 10,
     };
   }
-
 }
