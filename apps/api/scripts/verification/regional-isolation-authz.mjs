@@ -1,9 +1,6 @@
 /* global process, console, fetch */
-import fs from 'node:fs';
 import pg from 'pg';
 const API = 'http://127.0.0.1:3001/api/v1';
-const TOK =
-  'C:/Users/HPELIT~1/AppData/Local/Temp/claude/C--KARTSEEKAPP/3df589cb-3035-40ed-bf84-67d62b63e660/scratchpad/iso/';
 const login = async (email, password) => {
   const r = await fetch(API + '/auth/login', {
     method: 'POST',
@@ -13,7 +10,7 @@ const login = async (email, password) => {
   const j = await r.json();
   return j.accessToken;
 };
-const qa = fs.readFileSync(TOK + 'qa-admin.token', 'utf8').trim();
+const qa = await login('qa-admin@kartseek.com', 'AdminPass123!');
 const global = await login('admin@kartseek.com', 'AdminPass123!');
 const india = await login('india-admin@kartseek.com', 'AdminPass123!');
 const call = async (token, method, path, body, extra = {}) => {

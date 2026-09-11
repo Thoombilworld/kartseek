@@ -49,6 +49,7 @@
     "type-check": "tsc --noEmit -p tsconfig.json && npm run check:type-imports",
     "check:type-imports": "node ../../scripts/check-type-imports.js .",
     "verify:isolation": "ts-node --transpile-only -r tsconfig-paths/register scripts/verify-franchise-isolation.ts",
+    "verify:admin-scope": "node scripts/verification/admin-scope-authz.mjs",
     "clean": "rimraf dist",
     "test:e2e:marketplace": "ts-node -r tsconfig-paths/register scripts/e2e-marketplace.ts",
     "db:split": "ts-node -r tsconfig-paths/register scripts/split-databases.ts"
