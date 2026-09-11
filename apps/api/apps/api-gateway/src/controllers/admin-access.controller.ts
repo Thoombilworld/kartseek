@@ -24,7 +24,13 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { JwtAuthGuard, EncryptionService } from '@app/security';
-import { STAFF_ROLES, UserRole, ADMIN_PERMISSIONS, unknownPermissionKeys } from '@app/common';
+import {
+  STAFF_ROLES,
+  UserRole,
+  ADMIN_PERMISSIONS,
+  ALL_PERMISSIONS,
+  unknownPermissionKeys,
+} from '@app/common';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -78,7 +84,20 @@ export class AdminAccessController {
     return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
   }
 
+  /**
+   * Permissions a console-made role may hold.
+   *
+   * The wildcard is refused outright. Accepting it would let anyone who can
+   * reach this route mint a second `super_admin` under a different name —
+   * indistinguishable in effect, but not marked `is_system`, so none of the
+   * protections on the real one (undeletable, uneditable, unassignable) would
+   * apply to it. The seeded `super_admin` row keeps its `*`; nothing else may
+   * acquire one.
+   */
   private validatePermissions(perms: string[]) {
+    if ((perms ?? []).includes(ALL_PERMISSIONS)) {
+      throw new BadRequestException('The wildcard is reserved for the system super_admin role.');
+    }
     const unknown = unknownPermissionKeys(perms ?? []);
     if (unknown.length) {
       throw new BadRequestException(`Unknown permission key(s): ${unknown.join(', ')}`);

@@ -61,6 +61,12 @@ export class TestSeedService implements OnApplicationBootstrap {
     // The console's roles and staff pages are SUPER_ADMIN-only, and until now
     // no seeded account held that role — so every probe of them ran as an
     // ADMIN and answered 403, which reads exactly like a broken route.
+    //
+    // Opt-in (SEED_SUPER_ADMIN=true), unlike every other entry here. The other
+    // seeds are ordinary test accounts; this one has global control of every
+    // module, market and setting, and it would otherwise appear with a literal
+    // shared password in every environment that is merely "not production" —
+    // staging and shared dev boxes included.
     {
       email: 'superadmin@kartseek.com',
       password: 'AdminPass123!',
@@ -137,12 +143,32 @@ export class TestSeedService implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * The accounts this boot will actually seed.
+   *
+   * Everything except the SUPER_ADMIN, which requires `SEED_SUPER_ADMIN=true`.
+   * Exposed (rather than inlined into the loop) so the decision is testable
+   * without booting the gateway.
+   */
+  seededUsers(): typeof this.testUsers {
+    if (process.env.SEED_SUPER_ADMIN === 'true') return this.testUsers;
+    return this.testUsers.filter((u) => u.role !== UserRole.SUPER_ADMIN);
+  }
+
   async onApplicationBootstrap() {
     if (process.env.NODE_ENV === 'production') {
       return; // Never seed in production
     }
 
-    for (const testUser of this.testUsers) {
+    const users = this.seededUsers();
+    if (users.length !== this.testUsers.length) {
+      this.logger.log(
+        'Skipping the SUPER_ADMIN seed account — set SEED_SUPER_ADMIN=true to create ' +
+          'superadmin@kartseek.com with the shared development password.',
+      );
+    }
+
+    for (const testUser of users) {
       try {
         // Always clear lockout state for test users
         await this.lockout.adminUnlock(testUser.email);

@@ -147,10 +147,19 @@ export class UpdateStaffDto {
   @IsUUID()
   adminRoleId?: string;
 
-  @ApiPropertyOptional({ example: 'AE' })
+  /**
+   * The market, or `null` to clear it and make the account global again.
+   *
+   * `@IsOptional()` skips validation for `null` as well as `undefined`, which
+   * is what lets `null` through to the controller; `''` is not skipped, so an
+   * empty string is still rejected rather than quietly becoming "no market".
+   * Omitting the key leaves the existing market untouched — the three cases
+   * are deliberately distinct.
+   */
+  @ApiPropertyOptional({ example: 'AE', nullable: true })
   @IsOptional()
   @Matches(/^[A-Za-z]{2}$/, { message: 'regionCode must be a two-letter ISO country code' })
-  regionCode?: string;
+  regionCode?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

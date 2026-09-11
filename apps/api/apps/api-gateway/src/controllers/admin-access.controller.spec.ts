@@ -8,7 +8,8 @@ import {
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { AdminAccessController } from './admin-access.controller';
-import { CreateStaffDto } from '../dto/admin-access.dto';
+import { CreateStaffDto, UpdateStaffDto } from '../dto/admin-access.dto';
+import { GatewayValidationPipe } from '../pipes/gateway-validation.pipe';
 
 const superAdmin = { id: 'u-s', role: 'SUPER_ADMIN' };
 const lockedAdmin = { id: 'u-qa', role: 'ADMIN', regionCode: 'QA', regionLocked: true };
@@ -129,6 +130,41 @@ describe('AdminAccessController', () => {
     } as any);
     expect(created.data.permissions).toEqual(['orders.view']);
     expect(created.data.isSystem).toBe(false);
+  });
+
+  it('refuses the wildcard on create — it would be a second super_admin', async () => {
+    const { ctrl, roleRepo } = build();
+    await expect(
+      ctrl.createRole(req(superAdmin), {
+        key: 'shadow_root',
+        name: 'Shadow Root',
+        permissions: ['*'],
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      ctrl.createRole(req(superAdmin), {
+        key: 'shadow_root',
+        name: 'Shadow Root',
+        permissions: ['dashboard.view', '*'],
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+    expect(roleRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('refuses the wildcard on update too', async () => {
+    const role = { id: 'r1', key: 'ops_lead', isSystem: false, permissions: ['orders.view'] };
+    const { ctrl, roleRepo } = build([role]);
+    await expect(
+      ctrl.updateRole(req(superAdmin), 'r1', { permissions: ['*'] } as any),
+    ).rejects.toThrow(BadRequestException);
+    expect(roleRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('leaves the seeded super_admin row holding its wildcard', async () => {
+    const sa = { id: 'r-sa', key: 'super_admin', isSystem: true, permissions: ['*'] };
+    const { ctrl } = build([sa]);
+    const res = await ctrl.listRoles(req(superAdmin));
+    expect(res.data[0].permissions).toEqual(['*']);
   });
 
   it('refuses a duplicate role key', async () => {
@@ -276,6 +312,60 @@ describe('AdminAccessController', () => {
     expect(res.data.isActive).toBe(false);
   });
 
+  it('clears the market when regionCode is null', async () => {
+    const locked = {
+      id: 'u-ae',
+      role: 'ADMIN',
+      adminRoleId: 'r-reg',
+      regionCode: 'AE',
+      regionLocked: true,
+      isActive: true,
+    };
+    const { ctrl, userRepo } = build([regionalRole], [locked]);
+    const res = await ctrl.updateStaff(req(superAdmin), 'u-ae', {
+      regionCode: null,
+      regionLocked: false,
+    } as any);
+    expect(userRepo.save.mock.calls[0][0]).toMatchObject({
+      regionCode: null,
+      regionLocked: false,
+    });
+    expect(res.data.regionCode).toBeNull();
+    expect(res.data.regionLocked).toBe(false);
+  });
+
+  it('leaves the market alone when regionCode is absent', async () => {
+    const locked = {
+      id: 'u-ae',
+      role: 'ADMIN',
+      adminRoleId: 'r-reg',
+      regionCode: 'AE',
+      regionLocked: true,
+      isActive: true,
+    };
+    const { ctrl, userRepo } = build([regionalRole], [locked]);
+    await ctrl.updateStaff(req(superAdmin), 'u-ae', { firstName: 'Renamed' } as any);
+    expect(userRepo.save.mock.calls[0][0]).toMatchObject({ regionCode: 'AE', regionLocked: true });
+  });
+
+  it('refuses to clear the market while leaving the account locked', async () => {
+    const locked = {
+      id: 'u-ae',
+      role: 'ADMIN',
+      adminRoleId: 'r-reg',
+      regionCode: 'AE',
+      regionLocked: true,
+      isActive: true,
+    };
+    const { ctrl } = build([regionalRole], [locked]);
+    await expect(
+      ctrl.updateStaff(req(superAdmin), 'u-ae', {
+        regionCode: null,
+        regionLocked: true,
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('will not touch a non-staff account through the staff routes', async () => {
     const customer = { id: 'u-c', role: 'CUSTOMER' };
     const { ctrl } = build([], [customer]);
@@ -335,5 +425,66 @@ describe('CreateStaffDto', () => {
     expect(await errorsFor({ adminRoleId: 'r-reg' })).toContain('adminRoleId');
     expect(await errorsFor({ regionCode: 'UAE' })).toContain('regionCode');
     expect(await errorsFor({ regionCode: 'AE' })).toEqual([]);
+  });
+});
+
+describe('UpdateStaffDto', () => {
+  const errorsFor = async (patch: object) =>
+    (await validate(plainToInstance(UpdateStaffDto, patch))).map((e) => e.property);
+
+  it('accepts an empty patch — every field is optional', async () => {
+    expect(await errorsFor({})).toEqual([]);
+  });
+
+  it('accepts a null market, which is how the console clears it', async () => {
+    expect(await errorsFor({ regionCode: null, regionLocked: false })).toEqual([]);
+  });
+
+  it('rejects an empty-string market — "" is not "no market"', async () => {
+    expect(await errorsFor({ regionCode: '' })).toContain('regionCode');
+  });
+
+  it('still rejects a malformed market', async () => {
+    expect(await errorsFor({ regionCode: 'UAE' })).toContain('regionCode');
+    expect(await errorsFor({ regionCode: 'AE' })).toEqual([]);
+  });
+
+  it('declares no email — the gateway pipe answers 400 rather than ignoring it', async () => {
+    // Run through the real pipe's options, because this is the exact failure
+    // the console hit: every staff edit posted `email` and got a 400 back.
+    const pipe = new GatewayValidationPipe();
+    const meta = { type: 'body' as const, metatype: UpdateStaffDto };
+    await expect(pipe.transform({ firstName: 'A', email: 'x@y.com' }, meta)).rejects.toThrow(
+      BadRequestException,
+    );
+    // The same payload without it is accepted.
+    await expect(pipe.transform({ firstName: 'A' }, meta)).resolves.toMatchObject({
+      firstName: 'A',
+    });
+  });
+
+  it('accepts the real edit payload the console sends', async () => {
+    const pipe = new GatewayValidationPipe();
+    const meta = { type: 'body' as const, metatype: UpdateStaffDto };
+    await expect(
+      pipe.transform(
+        {
+          firstName: 'Emirates',
+          lastName: 'Admin',
+          phone: '+971500000111',
+          role: 'ADMIN',
+          adminRoleId: '5a9e1a0e-6f2b-4a5b-9c3d-1e2f3a4b5c6d',
+          regionCode: null,
+          regionLocked: false,
+          isActive: true,
+        },
+        meta,
+      ),
+    ).resolves.toMatchObject({ regionCode: null, regionLocked: false });
+  });
+
+  it('refuses SUPER_ADMIN as a role', async () => {
+    expect(await errorsFor({ role: 'SUPER_ADMIN' })).toContain('role');
+    expect(await errorsFor({ role: 'ADMIN' })).toEqual([]);
   });
 });
