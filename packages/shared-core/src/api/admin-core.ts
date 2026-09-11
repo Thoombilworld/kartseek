@@ -207,6 +207,89 @@ export interface SecurityActionResult {
   message: string;
 }
 
+// ─── KYC queue (/admin/kyc/pending) ──────────────────────────────────────────
+
+/**
+ * One row of the identity-check queue.
+ *
+ * Almost everything is optional, and that is the contract rather than
+ * defensiveness: admin-service builds this list by scanning the Redis keys
+ * `admin:kyc:pending:<entityType>:<entityId>` and returning whatever JSON it
+ * finds there (`AdminService.getPendingKyc`). It reads only `submittedAt` and
+ * one of `country`/`countryCode`/`regionCode` itself, and no platform code
+ * currently *writes* those keys — so a console that assumes a business name, an
+ * owner or a document list is assuming a shape nothing guarantees. The two
+ * fields a decision needs are `entityId` and `entityType`, because they are the
+ * key segments the approve and reject routes rebuild the key from.
+ */
+export interface KycPendingRow {
+  entityId?: string;
+  id?: string;
+  entityType?: string;
+  type?: string;
+  businessName?: string;
+  name?: string;
+  ownerName?: string;
+  email?: string;
+  phone?: string;
+  gstin?: string;
+  country?: string;
+  countryCode?: string;
+  regionCode?: string;
+  city?: string;
+  state?: string;
+  submittedAt?: string;
+  documents?: Array<{ name?: string; type?: string; url?: string; size?: string }>;
+}
+
+export interface KycPendingPage {
+  data: KycPendingRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// ─── Sellers (/admin/marketplace/sellers) ────────────────────────────────────
+
+/**
+ * A seller as `getSellersForAdmin` returns it — the `sellers` row itself, so
+ * the property names here are that table's columns.
+ *
+ * There is no `status`, no `revenue`, no `complaints` and no `lastActive`:
+ * `verificationStatus` (PENDING | VERIFIED | REJECTED | SUSPENDED) and
+ * `isActive` are what the table records, and the console has to show those
+ * rather than a status of its own devising. `ownerId` is the `users.id` behind
+ * the shop and is nullable — a seller created without an account has none.
+ */
+export interface AdminSellerRow {
+  id: string;
+  businessName: string;
+  storeSlug?: string;
+  ownerName: string | null;
+  ownerId: string | null;
+  email: string | null;
+  phone: string | null;
+  verificationStatus: string;
+  kycStatus: string;
+  isActive: boolean;
+  sellerRating: number | string | null;
+  totalReviews?: number;
+  totalProducts: number;
+  totalOrders: number;
+  commissionRate: number | string | null;
+  regionCode: string | null;
+  address?: { city?: string; state?: string; country?: string } | null;
+  createdAt?: string;
+}
+
+export interface AdminSellerPage {
+  data: AdminSellerRow[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore?: boolean;
+}
+
 // ─── Roles & staff (/admin/roles, /admin/staff — SUPER_ADMIN only) ───────────
 
 /** One permission the console may grant, as the gateway defines it. */
@@ -413,16 +496,20 @@ export const adminCoreApi = {
 
   // ── Users ─────────────────────────────────────────────────────────────────
   getUsers: (p: AdminListParams = {}) => apiCall(`${BASE_URL}/admin/users${buildQuery(p)}`),
-  banUser: (userId: string, reason: string, adminId: string) =>
+  /**
+   * `PUT /admin/users/:userId/ban`, body `ReasonDto` — `{ reason }` and nothing
+   * else. The route's pipe runs `forbidNonWhitelisted`, so the `adminId` this
+   * used to send is now a 400 (`property adminId should not exist`) rather than
+   * a field the controller ignores; the actor comes from the token.
+   */
+  banUser: (userId: string, reason: string) =>
     apiCall(`${BASE_URL}/admin/users/${userId}/ban`, {
       method: 'PUT',
-      body: JSON.stringify({ reason, adminId }),
+      body: JSON.stringify({ reason }),
     }),
-  unbanUser: (userId: string, adminId: string) =>
-    apiCall(`${BASE_URL}/admin/users/${userId}/unban`, {
-      method: 'PUT',
-      body: JSON.stringify({ adminId }),
-    }),
+  /** `PUT /admin/users/:userId/unban` declares no `@Body()` at all — so none is sent. */
+  unbanUser: (userId: string) =>
+    apiCall(`${BASE_URL}/admin/users/${userId}/unban`, { method: 'PUT' }),
 
   // ── Roles & staff ─────────────────────────────────────────────────────────
   // SUPER_ADMIN only, and refused outright for a market-locked admin: a role
@@ -460,46 +547,52 @@ export const adminCoreApi = {
 
   // ── KYC Verification ──────────────────────────────────────────────────────
   getPendingKyc: (p: AdminListParams = {}) =>
-    apiCall(`${BASE_URL}/admin/kyc/pending${buildQuery(p)}`),
-  approveKyc: (entityId: string, entityType: string, adminId: string) =>
-    apiCall(`${BASE_URL}/admin/kyc/${entityId}/approve`, {
+    apiCall<KycPendingPage>(`${BASE_URL}/admin/kyc/pending${buildQuery(p)}`),
+  /**
+   * `POST /admin/kyc/:entityId/approve`, body `KycDecisionDto` — `entityType`
+   * only. `entityType` is also the middle segment of the Redis key the queue
+   * lives under (`admin:kyc:pending:<type>:<id>`), so it has to be the same
+   * value the row was listed with or the check is simply not found.
+   */
+  approveKyc: (entityId: string, entityType: string) =>
+    apiCall(`${BASE_URL}/admin/kyc/${encodeURIComponent(entityId)}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ entityType, adminId }),
+      body: JSON.stringify({ entityType }),
     }),
-  rejectKyc: (entityId: string, entityType: string, adminId: string, reason: string) =>
-    apiCall(`${BASE_URL}/admin/kyc/${entityId}/reject`, {
+  rejectKyc: (entityId: string, entityType: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/kyc/${encodeURIComponent(entityId)}/reject`, {
       method: 'POST',
-      body: JSON.stringify({ entityType, adminId, reason }),
+      body: JSON.stringify({ entityType, reason }),
     }),
 
   // ── Sellers (via marketplace API) ─────────────────────────────────────────
   getSellers: (p: AdminListParams = {}) =>
-    apiCall(`${BASE_URL}/admin/marketplace/sellers${buildQuery(p)}`),
-  approveSeller: (id: string, adminId: string) =>
-    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/approve`, {
-      method: 'PATCH',
-      body: JSON.stringify({ adminId }),
-    }),
-  suspendSeller: (id: string, reason: string, adminId: string) =>
+    apiCall<AdminSellerPage>(`${BASE_URL}/admin/marketplace/sellers${buildQuery(p)}`),
+  approveSeller: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/approve`, { method: 'PATCH' }),
+  suspendSeller: (id: string, reason: string) =>
     apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/suspend`, {
       method: 'PATCH',
-      body: JSON.stringify({ reason, adminId }),
+      body: JSON.stringify({ reason }),
     }),
-  reactivateSeller: (id: string, adminId: string) =>
-    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/reactivate`, {
-      method: 'PATCH',
-      body: JSON.stringify({ adminId }),
-    }),
-  blockSeller: (id: string, reason: string, adminId: string) =>
-    apiCall(`${BASE_URL}/admin/users/${id}/ban`, {
+  reactivateSeller: (id: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/reactivate`, { method: 'PATCH' }),
+  /**
+   * Bans the seller's **owner account**, so the argument is `sellers.ownerId`
+   * — a `users.id` — not the seller id.
+   *
+   * This is a second wrapper onto `PUT /admin/users/:userId/ban`, whose path
+   * parameter runs through `ParseUUIDPipe` against the users table. Passing the
+   * seller's own id, which the console did, could only ever answer "user not
+   * found". A seller whose `ownerId` is null has no account to ban at all.
+   */
+  blockSeller: (ownerUserId: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/users/${ownerUserId}/ban`, {
       method: 'PUT',
-      body: JSON.stringify({ reason, adminId }),
+      body: JSON.stringify({ reason }),
     }),
-  unblockSeller: (id: string, adminId: string) =>
-    apiCall(`${BASE_URL}/admin/users/${id}/unban`, {
-      method: 'PUT',
-      body: JSON.stringify({ adminId }),
-    }),
+  unblockSeller: (ownerUserId: string) =>
+    apiCall(`${BASE_URL}/admin/users/${ownerUserId}/unban`, { method: 'PUT' }),
 
   // ── Orders ────────────────────────────────────────────────────────────────
   getOrders: (p: AdminListParams = {}) =>
