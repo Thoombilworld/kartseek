@@ -1,15 +1,30 @@
 import {
-  Controller, Get, Post, Put, Patch, Delete, Param, Req,
-  Body, Query, UseGuards, Inject, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import {
-  ApiTags, ApiOperation, ApiBearerAuth, ApiQuery,
-} from '@nestjs/swagger';
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Param,
+  Req,
+  Body,
+  Query,
+  UseGuards,
+  Inject,
+  Logger,
+  HttpException,
+  HttpStatus,
+  ParseUUIDPipe,
+  BadRequestException,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
+import { marketScopeOf, resolveMarket } from '../guards/market-scope';
 
 /**
  * Admin Taxi Controller
@@ -26,11 +41,9 @@ import { UserRole, rpcCatch } from '@app/common';
 export class AdminTaxiController {
   private readonly logger = new Logger(AdminTaxiController.name);
 
-  constructor(
-    @Inject('TAXI_SERVICE') private readonly taxiClient: ClientProxy,
-  ) {}
+  constructor(@Inject('TAXI_SERVICE') private readonly taxiClient: ClientProxy) {}
 
-    /**
+  /**
    * Forward to taxi-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -45,15 +58,28 @@ export class AdminTaxiController {
     return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
   }
 
+  /**
+   * The market this request may act in, as `scope` for the backend. A locked
+   * admin gets their market (and any other market they name is refused and
+   * logged); a global admin gets undefined — every market — or the market they
+   * filtered on.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
+  }
+
   private async send<T>(cmd: string, payload: object): Promise<T> {
     try {
       return await lastValueFrom(
         this.taxiClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Taxi service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Taxi service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -65,8 +91,9 @@ export class AdminTaxiController {
   // ── Dashboard ─────────────────────────────────────────────────
   @Get('dashboard')
   @ApiOperation({ summary: 'Admin taxi dashboard stats' })
-  async getDashboard() {
-    return { data: await this.send('admin.taxi.dashboard', {}) };
+  async getDashboard(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that dashboard');
+    return { data: await this.send('admin.taxi.dashboard', { countryCode: market, scope }) };
   }
 
   // ── Vendors ───────────────────────────────────────────────────
@@ -74,33 +101,77 @@ export class AdminTaxiController {
   @ApiOperation({ summary: 'List all taxi vendors' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'status', required: false })
-  async getVendors(@Query('page') page = 1, @Query('limit') limit = 20, @Query('status') status?: string) {
-    return await this.send('admin.taxi.vendors', { page, limit, status });
+  async getVendors(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those vendors');
+    return await this.send('admin.taxi.vendors', {
+      page: +page,
+      limit: +limit,
+      status,
+      countryCode: market,
+      scope,
+    });
   }
 
   @Get('vendors/:id')
   @ApiOperation({ summary: 'Get vendor detail' })
-  async getVendorById(@Param('id') id: string) {
-    return { data: await this.send('admin.taxi.vendorDetail', { id }) };
+  async getVendorById(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that vendor');
+    return { data: await this.send('admin.taxi.vendorDetail', { id, scope }) };
   }
 
   @Patch('vendors/:id/approve')
   @ApiOperation({ summary: 'Approve a vendor' })
-  async approveVendor(@Param('id') id: string) {
-    return { data: await this.send('admin.taxi.approveVendor', { id }) };
+  async approveVendor(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that vendor');
+    return {
+      data: await this.send('admin.taxi.approveVendor', { id, scope, adminId: this.actorId(req) }),
+    };
   }
 
   @Patch('vendors/:id/suspend')
   @ApiOperation({ summary: 'Suspend a vendor' })
-  async suspendVendor(@Param('id') id: string, @Body() body: { reason?: string }) {
-    return { data: await this.send('admin.taxi.suspendVendor', { id, ...body }) };
+  async suspendVendor(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that vendor');
+    return {
+      data: await this.send('admin.taxi.suspendVendor', {
+        id,
+        reason: body?.reason ?? '',
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Drivers ───────────────────────────────────────────────────
   @Get('drivers')
   @ApiOperation({ summary: 'List all drivers' })
-  async getDrivers(@Query('page') page = 1, @Query('status') status?: string) {
-    return await this.send('admin.taxi.drivers', { page, status });
+  async getDrivers(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+    @Query('limit') limit = 20,
+    @Query('search') search?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those drivers');
+    return await this.send('admin.taxi.drivers', {
+      page: +page,
+      limit: +limit,
+      status,
+      search,
+      countryCode: market,
+      scope,
+    });
   }
 
   /**
@@ -115,145 +186,302 @@ export class AdminTaxiController {
   @Get('drivers/nearby')
   @ApiOperation({ summary: 'Drivers near a point, for the live fleet map' })
   async nearbyDrivers(
+    @Req() req: any,
     @Query('lat') lat: string,
     @Query('lng') lng: string,
     @Query('radiusKm') radiusKm?: string,
     @Query('vehicleType') vehicleType?: string,
+    @Query('countryCode') countryCode?: string,
   ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that fleet');
     return this.send('admin.taxi.drivers.nearby', {
-      lat: Number(lat), lng: Number(lng),
-      radiusKm: radiusKm ? Number(radiusKm) : 5, vehicleType,
+      lat: Number(lat),
+      lng: Number(lng),
+      radiusKm: radiusKm ? Number(radiusKm) : 5,
+      vehicleType,
+      countryCode: market,
+      scope,
     });
   }
 
   @Get('drivers/:id')
   @ApiOperation({ summary: 'Get driver detail' })
-  async getDriverById(@Param('id') id: string) {
-    return { data: await this.send('admin.taxi.driverDetail', { id }) };
+  async getDriverById(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that driver');
+    return { data: await this.send('admin.taxi.driverDetail', { id, scope }) };
   }
 
   @Patch('drivers/:id/approve')
   @ApiOperation({ summary: 'Approve a driver' })
-  async approveDriver(@Param('id') id: string) {
-    return { data: await this.send('admin.taxi.approveDriver', { id }) };
+  async approveDriver(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that driver');
+    return {
+      data: await this.send('admin.taxi.approveDriver', { id, scope, adminId: this.actorId(req) }),
+    };
   }
 
   @Patch('drivers/:id/suspend')
   @ApiOperation({ summary: 'Suspend a driver' })
-  async suspendDriver(@Param('id') id: string, @Body() body: { reason: string }) {
-    return { data: await this.send('admin.taxi.suspendDriver', { id, ...body }) };
+  async suspendDriver(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that driver');
+    // taxi-service implements `admin.taxi.driver.suspend`; the previous name had no handler.
+    return {
+      data: await this.send('admin.taxi.driver.suspend', {
+        driverId: id,
+        reason: body?.reason ?? '',
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Rides ─────────────────────────────────────────────────────
   @Get('rides')
   @ApiOperation({ summary: 'List all rides' })
-  async getRides(@Query('page') page = 1, @Query('status') status?: string) {
-    return await this.send('admin.taxi.rides', { page, status });
+  async getRides(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those rides');
+    return await this.send('admin.taxi.rides', { page: +page, status, countryCode: market, scope });
   }
 
   @Get('rides/:id')
   @ApiOperation({ summary: 'Get ride detail' })
-  async getRideById(@Param('id') id: string) {
-    return { data: await this.send('admin.taxi.rideDetail', { id }) };
+  async getRideById(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that ride');
+    return { data: await this.send('admin.taxi.rideDetail', { id, scope }) };
   }
 
   // ── Pricing ───────────────────────────────────────────────────
   @Get('pricing')
   @ApiOperation({ summary: 'Get pricing configuration' })
-  async getPricing() {
-    return { data: await this.send('admin.taxi.pricing', {}) };
+  async getPricing(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that pricing');
+    return { data: await this.send('admin.taxi.pricing', { countryCode: market, scope }) };
   }
 
   @Post('pricing')
   @ApiOperation({ summary: 'Update pricing' })
-  async updatePricing(@Body() body: any) {
-    return { data: await this.send('admin.taxi.updatePricing', body) };
+  async updatePricing(
+    @Req() req: any,
+    @Body() body: { countryCode?: string; [k: string]: unknown },
+  ) {
+    const { scope, market } = this.scopeOf(req, body?.countryCode, 'that pricing');
+    return {
+      data: await this.send('admin.taxi.updatePricing', {
+        ...body,
+        countryCode: market,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Surge ─────────────────────────────────────────────────────
   @Get('surge')
   @ApiOperation({ summary: 'Get surge pricing zones' })
-  async getSurge() {
-    return { data: await this.send('admin.taxi.surge', {}) };
+  async getSurge(
+    @Req() req: any,
+    @Query('countryCode') countryCode?: string,
+    @Query('lat') lat?: string,
+    @Query('lng') lng?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those surge zones');
+    return {
+      data: await this.send('admin.taxi.surge', {
+        lat: lat ? Number(lat) : undefined,
+        lng: lng ? Number(lng) : undefined,
+        countryCode: market,
+        scope,
+      }),
+    };
   }
 
   @Post('surge')
   @ApiOperation({ summary: 'Update surge settings' })
-  async updateSurge(@Body() body: any) {
-    return { data: await this.send('admin.taxi.updateSurge', body) };
+  async updateSurge(@Req() req: any, @Body() body: { countryCode?: string; [k: string]: unknown }) {
+    const { scope, market } = this.scopeOf(req, body?.countryCode, 'those surge zones');
+    return {
+      data: await this.send('admin.taxi.updateSurge', {
+        ...body,
+        countryCode: market,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Complaints ────────────────────────────────────────────────
   @Get('complaints')
   @ApiOperation({ summary: 'List taxi complaints' })
-  async getComplaints(@Query('page') page = 1, @Query('status') status?: string) {
-    return await this.send('admin.taxi.complaints', { page, status });
+  async getComplaints(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those complaints');
+    return await this.send('admin.taxi.complaints', {
+      page: +page,
+      status,
+      countryCode: market,
+      scope,
+    });
   }
 
   @Patch('complaints/:id/resolve')
   @ApiOperation({ summary: 'Resolve a complaint' })
-  async resolveComplaint(@Param('id') id: string, @Body() body: { resolution: string }) {
-    return { data: await this.send('admin.taxi.resolveComplaint', { id, ...body }) };
+  async resolveComplaint(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { resolution: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that complaint');
+    return {
+      data: await this.send('admin.taxi.resolveComplaint', {
+        id,
+        resolution: body?.resolution ?? '',
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Fleet ─────────────────────────────────────────────────────
   @Get('fleet')
   @ApiOperation({ summary: 'List fleet vehicles' })
-  async getFleet(@Query('page') page = 1) {
-    return await this.send('admin.taxi.fleet', { page });
+  async getFleet(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that fleet');
+    return await this.send('admin.taxi.fleet', { page: +page, countryCode: market, scope });
   }
 
   // ── Payouts ───────────────────────────────────────────────────
   @Get('payouts')
   @ApiOperation({ summary: 'List driver payouts' })
-  async getPayouts(@Query('page') page = 1, @Query('status') status?: string) {
-    return await this.send('admin.taxi.payouts', { page, status });
+  async getPayouts(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('status') status?: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those payouts');
+    return await this.send('admin.taxi.payouts', {
+      page: +page,
+      status,
+      countryCode: market,
+      scope,
+    });
+  }
+
+  @Post('payouts/process')
+  @ApiOperation({ summary: 'Process a batch of approved payouts' })
+  async processPayouts(@Req() req: any, @Body() dto: { payoutIds?: string[] }) {
+    const { scope } = this.scopeOf(req, undefined, 'those payouts');
+    return this.send('admin.taxi.payouts.process', {
+      payoutIds: dto?.payoutIds ?? [],
+      scope,
+      adminId: this.actorId(req),
+    });
+  }
+
+  @Get('payouts/summary')
+  @ApiOperation({ summary: 'Platform payout totals' })
+  async payoutSummary(
+    @Req() req: any,
+    @Query('countryCode') countryCode?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that summary');
+    return this.send('admin.taxi.payouts.summary', {
+      countryCode: market,
+      startDate,
+      endDate,
+      scope,
+    });
   }
 
   @Post('payouts/:id/approve')
   @ApiOperation({ summary: 'Approve a payout' })
-  async approvePayout(@Param('id') id: string) {
-    return { data: await this.send('admin.taxi.approvePayout', { id }) };
+  async approvePayout(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that payout');
+    return {
+      data: await this.send('admin.taxi.approvePayout', { id, scope, adminId: this.actorId(req) }),
+    };
   }
 
   // ── Routes ────────────────────────────────────────────────────
   @Get('routes')
   @ApiOperation({ summary: 'List fixed routes' })
-  async getRoutes() {
-    return { data: await this.send('admin.taxi.routes', {}) };
+  async getRoutes(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those routes');
+    return { data: await this.send('admin.taxi.routes', { countryCode: market, scope }) };
   }
 
   @Post('routes')
   @ApiOperation({ summary: 'Create route' })
-  async createRoute(@Body() body: any) {
-    return { data: await this.send('admin.taxi.createRoute', body) };
+  async createRoute(@Req() req: any, @Body() body: { countryCode?: string; [k: string]: unknown }) {
+    const { scope, market } = this.scopeOf(req, body?.countryCode, 'that route');
+    return {
+      data: await this.send('admin.taxi.createRoute', {
+        ...body,
+        countryCode: market,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Pending Approvals ─────────────────────────────────────────
   @Get('pending-approvals')
   @ApiOperation({ summary: 'List all pending driver/vendor approvals' })
-  async getPendingApprovals() {
-    return { data: await this.send('admin.taxi.pendingApprovals', {}) };
+  async getPendingApprovals(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that queue');
+    return { data: await this.send('admin.taxi.pendingApprovals', { countryCode: market, scope }) };
   }
 
   // ── Compliance ────────────────────────────────────────────────
   @Get('compliance')
   @ApiOperation({ summary: 'Get compliance status' })
-  async getCompliance() {
-    return { data: await this.send('admin.taxi.compliance', {}) };
+  async getCompliance(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that compliance view');
+    return { data: await this.send('admin.taxi.compliance', { countryCode: market, scope }) };
   }
 
   // ── Settings ──────────────────────────────────────────────────
   @Get('settings')
   @ApiOperation({ summary: 'Get taxi admin settings' })
-  async getSettings() {
-    return { data: await this.send('admin.taxi.settings', {}) };
+  async getSettings(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those settings');
+    return { data: await this.send('admin.taxi.settings', { countryCode: market, scope }) };
   }
 
   @Post('settings')
   @ApiOperation({ summary: 'Update taxi settings' })
-  async updateSettings(@Body() body: any) {
-    return { data: await this.send('admin.taxi.updateSettings', body) };
+  async updateSettings(
+    @Req() req: any,
+    @Body() body: { countryCode?: string; [k: string]: unknown },
+  ) {
+    const { scope, market } = this.scopeOf(req, body?.countryCode, 'those settings');
+    return {
+      data: await this.send('admin.taxi.updateSettings', {
+        ...body,
+        countryCode: market,
+        scope,
+        adminId: this.actorId(req),
+      }),
+    };
   }
 
   // ── Driver documents ──────────────────────────────────────────
@@ -267,21 +495,31 @@ export class AdminTaxiController {
   @ApiQuery({ name: 'countryCode', required: false })
   @ApiQuery({ name: 'ownerType', required: false, enum: ['vendor', 'driver'] })
   async pendingDocuments(
+    @Req() req: any,
     @Query('countryCode') countryCode?: string,
     @Query('ownerType') ownerType?: 'vendor' | 'driver',
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those documents');
     return this.send('admin.taxi.documents.pending', {
-      countryCode, ownerType, page: page ? +page : 1, limit: limit ? +limit : 20,
+      countryCode: market,
+      ownerType,
+      page: page ? +page : 1,
+      limit: limit ? +limit : 20,
+      scope,
     });
   }
 
   @Post('documents/:documentId/approve')
   @ApiOperation({ summary: 'Approve a submitted document' })
-  async approveDocument(@Req() req: any, @Param('documentId') documentId: string) {
+  async approveDocument(@Req() req: any, @Param('documentId', ParseUUIDPipe) documentId: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that document');
     return this.send('admin.taxi.documents.review', {
-      documentId, adminId: this.actorId(req), decision: 'approved',
+      documentId,
+      adminId: this.actorId(req),
+      decision: 'approved',
+      scope,
     });
   }
 
@@ -289,11 +527,16 @@ export class AdminTaxiController {
   @ApiOperation({ summary: 'Reject a submitted document, with a reason' })
   async rejectDocument(
     @Req() req: any,
-    @Param('documentId') documentId: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
     @Body() dto: { reason?: string },
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'that document');
     return this.send('admin.taxi.documents.review', {
-      documentId, adminId: this.actorId(req), decision: 'rejected', rejectionReason: dto?.reason,
+      documentId,
+      adminId: this.actorId(req),
+      decision: 'rejected',
+      rejectionReason: dto?.reason,
+      scope,
     });
   }
 
@@ -301,8 +544,18 @@ export class AdminTaxiController {
 
   @Post('drivers/:driverId/block')
   @ApiOperation({ summary: 'Block a driver' })
-  async blockDriver(@Param('driverId') driverId: string, @Body() dto: { reason?: string }) {
-    return this.send('admin.taxi.driver.block', { driverId, reason: dto?.reason ?? '' });
+  async blockDriver(
+    @Req() req: any,
+    @Param('driverId', ParseUUIDPipe) driverId: string,
+    @Body() dto: { reason?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that driver');
+    return this.send('admin.taxi.driver.block', {
+      driverId,
+      reason: dto?.reason ?? '',
+      scope,
+      adminId: this.actorId(req),
+    });
   }
 
   // ── Rate cards ────────────────────────────────────────────────
@@ -312,52 +565,57 @@ export class AdminTaxiController {
   @Get('rates')
   @ApiOperation({ summary: 'Rate cards for a country' })
   @ApiQuery({ name: 'countryCode', required: true })
-  async rateCards(@Query('countryCode') countryCode: string) {
-    return this.send('admin.taxi.rate_cards', { countryCode });
+  async rateCards(@Req() req: any, @Query('countryCode') countryCode: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those rate cards');
+    if (!market) throw new BadRequestException('countryCode is required');
+    return this.send('admin.taxi.rate_cards', { countryCode: market, scope });
   }
 
   @Post('rates')
   @ApiOperation({ summary: 'Create or update a rate card' })
-  async upsertRateCard(@Body() dto: { countryCode: string; vehicleType: string; [k: string]: unknown }) {
-    return this.send('admin.taxi.rate_card.upsert', dto);
+  async upsertRateCard(
+    @Req() req: any,
+    @Body() dto: { countryCode: string; vehicleType: string; [k: string]: unknown },
+  ) {
+    const { scope, market } = this.scopeOf(req, dto?.countryCode, 'that rate card');
+    if (!market) throw new BadRequestException('countryCode is required');
+    return this.send('admin.taxi.rate_card.upsert', {
+      ...dto,
+      countryCode: market,
+      scope,
+      adminId: this.actorId(req),
+    });
   }
 
   // ── Country configuration ─────────────────────────────────────
 
   @Get('config')
   @ApiOperation({ summary: 'All country configurations' })
-  async allConfigs() {
-    return this.send('admin.taxi.configs', {});
+  async allConfigs(@Req() req: any) {
+    const { scope } = this.scopeOf(req, undefined, 'those configurations');
+    return this.send('admin.taxi.configs', { scope });
   }
 
   @Get('config/:countryCode')
   @ApiOperation({ summary: 'One country configuration' })
-  async getConfig(@Param('countryCode') countryCode: string) {
-    return this.send('admin.taxi.config.get', { countryCode });
+  async getConfig(@Req() req: any, @Param('countryCode') countryCode: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that configuration');
+    return this.send('admin.taxi.config.get', { countryCode: market, scope });
   }
 
   @Put('config/:countryCode')
   @ApiOperation({ summary: 'Create or update a country configuration' })
-  async upsertConfig(@Param('countryCode') countryCode: string, @Body() dto: Record<string, unknown>) {
-    return this.send('admin.taxi.config.upsert', { countryCode, ...dto });
-  }
-
-  // ── Payout batches ────────────────────────────────────────────
-
-  @Post('payouts/process')
-  @ApiOperation({ summary: 'Process a batch of approved payouts' })
-  async processPayouts(@Body() dto: { payoutIds?: string[] }) {
-    return this.send('admin.taxi.payouts.process', { payoutIds: dto?.payoutIds ?? [] });
-  }
-
-  @Get('payouts/summary')
-  @ApiOperation({ summary: 'Platform payout totals' })
-  async payoutSummary(
-    @Query('countryCode') countryCode?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+  async upsertConfig(
+    @Req() req: any,
+    @Param('countryCode') countryCode: string,
+    @Body() dto: Record<string, unknown>,
   ) {
-    return this.send('admin.taxi.payouts.summary', { countryCode, startDate, endDate });
+    const { scope, market } = this.scopeOf(req, countryCode, 'that configuration');
+    return this.send('admin.taxi.config.upsert', {
+      ...dto,
+      countryCode: market,
+      scope,
+      adminId: this.actorId(req),
+    });
   }
-
 }
