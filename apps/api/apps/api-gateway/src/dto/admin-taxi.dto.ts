@@ -14,6 +14,7 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -46,6 +47,20 @@ import {
 
 /** ISO 3166-1 alpha-2. `resolveMarket` upper-cases, so either case is accepted. */
 const ISO2 = /^[A-Za-z]{2}$/;
+
+/**
+ * Optional, but a `null` is a value rather than an absence.
+ *
+ * `@IsOptional()` skips every rule for `null` as well as `undefined`, so
+ * `PUT /admin/taxi/config/QA {"currency": null}` would sail past the pipe and
+ * reach `Object.assign(row, { currency: null })` on a NOT NULL column — a 500
+ * where a 400 belongs. This skips only when the key was omitted, so a null is
+ * validated by the property's own rule and refused with a message naming it.
+ *
+ * `timezone` deliberately keeps plain `@IsOptional()`: it is the one nullable
+ * column, where clearing it is a request an administrator may really make.
+ */
+const IfPresent = (): PropertyDecorator => ValidateIf((_object, value) => value !== undefined);
 
 /** A decision that has to carry a reason: vendor/driver suspension, driver block, document rejection. */
 export class ReasonDto {
@@ -81,7 +96,7 @@ export class RateCardUpsertDto {
   vehicleType: string;
 
   @ApiPropertyOptional({ example: 'Economy' })
-  @IsOptional()
+  @IfPresent()
   @IsString()
   @Length(1, 50)
   displayName?: string;
@@ -107,62 +122,62 @@ export class RateCardUpsertDto {
   minimumFare: number;
 
   @ApiPropertyOptional({ description: 'Rate per minute of waiting, after the free period' })
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   waitingRate?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   nightSurcharge?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   airportSurcharge?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   cancellationFee?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsInt()
   @Min(1)
   @Max(20)
   maxPassengers?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsInt()
   @Min(0)
   @Max(20)
   maxLuggage?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   isAccessible?: boolean;
 
   @ApiPropertyOptional({ example: 'car' })
-  @IsOptional()
+  @IfPresent()
   @IsString()
   @Length(1, 50)
   iconName?: string;
 
   @ApiPropertyOptional({ description: 'Display order, lower first' })
-  @IsOptional()
+  @IfPresent()
   @IsInt()
   @Min(0)
   sortOrder?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   isActive?: boolean;
 }
@@ -187,12 +202,12 @@ export class SurgeUpdateDto {
   multiplier: number;
 
   @ApiPropertyOptional({ example: 'QA' })
-  @IsOptional()
+  @IfPresent()
   @Matches(ISO2, { message: 'countryCode must be a two-letter ISO country code' })
   countryCode?: string;
 
   @ApiPropertyOptional({ description: 'How long the multiplier stands, in seconds' })
-  @IsOptional()
+  @IfPresent()
   @IsInt()
   @Min(60)
   @Max(86_400)
@@ -225,7 +240,7 @@ export class RouteCreateDto {
   fixedFare: number;
 
   @ApiPropertyOptional({ example: 'economy' })
-  @IsOptional()
+  @IfPresent()
   @IsString()
   @Length(2, 40)
   vehicleType?: string;
@@ -233,29 +248,29 @@ export class RouteCreateDto {
 
 export class SettingsUpdateDto {
   @ApiPropertyOptional({ example: 'QA' })
-  @IsOptional()
+  @IfPresent()
   @Matches(ISO2, { message: 'countryCode must be a two-letter ISO country code' })
   countryCode?: string;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   allowCashPayments?: boolean;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   allowScheduledRides?: boolean;
 
   @ApiPropertyOptional({ description: 'Free cancellation window, in minutes' })
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   @Max(100)
   cancellationWindowMinutes?: number;
 
   @ApiPropertyOptional({ enum: ['auto', 'manual'] })
-  @IsOptional()
+  @IfPresent()
   @IsIn(['auto', 'manual'])
   dispatchMode?: 'auto' | 'manual';
 }
@@ -318,80 +333,80 @@ export class PeakHourDto {
  */
 export class TaxiConfigUpsertDto {
   @ApiPropertyOptional({ example: 'QA', description: 'Ignored; the path parameter wins' })
-  @IsOptional()
+  @IfPresent()
   @Matches(ISO2, { message: 'countryCode must be a two-letter ISO country code' })
   countryCode?: string;
 
   @ApiPropertyOptional({ example: 'QAR', description: 'ISO 4217 code, not a symbol' })
-  @IsOptional()
+  @IfPresent()
   @Matches(/^[A-Z]{3}$/, { message: 'currency must be a three-letter ISO 4217 code' })
   currency?: string;
 
   @ApiPropertyOptional({ enum: ['km', 'mi'] })
-  @IsOptional()
+  @IfPresent()
   @IsIn(['km', 'mi'])
   distanceUnit?: string;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   otpRequired?: boolean;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   scheduledRidesEnabled?: boolean;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   cashEnabled?: boolean;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   tipsEnabled?: boolean;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   rideShareEnabled?: boolean;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsBoolean()
   vendorsEnabled?: boolean;
 
   @ApiPropertyOptional({ minimum: 0, maximum: 10 })
-  @IsOptional()
+  @IfPresent()
   @IsInt()
   @Min(0)
   @Max(10)
   maxStops?: number;
 
   @ApiPropertyOptional({ type: [String], example: ['cash', 'card', 'wallet'] })
-  @IsOptional()
+  @IfPresent()
   @IsArray()
   @IsString({ each: true })
   @Length(1, 60, { each: true })
   enabledPaymentGateways?: string[];
 
   @ApiPropertyOptional({ type: [String], example: ['economy', 'comfort'] })
-  @IsOptional()
+  @IfPresent()
   @IsArray()
   @IsString({ each: true })
   @Length(1, 60, { each: true })
   enabledVehicleTypes?: string[];
 
   @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
+  @IfPresent()
   @IsArray()
   @IsString({ each: true })
   @Length(1, 60, { each: true })
   requiredVendorDocuments?: string[];
 
   @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
+  @IfPresent()
   @IsArray()
   @IsString({ each: true })
   @Length(1, 60, { each: true })
@@ -403,74 +418,74 @@ export class TaxiConfigUpsertDto {
    * what stops a screen that forgot the division from booking 15× commission.
    */
   @ApiPropertyOptional({ example: 0.15, minimum: 0, maximum: 1 })
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   @Max(1)
   platformCommissionRate?: number;
 
   @ApiPropertyOptional({ example: 0.05, minimum: 0, maximum: 1 })
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   @Max(1)
   defaultVendorCommissionRate?: number;
 
   @ApiPropertyOptional({ example: 0.16, minimum: 0, maximum: 1 })
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   @Max(1)
   taxRate?: number;
 
   @ApiPropertyOptional({ type: SurgeLimitsDto })
-  @IsOptional()
+  @IfPresent()
   @IsObject()
   @ValidateNested()
   @Type(() => SurgeLimitsDto)
   surgeLimits?: SurgeLimitsDto;
 
   @ApiPropertyOptional({ type: [PeakHourDto] })
-  @IsOptional()
+  @IfPresent()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PeakHourDto)
   peakHourConfig?: PeakHourDto[];
 
   @ApiPropertyOptional({ example: '999' })
-  @IsOptional()
+  @IfPresent()
   @IsString()
   @Length(1, 20)
   emergencyNumber?: string;
 
   @ApiPropertyOptional({ example: 'en' })
-  @IsOptional()
+  @IfPresent()
   @IsString()
   @Length(2, 10)
   defaultLocale?: string;
 
-  @ApiPropertyOptional({ example: 'Asia/Qatar' })
+  @ApiPropertyOptional({ example: 'Asia/Qatar', nullable: true })
   @IsOptional()
   @IsString()
   @Length(1, 50)
-  timezone?: string;
+  timezone?: string | null;
 
   @ApiPropertyOptional({ minimum: 0, maximum: 5 })
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(0)
   @Max(5)
   minimumDriverRating?: number;
 
   @ApiPropertyOptional({ minimum: 0, maximum: 120 })
-  @IsOptional()
+  @IfPresent()
   @IsInt()
   @Min(0)
   @Max(120)
   freeWaitingMinutes?: number;
 
   @ApiPropertyOptional({ minimum: 0, maximum: 3600 })
-  @IsOptional()
+  @IfPresent()
   @IsInt()
   @Min(0)
   @Max(3600)

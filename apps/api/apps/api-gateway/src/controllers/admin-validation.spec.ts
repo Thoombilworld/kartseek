@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import { of } from 'rxjs';
 import type { BadRequestException } from '@nestjs/common';
@@ -70,12 +70,51 @@ const declaredKeys = (target: ClassRef): string[] =>
     ),
   ].sort();
 
+/**
+ * The columns a client may legitimately write.
+ *
+ * `mode` is filtered to `'regular'` deliberately: TypeORM's storage also holds
+ * `@CreateDateColumn`/`@UpdateDateColumn`, so a DTO that declared `createdAt`
+ * would otherwise pass the drift test below — and a body carrying server-managed
+ * fields is exactly the failure the taxi settings screen hits when it PUTs a
+ * fetched row straight back.
+ */
 const columnsOf = (target: ClassRef): Set<string> =>
   new Set(
     getMetadataArgsStorage()
-      .columns.filter((c) => c.target === (target as unknown))
+      .columns.filter((c) => c.target === (target as unknown) && c.mode === 'regular')
       .map((c) => c.propertyName),
   );
+
+/** A market-locked administrator, so `scope` and `market` are both defined. */
+const adminReq = {
+  user: { id: 'u-qa', role: 'ADMIN', regionCode: 'QA', regionLocked: true },
+  method: 'PUT',
+  originalUrl: '/x',
+  headers: {},
+};
+
+/** A controller whose RPC client records what it was asked to forward. */
+const taxiController = (): { ctrl: AdminTaxiController; forwarded: Record<string, unknown>[] } => {
+  const forwarded: Record<string, unknown>[] = [];
+  const client = {
+    send: (_pattern: unknown, payload: Record<string, unknown>) => {
+      forwarded.push(payload);
+      return of({ ok: true });
+    },
+  };
+  return { ctrl: new AdminTaxiController(client as never), forwarded };
+};
+
+/** The smallest rate card the DTO accepts. */
+const RATE_CARD = {
+  countryCode: 'QA',
+  vehicleType: 'economy',
+  baseFare: 5,
+  distanceRate: 1.5,
+  timeRate: 0.4,
+  minimumFare: 8,
+};
 
 // ── 1. The handlers are typed ────────────────────────────────────────────────
 
@@ -248,24 +287,8 @@ describe('admin taxi DTOs', () => {
     // Which is why the controller forwards only what was sent. Spreading the
     // instance itself would hand taxi-service `Object.assign(row, { timezone:
     // undefined })` and blank two columns on every settings save.
-    const forwarded: Record<string, unknown>[] = [];
-    const client = {
-      send: (_pattern: unknown, payload: Record<string, unknown>) => {
-        forwarded.push(payload);
-        return of({ ok: true });
-      },
-    };
-    const ctrl = new AdminTaxiController(client as never);
-    await ctrl.upsertConfig(
-      {
-        user: { id: 'u-qa', role: 'ADMIN', regionCode: 'QA', regionLocked: true },
-        method: 'PUT',
-        originalUrl: '/x',
-        headers: {},
-      },
-      'QA',
-      out,
-    );
+    const { ctrl, forwarded } = taxiController();
+    await ctrl.upsertConfig(adminReq, 'QA', out);
     const payloadSent = forwarded[0] ?? {};
     expect(Object.entries(payloadSent).filter(([, v]) => v === undefined)).toEqual([]);
     expect(payloadSent).toMatchObject({ countryCode: 'QA', currency: 'QAR' });
@@ -366,5 +389,134 @@ describe('taxi DTOs name only real columns', () => {
       expect(columns.has(key), `taxi_country_configs has no column ${key}`).toBe(true);
     }
     expect(declaredKeys(TaxiConfigUpsertDto).length).toBeGreaterThan(15);
+  });
+
+  /**
+   * Server-managed fields stay out of both DTOs. A client cannot re-key a rate
+   * card onto another row, and a screen that PUTs a fetched entity back gets a
+   * 400 naming the offending field rather than writing a timestamp of its own.
+   */
+  it('declares no server-managed field', () => {
+    for (const dto of [RateCardUpsertDto, PricingUpdateDto, TaxiConfigUpsertDto]) {
+      for (const managed of ['id', 'createdAt', 'updatedAt']) {
+        expect(declaredKeys(dto), `${dto.name} declares ${managed}`).not.toContain(managed);
+      }
+    }
+  });
+
+  it('refuses the fields a fetched row carries', async () => {
+    const messages = await rejectionOf(TaxiConfigUpsertDto, {
+      currency: 'QAR',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(messages).toContain('property createdAt should not exist');
+    expect(messages).toContain('property updatedAt should not exist');
+  });
+});
+
+// ── 4. null is a value, not an absence ───────────────────────────────────────
+
+describe('an explicit null', () => {
+  it('is refused on a NOT NULL column', async () => {
+    expect(await rejectionOf(TaxiConfigUpsertDto, { currency: null })).toContain(
+      'currency must be a three-letter ISO 4217 code',
+    );
+    expect(await rejectionOf(TaxiConfigUpsertDto, { maxStops: null })).toContain(
+      'maxStops must be an integer number',
+    );
+    expect(await rejectionOf(RateCardUpsertDto, { ...RATE_CARD, isActive: null })).toContain(
+      'isActive must be a boolean value',
+    );
+  });
+
+  it('is allowed on the one nullable column, and survives to the payload', async () => {
+    const out = (await run(TaxiConfigUpsertDto, {
+      currency: 'QAR',
+      timezone: null,
+    })) as TaxiConfigUpsertDto;
+    expect(out.timezone).toBeNull();
+
+    const { ctrl, forwarded } = taxiController();
+    await ctrl.upsertConfig(adminReq, 'QA', out);
+    expect(forwarded[0]).toMatchObject({ currency: 'QAR', timezone: null });
+  });
+});
+
+// ── 5. sent() forwards what was sent, and only that ──────────────────────────
+
+describe('AdminTaxiController.sent()', () => {
+  it('keeps null, drops undefined, and passes nested values through untouched', () => {
+    const { ctrl } = taxiController();
+    const nested = { minMultiplier: 1, maxMultiplier: 3, autoEnabled: true };
+    const list = [{ start: 7, end: 9, multiplier: 1.15, label: 'Morning Rush' }];
+    const out = (ctrl as unknown as { sent: (d: object) => Record<string, unknown> }).sent({
+      timezone: null,
+      currency: 'QAR',
+      distanceUnit: undefined,
+      surgeLimits: nested,
+      peakHourConfig: list,
+    });
+    expect(out).toEqual({
+      timezone: null,
+      currency: 'QAR',
+      surgeLimits: nested,
+      peakHourConfig: list,
+    });
+    expect(Object.keys(out)).not.toContain('distanceUnit');
+    // Untouched, not merely equal: the same objects travel on to the RPC call.
+    expect(out.surgeLimits).toBe(nested);
+    expect(out.peakHourConfig).toBe(list);
+  });
+
+  /**
+   * All six handlers that spread the body, not just `upsertConfig`. Each body is
+   * a minimal-but-valid payload driven through the real pipe, so every optional
+   * property the caller omitted is present as an own key holding `undefined` by
+   * the time the handler sees it.
+   */
+  const spreadSites: [string, ClassRef, object, (c: AdminTaxiController, d: never) => unknown][] = [
+    ['updatePricing', PricingUpdateDto, RATE_CARD, (c, d) => c.updatePricing(adminReq, d)],
+    [
+      'updateSurge',
+      SurgeUpdateDto,
+      { zoneId: 'zone-doha-west', multiplier: 1.8 },
+      (c, d) => c.updateSurge(adminReq, d),
+    ],
+    [
+      'createRoute',
+      RouteCreateDto,
+      {
+        name: 'Doha - Al Khor',
+        countryCode: 'QA',
+        origin: 'Hamad Airport',
+        destination: 'Al Khor',
+        fixedFare: 120,
+      },
+      (c, d) => c.createRoute(adminReq, d),
+    ],
+    [
+      'updateSettings',
+      SettingsUpdateDto,
+      { dispatchMode: 'auto' },
+      (c, d) => c.updateSettings(adminReq, d),
+    ],
+    ['upsertRateCard', RateCardUpsertDto, RATE_CARD, (c, d) => c.upsertRateCard(adminReq, d)],
+    [
+      'upsertConfig',
+      TaxiConfigUpsertDto,
+      { currency: 'QAR' },
+      (c, d) => c.upsertConfig(adminReq, 'QA', d),
+    ],
+  ];
+
+  it.each(spreadSites)('%s forwards no undefined key', async (_name, dto, body, invoke) => {
+    const validated = await run(dto, body);
+    const { ctrl, forwarded } = taxiController();
+    await invoke(ctrl, validated as never);
+    const payload = forwarded[0] ?? {};
+    expect(Object.entries(payload).filter(([, v]) => v === undefined)).toEqual([]);
+    // …and still carries everything the caller did send.
+    expect(payload).toMatchObject(body);
   });
 });

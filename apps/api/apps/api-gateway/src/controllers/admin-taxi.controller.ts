@@ -55,16 +55,6 @@ export class AdminTaxiController {
   constructor(@Inject('TAXI_SERVICE') private readonly taxiClient: ClientProxy) {}
 
   /**
-   * Forward to taxi-service, preserving the failure.
-   *
-   * This helper used to take a `fallback` and return it as a 200 whenever the
-   * service was unreachable, so an outage was indistinguishable from an empty
-   * result: the listing pages showed "no results in your area" rather than
-   * "we could not reach the service", and the admin screens showed empty queues
-   * rather than an error. The fallback parameter is gone; failures propagate and
-   * the client can tell the two apart.
-   */
-  /**
    * The fields the caller actually sent.
    *
    * `transform: true` rebuilds the body through `plainToInstance`, which
@@ -73,6 +63,12 @@ export class AdminTaxiController {
    * payload hands taxi-service `Object.assign(row, { timezone: undefined })`
    * and blanks a column nobody asked to change, so only the keys carrying a
    * value travel.
+   *
+   * `null` is a value and is kept: `timezone` is nullable, and clearing it is
+   * a thing an administrator may legitimately ask for. Shallow by design — the
+   * two nested shapes (`SurgeLimitsDto`, `PeakHourDto`) have no optional
+   * properties, so a half-materialised nested object cannot pass validation in
+   * the first place.
    */
   private sent<T extends object>(dto: T): Partial<T> {
     return Object.fromEntries(
@@ -101,6 +97,16 @@ export class AdminTaxiController {
     return { scope, market };
   }
 
+  /**
+   * Forward to taxi-service, preserving the failure.
+   *
+   * This helper used to take a `fallback` and return it as a 200 whenever the
+   * service was unreachable, so an outage was indistinguishable from an empty
+   * result: the listing pages showed "no results in your area" rather than
+   * "we could not reach the service", and the admin screens showed empty queues
+   * rather than an error. The fallback parameter is gone; failures propagate and
+   * the client can tell the two apart.
+   */
   private async send<T>(cmd: string, payload: object): Promise<T> {
     try {
       return await lastValueFrom(
