@@ -67,16 +67,20 @@ export type SellersResult =
  * throw into `data = null, error = null`, which here would draw "0 sellers" for
  * an expired session.
  */
+/**
+ * No `search`: the gateway forwards one but `getSellersForAdmin` has no search
+ * predicate, so a term sent here comes back as an unfiltered list wearing the
+ * look of a search result. The box above the table filters the loaded rows and
+ * says so.
+ */
 export async function loadSellers(params: {
   status?: string;
   country?: string;
-  search?: string;
 }): Promise<SellersResult> {
   const res = await adminCoreApi.getSellers({
     limit: 100,
     status: params.status,
     country: params.country,
-    search: params.search,
   });
   if (!res.success) {
     const message = res.error || 'The seller directory did not answer';
@@ -319,8 +323,31 @@ export function SellerDrawer({
             </button>
           )}
 
-          <div className="pt-2 border-t border-slate-100">
-            <p className="text-[11px] text-slate-400 mb-2">
+          {/* Closing the shop and locking the person out are different acts, so
+              they are different controls. Block writes the seller row
+              (`verificationStatus` + `isActive`); ban writes `users.status` and
+              keeps that human out of the platform as a customer too. */}
+          <div className="pt-2 border-t border-slate-100 space-y-2">
+            <p className="text-[11px] text-slate-400">
+              Blocking closes the shop. Nothing on the gateway reopens one: reactivate restores the
+              verification status but not the <code className="font-mono">isActive</code> flag a
+              block clears, so there is no honest unblock to offer.
+            </p>
+            <button
+              onClick={() => onAction({ kind: 'block', seller })}
+              className="w-full py-2.5 rounded-xl text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center gap-1.5"
+            >
+              <Ban className="w-3.5 h-3.5" /> Block shop
+            </button>
+            <button
+              disabled
+              title="No route restores a blocked seller's isActive flag"
+              className="w-full py-2.5 rounded-xl text-sm font-bold bg-slate-100 text-slate-400 cursor-not-allowed"
+            >
+              Unblock shop — no route
+            </button>
+
+            <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
               {seller.ownerId
                 ? 'The seller record does not say whether the owner’s account is banned, so both actions are offered and the result is reported.'
                 : 'This seller has no linked user account, so there is nothing to ban.'}
@@ -351,10 +378,15 @@ export function SellerDrawer({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 type SellerAction = {
-  kind: 'approve' | 'suspend' | 'reactivate' | 'ban' | 'unban';
+  kind: 'approve' | 'suspend' | 'reactivate' | 'block' | 'ban' | 'unban';
   seller: AdminSellerRow;
 };
 
+/**
+ * `block` is absent on purpose: `PATCH /admin/marketplace/sellers/:id/block`
+ * declares no body, so a reason collected for it would be typed by an
+ * administrator and then dropped by the gateway.
+ */
 const NEEDS_REASON: SellerAction['kind'][] = ['suspend', 'ban'];
 
 export default function SellersPage() {
@@ -414,9 +446,11 @@ export default function SellersPage() {
           ? await adminCoreApi.suspendSeller(seller.id, reason ?? '')
           : kind === 'reactivate'
             ? await adminCoreApi.reactivateSeller(seller.id)
-            : kind === 'ban'
-              ? await adminCoreApi.blockSeller(seller.ownerId as string, reason ?? '')
-              : await adminCoreApi.unblockSeller(seller.ownerId as string);
+            : kind === 'block'
+              ? await adminCoreApi.blockSeller(seller.id)
+              : kind === 'ban'
+                ? await adminCoreApi.banUser(seller.ownerId as string, reason ?? '')
+                : await adminCoreApi.unbanUser(seller.ownerId as string);
 
     setBusy(false);
     setPending(null);
@@ -487,7 +521,23 @@ export default function SellersPage() {
     );
   }
 
-  if (!board) return null;
+  // Not `return null`. Nothing should reach here — the loaders resolve a result
+  // rather than throwing, so `useAdminData`'s auth-error swallow cannot leave
+  // `data` and `error` both null — but a blank page is the one answer this
+  // console must never give.
+  if (!board) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6">
+        {header}
+        <AdminNotConnected
+          what="The seller directory"
+          route={SELLERS_ROUTE}
+          error="The page received no result and no error."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
 
   const counts = {
     pending: rows.filter((s) => s.verificationStatus === 'PENDING').length,

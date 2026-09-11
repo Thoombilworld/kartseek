@@ -260,10 +260,18 @@ export const adminTaxiApi = {
   getDriverById: (id: string) => apiCall<TaxiDriverRow>(`${BASE_URL}/admin/taxi/drivers/${id}`),
   // `approve` and `suspend` are PATCH; `block` is POST. They were reached with
   // a single POST for all three, so two of them 404'd against a @Patch route.
+  //
+  // `{ data: row }`, not `row`: these two handlers return `{ data: … }`
+  // themselves and `TransformInterceptor` wraps that again, so `apiCall`'s
+  // `json.data` unwrap leaves one envelope behind. Typed as it arrives, rather
+  // than as it ought to arrive, so the next caller that reads `.status` gets a
+  // type error instead of `undefined`.
   approveDriver: (id: string) =>
-    apiCall<TaxiDriverRow>(`${BASE_URL}/admin/taxi/drivers/${id}/approve`, { method: 'PATCH' }),
+    apiCall<{ data: TaxiDriverRow }>(`${BASE_URL}/admin/taxi/drivers/${id}/approve`, {
+      method: 'PATCH',
+    }),
   suspendDriver: (id: string, reason: string) =>
-    apiCall<TaxiDriverRow>(`${BASE_URL}/admin/taxi/drivers/${id}/suspend`, {
+    apiCall<{ data: TaxiDriverRow }>(`${BASE_URL}/admin/taxi/drivers/${id}/suspend`, {
       method: 'PATCH',
       body: JSON.stringify({ reason }),
     }),
@@ -308,10 +316,23 @@ export const adminTaxiApi = {
   getFleet: (page = 1) => apiCall(`${BASE_URL}/admin/taxi/fleet?page=${page}`),
 
   // ── Payouts ───────────────────────────────────────────────────
+  /**
+   * `GET /admin/taxi/payouts` declares `page`, `status` and `countryCode` — and
+   * **no `limit`**.
+   *
+   * A `limit` passed here reaches the query string and is then dropped by the
+   * controller, so taxi-service applies its own page size of 20
+   * (`TaxiPayoutService.getAllPayouts`). Asking for 100 and rendering what comes
+   * back as if it were everything is the same defect as the `?country=` this
+   * client used to send to the rates route. Page with `page`; show `total`.
+   */
   getPayouts: (p: ListParams = {}) =>
     apiCall<TaxiListPage<TaxiPayoutRow>>(`${BASE_URL}/admin/taxi/payouts${buildQuery(p)}`),
+  /** `{ data: row }` — the handler wraps, and so does the interceptor. */
   approvePayout: (id: string) =>
-    apiCall<TaxiPayoutRow>(`${BASE_URL}/admin/taxi/payouts/${id}/approve`, { method: 'POST' }),
+    apiCall<{ data: TaxiPayoutRow }>(`${BASE_URL}/admin/taxi/payouts/${id}/approve`, {
+      method: 'POST',
+    }),
   /**
    * `POST /admin/taxi/payouts/process`, body `PayoutBatchDto` — `{ payoutIds }`
    * and nothing else.

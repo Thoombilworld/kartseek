@@ -269,7 +269,20 @@ export default function TaxiDriversPage() {
     );
   }
 
-  if (!board) return null;
+  // Not `return null`; see the note in the sellers console.
+  if (!board) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6">
+        {header}
+        <AdminNotConnected
+          what="The driver list"
+          route={DRIVERS_ROUTE}
+          error="The page received no result and no error."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">

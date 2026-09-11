@@ -116,7 +116,6 @@ describe('/admin/sellers renders the API', () => {
       limit: 100,
       status: undefined,
       country: undefined,
-      search: undefined,
     });
   });
 
@@ -126,7 +125,6 @@ describe('/admin/sellers renders the API', () => {
       limit: 100,
       status: 'PENDING',
       country: 'QA',
-      search: undefined,
     });
   });
 
@@ -195,13 +193,32 @@ describe('the drawer, where the ban controls live', () => {
     const html = drawer(SELLER);
     expect(html).toContain('Ban owner');
     expect(html).toContain('Lift ban');
-    expect(html).not.toContain('disabled=""');
   });
 
   it('disables them, and says why, when the seller has no linked account', () => {
     const html = drawer({ ...SELLER, ownerId: null });
     expect(html).toContain('no linked user account');
-    expect(html).toContain('disabled=""');
+  });
+
+  it('offers a shop-level block distinct from the account-level ban', () => {
+    const html = drawer(SELLER);
+    expect(html).toContain('Block shop');
+    expect(html).toContain('Ban owner');
+  });
+
+  it('shows the unblock control as unavailable, with the reason', () => {
+    const html = drawer(SELLER);
+    expect(html).toContain('Unblock shop');
+    expect(html).toContain('no honest unblock to offer');
+    // A control that cannot work must not look clickable. With an owner id set,
+    // the ban pair is enabled, so the unblock button is the only disabled one.
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
+    expect(html).toMatch(/disabled=""[\s\S]{0,400}Unblock shop/);
+  });
+
+  it('keeps a block available even for a seller with no owner account', () => {
+    // The whole point of the retarget: an ownerless seller still has a shop.
+    expect(drawer({ ...SELLER, ownerId: null })).toContain('Block shop');
   });
 
   it('does not claim to know whether the owner is banned', () => {
@@ -234,23 +251,34 @@ describe('the seller bodies match the gateway DTOs', () => {
     }) as unknown as typeof fetch;
   });
 
-  it('ban posts { reason } only, to the OWNER user id', async () => {
-    await actual.adminCoreApi.blockSeller('22222222-2222-4222-8222-222222222222', 'Counterfeits');
+  it('block closes the shop: PATCH the SELLER id, no body', async () => {
+    await actual.adminCoreApi.blockSeller(SELLER.id);
+    expect(sent[0].method).toBe('PATCH');
+    expect(sent[0].url).toContain(`/admin/marketplace/sellers/${SELLER.id}/block`);
+    // The route declares no `@Body()`; a reason sent here would be discarded.
+    expect(sent[0].body).toBeNull();
+  });
+
+  it('ban locks the owner out: PUT { reason } to the OWNER user id', async () => {
+    await actual.adminCoreApi.banUser(SELLER.ownerId, 'Counterfeits');
     expect(sent[0].method).toBe('PUT');
-    expect(sent[0].url).toContain('/admin/users/22222222-2222-4222-8222-222222222222/ban');
+    expect(sent[0].url).toContain(`/admin/users/${SELLER.ownerId}/ban`);
     expect(sent[0].body).toEqual({ reason: 'Counterfeits' });
     expect(sent[0].body).not.toHaveProperty('adminId');
   });
 
-  it('banUser sends the same body — it is the same route', async () => {
-    await actual.adminCoreApi.banUser('22222222-2222-4222-8222-222222222222', 'Fraud');
-    expect(sent[0].body).toEqual({ reason: 'Fraud' });
+  it('the two are different routes — closing a shop is not banning a person', () => {
+    expect(String(actual.adminCoreApi.blockSeller)).toContain('marketplace/sellers');
+    expect(String(actual.adminCoreApi.banUser)).toContain('admin/users');
   });
 
-  it('unban and unblock send no body at all — the route declares none', async () => {
-    await actual.adminCoreApi.unblockSeller('22222222-2222-4222-8222-222222222222');
-    await actual.adminCoreApi.unbanUser('22222222-2222-4222-8222-222222222222');
-    expect(sent.map((s) => s.body)).toEqual([null, null]);
+  it('offers no unblockSeller — no route restores a blocked seller', () => {
+    expect(actual.adminCoreApi).not.toHaveProperty('unblockSeller');
+  });
+
+  it('unban sends no body at all — the route declares none', async () => {
+    await actual.adminCoreApi.unbanUser(SELLER.ownerId);
+    expect(sent.map((s) => s.body)).toEqual([null]);
   });
 
   it('suspend posts { reason }, approve and reactivate post nothing', async () => {
@@ -280,9 +308,21 @@ describe('the page source', () => {
     expect(source).not.toMatch(/adminId\s*[,:}]/);
   });
 
-  it('sends the owner id to the ban route, never the seller id', () => {
-    expect(source).toContain('blockSeller(seller.ownerId');
-    expect(source).toContain('unblockSeller(seller.ownerId');
+  it('blocks with the seller id and bans with the owner id', () => {
+    expect(source).toContain('blockSeller(seller.id)');
+    expect(source).toContain('banUser(seller.ownerId');
+    expect(source).toContain('unbanUser(seller.ownerId');
+  });
+
+  it('offers no unblock control it cannot honour', () => {
+    expect(source).not.toContain('unblockSeller');
+    expect(source).toContain('no honest unblock to offer');
+  });
+
+  it('asks the seller route for no search term the service ignores', () => {
+    // The gateway forwards `search`; `getSellersForAdmin` has no predicate for
+    // it, so an unfiltered list would come back looking like a search result.
+    expect(source).not.toMatch(/search:\s*params\.search/);
   });
 
   // The string literal, not the comment that records it was removed.

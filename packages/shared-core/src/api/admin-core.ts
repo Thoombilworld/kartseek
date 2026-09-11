@@ -578,21 +578,32 @@ export const adminCoreApi = {
   reactivateSeller: (id: string) =>
     apiCall(`${BASE_URL}/admin/marketplace/sellers/${id}/reactivate`, { method: 'PATCH' }),
   /**
-   * Bans the seller's **owner account**, so the argument is `sellers.ownerId`
-   * — a `users.id` — not the seller id.
+   * Closes the shop — `PATCH /admin/marketplace/sellers/:id/block`, which takes
+   * the **seller** id.
    *
-   * This is a second wrapper onto `PUT /admin/users/:userId/ban`, whose path
-   * parameter runs through `ParseUUIDPipe` against the users table. Passing the
-   * seller's own id, which the console did, could only ever answer "user not
-   * found". A seller whose `ownerId` is null has no account to ban at all.
+   * Distinct from `banUser`, which locks the owner out of the platform
+   * altogether (as a customer too). `AdminService.blockSeller` writes
+   * `verificationStatus = 'SUSPENDED'` **and** `isActive = false`, which is what
+   * separates it from `suspendSeller` — that one leaves `isActive` alone.
+   *
+   * No body: the route declares no `@Body()` and the actor comes from the token,
+   * so a reason passed here would be dropped on the floor rather than recorded.
+   * There is deliberately no `unblockSeller` beside it — see the note below.
    */
-  blockSeller: (ownerUserId: string, reason: string) =>
-    apiCall(`${BASE_URL}/admin/users/${ownerUserId}/ban`, {
-      method: 'PUT',
-      body: JSON.stringify({ reason }),
-    }),
-  unblockSeller: (ownerUserId: string) =>
-    apiCall(`${BASE_URL}/admin/users/${ownerUserId}/unban`, { method: 'PUT' }),
+  blockSeller: (sellerId: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/sellers/${sellerId}/block`, { method: 'PATCH' }),
+
+  /*
+   * Why there is no `unblockSeller`.
+   *
+   * Nothing on the gateway reverses a block. `PATCH sellers/:id/reactivate` is
+   * the closest route, and `MarketplaceService.reactivateSeller` sets
+   * `verificationStatus = 'VERIFIED'` and stops there — it never restores the
+   * `isActive = false` that the block wrote. So a blocked shop cannot be fully
+   * reopened from the console, and a wrapper called `unblockSeller` pointed at
+   * `reactivate` would report a restoration that only half happened. The
+   * console says so and disables the control instead.
+   */
 
   // ── Orders ────────────────────────────────────────────────────────────────
   getOrders: (p: AdminListParams = {}) =>

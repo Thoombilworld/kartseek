@@ -49,6 +49,7 @@ const {
   default: Page,
   loadKycQueue,
   normalizeKycRow,
+  keyOf,
 } = require('../app/admin/kyc-verification/page');
 
 /** A row shaped the way admin-service returns one. */
@@ -185,6 +186,49 @@ describe('/admin/kyc-verification failure states', () => {
     const html = render();
     expect(html).toContain('loading-skeleton');
     expect(html).not.toContain('No identity checks are waiting');
+  });
+});
+
+describe('a record is identified by type AND id', () => {
+  /**
+   * The Redis key is `admin:kyc:pending:<type>:<id>`, so the pair is the
+   * identity. Selecting on `entityId` alone let two queued records under
+   * different verticals pick each other — and `decide()` would then approve or
+   * reject the wrong one under the right-looking name.
+   */
+  const A = { entityId: 'dup-1', entityType: 'pharmacy', businessName: 'Alpha Pharmacy' };
+  const B = { entityId: 'dup-1', entityType: 'restaurant', businessName: 'Beta Kitchen' };
+
+  it('keyOf distinguishes two records that share an entityId', () => {
+    expect(keyOf(normalizeKycRow(A))).toBe('pharmacy:dup-1');
+    expect(keyOf(normalizeKycRow(B))).toBe('restaurant:dup-1');
+    expect(keyOf(normalizeKycRow(A))).not.toBe(keyOf(normalizeKycRow(B)));
+  });
+
+  it('renders both, and selects exactly one of them', () => {
+    hookResult = {
+      data: {
+        ok: true,
+        records: [normalizeKycRow(A), normalizeKycRow(B)],
+        total: 2,
+        undecidable: 0,
+      },
+      loading: false,
+      error: null,
+    };
+    const html = render();
+    expect(html).toContain('Alpha Pharmacy');
+    expect(html).toContain('Beta Kitchen');
+    // One row carries the selected border, not both.
+    expect(html.match(/border-l-indigo-600/g)).toHaveLength(1);
+  });
+
+  it('never compares selections on entityId alone', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'app', 'admin', 'kyc-verification', 'page.tsx'),
+      'utf8',
+    );
+    expect(source).not.toContain('r.entityId === selectedId');
   });
 });
 

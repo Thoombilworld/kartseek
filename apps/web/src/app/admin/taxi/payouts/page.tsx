@@ -52,12 +52,21 @@ export type PayoutsResult =
   | { ok: true; rows: TaxiPayoutRow[]; total: number }
   | { ok: false; kind: ApiFailureKind; message: string };
 
+/**
+ * No `limit`.
+ *
+ * `GET /admin/taxi/payouts` declares `page`, `status` and `countryCode` only,
+ * so a `limit` on the query string is dropped by the controller and
+ * taxi-service applies its own page size of 20. Asking for 100 did not widen
+ * the page; it only made the screen believe it had everything. The view is one
+ * service page, `total` says how many records match, and the screen says so
+ * when those two differ.
+ */
 export async function loadPayouts(params: {
   status?: string;
   countryCode?: string;
 }): Promise<PayoutsResult> {
   const res = await adminTaxiApi.getPayouts({
-    limit: 100,
     status: params.status,
     countryCode: params.countryCode,
   });
@@ -129,8 +138,14 @@ export default function TaxiPayoutsPage() {
       return next;
     });
 
-  const selectAllPending = () =>
-    setSelected(new Set(filtered.filter((p) => p.status === 'pending').map((p) => p.id)));
+  const shownPending = filtered.filter((p) => p.status === 'pending');
+
+  /**
+   * "Shown", not "all": this can only ever reach the records on screen, which
+   * are one service page of the matching set. Calling it "Select all pending"
+   * while `total` was larger told an administrator they had swept the queue.
+   */
+  const selectShownPending = () => setSelected(new Set(shownPending.map((p) => p.id)));
 
   /** Approval is per record: `POST /admin/taxi/payouts/:id/approve` takes no batch. */
   const batchApprove = async () => {
@@ -224,7 +239,23 @@ export default function TaxiPayoutsPage() {
     );
   }
 
-  if (!board) return null;
+  // Not `return null`; see the note in the sellers console.
+  if (!board) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6">
+        {header}
+        <AdminNotConnected
+          what="The payout ledger"
+          route={PAYOUTS_ROUTE}
+          error="The page received no result and no error."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
+
+  /** The service pages at 20 and the route takes no `limit`, so this is common. */
+  const truncated = board.total > payouts.length;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -355,11 +386,11 @@ export default function TaxiPayoutsPage() {
           ))}
         </select>
         <button
-          onClick={selectAllPending}
+          onClick={selectShownPending}
           className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors"
           id="select-all-pending"
         >
-          Select all pending
+          Select shown pending ({shownPending.length})
         </button>
       </div>
 
@@ -370,11 +401,11 @@ export default function TaxiPayoutsPage() {
               <tr>
                 <th className="px-3 py-3 font-semibold w-10">
                   <input
-                    title="Select all pending"
+                    title="Select the pending records shown"
                     type="checkbox"
                     className="rounded"
                     onChange={(e) => {
-                      if (e.target.checked) selectAllPending();
+                      if (e.target.checked) selectShownPending();
                       else setSelected(new Set());
                     }}
                   />
@@ -465,6 +496,19 @@ export default function TaxiPayoutsPage() {
             </p>
           </div>
         )}
+        {/* `total` was computed and never rendered, so a 20-row view of 340
+            records looked like the whole ledger — on a money screen, with a
+            batch selector above it. */}
+        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+          Showing {filtered.length} of {board.total} payout records
+          {truncated && (
+            <span className="block text-xs text-amber-700 mt-1">
+              This is the first page the route returns — {payouts.length} records. The market filter
+              and the batch selector reach these only. Paging arrives with the taxi operations plan
+              (Plan D); until then, narrow with the status and market filters.
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

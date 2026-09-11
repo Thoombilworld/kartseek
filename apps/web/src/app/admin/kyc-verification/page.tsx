@@ -86,6 +86,10 @@ export function normalizeKycRow(row: KycPendingRow): KycRecord | null {
   };
 }
 
+/** The record's identity: the two segments its Redis key is built from. */
+export const keyOf = (r: Pick<KycRecord, 'entityType' | 'entityId'>) =>
+  `${r.entityType}:${r.entityId}`;
+
 export type KycQueueResult =
   | { ok: true; records: KycRecord[]; total: number; undecidable: number }
   | { ok: false; kind: ApiFailureKind; message: string };
@@ -201,7 +205,12 @@ function ReasonDialog({
 export default function AdminKYCVerificationPage() {
   const { data, loading, error, refetch } = useAdminData<KycQueueResult>(() => loadKycQueue(), []);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // `<entityType>:<entityId>`, because that pair is the record's identity — it
+  // is literally the Redis key (`admin:kyc:pending:<type>:<id>`) the approve and
+  // reject routes rebuild. Keyed on `entityId` alone, two queued records sharing
+  // an id under different verticals select each other, and the decision then
+  // lands on the wrong one under the right-looking name.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
@@ -217,7 +226,7 @@ export default function AdminKYCVerificationPage() {
         : null;
 
   const records = board?.records ?? [];
-  const selected = records.find((r) => r.entityId === selectedId) ?? records[0] ?? null;
+  const selected = records.find((r) => keyOf(r) === selectedKey) ?? records[0] ?? null;
 
   const decide = async (kind: 'approve' | 'reject', reason?: string) => {
     if (!selected) return;
@@ -241,7 +250,7 @@ export default function AdminKYCVerificationPage() {
       entityId: selected.entityId,
       reason,
     });
-    setSelectedId(null);
+    setSelectedKey(null);
     await refetch();
   };
 
@@ -292,7 +301,22 @@ export default function AdminKYCVerificationPage() {
     );
   }
 
-  if (!board) return null;
+  // Not `return null`. Unreachable today — `loadKycQueue` resolves a result
+  // rather than throwing, so `useAdminData` cannot leave both `data` and `error`
+  // null — but a blank screen is the one answer this console must never give.
+  if (!board) {
+    return (
+      <div className="bg-slate-50 min-h-screen p-4 md:p-8 font-sans">
+        {header}
+        <AdminNotConnected
+          what="The identity-check queue"
+          route={KYC_ROUTE}
+          error="The page received no result and no error."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-50 min-h-screen p-4 md:p-8 font-sans">
@@ -309,13 +333,13 @@ export default function AdminKYCVerificationPage() {
           <div className="overflow-auto divide-y divide-slate-100 flex-1">
             {records.map((record) => (
               <div
-                key={`${record.entityType}:${record.entityId}`}
-                onClick={() => setSelectedId(record.entityId)}
+                key={keyOf(record)}
+                onClick={() => setSelectedKey(keyOf(record))}
                 role="button"
                 tabIndex={0}
-                onKeyDown={activateOnKey(() => setSelectedId(record.entityId))}
+                onKeyDown={activateOnKey(() => setSelectedKey(keyOf(record)))}
                 className={`p-4 cursor-pointer border-l-4 transition-colors ${
-                  selected?.entityId === record.entityId
+                  selected && keyOf(selected) === keyOf(record)
                     ? 'bg-indigo-50/50 border-l-indigo-600'
                     : 'hover:bg-slate-50 border-l-transparent'
                 }`}

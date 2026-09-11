@@ -285,6 +285,16 @@ describe('toConfigInput — the body PUT /admin/taxi/config/:cc accepts', () => 
     expect(body.taxRate).toBe(0);
   });
 
+  it('omits an emergency number rather than posting one the DTO refuses', () => {
+    // The column is NOT NULL and `@Length(1, 20)` rejects "", so clearing the
+    // field used to guarantee a 400. The upsert merges, so omitting the key
+    // leaves the stored number alone.
+    const cleared = SettingsPage.toConfigInput({ ...CONFIG_ROW, emergencyNumber: '' });
+    expect(cleared.emergencyNumber).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(cleared))).not.toHaveProperty('emergencyNumber');
+    expect(SettingsPage.toConfigInput(CONFIG_ROW).emergencyNumber).toBe('999');
+  });
+
   it('survives an envelope being handed to it rather than a row', () => {
     // The old code merged `{success, data, timestamp}` into state. Even if that
     // ever happened again, nothing undeclared could reach the wire.
@@ -359,14 +369,43 @@ describe('/admin/taxi/payouts', () => {
     hookResult = { data: { ok: true, rows: [PAYOUT], total: 1 }, loading: false, error: null };
   });
 
-  it('reads the ledger through the client', async () => {
+  it('reads the ledger through the client, and sends no limit the route drops', async () => {
     render(PayoutsPage);
     await Promise.resolve();
+    // `GET /admin/taxi/payouts` declares page, status and countryCode only, so a
+    // `limit` is dropped by the controller and the service pages at 20 anyway.
     expect(api.getPayouts).toHaveBeenCalledWith({
-      limit: 100,
       status: undefined,
       countryCode: undefined,
     });
+    expect(api.getPayouts.mock.calls[0][0]).not.toHaveProperty('limit');
+  });
+
+  it('renders the total the route reported, not just the rows it drew', () => {
+    hookResult = { data: { ok: true, rows: [PAYOUT], total: 340 }, loading: false, error: null };
+    const html = render(PayoutsPage);
+    expect(html).toContain('Showing 1 of 340 payout records');
+  });
+
+  it('says the view is one service page when more records match', () => {
+    hookResult = { data: { ok: true, rows: [PAYOUT], total: 340 }, loading: false, error: null };
+    const html = render(PayoutsPage);
+    expect(html).toContain('first page the route returns');
+    expect(html).toContain('Plan D');
+  });
+
+  it('says nothing about paging when the page holds everything', () => {
+    const html = render(PayoutsPage);
+    expect(html).toContain('Showing 1 of 1 payout records');
+    expect(html).not.toContain('first page the route returns');
+  });
+
+  it('offers to select what is SHOWN, and counts it', () => {
+    // "Select all pending" over a 20-row view of 340 told an administrator they
+    // had swept the queue.
+    const html = render(PayoutsPage);
+    expect(html).toContain('Select shown pending (1)');
+    expect(html).not.toContain('Select all pending');
   });
 
   it('renders the record the API returned, in its own currency', () => {
@@ -444,6 +483,30 @@ describe('/admin/taxi/pricing', () => {
     expect(codes).toEqual([...new Set(codes)]);
     expect(PricingPage.COUNTRY_OPTIONS.some((c: object) => 'currency' in c)).toBe(false);
     expect(render(PricingPage)).not.toContain('₹');
+  });
+});
+
+describe('/admin/taxi/pricing saves only what changed', () => {
+  beforeEach(() => {
+    hookResult = {
+      data: { ok: true, cards: [RATE_CARD], currency: 'QAR' },
+      loading: false,
+      error: null,
+    };
+  });
+
+  it('disables Save until a card is edited', () => {
+    // One click used to post every card in the market: N writes, N updatedAt
+    // bumps and N audit entries for a market nobody had touched.
+    const html = render(PricingPage);
+    expect(html).toMatch(/id="save-rates-btn"[^>]*disabled=""|disabled=""[^>]*id="save-rates-btn"/);
+    expect(html).toContain('Save rate cards');
+  });
+
+  it('posts one card per edited vehicle type, never the whole market', () => {
+    const source = fs.readFileSync(path.join(ADMIN_DIR, 'pricing', 'page.tsx'), 'utf8');
+    expect(source).toContain('cards ?? []).filter((c) => edited.has(c.id))');
+    expect(source).not.toMatch(/cards\.map\(\(card\) => adminTaxiApi\.upsertRateCard/);
   });
 });
 
@@ -526,6 +589,29 @@ describe('the taxi bodies match their DTOs', () => {
     await actual.adminTaxiApi.getDrivers({ countryCode: 'QA', status: 'active' });
     expect(sent[0].url).toContain('countryCode=QA');
     expect(sent[0].url).toContain('status=active');
+  });
+
+  it('types the double-wrapped replies as they arrive', async () => {
+    // These three handlers return `{ data: … }` and the interceptor wraps that
+    // again, so `apiCall`'s unwrap leaves one envelope. A caller reading
+    // `res.data.status` must get a type error, not `undefined` at runtime.
+    const src = fs.readFileSync(
+      path.join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        '..',
+        'packages',
+        'shared-core',
+        'src',
+        'api',
+        'admin-taxi.ts',
+      ),
+      'utf8',
+    );
+    expect(src).toContain('apiCall<{ data: TaxiDriverRow }>');
+    expect(src).toContain('apiCall<{ data: TaxiPayoutRow }>');
   });
 
   it('the config upsert PUTs the body it was given to the path market', async () => {

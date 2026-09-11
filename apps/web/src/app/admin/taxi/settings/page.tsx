@@ -148,7 +148,11 @@ export function toConfigInput(row: Partial<TaxiCountryConfig>): TaxiCountryConfi
       multiplier: nz(p.multiplier, 1),
       label: p.label ?? 'Peak',
     })),
-    emergencyNumber: row.emergencyNumber ?? '',
+    // `|| undefined`, not `?? ''`: the column is NOT NULL and the DTO's
+    // `@Length(1, 20)` refuses an empty string, so clearing the field posted a
+    // guaranteed 400. The upsert merges, so omitting the key leaves the stored
+    // number alone — which is the only other thing "no value" can honestly mean.
+    emergencyNumber: row.emergencyNumber || undefined,
     defaultLocale: row.defaultLocale ?? 'en',
     minimumDriverRating: nz(row.minimumDriverRating, 0),
     freeWaitingMinutes: nz(row.freeWaitingMinutes, 0),
@@ -441,7 +445,23 @@ export default function TaxiSettingsPage() {
     );
   }
 
-  if (!config) return null;
+  // Not `return null` — a blank page is the one answer this console must never
+  // give. Unreachable while `loadTaxiConfig` resolves a result rather than
+  // throwing, which is why it names that rather than a service outage.
+  if (!config) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-6">
+        {header}
+        {countryPicker}
+        <AdminNotConnected
+          what="The taxi configuration"
+          route={`GET /admin/taxi/config/${country}`}
+          error="The page received no result and no error."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

@@ -248,6 +248,8 @@ function FareCalculator({ cards, currency }: { cards: TaxiRateCard[]; currency: 
 export default function TaxiPricingPage() {
   const [country, setCountry] = useState('IN');
   const [draft, setDraft] = useState<TaxiRateCard[] | null>(null);
+  /** Which cards an administrator actually touched — only these are posted. */
+  const [edited, setEdited] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -286,25 +288,32 @@ export default function TaxiPricingPage() {
         c.id === id ? ({ ...c, [field]: value } as TaxiRateCard) : c,
       ),
     );
+    setEdited((prev) => new Set(prev).add(id));
     setSaveNote(null);
   };
 
-  /** One POST per vehicle type — the route upserts a single card, never a batch. */
+  /**
+   * One POST per **edited** vehicle type — the route upserts a single card,
+   * never a batch, and a save that posted every card in the market wrote N rows,
+   * bumped N `updatedAt`s and filed N audit entries for one changed fare.
+   */
   const handleSave = async () => {
-    if (!cards || cards.length === 0) return;
+    const dirtyCards = (cards ?? []).filter((c) => edited.has(c.id));
+    if (dirtyCards.length === 0) return;
     setSaving(true);
     setSaveError(null);
     setSaveNote(null);
     const results = await Promise.all(
-      cards.map((card) => adminTaxiApi.upsertRateCard(toRateCardInput(card, country))),
+      dirtyCards.map((card) => adminTaxiApi.upsertRateCard(toRateCardInput(card, country))),
     );
     setSaving(false);
     setEditing(null);
     const accepted = results.filter((r) => r.success).length;
     const refused = results.find((r) => !r.success);
     if (refused) setSaveError(refused.error || 'A rate card was not saved');
-    if (accepted > 0) setSaveNote(`${accepted} of ${cards.length} rate card(s) saved.`);
+    if (accepted > 0) setSaveNote(`${accepted} of ${dirtyCards.length} rate card(s) saved.`);
     setDraft(null);
+    setEdited(new Set());
     await refetch();
   };
 
@@ -324,11 +333,16 @@ export default function TaxiPricingPage() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => void handleSave()}
-          disabled={saving || !cards || cards.length === 0}
+          disabled={saving || edited.size === 0}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md disabled:opacity-50"
           id="save-rates-btn"
         >
-          <Save className="w-4 h-4" /> {saving ? 'Saving…' : 'Save rate cards'}
+          <Save className="w-4 h-4" />{' '}
+          {saving
+            ? 'Saving…'
+            : edited.size === 0
+              ? 'Save rate cards'
+              : `Save ${edited.size} rate card(s)`}
         </button>
       </div>
     </div>
@@ -342,6 +356,7 @@ export default function TaxiPricingPage() {
           onClick={() => {
             setCountry(c.code);
             setDraft(null);
+            setEdited(new Set());
             setEditing(null);
             setSaveNote(null);
             setSaveError(null);
@@ -417,7 +432,25 @@ export default function TaxiPricingPage() {
     );
   }
 
-  const rows = cards ?? [];
+  // Not `return null`; see the note in the sellers console. `cards` is null only
+  // before the first result, which the loading branch above already covers.
+  if (!cards) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        {header}
+        {tabs}
+        {countryPicker}
+        <AdminNotConnected
+          what="The fare rate cards"
+          route={`${RATES_ROUTE}?countryCode=${country}`}
+          error="The page received no result and no error."
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
+
+  const rows = cards;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
