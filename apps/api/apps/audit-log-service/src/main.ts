@@ -20,9 +20,28 @@ async function bootstrap() {
     },
   });
 
+  // ── TCP request/reply ───────────────────────────────────────────────────────
+  // Kafka carries writes: it is fire-and-forget, which is right for recording an
+  // action but cannot answer a question. The admin console needs a *read* — one
+  // filtered, market-scoped page of the trail, answered synchronously — so the
+  // gateway dials this port for `audit.query` and `audit.record`.
+  //
+  // The default MUST match `AUDIT_LOG_TCP_PORT`'s Joi default in the gateway's
+  // env.validation.ts. A mismatch between the two is invisible whenever `.env`
+  // sets the variable explicitly, and surfaces as a 503 on every audit read the
+  // day someone runs without it.
+  const tcpPort = +(process.env.AUDIT_LOG_TCP_PORT ?? 4028);
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.TCP,
+    options: { host: '0.0.0.0', port: tcpPort },
+  });
+
   await app.startAllMicroservices();
   const httpPort = +(process.env.AUDIT_LOG_SERVICE_PORT ?? 3028);
   await app.listen(httpPort);
-  Logger.log(`📋 Audit Log Service — HTTP :${httpPort} | Kafka consumer active`, 'Bootstrap');
+  Logger.log(
+    `📋 Audit Log Service — HTTP :${httpPort} | TCP :${tcpPort} | Kafka consumer active`,
+    'Bootstrap',
+  );
 }
 bootstrap();
