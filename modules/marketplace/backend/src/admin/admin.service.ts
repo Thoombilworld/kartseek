@@ -151,8 +151,22 @@ export class MarketplaceAdminService {
     return { success: true, id: saved.id, name: saved.name, slug: saved.slug };
   }
 
+  /**
+   * The marketplace dashboard, confined to one market when asked for one.
+   *
+   * `country` used to name the cache key and nothing else: every count and sum
+   * below was platform-wide, so a region-locked admin opening their dashboard
+   * read India's seller count and the platform's revenue as though they were
+   * their own market's. Sellers and orders carry `region_code`; products carry
+   * no market, so they are counted through the seller join.
+   *
+   * Brands are deliberately left platform-wide — catalogue taxonomy is one tree
+   * shared by every market, the same reason their admin routes are
+   * `@GlobalEntity` reads.
+   */
   async getAdminDashboard(country?: string) {
-    const cacheKey = `admin:dashboard:${country || 'all'}`;
+    const region = country?.trim() ? country.trim().toUpperCase() : undefined;
+    const cacheKey = `admin:dashboard:${region || 'all'}`;
     const cached = await this.redis.getJson(cacheKey);
     if (cached) return cached;
 
@@ -163,18 +177,24 @@ export class MarketplaceAdminService {
     weekStart.setDate(weekStart.getDate() - 7);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    const inRegion = region ? { regionCode: region } : {};
     const [sellerTotal, sellerActive, sellerPending, sellerSuspended] = await Promise.all([
-      this.sellerRepo.count(),
-      this.sellerRepo.count({ where: { verificationStatus: 'VERIFIED' } }),
-      this.sellerRepo.count({ where: { verificationStatus: 'PENDING' } }),
-      this.sellerRepo.count({ where: { verificationStatus: 'SUSPENDED' } }),
+      this.sellerRepo.count({ where: { ...inRegion } }),
+      this.sellerRepo.count({ where: { ...inRegion, verificationStatus: 'VERIFIED' } }),
+      this.sellerRepo.count({ where: { ...inRegion, verificationStatus: 'PENDING' } }),
+      this.sellerRepo.count({ where: { ...inRegion, verificationStatus: 'SUSPENDED' } }),
     ]);
 
+    const productCount = (status?: string) => {
+      const qb = this.adminProductQuery(region);
+      if (status) qb.andWhere('p.approval_status = :status', { status });
+      return qb.getCount();
+    };
     const [productTotal, productApproved, productPending, productRejected] = await Promise.all([
-      this.productRepo.count(),
-      this.productRepo.count({ where: { approval_status: 'APPROVED' } }),
-      this.productRepo.count({ where: { approval_status: 'PENDING' } }),
-      this.productRepo.count({ where: { approval_status: 'REJECTED' } }),
+      productCount(),
+      productCount('APPROVED'),
+      productCount('PENDING'),
+      productCount('REJECTED'),
     ]);
 
     const [brandTotal, brandApproved] = await Promise.all([
@@ -183,33 +203,26 @@ export class MarketplaceAdminService {
     ]);
 
     // Order stats
-    const todayOrders = await this.orderRepo
-      .createQueryBuilder('o')
-      .where('o.createdAt >= :todayStart', { todayStart })
-      .getCount();
-    const weekOrders = await this.orderRepo
-      .createQueryBuilder('o')
-      .where('o.createdAt >= :weekStart', { weekStart })
-      .getCount();
-    const monthOrders = await this.orderRepo
-      .createQueryBuilder('o')
-      .where('o.createdAt >= :monthStart', { monthStart })
-      .getCount();
-    const pendingOrders = await this.orderRepo.count({ where: { status: 'PENDING' } });
+    const ordersSince = (since: Date) => {
+      const qb = this.orderRepo.createQueryBuilder('o').where('o.createdAt >= :since', { since });
+      if (region) qb.andWhere('o.region_code = :region', { region });
+      return qb;
+    };
+    const todayOrders = await ordersSince(todayStart).getCount();
+    const weekOrders = await ordersSince(weekStart).getCount();
+    const monthOrders = await ordersSince(monthStart).getCount();
+    const pendingOrders = await this.orderRepo.count({
+      where: { ...inRegion, status: 'PENDING' },
+    });
 
     // Revenue stats
-    const todayRevenue = await this.orderRepo
-      .createQueryBuilder('o')
-      .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
-      .where('o.createdAt >= :todayStart', { todayStart })
-      .andWhere('o.paymentStatus = :paid', { paid: 'PAID' })
-      .getRawOne();
-    const monthRevenue = await this.orderRepo
-      .createQueryBuilder('o')
-      .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
-      .where('o.createdAt >= :monthStart', { monthStart })
-      .andWhere('o.paymentStatus = :paid', { paid: 'PAID' })
-      .getRawOne();
+    const revenueSince = (since: Date) =>
+      ordersSince(since)
+        .select('COALESCE(SUM(o.grandTotal), 0)', 'sum')
+        .andWhere('o.paymentStatus = :paid', { paid: 'PAID' })
+        .getRawOne();
+    const todayRevenue = await revenueSince(todayStart);
+    const monthRevenue = await revenueSince(monthStart);
 
     const result = {
       sellers: {
@@ -248,7 +261,7 @@ export class MarketplaceAdminService {
         commission: 0,
       },
       payouts: { pending: 0, processed: 0 },
-      country,
+      country: region ?? null,
     };
     await this.redis.setJson(cacheKey, result, 60);
     return result;
@@ -627,18 +640,20 @@ export class MarketplaceAdminService {
    * against the search path — the decoy — while the entity resolves against the
    * schema TypeORM was configured with.
    *
-   * Both sides are cast to text on purpose. `Product.seller_id` is declared as
-   * a string and documented as a text column, but the live
-   * `marketplace.products.seller_id` is a `uuid`; casting only the seller side
-   * (`s.id::text = p.seller_id`) therefore fails outright with
-   * `operator does not exist: text = uuid`. Casting both compares equal whether
-   * the column is text or uuid, so this does not depend on which of the two the
-   * schema happens to carry.
+   * Both columns are `uuid` (`Product.seller_id` is `@Column({ type: 'uuid' })`),
+   * so the comparison is a plain `s.id = p.seller_id` and the index on
+   * `products.seller_id` is usable. A cast on either side would make it
+   * unindexable, which the product entity warns about in its own comment.
+   *
+   * LEFT, not INNER. `seller_id` is nullable, and an inner join silently drops
+   * every product with no seller — so an orphaned product awaiting approval
+   * would never appear in the queue for anyone, including a global admin, and
+   * the moderation gate would have a hole in it nobody could see. The market
+   * predicate below already excludes orphans for a scoped caller, which is the
+   * fail-closed behaviour: unattributable, therefore not a regional admin's.
    */
   private adminProductQuery(region?: string) {
-    const qb = this.productRepo
-      .createQueryBuilder('p')
-      .innerJoin(Seller, 's', 's.id::text = p.seller_id::text');
+    const qb = this.productRepo.createQueryBuilder('p').leftJoin(Seller, 's', 's.id = p.seller_id');
     if (region) qb.andWhere('s.region_code = :region', { region: region.toUpperCase() });
     return qb;
   }

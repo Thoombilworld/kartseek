@@ -112,8 +112,8 @@ export class MarketplaceService {
    * `products` carries no market column of its own — the catalogue entry is
    * shared — so the only thing that can place a product in a market is the
    * seller who submitted it. The link is the snake-case `seller_id` the entity
-   * declares (a text column compared against `sellers.id::text`), not a
-   * camel-case `sellerId` that does not exist.
+   * declares (a nullable `uuid` column holding `sellers.id`), not a camel-case
+   * `sellerId` that does not exist.
    *
    * Fails closed: a product whose seller cannot be found has no market, and a
    * regional admin does not get to decide on a record nobody can attribute.

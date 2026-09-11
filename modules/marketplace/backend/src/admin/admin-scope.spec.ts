@@ -151,3 +151,98 @@ describe('MarketplaceAdminService admin queues respect scope', () => {
     expect(kafka.publish).not.toHaveBeenCalled();
   });
 });
+
+describe('the admin product query does not drop products without a seller', () => {
+  function query() {
+    const joins: { kind: string; on: string }[] = [];
+    const where: string[] = [];
+    const qb: any = {
+      leftJoin: (_e: unknown, _a: string, on: string) => (joins.push({ kind: 'left', on }), qb),
+      innerJoin: (_e: unknown, _a: string, on: string) => (joins.push({ kind: 'inner', on }), qb),
+      andWhere: (w: string) => (where.push(w), qb),
+      orderBy: () => qb,
+      skip: () => qb,
+      take: () => qb,
+      getMany: async () => [],
+      getCount: async () => 0,
+      getManyAndCount: async () => [[], 0],
+    };
+    const svc = Object.create(MarketplaceAdminService.prototype) as MarketplaceAdminService;
+    Object.assign(svc, {
+      productRepo: { createQueryBuilder: () => qb },
+      logger: { log: vi.fn(), warn: vi.fn() },
+    });
+    return { svc, joins, where };
+  }
+
+  it('left-joins the seller, so an orphan product still reaches a global admin', async () => {
+    const { svc, joins, where } = query();
+    await svc.getProductsForAdmin({});
+    expect(joins).toEqual([{ kind: 'left', on: 's.id = p.seller_id' }]);
+    // No market predicate for a global admin, so nothing excludes the orphan.
+    expect(where).not.toContain('s.region_code = :region');
+  });
+
+  it('excludes the orphan for a scoped admin, because it has no market', async () => {
+    const { svc, where } = query();
+    await svc.getProductsForAdmin({ region: 'qa' });
+    expect(where).toContain('s.region_code = :region');
+  });
+
+  it('compares the two uuid columns without a cast, so the index stays usable', async () => {
+    const { svc, joins } = query();
+    await svc.getPendingProducts('QA');
+    expect(joins[0].on).toBe('s.id = p.seller_id');
+    expect(joins[0].on).not.toContain('::text');
+  });
+});
+
+describe('the admin dashboard is counted per market, not platform-wide', () => {
+  /** Records every predicate the query builders were given. */
+  function dashboard() {
+    const where: string[] = [];
+    const qb: any = {
+      leftJoin: () => qb,
+      select: () => qb,
+      where: (w: string) => (where.push(w), qb),
+      andWhere: (w: string) => (where.push(w), qb),
+      getCount: async () => 0,
+      getRawOne: async () => ({ sum: '0' }),
+    };
+    const counted: any[] = [];
+    const countRepo = {
+      count: vi.fn(async (opts?: any) => (counted.push(opts?.where ?? {}), 0)),
+      createQueryBuilder: () => qb,
+    };
+    const svc = Object.create(MarketplaceAdminService.prototype) as MarketplaceAdminService;
+    Object.assign(svc, {
+      redis: { getJson: vi.fn(async () => null), setJson: vi.fn(async () => undefined) },
+      sellerRepo: countRepo,
+      productRepo: countRepo,
+      brandRepo: countRepo,
+      orderRepo: countRepo,
+      logger: { log: vi.fn(), warn: vi.fn() },
+    });
+    return { svc, where, counted };
+  }
+
+  it('scopes sellers, products and orders to the market it was given', async () => {
+    const { svc, where, counted } = dashboard();
+    const result: any = await svc.getAdminDashboard('qa');
+    expect(result.country).toBe('QA');
+    // Sellers are counted through the repository, with the market in the where.
+    expect(counted.some((w) => w.regionCode === 'QA')).toBe(true);
+    // Orders and the seller join both carry the region predicate.
+    expect(where).toContain('o.region_code = :region');
+    expect(where).toContain('s.region_code = :region');
+  });
+
+  it('counts the whole platform for a global admin', async () => {
+    const { svc, where, counted } = dashboard();
+    const result: any = await svc.getAdminDashboard();
+    expect(result.country).toBeNull();
+    expect(counted.every((w) => w.regionCode === undefined)).toBe(true);
+    expect(where).not.toContain('o.region_code = :region');
+    expect(where).not.toContain('s.region_code = :region');
+  });
+});
