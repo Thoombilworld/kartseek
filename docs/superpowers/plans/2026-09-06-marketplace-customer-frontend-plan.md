@@ -1124,3 +1124,12 @@ Still open from this pass:
 - **B-10** cancel-releases-stock now also has to hand back the flash-deal allocation (`releaseListingStock` already does when given `dealNominationId`; the cancel path calls neither).
 - **New: per-market content for doctor, pharmacy, taxi** — fixtures are Indian/rupee whatever the market; each vertical needs market-scoped data before its storefront is honest outside India.
 - **B-16 / S-01 reviews and images** unchanged.
+
+### Done in the fourth pass (2026-09-06, regional promotion isolation)
+
+- Regional admin identity (`users.region_code`/`region_locked`, JWT claims, profile) and gateway market scope on every admin promotion route; backend enforcement with logged denials.
+- Cache invalidation by market pattern; banner edits purge only their markets; orders persist market + currency; cart lines per market.
+- Fixture promotion data removed from the admin coupons/promotions/flash-deal pages and the cart service; `admin_get_promotions` real.
+- Verification scripts: `apps/api/scripts/verification/regional-isolation-authz.mjs` (36 checks) and `regional-isolation-e2e.mjs` (67 checks).
+
+Still open from this pass: B-10 (cancel releases stock + deal allocation); GB/US as trading markets (a configuration decision); dashboard fixture widgets; sponsored products.
