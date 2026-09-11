@@ -314,7 +314,6 @@ const onlyMarket = (name, res, pick, market) => {
     ['the payout queue', '/admin/marketplace/payouts'],
     ['commission earnings', '/admin/marketplace/commissions'],
     ['customer segments', '/admin/marketplace/customer-segments'],
-    ['platform notifications', '/admin/marketplace/notifications'],
     ['the compliance country list', '/admin/marketplace/compliance/countries'],
     ['the wallet ledger', '/admin/marketplace/wallet/transactions'],
   ]) {
@@ -380,10 +379,34 @@ const onlyMarket = (name, res, pick, market) => {
     (await call(qa, 'GET', '/admin/doctor/doctors')).status === 403,
   );
 
-  console.log('security');
+  console.log('notifications');
+  // Plan B (B7a): the notification feed is the signed-in admin's own inbox,
+  // scoped by user rather than market, so a locked admin reads it too; a
+  // foreign `?country=` is still refused by `scopeOf`.
   ok(
-    'IN admin may read the security board (role, not market)',
-    (await call(ind, 'GET', '/admin/security/status')).status === 200,
+    'QA admin reads their own notification inbox (personal, not market-scoped); global admin too',
+    (await call(qa, 'GET', '/admin/marketplace/notifications')).status === 200 &&
+      (await call(g, 'GET', '/admin/marketplace/notifications')).status === 200,
+  );
+  ok(
+    'QA admin ?country=IN on notifications → 403',
+    (await call(qa, 'GET', '/admin/marketplace/notifications?country=IN')).status === 403,
+  );
+
+  console.log('security');
+  // Plan B (B4): `/admin/security/*` requires the `security.manage` permission,
+  // which neither seeded `admin` nor `regional_admin` holds — only SUPER_ADMIN
+  // or a custom role granted the key. Both admins are refused by the
+  // permission half of the guard, not by the market lock.
+  const inSec = await call(ind, 'GET', '/admin/security/status');
+  ok(
+    'IN admin (regional_admin, no security.manage) is refused the security board',
+    inSec.status === 403 && /security\.manage/.test(JSON.stringify(inSec.json ?? '')),
+    `status ${inSec.status}`,
+  );
+  ok(
+    'global admin (seeded admin role, no security.manage) is refused the security board',
+    (await call(g, 'GET', '/admin/security/status')).status === 403,
   );
 
   console.log(`\n${pass} passed, ${fail} failed, ${skipped} skipped or empty`);
