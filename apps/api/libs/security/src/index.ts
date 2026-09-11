@@ -19,4 +19,3 @@ export * from './resource-owner.decorator';
 export * from './resource-ownership.guard';
 export * from './internal-service.guard';
 export * from './secure-id.util';
-export * from './region-isolation.guard';

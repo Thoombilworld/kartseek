@@ -23,3 +23,6 @@ export * from './interceptors/transform.interceptor';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 export * from './config';
+
+// ─── Staff market scope (backend half) ───────────────────────────────────────
+export * from './market/market-scope';
