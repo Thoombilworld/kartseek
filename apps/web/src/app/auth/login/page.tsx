@@ -6,7 +6,17 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth, toAuthUser } from '@/lib/contexts/auth-context';
 import { useRegion } from '@/lib/contexts/region-context';
 import { authApi, ApiError } from '@/lib/api-endpoints';
-import { Eye, EyeOff, Mail, Lock, ArrowRight, ShoppingBag, Truck, Shield, Hotel } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  ArrowRight,
+  ShoppingBag,
+  Truck,
+  Shield,
+  Hotel,
+} from 'lucide-react';
 import { KartseekLoader } from '@/components/kartseek-loader';
 import { useTranslation } from '@/i18n';
 import type { TranslationKeys } from '@/i18n';
@@ -39,7 +49,13 @@ function describeLoginError(err: unknown): LoginFailure {
 export default function LoginPage() {
   const { t } = useTranslation('common');
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><KartseekLoader size="lg" message={t('loading')} /></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <KartseekLoader size="lg" message={t('loading')} />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );
@@ -74,6 +90,21 @@ function LoginForm() {
 
     try {
       const session = await authApi.login(email.trim(), password);
+      /**
+       * A staff account does not get a session here.
+       *
+       * The gateway answers a staff sign-in with a second-factor challenge and
+       * no tokens. This called `login(...)` unconditionally, so it persisted
+       * `undefined` as the access token and dispatched LOGIN anyway: the header
+       * showed the customer signed in while every request they made was
+       * anonymous. Nothing is stored — they are sent to the console, which is
+       * where the challenge is completed.
+       */
+      if (session.requires2FA || !session.accessToken) {
+        setError('Staff accounts sign in at the admin console. Redirecting you there…');
+        router.push('/admin/login?redirect=/admin');
+        return;
+      }
       // Both tokens are kept: the access token authorises requests, the refresh
       // token is what lets the session outlive its one-hour lifetime.
       login(toAuthUser(session.user, regionCode), session.accessToken, session.refreshToken);
@@ -81,7 +112,7 @@ function LoginForm() {
     } catch (err) {
       const failure = describeLoginError(err);
       setError(failure.serverMessage || t(failure.key));
-      setLoading(false);   // stays mounted on failure, so clear the spinner
+      setLoading(false); // stays mounted on failure, so clear the spinner
     }
   };
 
@@ -103,11 +134,10 @@ function LoginForm() {
           </Link>
 
           <h2 className="text-4xl font-black leading-tight mb-4">
-            {t('loginTitle')}<span className="text-blue-200">.</span>
+            {t('loginTitle')}
+            <span className="text-blue-200">.</span>
           </h2>
-          <p className="text-blue-200 text-lg max-w-sm">
-            {t('signInSubtitle')}
-          </p>
+          <p className="text-blue-200 text-lg max-w-sm">{t('signInSubtitle')}</p>
         </div>
 
         <div className="relative z-10 space-y-4">
@@ -125,7 +155,9 @@ function LoginForm() {
             <div className="w-8 h-8 rounded-lg bg-linear-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
               <span className="text-white font-black text-sm">K</span>
             </div>
-            <span className="text-xl font-black tracking-tight text-blue-700">KART<span className="text-slate-900">SEEK</span></span>
+            <span className="text-xl font-black tracking-tight text-blue-700">
+              KART<span className="text-slate-900">SEEK</span>
+            </span>
           </Link>
 
           <h1 className="text-2xl font-bold text-slate-900 mb-1">{t('signIn')}</h1>
@@ -144,7 +176,10 @@ function LoginForm() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="login-email" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="login-email"
+                className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
                 {t('emailLabel')}
               </label>
               <div className="relative">
@@ -163,7 +198,10 @@ function LoginForm() {
             </div>
 
             <div>
-              <label htmlFor="login-password" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="login-password"
+                className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
                 {t('passwordLabel')}
               </label>
               <div className="relative">
@@ -188,7 +226,10 @@ function LoginForm() {
                 </button>
               </div>
               <div className="text-right mt-2">
-                <Link href="/auth/forgot-password" className="text-xs font-semibold text-blue-600 hover:underline">
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-xs font-semibold text-blue-600 hover:underline"
+                >
                   {t('forgotPassword')}
                 </Link>
               </div>
@@ -198,18 +239,27 @@ function LoginForm() {
               type="submit"
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-sm"
-             aria-label={t('signIn')}>{loading ? (
+              aria-label={t('signIn')}
+            >
+              {loading ? (
                 <KartseekLoader size="sm" />
               ) : (
                 <>
                   {t('signIn')} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                 </>
-              )}</button>
+              )}
+            </button>
           </form>
 
           <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
-            <div className="relative flex justify-center"><span className="bg-slate-50 px-3 text-xs text-slate-400 font-medium">{t('orContinueWith')}</span></div>
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-slate-50 px-3 text-xs text-slate-400 font-medium">
+                {t('orContinueWith')}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
