@@ -44,6 +44,27 @@ export interface ListParams {
   toDate?: string;
 }
 
+/**
+ * One row of `GET /admin/marketplace/notifications`.
+ *
+ * Every field but `id` is optional because the route returns two different
+ * things: rows of `marketplace.notifications` with no `userId` (the real admin
+ * feed), or — when that table is empty — four rows the marketplace service
+ * generates itself in `getAdminNotifications()`
+ * (`modules/marketplace/backend/src/admin/admin.service.ts`). The console cannot
+ * tell them apart and does not try; it renders what the route returns. The
+ * substitution is a server-side fabrication and has to be removed there.
+ */
+export interface AdminNotificationRow {
+  id: string;
+  title?: string;
+  message?: string;
+  type?: string;
+  priority?: string;
+  isRead?: boolean;
+  createdAt?: string;
+}
+
 // ─── Auth Header ─────────────────────────────────────────────────────────────
 
 function getHeaders(): HeadersInit {
@@ -228,6 +249,23 @@ export const adminMarketplaceApi = {
     apiCall(`${BASE_URL}/admin/marketplace/commissions${buildQuery(p)}`),
   getPayouts: (p: ListParams = {}) =>
     apiCall(`${BASE_URL}/admin/marketplace/payouts${buildQuery(p)}`),
+
+  // ── Notifications ──────────────────────────────────────────────────────────
+  /**
+   * The platform's admin notification feed.
+   *
+   * Takes `country` only — deliberately no `limit`. The gateway reads nothing
+   * else and the service always returns its newest 50, so accepting a `limit`
+   * here would be a parameter that silently does nothing; callers showing fewer
+   * slice the array themselves.
+   *
+   * Refused with 403 for a market-locked admin: the rows carry no market, so
+   * this list is the whole platform's and cannot be relabelled as theirs.
+   */
+  getNotifications: (p: { country?: string } = {}) =>
+    apiCall<{ data: AdminNotificationRow[]; total: number }>(
+      `${BASE_URL}/admin/marketplace/notifications${p.country ? `?country=${encodeURIComponent(p.country)}` : ''}`,
+    ),
 
   // ── Reports / Audit ────────────────────────────────────────────────────────
   getReports: (p: ListParams = {}) =>

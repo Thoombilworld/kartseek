@@ -115,6 +115,98 @@ export interface AuditLogEntryInput {
   adminId?: string;
 }
 
+// ─── Dashboard (/admin/dashboard) ────────────────────────────────────────────
+
+/**
+ * A figure the platform declines to report, rather than reporting as zero.
+ *
+ * `sellers`, `drivers` and `pendingKyc` live in databases admin-service has no
+ * connection to since the module split, so it says so. A console that rendered
+ * `value` without checking `unavailable` would print "0 sellers" for a platform
+ * with thousands.
+ */
+export interface UnavailableCounter {
+  value: number | null;
+  unavailable: string;
+}
+
+/** Exactly what `get_admin_dashboard` returns — no more, and nothing invented. */
+export interface DashboardStats {
+  users: { total: number; active: number; newToday: number };
+  orders: { total: number; today: number; pending: number };
+  revenue: { total: number; today: number };
+  sellers: UnavailableCounter;
+  drivers: UnavailableCounter;
+  pendingKyc: UnavailableCounter;
+  /** Null unless something has actually measured it. There is no per-module breakdown yet. */
+  serviceSplit: Record<string, number> | null;
+  generatedAt: string;
+}
+
+// ─── Security / DDoS (/admin/security — `security.manage`) ───────────────────
+
+export type ThreatLevel = 'normal' | 'elevated' | 'critical';
+
+/** `GET /admin/security/status` — Redis counters, platform-wide (no market). */
+export interface SecurityStatus {
+  level: ThreatLevel;
+  httpBansToday: number;
+  wsBansToday: number;
+  activeBans: number;
+  isHttpAttackMode: boolean;
+  isWsAttackMode: boolean;
+  timestamp: string;
+}
+
+/** One day of `GET /admin/security/trend` — 14 entries, oldest first. */
+export interface SecurityTrendPoint {
+  date: string;
+  httpBans: number;
+  wsBans: number;
+}
+
+/**
+ * Why an IP is banned, as `DdosMonitorService` stored it.
+ *
+ * Every field is optional because the value is whatever JSON was in Redis at
+ * ban time: an automatic ban carries `reason`/`strikes`/`banLevel`, a manual one
+ * carries `manual: true`, and a key whose payload has expired carries `{}`.
+ */
+export interface BanDetails {
+  reason?: string;
+  strikes?: number;
+  bannedAt?: string;
+  duration?: number;
+  banLevel?: number;
+  manual?: boolean;
+}
+
+export interface BannedIpRow {
+  ip: string;
+  type: 'http' | 'ws';
+  details: BanDetails;
+  /** Redis TTL. Negative for a key with no expiry. */
+  remainingSeconds: number;
+}
+
+/** `GET /admin/security/offenders` — striking, not yet banned. No country: the service does not resolve one. */
+export interface OffenderRow {
+  ip: string;
+  strikes: number;
+}
+
+/**
+ * `GET /admin/security/stats/endpoints` — keyed `METHOD:path:YYYY-MM-DDTHH`,
+ * one counter per endpoint per hour, capped at 200 keys by the service.
+ */
+export type EndpointStats = Record<string, number>;
+
+/** What the security mutations answer with. */
+export interface SecurityActionResult {
+  success: boolean;
+  message: string;
+}
+
 // ─── Roles & staff (/admin/roles, /admin/staff — SUPER_ADMIN only) ───────────
 
 /** One permission the console may grant, as the gateway defines it. */
@@ -246,8 +338,52 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<AdminApiR
 
 export const adminCoreApi = {
   // ── Dashboard ─────────────────────────────────────────────────────────────
-  getDashboard: () => apiCall(`${BASE_URL}/admin/dashboard`),
+  /**
+   * `country` narrows the counters to one market. A market-locked admin gets
+   * their own market whatever they ask for, and is refused if they name
+   * another — the gateway decides, not this call.
+   */
+  getDashboard: (country?: string) =>
+    apiCall<DashboardStats>(`${BASE_URL}/admin/dashboard${buildQuery({ country })}`),
   getPlatformHealth: () => apiCall(`${BASE_URL}/admin/platform/health`),
+
+  // ── Security / DDoS ───────────────────────────────────────────────────────
+  // `DdosAdminController` is gated as a whole on SUPER_ADMIN, ADMIN or
+  // `perm:security.manage`, so one 403 here means all of them are 403: the
+  // threat board names every banned address, which is the map of the
+  // platform's defences. None of these take a market — the ban list is
+  // platform-wide.
+  getSecurityStatus: () => apiCall<SecurityStatus>(`${BASE_URL}/admin/security/status`),
+  getSecurityTrend: () => apiCall<SecurityTrendPoint[]>(`${BASE_URL}/admin/security/trend`),
+  getEndpointStats: () => apiCall<EndpointStats>(`${BASE_URL}/admin/security/stats/endpoints`),
+  getOffenders: () => apiCall<OffenderRow[]>(`${BASE_URL}/admin/security/offenders`),
+  getBans: () => apiCall<BannedIpRow[]>(`${BASE_URL}/admin/security/bans`),
+  banIp: (ip: string, durationSeconds: number, reason: string) =>
+    apiCall<SecurityActionResult>(`${BASE_URL}/admin/security/bans`, {
+      method: 'POST',
+      body: JSON.stringify({ ip, durationSeconds, reason }),
+    }),
+  // The address is a path segment, so it is encoded: an IPv6 ban key is full of
+  // colons, and `::1` unencoded is not the same path.
+  unbanIp: (ip: string) =>
+    apiCall<SecurityActionResult>(`${BASE_URL}/admin/security/bans/${encodeURIComponent(ip)}`, {
+      method: 'DELETE',
+    }),
+  getWhitelist: () => apiCall<string[]>(`${BASE_URL}/admin/security/whitelist`),
+  addWhitelist: (ip: string) =>
+    apiCall<SecurityActionResult>(`${BASE_URL}/admin/security/whitelist`, {
+      method: 'POST',
+      body: JSON.stringify({ ip }),
+    }),
+  removeWhitelist: (ip: string) =>
+    apiCall<SecurityActionResult>(
+      `${BASE_URL}/admin/security/whitelist/${encodeURIComponent(ip)}`,
+      { method: 'DELETE' },
+    ),
+  resetAttackMode: () =>
+    apiCall<SecurityActionResult>(`${BASE_URL}/admin/security/attack-mode/reset`, {
+      method: 'POST',
+    }),
 
   // ── Users ─────────────────────────────────────────────────────────────────
   getUsers: (p: AdminListParams = {}) => apiCall(`${BASE_URL}/admin/users${buildQuery(p)}`),

@@ -56,6 +56,9 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { useAudit } from '@/lib/contexts/audit-context';
 import { isStaffRole } from '@/auth/staff-roles';
 import { CountryFlag } from '@/components/shared/country-flag';
+import { adminCoreApi, type SecurityStatus } from '@/lib/api/admin-core';
+import { adminMarketplaceApi, type AdminNotificationRow } from '@/lib/api/admin-marketplace';
+import { classifyApiFailure } from '@/components/admin/api-states';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
 interface NavItem {
@@ -158,12 +161,9 @@ const navSections: NavSection[] = [
   {
     label: 'Operations',
     items: [
-      {
-        href: '/admin/order-disputes',
-        label: 'Order Disputes',
-        icon: Package,
-        perm: 'orders.manage',
-      },
+      // `/admin/order-disputes` was here and there is no such route: the item
+      // was a permanent 404 for anyone holding `orders.manage`. Disputes are
+      // handled from the order pages themselves.
       {
         href: '/admin/page-builder',
         label: 'Page Builder (CMS)',
@@ -349,6 +349,349 @@ function RegionSwitcher() {
   );
 }
 
+/**
+ * What a header dropdown holds after asking the gateway.
+ *
+ * Three states, never two: the header is the one place an outage is easiest to
+ * mistake for calm, because "no notifications" and "nobody answered" both look
+ * like an empty list with no red dot.
+ */
+export type MenuState<T> =
+  | { phase: 'loading' }
+  | { phase: 'ready'; value: T }
+  | { phase: 'forbidden'; message: string }
+  | { phase: 'unreachable'; message: string };
+
+/**
+ * Ask once per mount and classify the answer.
+ *
+ * `apiCall` resolves `{ success: false, error }` rather than throwing, so there
+ * is nothing to catch — the failure arrives as a value and is classified the
+ * same way every admin page classifies one.
+ */
+function useMenuData<T>(load: () => Promise<{ success: boolean; data: T; error?: string }>) {
+  const [state, setState] = useState<MenuState<T>>({ phase: 'loading' });
+  const loadRef = React.useRef(load);
+  loadRef.current = load;
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void loadRef.current().then((res) => {
+      if (cancelled) return;
+      if (res.success) {
+        setState({ phase: 'ready', value: res.data });
+        return;
+      }
+      const message = res.error || 'The gateway did not answer';
+      setState({
+        phase: classifyApiFailure(message) === 'forbidden' ? 'forbidden' : 'unreachable',
+        message,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return state;
+}
+
+function MenuShell({
+  open,
+  onClose,
+  title,
+  badge,
+  footer,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  badge?: React.ReactNode;
+  footer: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose}>
+        <DismissOnEscape onDismiss={onClose} />
+      </div>
+      <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <h4 className="font-bold text-sm text-slate-900">{title}</h4>
+          {badge}
+        </div>
+        <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">{children}</div>
+        {footer}
+      </div>
+    </>
+  );
+}
+
+/** "Nobody answered", in the space a dropdown has. Names the call, like the pages do. */
+function MenuNotConnected({ route, message }: { route: string; message: string }) {
+  return (
+    <div className="px-4 py-5">
+      <p className="text-sm font-bold text-slate-900">Not connected.</p>
+      <p className="text-xs text-slate-500 mt-1">
+        <code className="font-mono text-[10px] bg-slate-100 px-1 py-0.5 rounded">{route}</code> did
+        not answer, so nothing is listed rather than something invented.
+      </p>
+      <p className="text-[11px] text-red-600 mt-2 font-medium">{message}</p>
+    </div>
+  );
+}
+
+/**
+ * The platform notification feed.
+ *
+ * This used to be four literal objects — "FreshMart Store applied for
+ * marketplace access", "Order #KS-28491 flagged" — under a hard-coded "4 new"
+ * badge, on every page of the console, for every administrator, forever.
+ *
+ * A market-locked admin gets 403 here by design: the rows carry no market, so
+ * the list is the whole platform's and cannot be shown as theirs. That is a
+ * quiet line, not an error — it is the expected answer for their role.
+ */
+export function NotificationsMenu({
+  open,
+  onToggle,
+  onClose,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}) {
+  const state = useMenuData<{ data: AdminNotificationRow[]; total: number }>(
+    React.useCallback(() => adminMarketplaceApi.getNotifications(), []),
+  );
+  return <NotificationsMenuView open={open} onToggle={onToggle} onClose={onClose} state={state} />;
+}
+
+/**
+ * The dropdown itself, with the answer already in hand.
+ *
+ * Split from the fetch so each of the four states can be rendered and asserted
+ * without an effect: `renderToStaticMarkup` never runs one, so a component that
+ * both fetched and drew would only ever be testable in its loading state — and
+ * the loading state is the one that was never wrong.
+ */
+export function NotificationsMenuView({
+  open,
+  onToggle,
+  onClose,
+  state,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  state: MenuState<{ data: AdminNotificationRow[]; total: number }>;
+}) {
+  const rows = state.phase === 'ready' ? (state.value?.data ?? []) : [];
+  const unread = rows.filter((n) => !n.isRead).length;
+
+  return (
+    <div className="relative">
+      <button
+        title="Notifications"
+        onClick={onToggle}
+        className={`text-slate-400 hover:text-slate-600 relative p-1.5 rounded-lg transition-colors ${open ? 'bg-slate-100 text-slate-600' : ''}`}
+      >
+        <Bell className="w-5 h-5" />
+        {/* Only when something is actually unread. The dot used to be painted
+            on unconditionally, so it never meant anything. */}
+        {unread > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />}
+      </button>
+      <MenuShell
+        open={open}
+        onClose={onClose}
+        title="Notifications"
+        badge={
+          state.phase === 'ready' && unread > 0 ? (
+            <span className="text-[10px] bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full">
+              {unread} unread
+            </span>
+          ) : null
+        }
+        footer={
+          <Link
+            href="/admin/notifications"
+            onClick={onClose}
+            className="block text-center text-xs text-blue-600 font-bold py-2.5 border-t border-slate-100 hover:bg-blue-50 transition-colors"
+          >
+            Open notifications
+          </Link>
+        }
+      >
+        {state.phase === 'loading' && (
+          <p className="px-4 py-5 text-xs text-slate-400">Asking the platform…</p>
+        )}
+        {state.phase === 'forbidden' && (
+          <p className="px-4 py-5 text-xs text-slate-500">
+            Platform notifications are not available for regional admins — these rows belong to
+            every market.
+          </p>
+        )}
+        {state.phase === 'unreachable' && (
+          <MenuNotConnected route="GET /admin/marketplace/notifications" message={state.message} />
+        )}
+        {state.phase === 'ready' && rows.length === 0 && (
+          <p className="px-4 py-5 text-xs text-slate-400">Nothing to report.</p>
+        )}
+        {state.phase === 'ready' &&
+          rows.slice(0, 8).map((n) => (
+            <div key={n.id} className="flex gap-3 px-4 py-3">
+              <span
+                className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                  n.priority === 'high'
+                    ? 'bg-red-500'
+                    : n.priority === 'medium'
+                      ? 'bg-amber-500'
+                      : 'bg-slate-400'
+                }`}
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">
+                  {n.title ?? n.type ?? 'Notification'}
+                </p>
+                {n.message && <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>}
+                {n.createdAt && (
+                  <p className="text-[10px] text-slate-400 mt-1" suppressHydrationWarning>
+                    {new Date(n.createdAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+      </MenuShell>
+    </div>
+  );
+}
+
+/**
+ * The threat board, in one dropdown.
+ *
+ * Replaces three invented alerts ("Admin login attempt from unrecognized device
+ * in Lagos, Nigeria") and a "2 active" badge with the counters
+ * `GET /admin/security/status` actually keeps. Refused unless the account holds
+ * `security.manage`, which is why the refusal names the permission.
+ */
+export function SecurityMenu({
+  open,
+  onToggle,
+  onClose,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}) {
+  const state = useMenuData<SecurityStatus>(
+    React.useCallback(() => adminCoreApi.getSecurityStatus(), []),
+  );
+  return <SecurityMenuView open={open} onToggle={onToggle} onClose={onClose} state={state} />;
+}
+
+/** The dropdown with the answer in hand — see `NotificationsMenuView`. */
+export function SecurityMenuView({
+  open,
+  onToggle,
+  onClose,
+  state,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  state: MenuState<SecurityStatus>;
+}) {
+  const status = state.phase === 'ready' ? state.value : null;
+  const raised =
+    !!status && (status.level !== 'normal' || status.isHttpAttackMode || status.isWsAttackMode);
+
+  return (
+    <div className="relative">
+      <button
+        title="Security alerts"
+        onClick={onToggle}
+        className={`text-slate-400 hover:text-slate-600 relative p-1.5 rounded-lg transition-colors ${open ? 'bg-slate-100 text-slate-600' : ''}`}
+      >
+        <ShieldAlert className="w-5 h-5" />
+        {raised && <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full" />}
+      </button>
+      <MenuShell
+        open={open}
+        onClose={onClose}
+        title="Security"
+        badge={
+          status ? (
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                status.level === 'critical'
+                  ? 'bg-red-100 text-red-600'
+                  : status.level === 'elevated'
+                    ? 'bg-amber-100 text-amber-600'
+                    : 'bg-emerald-100 text-emerald-700'
+              }`}
+            >
+              {status.level}
+            </span>
+          ) : null
+        }
+        footer={
+          <Link
+            href="/admin/security"
+            onClick={onClose}
+            className="block text-center text-xs text-blue-600 font-bold py-2.5 border-t border-slate-100 hover:bg-blue-50 transition-colors"
+          >
+            Security dashboard
+          </Link>
+        }
+      >
+        {state.phase === 'loading' && (
+          <p className="px-4 py-5 text-xs text-slate-400">Asking the gateway…</p>
+        )}
+        {state.phase === 'forbidden' && (
+          <p className="px-4 py-5 text-xs text-slate-500">
+            Your role does not hold <span className="font-mono">security.manage</span>, so the
+            threat board is closed to it.
+          </p>
+        )}
+        {state.phase === 'unreachable' && (
+          <MenuNotConnected route="GET /admin/security/status" message={state.message} />
+        )}
+        {status && (
+          <div className="px-4 py-3 space-y-2">
+            {(status.isHttpAttackMode || status.isWsAttackMode) && (
+              <p className="text-xs font-bold text-red-600">
+                Attack mode is on for{' '}
+                {status.isHttpAttackMode && status.isWsAttackMode
+                  ? 'HTTP and WebSocket traffic'
+                  : status.isHttpAttackMode
+                    ? 'HTTP traffic'
+                    : 'WebSocket traffic'}
+                .
+              </p>
+            )}
+            {[
+              ['Bans in force', status.activeBans],
+              ['HTTP bans today', status.httpBansToday],
+              ['WebSocket bans today', status.wsBansToday],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">{label}</span>
+                <span className="font-bold text-slate-900">{value}</span>
+              </div>
+            ))}
+            <p className="text-[10px] text-slate-400 pt-1" suppressHydrationWarning>
+              Measured {new Date(status.timestamp).toLocaleString()}
+            </p>
+          </div>
+        )}
+      </MenuShell>
+    </div>
+  );
+}
+
 function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -373,9 +716,14 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (isAuthenticated && user && !loginLoggedRef.current) {
       loginLoggedRef.current = true;
+      // Machine key, lower-case: `auditPostPayload` sends `<module>.<action>`
+      // and the gateway prefixes `console.`, so this used to be filed as
+      // `console.Auth.Admin signed in` — a key nothing can filter on, sort by or
+      // match a prefix against, with a space and capitals in the middle of it.
+      // The human sentence belongs in the details, which is where it now is.
       logAction(
-        'Admin signed in',
-        'Auth',
+        'signed_in',
+        'auth',
         `${user.name} (${user.adminRoleName || 'Admin'}) signed in as ${user.email}`,
       );
     }
@@ -423,7 +771,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     try {
-      logAction('Admin signed out', 'Auth', `User ${user?.name} (${user?.email}) signed out`);
+      logAction('signed_out', 'auth', `${user?.name} (${user?.email}) signed out`);
     } catch {}
     logout();
     router.push('/admin/login');
@@ -585,82 +933,15 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
             <RegionSwitcher />
 
             {/* Notifications */}
-            <div className="relative">
-              <button
-                title="Notifications"
-                onClick={() => {
-                  setShowNotifications(!showNotifications);
-                  setShowSecurity(false);
-                  setShowProfile(false);
-                }}
-                className={`text-slate-400 hover:text-slate-600 relative p-1.5 rounded-lg transition-colors ${showNotifications ? 'bg-slate-100 text-slate-600' : ''}`}
-              >
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
-              {showNotifications && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)}>
-                    <DismissOnEscape onDismiss={() => setShowNotifications(false)} />
-                  </div>
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-                      <h4 className="font-bold text-sm text-slate-900">Notifications</h4>
-                      <span className="text-[10px] bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full">
-                        4 new
-                      </span>
-                    </div>
-                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-                      {[
-                        {
-                          title: 'New seller registration',
-                          desc: 'FreshMart Store applied for marketplace access',
-                          time: '5m ago',
-                          dot: 'bg-blue-500',
-                        },
-                        {
-                          title: 'Order #KS-28491 flagged',
-                          desc: 'Suspicious payment detected — manual review required',
-                          time: '18m ago',
-                          dot: 'bg-red-500',
-                        },
-                        {
-                          title: 'Driver KYC approved',
-                          desc: 'Mohammed Al-Salem documents verified successfully',
-                          time: '1h ago',
-                          dot: 'bg-emerald-500',
-                        },
-                        {
-                          title: 'System update complete',
-                          desc: 'v3.12.0 deployed to all regions',
-                          time: '3h ago',
-                          dot: 'bg-slate-400',
-                        },
-                      ].map((n, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors"
-                        >
-                          <span className={`w-2 h-2 rounded-full ${n.dot} mt-1.5 shrink-0`} />
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">{n.title}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{n.desc}</p>
-                            <p className="text-[10px] text-slate-400 mt-1">{n.time}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <Link
-                      href="/admin/settings"
-                      onClick={() => setShowNotifications(false)}
-                      className="block text-center text-xs text-blue-600 font-bold py-2.5 border-t border-slate-100 hover:bg-blue-50 transition-colors"
-                    >
-                      View All Notifications
-                    </Link>
-                  </div>
-                </>
-              )}
-            </div>
+            <NotificationsMenu
+              open={showNotifications}
+              onToggle={() => {
+                setShowNotifications(!showNotifications);
+                setShowSecurity(false);
+                setShowProfile(false);
+              }}
+              onClose={() => setShowNotifications(false)}
+            />
 
             {/* Language — options follow the region selected above, so an admin
                 working the Qatari market sees Arabic and English only. */}
@@ -669,85 +950,15 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Security Alerts */}
-            <div className="relative">
-              <button
-                title="Security alerts"
-                onClick={() => {
-                  setShowSecurity(!showSecurity);
-                  setShowNotifications(false);
-                  setShowProfile(false);
-                }}
-                className={`text-slate-400 hover:text-slate-600 relative p-1.5 rounded-lg transition-colors ${showSecurity ? 'bg-slate-100 text-slate-600' : ''}`}
-              >
-                <ShieldAlert className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full"></span>
-              </button>
-              {showSecurity && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowSecurity(false)}>
-                    <DismissOnEscape onDismiss={() => setShowSecurity(false)} />
-                  </div>
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-                      <h4 className="font-bold text-sm text-slate-900">Security Alerts</h4>
-                      <span className="text-[10px] bg-amber-100 text-amber-600 font-bold px-2 py-0.5 rounded-full">
-                        2 active
-                      </span>
-                    </div>
-                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-                      {[
-                        {
-                          title: 'Rate limit breach detected',
-                          desc: 'API endpoint /api/auth/login exceeded 500 req/min from IP 192.168.1.x',
-                          severity: 'high',
-                          time: '12m ago',
-                        },
-                        {
-                          title: 'Unusual login pattern',
-                          desc: 'Admin login attempt from unrecognized device in Lagos, Nigeria',
-                          severity: 'medium',
-                          time: '45m ago',
-                        },
-                        {
-                          title: 'SSL certificate renewal',
-                          desc: 'Certificate for api.kartseek.com expires in 14 days',
-                          severity: 'low',
-                          time: '2h ago',
-                        },
-                      ].map((a, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors"
-                        >
-                          <div
-                            className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${a.severity === 'high' ? 'bg-red-500' : a.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-400'}`}
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-slate-900">{a.title}</p>
-                              <span
-                                className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${a.severity === 'high' ? 'bg-red-100 text-red-600' : a.severity === 'medium' ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-blue-600'}`}
-                              >
-                                {a.severity}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-0.5">{a.desc}</p>
-                            <p className="text-[10px] text-slate-400 mt-1">{a.time}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <Link
-                      href="/admin/security"
-                      onClick={() => setShowSecurity(false)}
-                      className="block text-center text-xs text-blue-600 font-bold py-2.5 border-t border-slate-100 hover:bg-blue-50 transition-colors"
-                    >
-                      Security Dashboard →
-                    </Link>
-                  </div>
-                </>
-              )}
-            </div>
+            <SecurityMenu
+              open={showSecurity}
+              onToggle={() => {
+                setShowSecurity(!showSecurity);
+                setShowNotifications(false);
+                setShowProfile(false);
+              }}
+              onClose={() => setShowSecurity(false)}
+            />
 
             {/* Profile Dropdown */}
             <div className="relative">
