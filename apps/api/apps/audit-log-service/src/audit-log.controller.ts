@@ -1,32 +1,44 @@
-import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload, Transport } from '@nestjs/microservices';
 import { AuditLogService } from './audit-log.service';
 
+/**
+ * The audit trail's own service. It speaks **TCP and Kafka**; its HTTP port
+ * answers one question only, and that question is "are you alive".
+ *
+ * It used to serve four more routes over HTTP — `GET /audit-logs`,
+ * `GET /audit-logs/user/:userId`, `GET /audit-logs/resource/:r/:id` and
+ * `POST /audit-logs` — on `AUDIT_LOG_SERVICE_PORT` (3028), with
+ * `app.enableCors()` in `main.ts` and **no guard, no token and no `scope`
+ * parameter**. Anyone who could reach the port read every market's
+ * administrative history — the exact cross-market activity a market lock
+ * exists to hide — and could `POST` forged entries into the collection an
+ * auditor treats as the system of record. Nothing in the repo called them: the
+ * gateway reads and writes over TCP 4028 (`audit.query` / `audit.record`) and
+ * the only HTTP consumer is the gateway's health probe
+ * (`api-gateway/src/controllers/health.controller.ts`), which wants
+ * `/audit-logs/health`. So they are gone rather than guarded — an
+ * authenticated second door onto the same rows would still have to re-derive
+ * the market scope the gateway already resolves from the signed token.
+ *
+ * `AuditLogService.getRecentLogs` / `getLogsByUser` / `getLogsByResource` are
+ * left in place: they are covered by `audit-log.service.spec.ts` and the
+ * service file is outside this change's remit. They are no longer reachable
+ * from outside the process.
+ *
+ * `audit-log.controller.spec.ts` asserts, from the route metadata, that
+ * `health` is the only HTTP handler on this class — so a new `@Get`/`@Post`
+ * here fails the suite rather than quietly re-opening the trail.
+ */
 @Controller('audit-logs')
 export class AuditLogController {
   constructor(private readonly svc: AuditLogService) {}
+
+  /** The gateway's service catalogue probes this, and nothing else here. */
   @Get('health') health() {
     return this.svc.healthCheck();
   }
-  @Post() log(@Body() dto: any) {
-    return this.svc.logEvent(dto);
-  }
-  @Get() getRecent(@Query('page') page = 1, @Query('limit') limit = 50) {
-    return this.svc.getRecentLogs(+page, +limit);
-  }
-  @Get('user/:userId') getByUser(
-    @Param('userId') uid: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    return this.svc.getLogsByUser(uid, +page, +limit);
-  }
-  @Get('resource/:resource/:resourceId') getByResource(
-    @Param('resource') r: string,
-    @Param('resourceId') rid: string,
-  ) {
-    return this.svc.getLogsByResource(r, rid);
-  }
+
   // Kafka consumer — auto-log auditable events.
   //
   // `Transport.KAFKA` explicitly, for the same reason the two TCP handlers
