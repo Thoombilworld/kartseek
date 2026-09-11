@@ -75,6 +75,10 @@ const renderSecurity = (state: unknown) =>
 
 /** The four literals the header used to carry. */
 const OLD_NOTIFICATIONS = [
+  // The market-lock copy this round removed: the feed is personal now, so it
+  // was telling regional admins their own inbox was somebody else's.
+  'Platform notifications are not available for regional admins',
+  'these rows belong to every market',
   'FreshMart Store applied for marketplace access',
   'Order #KS-28491 flagged',
   'Mohammed Al-Salem documents verified successfully',
@@ -165,13 +169,23 @@ describe('header notifications', () => {
     expect(html).not.toContain('rounded-full mt-1.5 shrink-0 bg-red-500');
   });
 
-  it('is quiet, not alarming, for a market-locked admin the route refuses', () => {
+  /**
+   * The feed is each administrator's own inbox, so a market lock has nothing to
+   * confine and the route no longer refuses one. The header used to say
+   * "Platform notifications are not available for regional admins — these rows
+   * belong to every market", which became false the moment the rows became
+   * personal. A 403 now means something else entirely, so the server's own words
+   * are shown instead of a guess.
+   */
+  it('shows the server’s reason for a refusal, not a guess about market scope', () => {
     const html = renderNotifications({
       phase: 'forbidden',
-      message:
-        'Your account is restricted to the QA market; platform notifications belongs to every market.',
+      message: 'Your session does not identify you; sign in again.',
     });
-    expect(html).toContain('Platform notifications are not available for regional admins');
+    expect(html).toContain('You cannot read this feed.');
+    expect(html).toContain('Your session does not identify you; sign in again.');
+    expect(html).not.toContain('regional admins');
+    expect(html).not.toContain('belong to every market');
     expect(html).not.toContain('Not connected.');
     expect(html).not.toContain('bg-red-500 rounded-full');
   });

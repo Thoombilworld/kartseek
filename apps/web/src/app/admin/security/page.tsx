@@ -226,6 +226,45 @@ const UNBACKED_SECTIONS = [
   ['Protection-mode switch', 'Attack mode is entered automatically; only clearing it is an API.'],
 ] as const;
 
+/**
+ * What the server said when it refused a ban, an unban or a whitelist change.
+ *
+ * A component rather than markup inside the page, so the copy can be rendered
+ * and asserted directly: the state that drives it is only ever set from a click
+ * handler, which `renderToStaticMarkup` never runs.
+ *
+ * It stays until the next attempt or an explicit dismissal — `AdminToast` clears
+ * itself after four seconds, which is not long enough to read a validation
+ * rejection, find the field it names and correct it. The form keeps its contents
+ * for the same reason.
+ */
+export function SecurityActionError({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-3"
+    >
+      <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-red-900">The security API refused that request.</p>
+        <p className="text-xs text-red-700 mt-0.5 break-words">{message}</p>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="text-xs font-bold text-red-700 hover:text-red-900 shrink-0"
+      >
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SecurityDashboardPage() {
@@ -405,22 +444,7 @@ export default function SecurityDashboardPage() {
       </div>
 
       {lastError && (
-        <div
-          role="alert"
-          className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-3"
-        >
-          <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-red-900">The security API refused that request.</p>
-            <p className="text-xs text-red-700 mt-0.5 break-words">{lastError}</p>
-          </div>
-          <button
-            onClick={() => setLastError(null)}
-            className="text-xs font-bold text-red-700 hover:text-red-900 shrink-0"
-          >
-            Dismiss
-          </button>
-        </div>
+        <SecurityActionError message={lastError} onDismiss={() => setLastError(null)} />
       )}
 
       {/* ── Counters ──────────────────────────────────────────────────────── */}

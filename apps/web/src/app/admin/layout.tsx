@@ -534,9 +534,13 @@ export function NotificationsMenuView({
           <p className="px-4 py-5 text-xs text-slate-400">Asking the platform…</p>
         )}
         {state.phase === 'forbidden' && (
+          // No longer "not available for regional admins": the feed is each
+          // administrator's own inbox, so a market lock has nothing to confine
+          // and the route no longer refuses one. A 403 here now means something
+          // else — an expired or role-less session — so the server's own words
+          // are shown rather than a guess about market scope.
           <p className="px-4 py-5 text-xs text-slate-500">
-            Platform notifications are not available for regional admins — these rows belong to
-            every market.
+            You cannot read this feed. {state.message}
           </p>
         )}
         {state.phase === 'unreachable' && (

@@ -58,6 +58,7 @@ const {
   formatSeconds,
   parseEndpointKey,
   topEndpoints,
+  SecurityActionError,
 } = SecurityPage;
 
 const ok = <T>(data: T) => ({ success: true, data });
@@ -227,21 +228,41 @@ describe('/admin/security trend chart', () => {
 });
 
 describe('/admin/security mutation errors', () => {
-  it('keeps a refusal on screen instead of only flashing a toast', () => {
-    // A validation rejection has to survive long enough to read, work out which
-    // field it names, and correct — the form deliberately keeps its contents so
-    // the admin can. `AdminToast` self-dismisses after four seconds.
-    const html = render();
-    expect(html).not.toContain('The security API refused that request.');
-    // The line is state-driven, so its copy is asserted from the source; what
-    // matters here is that the page has somewhere persistent to put it.
-    const source = require('fs').readFileSync(
-      require('path').join(__dirname, '../app/admin/security/page.tsx'),
-      'utf8',
-    ) as string;
-    expect(source).toContain('setLastError');
-    expect(source).toContain('The security API refused that request.');
-    expect(source).toContain('role="alert"');
+  /**
+   * A validation rejection has to survive long enough to read, work out which
+   * field it names, and correct — the form deliberately keeps its contents so
+   * the admin can. `AdminToast` self-dismisses after four seconds, so the
+   * refusal gets its own persistent line.
+   */
+  it('renders the server’s own words, in an alert, with a way to dismiss it', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SecurityActionError, {
+        message: 'ip must be an ip address',
+        onDismiss: () => {},
+      }),
+    );
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('The security API refused that request.');
+    // Verbatim: a rewritten "action failed" hides which field the server named.
+    expect(html).toContain('ip must be an ip address');
+    expect(html).toContain('Dismiss');
+  });
+
+  it('joins a multi-message rejection into one readable line', () => {
+    // `apiErrorMessage` joins the array before it gets here; this pins that the
+    // banner renders the joined string rather than concatenating an array.
+    const html = renderToStaticMarkup(
+      React.createElement(SecurityActionError, {
+        message: 'property ip should not exist; property reason should not exist',
+        onDismiss: () => {},
+      }),
+    );
+    expect(html).toContain('property ip should not exist; property reason should not exist');
+    expect(html).not.toContain('should not existproperty');
+  });
+
+  it('is absent until something has actually been refused', () => {
+    expect(render()).not.toContain('The security API refused that request.');
   });
 });
 
