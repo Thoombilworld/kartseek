@@ -72,6 +72,17 @@ export class User {
   @Column({ name: 'region_locked', type: 'boolean', default: false })
   regionLocked: boolean;
 
+  /**
+   * The admin role whose permissions this account holds — a row in
+   * `admin.admin_roles`, or null for a non-staff account (and for a staff
+   * account an operator has not assigned one to yet).
+   *
+   * `type: 'uuid'` is not optional decoration: a `string | null` property with
+   * no explicit type reflects as `Object` and the gateway refuses to boot.
+   */
+  @Column({ name: 'admin_role_id', type: 'uuid', nullable: true })
+  adminRoleId: string | null;
+
   @Column({ type: 'varchar', nullable: true, default: '' })
   firstName: string | null;
 

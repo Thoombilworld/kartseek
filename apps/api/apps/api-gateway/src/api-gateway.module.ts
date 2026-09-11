@@ -88,6 +88,7 @@ import {
 } from './controllers/static-pages.controller';
 import { AdminSeoController } from './controllers/admin-seo.controller';
 import { AdminCoreController } from './controllers/admin-core.controller';
+import { AdminAccessController } from './controllers/admin-access.controller';
 import { TestSeedService } from './services/test-seed.service';
 import { MarketplaceCatalogService } from './services/marketplace-catalog.service';
 import { MarketplaceOrderService } from './services/marketplace-order.service';
@@ -142,6 +143,7 @@ import {
   StaticPage,
 } from './entities';
 import { User } from './entities/user.entity';
+import { AdminRole } from './entities/admin-role.entity';
 
 // Skip DB when no PostgreSQL is available locally (set SKIP_DB=true in .env)
 const skipDb = process.env.SKIP_DB === 'true';
@@ -223,6 +225,7 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
             PageLayout,
             StaticPage,
             User,
+            AdminRole,
           ]),
         ]),
 
@@ -233,6 +236,7 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
       PageLayout,
       User,
       StaticPage,
+      AdminRole,
     ]),
 
     // ── Security: DDoS Protection + JWT Auth ────────────────────────────────
@@ -481,6 +485,7 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
     AdminStaticPagesController, // /admin/static-pages — CMS for legal & company pages
     AdminSeoController, // /admin/seo — per-path SEO metadata overrides
     AdminCoreController, // /admin — platform-wide admin (users, KYC, audit, revenue)
+    AdminAccessController, // /admin/roles, /admin/staff — SUPER_ADMIN only
     PublicPagesController, // /pages/:slug — public page content API
   ],
   providers: [

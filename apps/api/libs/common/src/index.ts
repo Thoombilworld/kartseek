@@ -26,3 +26,6 @@ export * from './config';
 
 // ─── Staff market scope (backend half) ───────────────────────────────────────
 export * from './market/market-scope';
+
+// ─── Admin permission vocabulary & seeded roles ──────────────────────────────
+export * from './admin/permissions';
