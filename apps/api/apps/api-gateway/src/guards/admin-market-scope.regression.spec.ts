@@ -18,7 +18,33 @@ const SIGNATURE = /^ {2}(?:async\s+)?[A-Za-z_]\w*\s*\(/;
  * scan starts after the signature, so a handler's own decorators and
  * parameters never end its block.
  */
-const MEMBER_START = /^ {2}(?:@|private\b|protected\b|public\b|static\b|readonly\b|constructor\b)|^}/;
+const MEMBER_START =
+  /^ {2}(?:@|private\b|protected\b|public\b|static\b|readonly\b|constructor\b)|^}/;
+
+/**
+ * The lines of one route's handler: its decorator block above the route line,
+ * down to the next class member (or the next route's decorator, whichever is
+ * first). One function, used by the collector and by the negative control, so
+ * the test cannot drift from what the collector actually does.
+ */
+function handlerBlock(
+  src: string[],
+  routeLine: number,
+  nextRoute: number,
+): { start: number; end: number } {
+  let sig = routeLine;
+  while (sig + 1 < nextRoute && !SIGNATURE.test(src[sig])) sig++;
+  let end = nextRoute;
+  for (let k = sig + 1; k < nextRoute; k++) {
+    if (MEMBER_START.test(src[k])) {
+      end = k;
+      break;
+    }
+  }
+  let start = routeLine;
+  while (start > 0 && /^\s*(@|\)|\*|\/\/)/.test(src[start - 1])) start--;
+  return { start, end };
+}
 
 /**
  * Routes that are market-free by nature. Anything else under /admin must
@@ -64,20 +90,8 @@ function collect(): AdminRoute[] {
     routeLines.forEach(({ l, i }, idx) => {
       const m = l.match(HTTP)!;
       const nextRoute = idx + 1 < routeLines.length ? routeLines[idx + 1].i : src.length;
-      // Walk to the handler's signature first, then to the next member start.
-      let sig = i;
-      while (sig + 1 < nextRoute && !SIGNATURE.test(src[sig])) sig++;
-      let end = nextRoute;
-      for (let k = sig + 1; k < nextRoute; k++) {
-        if (MEMBER_START.test(src[k])) {
-          end = k;
-          break;
-        }
-      }
-      // decorator block above + handler body until the next route decorator
-      let a = i;
-      while (a > 0 && /^\s*(@|\)|\*|\/\/)/.test(src[a - 1])) a--;
-      const block = src.slice(a, end).join('\n');
+      const { start, end } = handlerBlock(src, i, nextRoute);
+      const block = src.slice(start, end).join('\n');
       const sub = m[2] ?? m[3] ?? m[4] ?? '';
       out.push({
         file,
@@ -131,15 +145,7 @@ describe('admin market scope regression', () => {
       "  @Get('x')\n  async lastRoute() {\n    return 1;\n  }\n\n  private scopeOf(req: any) {\n    return resolveMarket(req);\n  }\n}\n",
     ).split('\n');
     const routeLine = src.findIndex((l) => HTTP.test(l));
-    let sig = routeLine;
-    while (sig + 1 < src.length && !SIGNATURE.test(src[sig])) sig++;
-    let end = src.length;
-    for (let k = sig + 1; k < src.length; k++) {
-      if (MEMBER_START.test(src[k])) {
-        end = k;
-        break;
-      }
-    }
-    expect(SCOPED.test(src.slice(routeLine, end).join('\n'))).toBe(false);
+    const { start, end } = handlerBlock(src, routeLine, src.length);
+    expect(SCOPED.test(src.slice(start, end).join('\n'))).toBe(false);
   });
 });
