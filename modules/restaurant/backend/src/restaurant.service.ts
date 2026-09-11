@@ -965,14 +965,19 @@ export class RestaurantService {
    * region-locked administrator. The restaurant is loaded before the update
    * rather than approved blind: a decision has to be checked against the
    * restaurant's own market, and an `update` by id alone cannot be.
+   *
+   * The market is `regionCode`, the platform's ISO-2 market identifier — not
+   * `countryCode`, which carries a legacy alpha-3 default ('KEN') that nothing
+   * seeds. A restaurant with no `regionCode`, or a sub-region like 'ZA-WC'
+   * rather than a plain market, is outside every locked admin's scope.
    */
   async approveRestaurant(restaurantId: string, adminId: string, scope?: string) {
     const restaurant = await this.restaurantRepo.findOne({
       where: { id: restaurantId },
-      select: { id: true, countryCode: true },
+      select: { id: true, regionCode: true },
     });
     if (!restaurant) throw new NotFoundException(`Restaurant ${restaurantId} not found`);
-    assertInMarket(restaurant.countryCode, scope, 'restaurant', this.logger);
+    assertInMarket(restaurant.regionCode, scope, 'restaurant', this.logger);
 
     await this.restaurantRepo.update(restaurantId, {
       status: RestaurantStatus.APPROVED,
@@ -994,10 +999,10 @@ export class RestaurantService {
   async suspendRestaurant(restaurantId: string, scope?: string) {
     const restaurant = await this.restaurantRepo.findOne({
       where: { id: restaurantId },
-      select: { id: true, countryCode: true },
+      select: { id: true, regionCode: true },
     });
     if (!restaurant) throw new NotFoundException(`Restaurant ${restaurantId} not found`);
-    assertInMarket(restaurant.countryCode, scope, 'restaurant', this.logger);
+    assertInMarket(restaurant.regionCode, scope, 'restaurant', this.logger);
 
     await this.restaurantRepo.update(restaurantId, {
       status: RestaurantStatus.SUSPENDED,
@@ -1025,20 +1030,24 @@ export class RestaurantService {
   }
 
   /**
-   * `countryCode` is the caller's market, forwarded by the gateway as `scope`
+   * `regionCode` is the caller's market, forwarded by the gateway as `scope`
    * for a region-locked administrator and left undefined for a global one.
    * Without it the Qatar admin's restaurant list was the whole platform's.
+   *
+   * `regionCode`, not `countryCode`: the platform's market identifier is the
+   * ISO-2 code, while `countryCode` here carries a legacy alpha-3 default
+   * ('KEN') that nothing seeds — filtering on it matched no row in any market.
    */
   async getAdminRestaurantList(opts: {
     status?: string;
     page?: number;
     limit?: number;
-    countryCode?: string;
+    regionCode?: string;
   }) {
-    const { status, page = 1, limit = 50, countryCode } = opts;
+    const { status, page = 1, limit = 50, regionCode } = opts;
     const where: any = {};
     if (status && status !== 'all') where.status = status;
-    if (countryCode) where.countryCode = countryCode;
+    if (regionCode) where.regionCode = regionCode;
     const [data, total] = await this.restaurantRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },

@@ -724,9 +724,11 @@ export class RestaurantController {
   // narrows to it; the decisions are asserted against the restaurant's own
   // market inside the service, before anything is written or published.
 
+  // The gateway names the market `countryCode` on the wire; the column it
+  // resolves to here is `regionCode`, the platform's ISO-2 market identifier.
   @MessagePattern({ cmd: 'admin.restaurant.list' })
   tcpAdminGetAdminRestaurantList(@Payload() d: EmptyMessage) {
-    return this.svc.getAdminRestaurantList({ ...d, countryCode: d?.scope ?? d?.countryCode });
+    return this.svc.getAdminRestaurantList({ ...d, regionCode: d?.scope ?? d?.countryCode });
   }
 
   @MessagePattern({ cmd: 'admin.restaurant.approve' })
