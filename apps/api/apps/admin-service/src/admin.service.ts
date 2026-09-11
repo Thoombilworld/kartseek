@@ -238,13 +238,14 @@ export class AdminService {
     search?: string,
     scope?: string,
   ) {
+    const market = marketPredicate(scope, country);
+
     // Try DB query first, fallback to Redis index
     if (this.isDbActive()) {
       try {
         const qb = this.em!.createQueryBuilder().select('u').from('users', 'u');
 
         if (role) qb.andWhere('u.role = :role', { role });
-        const market = marketPredicate(scope, country);
         if (scope) qb.andWhere('u.country = :scope', { scope: market });
         else if (market) qb.andWhere('u.country = :country', { country: market });
         if (search) {
@@ -273,6 +274,14 @@ export class AdminService {
       const s = search.toLowerCase();
       filtered = filtered.filter(
         (u) => u.name?.toLowerCase().includes(s) || u.email?.toLowerCase().includes(s),
+      );
+    }
+    // A locked admin must not see every market's users just because the DB
+    // query above failed or is switched off — fail closed: a user with no
+    // resolvable market is excluded, not shown, when a market is required.
+    if (market) {
+      filtered = filtered.filter(
+        (u) => marketPredicate(undefined, u.country ?? u.countryCode ?? u.regionCode) === market,
       );
     }
 

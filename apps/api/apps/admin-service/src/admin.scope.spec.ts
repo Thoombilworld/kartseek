@@ -113,4 +113,31 @@ describe('AdminService market scope', () => {
       NotImplementedException,
     );
   });
+
+  it('keeps the users list market-scoped when it falls back to the Redis index', async () => {
+    // isDbActive() is false with em: null, so getUsersList never reaches the
+    // query builder and must filter admin:users:index itself.
+    const redis = {
+      keys: vi.fn(async () => []),
+      getJson: vi.fn(async (k: string) =>
+        k === 'admin:users:index'
+          ? [
+              { id: 'u-qa', country: 'QA' },
+              { id: 'u-in', country: 'IN' },
+            ]
+          : null,
+      ),
+      setJson: vi.fn(async () => undefined),
+      get: vi.fn(async () => '0'),
+      set: vi.fn(async () => undefined),
+      del: vi.fn(async () => undefined),
+    };
+    const kafka = { publish: vi.fn(async () => undefined) };
+    const svc = new AdminService(redis as any, kafka as any, {} as any, null);
+
+    const res = await svc.getUsersList(1, 20, undefined, undefined, undefined, 'QA');
+
+    expect(res.data.map((u: any) => u.id)).toEqual(['u-qa']);
+    expect(res.total).toBe(1);
+  });
 });
