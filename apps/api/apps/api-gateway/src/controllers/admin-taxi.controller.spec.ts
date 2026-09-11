@@ -28,7 +28,14 @@ describe('AdminTaxiController market scope', () => {
     const { ctrl } = build();
     await expect(ctrl.upsertConfig(req(qaAdmin), 'IN', {})).rejects.toThrow(ForbiddenException);
     await expect(
-      ctrl.upsertRateCard(req(qaAdmin), { countryCode: 'IN', vehicleType: 'sedan' }),
+      ctrl.upsertRateCard(req(qaAdmin), {
+        countryCode: 'IN',
+        vehicleType: 'sedan',
+        baseFare: 50,
+        distanceRate: 12,
+        timeRate: 2,
+        minimumFare: 80,
+      }),
     ).rejects.toThrow(ForbiddenException);
     await expect(ctrl.rateCards(req(qaAdmin), 'IN')).rejects.toThrow(ForbiddenException);
   });

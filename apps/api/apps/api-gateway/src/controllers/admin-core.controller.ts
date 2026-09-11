@@ -24,6 +24,7 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
 import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { KycDecisionDto, ReasonDto } from '../dto/admin-core.dto';
 
 /**
  * Admin Core — the platform-wide admin surface.
@@ -132,12 +133,12 @@ export class AdminCoreController {
   async banUser(
     @Req() req: any,
     @Param('userId', ParseUUIDPipe) userId: string,
-    @Body() dto: { reason?: string },
+    @Body() dto: ReasonDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that user');
     return this.send('admin_ban_user', {
       userId,
-      reason: dto?.reason ?? '',
+      reason: dto.reason,
       adminId: this.actorId(req),
       scope,
     });
@@ -168,12 +169,12 @@ export class AdminCoreController {
   async approveKyc(
     @Req() req: any,
     @Param('entityId') entityId: string,
-    @Body() dto: { entityType?: string },
+    @Body() dto: KycDecisionDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that identity check');
     return this.send('admin_kyc_approve', {
       entityId,
-      entityType: dto?.entityType ?? 'seller',
+      entityType: dto.entityType,
       adminId: this.actorId(req),
       scope,
     });
@@ -184,14 +185,14 @@ export class AdminCoreController {
   async rejectKyc(
     @Req() req: any,
     @Param('entityId') entityId: string,
-    @Body() dto: { entityType?: string; reason?: string },
+    @Body() dto: KycDecisionDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that identity check');
     return this.send('admin_kyc_reject', {
       entityId,
-      entityType: dto?.entityType ?? 'seller',
+      entityType: dto.entityType,
       adminId: this.actorId(req),
-      reason: dto?.reason ?? '',
+      reason: dto.reason ?? '',
       scope,
     });
   }

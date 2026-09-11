@@ -25,6 +25,17 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
 import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import {
+  PayoutBatchDto,
+  PricingUpdateDto,
+  RateCardUpsertDto,
+  ReasonDto,
+  ResolutionDto,
+  RouteCreateDto,
+  SettingsUpdateDto,
+  SurgeUpdateDto,
+  TaxiConfigUpsertDto,
+} from '../dto/admin-taxi.dto';
 
 /**
  * Admin Taxi Controller
@@ -53,6 +64,22 @@ export class AdminTaxiController {
    * rather than an error. The fallback parameter is gone; failures propagate and
    * the client can tell the two apart.
    */
+  /**
+   * The fields the caller actually sent.
+   *
+   * `transform: true` rebuilds the body through `plainToInstance`, which
+   * materialises every declared property — an optional one the console omitted
+   * arrives as an own key holding `undefined`. Spreading that into the RPC
+   * payload hands taxi-service `Object.assign(row, { timezone: undefined })`
+   * and blanks a column nobody asked to change, so only the keys carrying a
+   * value travel.
+   */
+  private sent<T extends object>(dto: T): Partial<T> {
+    return Object.fromEntries(
+      Object.entries(dto ?? ({} as T)).filter(([, v]) => v !== undefined),
+    ) as Partial<T>;
+  }
+
   /** The acting administrator, from the verified token — recorded on decisions. */
   private actorId(req: any): string {
     return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
@@ -139,13 +166,13 @@ export class AdminTaxiController {
   async suspendVendor(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { reason?: string },
+    @Body() dto: ReasonDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that vendor');
     return {
       data: await this.send('admin.taxi.suspendVendor', {
         id,
-        reason: body?.reason ?? '',
+        reason: dto.reason,
         scope,
         adminId: this.actorId(req),
       }),
@@ -225,14 +252,14 @@ export class AdminTaxiController {
   async suspendDriver(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { reason: string },
+    @Body() dto: ReasonDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that driver');
     // taxi-service implements `admin.taxi.driver.suspend`; the previous name had no handler.
     return {
       data: await this.send('admin.taxi.driver.suspend', {
         driverId: id,
-        reason: body?.reason ?? '',
+        reason: dto.reason,
         scope,
         adminId: this.actorId(req),
       }),
@@ -269,14 +296,11 @@ export class AdminTaxiController {
 
   @Post('pricing')
   @ApiOperation({ summary: 'Update pricing' })
-  async updatePricing(
-    @Req() req: any,
-    @Body() body: { countryCode?: string; [k: string]: unknown },
-  ) {
-    const { scope, market } = this.scopeOf(req, body?.countryCode, 'that pricing');
+  async updatePricing(@Req() req: any, @Body() dto: PricingUpdateDto) {
+    const { scope, market } = this.scopeOf(req, dto?.countryCode, 'that pricing');
     return {
       data: await this.send('admin.taxi.updatePricing', {
-        ...body,
+        ...this.sent(dto),
         countryCode: market,
         scope,
         adminId: this.actorId(req),
@@ -306,11 +330,11 @@ export class AdminTaxiController {
 
   @Post('surge')
   @ApiOperation({ summary: 'Update surge settings' })
-  async updateSurge(@Req() req: any, @Body() body: { countryCode?: string; [k: string]: unknown }) {
-    const { scope, market } = this.scopeOf(req, body?.countryCode, 'those surge zones');
+  async updateSurge(@Req() req: any, @Body() dto: SurgeUpdateDto) {
+    const { scope, market } = this.scopeOf(req, dto?.countryCode, 'those surge zones');
     return {
       data: await this.send('admin.taxi.updateSurge', {
-        ...body,
+        ...this.sent(dto),
         countryCode: market,
         scope,
         adminId: this.actorId(req),
@@ -341,13 +365,13 @@ export class AdminTaxiController {
   async resolveComplaint(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { resolution: string },
+    @Body() dto: ResolutionDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that complaint');
     return {
       data: await this.send('admin.taxi.resolveComplaint', {
         id,
-        resolution: body?.resolution ?? '',
+        resolution: dto.resolution,
         scope,
         adminId: this.actorId(req),
       }),
@@ -386,10 +410,10 @@ export class AdminTaxiController {
 
   @Post('payouts/process')
   @ApiOperation({ summary: 'Process a batch of approved payouts' })
-  async processPayouts(@Req() req: any, @Body() dto: { payoutIds?: string[] }) {
+  async processPayouts(@Req() req: any, @Body() dto: PayoutBatchDto) {
     const { scope } = this.scopeOf(req, undefined, 'those payouts');
     return this.send('admin.taxi.payouts.process', {
-      payoutIds: dto?.payoutIds ?? [],
+      payoutIds: dto.payoutIds,
       scope,
       adminId: this.actorId(req),
     });
@@ -431,11 +455,11 @@ export class AdminTaxiController {
 
   @Post('routes')
   @ApiOperation({ summary: 'Create route' })
-  async createRoute(@Req() req: any, @Body() body: { countryCode?: string; [k: string]: unknown }) {
-    const { scope, market } = this.scopeOf(req, body?.countryCode, 'that route');
+  async createRoute(@Req() req: any, @Body() dto: RouteCreateDto) {
+    const { scope, market } = this.scopeOf(req, dto?.countryCode, 'that route');
     return {
       data: await this.send('admin.taxi.createRoute', {
-        ...body,
+        ...this.sent(dto),
         countryCode: market,
         scope,
         adminId: this.actorId(req),
@@ -469,14 +493,11 @@ export class AdminTaxiController {
 
   @Post('settings')
   @ApiOperation({ summary: 'Update taxi settings' })
-  async updateSettings(
-    @Req() req: any,
-    @Body() body: { countryCode?: string; [k: string]: unknown },
-  ) {
-    const { scope, market } = this.scopeOf(req, body?.countryCode, 'those settings');
+  async updateSettings(@Req() req: any, @Body() dto: SettingsUpdateDto) {
+    const { scope, market } = this.scopeOf(req, dto?.countryCode, 'those settings');
     return {
       data: await this.send('admin.taxi.updateSettings', {
-        ...body,
+        ...this.sent(dto),
         countryCode: market,
         scope,
         adminId: this.actorId(req),
@@ -528,14 +549,14 @@ export class AdminTaxiController {
   async rejectDocument(
     @Req() req: any,
     @Param('documentId', ParseUUIDPipe) documentId: string,
-    @Body() dto: { reason?: string },
+    @Body() dto: ReasonDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that document');
     return this.send('admin.taxi.documents.review', {
       documentId,
       adminId: this.actorId(req),
       decision: 'rejected',
-      rejectionReason: dto?.reason,
+      rejectionReason: dto.reason,
       scope,
     });
   }
@@ -547,12 +568,12 @@ export class AdminTaxiController {
   async blockDriver(
     @Req() req: any,
     @Param('driverId', ParseUUIDPipe) driverId: string,
-    @Body() dto: { reason?: string },
+    @Body() dto: ReasonDto,
   ) {
     const { scope } = this.scopeOf(req, undefined, 'that driver');
     return this.send('admin.taxi.driver.block', {
       driverId,
-      reason: dto?.reason ?? '',
+      reason: dto.reason,
       scope,
       adminId: this.actorId(req),
     });
@@ -573,14 +594,11 @@ export class AdminTaxiController {
 
   @Post('rates')
   @ApiOperation({ summary: 'Create or update a rate card' })
-  async upsertRateCard(
-    @Req() req: any,
-    @Body() dto: { countryCode: string; vehicleType: string; [k: string]: unknown },
-  ) {
+  async upsertRateCard(@Req() req: any, @Body() dto: RateCardUpsertDto) {
     const { scope, market } = this.scopeOf(req, dto?.countryCode, 'that rate card');
     if (!market) throw new BadRequestException('countryCode is required');
     return this.send('admin.taxi.rate_card.upsert', {
-      ...dto,
+      ...this.sent(dto),
       countryCode: market,
       scope,
       adminId: this.actorId(req),
@@ -608,11 +626,11 @@ export class AdminTaxiController {
   async upsertConfig(
     @Req() req: any,
     @Param('countryCode') countryCode: string,
-    @Body() dto: Record<string, unknown>,
+    @Body() dto: TaxiConfigUpsertDto,
   ) {
     const { scope, market } = this.scopeOf(req, countryCode, 'that configuration');
     return this.send('admin.taxi.config.upsert', {
-      ...dto,
+      ...this.sent(dto),
       countryCode: market,
       scope,
       adminId: this.actorId(req),
