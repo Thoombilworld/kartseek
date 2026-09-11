@@ -1,14 +1,9 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository, ILike, In, MoreThanOrEqual, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
+import { assertInMarket as assertInMarketShared } from '@app/common';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
 import { Category } from '../entities/category.entity';
@@ -687,15 +682,7 @@ export class MarketplaceAdminService {
     scope: string | undefined,
     what: string,
   ): void {
-    if (!scope) return;
-    const owner = recordRegion ? String(recordRegion).toUpperCase() : null;
-    if (owner === scope.toUpperCase()) return;
-    this.logger.warn(
-      `[region-scope-denied] ${what} in ${owner ?? 'every market'} refused for a ${scope}-scoped admin`,
-    );
-    throw new ForbiddenException(
-      `This ${what} belongs to ${owner ?? 'every market'}, not to the ${scope} market.`,
-    );
+    assertInMarketShared(recordRegion, scope, what, this.logger);
   }
 
   /** The one market a banner is scoped to; null when it runs in several or everywhere. */
