@@ -30,6 +30,23 @@ jest.mock('@/lib/api/admin-core', () => ({
   },
 }));
 
+/**
+ * The viewer's permission keys, as `staff-page.spec.ts` does it.
+ *
+ * `staff.view` alone is a real state here: `GET /admin/roles` admits
+ * `SUPER_ADMIN | ADMIN` holding `staff.view` and the seeded `admin` role holds
+ * it, while every write on the controller is
+ * `@Roles(SUPER_ADMIN, 'perm:staff.manage')`.
+ */
+let permissions: string[] = ['*'];
+
+jest.mock('@/lib/contexts/auth-context', () => ({
+  useAuth: () => ({
+    hasPermission: (...perms: string[]) =>
+      permissions.includes('*') || perms.every((p) => permissions.includes(p)),
+  }),
+}));
+
 let hookState: { data: unknown; loading: boolean; error: string | null } = {
   data: null,
   loading: false,
@@ -102,8 +119,43 @@ const render = () => renderToStaticMarkup(React.createElement(RolesPage));
 describe('/admin/roles', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    permissions = ['*'];
     listRoles.mockResolvedValue({ success: true, data: API_PAYLOAD });
     hookState = { data: API_PAYLOAD, loading: false, error: null };
+  });
+
+  /**
+   * A global ADMIN can reach this page by URL — the nav item is hidden, which
+   * is not a gate — and every write control used to be drawn for them. Pressing
+   * "Create Custom Role" filled the whole form and then answered "Insufficient
+   * permissions. Your role cannot perform this action." The sibling staff page
+   * was fixed for exactly this; the roles page was missed.
+   */
+  it('offers a staff.view reader the roles, and not one control that writes', () => {
+    permissions = ['staff.view', 'dashboard.view'];
+    const html = render();
+    // The read the API does allow still renders.
+    expect(html).toContain('Regional Admin');
+    expect(html).toContain('title="View"');
+    // The writes it refuses are not offered.
+    expect(html).not.toContain('Create Custom Role');
+    expect(html).not.toContain('title="Edit"');
+    expect(html).not.toContain('title="Duplicate"');
+    expect(html).not.toContain('title="Delete"');
+    // …and the reason is said rather than left as an empty toolbar.
+    expect(html).toContain('Read-only');
+    expect(html).toContain('Manage Staff');
+  });
+
+  it('keeps every control for a viewer holding staff.manage', () => {
+    permissions = ['staff.view', 'staff.manage'];
+    const html = render();
+    expect(html).toContain('Create Custom Role');
+    expect(html).toContain('title="Edit"');
+    expect(html).toContain('title="Duplicate"');
+    // `ops_lead` is the one non-system row, so Delete is drawn for it.
+    expect(html).toContain('title="Delete"');
+    expect(html).not.toContain('Read-only');
   });
 
   it('renders the roles the API returned', () => {

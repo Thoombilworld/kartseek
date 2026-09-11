@@ -31,6 +31,7 @@ import {
   AdminErrorBanner,
 } from '@/hooks/useAdminData';
 import { adminCoreApi, type AdminRoleRow, type PermissionDef } from '@/lib/api/admin-core';
+import { useAuth } from '@/lib/contexts/auth-context';
 
 /**
  * Roles & Permissions.
@@ -331,6 +332,25 @@ function keyFromName(name: string): string {
 
 export default function RolesPage() {
   useMarketplaceRegionFilter([]);
+
+  /**
+   * Reading and writing roles are two different permissions, and this page had
+   * only ever checked the first by accident.
+   *
+   * `GET /admin/roles` admits `SUPER_ADMIN | ADMIN` holding `staff.view`, and
+   * the seeded `admin` role holds it — while every write is
+   * `@Roles(SUPER_ADMIN, 'perm:staff.manage')`. So a global ADMIN could open
+   * this page by URL (the nav item is hidden, which is not a gate), press
+   * "Create Custom Role", fill the whole form, submit, and be told
+   * "Insufficient permissions. Your role cannot perform this action." The
+   * failure was at least reported honestly, but the control was offered to
+   * someone who can never use it.
+   *
+   * Same derivation as `staff/page.tsx`, which was fixed for exactly this.
+   */
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('staff.manage');
+
   const { data, loading, error, refetch, toast, showToast } = useAdminData(async () => {
     const res = await adminCoreApi.listRoles();
     if (!res.success) throw new Error(res.error || 'Could not load roles');
@@ -432,17 +452,27 @@ export default function RolesPage() {
             </Link>
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditRole(undefined);
-            setViewOnlyModal(false);
-            setShowModal(true);
-          }}
-          disabled={loading || !!error}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" /> Create Custom Role
-        </button>
+        {canManage ? (
+          <button
+            onClick={() => {
+              setEditRole(undefined);
+              setViewOnlyModal(false);
+              setShowModal(true);
+            }}
+            disabled={loading || !!error}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" /> Create Custom Role
+          </button>
+        ) : (
+          // Said plainly rather than left blank, the same wording the staff
+          // page uses: a reader should know why there is nothing to press
+          // rather than wonder whether the page failed to load.
+          <p className="text-xs text-slate-500 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5" /> Read-only — role changes need the Manage Staff
+            permission.
+          </p>
+        )}
       </div>
 
       {/* Summary */}
@@ -577,29 +607,37 @@ export default function RolesPage() {
                             >
                               <Eye className="w-4 h-4 text-slate-400" />
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditRole(r);
-                                setViewOnlyModal(false);
-                                setShowModal(true);
-                              }}
-                              className="p-1.5 hover:bg-slate-100 rounded-lg"
-                              title="Edit"
-                            >
-                              <Edit className="w-4 h-4 text-blue-500" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void duplicateRole(r);
-                              }}
-                              className="p-1.5 hover:bg-slate-100 rounded-lg"
-                              title="Duplicate"
-                            >
-                              <Copy className="w-4 h-4 text-slate-400" />
-                            </button>
-                            {!r.isSystem && (
+                            {/* Edit, Duplicate and Delete are all writes the
+                                API gates on `staff.manage`. A reader keeps the
+                                View control beside them, which is the whole of
+                                what `staff.view` grants. */}
+                            {canManage && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditRole(r);
+                                  setViewOnlyModal(false);
+                                  setShowModal(true);
+                                }}
+                                className="p-1.5 hover:bg-slate-100 rounded-lg"
+                                title="Edit"
+                              >
+                                <Edit className="w-4 h-4 text-blue-500" />
+                              </button>
+                            )}
+                            {canManage && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void duplicateRole(r);
+                                }}
+                                className="p-1.5 hover:bg-slate-100 rounded-lg"
+                                title="Duplicate"
+                              >
+                                <Copy className="w-4 h-4 text-slate-400" />
+                              </button>
+                            )}
+                            {canManage && !r.isSystem && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -683,7 +721,9 @@ export default function RolesPage() {
         <RoleEditorModal
           role={editRole}
           allPermissions={allPermissions}
-          isViewOnly={viewOnlyModal}
+          // The backstop for the row controls above: whatever opens the modal,
+          // a caller without `staff.manage` never sees a save button.
+          isViewOnly={!canManage || viewOnlyModal}
           saving={actionLoading}
           onSave={handleSaveRole}
           onClose={() => {

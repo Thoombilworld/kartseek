@@ -173,6 +173,24 @@ export async function loadTaxiConfig(countryCode: string): Promise<TaxiConfigRes
   return { ok: true, config: toConfigInput(res.data) };
 }
 
+/**
+ * The save, as a function rather than as a closure inside the button.
+ *
+ * Same shape as `loadTaxiConfig` above and for the same reason: the body this
+ * page PUTs is the thing worth asserting, and a handler only reachable through
+ * an `onClick` cannot be asserted at all under `renderToStaticMarkup`.
+ *
+ * `toConfigInput` is what makes the body legal. The draft holds whatever the
+ * inputs produced, so emptying the emergency-number field leaves
+ * `emergencyNumber: ''` — and `TaxiConfigUpsertDto` applies `@Length(1, 20)`,
+ * so posting the draft as-is meant the field could never be cleared: every
+ * attempt answered 400. `toConfigInput` maps `'' → undefined`, and the upsert
+ * merges, so an omitted key leaves the stored value alone.
+ */
+export async function saveTaxiConfig(countryCode: string, config: TaxiCountryConfigInput) {
+  return adminTaxiApi.upsertConfig(countryCode, toConfigInput(config));
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Toggle({
@@ -305,7 +323,12 @@ export default function TaxiSettingsPage() {
     if (!config) return;
     setSaving(true);
     setSaveError(null);
-    const res = await adminTaxiApi.upsertConfig(country, config);
+    // Through `saveTaxiConfig`, which normalises the draft with the same
+    // `toConfigInput` the page already applies to what it fetched — so a
+    // cleared emergency number is omitted rather than posted as `''`, which
+    // `@Length(1, 20)` refuses. Posting the raw draft made the field
+    // unclearable: every attempt answered 400.
+    const res = await saveTaxiConfig(country, config);
     setSaving(false);
     if (!res.success) {
       // "Saved!" used to appear whatever happened — including for the 400 the

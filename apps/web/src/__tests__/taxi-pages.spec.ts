@@ -303,6 +303,49 @@ describe('toConfigInput — the body PUT /admin/taxi/config/:cc accepts', () => 
   });
 });
 
+/**
+ * The Save button normalised nothing.
+ *
+ * `toConfigInput` was applied to what the page *fetched* and never to what it
+ * *posted*: `handleSave` sent the draft as-is. Emptying the emergency-number
+ * field leaves `emergencyNumber: ''` in that draft, and `@Length(1, 20)`
+ * refuses it — so the field could not be cleared through the UI at all. The
+ * page reported the failure honestly and the field stayed set forever.
+ */
+describe('saveTaxiConfig — what the Save button actually sends', () => {
+  const draftWithClearedNumber = {
+    ...SettingsPage.toConfigInput(CONFIG_ROW),
+    emergencyNumber: '',
+  };
+
+  it('omits a cleared emergency number instead of posting an empty string', async () => {
+    await SettingsPage.saveTaxiConfig('QA', draftWithClearedNumber);
+    const [country, body] = api.upsertConfig.mock.calls[0];
+    expect(country).toBe('QA');
+    expect(body.emergencyNumber).toBeUndefined();
+    // Not merely undefined in the object — absent from the JSON on the wire.
+    expect(JSON.parse(JSON.stringify(body))).not.toHaveProperty('emergencyNumber');
+  });
+
+  it('still sends a real emergency number when one is set', async () => {
+    await SettingsPage.saveTaxiConfig('QA', SettingsPage.toConfigInput(CONFIG_ROW));
+    expect(api.upsertConfig.mock.calls[0][1].emergencyNumber).toBe('999');
+  });
+
+  it('posts the DTO shape, not the draft it was handed', async () => {
+    // A stray field on the draft — the shape a future edit could introduce —
+    // must not reach a whitelist-validated endpoint.
+    await SettingsPage.saveTaxiConfig('QA', {
+      ...SettingsPage.toConfigInput(CONFIG_ROW),
+      countryCode: 'XX',
+      id: 'row-1',
+    } as never);
+    const body = api.upsertConfig.mock.calls[0][1];
+    expect(body).not.toHaveProperty('countryCode');
+    expect(body).not.toHaveProperty('id');
+  });
+});
+
 // ── Drivers ─────────────────────────────────────────────────────────────────
 
 describe('/admin/taxi/drivers', () => {

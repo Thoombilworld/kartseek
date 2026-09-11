@@ -307,20 +307,37 @@ export function SellerDrawer({
               <CheckCircle className="w-3.5 h-3.5" /> Approve seller
             </button>
           )}
-          {seller.verificationStatus === 'SUSPENDED' ? (
+          {/* Two different things land in `verificationStatus: 'SUSPENDED'`.
+              A *suspend* sets only that field and `reactivateSeller` puts it
+              back. A *block* sets `verificationStatus` **and**
+              `isActive: false`, and reactivate writes only the first — so on a
+              blocked shop this control reported "Reactivated …", flipped the
+              badge, and left the shop closed. `isActive` is what tells the two
+              apart, so a blocked seller is offered neither reactivate nor
+              suspend: the disabled "Unblock shop — no route" control below is
+              the honest state, and it already says why. */}
+          {seller.verificationStatus === 'SUSPENDED' && seller.isActive && (
             <button
               onClick={() => onAction({ kind: 'reactivate', seller })}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5"
             >
               <CheckCircle className="w-3.5 h-3.5" /> Reactivate seller
             </button>
-          ) : (
+          )}
+          {seller.verificationStatus !== 'SUSPENDED' && (
             <button
               onClick={() => onAction({ kind: 'suspend', seller })}
               className="w-full bg-amber-50 text-amber-700 hover:bg-amber-100 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5"
             >
               <Clock className="w-3.5 h-3.5" /> Suspend seller
             </button>
+          )}
+          {seller.verificationStatus === 'SUSPENDED' && !seller.isActive && (
+            <p className="text-[11px] text-slate-500 bg-slate-50 rounded-xl p-3">
+              This shop is blocked, not merely suspended — its{' '}
+              <code className="font-mono">isActive</code> flag is false. Reactivating would restore
+              the verification status and leave the shop closed, so it is not offered.
+            </p>
           )}
 
           {/* Closing the shop and locking the person out are different acts, so

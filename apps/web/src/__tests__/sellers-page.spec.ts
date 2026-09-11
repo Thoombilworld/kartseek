@@ -230,6 +230,40 @@ describe('the drawer, where the ban controls live', () => {
     expect(html).toContain('are not part of this query');
     expect(html).not.toContain('Revenue</p>');
   });
+
+  /**
+   * `verificationStatus: 'SUSPENDED'` means two different things.
+   *
+   * A *suspend* sets that field alone, and `reactivateSeller` puts it back. A
+   * *block* sets it **and** `isActive: false`, while reactivate writes only the
+   * verification status — so on a blocked shop the button reported
+   * "Reactivated …", flipped the badge, and left the shop closed. `isActive` is
+   * the only thing that tells the two states apart.
+   */
+  const suspended = { ...SELLER, verificationStatus: 'SUSPENDED', isActive: true };
+  const blocked = { ...SELLER, verificationStatus: 'SUSPENDED', isActive: false };
+
+  it('offers Reactivate for a suspended shop, which is what the route restores', () => {
+    const html = drawer(suspended);
+    expect(html).toContain('Reactivate seller');
+    expect(html).not.toContain('Suspend seller');
+  });
+
+  it('does not offer Reactivate for a blocked shop — it cannot reopen one', () => {
+    const html = drawer(blocked);
+    expect(html).not.toContain('Reactivate seller');
+    // Nor Suspend: the shop is already closed, harder than a suspension.
+    expect(html).not.toContain('Suspend seller');
+    // The disabled unblock control and its explanation are the honest state.
+    expect(html).toContain('Unblock shop');
+    expect(html).toContain('blocked, not merely suspended');
+  });
+
+  it('offers Suspend on a healthy shop, and no Reactivate', () => {
+    const html = drawer(SELLER);
+    expect(html).toContain('Suspend seller');
+    expect(html).not.toContain('Reactivate seller');
+  });
 });
 
 /** The bodies, against the real client rather than the mock. */
