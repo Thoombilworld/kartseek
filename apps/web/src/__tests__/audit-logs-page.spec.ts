@@ -188,6 +188,18 @@ describe('console-originated entries', () => {
     expect(payload.action as string).toMatch(/^[a-z][a-z0-9_.-]{2,80}$/);
   });
 
+  /**
+   * `'***'` folds to nothing, which would build `auth.` — a key the gateway's
+   * `@Matches` rejects, and `logAction` swallows a rejected write silently. A
+   * trail missing a row because its label was punctuation is worse than one
+   * carrying a vague label.
+   */
+  it.each(['***', '...', '   ', '!!!'])('never folds %s into an unpostable key', (action) => {
+    const payload = auditPostPayload(action, 'auth') as Record<string, unknown>;
+    expect(payload.action).toBe('auth.unspecified');
+    expect(payload.action as string).toMatch(/^[a-z][a-z0-9_.-]{2,80}$/);
+  });
+
   it('keeps the readable sentence in details, where it belongs', () => {
     const payload = auditPostPayload('signed_in', 'auth', 'Sara (Super Admin) signed in') as {
       details: { details?: string };

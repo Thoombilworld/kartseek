@@ -239,6 +239,7 @@ export default function SecurityDashboardPage() {
   const [banReason, setBanReason] = useState('');
   const [banDuration, setBanDuration] = useState(86400);
   const [wlInput, setWlInput] = useState('');
+  const [lastError, setLastError] = useState<string | null>(null);
 
   /**
    * Run a mutation and reload from the server.
@@ -257,12 +258,15 @@ export default function SecurityDashboardPage() {
       try {
         const res = await call();
         if (!res.success) {
-          // The server's own words. `POST /admin/security/bans` currently
-          // answers 400 for its own documented body, and an administrator needs
-          // to read that rather than a rewritten "action failed".
-          showToast(res.error || 'The security API refused that.', 'error');
+          // The server's own words, kept on screen. A toast self-dismisses after
+          // four seconds, which is not long enough to read a validation
+          // rejection, work out which field it names and correct it — and the
+          // form deliberately keeps its contents so the admin can. Cleared by
+          // the next attempt, not by a timer.
+          setLastError(res.error || 'The security API refused that.');
           return false;
         }
+        setLastError(null);
         showToast(res.message || ok, 'success');
         await refetch();
         return true;
@@ -400,6 +404,25 @@ export default function SecurityDashboardPage() {
         </div>
       </div>
 
+      {lastError && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-3"
+        >
+          <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-red-900">The security API refused that request.</p>
+            <p className="text-xs text-red-700 mt-0.5 break-words">{lastError}</p>
+          </div>
+          <button
+            onClick={() => setLastError(null)}
+            className="text-xs font-bold text-red-700 hover:text-red-900 shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* ── Counters ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
@@ -469,16 +492,20 @@ export default function SecurityDashboardPage() {
           <div className="flex items-end gap-1.5 h-28">
             {trend.map((t) => (
               <div key={t.date} className="flex-1 flex flex-col items-center gap-1 group">
+                {/* One scale for both series. The deleted version divided HTTP
+                    by `trendMax * 60px` and WebSocket by `trendMax * 20px`, so
+                    two equal counts drew bars a third apart — harmless while the
+                    numbers were invented, misleading now that they are real. */}
                 <div className="relative flex flex-col justify-end gap-0.5 h-20 w-full">
                   <div
                     ref={(el) => {
-                      if (el) el.style.setProperty('--bar-h', `${(t.httpBans / trendMax) * 60}px`);
+                      if (el) el.style.setProperty('--bar-h', `${(t.httpBans / trendMax) * 72}px`);
                     }}
                     className="bg-rose-400 rounded-t-sm security-bar"
                   />
                   <div
                     ref={(el) => {
-                      if (el) el.style.setProperty('--bar-h', `${(t.wsBans / trendMax) * 20}px`);
+                      if (el) el.style.setProperty('--bar-h', `${(t.wsBans / trendMax) * 72}px`);
                     }}
                     className="bg-amber-400 rounded-t-sm security-bar"
                   />

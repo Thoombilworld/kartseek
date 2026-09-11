@@ -135,7 +135,31 @@ describe('/admin renders the API', () => {
     expect(html).toContain('3 new today');
     expect(html).toContain('>12</p>'); // orders.today
     expect(html).toContain('>24</p>'); // orders.pending
-    expect(html).toContain('QR 22,187.97'); // revenue.today through the market formatter
+  });
+
+  /**
+   * Money is only meaningful inside one market.
+   *
+   * `getDashboardStats` sums `"order".orders.totalAmount` with no currency
+   * dimension, and under "All markets" `region-context` formats against the
+   * *home* market — so the card used to stamp QR on a figure that had added
+   * QAR, INR, AED and SAR together, in the page's default view. That is the
+   * defect the commission widget was deleted for.
+   */
+  it('prints a currency figure only when a single market is selected', () => {
+    // ALL: no formatted total at all, and the reason is on screen.
+    const all = render();
+    expect(all).not.toContain('QR 22,187.97');
+    expect(all).not.toContain('QR 2,615,268.15');
+    expect(all).toContain('Revenue is per market');
+
+    // One market: the figure is that market's, so it is printed.
+    selectedRegion = 'QA';
+    const qa = render();
+    expect(qa).toContain('QR 22,187.97');
+    expect(qa).toContain('QR 2,615,268.15');
+    expect(qa).toContain('Order value today, Qatar');
+    expect(qa).not.toContain('Revenue is per market');
   });
 
   it('reports a figure another module owns as unavailable, never as zero', () => {
@@ -207,7 +231,8 @@ describe('/admin activity panel', () => {
     expect(html).toContain('audit.logs');
     expect(html).not.toContain('The trail has no entries yet.');
     // The counters survive a refused trail — they are a different route.
-    expect(html).toContain('QR 22,187.97');
+    expect(html).toContain('>51</p>');
+    expect(html).toContain('>24</p>');
   });
 
   it('says the trail is empty only when it really returned no rows', () => {

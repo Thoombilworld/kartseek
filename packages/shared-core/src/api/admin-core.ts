@@ -318,6 +318,28 @@ function buildQuery(params: object): string {
   return q.toString() ? `?${q.toString()}` : '';
 }
 
+/**
+ * One readable sentence from whatever shape the gateway put in `message`.
+ *
+ * A class-validator rejection sends an **array** — `["property ip should not
+ * exist", "property reason should not exist"]` — and every consumer here treats
+ * `error` as a string. React renders an array by concatenating it, so a 400 read
+ * `property ip should not existproperty reason should not exist`, and
+ * `classifyApiFailure`'s `.toLowerCase()` would have thrown outright on one.
+ * Joined here, at the single place the response is unpacked, rather than at each
+ * of the call sites that forget.
+ */
+export function apiErrorMessage(message: unknown, fallback: string): string {
+  if (Array.isArray(message)) {
+    const joined = message.filter(Boolean).map(String).join('; ');
+    return joined || fallback;
+  }
+  if (typeof message === 'string' && message) return message;
+  // An object or a number is not a sentence; showing `[object Object]` to an
+  // administrator is worse than the fallback, which at least names the status.
+  return fallback;
+}
+
 async function apiCall<T>(url: string, options?: RequestInit): Promise<AdminApiResponse<T>> {
   try {
     const res = await fetch(url, { headers: getHeaders(), ...options });
@@ -326,9 +348,13 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<AdminApiR
       return {
         success: false,
         data: null as T,
-        error: json.message || `Request failed (${res.status})`,
+        error: apiErrorMessage(json.message, `Request failed (${res.status})`),
       };
-    return { success: true, data: json.data ?? json, message: json.message };
+    return {
+      success: true,
+      data: json.data ?? json,
+      message: typeof json.message === 'string' ? json.message : undefined,
+    };
   } catch (err) {
     return { success: false, data: null as T, error: 'Network error — API Gateway unreachable' };
   }

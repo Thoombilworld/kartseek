@@ -57,7 +57,7 @@ import { useAudit } from '@/lib/contexts/audit-context';
 import { isStaffRole } from '@/auth/staff-roles';
 import { CountryFlag } from '@/components/shared/country-flag';
 import { adminCoreApi, type SecurityStatus } from '@/lib/api/admin-core';
-import { adminMarketplaceApi, type AdminNotificationRow } from '@/lib/api/admin-marketplace';
+import { adminMarketplaceApi, type AdminNotificationPage } from '@/lib/api/admin-marketplace';
 import { classifyApiFailure } from '@/components/admin/api-states';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
@@ -463,7 +463,7 @@ export function NotificationsMenu({
   onToggle: () => void;
   onClose: () => void;
 }) {
-  const state = useMenuData<{ data: AdminNotificationRow[]; total: number }>(
+  const state = useMenuData<AdminNotificationPage>(
     React.useCallback(() => adminMarketplaceApi.getNotifications(), []),
   );
   return <NotificationsMenuView open={open} onToggle={onToggle} onClose={onClose} state={state} />;
@@ -486,10 +486,16 @@ export function NotificationsMenuView({
   open: boolean;
   onToggle: () => void;
   onClose: () => void;
-  state: MenuState<{ data: AdminNotificationRow[]; total: number }>;
+  state: MenuState<AdminNotificationPage>;
 }) {
   const rows = state.phase === 'ready' ? (state.value?.data ?? []) : [];
-  const unread = rows.filter((n) => !n.isRead).length;
+  // The server's count, not `rows.filter(...)`: the route returns the newest 50
+  // and an unread row older than that still belongs in the badge. Falls back to
+  // counting the page only if an older gateway omits the field.
+  const unread =
+    state.phase === 'ready' && typeof state.value?.unreadCount === 'number'
+      ? state.value.unreadCount
+      : rows.filter((n) => !n.isRead).length;
 
   return (
     <div className="relative">
@@ -542,13 +548,14 @@ export function NotificationsMenuView({
         {state.phase === 'ready' &&
           rows.slice(0, 8).map((n) => (
             <div key={n.id} className="flex gap-3 px-4 py-3">
+              {/* Unread, not "priority": `MarketplaceNotification` has no
+                  priority column — only the deleted fabricated rows did, so
+                  every genuine row fell to the grey default and the dot said
+                  nothing. `isRead` is a real column, and unread is what a
+                  reader is actually looking for. */}
               <span
                 className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                  n.priority === 'high'
-                    ? 'bg-red-500'
-                    : n.priority === 'medium'
-                      ? 'bg-amber-500'
-                      : 'bg-slate-400'
+                  n.isRead ? 'bg-slate-300' : 'bg-blue-500'
                 }`}
               />
               <div className="min-w-0">
@@ -949,16 +956,22 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
               <LocaleSwitcher showCountryTab={false} />
             </div>
 
-            {/* Security Alerts */}
-            <SecurityMenu
-              open={showSecurity}
-              onToggle={() => {
-                setShowSecurity(!showSecurity);
-                setShowNotifications(false);
-                setShowProfile(false);
-              }}
-              onClose={() => setShowSecurity(false)}
-            />
+            {/* Security alerts — same gate as the sidebar's "Security & DDoS"
+                item, and the same gate the route itself enforces. Without it a
+                support agent got a bell that fetched, 403'd, and offered a link
+                to a page they cannot open: the shape of the dead nav item
+                deleted from `navSections`. */}
+            {hasPermission('security.manage') && (
+              <SecurityMenu
+                open={showSecurity}
+                onToggle={() => {
+                  setShowSecurity(!showSecurity);
+                  setShowNotifications(false);
+                  setShowProfile(false);
+                }}
+                onClose={() => setShowSecurity(false)}
+              />
+            )}
 
             {/* Profile Dropdown */}
             <div className="relative">

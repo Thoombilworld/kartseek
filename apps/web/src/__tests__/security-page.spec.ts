@@ -191,6 +191,60 @@ describe('/admin/security renders the API', () => {
   });
 });
 
+describe('/admin/security trend chart', () => {
+  /**
+   * One scale for both series. The deleted version divided HTTP by
+   * `trendMax * 60px` and WebSocket by `trendMax * 20px`, so two equal counts
+   * drew bars a third apart — harmless while the numbers were invented.
+   */
+  it('draws equal HTTP and WebSocket counts at the same height', () => {
+    hookResult = {
+      data: {
+        ok: true,
+        board: {
+          ...BOARD,
+          trend: [{ date: '2026-09-11', httpBans: 5, wsBans: 5 }],
+        },
+      },
+      loading: false,
+      error: null,
+    };
+    // `--bar-h` is applied through a ref, which `renderToStaticMarkup` does not
+    // run, so the scale is asserted on the source of the two expressions
+    // instead: they must divide by the same denominator and multiply by the
+    // same factor.
+    const source = require('fs').readFileSync(
+      require('path').join(__dirname, '../app/admin/security/page.tsx'),
+      'utf8',
+    ) as string;
+    const factors = [...source.matchAll(/\/ trendMax\) \* (\d+)\}px/g)].map((m) => m[1]);
+    expect(factors).toHaveLength(2);
+    expect(new Set(factors).size).toBe(1);
+    // Stacked in an 80px column, so the shared factor must leave them room.
+    expect(Number(factors[0])).toBeLessThanOrEqual(80);
+    render();
+  });
+});
+
+describe('/admin/security mutation errors', () => {
+  it('keeps a refusal on screen instead of only flashing a toast', () => {
+    // A validation rejection has to survive long enough to read, work out which
+    // field it names, and correct — the form deliberately keeps its contents so
+    // the admin can. `AdminToast` self-dismisses after four seconds.
+    const html = render();
+    expect(html).not.toContain('The security API refused that request.');
+    // The line is state-driven, so its copy is asserted from the source; what
+    // matters here is that the page has somewhere persistent to put it.
+    const source = require('fs').readFileSync(
+      require('path').join(__dirname, '../app/admin/security/page.tsx'),
+      'utf8',
+    ) as string;
+    expect(source).toContain('setLastError');
+    expect(source).toContain('The security API refused that request.');
+    expect(source).toContain('role="alert"');
+  });
+});
+
 describe('/admin/security failure states', () => {
   it('shows a forbidden panel naming the permission when the server refused', () => {
     hookResult = {

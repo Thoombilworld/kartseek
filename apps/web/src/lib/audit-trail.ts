@@ -136,8 +136,22 @@ const FORBIDDEN_PATTERNS = [
   'forbidden',
 ];
 
-export function classifyAuditFailure(message: string | null | undefined): AuditFailureKind {
-  const text = (message ?? '').toLowerCase();
+/**
+ * Takes `unknown`, not `string`, on purpose.
+ *
+ * A class-validator rejection puts a `string[]` in `message`. `apiErrorMessage`
+ * joins it at the API layer, but this function is exported and called with
+ * whatever a page happens to hold, and `(message ?? '').toLowerCase()` on an
+ * array throws — turning a 400 into a blank page instead of a named failure.
+ * An array is flattened here rather than rejected: a refusal spread across
+ * several messages is still a refusal.
+ */
+export function classifyAuditFailure(message: unknown): AuditFailureKind {
+  const text = Array.isArray(message)
+    ? message.map(String).join(' ').toLowerCase()
+    : typeof message === 'string'
+      ? message.toLowerCase()
+      : '';
   return FORBIDDEN_PATTERNS.some((p) => text.includes(p)) ? 'forbidden' : 'unreachable';
 }
 

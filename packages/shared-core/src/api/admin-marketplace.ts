@@ -6,6 +6,7 @@
 
 import { getAuthToken } from '@/lib/auth-token';
 import { API_BASE_URL } from '@/lib/config/api-base';
+import { apiErrorMessage } from './admin-core';
 
 // Fallback must include `/v1` — the gateway serves `/api/v1/*` and answers 404
 // on `/api/*`. Masked today by NEXT_PUBLIC_API_URL being set, so it would only
@@ -45,24 +46,33 @@ export interface ListParams {
 }
 
 /**
- * One row of `GET /admin/marketplace/notifications`.
+ * One row of `GET /admin/marketplace/notifications` — a row of
+ * `marketplace_notifications` addressed to the signed-in administrator.
  *
- * Every field but `id` is optional because the route returns two different
- * things: rows of `marketplace.notifications` with no `userId` (the real admin
- * feed), or — when that table is empty — four rows the marketplace service
- * generates itself in `getAdminNotifications()`
- * (`modules/marketplace/backend/src/admin/admin.service.ts`). The console cannot
- * tell them apart and does not try; it renders what the route returns. The
- * substitution is a server-side fabrication and has to be removed there.
+ * No `priority`: the entity has no such column. It appeared only on the four
+ * rows the marketplace service used to fabricate when the query matched nothing
+ * (it never could — `userId` is NOT NULL and the query asked for `IsNull()`),
+ * and those are gone.
  */
 export interface AdminNotificationRow {
   id: string;
   title?: string;
   message?: string;
   type?: string;
-  priority?: string;
   isRead?: boolean;
   createdAt?: string;
+}
+
+/**
+ * The feed, with the unread total counted in the database.
+ *
+ * `unreadCount` is not `data.filter(…).length`: the route returns the newest 50
+ * and an unread row older than that still belongs in the header's badge.
+ */
+export interface AdminNotificationPage {
+  data: AdminNotificationRow[];
+  total: number;
+  unreadCount: number;
 }
 
 // ─── Auth Header ─────────────────────────────────────────────────────────────
@@ -95,8 +105,19 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
     const res = await fetch(url, { headers: getHeaders(), ...options });
     const json = await res.json();
     if (!res.ok)
-      return { success: false, data: null as T, error: json.message || 'Request failed' };
-    return { success: true, data: json.data ?? json, message: json.message };
+      // A class-validator rejection puts a `string[]` here; joined once, where
+      // the response is unpacked, rather than concatenated by React at whichever
+      // call site happens to render it. See `apiErrorMessage`.
+      return {
+        success: false,
+        data: null as T,
+        error: apiErrorMessage(json.message, `Request failed (${res.status})`),
+      };
+    return {
+      success: true,
+      data: json.data ?? json,
+      message: typeof json.message === 'string' ? json.message : undefined,
+    };
   } catch (err) {
     return { success: false, data: null as T, error: 'Network error — please check API Gateway' };
   }
@@ -252,18 +273,19 @@ export const adminMarketplaceApi = {
 
   // ── Notifications ──────────────────────────────────────────────────────────
   /**
-   * The platform's admin notification feed.
+   * The signed-in administrator's notification feed.
    *
    * Takes `country` only — deliberately no `limit`. The gateway reads nothing
    * else and the service always returns its newest 50, so accepting a `limit`
    * here would be a parameter that silently does nothing; callers showing fewer
-   * slice the array themselves.
+   * slice the array themselves. The actor is never sent: the gateway takes it
+   * from the verified token.
    *
    * Refused with 403 for a market-locked admin: the rows carry no market, so
    * this list is the whole platform's and cannot be relabelled as theirs.
    */
   getNotifications: (p: { country?: string } = {}) =>
-    apiCall<{ data: AdminNotificationRow[]; total: number }>(
+    apiCall<AdminNotificationPage>(
       `${BASE_URL}/admin/marketplace/notifications${p.country ? `?country=${encodeURIComponent(p.country)}` : ''}`,
     ),
 

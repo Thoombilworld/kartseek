@@ -91,35 +91,78 @@ const OLD_ALERTS = [
 ];
 
 describe('header notifications', () => {
-  it('renders the rows the API returned, with an unread count it counted', () => {
+  it('renders the rows the API returned, with the unread count it was given', () => {
     const html = renderNotifications({
       phase: 'ready',
       value: {
         data: [
-          {
-            id: 'n1',
-            title: 'Seller approved',
-            message: 'Al Meera Stores is live',
-            priority: 'high',
-            isRead: false,
-          },
+          { id: 'n1', title: 'Seller approved', message: 'Al Meera Stores is live', isRead: false },
           { id: 'n2', title: 'Payout batch', message: 'Ready', isRead: true },
         ],
         total: 2,
+        unreadCount: 1,
       },
     });
     expect(html).toContain('Seller approved');
     expect(html).toContain('Al Meera Stores is live');
-    expect(html).toContain('1 unread'); // one of the two, counted — not "4 new"
+    expect(html).toContain('1 unread'); // counted by the server — not "4 new"
+  });
+
+  /**
+   * The badge is the server's count, not `data.filter(...)`: the route returns
+   * the newest 50, and an unread row older than that still has to reach it.
+   */
+  it('trusts the server count over what fits on the page', () => {
+    const html = renderNotifications({
+      phase: 'ready',
+      value: {
+        data: [{ id: 'n1', title: 'One read row', isRead: true }],
+        total: 1,
+        unreadCount: 12,
+      },
+    });
+    expect(html).toContain('12 unread');
+  });
+
+  it('falls back to counting the page when no count was sent', () => {
+    const html = renderNotifications({
+      phase: 'ready',
+      value: { data: [{ id: 'n1', title: 'Unread row', isRead: false }], total: 1 },
+    });
+    expect(html).toContain('1 unread');
   });
 
   it('shows no red dot when nothing is unread', () => {
     const html = renderNotifications({
       phase: 'ready',
-      value: { data: [{ id: 'n1', title: 'Read one', isRead: true }], total: 1 },
+      value: { data: [{ id: 'n1', title: 'Read one', isRead: true }], total: 1, unreadCount: 0 },
     });
     expect(html).not.toContain('bg-red-500 rounded-full');
     expect(html).not.toContain('unread');
+  });
+
+  /**
+   * `MarketplaceNotification` has no `priority` column — only the four deleted
+   * fabricated rows had one, so a priority dot was grey for every genuine row.
+   * `isRead` is a real column, and unread is what a reader is looking for.
+   */
+  it('marks rows by unread, which is a real column, not by priority', () => {
+    const html = renderNotifications({
+      phase: 'ready',
+      value: {
+        data: [
+          { id: 'n1', title: 'Unread row', isRead: false },
+          { id: 'n2', title: 'Read row', isRead: true },
+        ],
+        total: 2,
+        unreadCount: 1,
+      },
+    });
+    expect(html).toContain('rounded-full mt-1.5 shrink-0 bg-blue-500');
+    expect(html).toContain('rounded-full mt-1.5 shrink-0 bg-slate-300');
+    // The colours the priority branch used, which nothing can set any more.
+    expect(html).not.toContain('rounded-full mt-1.5 shrink-0 bg-amber-500');
+    expect(html).not.toContain('rounded-full mt-1.5 shrink-0 bg-red-500');
   });
 
   it('is quiet, not alarming, for a market-locked admin the route refuses', () => {
@@ -145,7 +188,10 @@ describe('header notifications', () => {
   });
 
   it('says the feed is empty only when it really returned no rows', () => {
-    const html = renderNotifications({ phase: 'ready', value: { data: [], total: 0 } });
+    const html = renderNotifications({
+      phase: 'ready',
+      value: { data: [], total: 0, unreadCount: 0 },
+    });
     expect(html).toContain('Nothing to report.');
     expect(html).not.toContain('Not connected.');
   });
@@ -153,7 +199,7 @@ describe('header notifications', () => {
   it.each(OLD_NOTIFICATIONS)('no longer carries the literal %s', (needle) => {
     const states = [
       { phase: 'loading' },
-      { phase: 'ready', value: { data: [], total: 0 } },
+      { phase: 'ready', value: { data: [], total: 0, unreadCount: 0 } },
       { phase: 'forbidden', message: 'nope' },
       { phase: 'unreachable', message: 'nope' },
     ];

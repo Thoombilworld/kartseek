@@ -99,10 +99,15 @@ const REGION_NAMES: Record<string, string> = {
  * result trimmed of leading and trailing separators.
  */
 export function auditActionKey(value: string): string {
-  return value
+  const slug = value
     .toLowerCase()
     .replace(/[^a-z0-9_.-]+/g, '_')
     .replace(/^[_.-]+|[_.-]+$/g, '');
+  // `'***'` or `'...'` folds to nothing, which would build `auth.` — a key the
+  // gateway's `@Matches` rejects, and `logAction` swallows a rejected write
+  // silently. A placeholder records the entry: an audit trail missing a row
+  // because its label was punctuation is worse than one with a vague label.
+  return slug || 'unspecified';
 }
 
 /**

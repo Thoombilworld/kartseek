@@ -206,14 +206,35 @@ export default function AdminDashboardPage() {
 
       {/* ── Counters ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-linear-to-br from-emerald-500 to-emerald-600 p-5 rounded-xl shadow-md text-white">
-          <DollarSign className="w-5 h-5 opacity-80" />
-          <p className="text-3xl font-black mt-3">{formatCurrencyValue(stats.revenue.today)}</p>
-          <p className="text-sm font-medium opacity-80 mt-1">Order value today</p>
-          <p className="text-xs opacity-70 mt-2">
-            {formatCurrencyValue(stats.revenue.total)} all time
-          </p>
-        </div>
+        {/* Money is only meaningful inside one market.
+            `getDashboardStats` sums `"order".orders.totalAmount` with no
+            currency dimension, and under "All markets" `region-context` resolves
+            formatting against the *home* market — so this card used to stamp QR
+            on a figure that had added QAR, INR, AED and SAR together. That is
+            the defect the commission widget was deleted for, one card higher up,
+            and it was the page's default view. A per-market breakdown needs
+            support from admin-service (Plan C); until then the platform total is
+            not printed at all. */}
+        {isFiltered ? (
+          <div className="bg-linear-to-br from-emerald-500 to-emerald-600 p-5 rounded-xl shadow-md text-white">
+            <DollarSign className="w-5 h-5 opacity-80" />
+            <p className="text-3xl font-black mt-3">{formatCurrencyValue(stats.revenue.today)}</p>
+            <p className="text-sm font-medium opacity-80 mt-1">Order value today, {regionLabel}</p>
+            <p className="text-xs opacity-70 mt-2">
+              {formatCurrencyValue(stats.revenue.total)} all time
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <DollarSign className="w-5 h-5 text-slate-400" />
+            <p className="text-2xl font-black text-slate-300 mt-3">—</p>
+            <p className="text-sm text-slate-500 font-medium mt-1">Order value</p>
+            <p className="text-xs text-slate-400 mt-2">
+              Revenue is per market — select one above. A platform total would add every
+              market&apos;s currency into a single figure.
+            </p>
+          </div>
+        )}
 
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <Users className="w-5 h-5 text-blue-500" />
