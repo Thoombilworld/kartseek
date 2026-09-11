@@ -1,12 +1,34 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseFilters } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  Query,
+  UseFilters,
+  ForbiddenException,
+} from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DoctorService } from './doctor.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
-import { type DtoMessage, type EmptyMessage, type PaginatedMessage, RpcAwareExceptionsFilter, requireId } from '@app/common';
 import {
-  CreateAppointmentDto, UpdateAppointmentStatusDto, AdvanceTokenDto,
-  UpdateDoctorStatusDto, UpdateHospitalStatusDto, UpdateClinicStatusDto,
-  CreatePrescriptionDto, IssuePrescriptionDto, LinkPharmacyDto,
+  type DtoMessage,
+  type EmptyMessage,
+  type PaginatedMessage,
+  RpcAwareExceptionsFilter,
+  requireId,
+} from '@app/common';
+import {
+  CreateAppointmentDto,
+  UpdateAppointmentStatusDto,
+  AdvanceTokenDto,
+  UpdateDoctorStatusDto,
+  UpdateHospitalStatusDto,
+  UpdateClinicStatusDto,
+  CreatePrescriptionDto,
+  IssuePrescriptionDto,
+  LinkPharmacyDto,
 } from './dto/doctor.dto';
 
 @UseFilters(RpcAwareExceptionsFilter)
@@ -19,11 +41,15 @@ export class DoctorController {
 
   // ── Health ────────────────────────────────────────────────────────────────
   @Get('health')
-  health() { return this.svc.healthCheck(); }
+  health() {
+    return this.svc.healthCheck();
+  }
 
   // ── Specialties ───────────────────────────────────────────────────────────
   @Get('specialties')
-  getSpecialties() { return this.svc.getSpecialties(); }
+  getSpecialties() {
+    return this.svc.getSpecialties();
+  }
 
   // ── Hospitals ─────────────────────────────────────────────────────────────
   @Get('hospitals')
@@ -32,16 +58,19 @@ export class DoctorController {
     @Query('specialty') specialty?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
-  ) { return this.svc.getHospitals(city, specialty, +page, +limit); }
+  ) {
+    return this.svc.getHospitals(city, specialty, +page, +limit);
+  }
 
   @Get('hospitals/:id')
-  getHospitalById(@Param('id') id: string) { return this.svc.getHospitalById(id); }
+  getHospitalById(@Param('id') id: string) {
+    return this.svc.getHospitalById(id);
+  }
 
   @Get('hospitals/:id/doctors')
-  getDoctorsByHospital(
-    @Param('id') id: string,
-    @Query('specialty') specialty?: string,
-  ) { return this.svc.getDoctorsByHospital(id, specialty); }
+  getDoctorsByHospital(@Param('id') id: string, @Query('specialty') specialty?: string) {
+    return this.svc.getDoctorsByHospital(id, specialty);
+  }
 
   @Put('hospitals/:id/status')
   updateHospitalStatus(@Param('id') id: string, @Body() dto: UpdateHospitalStatusDto) {
@@ -55,16 +84,19 @@ export class DoctorController {
     @Query('specialty') specialty?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
-  ) { return this.svc.getClinics(city, specialty, +page, +limit); }
+  ) {
+    return this.svc.getClinics(city, specialty, +page, +limit);
+  }
 
   @Get('clinics/:id')
-  getClinicById(@Param('id') id: string) { return this.svc.getClinicById(id); }
+  getClinicById(@Param('id') id: string) {
+    return this.svc.getClinicById(id);
+  }
 
   @Get('clinics/:id/doctors')
-  getDoctorsByClinic(
-    @Param('id') id: string,
-    @Query('specialty') specialty?: string,
-  ) { return this.svc.getDoctorsByClinic(id, specialty); }
+  getDoctorsByClinic(@Param('id') id: string, @Query('specialty') specialty?: string) {
+    return this.svc.getDoctorsByClinic(id, specialty);
+  }
 
   @Put('clinics/:id/status')
   updateClinicStatus(@Param('id') id: string, @Body() dto: UpdateClinicStatusDto) {
@@ -77,10 +109,14 @@ export class DoctorController {
     @Query('specialty') specialty?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
-  ) { return this.svc.getDoctors(specialty, +page, +limit); }
+  ) {
+    return this.svc.getDoctors(specialty, +page, +limit);
+  }
 
   @Get(':id')
-  getDoctorById(@Param('id') id: string) { return this.svc.getDoctorById(id); }
+  getDoctorById(@Param('id') id: string) {
+    return this.svc.getDoctorById(id);
+  }
 
   @Get(':id/slots')
   getSlots(@Param('id') id: string, @Query('date') date: string) {
@@ -94,7 +130,9 @@ export class DoctorController {
 
   // ── Appointments ──────────────────────────────────────────────────────────
   @Post('appointments')
-  book(@Body() dto: CreateAppointmentDto) { return this.svc.bookAppointment(dto); }
+  book(@Body() dto: CreateAppointmentDto) {
+    return this.svc.bookAppointment(dto);
+  }
 
   @Get('appointments/doctor/:doctorId')
   getAppointmentsByDoctor(@Param('doctorId') doctorId: string) {
@@ -107,13 +145,14 @@ export class DoctorController {
   }
 
   @Get('appointments/:id')
-  getAppointment(@Param('id') id: string) { return this.svc.getAppointmentById(id); }
+  getAppointment(@Param('id') id: string) {
+    return this.svc.getAppointmentById(id);
+  }
 
   @Put('appointments/:id/status')
-  updateAppointmentStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateAppointmentStatusDto,
-  ) { return this.svc.updateAppointmentStatus(id, dto.status, dto.reason); }
+  updateAppointmentStatus(@Param('id') id: string, @Body() dto: UpdateAppointmentStatusDto) {
+    return this.svc.updateAppointmentStatus(id, dto.status, dto.reason);
+  }
 
   // ── Token Queue ────────────────────────────────────────────────────────────
 
@@ -128,13 +167,19 @@ export class DoctorController {
   }
 
   @Put('appointments/:id/check-in')
-  checkIn(@Param('id') id: string) { return this.svc.checkInPatient(id); }
+  checkIn(@Param('id') id: string) {
+    return this.svc.checkInPatient(id);
+  }
 
   @Put('appointments/:id/start-consultation')
-  startConsultation(@Param('id') id: string) { return this.svc.startConsultation(id); }
+  startConsultation(@Param('id') id: string) {
+    return this.svc.startConsultation(id);
+  }
 
   @Put('appointments/:id/end-consultation')
-  endConsultation(@Param('id') id: string) { return this.svc.endConsultation(id); }
+  endConsultation(@Param('id') id: string) {
+    return this.svc.endConsultation(id);
+  }
 
   // ── Reviews ───────────────────────────────────────────────────────────────
   @Get('reviews/:targetType/:targetId')
@@ -146,7 +191,9 @@ export class DoctorController {
   // These mirror every command sent by the API Gateway's DoctorController.
 
   @MessagePattern({ cmd: 'get_specialties' })
-  msgSpecialties() { return this.svc.getSpecialties(); }
+  msgSpecialties() {
+    return this.svc.getSpecialties();
+  }
 
   @MessagePattern({ cmd: 'get_hospitals' })
   msgHospitals(@Payload() d: { city?: string; specialty?: string; page?: number; limit?: number }) {
@@ -154,7 +201,9 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'get_hospital' })
-  msgHospital(@Payload() d: { id: string }) { return this.svc.getHospitalById(d.id); }
+  msgHospital(@Payload() d: { id: string }) {
+    return this.svc.getHospitalById(d.id);
+  }
 
   @MessagePattern({ cmd: 'get_hospital_doctors' })
   msgHospitalDoctors(@Payload() d: { hospitalId: string; specialty?: string }) {
@@ -172,7 +221,9 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'get_clinic' })
-  msgClinic(@Payload() d: { id: string }) { return this.svc.getClinicById(d.id); }
+  msgClinic(@Payload() d: { id: string }) {
+    return this.svc.getClinicById(d.id);
+  }
 
   @MessagePattern({ cmd: 'update_clinic_status' })
   msgUpdateClinicStatus(@Payload() d: { id: string; status: string }) {
@@ -185,7 +236,9 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'get_doctor' })
-  msgDoctor(@Payload() d: { id: string }) { return this.svc.getDoctorById(d.id); }
+  msgDoctor(@Payload() d: { id: string }) {
+    return this.svc.getDoctorById(d.id);
+  }
 
   @MessagePattern({ cmd: 'get_doctor_slots' })
   msgSlots(@Payload() d: { doctorId: string; date: string }) {
@@ -198,7 +251,9 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'book_appointment' })
-  msgBook(@Payload() d: CreateAppointmentDto) { return this.svc.bookAppointment(d); }
+  msgBook(@Payload() d: CreateAppointmentDto) {
+    return this.svc.bookAppointment(d);
+  }
 
   /**
    * The gateway sends `patientId` and `providerId`; these handlers read
@@ -272,10 +327,7 @@ export class DoctorController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Post('prescriptions')
-  createPrescription(
-    @Body() dto: CreatePrescriptionDto,
-    @Body('doctorId') doctorId: string,
-  ) {
+  createPrescription(@Body() dto: CreatePrescriptionDto, @Body('doctorId') doctorId: string) {
     return this.svc.createPrescription(doctorId, dto);
   }
 
@@ -355,7 +407,9 @@ export class DoctorController {
   }
 
   @Post('family-members')
-  addFamilyMember(@Body() dto: { userId: string; name: string; relation: string; [key: string]: any }) {
+  addFamilyMember(
+    @Body() dto: { userId: string; name: string; relation: string; [key: string]: any },
+  ) {
     return this.svc.addFamilyMember(dto.userId, dto as any);
   }
 
@@ -370,10 +424,14 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'get_family_members' })
-  msgGetFamily(@Payload() d: { userId: string }) { return this.svc.getFamilyMembers(d.userId); }
+  msgGetFamily(@Payload() d: { userId: string }) {
+    return this.svc.getFamilyMembers(d.userId);
+  }
 
   @MessagePattern({ cmd: 'add_family_member' })
-  msgAddFamily(@Payload() d: { userId: string; [key: string]: any }) { return this.svc.addFamilyMember(d.userId, d); }
+  msgAddFamily(@Payload() d: { userId: string; [key: string]: any }) {
+    return this.svc.addFamilyMember(d.userId, d);
+  }
 
   @MessagePattern({ cmd: 'update_family_member' })
   msgUpdateFamily(@Payload() d: { memberId: string; userId: string; [key: string]: any }) {
@@ -390,10 +448,7 @@ export class DoctorController {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Put('appointments/:id/reschedule')
-  rescheduleAppointment(
-    @Param('id') id: string,
-    @Body() dto: { date: string; time: string },
-  ) {
+  rescheduleAppointment(@Param('id') id: string, @Body() dto: { date: string; time: string }) {
     return this.svc.rescheduleAppointment(id, dto.date, dto.time);
   }
 
@@ -434,19 +489,29 @@ export class DoctorController {
   // franchise-service used to run against doctor/clinic tables directly.
 
   @MessagePattern({ cmd: 'franchise_doctor_kpis' })
-  msgFranchiseKpis(@Payload() d: EmptyMessage) { return this.franchiseView.getKpis(d.franchiseId); }
+  msgFranchiseKpis(@Payload() d: EmptyMessage) {
+    return this.franchiseView.getKpis(d.franchiseId);
+  }
 
   @MessagePattern({ cmd: 'franchise_doctor_clinics' })
-  msgFranchiseClinics(@Payload() d: EmptyMessage) { return this.franchiseView.getClinics(d.franchiseId, d.search, d.status); }
+  msgFranchiseClinics(@Payload() d: EmptyMessage) {
+    return this.franchiseView.getClinics(d.franchiseId, d.search, d.status);
+  }
 
   @MessagePattern({ cmd: 'franchise_doctor_appointments' })
-  msgFranchiseAppointments(@Payload() d: EmptyMessage) { return this.franchiseView.getAppointments(d.franchiseId, d.page, d.status); }
+  msgFranchiseAppointments(@Payload() d: EmptyMessage) {
+    return this.franchiseView.getAppointments(d.franchiseId, d.page, d.status);
+  }
 
   @MessagePattern({ cmd: 'franchise_doctor_doctors' })
-  msgFranchiseDoctors(@Payload() d: EmptyMessage) { return this.franchiseView.getDoctors(d.franchiseId, d.search); }
+  msgFranchiseDoctors(@Payload() d: EmptyMessage) {
+    return this.franchiseView.getDoctors(d.franchiseId, d.search);
+  }
 
   @MessagePattern({ cmd: 'franchise_doctor_analytics' })
-  msgFranchiseAnalytics(@Payload() d: EmptyMessage) { return this.franchiseView.getAnalytics(d.franchiseId, d.period); }
+  msgFranchiseAnalytics(@Payload() d: EmptyMessage) {
+    return this.franchiseView.getAnalytics(d.franchiseId, d.period);
+  }
 
   @MessagePattern({ cmd: 'franchise_doctor_update_clinic_status' })
   msgFranchiseUpdateClinicStatus(@Payload() d: any) {
@@ -460,13 +525,42 @@ export class DoctorController {
   // were in place, a 503 once they were removed. The implementations already
   // existed; only the patterns were missing.
 
+  // `scope` is the caller's market when the gateway resolved one for a
+  // region-locked administrator, and undefined for a global one.
+
   @MessagePattern({ cmd: 'admin.doctor.clinics' })
-  tcpAdminGetClinics(@Payload() d: PaginatedMessage & { city?: string; specialty?: string }) { return this.svc.getClinics(d?.city, d?.specialty, d?.page ?? 1, d?.limit ?? 20); }
+  tcpAdminGetClinics(
+    @Payload()
+    d: PaginatedMessage & {
+      city?: string;
+      specialty?: string;
+      scope?: string;
+      countryCode?: string;
+    },
+  ) {
+    return this.svc.getClinics(
+      d?.city,
+      d?.specialty,
+      d?.page ?? 1,
+      d?.limit ?? 20,
+      d?.scope ?? d?.countryCode,
+    );
+  }
 
+  /**
+   * `Doctor` carries no market column — a practitioner is reachable only
+   * through the clinic or hospital they happen to be attached to, and many
+   * rows have neither. There is no predicate to apply, so a scoped caller is
+   * refused rather than shown every market's practitioners.
+   */
   @MessagePattern({ cmd: 'admin.doctor.doctors' })
-  tcpAdminGetDoctors(@Payload() d: PaginatedMessage & { specialty?: string }) { return this.svc.getDoctors(d?.specialty, d?.page ?? 1, d?.limit ?? 20); }
-
+  tcpAdminGetDoctors(@Payload() d: PaginatedMessage & { specialty?: string; scope?: string }) {
+    if (d?.scope) throw new ForbiddenException('Doctors cannot be attributed to a market yet.');
+    return this.svc.getDoctors(d?.specialty, d?.page ?? 1, d?.limit ?? 20);
+  }
 
   @MessagePattern({ cmd: 'admin.doctor.specialties' })
-  tcpAdminGetSpecialties(@Payload() d: EmptyMessage) { return this.svc.getSpecialties(); }
+  tcpAdminGetSpecialties(@Payload() d: EmptyMessage) {
+    return this.svc.getSpecialties();
+  }
 }

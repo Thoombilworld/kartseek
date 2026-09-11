@@ -17,7 +17,11 @@ import { Prescription } from './entities/prescription.entity';
 import { PrescriptionItem } from './entities/prescription-item.entity';
 import { FamilyMember } from './entities/family-member.entity';
 import { IntakeForm } from './entities/intake-form.entity';
-import { CreateAppointmentDto, UpdateAppointmentStatusDto, CreatePrescriptionDto } from './dto/doctor.dto';
+import {
+  CreateAppointmentDto,
+  UpdateAppointmentStatusDto,
+  CreatePrescriptionDto,
+} from './dto/doctor.dto';
 import { KAFKA_TOPICS } from '@app/kafka';
 
 /**
@@ -33,7 +37,8 @@ export class DoctorService {
   constructor(
     @InjectRepository(Doctor) private readonly doctorRepo: Repository<Doctor>,
     @InjectRepository(Appointment) private readonly appointmentRepo: Repository<Appointment>,
-    @InjectRepository(DoctorAvailability) private readonly availabilityRepo: Repository<DoctorAvailability>,
+    @InjectRepository(DoctorAvailability)
+    private readonly availabilityRepo: Repository<DoctorAvailability>,
     @InjectRepository(Hospital) private readonly hospitalRepo: Repository<Hospital>,
     @InjectRepository(Clinic) private readonly clinicRepo: Repository<Clinic>,
     @InjectRepository(Specialty) private readonly specialtyRepo: Repository<Specialty>,
@@ -41,7 +46,8 @@ export class DoctorService {
     @InjectRepository(Review) private readonly reviewRepo: Repository<Review>,
     @InjectRepository(Document) private readonly documentRepo: Repository<Document>,
     @InjectRepository(Prescription) private readonly prescriptionRepo: Repository<Prescription>,
-    @InjectRepository(PrescriptionItem) private readonly prescriptionItemRepo: Repository<PrescriptionItem>,
+    @InjectRepository(PrescriptionItem)
+    private readonly prescriptionItemRepo: Repository<PrescriptionItem>,
     @InjectRepository(FamilyMember) private readonly familyMemberRepo: Repository<FamilyMember>,
     @InjectRepository(IntakeForm) private readonly intakeFormRepo: Repository<IntakeForm>,
     private readonly redis: RedisService,
@@ -64,7 +70,8 @@ export class DoctorService {
 
   // ── Hospitals ─────────────────────────────────────────────────────────────
   async getHospitals(city?: string, specialty?: string, page = 1, limit = 20) {
-    const qb = this.hospitalRepo.createQueryBuilder('h')
+    const qb = this.hospitalRepo
+      .createQueryBuilder('h')
       .where('h.status = :status', { status: 'active' });
 
     if (city) {
@@ -90,8 +97,14 @@ export class DoctorService {
   }
 
   // ── Clinics ───────────────────────────────────────────────────────────────
-  async getClinics(city?: string, specialty?: string, page = 1, limit = 20) {
-    const qb = this.clinicRepo.createQueryBuilder('c')
+  /**
+   * `regionCode` is the caller's market, forwarded by the gateway as `scope`
+   * for a region-locked administrator and left undefined for a global one.
+   * Without it the Qatar admin's clinic list was the whole platform's.
+   */
+  async getClinics(city?: string, specialty?: string, page = 1, limit = 20, regionCode?: string) {
+    const qb = this.clinicRepo
+      .createQueryBuilder('c')
       .where('c.status = :status', { status: 'active' });
 
     if (city) {
@@ -99,6 +112,9 @@ export class DoctorService {
     }
     if (specialty) {
       qb.andWhere('c.specialties LIKE :spec', { spec: `%${specialty}%` });
+    }
+    if (regionCode) {
+      qb.andWhere('c.regionCode = :rc', { rc: regionCode });
     }
 
     qb.orderBy('c.rating', 'DESC')
@@ -117,7 +133,8 @@ export class DoctorService {
 
   // ── Doctors ───────────────────────────────────────────────────────────────
   async getDoctors(specialty?: string, page = 1, limit = 20) {
-    const qb = this.doctorRepo.createQueryBuilder('d')
+    const qb = this.doctorRepo
+      .createQueryBuilder('d')
       .leftJoinAndSelect('d.hospital', 'hospital')
       .leftJoinAndSelect('d.clinic', 'clinic')
       .where('d.status = :status', { status: 'active' });
@@ -194,7 +211,7 @@ export class DoctorService {
       where: { doctorId, date, status: 'CONFIRMED' as any },
       select: ['timeSlot'],
     });
-    const bookedTimes = new Set(bookedAppointments.map(a => a.timeSlot));
+    const bookedTimes = new Set(bookedAppointments.map((a) => a.timeSlot));
     for (const slot of slots) {
       if (bookedTimes.has(slot.time)) {
         slot.available = false;
@@ -237,15 +254,25 @@ export class DoctorService {
     }
 
     // Schedule 30-min-before reminder
-    await this.scheduleAppointmentReminder(saved.id, dto.date, dto.time, dto.customerId, doctor.name);
+    await this.scheduleAppointmentReminder(
+      saved.id,
+      dto.date,
+      dto.time,
+      dto.customerId,
+      doctor.name,
+    );
 
     // Cache in Redis for fast lookup
     const refreshed = await this.appointmentRepo.findOne({ where: { id: saved.id } });
-    await this.redis.setJson(`appointment:${saved.id}`, {
-      ...refreshed,
-      doctorName: doctor.name,
-      specialty: doctor.specialty,
-    }, 86400 * 30);
+    await this.redis.setJson(
+      `appointment:${saved.id}`,
+      {
+        ...refreshed,
+        doctorName: doctor.name,
+        specialty: doctor.specialty,
+      },
+      86400 * 30,
+    );
 
     // Publish Kafka event
     await this.kafka.publish('doctor.appointment.booked', {
@@ -257,7 +284,9 @@ export class DoctorService {
       tokenNumber: refreshed?.tokenNumber,
     });
 
-    this.logger.log(`✅ Appointment booked: ${saved.id} (Token #${refreshed?.tokenNumber || 'N/A'})`);
+    this.logger.log(
+      `✅ Appointment booked: ${saved.id} (Token #${refreshed?.tokenNumber || 'N/A'})`,
+    );
     return { success: true, appointment: refreshed || saved };
   }
 
@@ -365,8 +394,7 @@ export class DoctorService {
 
   // ── Admin ──────────────────────────────────────────────────────────────────
   async getAllAppointments(status?: string, date?: string) {
-    const qb = this.appointmentRepo.createQueryBuilder('a')
-      .leftJoinAndSelect('a.doctor', 'doctor');
+    const qb = this.appointmentRepo.createQueryBuilder('a').leftJoinAndSelect('a.doctor', 'doctor');
 
     if (status) {
       qb.andWhere('a.status = :status', { status: status.toUpperCase() });
@@ -419,7 +447,7 @@ export class DoctorService {
     const redisKey = `doctor:queue:${doctorId}:${today}`;
 
     // Get current token from Redis (or calculate from DB)
-    let currentToken = parseInt(await this.redis.get(redisKey) || '0', 10);
+    let currentToken = parseInt((await this.redis.get(redisKey)) || '0', 10);
     currentToken += 1;
 
     // Persist in Redis
@@ -432,7 +460,13 @@ export class DoctorService {
       order: { tokenNumber: 'ASC' },
     });
 
-    const queueData: Array<{ id: string; tokenNumber: number; queuePosition: number; estimatedWaitMinutes: number; status: string }> = [];
+    const queueData: Array<{
+      id: string;
+      tokenNumber: number;
+      queuePosition: number;
+      estimatedWaitMinutes: number;
+      status: string;
+    }> = [];
 
     for (const appt of waitingAppointments) {
       if (!appt.tokenNumber) continue;
@@ -464,10 +498,16 @@ export class DoctorService {
 
     // Publish events
     await this.kafka.publish('doctor.token.advanced', {
-      doctorId, date: today, currentToken, avgWaitMinutes: avgWait,
+      doctorId,
+      date: today,
+      currentToken,
+      avgWaitMinutes: avgWait,
     });
     await this.kafka.publish('doctor.queue.updated', {
-      doctorId, date: today, currentToken, appointments: queueData,
+      doctorId,
+      date: today,
+      currentToken,
+      appointments: queueData,
     });
 
     this.logger.log(`🔔 Token advanced to #${currentToken} for doctor ${doctorId}`);
@@ -490,7 +530,7 @@ export class DoctorService {
     const today = date || new Date().toISOString().slice(0, 10);
     const redisKey = `doctor:queue:${doctorId}:${today}`;
 
-    const currentToken = parseInt(await this.redis.get(redisKey) || '0', 10);
+    const currentToken = parseInt((await this.redis.get(redisKey)) || '0', 10);
     const avgWait = await this.calculateEstimatedWait(doctorId);
 
     const appointments = await this.appointmentRepo.find({
@@ -498,9 +538,15 @@ export class DoctorService {
       order: { tokenNumber: 'ASC' },
     });
 
-    const totalTokens = appointments.filter(a => a.tokenNumber != null).length;
-    const waitingCount = appointments.filter(a => a.tokenNumber != null && a.tokenNumber > currentToken && a.status !== 'CANCELLED' && a.status !== 'NO_SHOW').length;
-    const completedCount = appointments.filter(a => a.status === 'COMPLETED').length;
+    const totalTokens = appointments.filter((a) => a.tokenNumber != null).length;
+    const waitingCount = appointments.filter(
+      (a) =>
+        a.tokenNumber != null &&
+        a.tokenNumber > currentToken &&
+        a.status !== 'CANCELLED' &&
+        a.status !== 'NO_SHOW',
+    ).length;
+    const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
 
     return {
       doctorId,
@@ -510,7 +556,7 @@ export class DoctorService {
       waitingCount,
       completedCount,
       avgWaitMinutes: avgWait,
-      appointments: appointments.map(a => ({
+      appointments: appointments.map((a) => ({
         id: a.id,
         patientName: a.patientName,
         tokenNumber: a.tokenNumber,
@@ -542,13 +588,14 @@ export class DoctorService {
       // the element type on its own, so the `.map()` below still saw
       // `Date | null` even though the guard above had excluded it.
       .filter((a): a is typeof a & { consultationStartedAt: Date; consultationEndedAt: Date } =>
-        Boolean(a.consultationStartedAt && a.consultationEndedAt))
-      .map(a => {
+        Boolean(a.consultationStartedAt && a.consultationEndedAt),
+      )
+      .map((a) => {
         const start = new Date(a.consultationStartedAt).getTime();
         const end = new Date(a.consultationEndedAt).getTime();
         return (end - start) / 60000; // Convert ms to minutes
       })
-      .filter(d => d > 0 && d < 120); // Sanity check: 0-120 min range
+      .filter((d) => d > 0 && d < 120); // Sanity check: 0-120 min range
 
     if (durations.length === 0) return 15; // Default 15 min per patient
 
@@ -582,11 +629,17 @@ export class DoctorService {
     await this.appointmentRepo.save(appointment);
 
     await this.kafka.publish('doctor.appointment.updated', {
-      id: appointmentId, status: 'IN_PROGRESS',
+      id: appointmentId,
+      status: 'IN_PROGRESS',
     });
 
     this.logger.log(`🩺 Consultation started: ${appointmentId}`);
-    return { success: true, appointmentId, status: 'IN_PROGRESS', startedAt: appointment.consultationStartedAt };
+    return {
+      success: true,
+      appointmentId,
+      status: 'IN_PROGRESS',
+      startedAt: appointment.consultationStartedAt,
+    };
   }
 
   /**
@@ -603,7 +656,8 @@ export class DoctorService {
     await this.appointmentRepo.save(appointment);
 
     await this.kafka.publish('doctor.appointment.completed', {
-      id: appointmentId, status: 'COMPLETED',
+      id: appointmentId,
+      status: 'COMPLETED',
     });
 
     // Auto-advance token to next patient
@@ -645,16 +699,22 @@ export class DoctorService {
 
       // Store reminder data in Redis with TTL (will be picked up by a cron/listener)
       const reminderKey = `doctor:reminder:${appointmentId}`;
-      await this.redis.setJson(reminderKey, {
-        appointmentId,
-        customerId,
-        doctorName,
-        date,
-        time,
-        scheduledFor: reminderTime.toISOString(),
-      }, secondsUntilReminder);
+      await this.redis.setJson(
+        reminderKey,
+        {
+          appointmentId,
+          customerId,
+          doctorName,
+          date,
+          time,
+          scheduledFor: reminderTime.toISOString(),
+        },
+        secondsUntilReminder,
+      );
 
-      this.logger.log(`⏰ Reminder scheduled for ${appointmentId} in ${Math.round(secondsUntilReminder / 60)} min`);
+      this.logger.log(
+        `⏰ Reminder scheduled for ${appointmentId} in ${Math.round(secondsUntilReminder / 60)} min`,
+      );
     } catch (err) {
       this.logger.warn(`Could not schedule reminder for ${appointmentId}: ${err}`);
     }
@@ -823,7 +883,7 @@ export class DoctorService {
       prescriptionId: saved.id,
       pharmacyOrderId,
       customerId: saved.customerId,
-      items: (await this.prescriptionItemRepo.find({ where: { prescriptionId } })).map(i => ({
+      items: (await this.prescriptionItemRepo.find({ where: { prescriptionId } })).map((i) => ({
         drugName: i.drugName,
         genericName: i.genericName,
         dosage: i.dosage,
@@ -831,7 +891,9 @@ export class DoctorService {
       })),
     });
 
-    this.logger.log(`💊 Prescription ${prescriptionId} linked to pharmacy order ${pharmacyOrderId}`);
+    this.logger.log(
+      `💊 Prescription ${prescriptionId} linked to pharmacy order ${pharmacyOrderId}`,
+    );
     return saved;
   }
 
@@ -892,8 +954,13 @@ export class DoctorService {
 
     // Publish event
     await this.kafka.publish(KAFKA_TOPICS.DOCTOR_APPOINTMENT_RESCHEDULED, {
-      appointmentId, doctorId: apt.doctorId, customerId: apt.customerId,
-      oldDate, oldTime, newDate, newTime,
+      appointmentId,
+      doctorId: apt.doctorId,
+      customerId: apt.customerId,
+      oldDate,
+      oldTime,
+      newDate,
+      newTime,
     });
 
     // Notify patient
@@ -905,7 +972,9 @@ export class DoctorService {
       data: { appointmentId, newDate, newTime },
     });
 
-    this.logger.log(`🔄 Appointment ${appointmentId} rescheduled: ${oldDate} ${oldTime} → ${newDate} ${newTime}`);
+    this.logger.log(
+      `🔄 Appointment ${appointmentId} rescheduled: ${oldDate} ${oldTime} → ${newDate} ${newTime}`,
+    );
     return saved;
   }
 
