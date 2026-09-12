@@ -107,6 +107,30 @@ export const envValidationSchema = Joi.object({
   // ── Google Maps ─────────────────────────────────────────────────────────
   GOOGLE_MAPS_API_KEY: Joi.string().optional(),
 
+  // ── Object storage ───────────────────────────────────────────────────────
+  // Two seams, and the private one is validated because getting it wrong is
+  // how identity documents ended up on the CDN-fronted public bucket
+  // (re-review RF-1). `STORAGE_PRIVATE_BUCKET` is required whenever the
+  // provider is a cloud one: a KYC upload with no private bucket configured is
+  // refused at the seam, and failing at boot instead says so where an operator
+  // reads it.
+  STORAGE_PROVIDER: Joi.string().valid('s3', 'gcs', 'r2', 'local').default('local'),
+  CDN_DOMAIN: Joi.string().default('cdn.kartseek.com'),
+  STORAGE_LOCAL_DIR: Joi.string().allow('').optional(),
+  STORAGE_PRIVATE_BUCKET: Joi.string()
+    .allow('')
+    .when('STORAGE_PROVIDER', {
+      is: Joi.valid('s3', 'gcs', 'r2'),
+      then: Joi.string().min(1).required(),
+      otherwise: Joi.optional(),
+    })
+    .description('Private bucket for confidential documents — never the CDN-fronted one'),
+  STORAGE_PRIVATE_PREFIX: Joi.string().allow('').default('private/'),
+  STORAGE_PRIVATE_DIR: Joi.string()
+    .allow('')
+    .optional()
+    .description('local provider only — must be outside any served static path'),
+
   // ── CSRF Protection ─────────────────────────────────────────────────────
   CSRF_ENABLED: Joi.string().valid('true', 'false').default('true'),
   CSRF_COOKIE_NAME: Joi.string().default('kartseek_csrf'),

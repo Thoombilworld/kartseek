@@ -8,6 +8,10 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
   UseGuards,
+  Inject,
+  Logger,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -21,10 +25,14 @@ import {
   ApiUnauthorizedResponse,
   ApiBadRequestResponse,
   ApiPayloadTooLargeResponse,
+  ApiBadGatewayResponse,
+  ApiServiceUnavailableResponse,
 } from '@nestjs/swagger';
+import { ClientProxy } from '@nestjs/microservices';
+import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
-import { UserRole } from '@app/common';
+import { UserRole, rpcCatch } from '@app/common';
 import { KycUploadResponseDto, ProfileImageUploadDto, ErrorResponseDto } from '../dto/gateway.dto';
 import { generateFileKey, JwtAuthGuard } from '@app/security';
 import { StorageService } from '@app/storage';
@@ -35,11 +43,60 @@ import { resolveScope } from '../guards/market-scope';
 @Controller('upload')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UploadController {
-  constructor(private readonly storage: StorageService) {}
+  private readonly logger = new Logger(UploadController.name);
+
+  constructor(
+    private readonly storage: StorageService,
+    // The KYC queue is admin-service's (Redis keys `admin:kyc:pending:*`), so
+    // the record this upload writes goes through admin-service rather than the
+    // gateway reaching into another service's keyspace. Not optional: a
+    // missing client must fail at boot, not as an upload that stores a document
+    // no queue can see.
+    @Inject('ADMIN_SERVICE') private readonly adminClient: ClientProxy,
+  ) {}
 
   /** @see resolveScope — the shared implementation. */
   private scopeOf(req: any, requested?: string, what = 'that market') {
     return resolveScope(req, requested, what);
+  }
+
+  /**
+   * A storage failure is a 502, named.
+   *
+   * Every provider inside `StorageService` used to `catch` a failed write and
+   * return a plausible CDN URL, so this controller's `await` resolved whatever
+   * happened and every upload here reported success for an object that did not
+   * exist (re-review RF-1). The providers throw now, which makes mapping the
+   * failure this controller's job: the seam is named, nothing is recorded, and
+   * the client is told to retry rather than handed a key that resolves to
+   * nothing.
+   */
+  private storageFailure(what: string, error: unknown): HttpException {
+    const detail = (error as Error)?.message ?? 'unknown storage error';
+    this.logger.error(`[storage-write-failed] what="${what}" error="${detail}"`);
+    return new HttpException(
+      `The document store did not accept ${what} (${detail}). Nothing was recorded — please retry.`,
+      HttpStatus.BAD_GATEWAY,
+    );
+  }
+
+  /**
+   * The public seam, with the failure mapped. Used by the five image uploads —
+   * a product photo that did not store is a 502 too, not a URL to an object
+   * that was never written.
+   */
+  private async storePublic(
+    folder: string,
+    key: string,
+    body: Buffer,
+    contentType: string,
+    what: string,
+  ): Promise<string> {
+    try {
+      return await this.storage.upload(folder, key, body, contentType);
+    } catch (error) {
+      throw this.storageFailure(what, error);
+    }
   }
 
   @Post('kyc-document')
@@ -49,10 +106,14 @@ export class UploadController {
     summary: 'Upload KYC document',
     description:
       'Accepts PDF, PNG, JPG, or JPEG files up to 5 MB. ' +
-      'The file is stored through StorageService under `kyc/<market>/<user>/<uuid>` and the ' +
-      'response carries that key; it is not a public URL. ' +
-      'No approval-queue row is written yet — the queue that reads these keys is owned by the ' +
-      'KYC/MODULES plan. ' +
+      'The file is stored on the PRIVATE storage seam (`StorageService.storePrivate`) under ' +
+      '`kyc/<user>/<uuid>.<ext>`: no public ACL, no CDN, no caching. The response carries that ' +
+      'opaque object key and never a URL — the only way back to the bytes is ' +
+      '`GET /admin/kyc/documents/:key`, which requires an admin role, `kyc.view`, and the ' +
+      "applicant's own market. " +
+      'The upload also records the pending review row the approval queue reads ' +
+      '(`admin:kyc:pending:<entityType>:<userId>`), carrying the key, owner, market, MIME type ' +
+      'and size. A failed store or a failed queue write answers 502/503 and records nothing. ' +
       '**Requires role: SELLER or DRIVER.**',
   })
   @ApiConsumes('multipart/form-data')
@@ -81,6 +142,16 @@ export class UploadController {
   @ApiPayloadTooLargeResponse({ description: 'File exceeds 5 MB limit' })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
   @ApiForbiddenResponse({ description: 'Role SELLER or DRIVER required' })
+  @ApiBadGatewayResponse({
+    type: ErrorResponseDto,
+    description: 'The private document store rejected the write — nothing was stored or queued',
+  })
+  @ApiServiceUnavailableResponse({
+    type: ErrorResponseDto,
+    description:
+      'The document was stored but the review queue could not be written; the object is removed ' +
+      'again, so the submission is not half-recorded',
+  })
   async uploadKycDocument(
     @Req() req: any,
     @UploadedFile(
@@ -93,39 +164,90 @@ export class UploadController {
     )
     file: any,
   ): Promise<KycUploadResponseDto> {
-    // The file is STORED, which it was not.
+    // An identity document is PRIVATE, and the store either happens or the
+    // request fails.
     //
-    // This handler used to validate the file, mint an opaque document
-    // reference, compute a `fileKey` it never used, discard
-    // `file.buffer`, and answer "KYC Document securely uploaded to object
-    // storage." with `PENDING_ADMIN_APPROVAL`. Nothing was uploaded and no row
-    // recorded it, so the reference resolved to nothing — and the applicant
-    // whose identity document it was had been told otherwise, on a compliance
-    // path (whole-branch review, MUST FIX 9). `/upload/profile-image` had the
-    // same shape until R12 wired it; this is the same wiring.
+    // History, because two fixes landed here and the first one was wrong. The
+    // original handler validated the file, minted an opaque reference,
+    // discarded `file.buffer` and answered "KYC Document securely uploaded to
+    // object storage." — nothing was uploaded, nothing recorded it, and the
+    // applicant whose identity document it was had been told otherwise on a
+    // compliance path (whole-branch review, MUST FIX 9). The fix wave then
+    // routed it through `StorageService.upload`, which is the platform's
+    // PUBLIC seam: GCS saves those objects with `public: true`, S3 and R2 stamp
+    // a public immutable `CacheControl` for the CDN in front of them, and every
+    // provider caught a failed write and returned a plausible CDN URL anyway —
+    // so the false success survived one layer down and a government ID was now
+    // on a CDN-fronted bucket (re-review RF-1).
     //
-    // `StorageService` is the platform's single storage seam, and `upload` is
-    // the call the other four uploads here make. With `STORAGE_PROVIDER`
-    // unset it logs a warning and returns a simulated CDN URL rather than
-    // writing an object — a documented dev fallback that applies to every
-    // upload on the platform, not a special case for this one.
+    // `storePrivate` is the seam for this: a private bucket/prefix (or, for the
+    // `local` provider, a private directory whose bytes are really written),
+    // no ACL, no CDN, `private, no-store`, an opaque KEY back and never a URL.
     //
-    // What is returned is the stored KEY, not the CDN URL `upload` hands back:
-    // a KYC document is not public content, and the key is what the approval
-    // queue will read when MODULES M9 builds it (no row is written here — that
-    // is the queue's schema, not a scope fix). The key is
-    // `<userId>/<uuid>.<ext>`, so the original filename never leaves the
-    // request either.
+    // The KEY carries no market segment. `kyc/<market>/…` was unreachable —
+    // `marketScopeOf` reports `locked` only for `regionLocked: true`, which
+    // nothing writes for a seller or a driver, so the segment was always absent
+    // in production while Swagger advertised `kyc/QA/…` (RF-2). The market is
+    // still resolved, and it is recorded on the queue ROW, where a region-locked
+    // reviewer's scope check can actually use it.
     const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const folder = market ? `kyc/${market}` : 'kyc';
-    // Not swallowed: a store that failed must not come back as a pending
-    // review. The upload error propagates and the applicant is told to retry.
-    await this.storage.upload(folder, fileKey, file.buffer, file.mimetype);
+    const uploadedAt = new Date().toISOString();
+
+    let key: string;
+    try {
+      key = await this.storage.storePrivate('kyc', fileKey, file.buffer, file.mimetype);
+    } catch (error) {
+      throw this.storageFailure('the identity document', error);
+    }
+
+    // The queue row is what makes the document reviewable: `admin/kyc/pending`
+    // reads `admin:kyc:pending:*` and the fix wave left that unwritten, so a
+    // stored document was invisible to the approval queue. If this write fails
+    // the object is removed again and the request fails — a document in the
+    // bucket that no queue can see is the same false success in a new place.
+    const entityType =
+      String(req.user?.role ?? '').toUpperCase() === 'DRIVER' ? 'driver' : 'seller';
+    try {
+      await lastValueFrom(
+        this.adminClient
+          .send(
+            { cmd: 'admin_kyc_document_submitted' },
+            {
+              key,
+              owner: userId,
+              entityType,
+              market: market ?? null,
+              mime: file.mimetype,
+              size: file.size,
+              uploadedAt,
+            },
+          )
+          .pipe(timeout(5000), catchError(rpcCatch('KYC review queue unavailable'))),
+      );
+    } catch (error) {
+      const detail = (error as Error)?.message ?? 'unknown error';
+      this.logger.error(`[kyc-queue-write-failed] key="${key}" owner=${userId} error="${detail}"`);
+      try {
+        await this.storage.deletePrivate(key);
+      } catch (cleanup) {
+        // Logged, not swallowed into a success: the object is orphaned and an
+        // operator needs the key to remove it by hand.
+        this.logger.error(
+          `[kyc-orphaned-object] key="${key}" could not be removed after the queue write failed: ` +
+            `${(cleanup as Error)?.message}`,
+        );
+      }
+      throw new HttpException(
+        `The document could not be queued for review (${detail}). Nothing was recorded — please retry.`,
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
     return {
       message: 'KYC document stored and queued for admin review.',
-      filename: `${folder}/${fileKey}`,
+      filename: key,
       size: file.size,
       status: 'PENDING_ADMIN_APPROVAL',
     };
@@ -181,11 +303,12 @@ export class UploadController {
     const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload(
+    const cdnUrl = await this.storePublic(
       market ? `profiles/${market}` : 'profiles',
       fileKey,
       file.buffer,
       file.mimetype,
+      'the profile image',
     );
     return { message: 'Profile image uploaded successfully.', url: cdnUrl };
   }
@@ -234,11 +357,12 @@ export class UploadController {
     const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload(
+    const cdnUrl = await this.storePublic(
       market ? `products/${market}` : 'products',
       fileKey,
       file.buffer,
       file.mimetype,
+      'the product image',
     );
     return { message: 'Product image uploaded successfully.', url: cdnUrl, size: file.size };
   }
@@ -280,7 +404,13 @@ export class UploadController {
   ) {
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload('reviews', fileKey, file.buffer, file.mimetype);
+    const cdnUrl = await this.storePublic(
+      'reviews',
+      fileKey,
+      file.buffer,
+      file.mimetype,
+      'the review photo',
+    );
     return { message: 'Review image uploaded successfully.', url: cdnUrl, size: file.size };
   }
 
@@ -335,11 +465,12 @@ export class UploadController {
     const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload(
+    const cdnUrl = await this.storePublic(
       market ? `delivery-proof/${market}` : 'delivery-proof',
       fileKey,
       file.buffer,
       file.mimetype,
+      'the proof photo',
     );
     return { message: 'Proof photo uploaded successfully.', url: cdnUrl, size: file.size };
   }
@@ -385,11 +516,12 @@ export class UploadController {
     const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload(
+    const cdnUrl = await this.storePublic(
       market ? `brands/${market}` : 'brands',
       fileKey,
       file.buffer,
       file.mimetype,
+      'the brand image',
     );
     return { message: 'Brand image uploaded successfully.', url: cdnUrl, size: file.size };
   }
@@ -434,11 +566,12 @@ export class UploadController {
     const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload(
+    const cdnUrl = await this.storePublic(
       market ? `categories/${market}` : 'categories',
       fileKey,
       file.buffer,
       file.mimetype,
+      'the category image',
     );
     return { message: 'Category image uploaded successfully.', url: cdnUrl, size: file.size };
   }

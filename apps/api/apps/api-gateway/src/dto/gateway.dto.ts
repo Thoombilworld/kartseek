@@ -848,13 +848,18 @@ export class KycUploadResponseDto {
   message: string;
 
   /**
-   * The STORED KEY, not a public URL and not the name the applicant's file had.
+   * The STORED KEY on the private storage seam — not a public URL, and not the
+   * name the applicant's file had.
    *
    * The example used to be `national_id.pdf`, and the handler used to answer
-   * with an opaque id for an object it had never written. The key is
-   * `kyc/<market>/<userId>/<uuid>.<ext>` and it resolves.
+   * with an opaque id for an object it had never written. It then read
+   * `kyc/<market>/<userId>/<uuid>.<ext>`, a shape production never produced:
+   * the market segment needed `regionLocked: true`, which nothing writes for a
+   * seller or a driver (re-review RF-2). The key is `kyc/<userId>/<uuid>.<ext>`,
+   * the market lives on the review row, and `GET /admin/kyc/documents/:key`
+   * (base64url of this key) is the only way back to the bytes.
    */
-  @ApiProperty({ example: 'kyc/QA/usr_ab12/8f1c…-…-….pdf' })
+  @ApiProperty({ example: 'kyc/usr_ab12/8f1c0c1e-5b3a-4f0e-9a1d-6a2b7c8d9e0f.pdf' })
   filename: string;
 
   @ApiProperty({ example: 245760, description: 'File size in bytes' })

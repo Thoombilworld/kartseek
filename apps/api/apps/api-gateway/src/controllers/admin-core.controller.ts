@@ -7,6 +7,7 @@ import {
   Query,
   Body,
   Req,
+  Res,
   UseGuards,
   Inject,
   Logger,
@@ -16,14 +17,24 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+  ApiOkResponse,
+  ApiNotFoundResponse,
+  ApiForbiddenResponse,
+} from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { resolveScope } from '../guards/market-scope';
+import { StorageService, StorageObjectNotFoundError } from '@app/storage';
+import { resolveScope, assertRecordInScope } from '../guards/market-scope';
 import { KycDecisionDto, ReasonDto } from '../dto/admin-core.dto';
 
 /**
@@ -49,7 +60,13 @@ import { KycDecisionDto, ReasonDto } from '../dto/admin-core.dto';
 export class AdminCoreController {
   private readonly logger = new Logger(AdminCoreController.name);
 
-  constructor(@Inject('ADMIN_SERVICE') private readonly adminClient: ClientProxy) {}
+  constructor(
+    @Inject('ADMIN_SERVICE') private readonly adminClient: ClientProxy,
+    // The KYC document read path streams from the private storage seam. Not
+    // optional: a missing provider must fail at boot rather than turn an
+    // identity-document read into a 500 during a review.
+    private readonly storage: StorageService,
+  ) {}
 
   /**
    * Forward to admin-service, preserving the failure.
@@ -199,6 +216,114 @@ export class AdminCoreController {
       reason: dto.reason ?? '',
       scope,
     });
+  }
+
+  /**
+   * Read one KYC document back — the only way to.
+   *
+   * The documents `POST /upload/kyc-document` stores live on the PRIVATE
+   * storage seam: no public ACL, no CDN, no signed URL, and therefore no link
+   * anybody can follow. Before this route there was no read path at all, which
+   * is half of why the fix wave's storage call was routed through the public
+   * seam instead (re-review RF-1) — a document nobody could read looked like a
+   * document that was not stored.
+   *
+   * `:key` is the base64url of the object key the upload returned
+   * (`kyc/<userId>/<uuid>.<ext>`). Encoded, because the key contains slashes;
+   * opaque, because it is one. It is NOT a credential — this route authorises
+   * on the token and on the record:
+   *
+   *   • `@Roles(ADMIN, SUPER_ADMIN, 'perm:kyc.view')` — the same permission the
+   *     console's KYC panel names;
+   *   • `this.scopeOf(req, …)` resolves the caller's market, and
+   *     `assertRecordInScope` compares it against the market recorded on the
+   *     document's own row, so a region-locked reviewer cannot read another
+   *     market's identity documents even holding a valid key;
+   *   • `Content-Disposition: attachment` and `Cache-Control: no-store`, so the
+   *     bytes are not rendered inline into a page and nothing downstream keeps a
+   *     copy.
+   *
+   * The OWNER's own read (a seller or driver fetching back what they submitted)
+   * is deliberately NOT here: `GET /users/partner/:partnerId/kyc` lists a
+   * different store (`partner:<id>` in Redis, written by the partner submit
+   * route) and wiring it to this seam is MODULES M9's, along with the rest of
+   * the KYC record schema.
+   */
+  @Get('kyc/documents/:key')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:kyc.view')
+  @ApiOperation({
+    summary: 'Stream one submitted KYC document',
+    description:
+      'Returns the stored bytes as an attachment, uncached. `key` is the base64url of the ' +
+      'object key `POST /upload/kyc-document` returned. Requires `kyc.view`; a region-locked ' +
+      'administrator may only read documents belonging to their own market.',
+  })
+  @ApiParam({ name: 'key', description: 'base64url of the stored object key' })
+  @ApiOkResponse({ description: 'The document bytes, as an attachment' })
+  @ApiForbiddenResponse({ description: 'Another market’s document, or `kyc.view` not held' })
+  @ApiNotFoundResponse({ description: 'No such document' })
+  async kycDocument(@Req() req: any, @Param('key') encoded: string, @Res() res: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that identity document');
+    const key = this.decodeDocumentKey(encoded);
+
+    const record = await this.send<{
+      key: string;
+      owner: string;
+      entityType: string;
+      market: string | null;
+      mime?: string;
+      size?: number;
+      uploadedAt?: string;
+    }>('admin_kyc_document', { key, scope });
+
+    // Asserted here as well as in admin-service: the record's market is the
+    // document's owner's market, and the gateway half of that rule is what the
+    // market-scope regression reads.
+    assertRecordInScope(req, record?.market, 'that identity document');
+
+    let object;
+    try {
+      object = await this.storage.readPrivate(key);
+    } catch (err) {
+      if (err instanceof StorageObjectNotFoundError) {
+        throw new HttpException(
+          'That identity document is no longer in the document store.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      this.logger.error(`kyc document read failed [${key}]: ${(err as Error)?.message}`);
+      throw new HttpException('The document store could not be read.', HttpStatus.BAD_GATEWAY);
+    }
+
+    const filename = key.split('/').pop() || 'document';
+    res.setHeader('Content-Type', object.contentType || record?.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(object.size));
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.status(HttpStatus.OK).end(object.body);
+  }
+
+  /**
+   * base64url → object key, refusing anything that is not one of ours.
+   *
+   * The key comes off a URL, so it is untrusted input on a path that reads
+   * files: the shape is pinned to `kyc/<owner>/<uuid>.<ext>` and traversal
+   * cannot survive it (`StorageService` refuses `..` again on its own side).
+   */
+  private decodeDocumentKey(encoded: string): string {
+    let key: string;
+    try {
+      key = Buffer.from(String(encoded ?? ''), 'base64url').toString('utf8');
+    } catch {
+      key = '';
+    }
+    if (!/^kyc\/[A-Za-z0-9._@:-]{1,80}\/[0-9a-f-]{36}\.(pdf|png|jpe?g)$/i.test(key)) {
+      throw new HttpException('That is not a document key.', HttpStatus.BAD_REQUEST);
+    }
+    return key;
   }
 
   // ── Audit trail ────────────────────────────────────────────────────────────
