@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ForbiddenException, Logger } from '@nestjs/common';
+import { assertInMarket } from '@app/common';
 import {
   assertRecordInScope,
   marketScopeOf,
@@ -15,8 +16,26 @@ const reqAs = (user: Record<string, unknown>) => ({
 });
 
 const qaAdmin = { id: 'u-qa', role: 'ADMIN', regionCode: 'QA', regionLocked: true };
+const inAdmin = { id: 'u-in', role: 'ADMIN', regionCode: 'IN', regionLocked: true };
 const globalAdmin = { id: 'u-g', role: 'ADMIN' };
 const superAdmin = { id: 'u-s', role: 'SUPER_ADMIN', regionCode: 'QA', regionLocked: true };
+const brokenLockAdmin = {
+  id: 'u-b',
+  role: 'ADMIN',
+  regionCode: 'NOT-A-COUNTRY',
+  regionLocked: true,
+};
+
+/** `'allowed'` or `'refused'` — so two implementations can be compared as data. */
+function verdict(fn: () => void): string {
+  try {
+    fn();
+    return 'allowed';
+  } catch {
+    return 'refused';
+  }
+}
+const silent = { warn: () => undefined };
 
 describe('marketScopeOf', () => {
   it('locks a region-locked ADMIN to their market', () => {
@@ -67,6 +86,80 @@ describe('assertRecordInScope', () => {
     );
     expect(() => assertRecordInScope(reqAs(qaAdmin), null, 'that banner')).toThrow(
       'that banner belongs to every market',
+    );
+  });
+
+  /**
+   * The record side normalises, exactly as `assertInMarket` does in
+   * `@app/common` — finding A-3 of the whole-branch review.
+   *
+   * This comparator was a raw `String(recordRegion).toUpperCase() === scope
+   * .region`, while every backend comparison went through `normaliseMarket`.
+   * `marketplace.sellers.region_code` is an unbounded, unvalidated, nullable
+   * varchar written straight from `input.countryCode`, and the dev database
+   * holds `IN-MH`, `IND`, `NOT-A-COUNTRY` and an XSS payload in it. So a seller
+   * stored as `IN-MH` was refused for the IN admin who owns that market —
+   * invisible to them, 403 on approve. That is the AUD2-079 symptom Task 5
+   * fixed on the restaurant side, still live on the gateway side.
+   *
+   * Capability loss, not leakage: the LOCK side cannot hold garbage (the staff
+   * DTOs validate `^[A-Za-z]{2}$` and `resolveMarket` refuses an unreadable
+   * lock at source), so no junk value could ever EQUAL a scope.
+   */
+  it('resolves a sub-region on the record to its market, like assertInMarket', () => {
+    // IN-MH is Maharashtra. The platform's unit of scope is the country, and
+    // the IN admin owns it.
+    expect(() => assertRecordInScope(reqAs(inAdmin), 'IN-MH', 'that seller')).not.toThrow();
+    expect(() => assertRecordInScope(reqAs(inAdmin), 'in-mh', 'that seller')).not.toThrow();
+    expect(() => assertRecordInScope(reqAs(inAdmin), 'IN_MH', 'that seller')).not.toThrow();
+    // And a sub-region of ANOTHER market is still refused, resolved to that
+    // market in the copy rather than echoed back as the sub-region.
+    expect(() => assertRecordInScope(reqAs(inAdmin), 'QA-DOH', 'that seller')).toThrow(
+      'Your account is restricted to the IN market; that seller belongs to QA.',
+    );
+  });
+
+  it('treats an alpha-3 or junk market on the record as unattributed, like assertInMarket', () => {
+    // `normaliseMarket` validates against `REGION_CONFIGS`, so `IND` and `KEN`
+    // are NOT the countries they look like — that strictness is what stopped
+    // `NOT-A-COUNTRY` becoming Norway. An unreadable row market therefore reads
+    // as "no market yet" and is refused for a locked caller, which is the same
+    // outcome `assertInMarket` gives and the same outcome as before this fix.
+    // The change is that it is now refused for the RIGHT reason, and says so.
+    for (const bad of ['IND', 'NOT-A-COUNTRY', '<SCRIPT>ALERT(1)</SCRIPT>']) {
+      expect(() => assertRecordInScope(reqAs(inAdmin), bad, 'that seller')).toThrow(
+        'that seller belongs to every market',
+      );
+    }
+    // A global admin is unaffected by any of it.
+    expect(() => assertRecordInScope(reqAs(globalAdmin), 'IND', 'that seller')).not.toThrow();
+  });
+
+  it('reaches the same VERDICT as assertInMarket for every market spelling', () => {
+    // One rule, two implementations, and this is the assertion that keeps them
+    // one rule: whatever the row holds, the gateway comparator and the backend
+    // comparator either both refuse or both allow.
+    //
+    // Verdicts, not messages. The two halves have deliberately different copy —
+    // the gateway speaks to a request ("Your account is restricted to the IN
+    // market; …") and `@app/common` to a record ("This that row belongs to …")
+    // — and each string is asserted verbatim by its own file's tests. What must
+    // never differ is the answer.
+    for (const value of ['IN', 'in', 'IN-MH', 'IND', 'QA', 'NOT-A-COUNTRY', null, undefined]) {
+      const gateway = verdict(() => assertRecordInScope(reqAs(inAdmin), value, 'that row'));
+      const backend = verdict(() => assertInMarket(value, 'IN', 'that row', silent));
+      expect(`${String(value)}: ${gateway}`).toBe(`${String(value)}: ${backend}`);
+    }
+  });
+
+  it('refuses a locked caller whose own market cannot be read, rather than comparing', () => {
+    // The lock arrives here through `marketScopeOf`, which does not validate —
+    // only `resolveMarket` does. A record comparison against an unreadable lock
+    // would be `null === undefined`, which is `false`, so it happened to fail
+    // closed; it now refuses with the platform's unattributable copy and says
+    // in the log that the CLAIM was the problem, not the row.
+    expect(() => assertRecordInScope(reqAs(brokenLockAdmin), 'IN', 'that seller')).toThrow(
+      'This that seller cannot be attributed to a market yet.',
     );
   });
 });

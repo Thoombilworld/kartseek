@@ -102,6 +102,31 @@ export function resolveMarket(
  * nobody has attributed yet — so `[region-scope-denied] target=every market`
  * read the same for a deliberate global banner and for a missing backfill.
  * Both stay refused: a global promotion is not a regional admin's to edit.
+ *
+ * ── BOTH SIDES NORMALISE, exactly as `assertInMarket` does ──────────────────
+ *
+ * This used to be a raw `String(recordRegion).toUpperCase()` against
+ * `scope.region`, while every backend comparison went through `normaliseMarket`
+ * — the one place on the platform where the two halves of one rule disagreed
+ * (whole-branch review, finding A-3). The record side is where that bites:
+ * `marketplace.sellers.region_code` is an unbounded, unvalidated, nullable
+ * varchar written straight from `input.countryCode`, and the dev database holds
+ * `IN-MH`, `IND`, `NOT-A-COUNTRY` and an XSS payload in it. A seller stored as
+ * `IN-MH` was therefore refused for the IN admin who owns that market —
+ * invisible in their lists, 403 on approve, which is the AUD2-079 symptom Task
+ * 5 fixed for restaurants and left standing here.
+ *
+ * `normaliseMarket` resolves a sub-region to its country and validates against
+ * `REGION_CONFIGS`, so `IN-MH` is IN while `IND` and `NOT-A-COUNTRY` are no
+ * market at all — read as unattributed and refused for a locked caller, which
+ * is the same outcome as before, now reached for the stated reason. Direction
+ * is still safe: nothing widens, because the LOCK side cannot hold garbage (the
+ * staff DTOs validate the shape, `assertLockState` validates the value, and
+ * `resolveMarket` refuses an unreadable lock at source). An unreadable lock
+ * arriving here anyway — `marketScopeOf` does not validate, only `resolveMarket`
+ * does — is refused outright rather than compared, for the same reason
+ * `resolveLock` refuses it in `@app/common`: a lock that cannot be read must
+ * never end up meaning "no lock".
  */
 export function assertRecordInScope(
   req: any,
@@ -111,16 +136,35 @@ export function assertRecordInScope(
 ): void {
   const scope = marketScopeOf(req);
   if (!scope.locked) return;
-  const owner = recordRegion ? String(recordRegion).toUpperCase() : null;
-  if (owner === scope.region) return;
+  const lock = normaliseMarket(scope.region);
+  if (!lock) {
+    logger.warn(
+      `[region-scope-denied] user=${scope.userId ?? 'unknown'} role=${scope.role} ` +
+        `scope="${scope.region}" is not a market this platform knows; refused rather than ` +
+        `compared against a record what="${what}" route=${req?.method ?? ''} ` +
+        `${req?.originalUrl ?? req?.url ?? ''} ` +
+        `requestId=${req?.headers?.['x-request-id'] ?? req?.id ?? '-'}`,
+    );
+    throw new ForbiddenException(`This ${what} cannot be attributed to a market yet.`);
+  }
+  const owner = normaliseMarket(recordRegion ?? undefined) ?? null;
+  if (owner === lock) return;
   denyOutOfScope(
     req,
-    scope,
+    { ...scope, region: lock },
     owner ?? 'every market',
     what,
     // Log detail only. The thrown copy is fixed platform wording and must read
-    // the same for both cases; the log is where the two are told apart.
-    owner ? undefined : isGlobal === true ? 'explicitly global' : 'not yet attributed',
+    // the same for both cases; the log is where the two are told apart. A row
+    // whose stored market this platform cannot READ lands in the same branch as
+    // a null one — it belongs to no market — and the raw value goes in the log.
+    owner
+      ? undefined
+      : isGlobal === true
+        ? 'explicitly global'
+        : recordRegion
+          ? `stored as "${recordRegion}", which is not a market this platform knows`
+          : 'not yet attributed',
   );
 }
 
