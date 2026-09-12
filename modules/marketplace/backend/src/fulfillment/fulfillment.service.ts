@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike, In, MoreThanOrEqual } from 'typeorm';
-import { assertInMarket, normaliseMarket, requireId } from '@app/common';
+import { applyMarketFilter, assertInMarket, normaliseMarket, requireId } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { Product } from '../entities/product.entity';
@@ -460,7 +460,11 @@ export class MarketplaceFulfillmentService {
     // in India. Codes without a region apply everywhere.
     if (filters.region) {
       const region = filters.region.toUpperCase();
-      if (filters.regionStrict) qb.andWhere('c.regionCode = :region', { region });
+      // The strict branch is a market BOUNDARY, so it goes through the shared
+      // predicate. The inclusive branch is not — it deliberately admits
+      // market-agnostic codes, which is a different question from "is this row
+      // mine", and `applyMarketFilter` only ever writes an equality.
+      if (filters.regionStrict) applyMarketFilter(qb, 'c.regionCode', region);
       else qb.andWhere('(c.regionCode IS NULL OR c.regionCode = :region)', { region });
     }
     if (filters.isActive !== undefined)
@@ -1088,8 +1092,7 @@ export class MarketplaceFulfillmentService {
       qb.andWhere('r.status = :status', { status });
     }
     if (query.productId) qb.andWhere('r.productId = :productId', { productId: query.productId });
-    const market = normaliseMarket(query.region);
-    if (market) qb.andWhere('s.region_code = :market', { market });
+    applyMarketFilter(qb, 's.region_code', normaliseMarket(query.region));
 
     const [data, total] = await qb
       .orderBy('r.createdAt', 'ASC')

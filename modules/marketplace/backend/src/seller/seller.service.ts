@@ -1,3 +1,4 @@
+import { applyMarketFilter, normaliseMarket, refuseUnattributable } from '@app/common';
 import {
   BadRequestException,
   ConflictException,
@@ -632,15 +633,30 @@ export class SellerService {
   }
 
   async getSellersByRegion(countryCode: string, page = 1, limit = 20) {
+    // The market is the whole question this method asks, so an unreadable one is
+    // a refusal rather than "every seller": `applyMarketFilter` adds no clause
+    // for an absent market, and reaching `getManyAndCount` with no predicate
+    // here would return the platform's entire seller list under one market's
+    // heading. The predicate itself is `andWhere` — this was the only remaining
+    // `.where(` market clause in the module, and `where` REPLACES the clause,
+    // so the next person to add a filter above it would have deleted it.
+    const market = normaliseMarket(countryCode);
+    if (!market)
+      refuseUnattributable(
+        countryCode,
+        'market',
+        undefined,
+        `${countryCode} is not a market this platform operates in.`,
+      );
     const qb = this.sellerRepo
       .createQueryBuilder('s')
-      .where('s.regionCode = :countryCode', { countryCode })
       .orderBy('s.sellerRating', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
+    applyMarketFilter(qb, 's.regionCode', market);
 
     const [data, total] = await qb.getManyAndCount();
-    return { countryCode, data, total, page, limit };
+    return { countryCode: market, data, total, page, limit };
   }
 
   async getSellerOrders(

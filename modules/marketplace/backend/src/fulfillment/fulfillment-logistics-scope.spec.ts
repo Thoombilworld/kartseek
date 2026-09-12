@@ -251,9 +251,9 @@ describe('product reports respect the reported seller market', () => {
   it('predicates the queue on the seller market, and not at all for a global admin', async () => {
     const { svc } = logistics();
     await svc.listProductReports({ region: 'QA' });
-    expect(lastReportQuery.conditions).toContain('s.region_code = :market');
+    expect(lastReportQuery.conditions).toContain('s.region_code = :__market');
     await svc.listProductReports({});
-    expect(lastReportQuery.conditions).not.toContain('s.region_code = :market');
+    expect(lastReportQuery.conditions).not.toContain('s.region_code = :__market');
   });
 });
 

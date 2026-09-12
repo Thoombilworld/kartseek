@@ -4,8 +4,11 @@ import { Repository, TreeRepository, ILike, In, MoreThanOrEqual } from 'typeorm'
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import {
+  applyMarketFilter,
   assertInMarket as assertInMarketShared,
+  assertRecordMarket,
   marketPredicate,
+  normaliseMarket,
   refuseUnattributable as refuseUnattributableShared,
 } from '@app/common';
 import { Product } from '../entities/product.entity';
@@ -203,7 +206,7 @@ export class MarketplaceAdminService {
     // Order stats
     const ordersSince = (since: Date) => {
       const qb = this.orderRepo.createQueryBuilder('o').where('o.createdAt >= :since', { since });
-      if (region) qb.andWhere('o.region_code = :region', { region });
+      applyMarketFilter(qb, 'o.region_code', region);
       return qb;
     };
     const todayOrders = await ordersSince(todayStart).getCount();
@@ -652,7 +655,7 @@ export class MarketplaceAdminService {
    */
   private adminProductQuery(region?: string) {
     const qb = this.productRepo.createQueryBuilder('p').leftJoin(Seller, 's', 's.id = p.seller_id');
-    if (region) qb.andWhere('s.region_code = :region', { region: region.toUpperCase() });
+    applyMarketFilter(qb, 's.region_code', region);
     return qb;
   }
 
@@ -825,9 +828,29 @@ export class MarketplaceAdminService {
     return { ...dto, regions: [scope.toUpperCase()] };
   }
 
-  /** The one market an exchange offer runs in; null when it runs in several or everywhere. */
-  private static soleCountry(list: unknown): string | null {
-    return Array.isArray(list) && list.length === 1 ? String(list[0]).toUpperCase() : null;
+  /**
+   * An offer write, scoped: the market is the caller's, not the payload's.
+   *
+   * A locked admin's offer belongs to their market and cannot be global; a
+   * global admin may name any market the registry knows, or set `is_global`
+   * explicitly. `regionCode` is the only column consulted — `applicableCountries`
+   * stays as the customer-facing eligibility list and no authorisation path
+   * reads it (C1 / AUD2-082).
+   */
+  private scopeOfferWrite(dto: any, scope: string | undefined, what: string) {
+    const named = normaliseMarket(dto?.regionCode);
+    if (dto?.regionCode && !named) {
+      throw new BadRequestException(
+        `\`regionCode\` must be a market this platform operates in; got \`${dto.regionCode}\`.`,
+      );
+    }
+    const lock = normaliseMarket(scope);
+    if (!lock) {
+      return { ...dto, regionCode: named ?? null, isGlobal: dto?.isGlobal === true };
+    }
+    // Refused by the same assert a read uses, so the denial reads the same.
+    if (named) this.assertInMarket(named, lock, what);
+    return { ...dto, regionCode: lock, isGlobal: false };
   }
 
   private static assertRenderableBanner(dto: any): void {
@@ -1197,7 +1220,7 @@ export class MarketplaceAdminService {
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.seller', 's')
       .orderBy('p.createdAt', 'DESC');
-    if (region) qb.andWhere('s.regionCode = :region', { region: region.toUpperCase() });
+    applyMarketFilter(qb, 's.regionCode', region);
     const rows = await qb.getMany();
     const data = rows.map((p) => MarketplaceAdminService.promotionRow(p));
     return { data, total: data.length };
@@ -1911,7 +1934,10 @@ export class MarketplaceAdminService {
       const code = region.toUpperCase();
       // A locked admin sees only their market's offers; the storefront and a
       // global admin filtering by market also get the market-agnostic ones.
-      if (regionStrict) qb.andWhere('bo.regionCode = :region', { region: code });
+      // Strict is a market BOUNDARY and goes through the shared predicate.
+      // The inclusive branch is a different question — it deliberately admits
+      // market-agnostic offers — and `applyMarketFilter` only writes equality.
+      if (regionStrict) applyMarketFilter(qb, 'bo.regionCode', code);
       else qb.andWhere('(bo.regionCode IS NULL OR bo.regionCode = :region)', { region: code });
     }
     if (activeOnly) {
@@ -1933,7 +1959,8 @@ export class MarketplaceAdminService {
     return { data, total };
   }
 
-  async createBankOffer(dto: any) {
+  async createBankOffer(dto: any, scope?: string) {
+    dto = this.scopeOfferWrite(dto, scope, 'bank offer');
     const saved = await this.bankOfferRepo.save(this.bankOfferRepo.create(dto as any));
     const row: any = Array.isArray(saved) ? saved[0] : saved;
     await this.invalidateOfferCaches();
@@ -1943,9 +1970,11 @@ export class MarketplaceAdminService {
 
   async updateBankOffer(id: string, dto: any, scope?: string) {
     const current = await this.bankOfferRepo.findOne({ where: { id } });
-    if (!current) throw new NotFoundException(`Bank offer ${id} not found`);
-    this.assertInMarket(current.regionCode, scope, 'bank offer');
-    const result = await this.bankOfferRepo.update(id, dto);
+    assertRecordMarket(current, 'regionCode', scope, 'bank offer', this.logger);
+    const result = await this.bankOfferRepo.update(
+      id,
+      this.scopeOfferWrite(dto, scope, 'bank offer'),
+    );
     if (!result.affected) throw new NotFoundException(`Bank offer ${id} not found`);
     const offer = await this.bankOfferRepo.findOne({ where: { id } });
     await this.invalidateOfferCaches();
@@ -1955,8 +1984,7 @@ export class MarketplaceAdminService {
 
   async deleteBankOffer(id: string, scope?: string) {
     const current = await this.bankOfferRepo.findOne({ where: { id } });
-    if (!current) throw new NotFoundException(`Bank offer ${id} not found`);
-    this.assertInMarket(current.regionCode, scope, 'bank offer');
+    assertRecordMarket(current, 'regionCode', scope, 'bank offer', this.logger);
     const result = await this.bankOfferRepo.delete(id);
     if (!result.affected) throw new NotFoundException(`Bank offer ${id} not found`);
     await this.invalidateOfferCaches();
@@ -1976,12 +2004,19 @@ export class MarketplaceAdminService {
       .addOrderBy('eo.priority', 'ASC');
     if (region) {
       const code = region.toUpperCase();
-      // `applicableCountries` is a simple-array (comma-joined text): empty or
-      // NULL runs everywhere. Strict means scoped to exactly this market.
-      if (regionStrict) qb.andWhere('eo.applicableCountries = :region', { region: code });
+      // The BOUNDARY reads `region_code`, the market column this entity gained
+      // in R11 — not `applicableCountries`. The legacy simple-array is display
+      // metadata now (see `exchange-offer.entity.ts`); predicating a market
+      // boundary on it compared a scope against comma-joined text, so a
+      // two-market offer could never equal any single market and an offer
+      // stored as 'QA,IN' was invisible to both.
+      if (regionStrict) applyMarketFilter(qb, 'eo.regionCode', code);
       else {
+        // The inclusive read still honours the legacy array as well as the new
+        // columns, because rows this backfill could not reduce to one market
+        // keep only the array — and a storefront must keep showing them.
         qb.andWhere(
-          "(eo.applicableCountries IS NULL OR eo.applicableCountries = '' OR :region = ANY(string_to_array(eo.applicableCountries, ',')))",
+          "(eo.isGlobal = true OR eo.regionCode = :region OR eo.applicableCountries IS NULL OR eo.applicableCountries = '' OR :region = ANY(string_to_array(eo.applicableCountries, ',')))",
           { region: code },
         );
       }
@@ -2008,7 +2043,8 @@ export class MarketplaceAdminService {
     return { bankOffers: bank.data, exchangeOffers: exchange.data };
   }
 
-  async createExchangeOffer(dto: any) {
+  async createExchangeOffer(dto: any, scope?: string) {
+    dto = this.scopeOfferWrite(dto, scope, 'exchange offer');
     const saved = await this.exchangeOfferRepo.save(this.exchangeOfferRepo.create(dto as any));
     const row: any = Array.isArray(saved) ? saved[0] : saved;
     await this.invalidateOfferCaches();
@@ -2018,13 +2054,14 @@ export class MarketplaceAdminService {
 
   async updateExchangeOffer(id: string, dto: any, scope?: string) {
     const current = await this.exchangeOfferRepo.findOne({ where: { id } });
-    if (!current) throw new NotFoundException(`Exchange offer ${id} not found`);
-    this.assertInMarket(
-      MarketplaceAdminService.soleCountry(current.applicableCountries),
-      scope,
-      'exchange offer',
+    // The row's own market column, through the shared assert: this compared a
+    // scope against `applicableCountries` — comma-joined text — so a
+    // multi-market offer matched no market and was nobody's to edit (C1).
+    assertRecordMarket(current, 'regionCode', scope, 'exchange offer', this.logger);
+    const result = await this.exchangeOfferRepo.update(
+      id,
+      this.scopeOfferWrite(dto, scope, 'exchange offer'),
     );
-    const result = await this.exchangeOfferRepo.update(id, dto);
     if (!result.affected) throw new NotFoundException(`Exchange offer ${id} not found`);
     const offer = await this.exchangeOfferRepo.findOne({ where: { id } });
     await this.invalidateOfferCaches();
@@ -2034,12 +2071,7 @@ export class MarketplaceAdminService {
 
   async deleteExchangeOffer(id: string, scope?: string) {
     const current = await this.exchangeOfferRepo.findOne({ where: { id } });
-    if (!current) throw new NotFoundException(`Exchange offer ${id} not found`);
-    this.assertInMarket(
-      MarketplaceAdminService.soleCountry(current.applicableCountries),
-      scope,
-      'exchange offer',
-    );
+    assertRecordMarket(current, 'regionCode', scope, 'exchange offer', this.logger);
     const result = await this.exchangeOfferRepo.delete(id);
     if (!result.affected) throw new NotFoundException(`Exchange offer ${id} not found`);
     await this.invalidateOfferCaches();
@@ -2100,7 +2132,7 @@ export class MarketplaceAdminService {
     // A customer belongs to the market they ordered in. Scoping the orders
     // rather than the identity also keeps the spend totals honest: a regional
     // admin sees what this customer spent in their market, not everywhere.
-    if (scope) qb.andWhere('o.region_code = :region', { region: scope.toUpperCase() });
+    applyMarketFilter(qb, 'o.region_code', scope);
     if (search) {
       qb.andWhere('(o.customerName ILIKE :s OR o.customerId ILIKE :s)', { s: `%${search}%` });
     }
@@ -2136,6 +2168,21 @@ export class MarketplaceAdminService {
     return { success: true, id };
   }
 
+  /**
+   * Seller identity and gross order value per market. NOT balances.
+   *
+   * This returned `commission` at a hardcoded 10%, a `pendingSettlement` at
+   * 15%, a `totalWithdrawn`/`availableBalance` 70/30 split of the remainder and
+   * a `lastPayoutAt` of "five days ago" whenever the seller had any order —
+   * every one of them invented, on the screen an operator uses to decide
+   * whether a seller has been paid. The payout queue beside it read
+   * `payout.seller_wallets`, so the two surfaces gave different answers about
+   * the same seller's money (AUD2-086 / I12).
+   *
+   * This service has no wallet table and cannot have an opinion about a
+   * balance. The gateway's `seller-wallets` route now reads the balances from
+   * payout-service and takes only the NAMES from here.
+   */
   async getSellerWallets(scope?: string) {
     const sellers = await this.sellerRepo.find(
       scope ? { where: { regionCode: scope.toUpperCase() } } : {},
@@ -2149,7 +2196,6 @@ export class MarketplaceAdminService {
           where: { sellerId: s.id, status: 'DELIVERED' as any },
         });
         const totalEarnings = orders.reduce((sum, o) => sum + Number(o.grandTotal || 0), 0);
-        const commission = Math.round(totalEarnings * 0.1);
         const pendingOrders = await this.orderRepo.count({
           where: {
             sellerId: s.id,
@@ -2166,26 +2212,15 @@ export class MarketplaceAdminService {
         return {
           sellerId: s.id,
           sellerName: s.businessName || 'Seller',
+          regionCode: s.regionCode ?? null,
+          // What this service can actually know: gross delivered order value
+          // and how many orders are still in flight.
           totalEarnings,
-          commission,
-          netBalance: totalEarnings - commission,
-          pendingSettlement: Math.round(totalEarnings * 0.15),
-          totalWithdrawn: Math.round((totalEarnings - commission) * 0.7),
-          availableBalance: Math.round((totalEarnings - commission) * 0.3),
           pendingOrders,
-          lastPayoutAt:
-            orders.length > 0 ? new Date(Date.now() - 5 * 86400000).toISOString() : null,
         };
       }),
     );
-    return {
-      data: wallets,
-      total: wallets.length,
-      summary: {
-        totalBalance: wallets.reduce((s, w) => s + w.availableBalance, 0),
-        totalPending: wallets.reduce((s, w) => s + w.pendingSettlement, 0),
-      },
-    };
+    return { data: wallets, total: wallets.length };
   }
 
   async adjustSellerWallet(sellerId: string, amount: number, reason: string, scope?: string) {
@@ -2206,9 +2241,11 @@ export class MarketplaceAdminService {
       .orderBy('q.createdAt', 'DESC')
       .take(50);
     if (market) {
-      qb.innerJoin(Seller, 's', 's.id = product.seller_id').andWhere('s.region_code = :market', {
+      applyMarketFilter(
+        qb.innerJoin(Seller, 's', 's.id = product.seller_id'),
+        's.region_code',
         market,
-      });
+      );
     }
     const questions = await qb.getMany();
     const items = questions.map((q) => ({

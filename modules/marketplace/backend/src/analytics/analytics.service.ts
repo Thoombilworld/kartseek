@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository } from 'typeorm';
 import type { SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
-import { normaliseMarket } from '@app/common';
+import { applyMarketFilter, normaliseMarket } from '@app/common';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
 import { Category } from '../entities/category.entity';
@@ -54,28 +54,6 @@ export class MarketplaceAnalyticsService {
   }
 
   /**
-   * The same narrowing on a query builder.
-   *
-   * `andWhere`, never `where`: these builders already carry a predicate (a
-   * date window, an active flag), and `where` replaces the lot — a market
-   * filter that silently deleted the period filter would report a market's
-   * whole history as this month's figures.
-   *
-   * A private method rather than a shared helper because `@app/common` has no
-   * query-builder half yet and this task may not add one; the three services
-   * that needed it (here, order-service, hotel-service) carry a copy each.
-   */
-  private applyMarketFilter(
-    qb: SelectQueryBuilder<any>,
-    column: string,
-    market?: string,
-  ): SelectQueryBuilder<any> {
-    const m = normaliseMarket(market);
-    if (m) qb.andWhere(`${column} = :market`, { market: m });
-    return qb;
-  }
-
-  /**
    * Products joined to their seller, so a market predicate can reach a product.
    *
    * The join goes through the `Seller` entity class rather than the string
@@ -88,7 +66,7 @@ export class MarketplaceAnalyticsService {
    */
   private productQuery(market?: string): SelectQueryBuilder<Product> {
     const qb = this.productRepo.createQueryBuilder('p').leftJoin(Seller, 's', 's.id = p.seller_id');
-    return this.applyMarketFilter(qb, 's.region_code', market) as SelectQueryBuilder<Product>;
+    return applyMarketFilter(qb, 's.region_code', market) as SelectQueryBuilder<Product>;
   }
 
   /** A product count for one market, counted in SQL rather than over loaded rows. */
@@ -108,11 +86,7 @@ export class MarketplaceAnalyticsService {
       .createQueryBuilder('o')
       .select('COUNT(o.id)', 'orders')
       .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'gmv');
-    return this.applyMarketFilter(
-      qb,
-      'o.regionCode',
-      market,
-    ) as SelectQueryBuilder<MarketplaceOrder>;
+    return applyMarketFilter(qb, 'o.regionCode', market) as SelectQueryBuilder<MarketplaceOrder>;
   }
 
   // ── Revenue ─────────────────────────────────────────────────────────────────
@@ -149,7 +123,7 @@ export class MarketplaceAnalyticsService {
       .addSelect('COALESCE(SUM(o.grandTotal), 0)', 'revenue')
       .where('o.createdAt >= :since', { since })
       .groupBy("TO_CHAR(o.createdAt, 'YYYY-MM-DD')");
-    this.applyMarketFilter(dailyQb, 'o.regionCode', m);
+    applyMarketFilter(dailyQb, 'o.regionCode', m);
     const dayRows =
       (await dailyQb.getRawMany<{ date: string; orders: string; revenue: string }>()) ?? [];
     const dayMap = new Map<string, { orders: number; revenue: number }>();

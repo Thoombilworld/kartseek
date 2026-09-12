@@ -15,7 +15,10 @@
     "check:type-imports": "node ../../../scripts/check-type-imports.js .",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
     "test:integration": "vitest run --config vitest.integration.mts",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "migration:show": "typeorm-ts-node-commonjs -d data-source.ts migration:show",
+    "migration:run": "typeorm-ts-node-commonjs -d data-source.ts migration:run",
+    "migration:revert": "typeorm-ts-node-commonjs -d data-source.ts migration:revert"
   },
   "jest": {
     "moduleFileExtensions": [

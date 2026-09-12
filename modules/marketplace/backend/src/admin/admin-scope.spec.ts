@@ -181,13 +181,13 @@ describe('the admin product query does not drop products without a seller', () =
     await svc.getProductsForAdmin({});
     expect(joins).toEqual([{ kind: 'left', on: 's.id = p.seller_id' }]);
     // No market predicate for a global admin, so nothing excludes the orphan.
-    expect(where).not.toContain('s.region_code = :region');
+    expect(where).not.toContain('s.region_code = :__market');
   });
 
   it('excludes the orphan for a scoped admin, because it has no market', async () => {
     const { svc, where } = query();
     await svc.getProductsForAdmin({ region: 'qa' });
-    expect(where).toContain('s.region_code = :region');
+    expect(where).toContain('s.region_code = :__market');
   });
 
   it('compares the two uuid columns without a cast, so the index stays usable', async () => {
@@ -234,8 +234,8 @@ describe('the admin dashboard is counted per market, not platform-wide', () => {
     // Sellers are counted through the repository, with the market in the where.
     expect(counted.some((w) => w.regionCode === 'QA')).toBe(true);
     // Orders and the seller join both carry the region predicate.
-    expect(where).toContain('o.region_code = :region');
-    expect(where).toContain('s.region_code = :region');
+    expect(where).toContain('o.region_code = :__market');
+    expect(where).toContain('s.region_code = :__market');
   });
 
   it('counts the whole platform for a global admin', async () => {
@@ -243,8 +243,8 @@ describe('the admin dashboard is counted per market, not platform-wide', () => {
     const result: any = await svc.getAdminDashboard();
     expect(result.country).toBeNull();
     expect(counted.every((w) => w.regionCode === undefined)).toBe(true);
-    expect(where).not.toContain('o.region_code = :region');
-    expect(where).not.toContain('s.region_code = :region');
+    expect(where).not.toContain('o.region_code = :__market');
+    expect(where).not.toContain('s.region_code = :__market');
   });
 });
 
@@ -475,20 +475,20 @@ describe('featured and Q&A reads carry the market predicate onto the seller join
   it('filters the featured rail on the seller’s market and never resets the builder', async () => {
     const scoped = query('productRepo');
     await scoped.svc.getAdminFeaturedProducts('qa');
-    expect(scoped.where).toContain('s.region_code = :region');
+    expect(scoped.where).toContain('s.region_code = :__market');
     expect(scoped.where).toContain('p.is_featured = true');
     expect(scoped.where.some((w) => w.startsWith('RESET:'))).toBe(false);
 
     const global = query('productRepo');
     await global.svc.getAdminFeaturedProducts();
-    expect(global.where).not.toContain('s.region_code = :region');
+    expect(global.where).not.toContain('s.region_code = :__market');
   });
 
   it('inner-joins the seller behind the question’s product for a scoped moderator only', async () => {
     const scoped = query('questionRepo');
     await scoped.svc.getQAItems(undefined, 'qa');
     expect(scoped.joins).toContainEqual({ kind: 'inner', on: 's.id = product.seller_id' });
-    expect(scoped.where).toContain('s.region_code = :market');
+    expect(scoped.where).toContain('s.region_code = :__market');
 
     const global = query('questionRepo');
     await global.svc.getQAItems();

@@ -50,7 +50,7 @@ describe('offer lists keep their market predicate under every filter', () => {
     const { svc, bank } = service();
     await svc.listBankOffers(true, undefined, 'QA', true);
     const sql = bank.calls.map((c) => c.sql);
-    expect(sql).toContain('bo.regionCode = :region');
+    expect(sql).toContain('bo.regionCode = :__market');
     expect(sql).toContain('bo.status = :status');
     expect(bank.calls.findIndex((c) => c.sql.includes('regionCode'))).toBeLessThan(
       bank.calls.findIndex((c) => c.sql.includes('status')),
@@ -61,13 +61,15 @@ describe('offer lists keep their market predicate under every filter', () => {
     const { svc, exchange } = service();
     await svc.listExchangeOffers(true, 'phones', 'QA', true);
     const sql = exchange.calls.map((c) => c.sql);
-    expect(sql).toContain('eo.applicableCountries = :region');
+    // The strict exchange-offer predicate reads the entity's own market column
+    // now, not the legacy comma-joined array (R11 / AUD2-082).
+    expect(sql).toContain('eo.regionCode = :__market');
     expect(sql).toContain('eo.status = :status');
   });
 
   it('still filters by market when no status filter is asked for', async () => {
     const { svc, bank } = service();
     await svc.listBankOffers(false, undefined, 'QA', true);
-    expect(bank.calls.map((c) => c.sql)).toEqual(['bo.regionCode = :region']);
+    expect(bank.calls.map((c) => c.sql)).toEqual(['bo.regionCode = :__market']);
   });
 });

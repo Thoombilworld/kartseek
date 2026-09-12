@@ -1930,12 +1930,12 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'admin_create_bank_offer' })
   tcpAdminCreateBankOffer(@Payload() d: DtoMessage) {
-    return this.admin.createBankOffer(d?.dto ?? d);
+    return this.admin.createBankOffer(d?.dto ?? d, (d as any)?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_create_exchange_offer' })
   tcpAdminCreateExchangeOffer(@Payload() d: DtoMessage) {
-    return this.admin.createExchangeOffer(d?.dto ?? d);
+    return this.admin.createExchangeOffer(d?.dto ?? d, (d as any)?.scope);
   }
 
   @MessagePattern({ cmd: 'admin_list_bank_offers' })
@@ -1973,7 +1973,10 @@ export class MarketplaceController {
     return this.admin.updateExchangeOffer(
       requireId(d?.id, 'record'),
       d?.dto ?? d,
-      (d as any)?.region,
+      // `scope`, not `region`: the gateway sends the LOCK here, and `region`
+      // was a global admin's filter that happened to be `undefined` for them
+      // and their own market for a locked caller — the same value by accident.
+      (d as any)?.scope ?? (d as any)?.region,
     );
   }
 

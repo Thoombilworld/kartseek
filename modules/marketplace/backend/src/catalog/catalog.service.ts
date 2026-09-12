@@ -1,3 +1,4 @@
+import { applyMarketFilter } from '@app/common';
 import {
   BadRequestException,
   Inject,
@@ -1816,7 +1817,7 @@ export class CatalogService {
     const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
 
     const qb = this.sellerRepo.createQueryBuilder('s');
-    if (opts.region) qb.andWhere('s.region_code = :region', { region: opts.region.toUpperCase() });
+    applyMarketFilter(qb, 's.region_code', undefined, opts.region);
     if (opts.status)
       qb.andWhere('s.verificationStatus = :status', { status: opts.status.toUpperCase() });
 

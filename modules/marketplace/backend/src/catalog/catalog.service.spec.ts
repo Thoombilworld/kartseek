@@ -631,7 +631,7 @@ describe('CatalogService', () => {
       await service.getSellersForAdmin({ region: 'qa', status: 'pending' });
 
       const qb = lastSellerQb();
-      expect(qb.andWhere).toHaveBeenCalledWith('s.region_code = :region', { region: 'QA' });
+      expect(qb.andWhere).toHaveBeenCalledWith('s.region_code = :__market', { __market: 'QA' });
       expect(qb.andWhere).toHaveBeenCalledWith('s.verificationStatus = :status', {
         status: 'PENDING',
       });
