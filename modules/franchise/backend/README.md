@@ -40,7 +40,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | TCP (message patterns) | 4006 | `FRANCHISE_TCP_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: no HTTP health route yet.
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_franchise`, schema `franchise` (`FRANCHISE_DB_*`).
 Image: `kartseek/franchise-service`. Depends on: postgres, redis, kafka.
 

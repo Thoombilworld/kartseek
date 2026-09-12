@@ -38,7 +38,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | gRPC | 5005 | `RESTAURANT_GRPC_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: `/restaurants/health` (live).
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_restaurant`, schema `restaurant` (`RESTAURANT_DB_*`).
 Image: `kartseek/restaurant-service`. Depends on: postgres, redis, kafka.
 

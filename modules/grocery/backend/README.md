@@ -41,7 +41,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | gRPC | 5010 | `GROCERY_GRPC_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: `/grocery/health` (live).
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_grocery`, schema `grocery` (`GROCERY_DB_*`).
 Image: `kartseek/grocery-service`. Depends on: postgres, redis, kafka.
 

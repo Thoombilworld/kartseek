@@ -44,7 +44,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | gRPC | 5006 | `MARKETPLACE_GRPC_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: `/health` (live).
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_marketplace`, schema `marketplace` (`MARKETPLACE_DB_*`).
 Image: `kartseek/marketplace-service`. Depends on: postgres, redis, kafka.
 

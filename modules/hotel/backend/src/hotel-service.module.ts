@@ -22,8 +22,18 @@ import { HotelPayout } from './entities/hotel-payout.entity';
 import { HotelStaff } from './entities/hotel-staff.entity';
 import { HotelSeasonalPricing } from './entities/hotel-seasonal-pricing.entity';
 
-const ENTITIES = [Hotel, HotelRoom, HotelBooking, HotelReview, HotelOwner, HotelGuest, HotelPayout, HotelStaff, HotelSeasonalPricing];
-import { buildEnvSchema, Joi } from '@app/common';
+const ENTITIES = [
+  Hotel,
+  HotelRoom,
+  HotelBooking,
+  HotelReview,
+  HotelOwner,
+  HotelGuest,
+  HotelPayout,
+  HotelStaff,
+  HotelSeasonalPricing,
+];
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { databaseCredentials } from '@app/database';
 
 const envSchema = buildEnvSchema({
@@ -37,6 +47,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'hotel-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this is
@@ -53,9 +64,10 @@ const envSchema = buildEnvSchema({
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule], inject: [ConfigService],
+      imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        type: 'postgres' as const,        // Dedicated HOTEL_DB_* values win; anything unset falls back to the
+        type: 'postgres' as const, // Dedicated HOTEL_DB_* values win; anything unset falls back to the
         // shared DB_* credentials. `databaseCredentials` still supplies the
         // password default and its production guard.
         ...databaseCredentials(cfg),
@@ -77,7 +89,12 @@ const envSchema = buildEnvSchema({
     RedisModule,
     KafkaModule,
   ],
-  controllers: [HotelController, HotelOwnerController, HotelAdminController, HotelWebhookController],
+  controllers: [
+    HotelController,
+    HotelOwnerController,
+    HotelAdminController,
+    HotelWebhookController,
+  ],
   providers: [HotelService],
 })
 export class HotelServiceModule {}

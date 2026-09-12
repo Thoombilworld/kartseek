@@ -41,7 +41,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | TCP (message patterns) | 4007 | `DOCTOR_TCP_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: `/doctors/health` (live).
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_doctor`, schema `doctor` (`DOCTOR_DB_*`).
 Image: `kartseek/doctor-service`. Depends on: postgres, redis, kafka.
 

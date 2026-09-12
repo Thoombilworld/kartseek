@@ -8,17 +8,27 @@ import { PharmacyService } from './pharmacy.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
 
 import {
-  PharmacyStore, PharmacyCategory, PharmacyItem,
-  PharmacyOrder, Prescription, PharmacyReview,
-  PharmacyStaff, PharmacyPromotion,
+  PharmacyStore,
+  PharmacyCategory,
+  PharmacyItem,
+  PharmacyOrder,
+  Prescription,
+  PharmacyReview,
+  PharmacyStaff,
+  PharmacyPromotion,
 } from './entities';
 
 const ENTITIES = [
-  PharmacyStore, PharmacyCategory, PharmacyItem,
-  PharmacyOrder, Prescription, PharmacyReview,
-  PharmacyStaff, PharmacyPromotion,
+  PharmacyStore,
+  PharmacyCategory,
+  PharmacyItem,
+  PharmacyOrder,
+  Prescription,
+  PharmacyReview,
+  PharmacyStaff,
+  PharmacyPromotion,
 ];
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { databaseCredentials } from '@app/database';
 
 const envSchema = buildEnvSchema({
@@ -32,6 +42,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'pharmacy-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this is

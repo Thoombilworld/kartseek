@@ -8,7 +8,7 @@ import { FranchiseService } from './franchise.service';
 import { databaseCredentials } from '@app/database';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Franchise } from './entities/franchise.entity';
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 
 const envSchema = buildEnvSchema({
   FRANCHISE_TCP_PORT: Joi.number().default(4006),
@@ -23,6 +23,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'franchise-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this is
@@ -70,11 +71,31 @@ const envSchema = buildEnvSchema({
     TypeOrmModule.forFeature([Franchise]),
 
     ClientsModule.register([
-      { name: 'MARKETPLACE_SERVICE', transport: Transport.TCP, options: { host: '127.0.0.1', port: +(process.env.MARKETPLACE_TCP_PORT ?? 4002) } },
-      { name: 'DOCTOR_SERVICE',      transport: Transport.TCP, options: { host: '127.0.0.1', port: +(process.env.DOCTOR_TCP_PORT      ?? 4007) } },
-      { name: 'GROCERY_SERVICE',     transport: Transport.TCP, options: { host: '127.0.0.1', port: +(process.env.GROCERY_TCP_PORT     ?? 4008) } },
-      { name: 'PHARMACY_SERVICE',    transport: Transport.TCP, options: { host: '127.0.0.1', port: +(process.env.PHARMACY_TCP_PORT    ?? 4010) } },
-      { name: 'RESTAURANT_SERVICE',  transport: Transport.TCP, options: { host: '127.0.0.1', port: +(process.env.RESTAURANT_TCP_PORT  ?? 4018) } },
+      {
+        name: 'MARKETPLACE_SERVICE',
+        transport: Transport.TCP,
+        options: { host: '127.0.0.1', port: +(process.env.MARKETPLACE_TCP_PORT ?? 4002) },
+      },
+      {
+        name: 'DOCTOR_SERVICE',
+        transport: Transport.TCP,
+        options: { host: '127.0.0.1', port: +(process.env.DOCTOR_TCP_PORT ?? 4007) },
+      },
+      {
+        name: 'GROCERY_SERVICE',
+        transport: Transport.TCP,
+        options: { host: '127.0.0.1', port: +(process.env.GROCERY_TCP_PORT ?? 4008) },
+      },
+      {
+        name: 'PHARMACY_SERVICE',
+        transport: Transport.TCP,
+        options: { host: '127.0.0.1', port: +(process.env.PHARMACY_TCP_PORT ?? 4010) },
+      },
+      {
+        name: 'RESTAURANT_SERVICE',
+        transport: Transport.TCP,
+        options: { host: '127.0.0.1', port: +(process.env.RESTAURANT_TCP_PORT ?? 4018) },
+      },
     ]),
   ],
   controllers: [FranchiseController],

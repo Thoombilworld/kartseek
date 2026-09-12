@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, SetMetadata } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '@app/redis';
@@ -6,7 +6,6 @@ import { KafkaModule } from '@app/kafka';
 // `EncryptionService` — bank account numbers are stored encrypted at rest.
 import { EncryptionService } from '@app/security';
 import { MarketplaceController } from './marketplace.controller';
-import { HealthController } from './transport/health.controller';
 import { MarketplaceService } from './marketplace.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
 import { CatalogService } from './catalog/catalog.service';
@@ -54,8 +53,24 @@ import { SellerController } from './seller/seller.controller';
 import { SellerMessagesController } from './seller/seller.messages.controller';
 import { SellerOwnershipGuard } from './seller/seller-ownership.guard';
 import { SellerService } from './seller/seller.service';
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, SharedHealthController, buildEnvSchema, Joi } from '@app/common';
 import { databaseCredentials } from '@app/database';
+import { ALLOW_HTTP_KEY } from './transport/http-surface.guard';
+
+/**
+ * HttpSurfaceGuard answers 404 to every HTTP request on this service unless the
+ * handler or its class carries the `@AllowHttp()` marking — that is what keeps
+ * the duplicate copy of the whole marketplace API off port 3012. The health
+ * routes are the one deliberate exception, and they now live in
+ * `@app/common`'s SharedHealthController, which cannot import a marketplace
+ * decorator without the shared library depending on one of its consumers.
+ *
+ * So the marking is applied from this side, on the class the guard actually
+ * inspects. It is the same metadata `@AllowHttp()` writes; `SetMetadata` used
+ * as a plain function is how Nest's own decorators are applied to a class
+ * outside a decorator position.
+ */
+SetMetadata(ALLOW_HTTP_KEY, true)(SharedHealthController);
 
 const envSchema = buildEnvSchema({
   MARKETPLACE_TCP_PORT: Joi.number().default(4002),
@@ -78,33 +93,51 @@ const envSchema = buildEnvSchema({
 // as a blanket 500 on the catalog routes (and an empty catalog in the web app,
 // because the gateway turns those 500s into 503s that the pages swallow).
 const ENTITIES = [
-  Product, Seller, Category, Brand,
+  Product,
+  Seller,
+  Category,
+  Brand,
   // Bank and exchange offers. These lived in the API gateway — entity, table
   // and all — while marketplace-service carried six admin methods for them
   // that published a Kafka event and returned a fabricated `bo-<timestamp>`
   // id without writing anything. The gateway held the only real
   // implementation, so the module that owns the catalogue could not read its
   // own offers. Ownership moved here; the gateway forwards.
-  BankOffer, ExchangeOffer,
-  ProductListing, ProductImage,
-  Review, WishlistItem, MarketplaceOrder,
-  ReturnRequest, Coupon, CouponUsage,
-  ShipmentTrackingEvent, ProductVariant,
-  ProductQuestion, ProductAnswer,
-  DeliveryAssignment, ProductAttribute,
-  MarketplaceNotification, GiftCard,
-  BrandFollow, BrandUpdate,
-  SellerSettings, SellerKyc,
+  BankOffer,
+  ExchangeOffer,
+  ProductListing,
+  ProductImage,
+  Review,
+  WishlistItem,
+  MarketplaceOrder,
+  ReturnRequest,
+  Coupon,
+  CouponUsage,
+  ShipmentTrackingEvent,
+  ProductVariant,
+  ProductQuestion,
+  ProductAnswer,
+  DeliveryAssignment,
+  ProductAttribute,
+  MarketplaceNotification,
+  GiftCard,
+  BrandFollow,
+  BrandUpdate,
+  SellerSettings,
+  SellerKyc,
   // Seller staff, promotions and support tickets. All three used to be
   // fabricated in memory and never stored — see the 1785850000000 migration.
-  SellerStaff, SellerPromotion, SellerSupportTicket,
+  SellerStaff,
+  SellerPromotion,
+  SellerSupportTicket,
   // Payout destinations. Payouts previously accepted a `bankAccountId` that
   // referred to nothing at all.
   SellerBankAccount,
   // Flash deal campaigns and seller nominations. Both used to live in Redis
   // under a 24-hour TTL with no table behind them, which is why an admin's
   // campaign never reached a shopper — see flash-deal.entity.ts.
-  FlashDeal, FlashDealNomination,
+  FlashDeal,
+  FlashDealNomination,
   // Shopper-filed listing reports. The product page's "Report Counterfeit"
   // control had no endpoint and no table — every report was discarded.
   ProductReport,
@@ -115,6 +148,7 @@ const ENTITIES = [
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'marketplace-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this
@@ -132,7 +166,8 @@ const ENTITIES = [
       // next.
     }),
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule], inject: [ConfigService],
+      imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres',
         // Prefer dedicated MARKETPLACE_DB_* env vars; fall back to shared DB_*
@@ -141,7 +176,8 @@ const ENTITIES = [
         port: cfg.get<number>('MARKETPLACE_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
         username: cfg.get<string>('MARKETPLACE_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
         password: cfg.get<string>('MARKETPLACE_DB_PASSWORD') || databaseCredentials(cfg).password,
-        database: cfg.get<string>('MARKETPLACE_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
+        database:
+          cfg.get<string>('MARKETPLACE_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
         schema: 'marketplace',
         entities: ENTITIES,
         // Safe to auto-sync in dev because the marketplace uses its own dedicated
@@ -155,11 +191,13 @@ const ENTITIES = [
     TypeOrmModule.forFeature(ENTITIES),
   ],
   controllers: [
-    HealthController,               // HTTP — the only route HttpSurfaceGuard admits
-    MarketplaceController,          // TCP (its HTTP routes are closed off)
-    MarketplaceGrpcController,      // gRPC (proto/marketplace.proto)
-    SellerController,               // HTTP, guarded
-    SellerMessagesController,       // TCP
+    // HTTP is served by @app/common's SharedHealthController (see the
+    // HealthModule.register above and the ALLOW_HTTP marking below it) — the
+    // only routes HttpSurfaceGuard admits.
+    MarketplaceController, // TCP (its HTTP routes are closed off)
+    MarketplaceGrpcController, // gRPC (proto/marketplace.proto)
+    SellerController, // HTTP, guarded
+    SellerMessagesController, // TCP
   ],
   providers: [
     // MarketplaceService is the single live implementation (all logic inline).

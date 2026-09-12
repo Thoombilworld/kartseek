@@ -26,7 +26,7 @@ import {
   TaxiDisciplinaryActionEntity,
   TaxiRideEntity,
 } from './entities';
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { databaseCredentials } from '@app/database';
 
 const envSchema = buildEnvSchema({
@@ -55,6 +55,7 @@ const ENTITIES = [
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'taxi-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this is
@@ -70,7 +71,8 @@ const ENTITIES = [
       // next.
     }),
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule], inject: [ConfigService],
+      imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres' as const,
         // Dedicated TAXI_DB_* values win; anything unset falls back to the

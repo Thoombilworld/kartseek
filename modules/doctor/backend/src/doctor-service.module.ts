@@ -24,12 +24,21 @@ import { FamilyMember } from './entities/family-member.entity';
 import { IntakeForm } from './entities/intake-form.entity';
 
 const ENTITIES = [
-  Doctor, Appointment, DoctorAvailability,
-  Hospital, Clinic, Specialty, Department,
-  Review, Document, Prescription, PrescriptionItem,
-  FamilyMember, IntakeForm,
+  Doctor,
+  Appointment,
+  DoctorAvailability,
+  Hospital,
+  Clinic,
+  Specialty,
+  Department,
+  Review,
+  Document,
+  Prescription,
+  PrescriptionItem,
+  FamilyMember,
+  IntakeForm,
 ];
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { databaseCredentials } from '@app/database';
 
 const envSchema = buildEnvSchema({
@@ -43,6 +52,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'doctor-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this is

@@ -38,7 +38,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | TCP (message patterns) | 4025 | `HOTEL_TCP_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: `/hotels/health` (live).
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_hotel`, schema `hotel` (`HOTEL_DB_*`).
 Image: `kartseek/hotel-service`. Depends on: postgres, redis, kafka.
 

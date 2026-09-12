@@ -20,9 +20,15 @@ import { GroceryReview } from './entities/grocery-review.entity';
 import { GroceryWishlist } from './entities/grocery-wishlist.entity';
 import { GroceryDeliveryZone } from './entities/grocery-delivery-zone.entity';
 import { GrocerySetting } from './entities/grocery-setting.entity';
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { databaseCredentials } from '@app/database';
-import { GroceryBrand, GroceryProductVariant, GroceryStockMovement, GroceryWarehouse, GroceryVariantStock } from './entities';
+import {
+  GroceryBrand,
+  GroceryProductVariant,
+  GroceryStockMovement,
+  GroceryWarehouse,
+  GroceryVariantStock,
+} from './entities';
 
 // Entity list is written out once and reused for both `forRoot` and `forFeature`.
 // They drifted apart in other services — a repository registered for an entity the
@@ -34,9 +40,15 @@ const GROCERY_ENTITIES = [
   GroceryStockMovement,
   GroceryWarehouse,
   GroceryVariantStock,
-  GroceryCategory, GroceryStore, GroceryItem, GroceryOrder,
-  GroceryFlashDeal, GroceryReview, GroceryWishlist,
-  GroceryDeliveryZone, GrocerySetting,
+  GroceryCategory,
+  GroceryStore,
+  GroceryItem,
+  GroceryOrder,
+  GroceryFlashDeal,
+  GroceryReview,
+  GroceryWishlist,
+  GroceryDeliveryZone,
+  GrocerySetting,
 ];
 
 const envSchema = buildEnvSchema({
@@ -47,6 +59,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'grocery-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this is
@@ -63,7 +76,8 @@ const envSchema = buildEnvSchema({
       // next.
     }),
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule], inject: [ConfigService],
+      imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres',
         // Dedicated GROCERY_DB_* values win; anything unset falls back to the

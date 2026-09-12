@@ -38,7 +38,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | gRPC | 5007 | `TAXI_GRPC_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: `/taxi/health` (live).
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_taxi`, schema `taxi` (`TAXI_DB_*`).
 Image: `kartseek/taxi-service`. Depends on: postgres, redis, kafka.
 

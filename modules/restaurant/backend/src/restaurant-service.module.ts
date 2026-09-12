@@ -8,17 +8,29 @@ import { RestaurantService } from './restaurant.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
 
 import {
-  Restaurant, MenuCategory, MenuItem,
-  RestaurantOrder, Reservation, RestaurantReview,
-  RestaurantTable, RestaurantPromotion, RestaurantStaff,
+  Restaurant,
+  MenuCategory,
+  MenuItem,
+  RestaurantOrder,
+  Reservation,
+  RestaurantReview,
+  RestaurantTable,
+  RestaurantPromotion,
+  RestaurantStaff,
 } from './entities';
 
 const ENTITIES = [
-  Restaurant, MenuCategory, MenuItem,
-  RestaurantOrder, Reservation, RestaurantReview,
-  RestaurantTable, RestaurantPromotion, RestaurantStaff,
+  Restaurant,
+  MenuCategory,
+  MenuItem,
+  RestaurantOrder,
+  Reservation,
+  RestaurantReview,
+  RestaurantTable,
+  RestaurantPromotion,
+  RestaurantStaff,
 ];
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { databaseCredentials } from '@app/database';
 
 const envSchema = buildEnvSchema({
@@ -32,6 +44,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'restaurant-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       // Resolved against process.cwd(). As an extracted microservice this is
@@ -61,7 +74,8 @@ const envSchema = buildEnvSchema({
         port: cfg.get<number>('RESTAURANT_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
         username: cfg.get<string>('RESTAURANT_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
         password: cfg.get<string>('RESTAURANT_DB_PASSWORD') || databaseCredentials(cfg).password,
-        database: cfg.get<string>('RESTAURANT_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
+        database:
+          cfg.get<string>('RESTAURANT_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
         // Fixed, not configurable: the same entity definitions must work whether
         // this points at the dedicated instance or back at shared Postgres.
         schema: 'restaurant',

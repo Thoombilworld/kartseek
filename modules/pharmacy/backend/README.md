@@ -38,7 +38,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | TCP (message patterns) | 4010 | `PHARMACY_TCP_PORT` |
 <!-- prettier-ignore-end -->
 
-Health: `/pharmacy/health` (live).
+Health: `/health` (live), `/health/ready` (ready).
 Database: `kartseek_pharmacy`, schema `pharmacy` (`PHARMACY_DB_*`).
 Image: `kartseek/pharmacy-service`. Depends on: postgres, redis, kafka.
 
