@@ -373,7 +373,12 @@ export class SettlementEngineService {
   async getReconciliationReport(date: string, market?: string) {
     const startOfDay = new Date(`${date}T00:00:00Z`);
     const endOfDay = new Date(`${date}T23:59:59Z`);
-    const cc = normaliseMarket(market);
+    // `requireMarket`: this method's own docstring calls a cross-market
+    // reconciliation "arithmetic on unrelated numbers", and `normaliseMarket`
+    // produced exactly that for a market it could not read — the conditional
+    // spreads below then dropped both predicates and reconciled every market's
+    // payments against every market's settlements (R3-1).
+    const cc = requireMarket(market, 'reconciliation report', this.logger);
 
     const payments = await this.paymentRepo.find({
       where: {

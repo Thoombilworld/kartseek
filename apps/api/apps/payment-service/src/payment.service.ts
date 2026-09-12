@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { applyMarketFilter, normaliseMarket } from '@app/common';
+import { applyMarketFilter, normaliseMarket, requireMarket } from '@app/common';
 import * as crypto from 'crypto';
 import { Payment, PaymentStatus, PaymentModule, PaymentGateway } from './entities/payment.entity';
 import { GatewayAdapterFactory } from './adapters/gateway-adapter.factory';
@@ -452,7 +452,13 @@ export class PaymentOrchestratorService {
    * dashboard showed Qatar totals over every market's detail (audit V8).
    */
   async getPaymentsDashboard(filters: DashboardFilters) {
-    const market = normaliseMarket(filters.countryCode);
+    // `requireMarket`, not `normaliseMarket`. `countryCode` is the market the
+    // gateway resolved for the caller — their own when they are region-locked —
+    // so this field carries a LOCK, and `normaliseMarket` returns `undefined`
+    // for one it cannot read, which makes the predicate below disappear and
+    // totals every market on a region-locked admin's dashboard. Refusing is
+    // the only safe reading of a lock nobody can place (R3-1).
+    const market = requireMarket(filters.countryCode, 'payments dashboard', this.logger);
     /** The market predicate, or a no-op when the caller may see every market. */
     const inMarket = (qb: SelectQueryBuilder<Payment>) =>
       applyMarketFilter(qb, 'p.countryCode', market);
@@ -551,7 +557,8 @@ export class PaymentOrchestratorService {
     endDate: string,
     countryCode?: string,
   ) {
-    const market = normaliseMarket(countryCode);
+    // Same collapsed lock, same refusal — see `getPaymentsDashboard` (R3-1).
+    const market = requireMarket(countryCode, 'payment analytics', this.logger);
     const inMarket = (qb: SelectQueryBuilder<Payment>) =>
       applyMarketFilter(qb, 'p.countryCode', market);
 

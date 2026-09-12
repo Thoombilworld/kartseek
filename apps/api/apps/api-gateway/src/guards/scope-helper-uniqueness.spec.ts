@@ -210,35 +210,215 @@ describe('there is one implementation of the market predicate', () => {
   });
 
   /**
-   * A `where` OBJECT is a predicate too, and the test above cannot see one.
+   * A `where` OBJECT is a predicate too, and the bare-equality test above
+   * cannot see one.
    *
    * `findAndCount({ where })` needs no query builder, so
    * `if (market) where.regionCode = market` reads as ordinary assignment and
    * sailed past the bare-equality scan — which is exactly how the
    * delivery-assignments list kept a `normaliseMarket`-only gate after every
-   * builder site had been converted (R2-1). A market assigned onto a `where`
-   * object must come from a refusing helper, so an unreadable value cannot
-   * simply drop the key and return every market.
+   * builder site had been converted (R2-1). A market on a `where` object must
+   * come from a REFUSING helper, so an unreadable value cannot simply drop the
+   * key and return every market.
+   *
+   * Three shapes, because a market predicate can be written three ways and the
+   * first version of this test only saw the first:
+   *
+   *   where.regionCode = m                         assignment
+   *   { where: { regionCode: m } }                 object literal
+   *   ...(cc ? { countryCode: cc } : {})           conditional spread
+   *
+   * `market-boundary-exempt:` is deliberately NOT honoured here (R3-3). That
+   * marker excuses a SHAPE — "this equality is a config key, not a boundary" —
+   * and the only thing this test asks for is a refusing helper, which no shape
+   * argument can excuse. Honouring it meant the marker alone would have kept
+   * this test green if a future edit deleted the `requireMarket` call at the
+   * one site the test was written for.
    */
-  it('a market assigned onto a where object comes from a refusing helper', () => {
-    const ASSIGN =
-      /where(?:\w*)?(?:\.(?:regionCode|region_code|countryCode|country_code)|\[['"](?:regionCode|region_code|countryCode|country_code)['"]\])\s*=\s*(.+)$/;
+  it('a market on a where object comes from a refusing helper', () => {
+    const COL = '(?:regionCode|region_code|countryCode|country_code)';
+    // A bare identifier, not a member expression, a string literal or
+    // `IsNull()`. The distinction is the whole point: `driver.countryCode`
+    // compares one loaded row against another and cannot silently drop;
+    // `{ countryCode: cc }` where `cc` may be `undefined` drops the KEY, and a
+    // `where` with no market key returns every market.
+    const VAL = String.raw`[A-Za-z_$][\w$]*`;
+    const SHAPES = [
+      // where.regionCode = m   /   whereFoo['region_code'] = m
+      new RegExp(String.raw`where\w*(?:\.${COL}\b|\[['"]${COL}['"]\])\s*=\s*${VAL}\s*[;,)]?\s*$`),
+      // ...(cc ? { countryCode: cc } : {})  — the conditional spread.
+      new RegExp(String.raw`\.\.\.\(\s*${VAL}\s*\?[^)]*\b${COL}\s*:`),
+      // x ? { … regionCode: x … } : …  — an object literal the same ternary can
+      // drop entirely. Both halves on one line is the shape that occurs here.
+      new RegExp(String.raw`\b${VAL}\s*\?[^?]*\b${COL}\s*:\s*${VAL}[^?]*:`),
+    ];
     const offenders: string[] = [];
     for (const file of sources()) {
       const lines = fs.readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, i) => {
         if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
-        const m = line.match(ASSIGN);
-        if (!m) return;
-        // The assigned value must be a variable a refusing helper produced, or
-        // the helper call itself. Look at this line and the few above it.
-        const context = lines.slice(Math.max(0, i - 6), i + 1).join('\n');
-        if (/requireMarket\(|assertInMarket\(|marketPredicate\(/.test(context)) return;
-        if (/market-boundary-exempt:/.test(context)) return;
+        if (!SHAPES.some((re) => re.test(line))) return;
+        // A type position is not a predicate.
+        if (/Promise<|interface |type \w+ =|@Column|select:/.test(line)) return;
+        // An explicit IS NULL is an inclusive read, not a boundary.
+        if (/IsNull\(/.test(line)) return;
+        // A WRITE payload is not a predicate either. `...(market ? {
+        // regionCode: market } : {})` onto a `dto` FORCES a market onto a
+        // create; an absent market there is the documented global-admin path,
+        // not a dropped boundary.
+        if (/\bdto\b|payload|\bactor\b/.test(line)) return;
+        // An actor/claim object — `{ ownerId, role, ...(region ? … : {}) }` —
+        // carries the same shape and is not a predicate. The method name sits
+        // above the line, so this looks at the lines just above it.
+        if (/ownerId|\brole\s*:/.test(lines.slice(Math.max(0, i - 5), i + 1).join('\n'))) return;
+
+        const window = lines.slice(Math.max(0, i - 20), i + 6).join('\n');
+        // Only a line that is actually building a query is in scope. An actor
+        // object or a response projection carries the same shape and is not a
+        // boundary — `gateway.controller.ts`'s claim projection, for one.
+        const isQuery = /\bwhere\b|\.(?:count|find|findOne|findOneBy|findAndCount)\(/.test(window);
+        if (!isQuery) return;
+        // The value must come from a REFUSING helper. `normaliseMarket` is
+        // pointedly absent: returning `undefined` for a code it cannot read is
+        // precisely how these sites fail open. `marketPredicate` is absent too
+        // (R3-2) — it refuses an unreadable LOCK but deliberately ignores an
+        // unreadable REQUESTED value, so it is only half a refusal.
+        if (/requireMarket\(|assertInMarket\(|assertRecordMarket\(/.test(window)) return;
         offenders.push(`${path.relative(REPO, file)}:${i + 1} ${line.trim().slice(0, 90)}`);
       });
     }
     expect(offenders.join('\n')).toBe('');
+  });
+
+  /**
+   * And a refusing helper cannot be fed a permissive value.
+   *
+   * This is the hole the first two gates structurally could not see, and the
+   * reason there was a round four. `applyMarketFilter(qb, col, market)` looks
+   * correct at every call site — the helper IS the shared one, the column IS
+   * right — while `const market = normaliseMarket(filters.countryCode)` six
+   * lines above has already turned an unreadable lock into `undefined`. The
+   * helper then adds no predicate and the read covers every market. The gate
+   * proved the helper was *used*; it never proved what reached its scope slot.
+   *
+   * So: a variable derived from `normaliseMarket(` may not be used as a market
+   * BOUNDARY. It stays perfectly legal for normalising a value to compare, to
+   * store, or to hand to `assertInMarket` (which refuses on its own) — the ban
+   * is on it becoming the predicate.
+   */
+  it('no boundary is derived from normaliseMarket alone', () => {
+    const COL = '(?:regionCode|region_code|countryCode|country_code)';
+    const offenders: string[] = [];
+    for (const file of sources()) {
+      const src = fs.readFileSync(file, 'utf8');
+      // Every `const x = normaliseMarket(...)` in the file, with its line.
+      const derived = [...src.matchAll(/const\s+(\w+)\s*=\s*normaliseMarket\(/g)].map((m) => ({
+        name: m[1],
+        line: src.slice(0, m.index).split('\n').length,
+      }));
+      if (!derived.length) continue;
+      const lines = src.split('\n');
+      for (const { name, line } of derived) {
+        // Does the declaration immediately refuse a falsy result? Then it is a
+        // refusing gate of its own and the value is safe downstream.
+        const after = lines.slice(line - 1, line + 4).join('\n');
+        if (new RegExp(String.raw`!\s*${name}\b[^\n]*\b(?:throw|Exception)`).test(after)) continue;
+        // A refusing declaration need not spell `throw` itself:
+        // `if (!market) refuseUnattributable(...)` throws just as hard.
+        if (
+          new RegExp(
+            String.raw`if\s*\(\s*!\s*${name}\s*\)[\s\S]{0,140}(?:throw|refuseUnattributable\(|requireMarket\()`,
+          ).test(after)
+        )
+          continue;
+
+        // Used in the SCOPE slot of a predicate helper, or as a where-object
+        // market value? The scope slot is the third argument.
+        const asScope = new RegExp(
+          String.raw`applyMarketFilter\([^,]+,[^,]+,\s*${name}\s*[,)]|assertRecordMarket\([^,]+,[^,]+,\s*${name}\s*[,)]`,
+        );
+        const asWhere = new RegExp(
+          String.raw`\b${COL}\s*:\s*${name}\b|where\w*\.${COL}\s*=\s*${name}\b`,
+        );
+        lines.forEach((l, i) => {
+          if (/^\s*(\/\/|\*|\/\*)/.test(l)) return;
+          if (!asScope.test(l) && !asWhere.test(l)) return;
+          offenders.push(
+            `${path.relative(REPO, file)}:${i + 1} \`${name}\` came from normaliseMarket — ` +
+              `use requireMarket: ${l.trim().slice(0, 60)}`,
+          );
+        });
+      }
+    }
+    expect(offenders.join('\n')).toBe('');
+  });
+
+  /**
+   * The same rule, inline: `applyMarketFilter(qb, col, normaliseMarket(x))`.
+   */
+  it('no predicate helper is called with normaliseMarket inline', () => {
+    const INLINE = /(?:applyMarketFilter|assertRecordMarket)\([^;]*?,\s*normaliseMarket\(/;
+    const offenders: string[] = [];
+    for (const file of sources()) {
+      fs.readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+          if (!INLINE.test(line)) return;
+          const at = `${path.relative(REPO, file)}:${i + 1}`;
+          if (PENDING_HANDOVER.some((p) => at.endsWith(p.at))) return;
+          offenders.push(`${at} ${line.trim().slice(0, 90)}`);
+        });
+    }
+    expect(offenders.join('\n')).toBe('');
+  });
+
+  /**
+   * The hand-over list, and why it is in the spec rather than in the source.
+   *
+   * One site this gate flags is real and cannot be fixed by the agent that
+   * found it: another agent holds uncommitted edits in the same file, and the
+   * rule for this round is never to commit a file someone else is editing — a
+   * rule written because committing one such file already cost that agent four
+   * lines of work (see the report's round-3 incident).
+   *
+   * A `market-boundary-exempt:` comment in the source would be the wrong tool:
+   * that marker says "this shape is not a boundary", which is false here, and
+   * R3-3 is precisely the finding that such a marker can outlive the fix it was
+   * standing in for. So the debt lives here, in the gate's own file, and the
+   * gate polices it:
+   *
+   *   • the entry names the exact offending text, so the moment someone applies
+   *     the fix the entry stops matching and the assertion below fails — the
+   *     list cannot rot into a permanent exemption;
+   *   • the list's length is pinned, so a second pending item cannot be added
+   *     quietly.
+   */
+  const PENDING_HANDOVER = [
+    {
+      at: 'fulfillment.service.ts:1107',
+      expect: "applyMarketFilter(qb, 's.region_code', normaliseMarket(query.region));",
+      fix: "requireMarket(query.region, 'product reports', this.logger)",
+      why: 'R12 holds uncommitted edits in this file (acceptAnswer); see task-11-report.md round 4',
+    },
+  ];
+
+  it('the hand-over list is exactly what it claims, and no longer', () => {
+    expect(PENDING_HANDOVER).toHaveLength(1);
+    const stale: string[] = [];
+    for (const pending of PENDING_HANDOVER) {
+      const file = sources().find((f) => f.endsWith(pending.at.split(':')[0]));
+      expect(file, `${pending.at}: file is gone — delete this entry`).toBeTruthy();
+      const line = fs.readFileSync(file!, 'utf8').split('\n')[Number(pending.at.split(':')[1]) - 1];
+      // If the fix has landed, the entry must go with it.
+      if (!line || line.trim() !== pending.expect) {
+        stale.push(
+          `${pending.at} no longer reads as recorded — the fix has landed or moved; ` +
+            `delete this PENDING_HANDOVER entry. Expected: ${pending.expect}`,
+        );
+      }
+    }
+    expect(stale.join('\n')).toBe('');
   });
 
   /**

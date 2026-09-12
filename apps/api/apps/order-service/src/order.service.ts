@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { applyMarketFilter, normaliseMarket } from '@app/common';
+import { applyMarketFilter, normaliseMarket, requireMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { Order } from './entities/order.entity';
@@ -420,7 +420,12 @@ export class OrderService {
     // a literal and a caller-supplied one would be an injection point.
     const trunc = { day: 'day', week: 'week', month: 'month' }[groupBy];
     if (!trunc) throw new BadRequestException('groupBy must be one of day, week, month.');
-    const m = normaliseMarket(market);
+    // `requireMarket`, not `normaliseMarket`: this field carries the market the
+    // gateway resolved for the caller, which for a region-locked admin IS their
+    // lock. `normaliseMarket` returns `undefined` for a code it cannot read, and
+    // every predicate below then disappears — the platform's numbers under one
+    // market's heading (R3-1).
+    const m = requireMarket(market, 'revenue report', this.logger);
 
     const qb = this.orderRepo
       .createQueryBuilder('o')

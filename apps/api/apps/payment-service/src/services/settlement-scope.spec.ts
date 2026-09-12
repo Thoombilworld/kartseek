@@ -80,6 +80,21 @@ describe('an unreadable lock cannot widen a settlement read', () => {
     });
   }
 
+  it('the reconciliation report refuses rather than reconciling every market', async () => {
+    // Its own docstring calls a cross-market reconciliation "arithmetic on
+    // unrelated numbers", and `normaliseMarket` produced exactly that: the two
+    // conditional spreads dropped both predicates for a market it could not
+    // read (R3-1).
+    const { svc } = build();
+    (svc as any).paymentRepo = { find: vi.fn(async () => []) };
+    for (const bad of ['ZZ', 'QAT', 'NOT-A-COUNTRY']) {
+      await expect((svc as any).getReconciliationReport('2026-09-12', bad)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect((svc as any).paymentRepo.find).not.toHaveBeenCalled();
+    }
+  });
+
   it('the dashboard summary refuses an unreadable market filter too', async () => {
     const { svc } = build();
     await expect((svc as any).getDashboardSummary({ countryCode: 'ZZ' })).rejects.toThrow(
