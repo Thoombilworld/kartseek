@@ -356,6 +356,19 @@ export class SearchService {
           if (filters.minPrice && doc.price && doc.price < filters.minPrice) continue;
           if (filters.maxPrice && doc.price && doc.price > filters.maxPrice) continue;
           if (filters.rating && doc.rating && doc.rating < filters.rating) continue;
+          // The market, mirroring the ES `term` filter at :282. Without it a
+          // country-filtered query returned every market's documents the moment
+          // Elasticsearch went down — a filter that silently stops filtering is
+          // worse than one that errors (audit C leak 4).
+          if (filters.country) {
+            const wanted = String(filters.country).trim().toUpperCase();
+            const owner = String(
+              (doc as any).metadata?.countryCode ?? (doc as any).metadata?.country ?? '',
+            )
+              .trim()
+              .toUpperCase();
+            if (owner !== wanted) continue;
+          }
 
           allResults.push({ ...doc, _score: matchTitle ? 10 : 5 } as any);
         }

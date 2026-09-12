@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { TaxiConfigService } from './taxi-config.service';
+import { getH3Zone } from './h3-zone';
 
 /**
  * FareCalculationService — Dynamic fare engine for the taxi module.
@@ -23,19 +24,19 @@ export class FareCalculationService {
 
   /** Default rate cards by vehicle type */
   private static readonly DEFAULT_RATES: Record<string, RateCard> = {
-    economy:  { baseFare: 50,  distanceRate: 35, timeRate: 5,  minimumFare: 100,  waitingRate: 2 },
-    comfort:  { baseFare: 80,  distanceRate: 50, timeRate: 7,  minimumFare: 150,  waitingRate: 3 },
-    premium:  { baseFare: 120, distanceRate: 75, timeRate: 10, minimumFare: 250,  waitingRate: 5 },
-    bike:     { baseFare: 30,  distanceRate: 18, timeRate: 3,  minimumFare: 50,   waitingRate: 1 },
-    suv:      { baseFare: 100, distanceRate: 60, timeRate: 8,  minimumFare: 200,  waitingRate: 4 },
-    delivery: { baseFare: 40,  distanceRate: 25, timeRate: 4,  minimumFare: 80,   waitingRate: 2 },
+    economy: { baseFare: 50, distanceRate: 35, timeRate: 5, minimumFare: 100, waitingRate: 2 },
+    comfort: { baseFare: 80, distanceRate: 50, timeRate: 7, minimumFare: 150, waitingRate: 3 },
+    premium: { baseFare: 120, distanceRate: 75, timeRate: 10, minimumFare: 250, waitingRate: 5 },
+    bike: { baseFare: 30, distanceRate: 18, timeRate: 3, minimumFare: 50, waitingRate: 1 },
+    suv: { baseFare: 100, distanceRate: 60, timeRate: 8, minimumFare: 200, waitingRate: 4 },
+    delivery: { baseFare: 40, distanceRate: 25, timeRate: 4, minimumFare: 80, waitingRate: 2 },
   };
 
   /** Peak hour definitions */
   private static readonly PEAK_HOURS = [
-    { start: 7, end: 9, multiplier: 1.15 },   // Morning rush
-    { start: 17, end: 20, multiplier: 1.2 },   // Evening rush
-    { start: 22, end: 5, multiplier: 1.1 },    // Late night
+    { start: 7, end: 9, multiplier: 1.15 }, // Morning rush
+    { start: 17, end: 20, multiplier: 1.2 }, // Evening rush
+    { start: 22, end: 5, multiplier: 1.1 }, // Late night
   ];
 
   constructor(
@@ -56,13 +57,13 @@ export class FareCalculationService {
     zoneId?: string;
   }): Promise<FareEstimate[]> {
     const distKm = this.haversineDistance(
-      params.pickupLat, params.pickupLng,
-      params.dropLat, params.dropLng,
+      params.pickupLat,
+      params.pickupLng,
+      params.dropLat,
+      params.dropLng,
     );
     const durationMin = this.estimateDuration(distKm);
-    const surgeMultiplier = await this.getSurgeForZone(
-      params.pickupLat, params.pickupLng, params.zoneId,
-    );
+    const surgeMultiplier = await this.getSurgeForZone(params.pickupLat, params.pickupLng);
     const peakMultiplier = this.getPeakMultiplier();
 
     const vehicleTypes = Object.keys(FareCalculationService.DEFAULT_RATES);
@@ -70,7 +71,13 @@ export class FareCalculationService {
 
     for (const type of vehicleTypes) {
       const rate = await this.getRateCard(type, params.zoneId);
-      const estimate = this.calculateFare(distKm, durationMin, rate, surgeMultiplier, peakMultiplier);
+      const estimate = this.calculateFare(
+        distKm,
+        durationMin,
+        rate,
+        surgeMultiplier,
+        peakMultiplier,
+      );
 
       estimates.push({
         vehicleType: type,
@@ -104,13 +111,13 @@ export class FareCalculationService {
     zoneId?: string;
   }): Promise<FareEstimate> {
     const distKm = this.haversineDistance(
-      params.pickupLat, params.pickupLng,
-      params.dropLat, params.dropLng,
+      params.pickupLat,
+      params.pickupLng,
+      params.dropLat,
+      params.dropLng,
     );
     const durationMin = this.estimateDuration(distKm);
-    const surgeMultiplier = await this.getSurgeForZone(
-      params.pickupLat, params.pickupLng, params.zoneId,
-    );
+    const surgeMultiplier = await this.getSurgeForZone(params.pickupLat, params.pickupLng);
     const peakMultiplier = this.getPeakMultiplier();
     const rate = await this.getRateCard(params.vehicleType, params.zoneId);
     const estimate = this.calculateFare(distKm, durationMin, rate, surgeMultiplier, peakMultiplier);
@@ -153,8 +160,8 @@ export class FareCalculationService {
     const fare = Math.max(Math.round(withSurge), rate.minimumFare);
 
     // Commission splits
-    const platformCommission = fare * 0.15;  // 15% platform
-    const vendorCommission = fare * 0.05;    // 5% vendor (if applicable)
+    const platformCommission = fare * 0.15; // 15% platform
+    const vendorCommission = fare * 0.05; // 5% vendor (if applicable)
     const driverEarning = fare - platformCommission - vendorCommission;
 
     return {
@@ -175,16 +182,25 @@ export class FareCalculationService {
   // ─── Private Helpers ──────────────────────────────────────────────────────
 
   private calculateFare(
-    distKm: number, durationMin: number,
-    rate: RateCard, surgeMult: number, peakMult: number,
+    distKm: number,
+    durationMin: number,
+    rate: RateCard,
+    surgeMult: number,
+    peakMult: number,
   ): { fare: number } {
-    const subtotal = rate.baseFare + (distKm * rate.distanceRate) + (durationMin * rate.timeRate);
+    const subtotal = rate.baseFare + distKm * rate.distanceRate + durationMin * rate.timeRate;
     const withSurge = subtotal * surgeMult * peakMult;
     return { fare: Math.max(Math.round(withSurge), rate.minimumFare) };
   }
 
   /**
    * Get rate card from Redis cache or use defaults.
+   *
+   * TODO(TAXI-plan, AUD2-018): same root cause as leak 3 —
+   * `zoneId?.split('-')[0] || 'IN'` prices every market off India's card.
+   * Fix belongs to the TAXI workstream: derive the country from
+   * `pickupLat`/`pickupLng` via `getH3Zone` (./h3-zone) plus `RegionService`,
+   * and delete the `zoneId` parameter.
    */
   private async getRateCard(vehicleType: string, zoneId?: string): Promise<RateCard> {
     // Try DB-backed rate card via TaxiConfigService (country code from zoneId prefix)
@@ -201,21 +217,29 @@ export class FareCalculationService {
     const cached = await this.redis.getJson<RateCard>(key);
     if (cached) return cached;
 
-    return FareCalculationService.DEFAULT_RATES[vehicleType]
-      || FareCalculationService.DEFAULT_RATES['economy'];
+    return (
+      FareCalculationService.DEFAULT_RATES[vehicleType] ||
+      FareCalculationService.DEFAULT_RATES['economy']
+    );
   }
 
   /**
-   * Get surge multiplier for a zone from Redis.
+   * The surge multiplier where the rider is standing.
+   *
+   * `zoneId` is gone. It was client-optional, defaulted to the literal
+   * `'DEFAULT_ZONE'`, and no caller in the repository ever supplied one — so
+   * this read a single global demand counter while `ride-matching.service.ts`
+   * dutifully incremented per-cell counters that nothing consulted (audit C
+   * leak 3). The cell now comes from the pickup coordinates, which is the same
+   * derivation the write side uses.
    */
-  private async getSurgeForZone(lat: number, lng: number, zoneId?: string): Promise<number> {
-    if (zoneId) {
-      const surge = await this.redis.get(`surge:${zoneId}`);
-      if (surge) return parseFloat(surge);
-    }
-    // Calculate from demand/supply
+  private async getSurgeForZone(lat: number, lng: number): Promise<number> {
+    const cell = getH3Zone(lat, lng);
+    const explicit = await this.redis.get(`surge:${cell}`);
+    if (explicit) return parseFloat(explicit);
+
     const nearby = await this.redis.georadius('drivers:locations', lng, lat, 3);
-    const demand = await this.redis.get(`zone:demand:${zoneId || 'DEFAULT_ZONE'}`);
+    const demand = await this.redis.get(`zone:demand:${cell}`);
     const demandCount = demand ? parseInt(demand, 10) : 0;
     const supply = nearby.length || 1;
     const ratio = demandCount / supply;
@@ -249,11 +273,11 @@ export class FareCalculationService {
    */
   haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) ** 2;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
@@ -271,10 +295,10 @@ export class FareCalculationService {
 
 export interface RateCard {
   baseFare: number;
-  distanceRate: number;  // per km
-  timeRate: number;      // per minute
+  distanceRate: number; // per km
+  timeRate: number; // per minute
   minimumFare: number;
-  waitingRate: number;   // per minute waiting
+  waitingRate: number; // per minute waiting
 }
 
 export interface FareEstimate {

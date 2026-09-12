@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
+import { getAdjacentZones, getH3Zone } from './h3-zone';
 
 /**
  * RideMatchingService — Core dispatch engine for driver matching.
@@ -49,31 +50,19 @@ export class RideMatchingService {
 
   /**
    * Convert lat/lng to an H3-inspired hexagonal zone key.
-   * Uses a grid-based approximation at ~1.2km resolution (res 8 equivalent).
-   *
-   * For production, replace with `h3-js` library:
-   *   import { latLngToCell } from 'h3-js';
-   *   return latLngToCell(lat, lng, 8);
+   * Delegates to the shared derivation in `./h3-zone` so this write side and
+   * `FareCalculationService`'s read side can never key the same coordinate
+   * differently (audit C leak 3).
    */
   getH3Zone(lat: number, lng: number, resolution = 8): string {
-    // Grid approximation: each cell ~1.2km at equator for res 8
-    const cellSize = 0.011 * Math.pow(3, 8 - resolution); // degrees per cell
-    const row = Math.floor(lat / cellSize);
-    const col = Math.floor(lng / cellSize);
-    return `h3:${resolution}:${row}:${col}`;
+    return getH3Zone(lat, lng, resolution);
   }
 
   /**
    * Get adjacent H3 zones (self + 6 neighbors) for expanded search.
    */
   getAdjacentZones(lat: number, lng: number, resolution = 8): string[] {
-    const cellSize = 0.011 * Math.pow(3, 8 - resolution);
-    const row = Math.floor(lat / cellSize);
-    const col = Math.floor(lng / cellSize);
-    const offsets = [
-      [0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1],
-    ];
-    return offsets.map(([dr, dc]) => `h3:${resolution}:${row + dr}:${col + dc}`);
+    return getAdjacentZones(lat, lng, resolution);
   }
 
   // ─── Driver Scoring ───────────────────────────────────────────────────────
@@ -124,18 +113,22 @@ export class RideMatchingService {
     if (ride.preferredDriverId) {
       const preferredAvailable = await this.isDriverAvailable(ride.preferredDriverId);
       if (preferredAvailable) {
-        this.logger.log(`⭐ Preferred driver ${ride.preferredDriverId} is available — sending request first`);
+        this.logger.log(
+          `⭐ Preferred driver ${ride.preferredDriverId} is available — sending request first`,
+        );
         const session: MatchingSession = {
           rideId: ride.id,
-          candidates: [{
-            driverId: ride.preferredDriverId,
-            distanceKm: 0,
-            rating: 5,
-            acceptanceRate: 1,
-            etaMinutes: 3,
-            score: 100,
-            vehicleType: ride.vehicleType,
-          }],
+          candidates: [
+            {
+              driverId: ride.preferredDriverId,
+              distanceKm: 0,
+              rating: 5,
+              acceptanceRate: 1,
+              etaMinutes: 3,
+              score: 100,
+              vehicleType: ride.vehicleType,
+            },
+          ],
           currentIndex: 0,
           attempts: 0,
           ride,
@@ -151,7 +144,10 @@ export class RideMatchingService {
     let candidates: DriverCandidate[] = [];
     for (const radius of RideMatchingService.SEARCH_RADII) {
       candidates = await this.findCandidates(
-        ride.pickupLat, ride.pickupLng, radius, ride.vehicleType,
+        ride.pickupLat,
+        ride.pickupLng,
+        radius,
+        ride.vehicleType,
       );
       if (candidates.length > 0) {
         this.logger.log(`✅ Found ${candidates.length} candidates within ${radius}km`);
@@ -168,8 +164,8 @@ export class RideMatchingService {
     }
 
     // 4. Sort by score (descending)
-    const maxDist = Math.max(...candidates.map(c => c.distanceKm), 1);
-    candidates.forEach(c => c.score = this.scoreDriver(c, maxDist));
+    const maxDist = Math.max(...candidates.map((c) => c.distanceKm), 1);
+    candidates.forEach((c) => (c.score = this.scoreDriver(c, maxDist)));
     candidates.sort((a, b) => b.score - a.score);
 
     // 5. Create matching session
@@ -191,7 +187,10 @@ export class RideMatchingService {
    * Find available driver candidates within a given radius.
    */
   private async findCandidates(
-    lat: number, lng: number, radiusKm: number, vehicleType: string,
+    lat: number,
+    lng: number,
+    radiusKm: number,
+    vehicleType: string,
   ): Promise<DriverCandidate[]> {
     // Query Redis GEO for nearby drivers
     const nearby = await this.redis.georadius('drivers:locations', lng, lat, radiusKm);
@@ -240,8 +239,10 @@ export class RideMatchingService {
     const session = this.activeSessions.get(rideId);
     if (!session) return;
 
-    if (session.currentIndex >= session.candidates.length ||
-        session.attempts >= RideMatchingService.MAX_ATTEMPTS) {
+    if (
+      session.currentIndex >= session.candidates.length ||
+      session.attempts >= RideMatchingService.MAX_ATTEMPTS
+    ) {
       this.logger.warn(`🛑 All candidates exhausted for ride ${rideId}`);
       await this.updateRideStatus(rideId, 'NO_DRIVER_FOUND');
       await this.kafka.publish('taxi.ride.no_driver', {
@@ -257,19 +258,23 @@ export class RideMatchingService {
 
     this.logger.log(
       `📤 Sending ride ${rideId} to driver ${candidate.driverId} ` +
-      `(score: ${candidate.score}, dist: ${candidate.distanceKm.toFixed(1)}km, ` +
-      `attempt ${session.attempts}/${RideMatchingService.MAX_ATTEMPTS})`
+        `(score: ${candidate.score}, dist: ${candidate.distanceKm.toFixed(1)}km, ` +
+        `attempt ${session.attempts}/${RideMatchingService.MAX_ATTEMPTS})`,
     );
 
     // Store pending request in Redis so driver can query it
-    await this.redis.setJson(`ride:pending:${candidate.driverId}`, {
-      rideId,
-      pickupLat: session.ride.pickupLat,
-      pickupLng: session.ride.pickupLng,
-      vehicleType: session.ride.vehicleType,
-      customerId: session.ride.customerId,
-      sentAt: new Date().toISOString(),
-    }, RideMatchingService.DRIVER_RESPONSE_TIMEOUT + 5);
+    await this.redis.setJson(
+      `ride:pending:${candidate.driverId}`,
+      {
+        rideId,
+        pickupLat: session.ride.pickupLat,
+        pickupLng: session.ride.pickupLng,
+        vehicleType: session.ride.vehicleType,
+        customerId: session.ride.customerId,
+        sentAt: new Date().toISOString(),
+      },
+      RideMatchingService.DRIVER_RESPONSE_TIMEOUT + 5,
+    );
 
     // Publish event for WebSocket gateway to push to driver
     await this.kafka.publish('taxi.ride.request_sent', {
@@ -422,16 +427,19 @@ export class RideMatchingService {
     const supply = nearby.length || 1;
 
     const ratio = demand / supply;
-    if (ratio > 5) return 2.0;  // Heavy surge
-    if (ratio > 3) return 1.5;  // Moderate surge
-    if (ratio > 2) return 1.2;  // Light surge
-    return 1.0;                  // No surge
+    if (ratio > 5) return 2.0; // Heavy surge
+    if (ratio > 3) return 1.5; // Moderate surge
+    if (ratio > 2) return 1.2; // Light surge
+    return 1.0; // No surge
   }
 
   /**
    * Get matching session stats (for admin monitoring).
    */
-  getActiveSessionStats(): { activeMatches: number; sessions: Array<{ rideId: string; attempts: number; candidateCount: number }> } {
+  getActiveSessionStats(): {
+    activeMatches: number;
+    sessions: Array<{ rideId: string; attempts: number; candidateCount: number }>;
+  } {
     const sessions = Array.from(this.activeSessions.entries()).map(([rideId, s]) => ({
       rideId,
       attempts: s.attempts,

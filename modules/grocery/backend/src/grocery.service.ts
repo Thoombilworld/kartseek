@@ -21,12 +21,7 @@ import {
 } from './entities/grocery-stock-movement.entity';
 import { GroceryWarehouse, type WarehouseType } from './entities/grocery-warehouse.entity';
 import { GroceryVariantStock } from './entities/grocery-variant-stock.entity';
-import {
-  GROCERY_TAXONOMY,
-  LEGACY_CATEGORY_MAP,
-  ALL_MARKETS,
-  taxonomyId,
-} from './catalog/catalog-tree';
+import { GROCERY_TAXONOMY, LEGACY_CATEGORY_MAP, taxonomyId } from './catalog/catalog-tree';
 import { GroceryItem } from './entities/grocery-item.entity';
 import {
   GroceryOrder,
@@ -583,11 +578,26 @@ export class GroceryService {
   }
 
   /**
+   * Every key the grocery category tree is cached under, in every market.
+   *
+   * `invalidateCategoryCache` purged only the unscoped key, so
+   * `grocery:categories:stocked:<region>` and `grocery:categories:tree:<market>`
+   * served the pre-rename tree for the full 300 s TTL — and
+   * `migrateCategoryTaxonomy`, whose blast radius is the whole taxonomy, missed
+   * `:stocked:` too (audit C §3). One helper, both callers.
+   */
+  private async purgeCategoryKeys(): Promise<void> {
+    await this.redis.del('grocery:categories:all').catch(() => undefined);
+    await this.redis.delPattern('grocery:categories:stocked:*').catch(() => undefined);
+    await this.redis.delPattern('grocery:categories:tree:*').catch(() => undefined);
+  }
+
+  /**
    * Admin action: invalidate the category cache so all clients get fresh data.
    * Also publishes a Kafka event so mobile apps can re-fetch on next launch.
    */
   async invalidateCategoryCache() {
-    await this.redis.del('grocery:categories:all');
+    await this.purgeCategoryKeys();
     // Also clear per-category caches
     for (const cat of CANONICAL_CATEGORIES) {
       await this.redis.del(`grocery:category:${cat.id}`);
@@ -1007,10 +1017,7 @@ export class GroceryService {
       }
     }
 
-    await this.redis.del('grocery:categories:all').catch(() => undefined);
-    for (const c of [...ALL_MARKETS, 'all']) {
-      await this.redis.del(`grocery:categories:tree:${c}`).catch(() => undefined);
-    }
+    await this.purgeCategoryKeys();
 
     return { success: true, ...stats, staleButInUse: kept, totalNodes: all.length };
   }

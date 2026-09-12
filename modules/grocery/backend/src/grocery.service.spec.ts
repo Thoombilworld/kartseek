@@ -13,7 +13,11 @@ import { GroceryWarehouse } from './entities/grocery-warehouse.entity';
 import { GroceryVariantStock } from './entities/grocery-variant-stock.entity';
 import { GroceryStore } from './entities/grocery-store.entity';
 import { GroceryItem } from './entities/grocery-item.entity';
-import { GroceryOrder, GroceryOrderStatus, GroceryPaymentMethod } from './entities/grocery-order.entity';
+import {
+  GroceryOrder,
+  GroceryOrderStatus,
+  GroceryPaymentMethod,
+} from './entities/grocery-order.entity';
 import { GroceryFlashDeal } from './entities/grocery-flash-deal.entity';
 import { GroceryReview } from './entities/grocery-review.entity';
 import { GroceryWishlist } from './entities/grocery-wishlist.entity';
@@ -88,6 +92,11 @@ describe('GroceryService', () => {
       // Product-cache invalidation is SCAN + DEL; a missing `scan` makes every
       // catalogue write log a warning it should not be logging.
       scan: jest.fn().mockResolvedValue(['0', []]),
+      // Category invalidation now purges the per-market `stocked:*` and
+      // `tree:*` key patterns alongside the unscoped key (audit C §3); a
+      // missing `delPattern` throws synchronously before the `.catch` on it
+      // ever attaches.
+      delPattern: jest.fn().mockResolvedValue(0),
     };
     const kafkaMock: Partial<jest.Mocked<KafkaProducerService>> = {
       publish: jest.fn().mockResolvedValue(undefined),
@@ -158,10 +167,17 @@ describe('GroceryService', () => {
 
     it('should query DB and cache results when Redis is empty', async () => {
       redis.getJson.mockResolvedValue(null);
-      const dbCats = [{ id: 'fruits-vegetables', name: 'Fruits & Vegetables', isActive: true, children: [] as unknown[] }];
+      const dbCats = [
+        {
+          id: 'fruits-vegetables',
+          name: 'Fruits & Vegetables',
+          isActive: true,
+          children: [] as unknown[],
+        },
+      ];
       categoryRepo.find.mockResolvedValue(dbCats as any);
 
-      const result = await service.getCategories() as any;
+      const result = (await service.getCategories()) as any;
 
       expect(result.source).toBe('database');
       expect(result.categories).toEqual(dbCats);
@@ -176,7 +192,7 @@ describe('GroceryService', () => {
       redis.getJson.mockResolvedValue(null);
       categoryRepo.find.mockResolvedValue([]);
 
-      const result = await service.getCategories() as any;
+      const result = (await service.getCategories()) as any;
 
       expect(result.source).toBe('canonical');
       expect(result.total).toBe(23);
@@ -196,10 +212,14 @@ describe('GroceryService', () => {
 
     it('should find category in DB and cache it', async () => {
       redis.getJson.mockResolvedValue(null);
-      const dbCat = { id: 'dairy-bread-eggs', name: 'Dairy, Bread & Eggs', children: [] as unknown[] };
+      const dbCat = {
+        id: 'dairy-bread-eggs',
+        name: 'Dairy, Bread & Eggs',
+        children: [] as unknown[],
+      };
       categoryRepo.findOne.mockResolvedValue(dbCat as any);
 
-      const result = await service.getCategoryById('dairy-bread-eggs') as any;
+      const result = (await service.getCategoryById('dairy-bread-eggs')) as any;
 
       expect(result?.id).toBe('dairy-bread-eggs');
       expect(redis.setJson).toHaveBeenCalledWith(
@@ -213,7 +233,7 @@ describe('GroceryService', () => {
       redis.getJson.mockResolvedValue(null);
       categoryRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.getCategoryById('fruits-vegetables') as any;
+      const result = (await service.getCategoryById('fruits-vegetables')) as any;
       expect(result?.id).toBe('fruits-vegetables'); // Found in canonical
     });
 
@@ -249,19 +269,42 @@ describe('GroceryService', () => {
     const dto = {
       customerId: 'cust-1',
       storeId: '11111111-1111-4111-8111-111111111111',
-      items: [{ productId: '22222222-2222-4222-8222-222222222222', name: 'Avocados', weight: '500g', price: 280, quantity: 2 }],
-      deliveryAddress: { line1: '123 Main St', city: 'Mumbai', pincode: '00100', lat: -1.29, lng: 36.82 },
+      items: [
+        {
+          productId: '22222222-2222-4222-8222-222222222222',
+          name: 'Avocados',
+          weight: '500g',
+          price: 280,
+          quantity: 2,
+        },
+      ],
+      deliveryAddress: {
+        line1: '123 Main St',
+        city: 'Mumbai',
+        pincode: '00100',
+        lat: -1.29,
+        lng: 36.82,
+      },
       paymentMethod: GroceryPaymentMethod.ONLINE,
     };
 
     const openStore = {
-      id: '11111111-1111-4111-8111-111111111111', name: 'FreshMart', status: 'APPROVED', isOnline: true,
-      minOrderAmount: 0, deliveryFee: 50, ownerId: 'seller-1',
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'FreshMart',
+      status: 'APPROVED',
+      isOnline: true,
+      minOrderAmount: 0,
+      deliveryFee: 50,
+      ownerId: 'seller-1',
     };
 
     /** A catalogue row the order can actually be priced against. */
     const catalogueProduct = (price = 280, stock = 10) => ({
-      id: '22222222-2222-4222-8222-222222222222', name: 'Avocados', storeId: '11111111-1111-4111-8111-111111111111', isAvailable: true, category: 'fruits-vegetables',
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'Avocados',
+      storeId: '11111111-1111-4111-8111-111111111111',
+      isAvailable: true,
+      category: 'fruits-vegetables',
       weightVariants: [{ weight: '500g', price, mrp: price + 20, stock }],
     });
 
@@ -270,13 +313,18 @@ describe('GroceryService', () => {
       itemRepo.find.mockResolvedValue([catalogueProduct()] as any);
       orderRepo.count.mockResolvedValue(0);
       mockEntityManager.save.mockResolvedValueOnce({
-        id: 'order-1', orderNumber: 'GRO-1001', ...dto, status: 'PLACED',
+        id: 'order-1',
+        orderNumber: 'GRO-1001',
+        ...dto,
+        status: 'PLACED',
       } as any);
 
       const result = await service.createGroceryOrder(dto);
 
       expect(result.success).toBe(true);
-      expect(storeRepo.findOne).toHaveBeenCalledWith({ where: { id: '11111111-1111-4111-8111-111111111111' } });
+      expect(storeRepo.findOne).toHaveBeenCalledWith({
+        where: { id: '11111111-1111-4111-8111-111111111111' },
+      });
       expect(redis.setJson).toHaveBeenCalledWith(
         expect.stringContaining('grocery:order:'),
         expect.objectContaining({ orderNumber: 'GRO-1001' }),
@@ -284,7 +332,10 @@ describe('GroceryService', () => {
       );
       expect(kafka.publish).toHaveBeenCalledWith(
         'grocery.order.created',
-        expect.objectContaining({ storeId: '11111111-1111-4111-8111-111111111111', customerId: 'cust-1' }),
+        expect.objectContaining({
+          storeId: '11111111-1111-4111-8111-111111111111',
+          customerId: 'cust-1',
+        }),
       );
       // Notification to seller
       expect(kafka.publish).toHaveBeenCalledWith(
@@ -310,8 +361,8 @@ describe('GroceryService', () => {
 
       const [, order] = mockEntityManager.create.mock.calls.at(-1)!;
       expect(order.items[0].price).toBe(280);
-      expect(order.itemTotal).toBe(560);       // 280 × 2, not 1 × 2
-      expect(order.grandTotal).toBe(610);      // + 50 delivery
+      expect(order.itemTotal).toBe(560); // 280 × 2, not 1 × 2
+      expect(order.grandTotal).toBe(610); // + 50 delivery
     });
 
     it('should reject a product that belongs to another store', async () => {
@@ -362,13 +413,19 @@ describe('GroceryService', () => {
   describe('updateOrderStatus', () => {
     it('should allow valid status transitions', async () => {
       const order = {
-        id: 'ord-1', orderNumber: 'GRO-1001', status: GroceryOrderStatus.PLACED,
-        storeId: 'GRC-001', customerId: 'cust-1', store: { name: 'FreshMart' },
+        id: 'ord-1',
+        orderNumber: 'GRO-1001',
+        status: GroceryOrderStatus.PLACED,
+        storeId: 'GRC-001',
+        customerId: 'cust-1',
+        store: { name: 'FreshMart' },
       };
       orderRepo.findOne.mockResolvedValue(order as any);
       orderRepo.save.mockResolvedValue({ ...order, status: GroceryOrderStatus.CONFIRMED } as any);
 
-      const result = await service.updateOrderStatus('ord-1', { status: GroceryOrderStatus.CONFIRMED });
+      const result = await service.updateOrderStatus('ord-1', {
+        status: GroceryOrderStatus.CONFIRMED,
+      });
 
       expect(result.success).toBe(true);
       expect(kafka.publish).toHaveBeenCalledWith(
@@ -391,13 +448,21 @@ describe('GroceryService', () => {
 
     it('should publish delivery.requested when order is READY_FOR_PICKUP', async () => {
       const order = {
-        id: 'ord-1', orderNumber: 'GRO-1001', status: GroceryOrderStatus.PACKING,
-        storeId: 'GRC-001', customerId: 'cust-1', paymentMethod: 'COD', grandTotal: 500,
+        id: 'ord-1',
+        orderNumber: 'GRO-1001',
+        status: GroceryOrderStatus.PACKING,
+        storeId: 'GRC-001',
+        customerId: 'cust-1',
+        paymentMethod: 'COD',
+        grandTotal: 500,
         store: { name: 'FreshMart', latitude: -1.29, longitude: 36.82, address: 'Andheri West' },
-        deliveryAddress: { lat: -1.30, lng: 36.83, line1: '123 Main', city: 'Mumbai' },
+        deliveryAddress: { lat: -1.3, lng: 36.83, line1: '123 Main', city: 'Mumbai' },
       };
       orderRepo.findOne.mockResolvedValue(order as any);
-      orderRepo.save.mockResolvedValue({ ...order, status: GroceryOrderStatus.READY_FOR_PICKUP } as any);
+      orderRepo.save.mockResolvedValue({
+        ...order,
+        status: GroceryOrderStatus.READY_FOR_PICKUP,
+      } as any);
 
       await service.updateOrderStatus('ord-1', { status: GroceryOrderStatus.READY_FOR_PICKUP });
 
@@ -423,7 +488,7 @@ describe('GroceryService', () => {
     it('should query DB and cache when cache is empty', async () => {
       redis.getJson.mockResolvedValue(null);
 
-      const result = await service.getProducts('GRC-001') as any;
+      const result = (await service.getProducts('GRC-001')) as any;
       expect(result.data).toBeDefined();
       expect(redis.setJson).toHaveBeenCalled();
     });
@@ -535,8 +600,9 @@ describe('GroceryService', () => {
       itemRepo.findOne.mockResolvedValueOnce(null as never);
       await expect(service.getProductById('store-B', 'prod-1')).rejects.toThrow(NotFoundException);
       // The store must be part of the query, not filtered afterwards.
-      expect(itemRepo.findOne).toHaveBeenCalledWith({ where: { id: 'prod-1', storeId: 'store-B' } });
+      expect(itemRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'prod-1', storeId: 'store-B' },
+      });
     });
   });
-
 });
