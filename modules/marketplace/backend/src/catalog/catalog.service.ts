@@ -1,4 +1,4 @@
-import { applyMarketFilter } from '@app/common';
+import { applyMarketFilter, requireMarket } from '@app/common';
 import {
   BadRequestException,
   Inject,
@@ -1817,7 +1817,12 @@ export class CatalogService {
     const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
 
     const qb = this.sellerRepo.createQueryBuilder('s');
-    applyMarketFilter(qb, 's.region_code', undefined, opts.region);
+    // `requireMarket`, not the permissive `requested` slot: the gateway's
+    // `marketplace.controller.ts` collapses the lock into this field
+    // (`region: data?.scope ?? this.payloadRegion(data)`), and an unreadable
+    // value in the `requested` slot is IGNORED — which would hand a
+    // market-confined admin every market's sellers on the APPROVALS queue (N1).
+    applyMarketFilter(qb, 's.region_code', requireMarket(opts.region, 'market'));
     if (opts.status)
       qb.andWhere('s.verificationStatus = :status', { status: opts.status.toUpperCase() });
 

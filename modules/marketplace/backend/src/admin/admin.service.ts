@@ -836,8 +836,29 @@ export class MarketplaceAdminService {
    * explicitly. `regionCode` is the only column consulted — `applicableCountries`
    * stays as the customer-facing eligibility list and no authorisation path
    * reads it (C1 / AUD2-082).
+   *
+   * ── `mode` exists because a PATCH is not a CREATE ───────────────────────────
+   *
+   * This returned `{ …dto, regionCode: named ?? null, isGlobal: … }`
+   * unconditionally, and the update paths applied it to `repo.update()`. So a
+   * SUPER_ADMIN sending `{ status: 'PAUSED' }` — which is exactly what the
+   * status and "featured" routes send — wrote `region_code = NULL,
+   * is_global = false` and ERASED the market this round exists to populate. The
+   * row then read as unattributed, i.e. invisible to the regional admin who had
+   * just been given it. Pausing an offer is not a statement about which market
+   * it runs in.
+   *
+   * So: `create` defaults both columns explicitly (a new row must not be born
+   * unattributed by omission), and `update` touches a column only when the
+   * payload actually carries it — or when a lock forces it, because a locked
+   * admin's offer is always theirs and never global, whatever they send.
    */
-  private scopeOfferWrite(dto: any, scope: string | undefined, what: string) {
+  private scopeOfferWrite(
+    dto: any,
+    scope: string | undefined,
+    what: string,
+    mode: 'create' | 'update' = 'create',
+  ) {
     const named = normaliseMarket(dto?.regionCode);
     if (dto?.regionCode && !named) {
       throw new BadRequestException(
@@ -845,12 +866,23 @@ export class MarketplaceAdminService {
       );
     }
     const lock = normaliseMarket(scope);
-    if (!lock) {
-      return { ...dto, regionCode: named ?? null, isGlobal: dto?.isGlobal === true };
+    const patch: any = { ...dto };
+    if (lock) {
+      // Refused by the same assert a read uses, so the denial reads the same.
+      if (named) this.assertInMarket(named, lock, what);
+      patch.regionCode = lock;
+      patch.isGlobal = false;
+      return patch;
     }
-    // Refused by the same assert a read uses, so the denial reads the same.
-    if (named) this.assertInMarket(named, lock, what);
-    return { ...dto, regionCode: lock, isGlobal: false };
+    if (mode === 'create') {
+      patch.regionCode = named ?? null;
+      patch.isGlobal = dto?.isGlobal === true;
+      return patch;
+    }
+    // A global admin's PATCH: only what the payload names.
+    if ('regionCode' in (dto ?? {})) patch.regionCode = named ?? null;
+    if ('isGlobal' in (dto ?? {})) patch.isGlobal = dto.isGlobal === true;
+    return patch;
   }
 
   private static assertRenderableBanner(dto: any): void {
@@ -1973,7 +2005,7 @@ export class MarketplaceAdminService {
     assertRecordMarket(current, 'regionCode', scope, 'bank offer', this.logger);
     const result = await this.bankOfferRepo.update(
       id,
-      this.scopeOfferWrite(dto, scope, 'bank offer'),
+      this.scopeOfferWrite(dto, scope, 'bank offer', 'update'),
     );
     if (!result.affected) throw new NotFoundException(`Bank offer ${id} not found`);
     const offer = await this.bankOfferRepo.findOne({ where: { id } });
@@ -2060,7 +2092,7 @@ export class MarketplaceAdminService {
     assertRecordMarket(current, 'regionCode', scope, 'exchange offer', this.logger);
     const result = await this.exchangeOfferRepo.update(
       id,
-      this.scopeOfferWrite(dto, scope, 'exchange offer'),
+      this.scopeOfferWrite(dto, scope, 'exchange offer', 'update'),
     );
     if (!result.affected) throw new NotFoundException(`Exchange offer ${id} not found`);
     const offer = await this.exchangeOfferRepo.findOne({ where: { id } });

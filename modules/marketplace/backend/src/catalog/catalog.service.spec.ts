@@ -13,6 +13,7 @@ import { Review } from '../entities/review.entity';
 import { ProductVariant } from '../entities/product-variant.entity';
 import { ProductAttribute } from '../entities/product-attribute.entity';
 import { FlashDealNomination } from '../entities/flash-deal.entity';
+import { ForbiddenException } from '@nestjs/common';
 
 /**
  * Catalogue read tests. These moved here with the methods when CatalogService was
@@ -646,6 +647,31 @@ describe('CatalogService', () => {
         sql.includes('region_code'),
       );
       expect(regionCall![0]).not.toContain('IS NULL');
+    });
+
+    /**
+     * The approvals queue is the worst place for this to fail open.
+     *
+     * `marketplace.controller.ts` collapses the two slots — `region:
+     * data?.scope ?? this.payloadRegion(data)` — so a region-locked admin's
+     * market lands in the FILTER slot, where an unreadable value is ignored.
+     * Ignored means no predicate, so a QA-confined admin would have been handed
+     * every market's pending sellers to approve (N1).
+     */
+    it('refuses an unreadable market rather than queueing every market', async () => {
+      for (const bad of ['NOT-A-COUNTRY', 'ZZ', 'QAT']) {
+        await expect(service.getSellersForAdmin({ region: bad })).rejects.toThrow(
+          ForbiddenException,
+        );
+      }
+    });
+
+    it('queues every market only when no market is named at all', async () => {
+      await service.getSellersForAdmin({});
+      const regionCall = lastSellerQb().andWhere.mock.calls.find(([sql]: [string]) =>
+        sql.includes('region_code'),
+      );
+      expect(regionCall).toBeUndefined();
     });
 
     it('returns the oldest applications first', async () => {
