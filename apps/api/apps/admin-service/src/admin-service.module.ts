@@ -21,7 +21,10 @@ import { HealthModule } from '@app/common';
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres' as const,
         ...databaseCredentials(cfg),
-        schema: 'admin',
+        // `public`, not `admin`. The `admin` schema holds `admin_roles` only;
+        // `page_layouts` is `public.page_layouts`, and the gateway registers
+        // the same entity against it. One table, one owner, one schema.
+        schema: 'public',
         // Explicit classes, never a __dirname glob — the bundled build makes the
         // glob match nothing, leaving TypeORM with no metadata and every
         // DB-backed route throwing while /health still returns 200.

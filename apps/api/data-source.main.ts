@@ -134,6 +134,15 @@ import { DataSource } from 'typeorm';
  *       round, review C2). A permission change is a data change and needs its
  *       own file.
  *
+ *   1786502500000-QuarantineStaleVerticalCopies
+ *       Renames `public.restaurants`, `public.grocery_stores`,
+ *       `public.pharmacy_stores`, `public.hotels` and `public.doctors` into a
+ *       new `legacy_public_verticals` schema. All five are 2024-era copies of
+ *       rows that live in their own module database (`kartseek_restaurant`,
+ *       `kartseek_grocery`, …) — nothing in the gateway or any service reads
+ *       them (AUD2-030, the actionable half). They live in `public` in *this*
+ *       database, so the rename has to run from here.
+ *
  * Deliberately **not** here, though each mentions `users` somewhere:
  *
  *   1719468000000-InitialMarketplaceSchema
@@ -185,6 +194,7 @@ export const MainDataSource = new DataSource({
     'migrations/1786502100000-SeoOverrides.ts',
     'migrations/1786502200000-MoneyPathMarket.ts',
     'migrations/1786502400000-RegionalAdminStaffPermissions.ts',
+    'migrations/1786502500000-QuarantineStaleVerticalCopies.ts',
   ],
   migrationsTableName: 'migrations',
   // One transaction per migration, matching the marketplace DataSource: a

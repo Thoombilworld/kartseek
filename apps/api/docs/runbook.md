@@ -76,6 +76,15 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 
 ---
 
+## Database Notes
+
+`orders` is `"order".orders`, not `public.orders`, and its money column is
+`currency`, not `currency_code`. Raw SQL against the main database must write
+the schema — `search_path` is `public`, so a bare `orders` either errors or
+builds a shadow table. The same applies to `admin.admin_roles`.
+
+---
+
 ## Incident Response
 
 Cluster commands (`kubectl`, manifest layout, current caveats) are in

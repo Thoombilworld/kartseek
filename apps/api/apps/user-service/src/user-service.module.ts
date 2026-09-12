@@ -18,7 +18,11 @@ import { HealthModule } from '@app/common';
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres',
         ...databaseCredentials(cfg),
-        schema: 'user',
+        // `public`, not `user`. The `user` schema in kartseek_db is empty: the
+        // 51 real users live in `public.users`, which the gateway registers
+        // too. Pointing here at `user` made every DB-backed user-service route
+        // fail with "relation user.users does not exist" while /health was 200.
+        schema: 'public',
         entities: [User],
         synchronize: cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
       }),
