@@ -210,6 +210,16 @@ export class MarketplaceFulfillmentService {
     return seller?.regionCode ?? null;
   }
 
+  /** The market of a reported listing: the seller who owns it. Null when unattributable. */
+  private async reportMarket(productId: string | null | undefined): Promise<string | null> {
+    if (!productId) return null;
+    const product = await this.productRepo.findOne({
+      where: { id: productId },
+      select: ['id', 'seller_id'],
+    });
+    return this.sellerMarket(product?.seller_id);
+  }
+
   // ── Return requests ─────────────────────────────────────────────────────────
   async createReturnRequest(dto: any) {
     const order = await this.orderRepo.findOne({ where: { id: dto.orderId } });
@@ -343,7 +353,7 @@ export class MarketplaceFulfillmentService {
 
   async assignReturnPickup(
     id: string,
-    dto: { pickupPartnerId: string; pickupScheduledAt: string },
+    dto: { pickupPartnerId: string; pickupScheduledAt: string; scope?: string },
   ) {
     // `new Date(undefined)` is an Invalid Date, which TypeORM serialises as
     // "0NaN-NaN-NaNTNaN:NaN..." and Postgres rejects — surfacing as a 500 that
@@ -356,6 +366,17 @@ export class MarketplaceFulfillmentService {
     if (Number.isNaN(scheduledAt.getTime())) {
       throw new BadRequestException('pickupScheduledAt must be a valid ISO 8601 date-time');
     }
+    // The return's own market, against the caller's. This wrote straight to
+    // `update()` without reading the row, so a regional admin scheduled pickups
+    // for another market's returns — and the 404 the missing row deserves was
+    // an `{ success: true }` besides.
+    const ret = await this.returnRepo.findOne({
+      where: { id: requireId(id, 'return request') },
+      select: ['id', 'regionCode'],
+    });
+    if (!ret) throw new NotFoundException(`Return request ${id} not found`);
+    assertInMarket(ret.regionCode, dto?.scope, 'return request', this.logger);
+
     await this.returnRepo.update(id, {
       pickupPartnerId: dto.pickupPartnerId,
       pickupScheduledAt: scheduledAt,
@@ -696,7 +717,10 @@ export class MarketplaceFulfillmentService {
    */
   async addTrackingEvent(dto: any, actor?: Actor) {
     const order = dto?.orderId
-      ? await this.orderRepo.findOne({ where: { id: dto.orderId }, select: ['id', 'sellerId'] })
+      ? await this.orderRepo.findOne({
+          where: { id: dto.orderId },
+          select: ['id', 'sellerId', 'regionCode'],
+        })
       : null;
     if (dto?.orderId && !order) throw new NotFoundException(`Order ${dto.orderId} not found`);
 
@@ -704,8 +728,14 @@ export class MarketplaceFulfillmentService {
     if (role !== 'DRIVER' && !MarketplaceFulfillmentService.isAdmin(actor)) {
       await this.assertOwns(actor, order?.sellerId, 'order');
     }
+    // A tracking event has no market of its own; the order it reports on does.
+    // An admin passed the ownership test above unconditionally, which is what
+    // let a regional admin (or a driver) push a DELIVERED event — and so settle
+    // commission — against another market's order.
+    const { scope, ...event } = (dto ?? {}) as { scope?: string } & Record<string, unknown>;
+    assertInMarket(order?.regionCode ?? null, scope, 'order', this.logger);
 
-    const entity = this.trackingRepo.create(dto);
+    const entity = this.trackingRepo.create(event);
     const saved = await this.trackingRepo.save(entity);
     // Update order's tracking info if it's a status-changing event
     if (['DELIVERED', 'OUT_FOR_DELIVERY', 'IN_TRANSIT', 'PICKED_UP'].includes(dto.status)) {
@@ -918,8 +948,11 @@ export class MarketplaceFulfillmentService {
   }
 
   /** A seller's own low-stock variants. The id comes from the URL, so it is checked. */
-  async getLowStockVariants(sellerId: string, actor?: Actor) {
+  async getLowStockVariants(sellerId: string, actor?: Actor, scope?: string) {
     await this.assertOwns(actor, sellerId, 'seller account');
+    // `assertOwns` returns immediately for an admin, which is what left this
+    // read open across markets: a regional admin saw any seller's stock levels.
+    assertInMarket(await this.sellerMarket(sellerId), scope, 'seller account', this.logger);
 
     const variants = await this.variantRepo
       .createQueryBuilder('v')
@@ -1016,14 +1049,33 @@ export class MarketplaceFulfillmentService {
     return { success: true, id: saved.id, updated: false };
   }
 
-  /** The moderation queue. Pending first, then oldest first within a status. */
+  /**
+   * The moderation queue. Pending first, then oldest first within a status.
+   *
+   * `region` is the market the gateway resolved for the caller. A report has no
+   * market column: it is attributed through the reported listing to the seller
+   * who owns it, the same join every admin product list uses. The join is LEFT
+   * and the predicate excludes a null market, so a report on a listing with no
+   * attributable seller is invisible to a regional admin and still visible to a
+   * global one — unattributable, therefore not a regional admin's.
+   */
   async listProductReports(
-    query: { status?: string; productId?: string; page?: number; limit?: number } = {},
+    query: {
+      status?: string;
+      productId?: string;
+      region?: string;
+      page?: number;
+      limit?: number;
+    } = {},
   ) {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
 
-    const where: Record<string, unknown> = {};
+    const qb = this.reportRepo
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.product', 'product')
+      .leftJoin(Seller, 's', 's.id = product.seller_id');
+
     if (query.status) {
       const status = String(query.status).toUpperCase() as ProductReportStatus;
       if (!MarketplaceFulfillmentService.REPORT_STATUSES.includes(status)) {
@@ -1031,17 +1083,17 @@ export class MarketplaceFulfillmentService {
           `\`status\` must be one of: ${MarketplaceFulfillmentService.REPORT_STATUSES.join(', ')}.`,
         );
       }
-      where.status = status;
+      qb.andWhere('r.status = :status', { status });
     }
-    if (query.productId) where.productId = query.productId;
+    if (query.productId) qb.andWhere('r.productId = :productId', { productId: query.productId });
+    const market = normaliseMarket(query.region);
+    if (market) qb.andWhere('s.region_code = :market', { market });
 
-    const [data, total] = await this.reportRepo.findAndCount({
-      where,
-      relations: ['product'],
-      order: { createdAt: 'ASC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [data, total] = await qb
+      .orderBy('r.createdAt', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
     return { data, total, page, limit };
   }
 
@@ -1053,7 +1105,7 @@ export class MarketplaceFulfillmentService {
    */
   async resolveProductReport(
     id: string,
-    dto: { status?: string; resolutionNote?: string },
+    dto: { status?: string; resolutionNote?: string; scope?: string },
     adminId?: string,
   ) {
     const reportId = requireId(id, 'report');
@@ -1069,6 +1121,10 @@ export class MarketplaceFulfillmentService {
 
     const report = await this.reportRepo.findOne({ where: { id: reportId } });
     if (!report) throw new NotFoundException(`Report ${reportId} not found`);
+    // Attributed through the listing to its seller, exactly as the queue read
+    // above is. Nothing here read the caller's market, so a regional admin
+    // could dismiss any market's report.
+    assertInMarket(await this.reportMarket(report.productId), dto?.scope, 'report', this.logger);
 
     const settled = status === 'ACTIONED' || status === 'DISMISSED';
     await this.reportRepo.update(reportId, {
@@ -1332,11 +1388,38 @@ export class MarketplaceFulfillmentService {
   }
 
   // ── Delivery assignments ────────────────────────────────────────────────────
+  //
+  // `delivery_assignments.region_code` has been on the table since it was
+  // created and nothing ever read or wrote it (audit V12). Every method below
+  // now does one of the two: the create stamps it from the order being
+  // assigned, and each read and write asserts it against the caller's market.
+  // The market is taken from the order rather than the request body on purpose
+  // — a market the caller supplied is a market the caller chose.
+
   async createDeliveryAssignment(dto: any) {
+    const {
+      scope,
+      regionCode: _ignored,
+      region_code: _ignoredToo,
+      ...fields
+    } = (dto ?? {}) as {
+      scope?: string;
+      regionCode?: string;
+      region_code?: string;
+    } & Record<string, unknown>;
+
+    const order = await this.orderRepo.findOne({
+      where: { id: requireId(fields.orderId as string | undefined, 'order') },
+      select: ['id', 'regionCode'],
+    });
+    if (!order) throw new NotFoundException(`Order ${fields.orderId} not found`);
+    assertInMarket(order.regionCode, scope, 'order', this.logger);
+
     // Generate a secure 4-digit OTP for delivery verification
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
     const entity = this.deliveryAssignmentRepo.create({
-      ...dto,
+      ...fields,
+      regionCode: order.regionCode,
       deliveryOtp: otp,
       status: 'PENDING',
       offeredAt: new Date(),
@@ -1384,6 +1467,7 @@ export class MarketplaceFulfillmentService {
     partnerId?: string;
     orderId?: string;
     status?: string;
+    region?: string;
     page?: number;
     limit?: number;
   }) {
@@ -1393,6 +1477,8 @@ export class MarketplaceFulfillmentService {
     if (filters.partnerId) where.partnerId = filters.partnerId;
     if (filters.orderId) where.orderId = filters.orderId;
     if (filters.status) where.status = filters.status;
+    const market = normaliseMarket(filters.region);
+    if (market) where.regionCode = market;
     const [data, total] = await this.deliveryAssignmentRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },
@@ -1402,12 +1488,15 @@ export class MarketplaceFulfillmentService {
     return { data, total, page, limit };
   }
 
-  async getDeliveryAssignmentById(id: string) {
+  async getDeliveryAssignmentById(id: string, scope?: string) {
     const assignment = await this.deliveryAssignmentRepo.findOne({
-      where: { id },
+      where: { id: requireId(id, 'delivery assignment') },
       relations: { order: true },
     });
     if (!assignment) throw new NotFoundException(`Delivery assignment ${id} not found`);
+    // The row carries the courier's name and phone and, through the order
+    // relation, the customer's address.
+    assertInMarket(assignment.regionCode, scope, 'delivery assignment', this.logger);
     return assignment;
   }
 
@@ -1420,10 +1509,14 @@ export class MarketplaceFulfillmentService {
       proofPhotos?: string[];
       deliveryCoordinates?: any;
       failureReason?: string;
+      scope?: string;
     },
   ) {
-    const assignment = await this.deliveryAssignmentRepo.findOne({ where: { id } });
+    const assignment = await this.deliveryAssignmentRepo.findOne({
+      where: { id: requireId(id, 'delivery assignment') },
+    });
     if (!assignment) throw new NotFoundException(`Delivery assignment ${id} not found`);
+    assertInMarket(assignment.regionCode, dto?.scope, 'delivery assignment', this.logger);
     const update: any = { status: dto.status };
     if (dto.status === 'ACCEPTED') update.acceptedAt = new Date();
     if (dto.status === 'PICKED_UP') update.pickedUpAt = new Date();
@@ -1442,7 +1535,7 @@ export class MarketplaceFulfillmentService {
     return { success: true, id, status: dto.status };
   }
 
-  async verifyDeliveryOtp(id: string, otp: string) {
+  async verifyDeliveryOtp(id: string, otp: string, scope?: string) {
     // `deliveryOtp` is `select: false`, so it has to be asked for explicitly.
     // This is the only place that should ever do so — the code is compared here
     // and never returned.
@@ -1450,9 +1543,12 @@ export class MarketplaceFulfillmentService {
       .createQueryBuilder('a')
       .addSelect('a.deliveryOtp')
       .leftJoinAndSelect('a.order', 'order')
-      .where('a.id = :id', { id })
+      .where('a.id = :id', { id: requireId(id, 'delivery assignment') })
       .getOne();
     if (!assignment) throw new NotFoundException(`Delivery assignment ${id} not found`);
+    // Before the attempt counter moves: a refused caller must not be able to
+    // burn another market's delivery out of its five OTP attempts.
+    assertInMarket(assignment.regionCode, scope, 'delivery assignment', this.logger);
 
     // Guard: already verified
     if (assignment.otpVerified) {

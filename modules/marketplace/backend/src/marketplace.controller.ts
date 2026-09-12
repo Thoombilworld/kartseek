@@ -2567,7 +2567,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'verify_delivery_otp' })
   tcpVerifyOtp(@Payload() data: any) {
-    return this.fulfillment.verifyDeliveryOtp(data?.id, data?.otp);
+    return this.fulfillment.verifyDeliveryOtp(data?.id, data?.otp, data?.scope);
   }
 
   @MessagePattern({ cmd: 'get_partner_active_delivery' })
@@ -2833,6 +2833,7 @@ export class MarketplaceController {
     return this.fulfillment.getLowStockVariants(
       typeof data === 'string' ? data : data?.sellerId,
       actorOf(data),
+      typeof data === 'string' ? undefined : data?.scope,
     );
   }
 
@@ -2876,7 +2877,9 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'get_delivery_assignment_by_id' })
   tcpGetDeliveryAssignmentById(@Payload() data: any) {
-    return this.fulfillment.getDeliveryAssignmentById(typeof data === 'string' ? data : data?.id);
+    return typeof data === 'string'
+      ? this.fulfillment.getDeliveryAssignmentById(data)
+      : this.fulfillment.getDeliveryAssignmentById(data?.id, data?.scope);
   }
 
   // ── Notifications ──────────────────────────────────────────────────────────
