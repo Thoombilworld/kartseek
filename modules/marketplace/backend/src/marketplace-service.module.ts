@@ -54,7 +54,7 @@ import { SellerMessagesController } from './seller/seller.messages.controller';
 import { SellerOwnershipGuard } from './seller/seller-ownership.guard';
 import { SellerService } from './seller/seller.service';
 import { HealthModule, SharedHealthController, buildEnvSchema, Joi } from '@app/common';
-import { databaseCredentials } from '@app/database';
+import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
 import { ALLOW_HTTP_KEY } from './transport/http-surface.guard';
 
 /**
@@ -180,10 +180,23 @@ const ENTITIES = [
           cfg.get<string>('MARKETPLACE_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
         schema: 'marketplace',
         entities: ENTITIES,
-        // Safe to auto-sync in dev because the marketplace uses its own dedicated
-        // schema — no cross-service ALTER TABLE conflicts can occur. In production,
-        // use the init-marketplace-schema.sql migration instead.
-        synchronize: cfg.get('NODE_ENV', 'development') !== 'production',
+        // Keyed on DB_SYNCHRONIZE so `validateDatabaseConfig()` and this factory
+        // read the same value, and wrapped so a boot with auto-sync on under
+        // NODE_ENV=production fails here rather than rewriting the schema
+        // (AUD2-070).
+        //
+        // The default is OFF in every environment, development included. This
+        // module's schema comes from `migrations/` and nothing else (IN3): the
+        // previous `NODE_ENV !== 'production'` meant annotating an existing
+        // column made dev auto-sync DROP and recreate it, which emptied the
+        // column three times during the regional plan. Set DB_SYNCHRONIZE=true
+        // deliberately, for an afternoon of entity iteration, and never against
+        // a database whose rows matter.
+        synchronize: assertSynchronizeAllowed(
+          cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
+          cfg.get('NODE_ENV', 'development'),
+          'marketplace-service',
+        ),
       }),
     }),
     RedisModule,
