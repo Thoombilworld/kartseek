@@ -49,6 +49,13 @@ function service(sellerRegion: string | null) {
   const couponUsageRepo = {
     find: vi.fn(async () => [{ id: 'u-1', customerId: 'cust-1', discountApplied: '25.00' }]),
   };
+  const questionRepo = {
+    findOne: vi.fn(async () => ({ id: 'q-1', productId: 'p-1' })),
+  };
+  const answerRepo = {
+    findOne: vi.fn(async () => ({ id: 'a-1', questionId: 'q-1', isAccepted: false })),
+    update: vi.fn(async () => ({ affected: 1 })),
+  };
   const kafka = { publish: vi.fn(async () => undefined) };
   const dataSource = {
     transaction: vi.fn(async () => ({ newQty: 0, sku: 'SKU', lowStockThreshold: 1 })),
@@ -63,11 +70,13 @@ function service(sellerRegion: string | null) {
     returnRepo,
     couponRepo,
     couponUsageRepo,
+    questionRepo,
+    answerRepo,
     kafka,
     dataSource,
     logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
   });
-  return { svc, variantRepo, returnRepo, couponRepo, couponUsageRepo, kafka };
+  return { svc, variantRepo, returnRepo, couponRepo, couponUsageRepo, answerRepo, kafka };
 }
 
 describe('variant writes respect the owning seller market', () => {
@@ -106,6 +115,35 @@ describe('variant writes respect the owning seller market', () => {
     await expect(svc.deleteVariant('v-1', admin, 'QA')).rejects.toThrow(
       'This variant belongs to every market, not to the QA market.',
     );
+  });
+});
+
+/**
+ * R12 leftover (c): `acceptAnswer` forwarded only `answerId`, unscoped —
+ * REACHABLE by a region-locked ADMIN (`@Roles(SELLER, ADMIN, SUPER_ADMIN)` at
+ * the gateway), left by both R2 and R6. The attribution join is the same one
+ * `reportMarket` already uses: answer → question → product → seller.
+ */
+describe('accepting an answer respects the owning seller market', () => {
+  it("refuses an IN product's answer for a QA admin, and writes nothing", async () => {
+    const { svc, answerRepo } = service('IN');
+    await expect(svc.acceptAnswer('a-1', 'QA')).rejects.toThrow(ForbiddenException);
+    await expect(svc.acceptAnswer('a-1', 'QA')).rejects.toThrow(
+      'This answer belongs to IN, not to the QA market.',
+    );
+    expect(answerRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('allows the same write on a QA seller — the control', async () => {
+    const { svc, answerRepo } = service('QA');
+    await expect(svc.acceptAnswer('a-1', 'QA')).resolves.toMatchObject({ success: true });
+    expect(answerRepo.update).toHaveBeenCalledWith('a-1', { isAccepted: true });
+  });
+
+  it('leaves a global admin (no scope) free in any market', async () => {
+    const { svc, answerRepo } = service('IN');
+    await expect(svc.acceptAnswer('a-1')).resolves.toMatchObject({ success: true });
+    expect(answerRepo.update).toHaveBeenCalledWith('a-1', { isAccepted: true });
   });
 });
 

@@ -2874,7 +2874,9 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'accept_answer' })
   tcpAcceptAnswer(@Payload() data: any) {
-    return this.fulfillment.acceptAnswer(typeof data === 'string' ? data : data?.answerId);
+    const answerId = typeof data === 'string' ? data : data?.answerId;
+    const scope = typeof data === 'string' ? undefined : data?.scope;
+    return this.fulfillment.acceptAnswer(answerId, scope);
   }
 
   // ── Delivery reads ─────────────────────────────────────────────────────────

@@ -1104,7 +1104,13 @@ export class MarketplaceFulfillmentService {
       qb.andWhere('r.status = :status', { status });
     }
     if (query.productId) qb.andWhere('r.productId = :productId', { productId: query.productId });
-    applyMarketFilter(qb, 's.region_code', normaliseMarket(query.region));
+    // `requireMarket`, not `normaliseMarket` alone: an unreadable value here
+    // used to add no predicate at all and return every market's reports.
+    applyMarketFilter(
+      qb,
+      's.region_code',
+      requireMarket(query.region, 'product reports', this.logger),
+    );
 
     const [data, total] = await qb
       .orderBy('r.createdAt', 'ASC')
@@ -1392,9 +1398,27 @@ export class MarketplaceFulfillmentService {
     return { success: true, id };
   }
 
-  async acceptAnswer(answerId: string) {
+  /**
+   * Accepting an answer is a write on a seller's own product — the same
+   * attribution join as `reportMarket`: the answer names a question, the
+   * question names a product, and the product's seller carries the market.
+   * REACHABLE by a region-locked ADMIN (`@Roles(SELLER, ADMIN, SUPER_ADMIN)`
+    const question = await this.questionRepo.findOne({
+      where: { id: answer.questionId },
+      select: ['id', 'productId'],
+    });
+    assertInMarket(await this.reportMarket(question?.productId), scope, 'answer', this.logger);
+   * at the gateway); left unscoped by both R2 and R6 and claimed by no brief
+   * until now.
+   */
+  async acceptAnswer(answerId: string, scope?: string) {
     const answer = await this.answerRepo.findOne({ where: { id: answerId } });
     if (!answer) throw new NotFoundException(`Answer ${answerId} not found`);
+    const question = await this.questionRepo.findOne({
+      where: { id: answer.questionId },
+      select: ['id', 'productId'],
+    });
+    assertInMarket(await this.reportMarket(question?.productId), scope, 'answer', this.logger);
     // Un-accept any previously accepted answer for this question
     await this.answerRepo.update(
       { questionId: answer.questionId, isAccepted: true },
