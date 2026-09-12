@@ -35,140 +35,26 @@ type Order = {
   city: string;
 };
 
-const orders: Order[] = [
-  {
-    id: 'KS-78432',
-    customer: 'Rahul K.',
-    module: 'Grocery',
-    vendor: 'City Supermart',
-    items: 8,
-    total: '₹1,487',
-    status: 'delivered',
-    payment: 'UPI',
-    time: '12 min ago',
-    city: 'Mumbai',
-  },
-  {
-    id: 'KS-78431',
-    customer: 'Priya S.',
-    module: 'Restaurant',
-    vendor: 'Burger King',
-    items: 3,
-    total: '₹650',
-    status: 'in-transit',
-    payment: 'Card',
-    time: '18 min ago',
-    city: 'Mumbai',
-  },
-  {
-    id: 'KS-78430',
-    customer: 'Anil M.',
-    module: 'Pharmacy',
-    vendor: 'MedPlus',
-    items: 2,
-    total: '₹245',
-    status: 'preparing',
-    payment: 'COD',
-    time: '25 min ago',
-    city: 'Bangalore',
-  },
-  {
-    id: 'KS-78429',
-    customer: 'Sneha R.',
-    module: 'Marketplace',
-    vendor: 'Nike Store',
-    items: 1,
-    total: '₹12,495',
-    status: 'shipped',
-    payment: 'Card',
-    time: '1 hr ago',
-    city: 'Delhi',
-  },
-  {
-    id: 'KS-78428',
-    customer: 'Vikram T.',
-    module: 'Taxi',
-    vendor: 'QuickRide',
-    items: 1,
-    total: '₹380',
-    status: 'completed',
-    payment: 'UPI',
-    time: '2 hr ago',
-    city: 'Pune',
-  },
-  {
-    id: 'KS-78427',
-    customer: 'Deepa N.',
-    module: 'Doctor',
-    vendor: 'Dr. Anjali Mehta',
-    items: 1,
-    total: '₹800',
-    status: 'confirmed',
-    payment: 'UPI',
-    time: '3 hr ago',
-    city: 'Chennai',
-  },
-  {
-    id: 'KS-78426',
-    customer: 'Rajesh K.',
-    module: 'Grocery',
-    vendor: 'Fresh Farm',
-    items: 12,
-    total: '₹2,340',
-    status: 'cancelled',
-    payment: 'Wallet',
-    time: '3 hr ago',
-    city: 'Mumbai',
-  },
-  {
-    id: 'KS-78425',
-    customer: 'Meera P.',
-    module: 'Restaurant',
-    vendor: 'Pizza Palace',
-    items: 4,
-    total: '₹890',
-    status: 'delivered',
-    payment: 'UPI',
-    time: '4 hr ago',
-    city: 'Hyderabad',
-  },
-  {
-    id: 'KS-78424',
-    customer: 'Sunil D.',
-    module: 'Marketplace',
-    vendor: 'Samsung Store',
-    items: 1,
-    total: '₹79,999',
-    status: 'processing',
-    payment: 'EMI',
-    time: '5 hr ago',
-    city: 'Delhi',
-  },
-  {
-    id: 'KS-78423',
-    customer: 'Mohan K.',
-    module: 'Pharmacy',
-    vendor: 'Apollo Pharmacy',
-    items: 5,
-    total: '₹1,650',
-    status: 'delivered',
-    payment: 'Card',
-    time: '5 hr ago',
-    city: 'Chennai',
-  },
-  {
-    id: 'KS-78422',
-    customer: 'Ahmed A.',
-    module: 'Hotel',
-    vendor: 'Marriott Downtown',
-    items: 1,
-    total: 'AED 2,400',
-    status: 'confirmed',
-    payment: 'Card',
-    time: '6 hr ago',
-    city: 'Dubai',
-  },
-];
+/**
+ * NO FIXTURE ARRAY LIVES HERE ANY MORE.
+ *
+ * `const orders: Order[] = [...]` held eight hardcoded orders spanning India,
+ * the UAE, the UK and Saudi Arabia, and the page seeded its state with them and
+ * then replaced them only `if (apiOrders.length > 0)`. An EMPTY response is
+ * exactly what a correctly scoped locked-admin read returns when that market
+ * has no orders — so a QA-locked administrator saw eight fabricated
+ * cross-market orders on the very screen tasks 4 and 9 spent their effort
+ * scoping, and the market-aware fetch and the fixture fallback landed in the
+ * same commit (`6d34356`). Worse, `todayTotal` and the seven per-module count
+ * tiles were computed from the fixture rather than from the fetched rows, so
+ * those KPIs were fabricated no matter what the API said — under a "Live" badge
+ * with an animated pulse, beside a Refresh button with no `onClick`
+ * (whole-branch review, finding G-1).
+ *
+ * The API result is what renders now, unconditionally, with an explicit empty
+ * state naming the market and an explicit error state. The broader rebuild of
+ * this screen stays with the CONSOLE plan (K2); this is the honesty fix only.
+ */
 
 const statusConfig: Record<string, { bg: string; icon: React.ReactNode }> = {
   delivered: {
@@ -207,36 +93,85 @@ const moduleColors: Record<string, string> = {
   Hotel: 'bg-indigo-100 text-indigo-700',
 };
 
+/**
+ * One row's value as a number.
+ *
+ * The rows come from the API and their shape is not this page's to assume —
+ * `total` arrives as a formatted string on some modules and a number on others.
+ * `o.total.replace(...)` threw `replace is not a function` on a numeric total,
+ * and that call sat above the table in the render, so one row of the wrong
+ * shape removed the whole page rather than itself (the same trap
+ * `admin/payouts` documents on its own filter).
+ */
+function amountOf(order: Order): number {
+  const digits = String(order?.total ?? '').replace(/[^0-9.-]/g, '');
+  const value = Number(digits);
+  return Number.isFinite(value) ? value : 0;
+}
+
 export default function OrdersPage() {
-  const { regionLabel, isFiltered, regionCode } = useMarketplaceRegionFilter([]);
+  const { regionLabel, isFiltered, regionCode, formatCurrencyValue } = useMarketplaceRegionFilter(
+    [],
+  );
   const country = isFiltered ? regionCode : undefined;
   const [search, setSearch] = useState('');
   const [moduleFilter, setModuleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [data, setData] = useState(orders);
+  // `null` is "not answered yet", `[]` is "answered, and this market has none".
+  // The two used to be the same thing, which is what let the fixture stand in
+  // for both.
+  const [data, setData] = useState<Order[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Fetch orders from backend on mount
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       const res = await adminCoreApi.getOrders({ country });
+      if (cancelled) return;
       if (res.success && Array.isArray((res.data as any)?.data)) {
-        const apiOrders = (res.data as any).data;
-        if (apiOrders.length > 0) setData(apiOrders);
+        setData((res.data as any).data as Order[]);
+      } else {
+        // Not an empty table: a failure says so, and says it instead of rows.
+        setData(null);
+        setError(
+          (res as any)?.error ?? 'Orders could not be loaded. The order service did not answer.',
+        );
       }
+      setLoading(false);
     })();
-  }, [country]);
+    return () => {
+      cancelled = true;
+    };
+  }, [country, reloadKey]);
 
-  const filtered = data.filter((o) => {
+  const rows = data ?? [];
+
+  const filtered = rows.filter((o) => {
+    // Coerced for the same reason `amountOf` exists: a row without a customer
+    // or a vendor is a row, not a crash.
+    const q = search.toLowerCase();
     const matchSearch =
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer.toLowerCase().includes(search.toLowerCase()) ||
-      o.vendor.toLowerCase().includes(search.toLowerCase());
+      String(o?.id ?? '')
+        .toLowerCase()
+        .includes(q) ||
+      String(o?.customer ?? '')
+        .toLowerCase()
+        .includes(q) ||
+      String(o?.vendor ?? '')
+        .toLowerCase()
+        .includes(q);
     const matchModule = moduleFilter === 'All' || o.module === moduleFilter;
     const matchStatus = statusFilter === 'All' || o.status === statusFilter;
     return matchSearch && matchModule && matchStatus;
   });
 
-  const todayTotal = orders.reduce((a, o) => a + parseInt(o.total.replace(/[₹,]/g, '')), 0);
+  // From the fetched rows, not from a fixture — and formatted in the market's
+  // own currency rather than with a hardcoded `₹`.
+  const todayTotal = rows.reduce((a, o) => a + amountOf(o), 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -249,11 +184,24 @@ export default function OrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Live
-          </span>
-          <button className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1">
-            <RefreshCcw className="w-3 h-3" /> Refresh
+          {/* The badge says what is true. It used to pulse "Live" over a
+              hardcoded fixture beside a Refresh button with no handler. */}
+          {error ? (
+            <span className="inline-flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-1.5 rounded-full font-bold">
+              <span className="w-2 h-2 bg-red-500 rounded-full"></span> Not connected
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Live
+            </span>
+          )}
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            disabled={loading}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 disabled:opacity-50"
+          >
+            <RefreshCcw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />{' '}
+            {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -261,7 +209,7 @@ export default function OrdersPage() {
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
         {['Marketplace', 'Grocery', 'Restaurant', 'Pharmacy', 'Doctor', 'Taxi', 'Hotel'].map(
           (m) => {
-            const count = orders.filter((o) => o.module === m).length;
+            const count = rows.filter((o) => o.module === m).length;
             return (
               <button
                 key={m}
@@ -308,6 +256,20 @@ export default function OrdersPage() {
         </select>
       </div>
 
+      {error && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-5 py-4 text-sm"
+        >
+          <p className="font-bold">Orders could not be loaded</p>
+          <p className="mt-1">{error}</p>
+          <p className="mt-1 text-xs text-red-600">
+            Nothing is shown below rather than a sample: an order list you cannot trust is worse
+            than no order list.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -325,6 +287,22 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {loading && !data && (
+                <tr>
+                  <td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-500">
+                    Loading orders…
+                  </td>
+                </tr>
+              )}
+              {!loading && !error && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-500">
+                    {rows.length === 0
+                      ? `No orders in ${isFiltered ? regionLabel : 'any market'} yet.`
+                      : 'No orders match these filters.'}
+                  </td>
+                </tr>
+              )}
               {filtered.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-5 py-4">
@@ -371,10 +349,11 @@ export default function OrdersPage() {
         </div>
         <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/50 flex justify-between text-sm text-slate-500">
           <span>
-            Showing {filtered.length} of {orders.length} orders
+            Showing {filtered.length} of {rows.length} orders
           </span>
           <span>
-            Total Value: <strong className="text-slate-900">₹{todayTotal.toLocaleString()}</strong>
+            Total Value:{' '}
+            <strong className="text-slate-900">{formatCurrencyValue(todayTotal)}</strong>
           </span>
         </div>
       </div>

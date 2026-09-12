@@ -54,164 +54,47 @@ const COUNTRY_TO_CODE: Record<string, string> = {
   'Saudi Arabia': 'SA',
 };
 
-const ORDERS = [
-  {
-    id: 'ORD-8820001',
-    customer: 'Ananya Sharma',
-    customerEmail: 'ananya@example.com',
-    seller: 'Apple India Store',
-    country: 'India',
-    items: 1,
-    amount: '₹1,59,900',
-    amountNum: 159900,
-    payment: 'paid',
-    orderStatus: 'processing',
-    delivery: 'pending',
-    created: '31 May 2026, 09:12',
-    shippingAddress: '23 MG Road, Bengaluru, Karnataka 560001',
-    trackingId: '',
-    courier: '',
-    products: [{ name: 'iPhone 15 Pro Max 256GB', qty: 1, price: '₹1,59,900', image: '📱' }],
-  },
-  {
-    id: 'ORD-8820002',
-    customer: 'Ravi Kumar',
-    customerEmail: 'ravi@example.com',
-    seller: 'Samsung Store',
-    country: 'India',
-    items: 2,
-    amount: '₹1,12,490',
-    amountNum: 112490,
-    payment: 'paid',
-    orderStatus: 'processing',
-    delivery: 'pending',
-    created: '31 May 2026, 08:48',
-    shippingAddress: '45 Nehru Place, New Delhi 110019',
-    trackingId: '',
-    courier: '',
-    products: [
-      { name: 'Galaxy S24 Ultra', qty: 1, price: '₹89,999', image: '📱' },
-      { name: 'Galaxy Buds3 Pro', qty: 1, price: '₹22,491', image: '🎧' },
-    ],
-  },
-  {
-    id: 'ORD-8820003',
-    customer: 'Fatima Al Rashid',
-    customerEmail: 'fatima@example.com',
-    seller: 'Gulf Electronics FZE',
-    country: 'UAE',
-    items: 1,
-    amount: 'AED 149',
-    amountNum: 149,
-    payment: 'paid',
-    orderStatus: 'delivered',
-    delivery: 'delivered',
-    created: '30 May 2026, 14:20',
-    shippingAddress: 'Dubai Marina, Tower A, Unit 1204',
-    trackingId: 'AE90281234',
-    courier: 'Aramex',
-    products: [{ name: 'Anker PowerCore 20K', qty: 1, price: 'AED 149', image: '🔋' }],
-  },
-  {
-    id: 'ORD-8820004',
-    customer: 'James Wilson',
-    customerEmail: 'james@example.com',
-    seller: 'London Luxury Goods',
-    country: 'UK',
-    items: 3,
-    amount: '£2,400',
-    amountNum: 2400,
-    payment: 'pending',
-    orderStatus: 'pending',
-    delivery: 'pending',
-    created: '30 May 2026, 11:05',
-    shippingAddress: '12 Baker Street, London W1U 3BW',
-    trackingId: '',
-    courier: '',
-    products: [
-      { name: 'Burberry Trench Coat', qty: 1, price: '£1,600', image: '🧥' },
-      { name: 'Burberry Scarf', qty: 2, price: '£400', image: '🧣' },
-    ],
-  },
-  {
-    id: 'ORD-8820005',
-    customer: 'Priya Mehta',
-    customerEmail: 'priya@example.com',
-    seller: 'Nike Official',
-    country: 'India',
-    items: 1,
-    amount: '₹17,995',
-    amountNum: 17995,
-    payment: 'paid',
-    orderStatus: 'cancelled',
-    delivery: 'cancelled',
-    created: '29 May 2026, 18:30',
-    shippingAddress: '78 Linking Road, Mumbai 400050',
-    trackingId: '',
-    courier: '',
-    products: [{ name: 'Nike Air Jordan 1 Retro', qty: 1, price: '₹17,995', image: '👟' }],
-  },
-  {
-    id: 'ORD-8820006',
-    customer: 'Ahmed Al Khatib',
-    customerEmail: 'ahmed@example.com',
-    seller: 'Gulf Electronics FZE',
-    country: 'UAE',
-    items: 2,
-    amount: 'AED 299',
-    amountNum: 299,
-    payment: 'paid',
-    orderStatus: 'delivered',
-    delivery: 'delivered',
-    created: '28 May 2026, 10:00',
-    shippingAddress: 'Abu Dhabi, Khalifa City B',
-    trackingId: 'AE90287654',
-    courier: 'Fetchr',
-    products: [
-      { name: 'Baseus USB-C Hub', qty: 1, price: 'AED 199', image: '🔌' },
-      { name: 'USB-C Cable 2m', qty: 1, price: 'AED 100', image: '🔌' },
-    ],
-  },
-  {
-    id: 'ORD-8820007',
-    customer: 'Sneha Nair',
-    customerEmail: 'sneha@example.com',
-    seller: "Levi's India",
-    country: 'India',
-    items: 4,
-    amount: '₹11,996',
-    amountNum: 11996,
-    payment: 'paid',
-    orderStatus: 'processing',
-    delivery: 'dispatched',
-    created: '28 May 2026, 09:15',
-    shippingAddress: '34 Marine Drive, Kochi, Kerala 682001',
-    trackingId: 'IN88812345',
-    courier: 'Delhivery',
-    products: [
-      { name: "Levi's 501 Jeans", qty: 2, price: '₹5,998', image: '👖' },
-      { name: "Levi's T-Shirt", qty: 2, price: '₹5,998', image: '👕' },
-    ],
-  },
-  {
-    id: 'ORD-8820008',
-    customer: 'Abdullah Al-Otaibi',
-    customerEmail: 'abdullah@example.com',
-    seller: 'Riyadh Fashion Co',
-    country: 'Saudi Arabia',
-    items: 1,
-    amount: 'SAR 890',
-    amountNum: 890,
-    payment: 'paid',
-    orderStatus: 'processing',
-    delivery: 'pending',
-    created: '27 May 2026, 16:00',
-    shippingAddress: 'Riyadh, Al Olaya District',
-    trackingId: '',
-    courier: '',
-    products: [{ name: 'Thobe Premium Cotton', qty: 1, price: 'SAR 890', image: '👔' }],
-  },
-];
+/**
+ * NO FIXTURE ARRAY LIVES HERE ANY MORE.
+ *
+ * `const ORDERS = [...]` held fabricated orders across India, the UAE and the
+ * UK, and `ordersSource = apiData?.data?.length ? apiData.data : ORDERS` fell
+ * back to them whenever the scoped API answered with an empty list — which is
+ * exactly what a correctly scoped locked-admin read returns for a market with
+ * no orders (whole-branch review, finding G-1 — `:532`).
+ *
+ * `Order` was `(typeof ORDERS)[number]`, so the fixture was also this file's
+ * type. It is declared outright now: a shape the API is expected to send, not a
+ * shape inferred from invented rows. The page already had a loading skeleton,
+ * an error banner and a `MarketplaceEmptyState` — the fallback was the only
+ * thing standing between them and the reader.
+ */
+type OrderProduct = { name: string; qty: number; price: string; image: string };
+
+/**
+ * Every field required, exactly as `(typeof ORDERS)[number]` inferred them —
+ * so this change is behavioural only and does not quietly widen what the rest
+ * of the file may assume. What the API actually guarantees is the CONSOLE
+ * plan's question, along with the rest of this screen.
+ */
+type Order = {
+  id: string;
+  customer: string;
+  customerEmail: string;
+  seller: string;
+  country: string;
+  items: number;
+  amount: string;
+  amountNum: number;
+  payment: string;
+  orderStatus: string;
+  delivery: string;
+  created: string;
+  shippingAddress: string;
+  trackingId: string;
+  courier: string;
+  products: OrderProduct[];
+};
 
 const TIMELINE_STEPS = [
   { status: 'placed', label: 'Order Placed', icon: ShoppingCart },
@@ -231,8 +114,6 @@ const STATUS_TO_STEP: Record<string, number> = {
 };
 
 const PAGE_SIZE = 6;
-
-type Order = (typeof ORDERS)[number];
 
 // ── Order Detail Drawer ──────────────────────────────────────────────────────
 function OrderDetailDrawer({
@@ -529,7 +410,9 @@ export default function OrdersPage() {
   );
   const { execute } = useAdminAction(showToast);
 
-  const ordersSource = apiData?.data?.length ? apiData.data : ORDERS;
+  // The API result, whatever it is. An empty list is an answer, not a gap to
+  // fill: the empty state below names it.
+  const ordersSource: Order[] = (apiData?.data as Order[] | undefined) ?? [];
   const {
     filtered: regionFiltered,
     regionLabel,

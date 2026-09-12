@@ -50,108 +50,19 @@ type WalletItem = {
 };
 type Transaction = { date: string; type: 'credit' | 'debit'; description: string; amount: number };
 
-const WALLETS: WalletItem[] = [
-  {
-    seller: 'Apple India Store',
-    id: 'SLR-1001',
-    country: 'India',
-    balance: 348920,
-    pending: 45890,
-    totalEarned: 2890000,
-    totalPaid: 2495190,
-    lastPayout: '2026-06-04',
-  },
-  {
-    seller: 'Samsung Official',
-    id: 'SLR-1002',
-    country: 'India',
-    balance: 220400,
-    pending: 32100,
-    totalEarned: 1890000,
-    totalPaid: 1637500,
-    lastPayout: '2026-06-03',
-  },
-  {
-    seller: 'Nike India',
-    id: 'SLR-1003',
-    country: 'India',
-    balance: 156780,
-    pending: 18900,
-    totalEarned: 980000,
-    totalPaid: 804320,
-    lastPayout: '2026-06-01',
-  },
-  {
-    seller: 'Heritage Silk House',
-    id: 'SLR-1004',
-    country: 'India',
-    balance: 89450,
-    pending: 12300,
-    totalEarned: 560000,
-    totalPaid: 458250,
-    lastPayout: '2026-05-28',
-  },
-  {
-    seller: 'Tech Haven',
-    id: 'SLR-1005',
-    country: 'India',
-    balance: 45600,
-    pending: 8900,
-    totalEarned: 340000,
-    totalPaid: 285500,
-    lastPayout: '2026-05-25',
-  },
-  {
-    seller: 'Gulf Electronics FZE',
-    id: 'SLR-2001',
-    country: 'UAE',
-    balance: 128400,
-    pending: 22100,
-    totalEarned: 1420000,
-    totalPaid: 1269500,
-    lastPayout: '2026-06-05',
-  },
-  {
-    seller: 'Dubai Luxe Mall',
-    id: 'SLR-2002',
-    country: 'UAE',
-    balance: 89200,
-    pending: 14500,
-    totalEarned: 980000,
-    totalPaid: 876300,
-    lastPayout: '2026-06-02',
-  },
-  {
-    seller: 'Riyadh Fashion Co',
-    id: 'SLR-3001',
-    country: 'Saudi Arabia',
-    balance: 198000,
-    pending: 34200,
-    totalEarned: 1640000,
-    totalPaid: 1407800,
-    lastPayout: '2026-06-04',
-  },
-  {
-    seller: 'London Luxury Goods',
-    id: 'SLR-4001',
-    country: 'UK',
-    balance: 62800,
-    pending: 9400,
-    totalEarned: 520000,
-    totalPaid: 447800,
-    lastPayout: '2026-06-01',
-  },
-  {
-    seller: 'Doha Digital Store',
-    id: 'SLR-5001',
-    country: 'Qatar',
-    balance: 44200,
-    pending: 7800,
-    totalEarned: 380000,
-    totalPaid: 328000,
-    lastPayout: '2026-05-30',
-  },
-];
+/**
+ * NO FIXTURE ARRAY LIVES HERE ANY MORE.
+ *
+ * `const WALLETS: WalletItem[] = [...]` held invented seller balances across
+ * several markets, and `walletsSource = apiData?.data?.length ? apiData.data :
+ * WALLETS` fell back to them whenever the scoped API answered with an empty
+ * list — which is what a correctly scoped locked-admin read returns for a
+ * market with no seller wallets. Fabricated money, on a screen an operator
+ * reads balances from (whole-branch review, finding G-1 — `:389`).
+ *
+ * The page already had a loading skeleton, an error banner and an empty state;
+ * the fallback was the only thing standing between them and the reader.
+ */
 
 const SAMPLE_TXNS: Transaction[] = [
   {
@@ -386,7 +297,8 @@ export default function SellerWalletsPage() {
   } = useAdminData(() => adminMarketplaceApi.getSellerWallets(country), [country]);
   const { execute } = useAdminAction(showToast);
 
-  const walletsSource = apiData?.data?.length ? apiData.data : WALLETS;
+  // The API result, whatever it is. An empty list is an answer.
+  const walletsSource: WalletItem[] = (apiData?.data as WalletItem[] | undefined) ?? [];
   const { filtered, regionLabel, isFiltered, formatCurrencyValue } =
     useMarketplaceRegionFilter(walletsSource);
   const fmt = (n: number) => formatCurrencyValue(n);

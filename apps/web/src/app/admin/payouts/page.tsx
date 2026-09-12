@@ -35,166 +35,22 @@ type Payout = {
   settledAt: string;
 };
 
-const payouts: Payout[] = [
-  {
-    id: 'PAY-4821',
-    partner: 'Burger King (Andheri)',
-    partnerId: 'RES-001',
-    module: 'Restaurant',
-    grossSales: '₹2,45,000',
-    commission: '₹49,000',
-    commRate: '20%',
-    netPayout: '₹1,96,000',
-    method: 'NEFT',
-    bankAcc: 'HDFC ****4521',
-    status: 'pending',
-    date: 'Today',
-    settledAt: '—',
-  },
-  {
-    id: 'PAY-4820',
-    partner: 'Apple India Store',
-    partnerId: 'MV-001',
-    module: 'Marketplace',
-    grossSales: '₹8,20,000',
-    commission: '₹98,400',
-    commRate: '12%',
-    netPayout: '₹7,21,600',
-    method: 'NEFT',
-    bankAcc: 'ICICI ****7832',
-    status: 'approved',
-    date: 'Today',
-    settledAt: '—',
-  },
-  {
-    id: 'PAY-4819',
-    partner: 'MedPlus Pharmacy',
-    partnerId: 'PH-001',
-    module: 'Pharmacy',
-    grossSales: '₹1,80,000',
-    commission: '₹27,000',
-    commRate: '15%',
-    netPayout: '₹1,53,000',
-    method: 'IMPS',
-    bankAcc: 'SBI ****2145',
-    status: 'settled',
-    date: 'Yesterday',
-    settledAt: '29 May, 2:15 PM',
-  },
-  {
-    id: 'PAY-4818',
-    partner: 'MetroFleet Logistics',
-    partnerId: 'TXV-002',
-    module: 'Taxi',
-    grossSales: '₹84,000',
-    commission: '₹8,400',
-    commRate: '10%',
-    netPayout: '₹75,600',
-    method: 'NEFT',
-    bankAcc: 'BOB ****9087',
-    status: 'failed',
-    date: 'Yesterday',
-    settledAt: 'Bank Error',
-  },
-  {
-    id: 'PAY-4817',
-    partner: 'City Supermart',
-    partnerId: 'GS-001',
-    module: 'Grocery',
-    grossSales: '₹4,20,000',
-    commission: '₹63,000',
-    commRate: '15%',
-    netPayout: '₹3,57,000',
-    method: 'NEFT',
-    bankAcc: 'HDFC ****1234',
-    status: 'settled',
-    date: '28 May',
-    settledAt: '28 May, 6:30 PM',
-  },
-  {
-    id: 'PAY-4816',
-    partner: 'Dr. Anjali Mehta',
-    partnerId: 'DOC-001',
-    module: 'Doctor',
-    grossSales: '₹63,000',
-    commission: '₹9,450',
-    commRate: '15%',
-    netPayout: '₹53,550',
-    method: 'UPI',
-    bankAcc: 'upi@oksbi',
-    status: 'processing',
-    date: 'Today',
-    settledAt: '—',
-  },
-  {
-    id: 'PAY-4815',
-    partner: 'QuickRide Fleet',
-    partnerId: 'TXV-001',
-    module: 'Taxi',
-    grossSales: '₹1,24,000',
-    commission: '₹12,400',
-    commRate: '10%',
-    netPayout: '₹1,11,600',
-    method: 'NEFT',
-    bankAcc: 'Axis ****5678',
-    status: 'settled',
-    date: '28 May',
-    settledAt: '28 May, 4:00 PM',
-  },
-  {
-    id: 'PAY-4814',
-    partner: 'Pizza Palace',
-    partnerId: 'RES-002',
-    module: 'Restaurant',
-    grossSales: '₹1,80,000',
-    commission: '₹36,000',
-    commRate: '20%',
-    netPayout: '₹1,44,000',
-    method: 'NEFT',
-    bankAcc: 'HDFC ****8901',
-    status: 'pending',
-    date: 'Today',
-    settledAt: '—',
-  },
-  {
-    id: 'PAY-4813',
-    partner: 'Ravi Kumar (Driver)',
-    partnerId: 'DRV-001',
-    module: 'Delivery',
-    grossSales: '₹12,400',
-    commission: '₹0',
-    commRate: '0%',
-    netPayout: '₹12,400',
-    method: 'IMPS',
-    bankAcc: 'SBI ****3456',
-    status: 'settled',
-    date: '28 May',
-    settledAt: '28 May, 8:00 PM',
-  },
-  {
-    id: 'PAY-4812',
-    partner: 'Mumbai South Franchise',
-    partnerId: 'FR-001',
-    module: 'Franchise',
-    grossSales: '₹3,40,000',
-    commission: '₹1,18,200',
-    commRate: '—',
-    netPayout: '₹1,18,200',
-    method: 'NEFT',
-    bankAcc: 'ICICI ****6789',
-    status: 'approved',
-    date: 'Today',
-    settledAt: '—',
-  },
-];
-
 /**
- * A status the API returns that this map does not know about must render as
- * itself, not crash. `sCfg[p.status].bg` threw
- * `Cannot read properties of undefined (reading 'bg')` for any value outside
- * the five below — and because it is inside the table body, one unexpected row
- * blanked the whole Payouts page.
+ * NO FIXTURE ARRAY LIVES HERE ANY MORE.
+ *
+ * `const payouts: Payout[] = [...]` seeded this page's state, and the fetch
+ * replaced it only `if (apiPayouts.length > 0)`. An empty response is what a
+ * correctly scoped locked-admin read returns when that market has no pending
+ * payouts, so the page answered "your market has no payouts" by rendering
+ * another market's (whole-branch review, finding G-1 — `:225`, `:236`).
+ *
+ * The API result renders unconditionally now, with an explicit empty state
+ * naming the market and an explicit error state. The hardcoded figures in the
+ * four summary cards above the table are a separate, pre-existing defect and
+ * stay with the CONSOLE plan (K2), which rebuilds this screen against
+ * `GET /admin/marketplace/payouts/stats`.
  */
+
 const sFallback = { bg: 'bg-slate-100 text-slate-600', icon: null as React.ReactNode };
 const sCfg: Record<string, { bg: string; icon: React.ReactNode }> = {
   pending: { bg: 'bg-amber-100 text-amber-700', icon: <Clock className="w-3.5 h-3.5" /> },
@@ -222,21 +78,39 @@ export default function PayoutsPage() {
   const [sf, setSf] = useState('All');
   const [mf, setMf] = useState('All');
   const [exp, setExp] = useState<string | null>(null);
-  const [data, setData] = useState(payouts);
+  // `null` is "not answered yet", `[]` is "answered, and this market has none".
+  const [rows, setRows] = useState<Payout[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const adminId =
     typeof window !== 'undefined' ? localStorage.getItem('adminUserId') || 'admin' : 'admin';
 
-  // Fetch payout data from backend on mount
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       const res = await adminCoreApi.getPayouts({ country });
+      if (cancelled) return;
       if (res.success && Array.isArray((res.data as any)?.data)) {
-        const apiPayouts = (res.data as any).data;
-        if (apiPayouts.length > 0) setData(apiPayouts);
+        setRows((res.data as any).data as Payout[]);
+      } else {
+        setRows(null);
+        setError(
+          (res as any)?.error ?? 'Payouts could not be loaded. The payout service did not answer.',
+        );
       }
+      setLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [country]);
+
+  const data = rows ?? [];
+  /** Local status edits are applied to the fetched rows, not to a fixture. */
+  const setData = (update: (prev: Payout[]) => Payout[]) => setRows((prev) => update(prev ?? []));
 
   const f = data.filter((p) => {
     // Coerced, because the rows come from `getPayouts()` and the API's shape is
@@ -361,6 +235,20 @@ export default function PayoutsPage() {
         </select>
       </div>
 
+      {error && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-5 py-4 text-sm"
+        >
+          <p className="font-bold">Payouts could not be loaded</p>
+          <p className="mt-1">{error}</p>
+          <p className="mt-1 text-xs text-red-600">
+            The table below is empty rather than seeded: a payout queue you cannot trust is worse
+            than no payout queue.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -376,6 +264,22 @@ export default function PayoutsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {loading && !rows && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
+                    Loading payouts…
+                  </td>
+                </tr>
+              )}
+              {!loading && !error && f.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
+                    {data.length === 0
+                      ? `No payouts in ${isFiltered ? regionLabel : 'any market'} yet.`
+                      : 'No payouts match these filters.'}
+                  </td>
+                </tr>
+              )}
               {f.map((p) => (
                 <React.Fragment key={p.id}>
                   <tr

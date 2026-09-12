@@ -41,128 +41,20 @@ type ModuleRate = {
   updatedBy: string;
 };
 
-const initialRates: ModuleRate[] = [
-  {
-    id: 'MOD-1',
-    module: 'Marketplace',
-    rate: 12,
-    minRate: 5,
-    maxRate: 25,
-    orders: 8420,
-    grossSales: '₹20.5L',
-    earned: '₹2.46L',
-    bg: 'bg-blue-100 text-blue-700',
-    tiers: [
-      { label: 'Standard Seller', min: '₹0', max: '₹5L/mo', rate: 12 },
-      { label: 'Premium Seller', min: '₹5L', max: '₹50L/mo', rate: 10 },
-      { label: 'Enterprise', min: '₹50L+', max: '∞', rate: 8 },
-    ],
-    lastUpdated: '15 May 2026',
-    updatedBy: 'Super Admin',
-  },
-  {
-    id: 'MOD-2',
-    module: 'Grocery',
-    rate: 15,
-    minRate: 8,
-    maxRate: 25,
-    orders: 5100,
-    grossSales: '₹12.0L',
-    earned: '₹1.80L',
-    bg: 'bg-green-100 text-green-700',
-    tiers: [
-      { label: 'Local Store', min: '₹0', max: '₹2L/mo', rate: 15 },
-      { label: 'Chain Store', min: '₹2L', max: '₹20L/mo', rate: 12 },
-      { label: 'Supermarket', min: '₹20L+', max: '∞', rate: 10 },
-    ],
-    lastUpdated: '10 May 2026',
-    updatedBy: 'Super Admin',
-  },
-  {
-    id: 'MOD-3',
-    module: 'Restaurant',
-    rate: 20,
-    minRate: 10,
-    maxRate: 30,
-    orders: 3800,
-    grossSales: '₹9.0L',
-    earned: '₹1.80L',
-    bg: 'bg-orange-100 text-orange-700',
-    tiers: [
-      { label: 'Single Outlet', min: '₹0', max: '₹3L/mo', rate: 20 },
-      { label: 'Multi-Outlet', min: '₹3L', max: '₹15L/mo', rate: 18 },
-      { label: 'Chain Brand', min: '₹15L+', max: '∞', rate: 15 },
-    ],
-    lastUpdated: '12 May 2026',
-    updatedBy: 'Finance Manager',
-  },
-  {
-    id: 'MOD-4',
-    module: 'Pharmacy',
-    rate: 15,
-    minRate: 8,
-    maxRate: 20,
-    orders: 1200,
-    grossSales: '₹4.0L',
-    earned: '₹0.60L',
-    bg: 'bg-cyan-100 text-cyan-700',
-    tiers: [
-      { label: 'Independent', min: '₹0', max: '₹2L/mo', rate: 15 },
-      { label: 'Chain Pharmacy', min: '₹2L+', max: '∞', rate: 12 },
-    ],
-    lastUpdated: '8 May 2026',
-    updatedBy: 'Super Admin',
-  },
-  {
-    id: 'MOD-5',
-    module: 'Doctor',
-    rate: 15,
-    minRate: 10,
-    maxRate: 25,
-    orders: 480,
-    grossSales: '₹2.0L',
-    earned: '₹0.30L',
-    bg: 'bg-purple-100 text-purple-700',
-    tiers: [
-      { label: 'Individual Doctor', min: '₹0', max: '₹1L/mo', rate: 15 },
-      { label: 'Hospital/Clinic', min: '₹1L+', max: '∞', rate: 12 },
-    ],
-    lastUpdated: '5 May 2026',
-    updatedBy: 'Super Admin',
-  },
-  {
-    id: 'MOD-6',
-    module: 'Taxi',
-    rate: 10,
-    minRate: 5,
-    maxRate: 20,
-    orders: 3200,
-    grossSales: '₹6.4L',
-    earned: '₹0.64L',
-    bg: 'bg-amber-100 text-amber-700',
-    tiers: [
-      { label: 'Individual Driver', min: '₹0', max: '₹50K/mo', rate: 10 },
-      { label: 'Fleet Vendor', min: '₹50K', max: '₹5L/mo', rate: 8 },
-      { label: 'Enterprise Fleet', min: '₹5L+', max: '∞', rate: 6 },
-    ],
-    lastUpdated: '1 May 2026',
-    updatedBy: 'Finance Manager',
-  },
-  {
-    id: 'MOD-7',
-    module: 'Delivery Fee',
-    rate: 100,
-    minRate: 100,
-    maxRate: 100,
-    orders: 12500,
-    grossSales: '₹5.2L',
-    earned: '₹5.20L',
-    bg: 'bg-violet-100 text-violet-700',
-    tiers: [{ label: 'Platform Collected', min: '—', max: '—', rate: 100 }],
-    lastUpdated: '1 Jan 2026',
-    updatedBy: 'System',
-  },
-];
+/**
+ * NO FIXTURE ARRAY LIVES HERE ANY MORE.
+ *
+ * `const initialRates: ModuleRate[] = [...]` seeded this page's state, and the
+ * fetch replaced it only `if (apiRates.length > 0)` — so an empty answer from
+ * a correctly scoped read rendered seven invented commission rates as if they
+ * were the market's own, on a screen an operator edits money with
+ * (whole-branch review, finding G-1 — `:256`, `:272`).
+ *
+ * The API result renders unconditionally now, with an explicit empty state
+ * naming the market and an explicit error state. `topEarners` below is a
+ * separate, pre-existing fixture feeding a second table that calls no API at
+ * all; it stays with the CONSOLE plan (K2) along with the rest of this screen.
+ */
 
 const moduleIcons: Record<string, React.ReactNode> = {
   Marketplace: <ShoppingCart className="w-4 h-4" />,
@@ -253,7 +145,10 @@ const modC: Record<string, string> = {
 export default function CommissionsPage() {
   const { regionLabel, isFiltered, regionCode } = useMarketplaceRegionFilter([]);
   const country = isFiltered ? regionCode : undefined;
-  const [rates, setRates] = useState(initialRates);
+  // `null` is "not answered yet", `[]` is "answered, and this market has none".
+  const [fetched, setFetched] = useState<ModuleRate[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -263,16 +158,33 @@ export default function CommissionsPage() {
   const adminId =
     typeof window !== 'undefined' ? localStorage.getItem('adminUserId') || 'admin' : 'admin';
 
-  // Fetch commission data from backend on mount
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       const res = await adminCoreApi.getCommissions({ country });
+      if (cancelled) return;
       if (res.success && Array.isArray((res.data as any)?.data)) {
-        const apiRates = (res.data as any).data;
-        if (apiRates.length > 0) setRates(apiRates);
+        setFetched((res.data as any).data as ModuleRate[]);
+      } else {
+        setFetched(null);
+        setError(
+          (res as any)?.error ??
+            'Commission rates could not be loaded. The commission service did not answer.',
+        );
       }
+      setLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [country]);
+
+  const rates = fetched ?? [];
+  /** An optimistic rate edit is applied to the fetched rows, not to a fixture. */
+  const setRates = (update: (prev: ModuleRate[]) => ModuleRate[]) =>
+    setFetched((prev) => update(prev ?? []));
 
   const startEdit = (id: string, currentRate: number) => {
     setEditingId(id);
@@ -456,6 +368,19 @@ export default function CommissionsPage() {
       </div>
 
       {/* Module Commission Rates */}
+      {error && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-5 py-4 text-sm"
+        >
+          <p className="font-bold">Commission rates could not be loaded</p>
+          <p className="mt-1">{error}</p>
+          <p className="mt-1 text-xs text-red-600">
+            No rates are shown rather than sample ones: this screen edits what partners are charged.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
           <h2 className="font-bold text-slate-900">Module Commission Rates</h2>
@@ -477,6 +402,21 @@ export default function CommissionsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {loading && !fetched && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
+                    Loading commission rates…
+                  </td>
+                </tr>
+              )}
+              {!loading && !error && rates.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
+                    No commission rates configured for {isFiltered ? regionLabel : 'any market'}{' '}
+                    yet.
+                  </td>
+                </tr>
+              )}
               {rates.map((c) => (
                 <React.Fragment key={c.id}>
                   <tr className="hover:bg-slate-50/50 transition-colors">
