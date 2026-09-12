@@ -104,6 +104,14 @@ import { DataSource } from 'typeorm';
  *       moderation ban, which the UPDATE in admin-service had always written to
  *       and which had never existed.
  *
+ *   1786502100000-SeoOverrides
+ *       `public.seo_overrides` — replaces the module-level `Map` in
+ *       `admin-seo.controller.ts` (per-process memory, gone on every restart
+ *       and inconsistent across replicas) with one row per path. The gateway
+ *       process owns and queries this table directly, same as
+ *       `page_layouts`/`static_pages` above, so it belongs here rather than
+ *       with the marketplace list (R7, audit V17 / H-12).
+ *
  * Deliberately **not** here, though each mentions `users` somewhere:
  *
  *   1719468000000-InitialMarketplaceSchema
@@ -152,6 +160,7 @@ export const MainDataSource = new DataSource({
     'migrations/1786501800000-AdminRoles.ts',
     'migrations/1786501900000-UserMarketBackfill.ts',
     'migrations/1786502000000-UserBanColumns.ts',
+    'migrations/1786502100000-SeoOverrides.ts',
   ],
   migrationsTableName: 'migrations',
   // One transaction per migration, matching the marketplace DataSource: a

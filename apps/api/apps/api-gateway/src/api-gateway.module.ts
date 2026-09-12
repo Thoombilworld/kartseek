@@ -142,6 +142,7 @@ import {
   DeliveryReturnTask,
   PageLayout,
   StaticPage,
+  SeoOverride,
 } from './entities';
 import { User } from './entities/user.entity';
 import { AdminRole } from './entities/admin-role.entity';
@@ -225,6 +226,7 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
             PartnerSosCase,
             PageLayout,
             StaticPage,
+            SeoOverride,
             User,
             AdminRole,
           ]),
@@ -237,6 +239,7 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
       PageLayout,
       User,
       StaticPage,
+      SeoOverride,
       AdminRole,
     ]),
 

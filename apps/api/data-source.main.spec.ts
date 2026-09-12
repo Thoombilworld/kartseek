@@ -79,6 +79,7 @@ describe('migration classification', () => {
         '1786501800000-AdminRoles.ts',
         '1786501900000-UserMarketBackfill.ts',
         '1786502000000-UserBanColumns.ts',
+        '1786502100000-SeoOverrides.ts',
       ].sort(),
     );
   });

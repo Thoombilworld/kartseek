@@ -56,15 +56,18 @@ function handlerBlock(
  * resolve a market in its handler body. Add here only with a reason.
  */
 const GLOBAL_ROUTES: Array<[RegExp, string]> = [
-  [/^\/admin\/security\//, 'DDoS board is per gateway, not per market'],
+  [
+    /^\/admin\/security\//,
+    'DDoS board is per gateway; every mutation calls refuseLockedAdmin (R7)',
+  ],
   [/^\/admin\/platform\/health$/, 'service liveness'],
   [
     /^\/admin\/layouts\//,
-    'page layouts are per module page, not per market (Plan E may scope them)',
+    'page layouts are per module page, not per market; the write calls refuseLockedAdmin (R7)',
   ],
   [
     /^\/admin\/seo/,
-    'SEO overrides are per path; market-specific paths carry their market in the path',
+    'SEO overrides are per path; a market-specific path carries its market in the path, and every write calls refuseLockedAdmin (R7)',
   ],
   [/^\/admin\/marketplace\/system-health$/, 'service liveness'],
 ];

@@ -5,6 +5,7 @@ import {
   Delete,
   Param,
   Body,
+  Req,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -23,6 +24,8 @@ import { DdosMonitorService, JwtAuthGuard } from '@app/security';
 import { UserRole } from '@app/common';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { GlobalEntity } from '../decorators/global-entity.decorator';
+import { refuseLockedAdmin } from '../guards/market-scope';
 import {
   BanIpRequestDto,
   WhitelistIpRequestDto,
@@ -43,6 +46,12 @@ import {
  * it rather than the mutations alone: the threat board names every banned and
  * whitelisted address, which is the map of the platform's defences. A finance
  * manager or a support agent holding the ADMIN role would otherwise read it.
+ *
+ * The board is global — one gateway, not one per market — and writing it is a
+ * global act too: a custom role holding `security.manage` **and** a region
+ * lock could otherwise ban IPs platform-wide from inside their one market.
+ * Every mutating handler below calls `refuseLockedAdmin` first; the reads
+ * carry `@GlobalEntity` (R7).
  */
 @ApiTags('🛡️ Security')
 @ApiBearerAuth('JWT')
@@ -55,6 +64,7 @@ export class DdosAdminController {
   // ── Dashboard Overview ─────────────────────────────────────────────────────
 
   @Get('status')
+  @GlobalEntity('DDoS board is per gateway, not per market')
   @ApiOperation({
     summary: 'DDoS threat status',
     description:
@@ -79,6 +89,7 @@ export class DdosAdminController {
   }
 
   @Get('trend')
+  @GlobalEntity('DDoS board is per gateway, not per market')
   @ApiOperation({
     summary: '14-day ban trend',
     description:
@@ -89,6 +100,7 @@ export class DdosAdminController {
   }
 
   @Get('stats/endpoints')
+  @GlobalEntity('DDoS board is per gateway, not per market')
   @ApiOperation({
     summary: 'Per-endpoint request stats',
     description:
@@ -99,6 +111,7 @@ export class DdosAdminController {
   }
 
   @Get('offenders')
+  @GlobalEntity('DDoS board is per gateway, not per market')
   @ApiOperation({
     summary: 'Top strike offenders',
     description:
@@ -111,6 +124,7 @@ export class DdosAdminController {
   // ── Banned IPs ─────────────────────────────────────────────────────────────
 
   @Get('bans')
+  @GlobalEntity('DDoS board is per gateway, not per market')
   @ApiOperation({
     summary: 'List all banned IPs',
     description:
@@ -128,7 +142,8 @@ export class DdosAdminController {
   })
   @ApiBody({ type: BanIpRequestDto })
   @ApiCreatedResponse({ type: SuccessResponseDto, description: 'IP banned successfully' })
-  async banIp(@Body() dto: BanIpRequestDto) {
+  async banIp(@Req() req: any, @Body() dto: BanIpRequestDto) {
+    refuseLockedAdmin(req, 'the security console');
     await this.monitor.banIp(dto.ip, dto.durationSeconds, dto.reason);
     return {
       success: true,
@@ -143,7 +158,8 @@ export class DdosAdminController {
     description: 'Removes HTTP ban, WebSocket ban, and clears all strike records for the IP.',
   })
   @ApiParam({ name: 'ip', description: 'IPv4 or IPv6 address to unban', example: '192.168.1.100' })
-  async unbanIp(@Param('ip') ip: string) {
+  async unbanIp(@Req() req: any, @Param('ip') ip: string) {
+    refuseLockedAdmin(req, 'the security console');
     await this.monitor.unbanIp(ip);
     return { success: true, message: `IP ${ip} has been fully unbanned and all strikes cleared.` };
   }
@@ -151,6 +167,7 @@ export class DdosAdminController {
   // ── Whitelist ──────────────────────────────────────────────────────────────
 
   @Get('whitelist')
+  @GlobalEntity('DDoS board is per gateway, not per market')
   @ApiOperation({
     summary: 'Get whitelist',
     description: 'Returns all IPs that bypass DDoS checks (trusted services, internal IPs).',
@@ -167,7 +184,8 @@ export class DdosAdminController {
   })
   @ApiBody({ type: WhitelistIpRequestDto })
   @ApiCreatedResponse({ type: SuccessResponseDto, description: 'IP added to whitelist' })
-  async addToWhitelist(@Body() dto: WhitelistIpRequestDto) {
+  async whitelistIp(@Req() req: any, @Body() dto: WhitelistIpRequestDto) {
+    refuseLockedAdmin(req, 'the security console');
     await this.monitor.whitelistIp(dto.ip);
     return { success: true, message: `IP ${dto.ip} added to whitelist.` };
   }
@@ -179,7 +197,8 @@ export class DdosAdminController {
     description: 'The IP will be subject to standard DDoS checks again after removal.',
   })
   @ApiParam({ name: 'ip', description: 'IPv4 or IPv6 address to remove', example: '10.0.0.1' })
-  async removeFromWhitelist(@Param('ip') ip: string) {
+  async removeFromWhitelist(@Req() req: any, @Param('ip') ip: string) {
+    refuseLockedAdmin(req, 'the security console');
     await this.monitor.removeFromWhitelist(ip);
     return { success: true, message: `IP ${ip} removed from whitelist.` };
   }
@@ -193,7 +212,8 @@ export class DdosAdminController {
     description:
       'Manually clears the elevated attack mode flag if it was triggered by a false positive. Rate limits return to normal.',
   })
-  async resetAttackMode() {
+  async resetAttackMode(@Req() req: any) {
+    refuseLockedAdmin(req, 'the security console');
     await this.monitor.resetAttackMode();
     return { success: true, message: 'Attack mode cleared. Rate limits restored to normal.' };
   }

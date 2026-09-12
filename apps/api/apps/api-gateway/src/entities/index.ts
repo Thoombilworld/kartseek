@@ -22,4 +22,4 @@ export * from './delivery.entity';
 export * from './geo-security.entities';
 export * from './page-layout.entity';
 export * from './static-page.entity';
-
+export * from './seo-override.entity';
