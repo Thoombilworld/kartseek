@@ -12,6 +12,7 @@ import { AdminTaxiController } from './admin-taxi.controller';
 import { AuditEntryDto } from '../dto/admin-audit.dto';
 import { BanIpRequestDto, WhitelistIpRequestDto } from '../dto/gateway.dto';
 import { KycDecisionDto, ReasonDto as CoreReasonDto } from '../dto/admin-core.dto';
+import { AdminCouponDto, AdminCouponUpdateDto } from '../dto/admin-marketplace.dto';
 import {
   PayoutBatchDto,
   PricingUpdateDto,
@@ -25,6 +26,7 @@ import {
 } from '../dto/admin-taxi.dto';
 import { TaxiRateCardEntity } from '../../../../../../modules/taxi/backend/src/entities/taxi-rate-card.entity';
 import { TaxiCountryConfigEntity } from '../../../../../../modules/taxi/backend/src/entities/taxi-country-config.entity';
+import { Coupon } from '../../../../../../modules/marketplace/backend/src/entities/coupon.entity';
 
 /**
  * Every admin body is a validated DTO.
@@ -617,5 +619,154 @@ describe('AdminTaxiController.sent()', () => {
     expect(Object.entries(payload).filter(([, v]) => v === undefined)).toEqual([]);
     // …and still carries everything the caller did send.
     expect(payload).toMatchObject(body);
+  });
+});
+
+// ── 6. the admin marketplace coupon DTOs ─────────────────────────────────────
+
+/** A create body that passes, so each case below changes exactly one thing. */
+const COUPON = {
+  code: 'QASUMMER25',
+  discountType: 'PERCENTAGE',
+  discountValue: 15,
+  validFrom: '2026-09-01T00:00:00.000Z',
+  validUntil: '2026-12-01T00:00:00.000Z',
+};
+
+describe('coupon DTOs name only real columns', () => {
+  /**
+   * The drift test that would have caught review I-1 from the other side:
+   * `COUPON_WRITABLE` in marketplace-service picked `name`, `isAutoApply` and
+   * `isFirstOrderOnly`, which are not properties of `Coupon`, while these DTOs
+   * validate `title`, `autoApply` and `firstOrderOnly`, which are. A field a
+   * DTO advertises and the row cannot hold is a setting that saves and never
+   * applies.
+   */
+  it.each([
+    ['AdminCouponDto', AdminCouponDto],
+    ['AdminCouponUpdateDto', AdminCouponUpdateDto],
+  ])('%s declares only properties of the coupons table', (_name, dto) => {
+    const columns = columnsOf(Coupon);
+    for (const key of declaredKeys(dto)) {
+      expect(columns.has(key), `coupons has no column ${key}`).toBe(true);
+    }
+    expect(declaredKeys(dto).length).toBeGreaterThan(10);
+  });
+
+  /**
+   * `usedCount` is the redemption counter the limit is enforced against and
+   * `sellerId` decides who may edit the row at all, so neither is a client's to
+   * send even though both are real columns.
+   */
+  it.each([
+    ['AdminCouponDto', AdminCouponDto],
+    ['AdminCouponUpdateDto', AdminCouponUpdateDto],
+  ])('%s declares no server-managed or ownership field', (_name, dto) => {
+    for (const managed of [
+      'id',
+      'createdAt',
+      'updatedAt',
+      'usedCount',
+      'sellerId',
+      'franchiseId',
+    ]) {
+      expect(declaredKeys(dto)).not.toContain(managed);
+    }
+  });
+
+  it('refuses a code the column cannot hold, and a lower-case one', async () => {
+    expect(await rejectionOf(AdminCouponDto, { ...COUPON, code: 'X'.repeat(31) })).toContain(
+      'code must be shorter than or equal to 30 characters',
+    );
+    expect(await rejectionOf(AdminCouponDto, { ...COUPON, code: 'qasummer' })).toContain(
+      'code must be upper-case letters, digits, _ or -',
+    );
+  });
+});
+
+describe('an explicit null on a coupon body', () => {
+  /**
+   * Review I-2. `@IsOptional()` skips every validator for `null` as well as
+   * `undefined`, and `pick` copies any key whose value is not `undefined` — so
+   * `{"discountValue": null}` reached `couponRepo.update` and came back as a
+   * Postgres not-null violation the caller read as a 500, on a money route.
+   */
+  it.each([
+    ['discountType', 'discountType must be one of the following values'],
+    ['discountValue', 'discountValue must be a number'],
+    ['minOrderValue', 'minOrderValue must be a number'],
+    ['usageLimit', 'usageLimit must be a number'],
+    ['usageLimitPerUser', 'usageLimitPerUser must be a number'],
+    ['validFrom', 'validFrom must be a valid ISO 8601 date string'],
+    ['validUntil', 'validUntil must be a valid ISO 8601 date string'],
+    ['isActive', 'isActive must be a boolean value'],
+    ['autoApply', 'autoApply must be a boolean value'],
+    ['firstOrderOnly', 'firstOrderOnly must be a boolean value'],
+  ])('is refused on the NOT NULL column %s', async (field, message) => {
+    const said = await rejectionOf(AdminCouponUpdateDto, { [field]: null });
+    expect(said.join(' | ')).toContain(message);
+  });
+
+  it('is refused on a NOT NULL column of the create body too', async () => {
+    expect(await rejectionOf(AdminCouponDto, { ...COUPON, isActive: null })).toContain(
+      'isActive must be a boolean value',
+    );
+  });
+
+  it('is allowed on the three nullable columns, and survives to the payload', async () => {
+    const out = (await run(AdminCouponUpdateDto, {
+      title: null,
+      description: null,
+      maxDiscount: null,
+    })) as Record<string, unknown>;
+    expect(out).toEqual({ title: null, description: null, maxDiscount: null });
+  });
+});
+
+describe('a percentage discount is bounded by 100', () => {
+  /**
+   * Review I-3. `validateCoupon` computes `orderTotal * (discountValue / 100)`
+   * and caps it only when `maxDiscount` is set, so a `PERCENTAGE / 500` coupon
+   * takes five times the basket. The bound cannot be a plain `@Max(100)` — a
+   * FLAT coupon is denominated in currency and 500 is ordinary — so it is
+   * conditional on the type the same body declares.
+   */
+  it('refuses PERCENTAGE above 100', async () => {
+    expect(
+      await rejectionOf(AdminCouponDto, {
+        ...COUPON,
+        discountType: 'PERCENTAGE',
+        discountValue: 500,
+      }),
+    ).toContain('discountValue must not be greater than 100 for a PERCENTAGE coupon');
+  });
+
+  it('accepts PERCENTAGE at exactly 100, and FLAT well above it', async () => {
+    await expect(
+      run(AdminCouponDto, { ...COUPON, discountType: 'PERCENTAGE', discountValue: 100 }),
+    ).resolves.toMatchObject({ discountValue: 100 });
+    await expect(
+      run(AdminCouponDto, { ...COUPON, discountType: 'FLAT', discountValue: 500 }),
+    ).resolves.toMatchObject({ discountValue: 500 });
+  });
+
+  it('applies the same bound on an edit', async () => {
+    expect(
+      await rejectionOf(AdminCouponUpdateDto, { discountType: 'PERCENTAGE', discountValue: 101 }),
+    ).toContain('discountValue must not be greater than 100 for a PERCENTAGE coupon');
+    await expect(
+      run(AdminCouponUpdateDto, { discountType: 'FLAT', discountValue: 500 }),
+    ).resolves.toMatchObject({ discountValue: 500 });
+  });
+
+  /**
+   * An edit that changes the amount without restating the type cannot be
+   * bounded at the edge — the gateway has no row to read the type from — so it
+   * is refused rather than waved through. The console's pause/activate sends
+   * neither field and is unaffected.
+   */
+  it('refuses a new amount that does not say which kind of discount it is', async () => {
+    const said = await rejectionOf(AdminCouponUpdateDto, { discountValue: 20 });
+    expect(said.join(' | ')).toContain('discountValue must be sent together with discountType');
   });
 });

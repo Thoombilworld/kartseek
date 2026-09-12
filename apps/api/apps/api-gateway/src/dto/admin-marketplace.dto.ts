@@ -10,7 +10,11 @@ import {
   Matches,
   Max,
   Min,
+  Validate,
+  ValidateIf,
+  ValidatorConstraint,
 } from 'class-validator';
+import type { ValidationArguments, ValidatorConstraintInterface } from 'class-validator';
 
 /**
  * Bodies for the admin marketplace surface (`AdminMarketplaceController`).
@@ -30,7 +34,71 @@ import {
  * to be checked rather than assumed: a DTO that is stricter than the table
  * turns a working console page into a wall of 400s, and one that is looser
  * turns a bad body into a 500 from the Postgres driver.
+ * `admin-validation.spec.ts` pins the match against the entity's own metadata.
  */
+
+/**
+ * Validate a field only when the caller actually sent it.
+ *
+ * `@IsOptional()` skips every validator for `null` as well as `undefined`, and
+ * marketplace-service's `pick` copies any key whose value is not `undefined` —
+ * so `{"discountValue": null}` travelled all the way to `couponRepo.update` and
+ * came back as a Postgres not-null violation the caller read as a 500, on a
+ * money route (review I-2). With this, the field's own validator runs against
+ * the `null` and answers 400 naming the field.
+ *
+ * `@IsOptional()` stays on `title`, `description` and `maxDiscount`, whose
+ * columns are nullable and where clearing the value is a request an
+ * administrator may really make.
+ *
+ * The same helper exists in `admin-taxi.dto.ts` for the same reason; it is
+ * duplicated rather than shared because neither file is the natural home for a
+ * cross-cutting validation idiom. Worth extracting into a `dto/validation.ts`
+ * the next time a third file needs it.
+ */
+const IfPresent = (): PropertyDecorator => ValidateIf((_object, value) => value !== undefined);
+
+/** The types `discountValue` is a percentage for, and the cap that then applies. */
+const PERCENTAGE_CAP = 100;
+
+/**
+ * A percentage discount cannot exceed 100.
+ *
+ * `validateCoupon` computes `orderTotal * (discountValue / 100)` and caps the
+ * result only when `maxDiscount` is set, so a `PERCENTAGE / 500` coupon takes
+ * five times the basket (review I-3). A plain `@Max(100)` would be wrong — a
+ * `FLAT` coupon is denominated in currency and 500 is an ordinary figure — and
+ * a bare `@ValidateIf` would be worse, because it suppresses *every* validator
+ * on the property when its condition is false, leaving a FLAT amount unchecked
+ * altogether. So the bound is a constraint that reads the sibling field.
+ *
+ * On an edit, an amount sent without its type cannot be bounded here at all —
+ * the gateway has no row to read the type from — so it is refused rather than
+ * waved through. The console's pause/activate sends neither field.
+ */
+@ValidatorConstraint({ name: 'discountValueWithinType', async: false })
+class DiscountValueWithinType implements ValidatorConstraintInterface {
+  validate(value: unknown, args: ValidationArguments): boolean {
+    // Not a number at all: `@IsNumber()` reports that, and reporting it twice
+    // would answer one mistake with two messages.
+    if (typeof value !== 'number' || !Number.isFinite(value)) return true;
+    const type = (args.object as { discountType?: unknown }).discountType;
+    if (type === undefined) return false;
+    return type === 'PERCENTAGE' ? value <= PERCENTAGE_CAP : true;
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    const type = (args.object as { discountType?: unknown }).discountType;
+    if (type === undefined) {
+      return 'discountValue must be sent together with discountType, so the percentage cap can be applied';
+    }
+    return `discountValue must not be greater than ${PERCENTAGE_CAP} for a PERCENTAGE coupon`;
+  }
+}
+
+/** The five values `coupons.discount_type` actually holds. There is no `FIXED`. */
+const DISCOUNT_TYPES = ['PERCENTAGE', 'FLAT', 'FREE_SHIPPING', 'CASHBACK', 'BUY_X_GET_Y'] as const;
+
 export class AdminCouponDto {
   /** `coupons.code` is `varchar(30)` and unique; the service upper-cases it. */
   @ApiProperty({ example: 'QASUMMER25' })
@@ -39,28 +107,27 @@ export class AdminCouponDto {
   @Matches(/^[A-Z0-9_-]+$/, { message: 'code must be upper-case letters, digits, _ or -' })
   code!: string;
 
-  @ApiPropertyOptional({ example: 'Summer sale', maxLength: 200 })
+  @ApiPropertyOptional({ example: 'Summer sale', maxLength: 255 })
   @IsOptional()
   @IsString()
-  @Length(0, 200)
+  @Length(0, 255)
   title?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @Length(0, 300) description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(0, 2000) description?: string;
 
   /**
-   * The five values the `coupons.discount_type` enum actually holds. `FIXED`
-   * is not one of them — the flat-amount member is spelled `FLAT`, and the
-   * admin console's create form emits `FLAT`, `FREE_SHIPPING` and
+   * The admin console's create form emits `FLAT`, `FREE_SHIPPING` and
    * `BUY_X_GET_Y` as well as `PERCENTAGE`.
    */
-  @ApiProperty({ enum: ['PERCENTAGE', 'FLAT', 'FREE_SHIPPING', 'CASHBACK', 'BUY_X_GET_Y'] })
-  @IsIn(['PERCENTAGE', 'FLAT', 'FREE_SHIPPING', 'CASHBACK', 'BUY_X_GET_Y'])
+  @ApiProperty({ enum: DISCOUNT_TYPES })
+  @IsIn(DISCOUNT_TYPES)
   discountType!: string;
 
-  @ApiProperty({ example: 15 })
+  @ApiProperty({ example: 15, description: 'At most 100 when discountType is PERCENTAGE' })
   @IsNumber()
   @Min(0)
   @Max(1_000_000)
+  @Validate(DiscountValueWithinType)
   discountValue!: number;
 
   @ApiPropertyOptional({ example: 50, description: 'Cap for a percentage coupon' })
@@ -70,18 +137,23 @@ export class AdminCouponDto {
   @Max(1_000_000)
   maxDiscount?: number;
 
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) minOrderValue?: number;
+  @ApiPropertyOptional()
+  @IfPresent()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
+  minOrderValue?: number;
 
   /** `-1` and `0` both mean unlimited in this table; the console sends `0`. */
   @ApiPropertyOptional({ example: 500 })
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(-1)
   @Max(1_000_000)
   usageLimit?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
   @IsNumber()
   @Min(1)
   @Max(1_000_000)
@@ -101,9 +173,9 @@ export class AdminCouponDto {
   @IsDateString()
   validUntil!: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() autoApply?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() firstOrderOnly?: boolean;
+  @ApiPropertyOptional() @IfPresent() @IsBoolean() isActive?: boolean;
+  @ApiPropertyOptional() @IfPresent() @IsBoolean() autoApply?: boolean;
+  @ApiPropertyOptional() @IfPresent() @IsBoolean() firstOrderOnly?: boolean;
 
   /**
    * The market the coupon is issued for. A locked admin may only name their
@@ -128,32 +200,51 @@ export class AdminCouponDto {
  * have already been given.
  */
 export class AdminCouponUpdateDto {
-  @ApiPropertyOptional() @IsOptional() @IsString() @Length(0, 200) title?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() @Length(0, 300) description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(0, 255) title?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(0, 2000) description?: string;
 
-  @ApiPropertyOptional({ enum: ['PERCENTAGE', 'FLAT', 'FREE_SHIPPING', 'CASHBACK', 'BUY_X_GET_Y'] })
-  @IsOptional()
-  @IsIn(['PERCENTAGE', 'FLAT', 'FREE_SHIPPING', 'CASHBACK', 'BUY_X_GET_Y'])
+  @ApiPropertyOptional({ enum: DISCOUNT_TYPES })
+  @IfPresent()
+  @IsIn(DISCOUNT_TYPES)
   discountType?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) discountValue?: number;
+  @ApiPropertyOptional({ description: 'At most 100 when discountType is PERCENTAGE' })
+  @IfPresent()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
+  @Validate(DiscountValueWithinType)
+  discountValue?: number;
+
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) maxDiscount?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) minOrderValue?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(-1) @Max(1_000_000) usageLimit?: number;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @IfPresent()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
+  minOrderValue?: number;
+
+  @ApiPropertyOptional()
+  @IfPresent()
+  @IsNumber()
+  @Min(-1)
+  @Max(1_000_000)
+  usageLimit?: number;
+
+  @ApiPropertyOptional()
+  @IfPresent()
   @IsNumber()
   @Min(1)
   @Max(1_000_000)
   usageLimitPerUser?: number;
 
-  @ApiPropertyOptional() @IsOptional() @IsDateString() validFrom?: string;
-  @ApiPropertyOptional() @IsOptional() @IsDateString() validUntil?: string;
+  @ApiPropertyOptional() @IfPresent() @IsDateString() validFrom?: string;
+  @ApiPropertyOptional() @IfPresent() @IsDateString() validUntil?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() autoApply?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() firstOrderOnly?: boolean;
+  @ApiPropertyOptional() @IfPresent() @IsBoolean() isActive?: boolean;
+  @ApiPropertyOptional() @IfPresent() @IsBoolean() autoApply?: boolean;
+  @ApiPropertyOptional() @IfPresent() @IsBoolean() firstOrderOnly?: boolean;
 
   @ApiPropertyOptional({ example: 'QA', description: 'ISO-2 market' })
   @IsOptional()

@@ -910,6 +910,7 @@ export class MarketplaceGatewayController {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_COUPON_USAGE, {
       id,
       _actor: this.actor(req),
+      scope: this.scopeOf(req, undefined, 'that coupon').scope,
     });
   }
 

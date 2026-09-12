@@ -60,3 +60,46 @@ describe('MarketplaceGatewayController forwards scope on the admin-reachable wri
     expect(client.send).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The coupon reads and the two coupon writes the first round left unpinned.
+ *
+ * `GET coupons/:id/usage` is a read, so it fell outside the brief's four ids —
+ * but it returns `customerId` and `discountApplied` per redemption, and
+ * `assertOwns` admits every admin role, so it was the last coupon route on this
+ * controller that crossed markets freely (review I-4).
+ */
+describe('MarketplaceGatewayController forwards scope on the coupon reads and edits', () => {
+  it('sends the caller market as scope on a redemption-history read', async () => {
+    const { ctrl, client } = build();
+    await ctrl.getCouponUsage(req(qaAdmin), 'c-1');
+    expect(client.send).toHaveBeenCalledWith(
+      { cmd: MARKETPLACE_PATTERNS.GET_COUPON_USAGE },
+      expect.objectContaining({ id: 'c-1', scope: 'QA' }),
+    );
+  });
+
+  it('sends no scope on that read for a global admin or a seller', async () => {
+    for (const user of [globalAdmin, seller]) {
+      const { ctrl, client } = build();
+      await ctrl.getCouponUsage(req(user), 'c-1');
+      expect((client.send.mock.calls[0] as any)[1].scope).toBeUndefined();
+    }
+  });
+
+  it('sends scope on the coupon edit and the coupon delete', async () => {
+    const { ctrl, client } = build();
+    await ctrl.updateCoupon(req(qaAdmin), 'c-1', { discountValue: 5 } as any);
+    await ctrl.deleteCoupon(req(qaAdmin), 'c-1');
+    expect(client.send.mock.calls).toHaveLength(2);
+    for (const call of client.send.mock.calls) expect(call[1]).toMatchObject({ scope: 'QA' });
+  });
+
+  it('refuses a locked admin who renames a coupon into another market on an edit', async () => {
+    const { ctrl, client } = build();
+    await expect(
+      ctrl.updateCoupon(req(qaAdmin), 'c-1', { regionCode: 'IN' } as any),
+    ).rejects.toThrow(ForbiddenException);
+    expect(client.send).not.toHaveBeenCalled();
+  });
+});
