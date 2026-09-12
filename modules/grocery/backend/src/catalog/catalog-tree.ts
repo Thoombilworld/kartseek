@@ -16,8 +16,6 @@
  * so two departments can both have "Chicken" without colliding.
  */
 
-/** Markets where a seller can be onboarded — mirrors `SellerCountryCode` on the web. */
-export const ALL_MARKETS = ['IN', 'QA', 'AE', 'SA', 'BH', 'KW', 'OM', 'GB', 'US'] as const;
 export const GCC = ['QA', 'AE', 'SA', 'BH', 'KW', 'OM'] as const;
 /** The Gulf plus India — where South Asian staples have a mainstream aisle. */
 export const GCC_AND_INDIA = ['IN', ...GCC] as const;
@@ -35,8 +33,31 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
   {
     name: 'Fruits & Vegetables',
     children: [
-      { name: 'Fresh Fruits', children: sub('Apples', 'Bananas', 'Oranges', 'Mangoes', 'Grapes', 'Berries', 'Melons', 'Citrus') },
-      { name: 'Fresh Vegetables', children: sub('Potatoes', 'Onions', 'Tomatoes', 'Carrots', 'Cucumbers', 'Peppers', 'Broccoli') },
+      {
+        name: 'Fresh Fruits',
+        children: sub(
+          'Apples',
+          'Bananas',
+          'Oranges',
+          'Mangoes',
+          'Grapes',
+          'Berries',
+          'Melons',
+          'Citrus',
+        ),
+      },
+      {
+        name: 'Fresh Vegetables',
+        children: sub(
+          'Potatoes',
+          'Onions',
+          'Tomatoes',
+          'Carrots',
+          'Cucumbers',
+          'Peppers',
+          'Broccoli',
+        ),
+      },
       { name: 'Leafy Greens', children: sub('Spinach', 'Lettuce', 'Kale', 'Coriander', 'Mint') },
       { name: 'Herbs', children: sub('Basil', 'Parsley', 'Rosemary', 'Thyme') },
       { name: 'Exotic Produce', children: sub('Avocado', 'Dragon Fruit', 'Kiwi', 'Asparagus') },
@@ -46,12 +67,24 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
   {
     name: 'Dairy & Eggs',
     children: [
-      { name: 'Milk', children: sub('Full Cream', 'Low Fat', 'Skimmed', 'Lactose-Free', 'Plant-Based') },
+      {
+        name: 'Milk',
+        children: sub('Full Cream', 'Low Fat', 'Skimmed', 'Lactose-Free', 'Plant-Based'),
+      },
       { name: 'Yogurt', children: sub('Plain', 'Greek', 'Flavored', 'Drinking Yogurt') },
-      { name: 'Cheese', children: sub('Cheddar', 'Mozzarella', 'Feta', 'Cream Cheese', 'Sliced Cheese') },
-      { name: 'Butter & Margarine', children: sub('Butter', 'Salted Butter', 'Unsalted Butter', 'Margarine') },
+      {
+        name: 'Cheese',
+        children: sub('Cheddar', 'Mozzarella', 'Feta', 'Cream Cheese', 'Sliced Cheese'),
+      },
+      {
+        name: 'Butter & Margarine',
+        children: sub('Butter', 'Salted Butter', 'Unsalted Butter', 'Margarine'),
+      },
       { name: 'Cream', children: sub('Fresh Cream', 'Whipping Cream', 'Cooking Cream') },
-      { name: 'Eggs', children: sub('White Eggs', 'Brown Eggs', 'Free-Range', 'Organic', 'Quail Eggs') },
+      {
+        name: 'Eggs',
+        children: sub('White Eggs', 'Brown Eggs', 'Free-Range', 'Organic', 'Quail Eggs'),
+      },
     ],
   },
   {
@@ -60,9 +93,16 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
       { name: 'Chicken', children: sub('Whole Chicken', 'Breast', 'Thigh', 'Wings', 'Mince') },
       { name: 'Mutton & Lamb', children: sub('Chops', 'Leg', 'Shoulder', 'Mince', 'Cubes') },
       // Beef is not sold in the Indian grocery catalogue.
-      { name: 'Beef', countries: [...GCC, 'GB', 'US'], children: sub('Steak', 'Mince', 'Cubes', 'Roast') },
+      {
+        name: 'Beef',
+        countries: [...GCC, 'GB', 'US'],
+        children: sub('Steak', 'Mince', 'Cubes', 'Roast'),
+      },
       { name: 'Turkey', children: sub('Whole Turkey', 'Breast', 'Slices') },
-      { name: 'Processed Meat', children: sub('Sausages', 'Salami', 'Ham', 'Nuggets', 'Meatballs') },
+      {
+        name: 'Processed Meat',
+        children: sub('Sausages', 'Salami', 'Ham', 'Nuggets', 'Meatballs'),
+      },
       { name: 'Fresh Meat', children: sub('Fresh Cuts', 'Minced Meat', 'Offal') },
     ],
   },
@@ -90,7 +130,10 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
     name: 'Rice, Grains & Pulses',
     children: [
       { name: 'Rice', children: sub('Basmati', 'Sona Masoori', 'Brown Rice', 'Jasmine Rice') },
-      { name: 'Flour', children: sub('Wheat Flour', 'All-Purpose Flour', 'Rice Flour', 'Corn Flour') },
+      {
+        name: 'Flour',
+        children: sub('Wheat Flour', 'All-Purpose Flour', 'Rice Flour', 'Corn Flour'),
+      },
       { name: 'Pulses', children: sub('Lentils', 'Chickpeas', 'Kidney Beans', 'Black Beans') },
       { name: 'Grains', children: sub('Oats', 'Quinoa', 'Barley', 'Millet') },
       { name: 'Semolina', children: sub('Fine', 'Coarse', 'Roasted') },
@@ -100,7 +143,11 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
     name: 'Cooking Essentials',
     children: [
       { name: 'Cooking Oil', children: sub('Sunflower', 'Canola', 'Olive', 'Coconut', 'Sesame') },
-      { name: 'Ghee', countries: GCC_AND_INDIA, children: sub('Cow Ghee', 'Buffalo Ghee', 'Clarified Butter') },
+      {
+        name: 'Ghee',
+        countries: GCC_AND_INDIA,
+        children: sub('Cow Ghee', 'Buffalo Ghee', 'Clarified Butter'),
+      },
       { name: 'Vinegar', children: sub('White Vinegar', 'Apple Cider', 'Balsamic') },
       { name: 'Sauces', children: sub('Soy Sauce', 'Tomato Sauce', 'Chili Sauce', 'BBQ Sauce') },
       { name: 'Pastes', children: sub('Ginger Paste', 'Garlic Paste', 'Curry Paste') },
@@ -121,7 +168,10 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
     children: [
       { name: 'Cereals', children: sub('Corn Flakes', 'Muesli', 'Granola', 'Bran') },
       { name: 'Oats', children: sub('Rolled', 'Instant', 'Steel-Cut') },
-      { name: 'Breakfast Spreads', children: sub('Peanut Butter', 'Chocolate Spread', 'Jam', 'Honey') },
+      {
+        name: 'Breakfast Spreads',
+        children: sub('Peanut Butter', 'Chocolate Spread', 'Jam', 'Honey'),
+      },
       { name: 'Pancake & Baking Mix', children: sub('Pancake Mix', 'Waffle Mix') },
     ],
   },
@@ -192,9 +242,17 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
   {
     name: 'Sweets & Desserts',
     children: [
-      { name: 'Traditional Sweets', countries: GCC_AND_INDIA, children: sub('Halwa', 'Laddu', 'Barfi', 'Jalebi') },
+      {
+        name: 'Traditional Sweets',
+        countries: GCC_AND_INDIA,
+        children: sub('Halwa', 'Laddu', 'Barfi', 'Jalebi'),
+      },
       { name: 'Puddings', children: sub('Custard', 'Rice Pudding') },
-      { name: 'Dessert Mixes', countries: GCC_AND_INDIA, children: sub('Gulab Jamun Mix', 'Kheer Mix') },
+      {
+        name: 'Dessert Mixes',
+        countries: GCC_AND_INDIA,
+        children: sub('Gulab Jamun Mix', 'Kheer Mix'),
+      },
       { name: 'Syrups', children: sub('Chocolate', 'Caramel', 'Fruit Syrups') },
     ],
   },
@@ -210,9 +268,15 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
   {
     name: 'Health & Wellness Foods',
     children: [
-      { name: 'Organic Foods', children: sub('Organic Rice', 'Organic Flour', 'Organic Fruits', 'Organic Vegetables') },
+      {
+        name: 'Organic Foods',
+        children: sub('Organic Rice', 'Organic Flour', 'Organic Fruits', 'Organic Vegetables'),
+      },
       { name: 'Sugar-Free', children: sub('Sugar-Free Snacks', 'Sugar-Free Drinks') },
-      { name: 'Gluten-Free', children: sub('Gluten-Free Flour', 'Gluten-Free Bread', 'Gluten-Free Pasta') },
+      {
+        name: 'Gluten-Free',
+        children: sub('Gluten-Free Flour', 'Gluten-Free Bread', 'Gluten-Free Pasta'),
+      },
       { name: 'Vegan Foods', children: sub('Vegan Milk', 'Meat Alternatives') },
       { name: 'Keto Foods', children: sub('Keto Snacks', 'Low-Carb Products') },
     ],
@@ -310,7 +374,11 @@ export const GROCERY_TAXONOMY: TaxonomyNode[] = [
       { name: 'Ready Meals', children: sub('Curries', 'Rice Meals', 'Pasta') },
       { name: 'Ready-to-Cook', children: sub('Paratha', 'Nuggets', 'Kebabs') },
       { name: 'Meal Kits', children: sub('Curry Kits', 'Cooking Kits') },
-      { name: 'Instant Mixes', countries: GCC_AND_INDIA, children: sub('Dosa Mix', 'Idli Mix', 'Pancake Mix') },
+      {
+        name: 'Instant Mixes',
+        countries: GCC_AND_INDIA,
+        children: sub('Dosa Mix', 'Idli Mix', 'Pancake Mix'),
+      },
     ],
   },
   {
