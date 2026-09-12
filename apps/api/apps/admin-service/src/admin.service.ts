@@ -110,7 +110,11 @@ export class AdminService {
              COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE status = 'active')::int AS active,
              COUNT(*) FILTER (WHERE "createdAt"::date = $1)::int AS new_today
-           FROM public.users${scope ? ' WHERE country = $2' : ''}`,
+           -- region_code, not country: users.country carries an 'IN' DEFAULT,
+           -- so a per-market user count taken from it was the whole platform's
+           -- count under one market's name (audit V6). This has to count the
+           -- same rows the users list shows for that market.
+           FROM public.users${scope ? ' WHERE region_code = $2' : ''}`,
           scope ? [today, scope] : [today],
         );
         users = { total: u?.total ?? 0, active: u?.active ?? 0, newToday: u?.new_today ?? 0 };
@@ -243,22 +247,61 @@ export class AdminService {
     // Try DB query first, fallback to Redis index
     if (this.isDbActive()) {
       try {
-        const qb = this.em!.createQueryBuilder().select('u').from('users', 'u');
+        // Raw columns, not `select('u')`.
+        //
+        // This service registers only `PageLayout`, so a query builder over the
+        // bare table name `users` has no entity metadata at all: `select('u')`
+        // emitted the invalid `SELECT u`, and `getManyAndCount()` threw
+        // "Cannot get entity metadata for the given alias u" on every single
+        // call. The catch below then fell through to `admin:users:index`, a
+        // Redis key nothing in the platform writes — so GET /admin/users
+        // answered 200 with an empty list for every administrator in every
+        // market, and had done since it was written. Confirmed live against
+        // both the previous and the current bundle before this was changed.
+        //
+        // The columns are named rather than taken as `u.*` so that
+        // `passwordHash` and `refreshToken` cannot leave the service in a list
+        // response.
+        const qb = this.em!.createQueryBuilder()
+          .select(
+            'u.id, u.email, u.phone, u."firstName", u."lastName", u.role, u.status, ' +
+              'u.country, u.region_code, u.region_locked, u."isActive", u."isEmailVerified", ' +
+              'u."isPhoneVerified", u."isKycVerified", u."avatarUrl", u.seller_type, u."createdAt"',
+          )
+          .from('users', 'u');
 
         if (role) qb.andWhere('u.role = :role', { role });
-        if (scope) qb.andWhere('u.country = :scope', { scope: market });
-        else if (market) qb.andWhere('u.country = :country', { country: market });
+        // `region_code`, not `country`: the lock in the token is minted from
+        // `users.region_code`, and `users.country` carries an 'IN' DEFAULT that
+        // made every customer look Indian (audit V6). A scoped caller also gets
+        // NULL rows excluded — an unattributable user is nobody's to moderate.
+        if (scope) qb.andWhere('u.region_code = :scope', { scope: market });
+        else if (market) qb.andWhere('u.region_code = :market', { market });
         if (search) {
-          qb.andWhere('(u.name ILIKE :search OR u.email ILIKE :search OR u.phone ILIKE :search)', {
-            search: `%${search}%`,
-          });
+          // `u.name` does not exist on this table — the name is two columns —
+          // so the old predicate turned any search into a 42703 and, through
+          // the catch below, into an empty list.
+          qb.andWhere(
+            '(u."firstName" ILIKE :search OR u."lastName" ILIKE :search OR ' +
+              'u.email ILIKE :search OR u.phone ILIKE :search)',
+            { search: `%${search}%` },
+          );
         }
 
-        qb.orderBy('u.createdAt', 'DESC')
-          .skip((page - 1) * limit)
-          .take(limit);
+        // `getCount()`/`skip`/`take` are entity-level too: they need the
+        // primary key from the metadata this alias has none of. The count is
+        // the same predicates over COUNT(*), and the page is OFFSET/LIMIT.
+        const counted = await qb.clone().select('COUNT(*)', 'total').getRawOne<{ total: string }>();
+        const total = Number(counted?.total ?? 0);
 
-        const [data, total] = await qb.getManyAndCount();
+        const data = await qb
+          // Quoted: unquoted `u.createdAt` is folded to `createdat` by Postgres
+          // and the column does not exist under that name.
+          .orderBy('u."createdAt"', 'DESC')
+          .offset((page - 1) * limit)
+          .limit(limit)
+          .getRawMany();
+
         return { data, total, page, limit, hasMore: total > page * limit };
       } catch (err) {
         this.logger.warn(`DB query failed for users list: ${(err as Error).message}`);
@@ -269,7 +312,11 @@ export class AdminService {
     const allUsers = (await this.redis.getJson<any[]>('admin:users:index')) ?? [];
     let filtered = allUsers;
     if (role) filtered = filtered.filter((u) => u.role === role);
-    if (country) filtered = filtered.filter((u) => u.country === country);
+    if (market && !scope) {
+      filtered = filtered.filter(
+        (u) => marketPredicate(undefined, u.regionCode ?? u.region_code) === market,
+      );
+    }
     if (search) {
       const s = search.toLowerCase();
       filtered = filtered.filter(
@@ -278,10 +325,11 @@ export class AdminService {
     }
     // A locked admin must not see every market's users just because the DB
     // query above failed or is switched off — fail closed: a user with no
-    // resolvable market is excluded, not shown, when a market is required.
-    if (market) {
+    // resolvable market is excluded, not shown. `country` is deliberately not a
+    // fallback source here; it is 'IN' on every row and would re-open V6.
+    if (scope) {
       filtered = filtered.filter(
-        (u) => marketPredicate(undefined, u.country ?? u.countryCode ?? u.regionCode) === market,
+        (u) => marketPredicate(undefined, u.regionCode ?? u.region_code) === marketPredicate(scope),
       );
     }
 
@@ -330,17 +378,29 @@ export class AdminService {
     }
   }
 
-  /** The market a user belongs to, for the scope check on ban/unban. */
+  /**
+   * The market a user belongs to, for the scope check on ban/unban.
+   *
+   * The aliases are given explicitly. `select(['u.id', 'u.region_code'])` on an
+   * alias with no entity metadata — which is every alias in this service, see
+   * `getUsersList` — emits the columns verbatim, so `getRawOne` hands back
+   * `{ id, region_code }` and the `u_`-prefixed read was `undefined` for every
+   * user. That resolved to "no market", which fails closed: a locked admin was
+   * refused every ban, including in their own market, with copy claiming the
+   * account belonged to every market. The two-argument `select`/`addSelect`
+   * form sets the alias in SQL, so the shape below is the shape returned.
+   */
   private async userMarket(userId: string): Promise<string | null> {
     if (!this.isDbActive() || !this.em) return null;
     const row = await this.em
       .createQueryBuilder()
-      .select(['u.id', 'u.country'])
+      .select('u.id', 'u_id')
+      .addSelect('u.region_code', 'u_region_code')
       .from('users', 'u')
       .where('u.id = :id', { id: userId })
-      .getRawOne<{ u_id: string; u_country: string | null }>();
+      .getRawOne<{ u_id: string; u_region_code: string | null }>();
     if (!row) throw new NotFoundException('User not found');
-    return row.u_country ?? null;
+    return row.u_region_code ?? null;
   }
 
   // ── Ban User ───────────────────────────────────────────────────────────────
@@ -587,12 +647,18 @@ export class AdminService {
 
   // ── Revenue Report ─────────────────────────────────────────────────────────
   //
-  // Sums global per-day Redis counters (`admin:counter:revenue:<date>`,
-  // `admin:counter:orders:<date>`), which carry no market dimension — there is
-  // no query here to add a market predicate to. A scoped admin is refused
-  // outright rather than shown a platform-wide total under their market's
-  // name; Plan C1 routes this report to order-service, where orders carry
-  // their own region_code, and per-market revenue becomes possible.
+  // Sums per-day Redis counters — `admin:counter:revenue:<date>` and
+  // `admin:counter:orders:<date>`, a key shape nothing writes: `incrementCounter`
+  // wrote `admin:counter:revenue` with no date at all before it was bucketed by
+  // market, and writes `admin:counter:<kind>:<market>:<date>` now. Both readings
+  // are zero, and that mismatch is older than the market segment.
+  //
+  // Deliberately not repaired by pointing this at the new keys: reading a
+  // `GLOBAL` bucket as if it were a market is the failure both halves of
+  // AUD2-095 exist to prevent, and a scoped admin is refused outright rather
+  // than shown a platform-wide total under their market's name. Plan C1 routes
+  // this report to order-service, where every order carries its own
+  // region_code and per-market revenue is a query rather than a counter.
   async getRevenueReport(
     startDate: string,
     endDate: string,
@@ -644,10 +710,32 @@ export class AdminService {
     };
   }
 
-  // ── Increment Counter (called by other services via Kafka) ─────────────────
-  async incrementCounter(counter: string, value = 1) {
-    const key = `admin:counter:${counter}`;
-    const current = parseInt((await this.redis.get(key)) ?? '0', 10);
-    await this.redis.set(key, String(current + value), 86400 * 365);
+  // ── Increment Counter (called by other services) ───────────────────────────
+  private static readonly COUNTER_TTL_SECONDS = 86400 * 365;
+
+  /**
+   * A dashboard counter, bucketed by market.
+   *
+   * These keys had no market segment at all, so there was exactly one revenue
+   * figure and one order count for the whole platform and no per-market number
+   * could ever be produced from them (audit C §2 #5 / AUD2-095). `GLOBAL` is
+   * the bucket for an event that genuinely carries no market, so "not yet
+   * attributed" stays distinguishable from "everyone's".
+   *
+   * The old unsegmented keys are left where they are, unread, and expire with
+   * their existing one-year TTL.
+   *
+   * `kind` is `revenue` or `orders` — the platform produces no others — but is
+   * typed as a string because the one caller is this service's own
+   * `POST /counter/increment`, which reads it out of a request body. `amount`
+   * is summed as a float: revenue is not an integer and `parseInt` used to
+   * truncate it.
+   */
+  async incrementCounter(kind: string, amount = 1, market?: string): Promise<void> {
+    const bucket = marketPredicate(market) ?? 'GLOBAL';
+    const dateKey = new Date().toISOString().slice(0, 10);
+    const key = `admin:counter:${kind}:${bucket}:${dateKey}`;
+    const current = Number((await this.redis.get(key)) ?? 0);
+    await this.redis.set(key, String(current + amount), AdminService.COUNTER_TTL_SECONDS);
   }
 }

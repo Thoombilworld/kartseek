@@ -18,7 +18,7 @@ import { MainDataSource } from './data-source.main';
  * the three newest were applied by hand, which is precisely why the gap stayed
  * invisible.
  *
- * A glob cannot express "these five go elsewhere", so both DataSources now name
+ * A glob cannot express "these six go elsewhere", so both DataSources now name
  * their migrations. Naming them is only safe if something notices a file that
  * belongs to neither list — which is this spec. It reads `options.migrations`
  * from the two DataSources rather than the source text, so what is asserted is
@@ -67,7 +67,7 @@ describe('migration classification', () => {
   });
 
   it('sends the main-database migrations to the main-database DataSource', () => {
-    // The five whose `up()` targets `users`, `order.orders`, `admin.*`, or a
+    // The six whose `up()` targets `users`, `order.orders`, `admin.*`, or a
     // table the gateway process itself owns. `data-source.main.ts` carries the
     // reasoning per file; this is the list that reasoning produced.
     expect(main.sort()).toEqual(
@@ -77,6 +77,7 @@ describe('migration classification', () => {
         '1786501600000-UserRegionScope.ts',
         '1786501700000-OrderMarket.ts',
         '1786501800000-AdminRoles.ts',
+        '1786501900000-UserMarketBackfill.ts',
       ].sort(),
     );
   });

@@ -3,9 +3,22 @@ import { ForbiddenException, NotImplementedException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 
 /** Minimal doubles: a Redis with the pending-KYC keys, an EntityManager whose
- *  query builder records the predicates it was given, a Kafka that swallows. */
-function makeService(overrides: { userCountry?: string | null; kyc?: Record<string, any> } = {}) {
+ *  query builder records the predicates it was given, a Kafka that swallows.
+ *
+ *  `userRegion` is what the `users` row hands back as its market on a ban/unban
+ *  check; `index` seeds `admin:users:index` and `dbDown` switches the database
+ *  off (`em: null`), which is the only way to reach the Redis fallback. */
+function makeService(
+  overrides: {
+    userRegion?: string | null;
+    kyc?: Record<string, any>;
+    index?: any[];
+    rows?: any[];
+    dbDown?: boolean;
+  } = {},
+) {
   const store = new Map<string, any>(Object.entries(overrides.kyc ?? {}));
+  if (overrides.index) store.set('admin:users:index', overrides.index);
   const redis = {
     keys: vi.fn(async (pattern: string) =>
       [...store.keys()].filter((k) => k.startsWith(pattern.replace('*', ''))),
@@ -20,8 +33,16 @@ function makeService(overrides: { userCountry?: string | null; kyc?: Record<stri
   };
   const kafka = { publish: vi.fn(async () => undefined) };
   const where: string[] = [];
+  const selects: string[] = [];
   const qb: any = {
-    select: () => qb,
+    select: (s: string) => {
+      selects.push(s);
+      return qb;
+    },
+    addSelect: (s: string, alias?: string) => {
+      selects.push(alias ? `${s} AS ${alias}` : s);
+      return qb;
+    },
     from: () => qb,
     andWhere: (s: string) => {
       where.push(s);
@@ -31,33 +52,34 @@ function makeService(overrides: { userCountry?: string | null; kyc?: Record<stri
       where.push(s);
       return qb;
     },
+    clone: () => qb,
     orderBy: () => qb,
-    skip: () => qb,
-    take: () => qb,
-    getManyAndCount: async () => [[], 0],
-    getRawOne: async () => ({ u_id: 'user-1', u_country: overrides.userCountry ?? 'IN' }),
+    offset: () => qb,
+    limit: () => qb,
+    getRawMany: async () => overrides.rows ?? [],
+    // The service's own aliases: `u_total` for the count, and the two columns
+    // `userMarket` asks for. The names matter — a metadata-less alias returns
+    // exactly the aliases the SQL names, which is what the `u_`-prefixed read
+    // used to get wrong.
+    getRawOne: async () => ({
+      total: String((overrides.rows ?? []).length),
+      u_id: 'user-1',
+      u_region_code: overrides.userRegion ?? null,
+    }),
   };
   const em: any = { createQueryBuilder: () => qb, query: vi.fn(async () => [{ id: 'user-1' }]) };
   // Constructor order as of 2026-09-11: (redis, kafka, layoutRepo, em).
-  const svc = new AdminService(redis as any, kafka as any, {} as any, em);
-  return { svc, where, kafka, store };
+  const svc = new AdminService(redis as any, kafka as any, {} as any, overrides.dbDown ? null : em);
+  return { svc, where, selects, kafka, store };
 }
 
 describe('AdminService market scope', () => {
-  it('adds the scope predicate to the users list and ignores a conflicting country', async () => {
-    const { svc, where } = makeService();
-    await svc.getUsersList(1, 20, undefined, 'IN', undefined, 'QA');
-    expect(where.some((w) => w.includes('u.country = :scope'))).toBe(true);
-    expect(where.some((w) => w.includes('u.country = :country'))).toBe(false);
-  });
-
-  it('refuses to ban a user from another market', async () => {
-    const { svc, kafka } = makeService({ userCountry: 'IN' });
-    await expect(svc.banUser('user-1', 'fraud', 'admin-qa', 'QA')).rejects.toThrow(
-      ForbiddenException,
-    );
-    expect(kafka.publish).not.toHaveBeenCalled();
-  });
+  // The two `it`s that used to open this block — "adds the scope predicate to
+  // the users list" and "refuses to ban a user from another market" — asserted
+  // the predicate and the ban check against `u.country`. Both are superseded by
+  // the `u.region_code` block at the bottom of this file, which covers the same
+  // two cases plus the NULL one; keeping them would have asserted the very
+  // column audit V6 says must not be read.
 
   it("lists only the scoped market's pending KYC records", async () => {
     const { svc } = makeService({
@@ -81,7 +103,7 @@ describe('AdminService market scope', () => {
     expect(store.has('admin:kyc:pending:seller:b')).toBe(true);
   });
 
-  it('adds a country predicate to the dashboard aggregate and keys the cache by scope', async () => {
+  it('adds a market predicate to the dashboard aggregate and keys the cache by scope', async () => {
     const query = vi.fn(async () => [{}]);
     const redis = {
       keys: vi.fn(async () => []),
@@ -99,7 +121,10 @@ describe('AdminService market scope', () => {
     await svc.getDashboardStats('QA');
 
     const usersCall = query.mock.calls.find((c) => String(c[0]).includes('public.users'));
-    expect(usersCall?.[0]).toEqual(expect.stringContaining('country = $2'));
+    // region_code, not country: the counter under a market's name has to count
+    // the same rows the users list under that market shows.
+    expect(usersCall?.[0]).toEqual(expect.stringContaining('region_code = $2'));
+    expect(usersCall?.[0]).not.toEqual(expect.stringContaining('country = $2'));
     expect(usersCall?.[1]).toEqual([today, 'QA']);
 
     const ordersCall = query.mock.calls.find((c) => String(c[0]).includes('order".orders'));
@@ -122,8 +147,8 @@ describe('AdminService market scope', () => {
       getJson: vi.fn(async (k: string) =>
         k === 'admin:users:index'
           ? [
-              { id: 'u-qa', country: 'QA' },
-              { id: 'u-in', country: 'IN' },
+              { id: 'u-qa', regionCode: 'QA' },
+              { id: 'u-in', regionCode: 'IN' },
             ]
           : null,
       ),
@@ -139,5 +164,110 @@ describe('AdminService market scope', () => {
 
     expect(res.data.map((u: any) => u.id)).toEqual(['u-qa']);
     expect(res.total).toBe(1);
+  });
+});
+
+describe('AdminService scopes users on the market the claim is minted from', () => {
+  it('narrows the users list on u.region_code, not on u.country', async () => {
+    const { svc, where } = makeService();
+    await svc.getUsersList(1, 20, undefined, undefined, undefined, 'QA');
+    expect(where.some((w) => w.includes('u.region_code = :scope'))).toBe(true);
+    // `users.country` defaults to 'IN' on every row, so scoping on it handed an
+    // IN admin every customer on the platform and a QA admin none (audit V6).
+    expect(where.some((w) => w.includes('u.country'))).toBe(false);
+  });
+
+  it('ignores a conflicting ?country= filter when the caller is locked', async () => {
+    const { svc, where } = makeService();
+    await svc.getUsersList(1, 20, undefined, 'IN', undefined, 'QA');
+    expect(where.filter((w) => w.includes('region_code'))).toEqual(['u.region_code = :scope']);
+  });
+
+  it('lets a global admin filter by market without a scope predicate', async () => {
+    const { svc, where } = makeService();
+    await svc.getUsersList(1, 20, undefined, 'in', undefined, undefined);
+    expect(where).toContain('u.region_code = :market');
+    expect(where.some((w) => w.includes(':scope'))).toBe(false);
+  });
+
+  it('refuses to ban a user whose region_code is another market, and one with none at all', async () => {
+    for (const region of ['IN', null]) {
+      const { svc, kafka } = makeService({ userRegion: region });
+      await expect(svc.banUser('user-1', 'fraud', 'admin-qa', 'QA')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(kafka.publish).not.toHaveBeenCalled();
+    }
+  });
+
+  it('bans a user in the same market — the control', async () => {
+    const { svc, kafka } = makeService({ userRegion: 'QA' });
+    await expect(svc.banUser('user-1', 'fraud', 'admin-qa', 'QA')).resolves.toBeDefined();
+    expect(kafka.publish).toHaveBeenCalled();
+  });
+
+  it('excludes an unattributable user from the Redis fallback list rather than showing them', async () => {
+    const { svc } = makeService({
+      index: [
+        { id: 'a', regionCode: 'QA' },
+        { id: 'b', regionCode: 'IN' },
+        { id: 'c', regionCode: null, country: 'IN' },
+      ],
+      dbDown: true,
+    });
+    const res = await svc.getUsersList(1, 20, undefined, undefined, undefined, 'QA');
+    expect(res.data.map((u: any) => u.id)).toEqual(['a']);
+  });
+});
+
+/**
+ * The two faults the live probe of this change found, both older than it.
+ *
+ * Neither is about which column is read, which is why the scope specs above
+ * passed throughout: the users list could not return a row at all, and the
+ * ban check could not read a market at all. The first made every market's list
+ * empty; the second refused a locked admin every ban, including in their own
+ * market, and said the account "belongs to every market" while doing it.
+ */
+describe('AdminService reads a table it has no entity metadata for', () => {
+  it('returns the rows the database gave it instead of falling through to Redis', async () => {
+    const { svc } = makeService({
+      rows: [
+        { id: 'a', email: 'a@x.test', region_code: 'QA' },
+        { id: 'b', email: 'b@x.test', region_code: 'QA' },
+      ],
+    });
+    const res = await svc.getUsersList(1, 20, undefined, undefined, undefined, 'QA');
+    // `getManyAndCount()` threw on every call ("Cannot get entity metadata for
+    // the given alias u"), so this used to be [] with total 0 for everybody.
+    expect(res.data.map((u: any) => u.id)).toEqual(['a', 'b']);
+    expect(res.total).toBe(2);
+  });
+
+  it('never selects passwordHash or refreshToken into a list response', async () => {
+    const { svc, selects } = makeService({ rows: [] });
+    await svc.getUsersList(1, 20);
+    const columns = selects.join(' ');
+    expect(columns).toContain('u.region_code');
+    expect(columns).not.toContain('passwordHash');
+    expect(columns).not.toContain('refreshToken');
+  });
+
+  it('searches the columns the table has, not a u.name that does not exist', async () => {
+    const { svc, where } = makeService({ rows: [] });
+    await svc.getUsersList(1, 20, undefined, undefined, 'ali');
+    const search = where.find((w) => w.includes('ILIKE'));
+    expect(search).toBeDefined();
+    expect(search).toContain('u."firstName"');
+    expect(search).not.toContain('u.name ');
+  });
+
+  it('aliases the market column so the ban check can actually read it', async () => {
+    const { svc, selects } = makeService({ userRegion: 'QA' });
+    await svc.banUser('user-1', 'fraud', 'admin-qa', 'QA');
+    // Without the explicit alias the raw row comes back as { id, region_code }
+    // and `u_region_code` is undefined — which reads as "no market" and fails
+    // closed on every ban a locked admin attempts.
+    expect(selects).toContain('u.region_code AS u_region_code');
   });
 });

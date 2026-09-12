@@ -51,7 +51,7 @@ import { DataSource } from 'typeorm';
  * a shadow table there.
  *
  * ═══════════════════════════════════════════════════════════════════════════
- * CLASSIFICATION — why these five files and no others
+ * CLASSIFICATION — why these six files and no others
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Every migration's `up()` was read and assigned to exactly one DataSource.
@@ -92,6 +92,13 @@ import { DataSource } from 'typeorm';
  *       `ALTER TABLE "users" ADD COLUMN "admin_role_id"`. The one whose absence
  *       takes every staff login down.
  *
+ *   1786501900000-UserMarketBackfill
+ *       Backfills `users.region_code` from `"order".orders.region_code`, adds
+ *       the ISO-2 CHECK and `IDX_users_region_code`. Reads the `order` schema
+ *       and writes `users`; both live in this database. Its revert ledger,
+ *       `public.user_region_backfill_1786501900000`, is created and dropped by
+ *       the migration itself.
+ *
  * Deliberately **not** here, though each mentions `users` somewhere:
  *
  *   1719468000000-InitialMarketplaceSchema
@@ -121,7 +128,7 @@ import { DataSource } from 'typeorm';
  * Nothing in `migrations/` creates `public.users` in *this* database. It was
  * built by `synchronize` before the databases were split, and the main database
  * is the one that does not synchronize. A genuinely empty main database needs
- * that table before any of the five below can alter it.
+ * that table before any of the six below can alter it.
  */
 export const MainDataSource = new DataSource({
   type: 'postgres',
@@ -138,6 +145,7 @@ export const MainDataSource = new DataSource({
     'migrations/1786501600000-UserRegionScope.ts',
     'migrations/1786501700000-OrderMarket.ts',
     'migrations/1786501800000-AdminRoles.ts',
+    'migrations/1786501900000-UserMarketBackfill.ts',
   ],
   migrationsTableName: 'migrations',
   // One transaction per migration, matching the marketplace DataSource: a
