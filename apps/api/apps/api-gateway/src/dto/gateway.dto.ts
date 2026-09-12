@@ -844,10 +844,17 @@ export class ThreatStatusResponseDto {
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
 export class KycUploadResponseDto {
-  @ApiProperty({ example: 'KYC Document securely uploaded to object storage.' })
+  @ApiProperty({ example: 'KYC document stored and queued for admin review.' })
   message: string;
 
-  @ApiProperty({ example: 'national_id.pdf' })
+  /**
+   * The STORED KEY, not a public URL and not the name the applicant's file had.
+   *
+   * The example used to be `national_id.pdf`, and the handler used to answer
+   * with an opaque id for an object it had never written. The key is
+   * `kyc/<market>/<userId>/<uuid>.<ext>` and it resolves.
+   */
+  @ApiProperty({ example: 'kyc/QA/usr_ab12/8f1c…-…-….pdf' })
   filename: string;
 
   @ApiProperty({ example: 245760, description: 'File size in bytes' })

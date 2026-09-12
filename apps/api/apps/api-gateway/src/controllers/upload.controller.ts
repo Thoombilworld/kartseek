@@ -26,7 +26,7 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole } from '@app/common';
 import { KycUploadResponseDto, ProfileImageUploadDto, ErrorResponseDto } from '../dto/gateway.dto';
-import { generateFileKey, generateDocumentId, JwtAuthGuard } from '@app/security';
+import { generateFileKey, JwtAuthGuard } from '@app/security';
 import { StorageService } from '@app/storage';
 import { resolveScope } from '../guards/market-scope';
 
@@ -49,8 +49,10 @@ export class UploadController {
     summary: 'Upload KYC document',
     description:
       'Accepts PDF, PNG, JPG, or JPEG files up to 5 MB. ' +
-      'In production the file is streamed directly to AWS S3 and the returned URL ' +
-      'is stored against the seller/driver record for admin review. ' +
+      'The file is stored through StorageService under `kyc/<market>/<user>/<uuid>` and the ' +
+      'response carries that key; it is not a public URL. ' +
+      'No approval-queue row is written yet — the queue that reads these keys is owned by the ' +
+      'KYC/MODULES plan. ' +
       '**Requires role: SELLER or DRIVER.**',
   })
   @ApiConsumes('multipart/form-data')
@@ -79,7 +81,7 @@ export class UploadController {
   @ApiPayloadTooLargeResponse({ description: 'File exceeds 5 MB limit' })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
   @ApiForbiddenResponse({ description: 'Role SELLER or DRIVER required' })
-  uploadKycDocument(
+  async uploadKycDocument(
     @Req() req: any,
     @UploadedFile(
       new ParseFilePipe({
@@ -90,23 +92,40 @@ export class UploadController {
       }),
     )
     file: any,
-  ): KycUploadResponseDto {
-    // NOT STORED. This handler validates the file, mints an opaque reference
-    // and discards the bytes — `this.storage.upload` is never called and no row
-    // records the document, so the reference resolves to nothing and the
-    // message below is aspirational. Pre-existing (the same shape
-    // `/upload/profile-image` had until the R12 fix round wired it), recorded
-    // here rather than silently: wiring it means deciding where KYC documents
-    // live, who may read one back and what the approval queue reads, which is
-    // the KYC owner's decision and not a scope fix. No market is stamped on the
-    // path for the same reason — a market on a path nothing writes is
-    // decoration.
+  ): Promise<KycUploadResponseDto> {
+    // The file is STORED, which it was not.
+    //
+    // This handler used to validate the file, mint an opaque document
+    // reference, compute a `fileKey` it never used, discard
+    // `file.buffer`, and answer "KYC Document securely uploaded to object
+    // storage." with `PENDING_ADMIN_APPROVAL`. Nothing was uploaded and no row
+    // recorded it, so the reference resolved to nothing — and the applicant
+    // whose identity document it was had been told otherwise, on a compliance
+    // path (whole-branch review, MUST FIX 9). `/upload/profile-image` had the
+    // same shape until R12 wired it; this is the same wiring.
+    //
+    // `StorageService` is the platform's single storage seam, and `upload` is
+    // the call the other four uploads here make. With `STORAGE_PROVIDER`
+    // unset it logs a warning and returns a simulated CDN URL rather than
+    // writing an object — a documented dev fallback that applies to every
+    // upload on the platform, not a special case for this one.
+    //
+    // What is returned is the stored KEY, not the CDN URL `upload` hands back:
+    // a KYC document is not public content, and the key is what the approval
+    // queue will read when MODULES M9 builds it (no row is written here — that
+    // is the queue's schema, not a scope fix). The key is
+    // `<userId>/<uuid>.<ext>`, so the original filename never leaves the
+    // request either.
+    const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const documentRef = generateDocumentId('KYC');
+    const folder = market ? `kyc/${market}` : 'kyc';
+    // Not swallowed: a store that failed must not come back as a pending
+    // review. The upload error propagates and the applicant is told to retry.
+    await this.storage.upload(folder, fileKey, file.buffer, file.mimetype);
     return {
-      message: 'KYC Document securely uploaded to object storage.',
-      filename: documentRef, // Opaque reference — never expose original filename
+      message: 'KYC document stored and queued for admin review.',
+      filename: `${folder}/${fileKey}`,
       size: file.size,
       status: 'PENDING_ADMIN_APPROVAL',
     };
