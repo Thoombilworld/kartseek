@@ -133,6 +133,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // offer with this id" was answered 500 — indistinguishable from a crash, and
     // it made every admin edit screen look broken when the record simply did not
     // exist. Matched by name so this file need not import typeorm.
+    // Redis is down and this is production, where there is no in-memory
+    // emulator to answer from. 503, not 500: the request is not malformed and
+    // the code did not crash — a dependency is unavailable, which is a
+    // different instruction to the caller (retry) and to a load balancer.
+    // Matched by name so this file needs no import from `@app/redis`, the same
+    // way EntityNotFoundError is matched without importing typeorm.
+    if (exception instanceof Error && exception.name === 'RedisUnavailableError') {
+      return {
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        message: this.isProd
+          ? 'A required service is temporarily unavailable. Please retry.'
+          : exception.message,
+        errorCode: 'REDIS_UNAVAILABLE',
+        stack: exception.stack,
+      };
+    }
+
     if (exception instanceof Error && exception.name === 'EntityNotFoundError') {
       return {
         statusCode: HttpStatus.NOT_FOUND,

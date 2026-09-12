@@ -103,7 +103,16 @@ export class HealthService {
 
   private async redisCheck(): Promise<DependencyStatus> {
     try {
-      return await this.redis!.health();
+      const result = await this.redis!.health();
+      // Logged because the wire form an unauthenticated caller sees is one word
+      // per dependency, and `degraded` alone cannot tell a developer whether
+      // Redis was switched off on purpose (`SKIP_REDIS=true`) or has quietly
+      // died under them. The reason belongs where they will actually read it.
+      if (result.status !== 'up' && result.status !== 'skipped')
+        this.logger.warn(
+          `[health] redis is ${result.status}${result.reason ? ` (${result.reason})` : ''}: ${result.detail ?? result.error ?? 'no detail'}`,
+        );
+      return result;
     } catch (err) {
       return { status: 'down', error: err instanceof Error ? err.message : String(err) };
     }

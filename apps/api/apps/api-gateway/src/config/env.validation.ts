@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { STORE_EMULATOR_SWITCHES, devOnlyStoreSwitch } from '@app/common';
 
 /**
  * KARTSEEK API Gateway — Environment Variable Validation Schema
@@ -14,10 +15,13 @@ export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   API_GATEWAY_PORT: Joi.number().port().default(3001),
 
-  // ── Skip Flags (dev convenience) ─────────────────────────────────────────
-  SKIP_DB: Joi.string().valid('true', 'false').default('false'),
-  SKIP_KAFKA: Joi.string().valid('true', 'false').default('false'),
-  SKIP_REDIS: Joi.string().valid('true', 'false').default('false'),
+  // ── Skip Flags (dev convenience, refused in production) ──────────────────
+  // Each of these swaps a shared store for an in-process emulator, so each is
+  // rejected at boot when NODE_ENV=production. The rule is the shared one from
+  // `@app/common` rather than a copy, because the gateway and the other 25
+  // services disagreeing about which environments may run on an emulator is
+  // precisely how one of them would end up doing it.
+  ...Object.fromEntries(STORE_EMULATOR_SWITCHES.map((f) => [f, devOnlyStoreSwitch(f)])),
 
   // ── Dev Auth Bypass ───────────────────────────────────────────────────────
   DEV_AUTH_BYPASS: Joi.string().valid('true', 'false').default('false'),

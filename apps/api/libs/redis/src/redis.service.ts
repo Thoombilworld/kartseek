@@ -1,13 +1,29 @@
 import { Injectable, type OnModuleInit, type OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { RedisUnavailableError } from './redis-unavailable.error';
+
+/** Why the real client cannot serve. `skipped` is the only one that was asked for. */
+export type RedisUnavailableReason = 'skipped' | 'no-client' | 'not-ready' | 'command-failed';
 
 /**
  * RedisService — High-performance Redis caching & storage client.
  *
- * Implements a complete local in-memory fallback emulator when:
- *  - SKIP_REDIS=true is set in the environment.
- *  - Redis is unreachable (resilient fail-over to in-memory).
+ * Outside production it carries a complete in-memory emulator, which serves
+ * whenever the real client cannot:
+ *  - SKIP_REDIS=true is set in the environment (a deliberate opt-in), or
+ *  - the client was never constructed, or has not reached `ready`.
+ *
+ * **In production there is no emulator.** It used to engage on all three of
+ * those conditions with no environment gate, and only the first is deliberate:
+ * the other two are exactly what a real, unrecovered outage looks like, because
+ * ioredis's `retryStrategy` retries for ever and `status` sits at
+ * `reconnecting` rather than reaching a terminal state. So a production outage
+ * read as `degraded`, answered HTTP 200, stayed in the load balancer, and every
+ * pod diverged onto its own private sessions, carts, refresh slots, rate-limit
+ * buckets and OTPs — AUD2-024 relabelled rather than closed. In production the
+ * same conditions make `health()` report `down` (readiness 503) and every
+ * operation throw `RedisUnavailableError`, which the shared filter maps to 503.
  *
  * Prevents MaxRetriesPerRequestError by setting maxRetriesPerRequest to null,
  * allowing background reconnection attempts without blocking application bootstrap.
@@ -17,6 +33,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: Redis | null = null;
   private readonly logger = new Logger(RedisService.name);
   private isSkipped = false;
+  /** Set when the client could not even be constructed; surfaced by `health()`. */
+  private initError: string | null = null;
 
   // In-memory fallback databases for offline developer mode
   private readonly memoryDb = new Map<string, string>();
@@ -64,8 +82,62 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.client.on('reconnecting', () => this.logger.warn('🔄 Redis reconnecting...'));
     } catch (err: any) {
       this.logger.error(`❌ Failed to initialize Redis client: ${err?.message}`);
-      this.isSkipped = true;
+      this.client = null;
+      // Outside production, a client that cannot even be constructed is the
+      // same situation as no Redis at all, and the emulator takes over.
+      //
+      // `isSkipped = true` unconditionally was wrong in production for a
+      // different reason than the emulator itself: `skipped` is the one verdict
+      // that means "this was on purpose", so a construction failure would have
+      // been reported as a deliberate choice. It now stays `false` and
+      // `health()` answers `down` with reason `no-client`.
+      this.isSkipped = !this.isProduction();
+      this.initError = err?.message ?? 'client construction failed';
     }
+  }
+
+  /**
+   * Read at call time, never cached at construction: a spec needs to exercise
+   * both environments in one process, and a module-level constant would fix the
+   * answer at import.
+   */
+  private isProduction(): boolean {
+    return process.env.NODE_ENV === 'production';
+  }
+
+  /** Why the real client cannot serve right now, or null when it can. */
+  private unavailableReason(): RedisUnavailableReason | null {
+    if (this.isSkipped) return 'skipped';
+    if (!this.client) return 'no-client';
+    if (this.client.status !== 'ready') return 'not-ready';
+    return null;
+  }
+
+  /**
+   * The single gate in front of the in-memory emulator.
+   *
+   * Returns true when the emulator may serve this call, which is only ever
+   * outside production. In production it throws instead, so nothing is written
+   * into a Map that no other pod can read and no caller is handed an answer
+   * that was invented locally.
+   */
+  private emulatorMayServe(reason: RedisUnavailableReason): boolean {
+    if (this.isProduction()) throw new RedisUnavailableError(reason);
+    return true;
+  }
+
+  /**
+   * A command failed on a client that had reached `ready`.
+   *
+   * Outside production the emulator absorbs it. In production it is an outage,
+   * not a cache miss: a `maxmemory` OOM and a mid-flight disconnect both land
+   * here with `status` still `ready`, and both used to be answered silently
+   * from a private Map.
+   */
+  private assertEmulatorAllowed(err?: unknown): void {
+    if (!this.isProduction()) return;
+    const detail = err instanceof Error ? err.message : err === undefined ? '' : String(err);
+    throw new RedisUnavailableError(detail ? `command-failed: ${detail}` : 'command-failed');
   }
 
   onModuleDestroy() {
@@ -75,7 +147,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   private useMemory(): boolean {
-    return this.isSkipped || !this.client || this.client.status !== 'ready';
+    const reason = this.unavailableReason();
+    return reason === null ? false : this.emulatorMayServe(reason);
   }
 
   // ─── Core String Ops ──────────────────────────────────────────────────────
@@ -86,6 +159,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       return await this.client!.get(key);
     } catch (err: any) {
+      this.assertEmulatorAllowed(err);
       this.logger.warn(`Redis GET failed: ${err.message}. Falling back to memory.`);
       return this.memoryDb.get(key) || null;
     }
@@ -100,6 +174,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       if (ttlSeconds) await this.client!.setex(key, ttlSeconds, value);
       else await this.client!.set(key, value);
     } catch (err: any) {
+      this.assertEmulatorAllowed(err);
       this.logger.warn(`Redis SET failed: ${err.message}. Falling back to memory.`);
       this.memoryDb.set(key, value);
     }
@@ -118,6 +193,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client!.del(key);
     } catch (err: any) {
+      this.assertEmulatorAllowed(err);
       this.logger.warn(`Redis DEL failed: ${err.message}.`);
       this.memoryDb.delete(key);
     }
@@ -130,6 +206,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       return (await this.client!.exists(key)) === 1;
     } catch (err: any) {
+      this.assertEmulatorAllowed(err);
       return this.memoryDb.has(key);
     }
   }
@@ -139,6 +216,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client!.expire(key, seconds);
     } catch (err: any) {
+      this.assertEmulatorAllowed(err);
       this.logger.warn(`Redis EXPIRE failed: ${err.message}`);
     }
   }
@@ -147,7 +225,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (this.useMemory()) return -1;
     try {
       return await this.client!.ttl(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return -1;
     }
   }
@@ -180,7 +259,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.keys(pattern);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return [];
     }
   }
@@ -203,7 +283,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.scan(cursor, ...(args as []));
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return ['0', []];
     }
   }
@@ -214,7 +295,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (!raw) return null;
     try {
       return JSON.parse(raw) as T;
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return null;
     }
   }
@@ -244,7 +326,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.mget(...keys);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return keys.map((k) => this.memoryDb.get(k) || null);
     }
   }
@@ -259,7 +342,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       if (!r) return null;
       try {
         return JSON.parse(r) as T;
-      } catch {
+      } catch (err) {
+        this.assertEmulatorAllowed(err);
         return null;
       }
     });
@@ -277,7 +361,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.hmget(key, ...fields);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const hash = this.hashDb.get(key);
       return fields.map((f) => hash?.get(f) || null);
     }
@@ -292,7 +377,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.incr(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const val = parseInt(this.memoryDb.get(key) || '0', 10) + 1;
       this.memoryDb.set(key, String(val));
       return val;
@@ -307,7 +393,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.incrby(key, by);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const val = parseInt(this.memoryDb.get(key) || '0', 10) + by;
       this.memoryDb.set(key, String(val));
       return val;
@@ -322,7 +409,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.decr(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const val = parseInt(this.memoryDb.get(key) || '0', 10) - 1;
       this.memoryDb.set(key, String(val));
       return val;
@@ -338,7 +426,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       await this.client!.hset(key, field, value);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.hashDb.has(key)) this.hashDb.set(key, new Map());
       this.hashDb.get(key)!.set(field, value);
     }
@@ -350,7 +439,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.hget(key, field);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return this.hashDb.get(key)?.get(field) || null;
     }
   }
@@ -366,7 +456,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.hgetall(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const res: Record<string, string> = {};
       const fields = this.hashDb.get(key);
       if (fields) {
@@ -383,7 +474,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       await this.client!.hdel(key, field);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       this.hashDb.get(key)?.delete(field);
     }
   }
@@ -399,7 +491,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       await this.client!.hmset(key, data);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.hashDb.has(key)) this.hashDb.set(key, new Map());
       const map = this.hashDb.get(key)!;
       for (const [f, v] of Object.entries(data)) {
@@ -415,7 +508,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.hkeys(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const map = this.hashDb.get(key);
       return map ? Array.from(map.keys()) : [];
     }
@@ -428,7 +522,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.hvals(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const map = this.hashDb.get(key);
       return map ? Array.from(map.values()) : [];
     }
@@ -450,7 +545,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.sadd(key, ...members);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.setDb.has(key)) this.setDb.set(key, new Set());
       const set = this.setDb.get(key)!;
       let added = 0;
@@ -476,7 +572,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.srem(key, ...members);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const set = this.setDb.get(key);
       if (!set) return 0;
       let removed = 0;
@@ -494,7 +591,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.smembers(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const set = this.setDb.get(key);
       return set ? Array.from(set) : [];
     }
@@ -506,7 +604,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return (await this.client!.sismember(key, member)) === 1;
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return this.setDb.get(key)?.has(member) || false;
     }
   }
@@ -517,7 +616,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.scard(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return this.setDb.get(key)?.size || 0;
     }
   }
@@ -531,7 +631,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.lpush(key, ...values);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.listDb.has(key)) this.listDb.set(key, []);
       this.listDb.get(key)!.unshift(...values.reverse());
       return this.listDb.get(key)!.length;
@@ -546,7 +647,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.rpush(key, ...values);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.listDb.has(key)) this.listDb.set(key, []);
       this.listDb.get(key)!.push(...values);
       return this.listDb.get(key)!.length;
@@ -561,7 +663,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.lrange(key, start, stop);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const list = this.listDb.get(key) || [];
       const end = stop === -1 ? list.length : stop + 1;
       return list.slice(start, end);
@@ -577,7 +680,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       await this.client!.ltrim(key, start, stop);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const list = this.listDb.get(key) || [];
       const end = stop === -1 ? list.length : stop + 1;
       this.listDb.set(key, list.slice(start, end));
@@ -590,7 +694,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.llen(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return this.listDb.get(key)?.length || 0;
     }
   }
@@ -606,7 +711,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.zadd(key, score, member);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.zsetDb.has(key)) this.zsetDb.set(key, new Map());
       const map = this.zsetDb.get(key)!;
       const isNew = !map.has(member);
@@ -625,7 +731,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.zrange(key, start, stop);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const map = this.zsetDb.get(key);
       if (!map) return [];
       const sorted = Array.from(map.entries()).sort((a, b) => a[1] - b[1]);
@@ -665,7 +772,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       if (withScores)
         return await (this.client as any).zrange(key, start, stop, 'REV', 'WITHSCORES');
       return await (this.client as any).zrange(key, start, stop, 'REV');
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const map = this.zsetDb.get(key);
       if (!map) return [];
       const sorted = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
@@ -700,7 +808,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.zrem(key, member);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const map = this.zsetDb.get(key);
       if (!map) return 0;
       return map.delete(member) ? 1 : 0;
@@ -714,7 +823,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.zscore(key, member);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const val = this.zsetDb.get(key)?.get(member);
       return val !== undefined ? String(val) : null;
     }
@@ -726,7 +836,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.zcard(key);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return this.zsetDb.get(key)?.size || 0;
     }
   }
@@ -742,7 +853,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.zincrby(key, increment, member);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.zsetDb.has(key)) this.zsetDb.set(key, new Map());
       const map = this.zsetDb.get(key)!;
       const current = map.get(member) || 0;
@@ -761,7 +873,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       return await this.client!.geoadd(key, longitude, latitude, member);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       if (!this.geoDb.has(key)) this.geoDb.set(key, new Map());
       this.geoDb.get(key)!.set(member, { lng: longitude, lat: latitude });
       return 1;
@@ -778,7 +891,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       if (!result || !result[0]) return null;
       const [lon, lat] = result[0] as [string, string];
       return [parseFloat(lon), parseFloat(lat)];
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       const coords = this.geoDb.get(key)?.get(member);
       return coords ? [coords.lng, coords.lat] : null;
     }
@@ -816,7 +930,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       const d = (await (this.client as any).geodist(key, member1, member2, unit)) as string | null;
       return d ? parseFloat(d) : null;
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return null;
     }
   }
@@ -881,7 +996,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         lng: parseFloat((r[2] as string[])[0]),
         lat: parseFloat((r[2] as string[])[1]),
       }));
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return [];
     }
   }
@@ -893,7 +1009,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       await this.client!.zrem(key, member);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       this.geoDb.get(key)?.delete(member);
     }
   }
@@ -903,7 +1020,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (this.useMemory()) return 0;
     try {
       return await this.client!.publish(channel, message);
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return 0;
     }
   }
@@ -926,7 +1044,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (this.useMemory()) return 'PONG (memory)';
     try {
       return await this.client!.ping();
-    } catch {
+    } catch (err) {
+      this.assertEmulatorAllowed(err);
       return 'PONG (memory fallback)';
     }
   }
@@ -938,28 +1057,53 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * whenever the client is not ready — and the gateway mapped anything starting
    * with "pong" to `up`. So a Redis outage read as healthy while all 26
    * processes silently diverged onto private in-process sessions, refresh
-   * slots, rate-limit buckets, OTPs and carts (AUD2-024). The emulator is a
-   * development convenience, never a passing dependency: it reports
-   * `degraded` with `emulated: true`, and only an explicit SKIP_REDIS=true
-   * makes that a deliberate `skipped`.
+   * slots, rate-limit buckets, OTPs and carts (AUD2-024).
+   *
+   * Three verdicts, and `reason` is what separates them:
+   *
+   *  - **production, cannot serve** → `down`. There is no emulator here, so this
+   *    is a hard failure and readiness answers 503. `degraded` would have kept
+   *    the pod in the load balancer for ever while it served private state.
+   *  - **development, SKIP_REDIS=true** → `skipped`, reason `skipped`. Deliberate.
+   *  - **development, client not ready** → `degraded` + `emulated: true`, reason
+   *    `not-ready`. Same emulator, *different reason* — without that distinction
+   *    a developer whose Redis had quietly died read the same line as one who
+   *    had switched it off on purpose.
    */
   async health(): Promise<{
     status: 'up' | 'degraded' | 'down' | 'skipped';
+    reason?: RedisUnavailableReason;
     latencyMs?: number;
     detail?: string;
     error?: string;
     emulated?: boolean;
   }> {
-    if (process.env.SKIP_REDIS === 'true') {
-      return { status: 'skipped', emulated: true, detail: 'SKIP_REDIS=true — in-memory emulator' };
-    }
-    if (this.useMemory()) {
+    const reason = this.unavailableReason();
+    if (reason !== null) {
+      if (this.isProduction()) {
+        return {
+          status: 'down',
+          reason,
+          detail: 'no in-memory fallback exists in production',
+          error:
+            reason === 'skipped'
+              ? 'SKIP_REDIS=true reached a production process'
+              : (this.initError ??
+                `client ${reason === 'no-client' ? 'was never constructed' : `status: ${this.client?.status}`}`),
+        };
+      }
       return {
-        status: 'degraded',
+        status: reason === 'skipped' ? 'skipped' : 'degraded',
+        reason,
         emulated: true,
         detail:
-          'in-memory emulator: sessions, carts, rate limits and OTPs are private to this process',
-        error: this.isSkipped ? 'client not initialised' : `client status: ${this.client?.status}`,
+          reason === 'skipped'
+            ? 'SKIP_REDIS=true — in-memory emulator, switched off on purpose'
+            : `client is not ready (${reason}) — in-memory emulator: sessions, carts, rate limits and OTPs are private to this process`,
+        error:
+          reason === 'skipped'
+            ? undefined
+            : (this.initError ?? `client status: ${this.client?.status ?? 'none'}`),
       };
     }
     const t0 = Date.now();

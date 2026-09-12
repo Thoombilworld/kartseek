@@ -1,1 +1,6 @@
-export { buildEnvSchema, Joi } from './env-schema.builder';
+export {
+  buildEnvSchema,
+  devOnlyStoreSwitch,
+  STORE_EMULATOR_SWITCHES,
+  Joi,
+} from './env-schema.builder';

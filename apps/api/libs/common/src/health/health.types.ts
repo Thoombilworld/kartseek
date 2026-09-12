@@ -2,6 +2,12 @@ export type DependencyState = 'up' | 'degraded' | 'down' | 'skipped';
 
 export interface DependencyStatus {
   status: DependencyState;
+  /**
+   * Why a dependency is not `up`, from a fixed vocabulary — never a driver
+   * message. Populated by `RedisService.health()` so a `degraded` verdict can
+   * say whether the store was switched off on purpose or has quietly died.
+   */
+  reason?: string;
   latencyMs?: number;
   detail?: string;
   error?: string;
