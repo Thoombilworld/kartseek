@@ -14,32 +14,36 @@
  * an Indian admin was refused an Indian pharmacy (audit F-34). The city and
  * `zoneId` carry the sub-market detail; `regionCode` carries the market.
  *
+ * The dead `countryCode` ('IND', beside a `regionCode` of 'IN') is gone with
+ * the column: `DropDeadMarketColumns1786502400000` dropped it and the entity no
+ * longer declares it, so every store literal here was setting a property that
+ * does not exist.
+ *
  * Usage:
  *   npx ts-node --transpile-only -r tsconfig-paths/register scripts/seed-pharmacy.ts
  */
 
-import { DataSource, type DeepPartial } from 'typeorm';
-import * as path from 'path';
+import { type DeepPartial } from 'typeorm';
+import { PharmacyDataSource } from '../../../../modules/pharmacy/backend/data-source';
 
-const ds = new DataSource({
-  type: 'postgres',
-  host: process.env.PHARMACY_DB_HOST || process.env.DB_HOST || 'localhost',
-  port: +(process.env.PHARMACY_DB_PORT || process.env.DB_PORT || 5432),
-  username: process.env.PHARMACY_DB_USER || process.env.DB_USER || 'postgres',
-  password: process.env.PHARMACY_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
-  // This vertical owns its own database now. Seeding kartseek_db would write
-  // rows the service never reads, and leave the module looking empty.
-  database: process.env.PHARMACY_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_pharmacy',
-  // Without this the seed connects on the default search_path and writes to
-  // `public`, while the service reads its own schema -- so seeding "succeeded"
-  // and the storefront stayed empty.
-  schema: 'pharmacy',
-  entities: [
-    path.join(__dirname, '../../../../modules/pharmacy/backend/src/entities/*.entity.{ts,js}'),
-  ],
-  synchronize: true,
-  logging: false,
-});
+/**
+ * The module's own migration-runner DataSource, reused verbatim.
+ *
+ * This file used to declare a second DataSource with `synchronize: true`,
+ * which meant a seed script wrote DDL from entity metadata against a live
+ * database — the one thing IN3 closed off in the service itself. It also
+ * meant two copies of the entity list and two copies of the credential
+ * resolution, free to drift.
+ *
+ * `PharmacyDataSource` has `synchronize: false`, so the tables have to exist
+ * first:
+ *
+ *     cd modules/pharmacy/backend && npm run migration:run
+ *
+ * A seed against a database with no schema now fails saying so, instead of
+ * quietly creating one that no migration describes.
+ */
+const ds = PharmacyDataSource;
 
 import {
   PharmacyStore,
@@ -184,7 +188,6 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     latitude: 19.076,
     longitude: 72.8777,
     regionCode: 'IN',
-    countryCode: 'IND',
     phone: '+91-700-111-001',
     email: 'cbd@healthplus.co.in',
     is24hr: true,
@@ -215,7 +218,6 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     latitude: 19.0544,
     longitude: 72.8403,
     regionCode: 'IN',
-    countryCode: 'IND',
     phone: '+91-700-111-002',
     email: 'info@medpluschemist.co.in',
     is24hr: false,
@@ -246,7 +248,6 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     latitude: 19.1176,
     longitude: 72.8271,
     regionCode: 'IN',
-    countryCode: 'IND',
     phone: '+91-700-111-003',
     email: 'Andheri West@rxMumbai.co.in',
     is24hr: false,
@@ -277,7 +278,6 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     latitude: 19.1075,
     longitude: 72.8263,
     regionCode: 'IN',
-    countryCode: 'IND',
     phone: '+91-700-111-004',
     email: 'Juhu@dawapharmacy.co.in',
     is24hr: false,
@@ -308,7 +308,6 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     latitude: 19.0178,
     longitude: 72.8478,
     regionCode: 'IN',
-    countryCode: 'IND',
     phone: '+91-700-111-005',
     email: 'support@quickmeds.co.in',
     is24hr: true,
@@ -339,7 +338,6 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     latitude: 19.1197,
     longitude: 72.9051,
     regionCode: 'IN',
-    countryCode: 'IND',
     phone: '+91-700-111-006',
     email: 'hello@naturecarewellness.co.in',
     is24hr: false,

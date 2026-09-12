@@ -12,7 +12,8 @@
  *   - Tables created via TypeORM synchronize or migrations
  */
 
-import { DataSource, type DeepPartial } from 'typeorm';
+import { type DeepPartial } from 'typeorm';
+import { DoctorDataSource } from '../../../../modules/doctor/backend/data-source';
 import { Specialty } from '../../../../modules/doctor/backend/src/entities/specialty.entity';
 import { Hospital } from '../../../../modules/doctor/backend/src/entities/hospital.entity';
 import { Clinic } from '../../../../modules/doctor/backend/src/entities/clinic.entity';
@@ -21,37 +22,25 @@ import { Doctor } from '../../../../modules/doctor/backend/src/entities/doctor.e
 import { DoctorAvailability } from '../../../../modules/doctor/backend/src/entities/doctor-availability.entity';
 import { Appointment } from '../../../../modules/doctor/backend/src/entities/appointment.entity';
 // Note: Review entity excluded — shares 'reviews' table with marketplace module
-import { Document } from '../../../../modules/doctor/backend/src/entities/document.entity';
 
-const ENTITIES = [
-  Specialty,
-  Hospital,
-  Clinic,
-  Department,
-  Doctor,
-  DoctorAvailability,
-  Appointment,
-  Document,
-];
-
-const AppDataSource = new DataSource({
-  type: 'postgres',
-  host: process.env.DOCTOR_DB_HOST || process.env.DB_HOST || 'localhost',
-  port: +(process.env.DOCTOR_DB_PORT || process.env.DB_PORT || 5432),
-  username: process.env.DOCTOR_DB_USER || process.env.DB_USER || 'postgres',
-  password: process.env.DOCTOR_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
-  // This vertical owns its own database now. Seeding kartseek_db would write
-  // rows the service never reads, and leave the module looking empty.
-  database: process.env.DOCTOR_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_doctor',
-  // The module keeps its tables in the `doctor` schema. Without this the seed
-  // created a second, empty-looking set of tables in `public` and wrote every
-  // row there — the service read doctor.specialties and found nothing while
-  // public.specialties held all twelve.
-  schema: 'doctor',
-  entities: ENTITIES,
-  synchronize: true, // Doctor tables have no gateway entity — seed creates them
-  logging: false,
-});
+/**
+ * The module's own migration-runner DataSource, reused verbatim.
+ *
+ * This file used to declare a second DataSource with `synchronize: true`,
+ * which meant a seed script wrote DDL from entity metadata against a live
+ * database — the one thing IN3 closed off in the service itself. It also
+ * meant two copies of the entity list and two copies of the credential
+ * resolution, free to drift.
+ *
+ * `DoctorDataSource` has `synchronize: false`, so the tables have to exist
+ * first:
+ *
+ *     cd modules/doctor/backend && npm run migration:run
+ *
+ * A seed against a database with no schema now fails saying so, instead of
+ * quietly creating one that no migration describes.
+ */
+const AppDataSource = DoctorDataSource;
 
 function slug(name: string): string {
   return name

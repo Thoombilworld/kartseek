@@ -13,50 +13,29 @@
  *   npx ts-node scripts/seed-restaurant.ts
  */
 
-import { DataSource, type DeepPartial } from 'typeorm';
+import { type DeepPartial } from 'typeorm';
+import { RestaurantDataSource } from '../../../../modules/restaurant/backend/data-source';
 import { Restaurant } from '../../../../modules/restaurant/backend/src/entities/restaurant.entity';
 import { MenuItem } from '../../../../modules/restaurant/backend/src/entities/menu-item.entity';
-import { MenuCategory } from '../../../../modules/restaurant/backend/src/entities/menu-category.entity';
-import { RestaurantReview } from '../../../../modules/restaurant/backend/src/entities/restaurant-review.entity';
-import { RestaurantPromotion } from '../../../../modules/restaurant/backend/src/entities/restaurant-promotion.entity';
-import { RestaurantTable } from '../../../../modules/restaurant/backend/src/entities/restaurant-table.entity';
-import { RestaurantStaff } from '../../../../modules/restaurant/backend/src/entities/restaurant-staff.entity';
-import { Reservation } from '../../../../modules/restaurant/backend/src/entities/reservation.entity';
-import { RestaurantOrder } from '../../../../modules/restaurant/backend/src/entities/restaurant-order.entity';
 
-const ds = new DataSource({
-  type: 'postgres',
-  host: process.env.RESTAURANT_DB_HOST || process.env.DB_HOST || 'localhost',
-  port: +(process.env.RESTAURANT_DB_PORT || process.env.DB_PORT || 5432),
-  username: process.env.RESTAURANT_DB_USER || process.env.DB_USER || 'postgres',
-  password: process.env.RESTAURANT_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
-  // This vertical owns its own database now. Seeding kartseek_db would write
-  // rows the service never reads, and leave the module looking empty.
-  database: process.env.RESTAURANT_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_restaurant',
-  // Without this the seed connects on the default search_path and writes to
-  // `public`, while every service reads its own schema -- so seeding "succeeded"
-  // (8 restaurants, 160 menu items) and the storefront stayed empty. Combined
-  // with `synchronize: true` below, the seed was also *creating* the shadow
-  // public.* tables that then masquerade as the real ones.
-  schema: 'restaurant',
-  // Explicit, not a glob. TypeORM's directory loader goes through minimatch,
-  // and the repo-wide brace-expansion override makes that throw
-  // "brace_expansion_1.default is not a function" before a single row is
-  // written. Listing the entities also documents exactly what this seed owns.
-  entities: [
-    Restaurant,
-    MenuItem,
-    MenuCategory,
-    RestaurantReview,
-    RestaurantPromotion,
-    RestaurantTable,
-    RestaurantStaff,
-    Reservation,
-    RestaurantOrder,
-  ],
-  synchronize: true,
-  logging: false,
-});
+/**
+ * The module's own migration-runner DataSource, reused verbatim.
+ *
+ * This file used to declare a second DataSource with `synchronize: true`,
+ * which meant a seed script wrote DDL from entity metadata against a live
+ * database — the one thing IN3 closed off in the service itself. It also
+ * meant two copies of the entity list and two copies of the credential
+ * resolution, free to drift.
+ *
+ * `RestaurantDataSource` has `synchronize: false`, so the tables have to exist
+ * first:
+ *
+ *     cd modules/restaurant/backend && npm run migration:run
+ *
+ * A seed against a database with no schema now fails saying so, instead of
+ * quietly creating one that no migration describes.
+ */
+const ds = RestaurantDataSource;
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 

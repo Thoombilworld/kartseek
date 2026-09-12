@@ -51,16 +51,25 @@ npm run migration:baseline  # mark historical migrations applied without running
 each module's `.env.example`, `infra/k8s/config.yaml`) and stays that way in
 every environment, development included. Two things enforce it:
 
-- `validateDatabaseConfig()` refuses to boot a core service with
-  `DB_SYNCHRONIZE=true` at all;
+- `validateDatabaseConfig()`, called from every service's `main.ts` — the core
+  eighteen and now all eight module backends — throws on `DB_SYNCHRONIZE=true`
+  in **every** environment. There is no development escape hatch: asking for
+  auto-sync is a fatal boot, not a warning. Marketplace and franchise did not
+  call it until IN3's fix round, which is why their `.env.example` used to
+  describe an escape hatch the other six did not have;
 - `assertSynchronizeAllowed(synchronize, nodeEnv, service)` — the last line
   before TypeORM writes DDL — throws when auto-sync is on under
   `NODE_ENV=production`, inside the `useFactory` where the value actually is.
   Each of the eight module backends calls it (`modules/<m>/backend/src/<m>-service.module.ts`).
-  The guard exists because those eight used to key `synchronize` on
-  `NODE_ENV !== 'production'`, which `validateDatabaseConfig()` never sees and
-  which Compose — declaring `NODE_ENV` nowhere — resolves to `development` on
-  a staging box (AUD2-070).
+  It is reachable despite the first guard, because `SKIP_DB=true` makes
+  `validateDatabaseConfig()` return early. The guard exists because those eight
+  used to key `synchronize` on `NODE_ENV !== 'production'`, which
+  `validateDatabaseConfig()` never sees and which Compose — declaring
+  `NODE_ENV` nowhere — resolves to `development` on a staging box (AUD2-070).
+
+To iterate on entities, generate a migration against a scratch database (below).
+That is the replacement for turning auto-sync on for an afternoon, and it is the
+only one.
 
 That default used to be on in development, and it is off now because auto-sync
 is destructive in a way that is easy to miss: annotating an **existing** column
@@ -68,12 +77,20 @@ in an entity (narrowing `region_code` to `varchar(2)`, say) makes `synchronize`
 DROP and recreate it on the next boot, emptying it. That happened three times
 during the regional plan. Auto-sync also silently **drops indexes TypeORM's
 entity metadata does not know about** — `marketplace.bank_offers`' region index
-was created by a migration and is missing from the dev database today for
-exactly that reason. Even where it has been used during development, it cannot
-express everything a real migration can:
+was created by `OfferMarket1786502300000` and dev auto-sync dropped it again;
+re-running that migration under the new ledger is what put it back. Even where
+it has been used during development, auto-sync cannot express everything a real
+migration can:
 
-- **Expression indexes** — the search GIN indexes, for example — have no
-  entity-level representation for `synchronize` to generate.
+- **Expression indexes** have no entity-level representation, so neither
+  `synchronize` nor `migration:generate` will ever produce one. Both of
+  marketplace's search indexes are in that position and are written by hand at
+  the end of `1786498000000-InitialMarketplaceSchema.ts`: `IDX_products_fts`
+  (GIN over the `to_tsvector` expression `CatalogService.searchProducts` uses)
+  and `IDX_products_name_trgm` (GIN `name gin_trgm_ops`, for the `ILIKE`
+  fallback). Without them a module-only deploy searches the catalogue by
+  sequential scan — no error, just a slow page. If you add a query with an
+  expression predicate, its index is yours to write.
 - **Data backfills.** `synchronize` will happily add a new column with a
   default, but it performs no backfill of existing rows. The sharp case in
   this codebase is the `ListingApprovalAndBuyBox` migration: it adds an
@@ -89,11 +106,10 @@ express everything a real migration can:
 
 The eight module backends are not in `apps/api` and do not share its ledger.
 Each has its own runner — `modules/<m>/backend/data-source.ts` — and its own
-`migrations/` folder, and each writes a `migrations` table inside its own
-schema, beside the tables it describes. Run every command **from the module's
-own directory**: `dotenv/config` reads `.env` from the working directory, and
-from the repository root `<MODULE>_DB_*` is unset, the shared `DB_*` answers
-instead, and the migration lands in the wrong database.
+`migrations/` folder. Run every command **from the module's own directory**:
+`dotenv/config` reads `.env` from the working directory, and from the
+repository root `<MODULE>_DB_*` is unset, the shared `DB_*` answers instead,
+and the migration lands in the wrong database.
 
 ```bash
 cd modules/grocery/backend
@@ -103,7 +119,7 @@ npm run migration:revert                            # undo the last one
 npm run migration:generate -- migrations/AddThing   # see the procedure below
 ```
 
-Two differences from `apps/api/data-source.ts`, both deliberate:
+Four differences from `apps/api/data-source.ts`, all deliberate:
 
 - **Entities are listed explicitly and the list is populated**, copied verbatim
   from `ENTITIES` in the module's service module. `apps/api` keeps `entities: []`
@@ -115,6 +131,21 @@ Two differences from `apps/api/data-source.ts`, both deliberate:
   glob match nothing. `apps/api/test/module-data-sources.spec.ts` fails when a
   file in `migrations/` is missing from the list, named twice, or named but
   absent from disk.
+- **The ledger is `public.<module>_migrations`, not `<module>.migrations`** —
+  and the DataSource declares **no `schema`** at all, which is what puts it
+  there. TypeORM builds the ledger table inside `options.schema` and does it
+  _before_ the first migration's `up()` runs, so with `schema: 'taxi'` a fresh
+  `kartseek_taxi` died on `CREATE TABLE "taxi"."migrations"` — the schema does
+  not exist yet, and no `CREATE SCHEMA` inside a migration can run early enough
+  to help. `migrationsSchema` is private in TypeORM and derived from
+  `options.schema`, so dropping the connection-level schema is the only way to
+  move the ledger. The per-module ledger name keeps the eight apart if they ever
+  share one database — plain `public.migrations` there is the platform's own.
+- **Every entity names its own schema** (`@Entity({ name: 'x', schema: 'taxi' })`),
+  because there is no connection-level schema left to inherit from. The spec
+  asserts it for all 97: an entity that forgets would have
+  `migration:generate` propose creating the whole module in `public` and
+  dropping it from the module's own schema.
 
 ### Timestamps are allocated, not taken from the clock
 
@@ -154,49 +185,109 @@ against an empty scratch database instead:
 
 ```bash
 # 1. Scratch Postgres on a port nothing else uses. Same image as the platform.
+#    Wait for the INIT to finish, not just for pg_isready: the entrypoint runs a
+#    temporary server during initdb and then restarts it, so a CREATE DATABASE
+#    issued too early dies with "the database system is shutting down".
 docker run -d --name kartseek-scratch -p 5499:5432 \
   -e POSTGRES_PASSWORD=scratch -e POSTGRES_DB=scratch postgis/postgis:16-3.4-alpine
-until docker exec kartseek-scratch pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-docker exec kartseek-scratch psql -U postgres -d scratch -c \
-  "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+until docker logs kartseek-scratch 2>&1 | grep -q 'PostgreSQL init process complete'; do sleep 1; done
+sleep 3
 
-# 2. Point the module's runner at it, create the schema, generate.
-docker exec kartseek-scratch psql -U postgres -d scratch -c "CREATE SCHEMA IF NOT EXISTS grocery;"
+# 2. One EMPTY database per module. No schema, no extensions, no init SQL — the
+#    initial migration creates both, and this is the only way to find out
+#    whether it really does.
+docker exec kartseek-scratch psql -U postgres -d scratch -c 'CREATE DATABASE scratch_grocery'
+
+# 3. Build the current schema from the migrations, then generate the new one
+#    against it.
 cd modules/grocery/backend
 env GROCERY_DB_HOST=127.0.0.1 GROCERY_DB_PORT=5499 GROCERY_DB_USER=postgres \
-    GROCERY_DB_PASSWORD=scratch GROCERY_DB_NAME=scratch \
+    GROCERY_DB_PASSWORD=scratch GROCERY_DB_NAME=scratch_grocery npm run migration:run
+env GROCERY_DB_HOST=127.0.0.1 GROCERY_DB_PORT=5499 GROCERY_DB_USER=postgres \
+    GROCERY_DB_PASSWORD=scratch GROCERY_DB_NAME=scratch_grocery \
   npm run migration:generate -- migrations/AddThing
 
-# 3. REVIEW the emitted SQL before committing it. Two things to look for:
+# 4. REVIEW the emitted SQL before committing it. Two things to look for:
 #    - a DROP in up()          → an entity is missing from the list; fix, regenerate
-#    - a table you do not know  → the schema was not empty; drop it and repeat
+#    - a table you do not know  → the database was not empty; recreate it, repeat
 awk '/public async up/,/public async down/' migrations/*AddThing.ts \
   | grep -c 'DROP TABLE\|DROP COLUMN\|DROP INDEX\|DROP CONSTRAINT'   # must be 0
 
-# 4. Rename the file and its class to an allocated timestamp (see the table).
+# 5. Rename the file and its class to an allocated timestamp (see the table).
 
-# 5. Prove it applies to an empty database and then reports nothing pending.
-docker exec kartseek-scratch psql -U postgres -d scratch -c \
-  "DROP SCHEMA grocery CASCADE; CREATE SCHEMA grocery;"
+# 6. Prove the whole folder applies to a database that holds NOTHING, and then
+#    reports nothing pending.
+docker exec kartseek-scratch psql -U postgres -d scratch -c 'DROP DATABASE scratch_grocery'
+docker exec kartseek-scratch psql -U postgres -d scratch -c 'CREATE DATABASE scratch_grocery'
 env GROCERY_DB_HOST=127.0.0.1 GROCERY_DB_PORT=5499 GROCERY_DB_USER=postgres \
-    GROCERY_DB_PASSWORD=scratch GROCERY_DB_NAME=scratch npm run migration:run
+    GROCERY_DB_PASSWORD=scratch GROCERY_DB_NAME=scratch_grocery npm run migration:run
 env GROCERY_DB_HOST=127.0.0.1 GROCERY_DB_PORT=5499 GROCERY_DB_USER=postgres \
-    GROCERY_DB_PASSWORD=scratch GROCERY_DB_NAME=scratch npm run migration:show   # zero [ ]
+    GROCERY_DB_PASSWORD=scratch GROCERY_DB_NAME=scratch_grocery npm run migration:show  # zero [ ]
 
 docker rm -f kartseek-scratch
 ```
 
-Step 5 is the acceptance test, not a formality: the module services run with
-`synchronize: false`, so migrations alone have to be enough to serve a request.
-Compare the scratch schema against the live one — `information_schema.columns`
-and `pg_indexes` for the module's schema, diffed — before believing it.
+Step 6 is the acceptance test, not a formality: the module services run with
+`synchronize: false`, so migrations alone have to be enough to serve a request —
+including the `CREATE SCHEMA` and `CREATE EXTENSION` that every initial
+migration opens with.
+
+### Diffing what the migrations built against what is live
+
+Do this before believing a generated migration. Both queries take the module's
+schema name:
+
+```bash
+COLS="SELECT table_name||'.'||column_name||' '||data_type
+             ||COALESCE('('||character_maximum_length||')','')||' null='||is_nullable
+        FROM information_schema.columns WHERE table_schema='grocery' ORDER BY 1;"
+IDX="SELECT tablename||' '||indexname||' '||regexp_replace(indexdef,'^.*USING ','')
+       FROM pg_indexes WHERE schemaname='grocery' ORDER BY 1;"
+
+docker exec kartseek-scratch          psql -U postgres     -d scratch_grocery  -tAc "$COLS" > /tmp/scratch.cols
+docker exec kartseek-postgres-grocery psql -U grocery_user -d kartseek_grocery -tAc "$COLS" > /tmp/live.cols
+diff /tmp/live.cols /tmp/scratch.cols        # expect no output
+
+docker exec kartseek-scratch          psql -U postgres     -d scratch_grocery  -tAc "$IDX" > /tmp/scratch.idx
+docker exec kartseek-postgres-grocery psql -U grocery_user -d kartseek_grocery -tAc "$IDX" > /tmp/live.idx
+diff /tmp/live.idx /tmp/scratch.idx
+```
+
+Two differences are expected and are not defects. Constraint **names** differ
+wherever a table was originally built by a hand-written `apps/api` migration
+(`PK_flash_deals`) rather than by `migration:generate` (`PK_8f1c0e8afe…`) — same
+columns, same uniqueness. And a live database may still carry a
+`<schema>.migrations` table: that is the pre-IN3 ledger, left in place and
+inert. The ledger in use is `public.<module>_migrations`.
+
+### A fresh, empty database
+
+A module database arrives with nothing in it: no `<module>` schema, no
+`uuid-ossp`, no tables. Everything after `CREATE DATABASE` comes from the
+migrations — there is no init SQL step and no `psql -c 'CREATE SCHEMA'` to
+remember, because forgetting it was how this broke in the first place.
+
+```bash
+# provisioning: the database itself, and a role that owns it
+psql -h <host> -U postgres -c 'CREATE DATABASE kartseek_taxi'
+
+cd modules/taxi/backend
+npm run migration:show     # [ ] InitialTaxiSchema1786498600000
+npm run migration:run      # CREATE SCHEMA, CREATE EXTENSION, then every table
+npm run migration:show     # [X] 1 InitialTaxiSchema1786498600000
+```
+
+`CREATE EXTENSION "uuid-ossp"` needs a superuser or an already-installed
+extension; on a managed Postgres the platform usually pre-installs it and the
+`IF NOT EXISTS` then makes the statement a no-op. Marketplace also creates
+`pg_trgm`, for the trigram index its product search falls back to.
 
 ### A database that already has its tables
 
 The dev and staging module databases were built by `synchronize` and have no
-ledger row to say so. The **initial** schema migrations are written for this:
-every statement in `up()` is guarded, so running one against a database that
-already holds the tables changes nothing but the ledger.
+ledger row to say so. The **initial** schema migrations are written for this
+too: every statement in `up()` is guarded, so running one against a database
+that already holds the tables changes nothing but the ledger.
 
 ```bash
 cd modules/taxi/backend
@@ -205,18 +296,15 @@ npm run migration:run      # guards make every DDL statement a no-op
 npm run migration:show     # [X] 1 InitialTaxiSchema1786498600000
 ```
 
-`CREATE TABLE` / `CREATE INDEX` carry `IF NOT EXISTS`; `CREATE TYPE` and
-`ALTER TABLE … ADD CONSTRAINT`, which Postgres has no `IF NOT EXISTS` for, run
-inside a `DO` block that swallows `duplicate_object` and nothing else. An
-existing table is skipped whole, its `COMMENT`s included, so a column that has
-drifted since cannot fail the run. **Rollback:** the only write is one ledger
-row — `DELETE FROM <schema>.migrations WHERE name = 'Initial<Module>Schema<ts>'`
+`CREATE SCHEMA` / `CREATE EXTENSION` / `CREATE TABLE` / `CREATE INDEX` carry
+`IF NOT EXISTS`; `CREATE TYPE` and `ALTER TABLE … ADD CONSTRAINT`, which
+Postgres has no `IF NOT EXISTS` for, run inside a `DO` block that swallows
+`duplicate_object` and nothing else. An existing table is skipped whole, its
+`COMMENT`s included, so a column that has drifted since cannot fail the run.
+**Rollback:** the only write is one ledger row —
+`DELETE FROM public.<module>_migrations WHERE name = 'Initial<Module>Schema<ts>'`
 undoes it and no DDL ran. Do **not** use `migration:revert` for this: that runs
-`down()`, which drops every table in the module's database.
-
-A genuinely empty store — a fresh deploy, a new environment, a scratch
-container — skips all of that. `migration:run` builds the schema from nothing,
-which is the whole point of the initial migration existing.
+`down()`, which drops every table in the module's database and then the schema.
 
 ## The two-Postgres-on-5432 trap
 
