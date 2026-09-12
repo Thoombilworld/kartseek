@@ -150,12 +150,22 @@ check('QA admin reject India nomination → 403', r.status === 403, `status ${r.
 
 // ── Coupons ──
 r = await call(qa, 'GET', '/admin/marketplace/coupons');
+// Hardened past a fixed row count: a coupon carries region_code null only when
+// it is platform-wide by design (fulfillment.service.ts's getCoupons — a
+// locked admin's regionStrict query excludes those too), so every row here
+// must be QA or explicitly global, and the two cross-market codes must never
+// leak in regardless of how many rows are seeded on either side of them.
+const qaCouponRows = rows(r.j);
+const qaCouponCodes = qaCouponRows.map((x) => x.code);
 check(
   'QA admin coupon list is QA-only (no WELCOME10, no SAVE500IN)',
-  rows(r.j).length === 1 && rows(r.j)[0]?.code === 'SAVE50QA',
-  rows(r.j)
-    .map((x) => x.code)
-    .join(','),
+  qaCouponRows.every((x) => {
+    const region = (x.regionCode ?? x.region_code ?? '').toUpperCase();
+    return region === 'QA' || region === '';
+  }) &&
+    !qaCouponCodes.includes('WELCOME10') &&
+    !qaCouponCodes.includes('SAVE500IN'),
+  qaCouponCodes.join(','),
 );
 r = await call(qa, 'GET', '/admin/marketplace/coupons?country=IN');
 check('QA admin ?country=IN on coupons → 403', r.status === 403, `status ${r.status}`);

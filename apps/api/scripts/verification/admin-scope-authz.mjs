@@ -112,7 +112,9 @@ const onlyMarket = (name, res, pick, market) => {
     (await call(qa, 'GET', '/admin/users?country=IN')).status === 403,
   );
   const qaUsers = await call(qa, 'GET', '/admin/users?limit=50');
-  onlyMarket('QA admin sees only QA users', qaUsers, (u) => u.country, 'QA');
+  // users.country carries an 'IN' default and is not the market — R4 scopes on
+  // users.region_code, so that (not .country) is what proves the lock.
+  onlyMarket('QA admin sees only QA users', qaUsers, (u) => u.region_code ?? u.regionCode, 'QA');
   const inUsers = await call(g, 'GET', '/admin/users?country=IN&limit=1');
   const inUser = listOf(inUsers.json)?.[0];
   if (inUser)
@@ -311,7 +313,6 @@ const onlyMarket = (name, res, pick, market) => {
   );
   for (const [name, path] of [
     ['the refund queue', '/admin/marketplace/refunds'],
-    ['the payout queue', '/admin/marketplace/payouts'],
     ['commission earnings', '/admin/marketplace/commissions'],
     ['customer segments', '/admin/marketplace/customer-segments'],
     ['the compliance country list', '/admin/marketplace/compliance/countries'],
@@ -325,6 +326,42 @@ const onlyMarket = (name, res, pick, market) => {
       `qa ${scoped.status}, global ${global.status}`,
     );
   }
+
+  // R11 (AUD2-089) gave payout.payouts a real market column and flipped the
+  // queue from a blanket refusal to a filter: a locked admin now gets 200 with
+  // only their own market's rows, rather than 403.
+  console.log('marketplace payouts (R11: filtered per market, not refused)');
+  const payoutMarket = (p) => p.regionCode ?? p.region_code;
+  onlyMarket(
+    'QA admin sees only QA payouts',
+    await call(qa, 'GET', '/admin/marketplace/payouts?limit=50'),
+    payoutMarket,
+    'QA',
+  );
+  onlyMarket(
+    'IN admin sees only IN payouts',
+    await call(ind, 'GET', '/admin/marketplace/payouts?limit=50'),
+    payoutMarket,
+    'IN',
+  );
+  const globalPayouts = await call(g, 'GET', '/admin/marketplace/payouts?limit=50');
+  const globalPayoutList = listOf(globalPayouts.json);
+  if (globalPayouts.status !== 200 || !globalPayoutList) {
+    ok('global admin reads the payout queue', false, `status ${globalPayouts.status}`);
+  } else if (globalPayoutList.length === 0) {
+    skip('global admin sees both QA and IN payouts', 'empty queue, nothing to prove');
+  } else {
+    const seen = new Set(globalPayoutList.map((p) => (payoutMarket(p) ?? '').toUpperCase()));
+    ok(
+      'global admin sees both QA and IN payouts',
+      seen.has('QA') && seen.has('IN'),
+      `saw ${[...seen].join(',') || 'nothing'}`,
+    );
+  }
+  ok(
+    'QA admin ?country=IN on payouts → 403',
+    (await call(qa, 'GET', '/admin/marketplace/payouts?country=IN')).status === 403,
+  );
 
   console.log('hotel');
   ok(

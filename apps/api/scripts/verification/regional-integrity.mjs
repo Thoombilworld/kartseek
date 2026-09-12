@@ -190,6 +190,12 @@ const FILTERED_LISTS = [
     nonEmpty: false,
   },
   { task: 'R10', name: 'taxi drivers', path: '/admin/taxi/drivers', pick: (d) => d.countryCode },
+  {
+    task: 'R11',
+    name: 'the payout queue',
+    path: '/admin/marketplace/payouts?limit=50',
+    pick: (p) => p.regionCode ?? p.region_code,
+  },
 ];
 
 /**
@@ -290,6 +296,12 @@ const CROSS_MARKET_REFUSALS = [
   { task: 'R10', name: 'taxi rate cards', path: '/admin/taxi/rates', foreign: 'countryCode=IN' },
   { task: 'R5', name: 'grocery stores', path: '/admin/grocery/stores', foreign: 'regionCode=IN' },
   { task: 'R1', name: 'hotel listings', path: '/admin/hotel/hotels', foreign: 'countryCode=IN' },
+  {
+    task: 'R11',
+    name: 'the payout queue',
+    path: '/admin/marketplace/payouts',
+    foreign: 'country=IN',
+  },
 ];
 
 /**
@@ -299,7 +311,6 @@ const CROSS_MARKET_REFUSALS = [
  */
 const STILL_UNATTRIBUTABLE = [
   { task: 'R6', name: 'the refund queue', path: '/admin/marketplace/refunds' },
-  { task: 'R6', name: 'the payout queue', path: '/admin/marketplace/payouts' },
   { task: 'R6', name: 'the wallet ledger', path: '/admin/marketplace/wallet/transactions' },
   { task: 'R5', name: 'the doctor directory', path: '/admin/doctor/doctors' },
 ];
