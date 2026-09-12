@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  HTTP,
+  stripComments,
+  classBlocks,
+  controllerFiles,
+} from './spec-helpers/controller-source';
 
 /**
  * Admin market-scope regression.
@@ -45,7 +51,6 @@ const CONTROLLERS = path.join(__dirname, '..', 'controllers');
  */
 const LIBS = path.join(__dirname, '..', '..', '..', '..', 'libs');
 
-const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)?\s*\)/;
 /**
  * Every route decorator that sits at the start of a line in the **raw** source.
  * Comment bodies start with `//` or `*`, so this counts declarations and not
@@ -72,9 +77,6 @@ const ROLES_CALL = /@Roles\(([^)]*)\)/g;
 const CONTROLLER = /@Controller\(/;
 /** The base path: `@Controller('x')` and the doubled-mount `@Controller(['x', …])`. */
 const BASE = /@Controller\(\s*\[?\s*['"`]([^'"`]*)['"`]/;
-/** A top-level class declaration and a class's closing brace, both at column 0. */
-const CLASS_LINE = /^(?:export\s+)?(?:abstract\s+)?class\s/;
-const CLASS_CLOSE = /^}/;
 
 /**
  * Controllers whose class-level guard performs the market check itself, so the
@@ -278,75 +280,13 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
   // ── REGIONAL follow-up (this plan, R8 Step 3 — descoped) ──────────────────
   // Task 8's brief assigned the doctor, upload and region fixes to this task.
   // The coordinator then narrowed R8 to the spec file alone (ledger: "Task 8
-  // (R8): … regression collector widening; only the spec file"), so they need a
-  // follow-up dispatch. The brief's prescriptions are recorded per entry so that
-  // dispatch is mechanical.
-  {
-    verb: 'PUT',
-    path: '/doctor/hospitals/:hospitalId/status',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'cross-region status write of the V7/V9 shape; clinics.region_code exists — add scopeOf + assert the market in doctor.service.ts',
-  },
-  {
-    verb: 'PUT',
-    path: '/doctor/clinics/:clinicId/status',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'cross-region status write; clinics.region_code exists — add scopeOf + assert the market in doctor.service.ts',
-  },
-  {
-    verb: 'PUT',
-    path: '/doctor/doctors/:doctorId/status',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'cross-region status write; resolve the doctor through their clinic market',
-  },
-  {
-    verb: 'GET',
-    path: '/regions/stats',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: "registry statistics, not one market's data — takes @GlobalEntity('region statistics are the registry itself'), which this spec permits on a GET",
-  },
-  {
-    verb: 'GET',
-    path: '/regions/stats/region',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'per-region registry statistics — same @GlobalEntity marker as /regions/stats',
-  },
-  {
-    verb: 'GET',
-    path: '/regions/india/stats',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'India registry statistics — the market is in the path; same @GlobalEntity marker',
-  },
-  {
-    verb: 'POST',
-    path: '/upload/profile-image',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'a file has no market but the audit trail of who uploaded it from which market does — stamp marketScopeOf(req) on the stored object',
-  },
-  {
-    verb: 'POST',
-    path: '/upload/product-image',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'same as /upload/profile-image — stamp the resolved market on the object metadata',
-  },
-  {
-    verb: 'POST',
-    path: '/upload/delivery-proof',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'REACHABLE by a region-locked ADMIN (@Roles DRIVER, ADMIN, SUPER_ADMIN) — highest priority of the five uploads',
-  },
-  {
-    verb: 'POST',
-    path: '/upload/brand-image',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'same as /upload/profile-image — stamp the resolved market on the object metadata',
-  },
-  {
-    verb: 'POST',
-    path: '/upload/category-image',
-    owner: 'REGIONAL follow-up (R8 Step 3)',
-    why: 'same as /upload/profile-image — stamp the resolved market on the object metadata',
-  },
+  // (R8): … regression collector widening; only the spec file"), so they needed
+  // a follow-up dispatch. R12 closed all eleven: the three doctor status writes
+  // (`this.scopeOf` + `assertInMarket`/`refuseUnattributable` resolved through
+  // the clinic, since `hospitals` carries no market column at all), the three
+  // region registry reads (`@GlobalEntity`), and the five uploads (the resolved
+  // market stamped on the storage path). Only the MODULES-owned appointments
+  // route below is left from R8 Step 3's original list.
 
   // ── MODULES plan ──────────────────────────────────────────────────────────
   {
@@ -354,38 +294,6 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
     path: '/doctor/admin/appointments',
     owner: 'MODULES plan',
     why: 'no handler exists in doctor-service (plan §2(a) row 37) — the route 503s; it must still send scope when the handler lands',
-  },
-  {
-    verb: 'PUT',
-    path: '/marketplace/answers/:answerId/accept',
-    owner: 'MODULES plan',
-    why: 'REACHABLE by a region-locked ADMIN; forwards only answerId. R2 and R6 both left it and the ledger records it as claimed by no brief; marketplace.controller.ts also binds the second RolesGuard implementation, which R11 must unify first',
-  },
-
-  // ── Unowned — escalated to the coordinator by R8 ───────────────────────────
-  // Newly surfaced by this widening: libs/gdpr is mounted by
-  // api-gateway.module.ts:250 and no brief in this plan mentions GDPR. All three
-  // are REACHABLE by a region-locked ADMIN, and the module has no market
-  // dimension at all (no region/country column anywhere in libs/gdpr), so the
-  // interim fix is refuseLockedAdmin(req, …) until the subject's
-  // users.region_code is joined.
-  {
-    verb: 'POST',
-    path: '/gdpr/export/:requestId/process',
-    owner: 'unowned — escalated in the R8 report',
-    why: "REACHABLE by a region-locked ADMIN; processes another market's data-export request. libs/gdpr has no market column — refuseLockedAdmin is the interim",
-  },
-  {
-    verb: 'POST',
-    path: '/gdpr/erasure/:requestId/process',
-    owner: 'unowned — escalated in the R8 report',
-    why: "REACHABLE by a region-locked ADMIN; erases another market's subject data. libs/gdpr has no market column — refuseLockedAdmin is the interim",
-  },
-  {
-    verb: 'GET',
-    path: '/gdpr/compliance/dashboard',
-    owner: 'unowned — escalated in the R8 report',
-    why: 'REACHABLE by a region-locked ADMIN; platform-wide compliance counts across every market',
   },
 
   // ── MODULES M1 / CONSOLE ──────────────────────────────────────────────────
@@ -434,10 +342,6 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
  */
 const EXCEPTION_CENSUS: readonly string[] = [
   'GET /doctor/admin/appointments',
-  'GET /gdpr/compliance/dashboard',
-  'GET /regions/india/stats',
-  'GET /regions/stats',
-  'GET /regions/stats/region',
   'GET /taxi/admin/audit-logs',
   'GET /taxi/admin/dashboard',
   'GET /taxi/admin/disputes',
@@ -447,21 +351,10 @@ const EXCEPTION_CENSUS: readonly string[] = [
   'GET /taxi/admin/vendors',
   'PATCH /seller/listings/:id',
   'PATCH /seller/products/:id/stock',
-  'POST /gdpr/erasure/:requestId/process',
-  'POST /gdpr/export/:requestId/process',
   'POST /taxi/admin/drivers/:id/approve',
   'POST /taxi/admin/fare-rules',
   'POST /taxi/admin/vendors/:id/approve',
   'POST /taxi/admin/vendors/:id/reject',
-  'POST /upload/brand-image',
-  'POST /upload/category-image',
-  'POST /upload/delivery-proof',
-  'POST /upload/product-image',
-  'POST /upload/profile-image',
-  'PUT /doctor/clinics/:clinicId/status',
-  'PUT /doctor/doctors/:doctorId/status',
-  'PUT /doctor/hospitals/:hospitalId/status',
-  'PUT /marketplace/answers/:answerId/accept',
   'PUT /seller/orders/:id/status',
   'PUT /seller/products/:id',
 ];
@@ -518,159 +411,9 @@ interface AdminRoute {
   guardScoped: boolean;
 }
 
-/**
- * Remove comments without removing code.
- *
- * A scanner, not two regexes: it tracks strings and template literals so a
- * quoted `//` stays, and — the reason it exists — it never lets a `/*` inside a
- * line comment open a block comment. `.replace(/\/\*[\s\S]*?\*\//g, '')`
- * followed by a line-comment pass does exactly that, and it cost this spec five
- * of `admin-seo.controller.ts`'s six routes plus every route in `loyalty`,
- * `partner` and `seller` (64 in all), silently, for as long as the file existed.
- * Newlines inside block comments are kept so line numbers survive.
- */
-function stripComments(s: string): string {
-  let out = '';
-  let state: 'code' | 'line' | 'block' | 'regex' | "'" | '"' | '`' = 'code';
-  /** Inside a regex's `[...]`, where an unescaped `/` does not end the literal. */
-  let charClass = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    const d = s[i + 1];
-    if (state === 'code') {
-      // A comment wins over a regex at the same `/`: `//` is never an empty
-      // regex and a regex cannot begin with `*`.
-      if (c === '/' && d === '/') {
-        state = 'line';
-        i++;
-      } else if (c === '/' && d === '*') {
-        state = 'block';
-        i++;
-      } else if (c === '/' && regexStartsHere(out)) {
-        state = 'regex';
-        charClass = false;
-        out += c;
-      } else {
-        if (c === "'" || c === '"' || c === '`') state = c;
-        out += c;
-      }
-    } else if (state === 'line') {
-      if (c === '\n') {
-        state = 'code';
-        out += c;
-      }
-    } else if (state === 'block') {
-      if (c === '*' && d === '/') {
-        state = 'code';
-        i++;
-      } else if (c === '\n') {
-        out += c;
-      }
-    } else if (state === 'regex') {
-      // A regex literal is code: emit it, and read to its real end so its
-      // contents cannot open a comment.
-      out += c;
-      if (c === '\\') {
-        out += d ?? '';
-        i++;
-      } else if (c === '[') {
-        charClass = true;
-      } else if (c === ']') {
-        charClass = false;
-      } else if (c === '/' && !charClass) {
-        state = 'code';
-      } else if (c === '\n') {
-        // An unterminated regex cannot span a line; bail out rather than eat
-        // the rest of the file.
-        state = 'code';
-      }
-    } else if (c === '\\') {
-      out += c + (d ?? '');
-      i++;
-    } else {
-      if (c === state) state = 'code';
-      out += c;
-    }
-  }
-  return out;
-}
-
-/** Punctuators after which a `/` opens a regex literal rather than dividing. */
-const REGEX_PRECEDERS = new Set('(,=:[!&|?{};+-*%~<>^'.split(''));
-/** Keywords after which the same is true. */
-const REGEX_KEYWORDS = new Set([
-  'return',
-  'typeof',
-  'instanceof',
-  'in',
-  'of',
-  'new',
-  'delete',
-  'void',
-  'case',
-  'do',
-  'else',
-  'yield',
-  'await',
-  'throw',
-]);
-
-/**
- * Is the `/` about to be read the start of a regex literal?
- *
- * Decided from the last significant token already emitted, the standard way:
- * after an operator, an opening bracket or one of the keywords above, a `/`
- * begins a regex; after an identifier, a number, `)` or `]` it divides. Getting
- * this wrong in the safe direction (reading a regex as division) is what the
- * first version of this scanner did, and `/\/\//` — a regex matching a literal
- * `//`, the shape at `health.controller.ts:120` — then looked like a line
- * comment and swallowed the rest of its line, while a character class such as
- * `/[/*]/` looked like a *block* comment and would have swallowed the
- * `@Controller` and `@Roles` lines that followed it. A route decorator lost that
- * way trips the declared-vs-parsed counter; a lost class-level `@Roles` or
- * `@Controller` would not, and would silently drop a whole controller from the
- * scan — the very failure this spec exists to prevent, moved from a filename
- * filter to a regex edge case.
- */
-function regexStartsHere(emitted: string): boolean {
-  let k = emitted.length - 1;
-  while (k >= 0 && /\s/.test(emitted[k])) k--;
-  if (k < 0) return true;
-  const p = emitted[k];
-  if (REGEX_PRECEDERS.has(p)) return true;
-  if (!/[A-Za-z0-9_$]/.test(p)) return false;
-  let word = '';
-  while (k >= 0 && /[A-Za-z0-9_$]/.test(emitted[k])) word = emitted[k--] + word;
-  return REGEX_KEYWORDS.has(word);
-}
-
-/**
- * One region per top-level class: the decorator block above it, and its body.
- *
- * Not "everything above the first `export class`". `static-pages.controller.ts`
- * holds two controllers with different base paths (`admin/static-pages` and
- * `pages`), and a file may open with an exported DTO class above the controller
- * — the shape that makes `route-exposure.regression.spec.ts` misread a file
- * (noted by R5). Taking the first class would give every route in such a file
- * the wrong base path and the wrong class-level decorators. Walking up from the
- * class to the previous class's closing brace also picks up a prettier-wrapped
- * `@Roles(` or `@UseGuards(`, which a "while the line above starts with @" walk
- * stops at (see the note at `admin-audit.controller.ts:52`).
- */
-function classBlocks(src: string[]): Array<{ head: string; from: number; to: number }> {
-  const closes: number[] = [];
-  const decls: number[] = [];
-  src.forEach((line, i) => {
-    if (CLASS_CLOSE.test(line)) closes.push(i);
-    if (CLASS_LINE.test(line)) decls.push(i);
-  });
-  return decls.map((at) => {
-    const before = closes.filter((c) => c < at);
-    const prevClose = before.length ? before[before.length - 1] : -1;
-    const nextClose = closes.find((c) => c > at) ?? src.length;
-    return { head: src.slice(prevClose + 1, at + 1).join('\n'), from: at + 1, to: nextClose };
-  });
-}
+// `stripComments` and `classBlocks` now live in `./spec-helpers/controller-source`
+// (imported above), shared with `route-exposure.regression.spec.ts` — see that
+// module's docstring for why the two specs used to drift on exactly this code.
 
 interface Parsed {
   routes: AdminRoute[];
@@ -736,20 +479,7 @@ function parseController(file: string, text: string): Parsed {
   };
 }
 
-/** Every `*.controller.ts` under `dir`, recursively, skipping build output. */
-function controllerFiles(dir: string): string[] {
-  const found: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name !== 'node_modules' && entry.name !== 'dist')
-        found.push(...controllerFiles(full));
-    } else if (entry.name.endsWith('.controller.ts')) {
-      found.push(full);
-    }
-  }
-  return found;
-}
+// `controllerFiles` now lives in `./spec-helpers/controller-source` too.
 
 const parserGaps: string[] = [];
 const undecidableRoles: string[] = [];

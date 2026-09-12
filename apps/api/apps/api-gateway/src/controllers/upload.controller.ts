@@ -1,15 +1,26 @@
 import {
-  Controller, Post, Req,
-  UseInterceptors, UploadedFile,
-  ParseFilePipe, MaxFileSizeValidator,
-  FileTypeValidator, UseGuards,
+  Controller,
+  Post,
+  Req,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiConsumes, ApiBody, ApiCreatedResponse,
-  ApiForbiddenResponse, ApiUnauthorizedResponse,
-  ApiBadRequestResponse, ApiPayloadTooLargeResponse,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiUnauthorizedResponse,
+  ApiBadRequestResponse,
+  ApiPayloadTooLargeResponse,
 } from '@nestjs/swagger';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -17,14 +28,19 @@ import { UserRole } from '@app/common';
 import { KycUploadResponseDto, ProfileImageUploadDto, ErrorResponseDto } from '../dto/gateway.dto';
 import { generateFileKey, generateDocumentId, JwtAuthGuard } from '@app/security';
 import { StorageService } from '@app/storage';
+import { resolveScope } from '../guards/market-scope';
 
 @ApiTags('📁 Uploads')
 @ApiBearerAuth('JWT')
 @Controller('upload')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UploadController {
-
   constructor(private readonly storage: StorageService) {}
+
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
+  }
 
   @Post('kyc-document')
   @Roles(UserRole.SELLER, UserRole.DRIVER)
@@ -52,8 +68,14 @@ export class UploadController {
       },
     },
   })
-  @ApiCreatedResponse({ type: KycUploadResponseDto, description: 'Document uploaded and queued for review' })
-  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid file type (only PDF/PNG/JPG allowed)' })
+  @ApiCreatedResponse({
+    type: KycUploadResponseDto,
+    description: 'Document uploaded and queued for review',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorResponseDto,
+    description: 'Invalid file type (only PDF/PNG/JPG allowed)',
+  })
   @ApiPayloadTooLargeResponse({ description: 'File exceeds 5 MB limit' })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
   @ApiForbiddenResponse({ description: 'Role SELLER or DRIVER required' })
@@ -65,8 +87,10 @@ export class UploadController {
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 5 }),
           new FileTypeValidator({ fileType: '.(png|jpeg|jpg|pdf)' }),
         ],
-      }))
-    file: any): KycUploadResponseDto {
+      }),
+    )
+    file: any,
+  ): KycUploadResponseDto {
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
     const documentRef = generateDocumentId('KYC');
@@ -110,11 +134,17 @@ export class UploadController {
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }),
           new FileTypeValidator({ fileType: '.(png|jpeg|jpg)' }),
         ],
-      }))
-    file: any): ProfileImageUploadDto {
+      }),
+    )
+    file: any,
+  ): ProfileImageUploadDto {
+    // A profile photo has no market of its own, but the audit trail of who
+    // uploaded it, from which market, does — stamped on the storage path so a
+    // region-locked admin's own uploads are distinguishable from the platform's.
+    const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = `https://cdn.kartseek.com/profiles/${fileKey}`;
+    const cdnUrl = `https://cdn.kartseek.com/profiles/${market ? `${market}/` : ''}${fileKey}`;
     return { message: 'Profile image uploaded successfully.', url: cdnUrl };
   }
 
@@ -153,11 +183,21 @@ export class UploadController {
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 5 }),
           new FileTypeValidator({ fileType: '.(png|jpeg|jpg|webp)' }),
         ],
-      }))
-    file: any) {
+      }),
+    )
+    file: any,
+  ) {
+    // Same as /upload/profile-image — stamp the resolved market on the object
+    // metadata (the storage path) rather than the audit trail losing it.
+    const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload('products', fileKey, file.buffer, file.mimetype);
+    const cdnUrl = await this.storage.upload(
+      market ? `products/${market}` : 'products',
+      fileKey,
+      file.buffer,
+      file.mimetype,
+    );
     return { message: 'Product image uploaded successfully.', url: cdnUrl, size: file.size };
   }
 
@@ -170,7 +210,8 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('image'))
   @ApiOperation({
     summary: 'Upload a photo to attach to a product review',
-    description: 'Accepts PNG, JPG or WebP up to 5 MB. Returns the public URL to pass in the review’s `imageUrls`.',
+    description:
+      'Accepts PNG, JPG or WebP up to 5 MB. Returns the public URL to pass in the review’s `imageUrls`.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -191,8 +232,10 @@ export class UploadController {
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 5 }),
           new FileTypeValidator({ fileType: '.(png|jpeg|jpg|webp)' }),
         ],
-      }))
-    file: any) {
+      }),
+    )
+    file: any,
+  ) {
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
     const cdnUrl = await this.storage.upload('reviews', fileKey, file.buffer, file.mimetype);
@@ -235,15 +278,27 @@ export class UploadController {
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 5 }),
           new FileTypeValidator({ fileType: '.(png|jpeg|jpg|webp)' }),
         ],
-      }))
-    file: any) {
+      }),
+    )
+    file: any,
+  ) {
     // Scoped to DRIVER because the existing image routes are SELLER-only, which
     // is why the partner app had nowhere to send a photograph: its proof screen
     // tracked four booleans and uploaded nothing, so a delivery dispute had no
     // evidence behind it.
+    //
+    // REACHABLE by a region-locked ADMIN (@Roles DRIVER, ADMIN, SUPER_ADMIN) —
+    // the resolved market is stamped on the storage path, same as the other
+    // four upload routes.
+    const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload('delivery-proof', fileKey, file.buffer, file.mimetype);
+    const cdnUrl = await this.storage.upload(
+      market ? `delivery-proof/${market}` : 'delivery-proof',
+      fileKey,
+      file.buffer,
+      file.mimetype,
+    );
     return { message: 'Proof photo uploaded successfully.', url: cdnUrl, size: file.size };
   }
 
@@ -279,11 +334,21 @@ export class UploadController {
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 3 }),
           new FileTypeValidator({ fileType: '.(png|jpeg|jpg|webp|svg)' }),
         ],
-      }))
-    file: any) {
+      }),
+    )
+    file: any,
+  ) {
+    // Same as /upload/profile-image — stamp the resolved market on the object
+    // metadata (the storage path).
+    const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload('brands', fileKey, file.buffer, file.mimetype);
+    const cdnUrl = await this.storage.upload(
+      market ? `brands/${market}` : 'brands',
+      fileKey,
+      file.buffer,
+      file.mimetype,
+    );
     return { message: 'Brand image uploaded successfully.', url: cdnUrl, size: file.size };
   }
 
@@ -318,11 +383,21 @@ export class UploadController {
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 3 }),
           new FileTypeValidator({ fileType: '.(png|jpeg|jpg|webp)' }),
         ],
-      }))
-    file: any) {
+      }),
+    )
+    file: any,
+  ) {
+    // Same as /upload/profile-image — stamp the resolved market on the object
+    // metadata (the storage path).
+    const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = await this.storage.upload('categories', fileKey, file.buffer, file.mimetype);
+    const cdnUrl = await this.storage.upload(
+      market ? `categories/${market}` : 'categories',
+      fileKey,
+      file.buffer,
+      file.mimetype,
+    );
     return { message: 'Category image uploaded successfully.', url: cdnUrl, size: file.size };
   }
 }

@@ -1,19 +1,22 @@
-import { Controller, Get, Param, Query, Req, UseGuards, Logger, NotFoundException } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiQuery,
-  ApiParam
-} from '@nestjs/swagger';
+  Controller,
+  Get,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { type Request } from 'express';
 import { RegionService, Region, BypassRegion } from '@app/region';
 import { IndiaPinCodeService } from '@app/region/india-pincode.service';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { GlobalEntity } from '../decorators/global-entity.decorator';
 import { UserRole } from '@app/common';
-
 
 /**
  * Region Controller — Multi-Regional Data Architecture
@@ -34,7 +37,6 @@ export class RegionController {
     private readonly indiaPinCode: IndiaPinCodeService,
   ) {}
 
-
   /**
    * Detect the client's region from their request context.
    * Uses GPS headers, IP address, or explicit region header.
@@ -43,7 +45,8 @@ export class RegionController {
   @BypassRegion()
   @ApiOperation({
     summary: 'Detect client region',
-    description: 'Resolves the client\'s operational region from GPS coordinates (X-Latitude/X-Longitude headers), IP address, or explicit X-Region-Code header.'
+    description:
+      "Resolves the client's operational region from GPS coordinates (X-Latitude/X-Longitude headers), IP address, or explicit X-Region-Code header.",
   })
   @ApiOkResponse({ description: 'Region detection result with config' })
   async detectRegion(@Req() req: Request) {
@@ -58,9 +61,10 @@ export class RegionController {
     }
 
     // Use IP
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-      || req.socket?.remoteAddress
-      || '127.0.0.1';
+    const clientIp =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      '127.0.0.1';
 
     const result = await this.regionService.detectRegionFromIp(clientIp);
     this.logger.log(`🌐 Region detected via IP: ${result.region.flag} ${result.region.name}`);
@@ -74,13 +78,14 @@ export class RegionController {
   @BypassRegion()
   @ApiOperation({
     summary: 'List all supported regions',
-    description: 'Returns all active operational regions with currency, timezone, locale, and enabled service modules.'
+    description:
+      'Returns all active operational regions with currency, timezone, locale, and enabled service modules.',
   })
   @ApiOkResponse({ description: 'Array of active region configurations' })
   listRegions() {
     return {
       regions: this.regionService.getActiveRegions(),
-      total: this.regionService.getActiveRegions().length
+      total: this.regionService.getActiveRegions().length,
     };
   }
 
@@ -90,7 +95,7 @@ export class RegionController {
   @Get('current')
   @ApiOperation({
     summary: 'Get current region config',
-    description: 'Returns the full configuration for the client\'s auto-detected region.'
+    description: "Returns the full configuration for the client's auto-detected region.",
   })
   @ApiOkResponse({ description: 'Current region configuration' })
   getCurrentRegion(@Region() regionCode: string) {
@@ -103,10 +108,14 @@ export class RegionController {
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
+  @GlobalEntity(
+    "registry statistics — aggregated across every operational region, not one market's data",
+  )
   @BypassRegion()
   @ApiOperation({
     summary: 'Get regional statistics (Admin)',
-    description: 'Returns aggregated KPI statistics for all operational regions. Used by the admin dashboard for regional segmentation.'
+    description:
+      'Returns aggregated KPI statistics for all operational regions. Used by the admin dashboard for regional segmentation.',
   })
   @ApiOkResponse({ description: 'Array of regional statistics' })
   async getRegionStats() {
@@ -121,8 +130,8 @@ export class RegionController {
         totalPartners: stats.reduce((s, r) => s + r.totalPartners, 0),
         totalRevenue: stats.reduce((s, r) => s + r.revenue, 0),
         todayRevenue: stats.reduce((s, r) => s + r.todayRevenue, 0),
-        todayOrders: stats.reduce((s, r) => s + r.todayOrders, 0)
-      }
+        todayOrders: stats.reduce((s, r) => s + r.todayOrders, 0),
+      },
     };
   }
 
@@ -132,16 +141,22 @@ export class RegionController {
   @Get('stats/region')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
+  @GlobalEntity(
+    "one region's statistics, read from the registry itself — same marker as /regions/stats",
+  )
   @ApiOperation({
     summary: 'Get stats for specific region (Admin)',
-    description: 'Returns KPI statistics for a single operational region.'
+    description: 'Returns KPI statistics for a single operational region.',
   })
   @ApiQuery({ name: 'code', description: 'Country code (IN, QA, AE, SA)', required: true })
   @ApiOkResponse({ description: 'Region statistics' })
   async getRegionStatByCode(@Query('code') code: string) {
     const region = this.regionService.resolveFromHeader(code);
     if (region.detectedVia === 'default' && code.toUpperCase() !== 'IN') {
-      return { error: `Unsupported region code: ${code}`, supportedCodes: ['IN', 'QA', 'IN', 'AE', 'SA'] };
+      return {
+        error: `Unsupported region code: ${code}`,
+        supportedCodes: ['IN', 'QA', 'IN', 'AE', 'SA'],
+      };
     }
     return this.regionService.getRegionStats(region.countryCode);
   }
@@ -155,14 +170,17 @@ export class RegionController {
   @BypassRegion()
   @ApiOperation({
     summary: 'India PIN code lookup',
-    description: 'Resolve a 6-digit Indian PIN code to state, district, city, zone, and delivery timeline. Used by checkout and address forms.'
+    description:
+      'Resolve a 6-digit Indian PIN code to state, district, city, zone, and delivery timeline. Used by checkout and address forms.',
   })
   @ApiParam({ name: 'pin', description: '6-digit Indian postal PIN code', example: '400001' })
   @ApiOkResponse({ description: 'PIN code location details and delivery info' })
   indiaPinCodeLookup(@Param('pin') pin: string) {
     const result = this.indiaPinCode.lookupPinCode(pin);
     if (!result) {
-      throw new NotFoundException(`PIN code ${pin} is invalid or not found in India's postal database.`);
+      throw new NotFoundException(
+        `PIN code ${pin} is invalid or not found in India's postal database.`,
+      );
     }
     return result;
   }
@@ -174,15 +192,15 @@ export class RegionController {
   @BypassRegion()
   @ApiOperation({
     summary: 'List all Indian states & UTs',
-    description: 'Returns all 28 states and 8 Union Territories of India, sorted alphabetically.'
+    description: 'Returns all 28 states and 8 Union Territories of India, sorted alphabetically.',
   })
   @ApiOkResponse({ description: 'List of Indian states and UTs' })
   indiaStateList() {
     const states = this.indiaPinCode.getStateList();
     return {
       total: states.length,
-      states: states.filter(s => !s.isUT),
-      unionTerritories: states.filter(s => s.isUT)
+      states: states.filter((s) => !s.isUT),
+      unionTerritories: states.filter((s) => s.isUT),
     };
   }
 
@@ -193,14 +211,21 @@ export class RegionController {
   @BypassRegion()
   @ApiOperation({
     summary: 'Get districts for an Indian state',
-    description: 'Returns all districts and their PIN ranges for a given state code (e.g., MH for Maharashtra).'
+    description:
+      'Returns all districts and their PIN ranges for a given state code (e.g., MH for Maharashtra).',
   })
-  @ApiParam({ name: 'stateCode', description: '2-letter state code (e.g. MH, DL, KA)', example: 'MH' })
+  @ApiParam({
+    name: 'stateCode',
+    description: '2-letter state code (e.g. MH, DL, KA)',
+    example: 'MH',
+  })
   @ApiOkResponse({ description: 'Districts list for the given state' })
   indiaDistrictsByState(@Param('stateCode') stateCode: string) {
     const state = this.indiaPinCode.getStateByCode(stateCode);
     if (!state) {
-      throw new NotFoundException(`State code '${stateCode}' not found. Use 2-letter codes like MH, DL, KA, TN, KL.`);
+      throw new NotFoundException(
+        `State code '${stateCode}' not found. Use 2-letter codes like MH, DL, KA, TN, KL.`,
+      );
     }
     const districts = this.indiaPinCode.getDistrictsByState(stateCode);
     return {
@@ -209,7 +234,7 @@ export class RegionController {
       capital: state.capital,
       isUT: state.isUT,
       totalDistricts: districts.length,
-      districts
+      districts,
     };
   }
 
@@ -220,7 +245,8 @@ export class RegionController {
   @BypassRegion()
   @ApiOperation({
     summary: 'India delivery serviceability check',
-    description: 'Check if KARTSEEK delivers to the given PIN code. Returns serviceability status and estimated delivery days.'
+    description:
+      'Check if KARTSEEK delivers to the given PIN code. Returns serviceability status and estimated delivery days.',
   })
   @ApiParam({ name: 'pin', description: '6-digit Indian PIN code', example: '110001' })
   @ApiOkResponse({ description: 'Delivery serviceability result' })
@@ -234,6 +260,7 @@ export class RegionController {
   @Get('india/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
+  @GlobalEntity('the India PIN code registry itself — the market is in the path, not a filter')
   @BypassRegion()
   @ApiOperation({ summary: 'India location system statistics (Admin)' })
   indiaStats() {
@@ -242,8 +269,7 @@ export class RegionController {
       coverage: 'All 28 States + 8 Union Territories',
       pinCodeFormat: '6 digits — Zone(1) + Sub-zone(1) + Sorting district(1) + Post office(3)',
       postalZones: 9,
-      description: 'India PIN code system modeled after Amazon India / Flipkart serviceability'
+      description: 'India PIN code system modeled after Amazon India / Flipkart serviceability',
     };
   }
 }
-

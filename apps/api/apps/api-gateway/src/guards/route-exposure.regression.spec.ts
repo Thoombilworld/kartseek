@@ -1,5 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  HTTP,
+  stripComments,
+  classBlocks,
+  controllerFiles,
+} from './spec-helpers/controller-source';
 
 /**
  * Route exposure regression.
@@ -19,6 +25,19 @@ import * as path from 'path';
  *   • it should be authenticated → add `@UseGuards(JwtAuthGuard)`
  *   • it is genuinely public     → add `@Public()` and, if it is a new prefix,
  *                                   an entry here explaining why
+ *
+ * The comment-stripper and the controller-locator are shared with
+ * `admin-market-scope.regression.spec.ts` (`./spec-helpers/controller-source`)
+ * — this spec used to carry its own, older copies of both, and each had the
+ * exact fault that spec's own history records: a naive
+ * `.replace(/\/\*[\s\S]*?\*\//g, '')`-then-line-comment stripper a regex
+ * literal or a `//` inside a string can corrupt (used below in `codeOf()` and
+ * for the GDPR file), and a "first `export class` in the file" locator that
+ * takes the wrong class when an exported DTO sits above the real controller,
+ * or only the first of two controllers sharing one file
+ * (`static-pages.controller.ts`'s shape) — silently, the same way a lost
+ * `@Controller`/`@Roles` block always fails here: not a parse error, just
+ * routes the scan never saw.
  */
 
 const CONTROLLERS = path.join(__dirname, '..', 'controllers');
@@ -30,22 +49,6 @@ const CONTROLLERS = path.join(__dirname, '..', 'controllers');
  * export and erasure until 2026-09-06, and this file never looked at it.
  */
 const LIBS = path.join(__dirname, '..', '..', '..', '..', 'libs');
-const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)?\s*\)/;
-
-/** Every `*.controller.ts` under `dir`, recursively, skipping build output. */
-function controllerFiles(dir: string): string[] {
-  const found: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name !== 'node_modules' && entry.name !== 'dist')
-        found.push(...controllerFiles(full));
-    } else if (entry.name.endsWith('.controller.ts')) {
-      found.push(full);
-    }
-  }
-  return found;
-}
 
 /**
  * Prefixes that may serve anonymous traffic, with the reason. Anything matching
@@ -75,6 +78,16 @@ const PUBLIC_PREFIXES: Array<[RegExp, string]> = [
   [/^\/franchise\/(health|register)/, 'franchise enquiry form'],
   [/^\/sellers?\//, 'public seller storefronts'],
   [/^\/static-pages/, 'CMS marketing pages'],
+  [
+    /^\/pages\//,
+    // `PublicPagesController` — the second controller in
+    // `static-pages.controller.ts`, after `AdminStaticPagesController`. The
+    // old "first `export class` in the file" locator never reached it, so
+    // this route sat unauthenticated AND unreported — it happens to be
+    // genuinely public (`GET /pages/:slug` serves only published CMS pages),
+    // but the gap in the spec, not just the route, was the finding.
+    'published CMS pages, customer-facing — the same content /static-pages serves the admin console',
+  ],
   [/^\/users\/health/, 'liveness probe'],
   [/^\/users\/partner\/register/, 'partner sign-up'],
 ];
@@ -95,59 +108,62 @@ interface Route {
  * The assertions below search for the *old* insecure code, and the fixes
  * deliberately quote that code in their explanatory comments — so a naive
  * `toContain` matches the very prose describing the fix. Strip comments first so
- * these test what executes, not what is documented.
+ * these test what executes, not what is documented. `stripComments` is the
+ * shared, regex-literal-aware scanner — see the module docstring.
  */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-}
-
 function codeOf(file: string): string {
   return stripComments(fs.readFileSync(path.join(CONTROLLERS, file), 'utf8'));
 }
+
+const ADMIN_ROLE = /@Roles\([^)]*(UserRole\.(SUPER_ADMIN|ADMIN)|'(SUPER_ADMIN|ADMIN)')/;
+/** The base path: `@Controller('x')` and the doubled-mount `@Controller(['x', …])`. */
+const BASE = /@Controller\(\s*\[?\s*['"`]([^'"`]*)['"`]/;
+const CONTROLLER_DECORATOR = /@Controller\(/;
 
 function collectRoutes(): Route[] {
   const routes: Route[] = [];
 
   for (const full of [...controllerFiles(CONTROLLERS), ...controllerFiles(LIBS)]) {
     const file = path.relative(path.join(LIBS, '..'), full).split(path.sep).join('/');
-    const src = fs.readFileSync(full, 'utf8').split('\n');
+    // Stripped first, same as the market-scope scan: an unstripped file reads a
+    // commented-out `@UseGuards`/`@Roles` as live code (a false negative for
+    // this spec — a hole it would never report) and a class-locating regex can
+    // be fooled by a decorator or a route path that only appears in prose.
+    const src = stripComments(fs.readFileSync(full, 'utf8')).split('\n');
 
-    const classLine = src.findIndex((l) => /^export class \w+/.test(l));
-    if (classLine === -1) continue;
+    // One region per class — not "everything above the first `export class`",
+    // which took the wrong class when a DTO was exported above the controller
+    // and missed the second controller in a two-controller file entirely.
+    for (const cls of classBlocks(src)) {
+      if (!CONTROLLER_DECORATOR.test(cls.head)) continue;
 
-    const head = src.slice(0, classLine).join('\n');
-    // A controller may declare several prefixes (`@Controller(['loyalty', 'api/loyalty'])`);
-    // the first one is canonical and is the path checked here.
-    const base = (head.match(/@Controller\(\s*(?:\[\s*)?['"`]([^'"`]*)['"`]/) || [])[1] ?? '';
+      // A controller may declare several prefixes (`@Controller(['loyalty', 'api/loyalty'])`);
+      // the first one is canonical and is the path checked here.
+      const base = (cls.head.match(BASE) || [])[1] ?? '';
+      const classGuarded = /@UseGuards\([^)]*JwtAuth/.test(cls.head);
+      const classPublic = /@Public\(\)/.test(cls.head);
+      const classAdminRole = ADMIN_ROLE.test(cls.head);
 
-    // Only the contiguous decorator block directly above `export class`.
-    let top = classLine;
-    while (top > 0 && /^\s*(@|\)|\*|\/\*|\/\/|$)/.test(src[top - 1])) top--;
-    const classBlock = src.slice(top, classLine).join('\n');
-    const classGuarded = /@UseGuards\([^)]*JwtAuth/.test(classBlock);
-    const classPublic = /@Public\(\)/.test(classBlock);
-    const ADMIN_ROLE = /@Roles\([^)]*(UserRole\.(SUPER_ADMIN|ADMIN)|'(SUPER_ADMIN|ADMIN)')/;
-    const classAdminRole = ADMIN_ROLE.test(classBlock);
+      for (let i = cls.from; i < cls.to; i++) {
+        const m = src[i].match(HTTP);
+        if (!m) continue;
 
-    for (let i = classLine; i < src.length; i++) {
-      const m = src[i].match(HTTP);
-      if (!m) continue;
+        let a = i;
+        while (a > cls.from && /^\s*(@|\))/.test(src[a - 1])) a--;
+        let b = i;
+        while (b < cls.to - 1 && !/\(.*\)\s*[:{]/.test(src[b]) && b - i < 15) b++;
+        const block = src.slice(a, b + 1).join('\n');
 
-      let a = i;
-      while (a > classLine && /^\s*(@|\)|\*|\/\/)/.test(src[a - 1])) a--;
-      let b = i;
-      while (b < src.length - 1 && !/\(.*\)\s*[:{]/.test(src[b]) && b - i < 15) b++;
-      const block = src.slice(a, b + 1).join('\n');
-
-      const sub = m[2] ?? m[3] ?? m[4] ?? '';
-      routes.push({
-        file,
-        verb: m[1].toUpperCase(),
-        path: ('/' + base + (sub ? '/' + sub : '')).replace(/\/+/g, '/'),
-        guarded: classGuarded || /@UseGuards\([^)]*JwtAuth/.test(block),
-        declaredPublic: classPublic || /@Public\(\)/.test(block),
-        adminRole: classAdminRole || ADMIN_ROLE.test(block),
-      });
+        const sub = m[2] ?? m[3] ?? m[4] ?? '';
+        routes.push({
+          file,
+          verb: m[1].toUpperCase(),
+          path: ('/' + base + (sub ? '/' + sub : '')).replace(/\/+/g, '/'),
+          guarded: classGuarded || /@UseGuards\([^)]*JwtAuth/.test(block),
+          declaredPublic: classPublic || /@Public\(\)/.test(block),
+          adminRole: classAdminRole || ADMIN_ROLE.test(block),
+        });
+      }
     }
   }
   return routes;
@@ -160,6 +176,27 @@ describe('gateway route exposure', () => {
     // Guards the parser itself: a refactor that breaks the regex would otherwise
     // make every assertion below pass vacuously.
     expect(routes.length).toBeGreaterThan(500);
+  });
+
+  /**
+   * This spec and `admin-market-scope.regression.spec.ts` now share one
+   * comment-stripper and one controller-locator (`./spec-helpers/controller-
+   * source`) — a route either scan drops is a route BOTH would drop, silently.
+   * This is that spec's own tripwire (`it('sees every route decorator it
+   * counts…')`), ported: every `@Get/@Post/@Put/@Patch/@Delete/@All(` in the
+   * raw source sits inside some `@Controller`-decorated class's scanned range,
+   * or this count and `routes.length` disagree — which is exactly the shape of
+   * the old fault (a `@Controller` swallowed by a phantom comment, or a second
+   * controller in a file the locator never reached) making itself visible
+   * again, here, instead of only in the other spec.
+   */
+  it('agrees with the market-scope regression on how many routes the raw source declares', () => {
+    const DECLARED = /^[ \t]*@(?:Get|Post|Put|Patch|Delete|All)\(/gm;
+    let declared = 0;
+    for (const full of [...controllerFiles(CONTROLLERS), ...controllerFiles(LIBS)]) {
+      declared += (fs.readFileSync(full, 'utf8').match(DECLARED) ?? []).length;
+    }
+    expect(routes.length).toBe(declared);
   });
 
   it('exposes no route that is neither authenticated nor intentionally public', () => {
@@ -229,7 +266,12 @@ describe('gateway route exposure', () => {
     ]) {
       const at = src.indexOf(route);
       expect(at).toBeGreaterThan(-1);
-      expect(src.slice(at, at + 120)).toContain('@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)');
+      // SUPER_ADMIN only, not a global ADMIN, as of R12 leftover (b): personal
+      // data processing is a platform-wide act with no market column anywhere
+      // in libs/gdpr.
+      expect(src.slice(at, at + 120)).toContain(
+        "@Roles(UserRole.SUPER_ADMIN, 'perm:system.settings')",
+      );
     }
     // The request-scoped routes carry no user id in the URL; each must ask.
     for (const route of [

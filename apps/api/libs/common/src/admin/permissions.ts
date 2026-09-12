@@ -158,10 +158,15 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRole> = [
     key: 'regional_admin',
     name: 'Regional Admin',
     description: 'Everything an Admin can do, inside one market',
-    // No `staff.view`, `franchise.manage`, `system.health`: staff, franchises
-    // and platform health are global entities, and the market lock is enforced
-    // separately (guards/market-scope.ts) — this list is the second half of
-    // the same rule, not a substitute for it.
+    // No `franchise.manage`, `system.health`: franchises and platform health
+    // are global entities, and the market lock is enforced separately
+    // (guards/market-scope.ts) — this list is the second half of the same
+    // rule, not a substitute for it. `staff.view`/`staff.manage` DO belong
+    // here now: staff are global as a DIRECTORY but regional as RECORDS
+    // (audit F-31, R12) — `GET /admin/staff` and `PATCH /admin/staff/:id`
+    // narrow to the caller's own market in the handler, the same way every
+    // other list above does; `POST /admin/staff` and the role routes stay
+    // SUPER_ADMIN-only regardless of this key.
     permissions: [
       'dashboard.view',
       'orders.view',
@@ -186,6 +191,8 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRole> = [
       'delivery.manage',
       'support.view',
       'support.respond',
+      'staff.view',
+      'staff.manage',
       'wallet.audit',
       'loyalty.view',
       'modules.marketplace',

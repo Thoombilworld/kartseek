@@ -16,9 +16,25 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam, ApiQuery } fro
 import { type Request } from 'express';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { RolesGuard } from '@app/guards';
-import { Roles } from '@app/decorators';
 import { UserRole } from '@app/common';
 import { GdprService, type ConsentType } from './gdpr.service';
+// `libs/gdpr` is mounted by `api-gateway.module.ts`, so it runs inside the
+// gateway process, but it is a shared library and these three are the
+// gateway APP's own files — not a `@app/*` package. Reaching them by
+// relative path reuses the one canonical implementation instead of a second
+// copy (`scope-helper-uniqueness.spec.ts` proves `resolveScope` has exactly
+// one declaration, in that file) rather than reimplementing the lock check
+// and the denial copy here.
+//
+// `Roles` in particular replaces `@app/decorators`'s (whose signature is
+// `(...roles: UserRole[])`, so it cannot type a `'perm:...'` key at all) —
+// the gateway's own accepts `UserRole | string` and writes the same `'roles'`
+// metadata key `@app/guards`'s `RolesGuard` already reads, so the class-level
+// guard binding below needs no change for these three routes to carry a
+// permission key like every other admin route.
+import { refuseLockedAdmin } from '../../../apps/api-gateway/src/guards/market-scope';
+import { GlobalEntity } from '../../../apps/api-gateway/src/decorators/global-entity.decorator';
+import { Roles } from '../../../apps/api-gateway/src/decorators/roles.decorator';
 
 /**
  * Roles that may act on any data subject's records: the people who handle
@@ -174,10 +190,18 @@ export class GdprController {
     return { success: true, data };
   }
 
+  /**
+   * Processing another person's export request is a platform-wide act on
+   * personal data with no market column anywhere in `libs/gdpr` — SUPER_ADMIN
+   * only, not a global ADMIN, and `refuseLockedAdmin` refuses a region-locked
+   * caller before the request is ever touched (audit: escalated in the R8
+   * report as REACHABLE by a region-locked ADMIN and unowned by any brief).
+   */
   @Post('export/:requestId/process')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, 'perm:system.settings')
   @ApiOperation({ summary: '[Admin] Process a pending data export request' })
-  async processExport(@Param('requestId') requestId: string) {
+  async processExport(@Req() req: AuthenticatedRequest, @Param('requestId') requestId: string) {
+    refuseLockedAdmin(req, 'that export request', 'Personal-data requests are managed globally.');
     const result = await this.gdprService.processDataExport(requestId);
     return { success: true, request: result };
   }
@@ -207,10 +231,12 @@ export class GdprController {
     return { success: true, request: status };
   }
 
+  /** Same ruling as `processExport` — SUPER_ADMIN only, refused for a locked caller first. */
   @Post('erasure/:requestId/process')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, 'perm:system.settings')
   @ApiOperation({ summary: '[Admin] Process a pending data erasure request' })
   async processErasure(@Param('requestId') requestId: string, @Req() req: AuthenticatedRequest) {
+    refuseLockedAdmin(req, 'that erasure request', 'Personal-data requests are managed globally.');
     // Recorded as `processedBy`: the authenticated admin, not a body field the
     // caller used to be able to fill with anyone's id.
     const result = await this.gdprService.processErasure(requestId, req.user?.userId);
@@ -219,8 +245,15 @@ export class GdprController {
 
   // ── Compliance Dashboard ───────────────────────────────────────────────────
 
+  /**
+   * Platform-wide compliance counts across every market — there is no single
+   * region to narrow this to, so it carries `@GlobalEntity` rather than a
+   * scope call (this spec's own rule: the marker is for reads; every write
+   * above refuses a locked caller itself instead).
+   */
   @Get('compliance/dashboard')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, 'perm:system.settings')
+  @GlobalEntity('personal-data requests are platform-wide')
   @ApiOperation({ summary: '[Admin] Get GDPR compliance dashboard data' })
   async getComplianceDashboard() {
     const dashboard = await this.gdprService.getComplianceDashboard();

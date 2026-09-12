@@ -1,17 +1,28 @@
 import {
-  Controller, Get, Post, Put, UseGuards,
-  Param, Body, Query, Req, Inject, Logger, HttpException, HttpStatus, ForbiddenException } from '@nestjs/common';
+  Controller,
+  Get,
+  Post,
+  Put,
+  UseGuards,
+  Param,
+  Body,
+  Query,
+  Req,
+  Inject,
+  Logger,
+  HttpException,
+  HttpStatus,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiParam, ApiQuery, ApiBody,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard } from '@app/security';
 import { generateDocumentId } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
+import { resolveScope } from '../guards/market-scope';
 
 /**
  * Doctor Gateway Controller
@@ -29,11 +40,10 @@ import { UserRole, rpcCatch } from '@app/common';
 export class DoctorController {
   private readonly logger = new Logger(DoctorController.name);
 
-  constructor(
-    @Inject('DOCTOR_SERVICE') private readonly client: ClientProxy) {}
+  constructor(@Inject('DOCTOR_SERVICE') private readonly client: ClientProxy) {}
 
   /** Helper — sends a TCP message and falls back gracefully on timeout / error. */
-    /**
+  /**
    * Forward to doctor-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -48,10 +58,7 @@ export class DoctorController {
       return await lastValueFrom(
         this.client
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Doctor service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Doctor service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -65,6 +72,11 @@ export class DoctorController {
     const id = req?.user?.id ?? req?.user?.userId ?? req?.user?.sub;
     if (!id) throw new ForbiddenException('Could not identify the signed-in user.');
     return String(id);
+  }
+
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   // ── Specialties ───────────────────────────────────────────────────────────
@@ -89,7 +101,8 @@ export class DoctorController {
     @Query('specialty') specialty?: string,
     @Query('city') city?: string,
     @Query('page') page = 1,
-    @Query('limit') limit = 20) {
+    @Query('limit') limit = 20,
+  ) {
     return this.send('get_hospitals', { specialty, city, page: +page, limit: +limit });
   }
 
@@ -106,7 +119,8 @@ export class DoctorController {
   @ApiQuery({ name: 'specialty', required: false })
   getDoctorsByHospital(
     @Param('hospitalId') hospitalId: string,
-    @Query('specialty') specialty?: string) {
+    @Query('specialty') specialty?: string,
+  ) {
     return this.send('get_hospital_doctors', { hospitalId, specialty });
   }
 
@@ -117,9 +131,12 @@ export class DoctorController {
   @ApiParam({ name: 'hospitalId' })
   @ApiBody({ schema: { example: { status: 'inactive' } } })
   updateHospitalStatus(
+    @Req() req: any,
     @Param('hospitalId') hospitalId: string,
-    @Body('status') status: string) {
-    return this.send('update_hospital_status', { id: hospitalId, status });
+    @Body('status') status: string,
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that hospital');
+    return this.send('update_hospital_status', { id: hospitalId, status, scope });
   }
 
   // ── Clinics ───────────────────────────────────────────────────────────────
@@ -128,9 +145,7 @@ export class DoctorController {
   @ApiOperation({ summary: 'List clinics' })
   @ApiQuery({ name: 'specialty', required: false })
   @ApiQuery({ name: 'city', required: false })
-  getClinics(
-    @Query('specialty') specialty?: string,
-    @Query('city') city?: string) {
+  getClinics(@Query('specialty') specialty?: string, @Query('city') city?: string) {
     return this.send('get_clinics', { specialty, city });
   }
 
@@ -147,9 +162,12 @@ export class DoctorController {
   @ApiOperation({ summary: 'Update clinic status (admin)' })
   @ApiParam({ name: 'clinicId' })
   updateClinicStatus(
+    @Req() req: any,
     @Param('clinicId') clinicId: string,
-    @Body('status') status: string) {
-    return this.send('update_clinic_status', { id: clinicId, status });
+    @Body('status') status: string,
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that clinic');
+    return this.send('update_clinic_status', { id: clinicId, status, scope });
   }
 
   // ── Doctors ───────────────────────────────────────────────────────────────
@@ -164,7 +182,8 @@ export class DoctorController {
     @Query('specialty') specialty?: string,
     @Query('city') city?: string,
     @Query('page') page = 1,
-    @Query('limit') limit = 20) {
+    @Query('limit') limit = 20,
+  ) {
     return this.send('get_doctors', { specialty, city, page: +page, limit: +limit });
   }
 
@@ -179,9 +198,7 @@ export class DoctorController {
   @ApiOperation({ summary: 'Get available appointment slots for a date' })
   @ApiParam({ name: 'doctorId' })
   @ApiQuery({ name: 'date', required: true, example: '2026-06-20' })
-  getSlots(
-    @Param('doctorId') doctorId: string,
-    @Query('date') date: string) {
+  getSlots(@Param('doctorId') doctorId: string, @Query('date') date: string) {
     return this.send('get_doctor_slots', { doctorId, date });
   }
 
@@ -191,9 +208,12 @@ export class DoctorController {
   @ApiOperation({ summary: 'Update doctor status (admin)' })
   @ApiParam({ name: 'doctorId' })
   updateDoctorStatus(
+    @Req() req: any,
     @Param('doctorId') doctorId: string,
-    @Body('status') status: string) {
-    return this.send('update_doctor_status', { id: doctorId, status });
+    @Body('status') status: string,
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that doctor');
+    return this.send('update_doctor_status', { id: doctorId, status, scope });
   }
 
   // ── Appointments ──────────────────────────────────────────────────────────
@@ -228,18 +248,29 @@ export class DoctorController {
   @ApiBody({
     schema: {
       example: {
-        doctorId: 'DOC-001', date: '2026-06-20', time: '09:00',
-        type: 'in-clinic', patientName: 'A. Patient', symptoms: 'Follow-up',
+        doctorId: 'DOC-001',
+        date: '2026-06-20',
+        time: '09:00',
+        type: 'in-clinic',
+        patientName: 'A. Patient',
+        symptoms: 'Follow-up',
       },
     },
   })
   bookAppointment(
     @Req() req: any,
-    @Body() body: {
-      doctorId: string; date: string; time: string;
-      type?: 'in-clinic' | 'video'; patientName?: string;
-      patientAge?: number; patientGender?: string; symptoms?: string;
-    }) {
+    @Body()
+    body: {
+      doctorId: string;
+      date: string;
+      time: string;
+      type?: 'in-clinic' | 'video';
+      patientName?: string;
+      patientAge?: number;
+      patientGender?: string;
+      symptoms?: string;
+    },
+  ) {
     return this.send('book_appointment', { ...body, customerId: this.callerId(req) });
   }
 
@@ -263,9 +294,7 @@ export class DoctorController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update appointment status' })
   @ApiParam({ name: 'id' })
-  updateAppointmentStatus(
-    @Param('id') id: string,
-    @Body('status') status: string) {
+  updateAppointmentStatus(@Param('id') id: string, @Body('status') status: string) {
     return this.send('update_appointment_status', { id, status });
   }
 
@@ -275,9 +304,7 @@ export class DoctorController {
   @ApiOperation({ summary: 'Get reviews for a doctor / hospital / clinic' })
   @ApiParam({ name: 'targetType', example: 'doctor' })
   @ApiParam({ name: 'targetId', example: 'DOC-001' })
-  getReviews(
-    @Param('targetType') targetType: string,
-    @Param('targetId') targetId: string) {
+  getReviews(@Param('targetType') targetType: string, @Param('targetId') targetId: string) {
     return this.send('get_reviews', { targetType, targetId });
   }
 
@@ -292,9 +319,7 @@ export class DoctorController {
   @ApiOperation({ summary: 'List all appointments (admin)' })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'date', required: false })
-  getAllAppointments(
-    @Query('status') status?: string,
-    @Query('date') date?: string) {
+  getAllAppointments(@Query('status') status?: string, @Query('date') date?: string) {
     return this.send('get_all_appointments', { status, date });
   }
 
@@ -305,9 +330,7 @@ export class DoctorController {
   @ApiOperation({ summary: 'Advance doctor token to next patient' })
   @ApiParam({ name: 'doctorId' })
   @ApiBody({ schema: { example: { doctorId: 'DOC-001', date: '2026-07-15' } } })
-  advanceToken(
-    @Param('doctorId') doctorId: string,
-    @Body('date') date?: string) {
+  advanceToken(@Param('doctorId') doctorId: string, @Body('date') date?: string) {
     return this.send('advance_token', { doctorId, date });
   }
 
@@ -315,9 +338,7 @@ export class DoctorController {
   @ApiOperation({ summary: 'Get live queue status for a doctor' })
   @ApiParam({ name: 'doctorId' })
   @ApiQuery({ name: 'date', required: false })
-  getQueueStatus(
-    @Param('doctorId') doctorId: string,
-    @Query('date') date?: string) {
+  getQueueStatus(@Param('doctorId') doctorId: string, @Query('date') date?: string) {
     return this.send('get_queue_status', { doctorId, date });
   }
 
@@ -395,7 +416,8 @@ export class DoctorController {
   getPrescriptionsByDoctor(
     @Param('doctorId') doctorId: string,
     @Query('limit') limit?: string,
-    @Query('offset') offset?: string) {
+    @Query('offset') offset?: string,
+  ) {
     return this.send('get_prescriptions_by_doctor', {
       doctorId,
       limit: limit ? +limit : undefined,
@@ -409,7 +431,8 @@ export class DoctorController {
   @ApiParam({ name: 'id' })
   linkPrescriptionToPharmacy(@Param('id') id: string, @Body() dto: { pharmacyOrderId: string }) {
     return this.send('link_prescription_pharmacy', {
-      prescriptionId: id, pharmacyOrderId: dto.pharmacyOrderId,
+      prescriptionId: id,
+      pharmacyOrderId: dto.pharmacyOrderId,
     });
   }
 
@@ -458,7 +481,9 @@ export class DoctorController {
   @ApiParam({ name: 'id' })
   rescheduleAppointment(@Param('id') id: string, @Body() dto: { date: string; time: string }) {
     return this.send('reschedule_appointment', {
-      appointmentId: id, date: dto.date, time: dto.time,
+      appointmentId: id,
+      date: dto.date,
+      time: dto.time,
     });
   }
 

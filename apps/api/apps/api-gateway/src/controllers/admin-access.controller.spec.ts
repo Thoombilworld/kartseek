@@ -91,15 +91,25 @@ describe('AdminAccessController', () => {
 
   // ── Market lock ────────────────────────────────────────────────────────────
 
-  it('refuses a locked admin even on a read — staff are not managed per market', async () => {
+  it('refuses a locked admin on roles even on a read — roles are not managed per market', async () => {
     const { ctrl } = build();
     await expect(ctrl.listRoles(req(lockedAdmin))).rejects.toThrow(ForbiddenException);
     await expect(
-      ctrl.listStaff(req(lockedAdmin), 1, 20, undefined, undefined, undefined),
-    ).rejects.toThrow(ForbiddenException);
-    await expect(
       ctrl.createRole(req(lockedAdmin), { key: 'x_role', name: 'X', permissions: [] } as any),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  /**
+   * The narrower rule (audit F-31): staff are global as a DIRECTORY and
+   * regional as RECORDS. A locked admin reads their own market's staff rather
+   * than being refused the whole screen — `admin-access-scope.spec.ts` covers
+   * the narrowing (own-market edits, cross-market refusals) in full.
+   */
+  it('lets a locked admin read the staff directory, narrowed to their own market', async () => {
+    const { ctrl } = build();
+    await expect(
+      ctrl.listStaff(req(lockedAdmin), 1, 20, undefined, undefined, undefined),
+    ).resolves.toBeDefined();
   });
 
   it('lets a global admin through', async () => {
@@ -492,17 +502,26 @@ describe('AdminAccessController', () => {
       }
     });
 
-    it('keeps every write to SUPER_ADMIN holding staff.manage', () => {
-      // Reading the directory is not the authority to mint an account in it.
-      for (const method of [
-        'createRole',
-        'updateRole',
-        'deleteRole',
-        'createStaff',
-        'updateStaff',
-      ] as const) {
+    it('keeps role writes and minting a staff account to SUPER_ADMIN holding staff.manage', () => {
+      // Reading the directory is not the authority to mint an account in it —
+      // and neither is editing your own market's staff the authority to write
+      // the platform's permission vocabulary.
+      for (const method of ['createRole', 'updateRole', 'deleteRole', 'createStaff'] as const) {
         expect(declared(method)).toEqual([UserRole.SUPER_ADMIN, 'perm:staff.manage']);
       }
+    });
+
+    it('admits a global ADMIN holding staff.manage to updateStaff — narrowed to their own market in the handler', () => {
+      // `updateStaff` is the one write a region-locked admin may reach at all,
+      // and only for staff already locked to their own market (R12, audit
+      // F-31): the route-level gate widens, the handler body is what actually
+      // narrows it back down (`this.scopeOf` + `assertInMarket`, and the
+      // explicit refusals on a role grant or a market-lock change).
+      expect(declared('updateStaff')).toEqual([
+        UserRole.SUPER_ADMIN,
+        UserRole.ADMIN,
+        'perm:staff.manage',
+      ]);
     });
 
     it('names only keys the vocabulary defines', () => {

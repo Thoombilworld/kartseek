@@ -1,4 +1,23 @@
-import { Controller, Get, Post, Put, Param, Body, Query, Inject, DefaultValuePipe, ParseIntPipe, ParseUUIDPipe, UseGuards, Logger, HttpException, HttpStatus, Req, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  Query,
+  Inject,
+  DefaultValuePipe,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  UseGuards,
+  Logger,
+  HttpException,
+  HttpStatus,
+  Req,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { rpcCatch } from '@app/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
@@ -25,12 +44,10 @@ import { Public } from '../decorators/public.decorator';
 export class HotelController {
   private readonly logger = new Logger(HotelController.name);
 
-  constructor(
-    @Inject('HOTEL_SERVICE') private readonly hotelClient: ClientProxy,
-  ) {}
+  constructor(@Inject('HOTEL_SERVICE') private readonly hotelClient: ClientProxy) {}
 
   /** Helper — sends TCP message with 5s timeout and graceful fallback. */
-    /**
+  /**
    * Forward to hotel-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -45,10 +62,7 @@ export class HotelController {
       return await lastValueFrom(
         this.hotelClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Hotel service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Hotel service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -152,7 +166,11 @@ export class HotelController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Cancel a booking' })
-  cancelBooking(@Param('bookingId') bookingId: string, @Body('reason') reason: string, @Req() req: any) {
+  cancelBooking(
+    @Param('bookingId') bookingId: string,
+    @Body('reason') reason: string,
+    @Req() req: any,
+  ) {
     return this.send('cancel_hotel_booking', { bookingId, reason, ...this.requesterOf(req) });
   }
 
@@ -241,12 +259,15 @@ export class HotelController {
   }
 
   // ── Admin ─────────────────────────────────────────────────────────────
-
-  @Get('admin/stats')
-  @ApiOperation({ summary: 'Admin: hotel module statistics' })
-  getAdminStats() {
-    return this.send('admin_hotel_stats', {});
-  }
+  //
+  // `GET /hotels/admin/stats` used to live here: `@UseGuards(JwtAuthGuard)` is
+  // this whole controller's CLASS-level guard, with no per-route `@Roles`, so
+  // any authenticated caller — any role, any market — read platform-wide
+  // hotel figures. It duplicated the properly scoped
+  // `GET /admin/hotel/dashboard` in `admin-hotel.controller.ts` (which does
+  // carry `@Roles` and forwards the caller's market), had no caller anywhere
+  // in `apps/web`, `packages/shared-core` or `apps/api/scripts` (checked by
+  // grep), and is deleted rather than fixed in place.
 
   @Get('admin/hotels')
   @ApiOperation({ summary: 'Admin: list all hotels with filters' })

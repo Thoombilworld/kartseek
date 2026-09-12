@@ -333,13 +333,17 @@ export class AdminGroceryController {
   }
 
   // ── Settings ──────────────────────────────────────────────────
-  // Platform-wide policy (commission, minimum order, auto-approve) — the same
-  // knobs in every market, not something a regional admin owns a copy of.
+  // A delivery fee, a minimum basket and a service radius are market facts
+  // (audit I9) — the read takes a market, with a platform-wide fallback row.
+  // The write stays global-only below: nothing yet lets an operator save a
+  // market's own row, so a locked admin is refused rather than silently
+  // editing every market at once.
   @Get('settings')
   @ApiOperation({ summary: 'Get grocery admin settings' })
-  async getSettings(@Req() req: any) {
-    this.scopeOf(req, undefined, 'those settings');
-    return this.send('admin.grocery.settings', {});
+  @ApiQuery({ name: 'country', required: false })
+  async getSettings(@Req() req: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those settings');
+    return this.send('admin.grocery.settings', { market, scope });
   }
 
   @Post('settings')

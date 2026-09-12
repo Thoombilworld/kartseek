@@ -36,8 +36,8 @@ import { RedisService } from '@app/redis';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
-import { refuseLockedAdmin } from '../guards/market-scope';
-import { applyMarketFilter } from '@app/common';
+import { refuseLockedAdmin, resolveScope } from '../guards/market-scope';
+import { applyMarketFilter, assertInMarket, requireMarket } from '@app/common';
 import { AdminRole } from '../entities/admin-role.entity';
 import { User } from '../entities/user.entity';
 import {
@@ -62,7 +62,7 @@ const MAX_PAGE_SIZE = 100;
 const REVOCATION_TTL_SECONDS = 3600;
 
 /**
- * Roles & staff — SUPER_ADMIN to write, and never a market-locked account.
+ * Roles & staff.
  *
  * Both `/admin/roles` and `/admin/staff` used to be static arrays inside the
  * admin console: seventeen roles with invented user counts and twelve
@@ -70,19 +70,23 @@ const REVOCATION_TTL_SECONDS = 3600;
  * the fixtures back, so no permission the console displayed had ever been
  * recorded anywhere, let alone enforced.
  *
- * These are global entities by nature — a role applies in every market, and a
- * staff record is what *creates* a market lock — so a region-locked admin is
- * refused outright rather than scoped, reads included. Letting the Qatar admin
- * merely *read* the directory would still hand them every colleague's email
- * and every market's staffing; letting them write would let them mint
- * themselves an unlocked account.
+ * Roles are a global entity by nature — the permission vocabulary is
+ * platform-wide, not a market's own business — so a region-locked admin is
+ * refused outright on every `/admin/roles` route, reads included.
  *
- * The two reads also admit a global ADMIN holding `staff.view` — the console's
- * "Staff Management" item is gated on that key, and a link that always answers
- * 403 is worse than no link. Every write stays SUPER_ADMIN + `staff.manage`:
- * reading the directory is not the same authority as minting an account in it.
- * `regional_admin` carries neither key, so a market-locked admin is still
- * refused here on two counts.
+ * Staff are different: global as a DIRECTORY, regional as RECORDS (audit
+ * F-31). `GET /admin/staff` and `PATCH /admin/staff/:id` admit a region-locked
+ * admin, narrowed to staff whose own `regionCode` equals theirs — see
+ * `scopeOf`/`assertInMarket` in each handler. Neither route lets a locked
+ * caller grant a role or touch the market lock itself (that would be an
+ * escalation performed one PATCH at a time), and `POST /admin/staff` — minting
+ * an account — stays SUPER_ADMIN only: creating an unlocked account is a
+ * platform act no market's administrator should hold.
+ *
+ * The reads also admit a global ADMIN holding `staff.view`; every write also
+ * requires `staff.manage`. The seeded `regional_admin` role carries both keys
+ * (it did not, before this: a region-locked admin was refused the whole
+ * screen, so the gap was never noticed).
  */
 @ApiTags('👑 Admin — Access')
 @ApiBearerAuth('JWT')
@@ -163,6 +167,11 @@ export class AdminAccessController {
   /** The acting administrator, from the verified token — recorded on mutations. */
   private actorId(req: any): string {
     return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
+  }
+
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   /**
@@ -314,7 +323,6 @@ export class AdminAccessController {
 
   @Get('staff')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, 'perm:staff.view')
-  @GlobalEntity('staff directory is global; the lock is a property of each record')
   @ApiOperation({ summary: 'Staff accounts' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'roleId', required: false })
@@ -327,7 +335,12 @@ export class AdminAccessController {
     @Query('roleId') roleId?: string,
     @Query('regionCode') regionCode?: string,
   ) {
-    refuseLockedAdmin(req, 'roles and staff', 'Roles and staff are managed globally.');
+    // Staff are global as a DIRECTORY and regional as RECORDS. A locked admin
+    // was refused the whole screen, so they could not see who administers their
+    // own market — while `users.region_code` was sitting right there and this
+    // route already accepted `?regionCode=` (audit F-31). Roles stay global:
+    // they are the permission vocabulary, not a market's own business.
+    const { scope, market } = this.scopeOf(req, regionCode, 'those staff accounts');
     const size = Math.min(Math.max(Number(limit) || 20, 1), MAX_PAGE_SIZE);
     const current = Math.max(Number(page) || 1, 1);
     const qb = this.userRepo
@@ -339,7 +352,22 @@ export class AdminAccessController {
       });
     }
     if (roleId) qb.andWhere('u.adminRoleId = :roleId', { roleId });
-    applyMarketFilter(qb, 'UPPER(u.regionCode)', undefined, regionCode);
+    // `requireMarket`, not the permissive `requested` slot: `applyMarketFilter`
+    // deliberately IGNORES a value in that slot it cannot read (it only ever
+    // expects a global admin's typo there, and a global admin may see every
+    // market anyway) — so `?regionCode=ZZ` would add no predicate at all and
+    // hand back every market's staff (N4). `market` is already the resolved,
+    // lock-aware value (the caller's own region when locked, the requested
+    // filter when global); `requireMarket` is what refuses it here rather
+    // than widening it when it cannot be read.
+    applyMarketFilter(
+      qb,
+      'UPPER(u.regionCode)',
+      requireMarket(market, 'staff market', this.logger),
+    );
+    // A locked caller additionally never sees a global account: an unlocked
+    // admin belongs to every market, which is not theirs to administer.
+    if (scope) qb.andWhere('u.regionLocked = true');
     const [rows, total] = await qb
       .orderBy('u.createdAt', 'DESC')
       .skip((current - 1) * size)
@@ -425,20 +453,38 @@ export class AdminAccessController {
   }
 
   @Patch('staff/:id')
-  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.manage')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, 'perm:staff.manage')
   @ApiOperation({ summary: "Change a staff member's role, market lock or active flag" })
   async updateStaff(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStaffDto,
   ) {
-    refuseLockedAdmin(req, 'roles and staff', 'Roles and staff are managed globally.');
+    const { scope } = this.scopeOf(req, undefined, 'that staff account');
     const user = await this.userRepo.findOne({ where: { id } });
     // Not a 403: these routes manage staff, and a customer id is simply not a
     // staff member. Saying so plainly avoids the staff directory doubling as a
     // way to edit ordinary users.
     if (!user || !(STAFF_ROLES as readonly string[]).includes(String(user.role).toUpperCase())) {
       throw new NotFoundException('Staff member not found');
+    }
+    // A locked admin may edit staff in their own market — and only staff who
+    // are themselves locked to it. A global account belongs to every market.
+    if (scope) {
+      if (!user.regionLocked) {
+        refuseLockedAdmin(req, 'a global staff account');
+      }
+      assertInMarket(user.regionCode, scope, 'staff account', this.logger);
+      // Two things a market's administrator must not do to their own staff:
+      // grant a role (the permission vocabulary is platform-wide) and unlock
+      // the account (which would make it global — an escalation performed one
+      // PATCH at a time).
+      if (dto.adminRoleId !== undefined) {
+        throw new ForbiddenException('Only a global administrator may change a role assignment.');
+      }
+      if (dto.regionCode !== undefined || dto.regionLocked !== undefined) {
+        throw new ForbiddenException('Only a global administrator may change a market lock.');
+      }
     }
     if (user.id === this.actorId(req) && dto.isActive === false) {
       throw new BadRequestException('You cannot deactivate your own account.');
@@ -452,8 +498,16 @@ export class AdminAccessController {
     }
     const nextMarket =
       dto.regionCode !== undefined ? (dto.regionCode?.toUpperCase() ?? null) : user.regionCode;
-    if (dto.regionLocked === true && !nextMarket) {
-      throw new BadRequestException('A locked account needs a market');
+    const nextLocked = dto.regionLocked !== undefined ? dto.regionLocked : user.regionLocked;
+    // The RESULTING pair, not the request. `{"regionCode": null}` on a locked
+    // account passed the old check — `dto.regionLocked` was undefined — and left
+    // `region_locked = true` with `region_code = null`. `marketScopeOf` reads
+    // that as `locked: false`, so the account quietly became a GLOBAL admin
+    // while the console went on drawing its "region locked" badge (audit H-13).
+    if (nextLocked && !nextMarket) {
+      throw new BadRequestException(
+        'A locked account needs a market: set a market, or clear the lock in the same request.',
+      );
     }
 
     if (dto.firstName !== undefined) user.firstName = dto.firstName;
@@ -482,11 +536,20 @@ export class AdminAccessController {
     } else if (dto.isActive === true) {
       await this.restoreSessions(id);
     }
-    await this.kafka.publish('admin.staff.updated', {
-      userId: id,
-      actorId: this.actorId(req),
-      changes: Object.keys(dto),
-    });
+    // Best-effort, like the session revocation above: the staff record is
+    // already durably saved, and an audit event that failed to publish must
+    // not turn a successful edit into a 500 for the operator who made it.
+    try {
+      await this.kafka.publish('admin.staff.updated', {
+        userId: id,
+        actorId: this.actorId(req),
+        changes: Object.keys(dto),
+      });
+    } catch (e) {
+      this.logger.error(
+        `Staff account updated (${id}) but the audit event failed to publish: ${(e as Error).message}`,
+      );
+    }
     return { data: this.staffView(saved) };
   }
 

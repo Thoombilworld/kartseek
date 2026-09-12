@@ -1147,8 +1147,11 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Accept an answer (seller/admin)' })
-  async acceptAnswer(@Param('answerId') answerId: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ACCEPT_ANSWER, { answerId });
+  async acceptAnswer(@Req() req: any, @Param('answerId') answerId: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ACCEPT_ANSWER, {
+      answerId,
+      scope: this.scopeOf(req, undefined, 'that answer').scope,
+    });
   }
 
   // ── Delivery Assignments ───────────────────────────────────────────────────

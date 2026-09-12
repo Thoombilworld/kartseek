@@ -394,17 +394,14 @@ describe('there is one implementation of the market predicate', () => {
    *   • the list's length is pinned, so a second pending item cannot be added
    *     quietly.
    */
-  const PENDING_HANDOVER = [
-    {
-      at: 'fulfillment.service.ts:1107',
-      expect: "applyMarketFilter(qb, 's.region_code', normaliseMarket(query.region));",
-      fix: "requireMarket(query.region, 'product reports', this.logger)",
-      why: 'R12 holds uncommitted edits in this file (acceptAnswer); see task-11-report.md round 4',
-    },
-  ];
+  // Empty once the one pending site (`fulfillment.service.ts:1107`, the
+  // `acceptAnswer` hand-over) landed via `requireMarket` in R12 — see that
+  // task's report. The length stays pinned so a second pending item cannot be
+  // added quietly.
+  const PENDING_HANDOVER: Array<{ at: string; expect: string; fix: string; why: string }> = [];
 
   it('the hand-over list is exactly what it claims, and no longer', () => {
-    expect(PENDING_HANDOVER).toHaveLength(1);
+    expect(PENDING_HANDOVER).toHaveLength(0);
     const stale: string[] = [];
     for (const pending of PENDING_HANDOVER) {
       const file = sources().find((f) => f.endsWith(pending.at.split(':')[0]));

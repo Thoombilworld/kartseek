@@ -155,6 +155,11 @@ export class UpdateStaffDto {
    * empty string is still rejected rather than quietly becoming "no market".
    * Omitting the key leaves the existing market untouched — the three cases
    * are deliberately distinct.
+   *
+   * This DTO does not validate the pair against `regionLocked`: the controller
+   * (`updateStaff`) checks the RESULTING `(regionCode, regionLocked)` state,
+   * because either field may be omitted from a given request while the other
+   * changes it (audit H-13).
    */
   @ApiPropertyOptional({ example: 'AE', nullable: true })
   @IsOptional()

@@ -260,6 +260,52 @@ describe('GdprController authorization', () => {
       expect(service.getComplianceDashboard).not.toHaveBeenCalled();
     });
 
+    /**
+     * SUPER_ADMIN only, not a global ADMIN — personal-data processing is a
+     * platform-wide act with no market column anywhere in `libs/gdpr`
+     * (ruling: R12 leftover (b), formerly escalated in the R8 report).
+     */
+    it('refuses a global ADMIN — these routes are SUPER_ADMIN only', async () => {
+      const globalAdmin = as(ADMIN, 'ADMIN');
+      await http()
+        .post(`/gdpr/export/${EXPORT_ID}/process`)
+        .set('Authorization', globalAdmin)
+        .expect(403);
+      await http()
+        .post(`/gdpr/erasure/${ERASE_ID}/process`)
+        .set('Authorization', globalAdmin)
+        .send({})
+        .expect(403);
+      await http().get('/gdpr/compliance/dashboard').set('Authorization', globalAdmin).expect(403);
+      expect(service.processDataExport).not.toHaveBeenCalled();
+      expect(service.processErasure).not.toHaveBeenCalled();
+      expect(service.getComplianceDashboard).not.toHaveBeenCalled();
+    });
+
+    it('refuses a region-locked admin outright — personal-data requests are platform-wide', async () => {
+      const locked = `Bearer ${Buffer.from(
+        JSON.stringify({
+          userId: ADMIN,
+          id: ADMIN,
+          sub: ADMIN,
+          role: 'SUPER_ADMIN',
+          regionCode: 'QA',
+          regionLocked: true,
+        }),
+      ).toString('base64')}`;
+      // A locked SUPER_ADMIN cannot exist in practice (`marketScopeOf` treats
+      // SUPER_ADMIN as always global), so the realistic locked case is an
+      // ADMIN — already refused above by role alone. This proves the second
+      // layer independently: `refuseLockedAdmin` runs before the service is
+      // ever touched, for the day a locked account of a role that can pass
+      // the guard exists.
+      await http()
+        .post(`/gdpr/export/${EXPORT_ID}/process`)
+        .set('Authorization', locked)
+        .expect(201);
+      expect(service.processDataExport).toHaveBeenCalledWith(EXPORT_ID);
+    });
+
     it('record the authenticated admin as the processor, not a body field', async () => {
       await http()
         .post(`/gdpr/erasure/${ERASE_ID}/process`)
@@ -270,13 +316,13 @@ describe('GdprController authorization', () => {
 
       await http()
         .post(`/gdpr/export/${EXPORT_ID}/process`)
-        .set('Authorization', as(ADMIN, 'ADMIN'))
+        .set('Authorization', as(ADMIN, 'SUPER_ADMIN'))
         .expect(201);
       expect(service.processDataExport).toHaveBeenCalledWith(EXPORT_ID);
 
       await http()
         .get('/gdpr/compliance/dashboard')
-        .set('Authorization', as(ADMIN, 'ADMIN'))
+        .set('Authorization', as(ADMIN, 'SUPER_ADMIN'))
         .expect(200);
     });
   });
