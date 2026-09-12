@@ -21,8 +21,8 @@ import {
   type PaginatedMessage,
   RpcAwareExceptionsFilter,
   type SellerScopedMessage,
+  marketPredicate,
   messageId,
-  refuseUnattributable,
   requireId,
 } from '@app/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
@@ -2578,77 +2578,82 @@ export class MarketplaceController {
   // ── Phase 2 TCP Handlers ────────────────────────────────────────────────
 
   /**
-   * None of the ten analytics reads takes a market.
+   * The ten analytics reads take the market the gateway resolved.
    *
-   * `MarketplaceAnalyticsService` aggregates platform-wide and has no region
-   * parameter on any of its methods, so a region-locked admin asking for
-   * "revenue" would be handed the platform's revenue with their own market's
-   * name on the screen. Until those methods take a region (Plan C1), a scoped
-   * caller is refused rather than answered with a number that is not theirs.
-   * A global admin — no scope — is unaffected.
+   * They used to refuse any scoped caller through a `refuseScopedReport`
+   * wrapper, because `MarketplaceAnalyticsService` had no region parameter and
+   * answering would have handed a regional admin the platform's numbers under
+   * their own market's name. It has one on every method now (R9), so they
+   * answer — `marketPredicate` puts the lock ahead of whatever `?country=`
+   * asked for, and `undefined` (a global admin) still means every market.
+   *
+   * There is no per-controller refusal wrapper left to drift: a read that
+   * genuinely cannot be attributed calls `refuseUnattributable` at the handler
+   * that has the problem, where a reviewer can see it.
    */
-  private refuseScopedReport(scope?: string): void {
-    refuseUnattributable(scope, 'report', this.logger);
-  }
-
   @MessagePattern({ cmd: 'admin_get_revenue_analytics' })
   tcpRevenueAnalytics(@Payload() data: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getRevenueAnalytics(data?.period);
+    return this.analytics.getRevenueAnalytics(
+      data?.period,
+      marketPredicate(data?.scope, data?.region),
+    );
   }
 
   @MessagePattern({ cmd: 'admin_get_conversion_funnel' })
   tcpConversionFunnel(@Payload() data: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getConversionFunnel(data?.period);
+    return this.analytics.getConversionFunnel(
+      data?.period,
+      marketPredicate(data?.scope, data?.region),
+    );
   }
 
   @MessagePattern({ cmd: 'admin_get_seller_rankings' })
   tcpSellerRankings(@Payload() data: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getSellerRankings(data?.sortBy);
+    return this.analytics.getSellerRankings(
+      data?.sortBy,
+      marketPredicate(data?.scope, data?.region),
+    );
   }
 
   @MessagePattern({ cmd: 'admin_get_category_performance' })
   tcpCategoryPerformance(@Payload() data?: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getCategoryPerformance();
+    return this.analytics.getCategoryPerformance(marketPredicate(data?.scope, data?.region));
   }
 
   @MessagePattern({ cmd: 'admin_get_regional_performance' })
   tcpRegionalPerformance(@Payload() data?: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getRegionalPerformance();
+    return this.analytics.getRegionalPerformance(marketPredicate(data?.scope, data?.region));
   }
 
   @MessagePattern({ cmd: 'admin_get_inventory_aging' })
   tcpInventoryAging(@Payload() data?: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getInventoryAging();
+    return this.analytics.getInventoryAging(marketPredicate(data?.scope, data?.region));
   }
 
   @MessagePattern({ cmd: 'admin_get_return_analysis' })
   tcpReturnAnalysis(@Payload() data?: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getReturnRateAnalysis();
+    return this.analytics.getReturnRateAnalysis(marketPredicate(data?.scope, data?.region));
   }
 
   @MessagePattern({ cmd: 'admin_get_fraud_alerts' })
   tcpFraudAlerts(@Payload() data?: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getFraudAlerts();
+    return this.analytics.getFraudAlerts(marketPredicate(data?.scope, data?.region));
   }
 
   @MessagePattern({ cmd: 'admin_get_sla_compliance' })
   tcpSLACompliance(@Payload() data: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getSLACompliance(data?.sellerId);
+    return this.analytics.getSLACompliance(
+      data?.sellerId,
+      marketPredicate(data?.scope, data?.region),
+    );
   }
 
   @MessagePattern({ cmd: 'admin_get_penalty_ledger' })
   tcpPenaltyLedger(@Payload() data: any) {
-    this.refuseScopedReport(data?.scope);
-    return this.analytics.getPenaltyLedger(data?.sellerId);
+    return this.analytics.getPenaltyLedger(
+      data?.sellerId,
+      marketPredicate(data?.scope, data?.region),
+    );
   }
 
   @MessagePattern({ cmd: 'seller_get_dashboard' })
