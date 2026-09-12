@@ -1,8 +1,9 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
+import { normaliseMarket } from '@app/common';
 import * as crypto from 'crypto';
 import { Payment, PaymentStatus, PaymentModule, PaymentGateway } from './entities/payment.entity';
 import { GatewayAdapterFactory } from './adapters/gateway-adapter.factory';
@@ -38,7 +39,7 @@ export class PaymentOrchestratorService {
   async initiatePayment(dto: InitiatePaymentDto): Promise<PaymentResult> {
     this.logger.log(
       `[Payment] Initiating | Module: ${dto.module} | ${dto.currency} ${dto.amount} | ` +
-      `Country: ${dto.countryCode} | Method: ${dto.methodType}`,
+        `Country: ${dto.countryCode} | Method: ${dto.methodType}`,
     );
 
     // 1. Validate
@@ -152,9 +153,7 @@ export class PaymentOrchestratorService {
     });
 
     // Escrow: successful payments go to ESCROW_HOLD
-    const newStatus = result.verified
-      ? PaymentStatus.ESCROW_HOLD
-      : PaymentStatus.FAILED;
+    const newStatus = result.verified ? PaymentStatus.ESCROW_HOLD : PaymentStatus.FAILED;
 
     payment.status = newStatus;
     payment.gatewayPaymentId = result.gatewayPaymentId;
@@ -266,8 +265,13 @@ export class PaymentOrchestratorService {
   }
 
   async processTaxiPayment(dto: {
-    rideId: string; customerId: string; customerEmail?: string;
-    estimatedFare: number; currency: string; countryCode: string; paymentMethod: string;
+    rideId: string;
+    customerId: string;
+    customerEmail?: string;
+    estimatedFare: number;
+    currency: string;
+    countryCode: string;
+    paymentMethod: string;
   }): Promise<any> {
     return this.billingService.preAuthorize({
       rideId: dto.rideId,
@@ -280,13 +284,22 @@ export class PaymentOrchestratorService {
     });
   }
 
-  async captureTaxiFare(rideId: string, finalFare: number, tipAmount?: number, discount?: number): Promise<any> {
+  async captureTaxiFare(
+    rideId: string,
+    finalFare: number,
+    tipAmount?: number,
+    discount?: number,
+  ): Promise<any> {
     return this.billingService.captureRideFare({ rideId, finalFare, tipAmount, discount });
   }
 
   async processWalletTopup(dto: {
-    userId: string; amount: number; currency: string;
-    countryCode: string; methodType: string; callbackUrl?: string;
+    userId: string;
+    amount: number;
+    currency: string;
+    countryCode: string;
+    methodType: string;
+    callbackUrl?: string;
   }): Promise<PaymentResult> {
     return this.initiatePayment({
       module: PaymentModule.WALLET_TOPUP,
@@ -333,11 +346,18 @@ export class PaymentOrchestratorService {
   // ── Refunds ───────────────────────────────────────────────────────────────
 
   async initiateRefund(dto: {
-    paymentId: string; amount: number; reason: string; initiatedBy: string;
+    paymentId: string;
+    amount: number;
+    reason: string;
+    initiatedBy: string;
   }): Promise<RefundResult> {
     const payment = await this.findPaymentOrFail(dto.paymentId);
 
-    if (![PaymentStatus.SUCCESS, PaymentStatus.ESCROW_HOLD, PaymentStatus.ESCROW_RELEASED].includes(payment.status)) {
+    if (
+      ![PaymentStatus.SUCCESS, PaymentStatus.ESCROW_HOLD, PaymentStatus.ESCROW_RELEASED].includes(
+        payment.status,
+      )
+    ) {
       throw new BadRequestException(`Cannot refund payment in status: ${payment.status}`);
     }
 
@@ -370,9 +390,10 @@ export class PaymentOrchestratorService {
 
     if (result.success) {
       payment.refundedAmount = Number(payment.refundedAmount) + dto.amount;
-      payment.status = payment.refundedAmount >= Number(payment.amount)
-        ? PaymentStatus.REFUNDED
-        : PaymentStatus.PARTIALLY_REFUNDED;
+      payment.status =
+        payment.refundedAmount >= Number(payment.amount)
+          ? PaymentStatus.REFUNDED
+          : PaymentStatus.PARTIALLY_REFUNDED;
       await this.paymentRepo.save(payment);
 
       await this.kafka.publish('payment.v2.refund.completed', {
@@ -421,19 +442,35 @@ export class PaymentOrchestratorService {
 
   // ── Super Admin Dashboard ─────────────────────────────────────────────────
 
+  /**
+   * The payments dashboard, for one market or for all of them.
+   *
+   * `countryCode` is the market the gateway resolved for the caller — their own
+   * when they are region-locked. It reached this method from the start and only
+   * the first of four legs applied it: the module and gateway breakdowns and
+   * the recent-payments page each built a fresh query builder, so a Qatar
+   * dashboard showed Qatar totals over every market's detail (audit V8).
+   */
   async getPaymentsDashboard(filters: DashboardFilters) {
+    const market = normaliseMarket(filters.countryCode);
+    /** The market predicate, or a no-op when the caller may see every market. */
+    const inMarket = (qb: SelectQueryBuilder<Payment>) =>
+      market ? qb.andWhere('p.countryCode = :cc', { cc: market }) : qb;
+
     const qb = this.paymentRepo.createQueryBuilder('p');
 
     if (filters.module) qb.andWhere('p.module = :module', { module: filters.module });
-    if (filters.countryCode) qb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });
+    inMarket(qb);
     if (filters.status) qb.andWhere('p.status = :status', { status: filters.status });
     if (filters.gateway) qb.andWhere('p.gateway = :gw', { gw: filters.gateway });
-    if (filters.startDate) qb.andWhere('p.createdAt >= :start', { start: new Date(filters.startDate) });
+    if (filters.startDate)
+      qb.andWhere('p.createdAt >= :start', { start: new Date(filters.startDate) });
     if (filters.endDate) qb.andWhere('p.createdAt <= :end', { end: new Date(filters.endDate) });
     if (filters.sellerId) qb.andWhere('p.sellerId = :sid', { sid: filters.sellerId });
 
     // Aggregate stats
-    const totalStats = await qb.clone()
+    const totalStats = await qb
+      .clone()
       .select('COUNT(p.id)', 'totalTransactions')
       .addSelect('COALESCE(SUM(p.amount), 0)', 'totalVolume')
       .addSelect('COALESCE(SUM(p."platformCommission"), 0)', 'totalCommission')
@@ -443,23 +480,37 @@ export class PaymentOrchestratorService {
       .getRawOne();
 
     // Module-wise breakdown
-    const moduleBreakdown = await this.paymentRepo.createQueryBuilder('p')
-      .select('p.module', 'module')
-      .addSelect('COUNT(p.id)', 'transactions')
-      .addSelect('COALESCE(SUM(p.amount), 0)', 'volume')
-      .addSelect('COALESCE(SUM(p."platformCommission"), 0)', 'commission')
-      .where(filters.startDate ? 'p.createdAt >= :start' : '1=1', { start: filters.startDate ? new Date(filters.startDate) : undefined })
-      .andWhere(filters.endDate ? 'p.createdAt <= :end' : '1=1', { end: filters.endDate ? new Date(filters.endDate) : undefined })
+    const moduleBreakdown = await inMarket(
+      this.paymentRepo
+        .createQueryBuilder('p')
+        .select('p.module', 'module')
+        .addSelect('COUNT(p.id)', 'transactions')
+        .addSelect('COALESCE(SUM(p.amount), 0)', 'volume')
+        .addSelect('COALESCE(SUM(p."platformCommission"), 0)', 'commission')
+        .where(filters.startDate ? 'p.createdAt >= :start' : '1=1', {
+          start: filters.startDate ? new Date(filters.startDate) : undefined,
+        })
+        .andWhere(filters.endDate ? 'p.createdAt <= :end' : '1=1', {
+          end: filters.endDate ? new Date(filters.endDate) : undefined,
+        }),
+    )
       .groupBy('p.module')
       .getRawMany();
 
     // Gateway breakdown
-    const gatewayBreakdown = await this.paymentRepo.createQueryBuilder('p')
-      .select('p.gateway', 'gateway')
-      .addSelect('COUNT(p.id)', 'transactions')
-      .addSelect('COALESCE(SUM(p.amount), 0)', 'volume')
-      .where(filters.startDate ? 'p.createdAt >= :start' : '1=1', { start: filters.startDate ? new Date(filters.startDate) : undefined })
-      .andWhere(filters.endDate ? 'p.createdAt <= :end' : '1=1', { end: filters.endDate ? new Date(filters.endDate) : undefined })
+    const gatewayBreakdown = await inMarket(
+      this.paymentRepo
+        .createQueryBuilder('p')
+        .select('p.gateway', 'gateway')
+        .addSelect('COUNT(p.id)', 'transactions')
+        .addSelect('COALESCE(SUM(p.amount), 0)', 'volume')
+        .where(filters.startDate ? 'p.createdAt >= :start' : '1=1', {
+          start: filters.startDate ? new Date(filters.startDate) : undefined,
+        })
+        .andWhere(filters.endDate ? 'p.createdAt <= :end' : '1=1', {
+          end: filters.endDate ? new Date(filters.endDate) : undefined,
+        }),
+    )
       .groupBy('p.gateway')
       .getRawMany();
 
@@ -493,36 +544,55 @@ export class PaymentOrchestratorService {
     };
   }
 
-  async getModuleRevenue(module: PaymentModule, startDate: string, endDate: string) {
-    const stats = await this.paymentRepo.createQueryBuilder('p')
-      .select('COUNT(p.id)', 'transactions')
-      .addSelect('COALESCE(SUM(p.amount), 0)', 'grossRevenue')
-      .addSelect('COALESCE(SUM(p."platformCommission"), 0)', 'commission')
-      .addSelect('COALESCE(SUM(p."netSellerAmount"), 0)', 'sellerPayouts')
-      .addSelect('COALESCE(SUM(p."franchiseShare"), 0)', 'franchisePayouts')
-      .addSelect('COALESCE(SUM(p."taxAmount"), 0)', 'tax')
-      .addSelect('COALESCE(SUM(p."refundedAmount"), 0)', 'refunds')
-      .where('p.module = :module', { module })
-      .andWhere('p.createdAt >= :start', { start: new Date(startDate) })
-      .andWhere('p.createdAt <= :end', { end: new Date(endDate) })
-      .andWhere('p.status IN (:...statuses)', {
-        statuses: [PaymentStatus.SUCCESS, PaymentStatus.ESCROW_HOLD, PaymentStatus.ESCROW_RELEASED],
-      })
-      .getRawOne();
+  /** One module's revenue, in one market or across all of them — both legs scoped. */
+  async getModuleRevenue(
+    module: PaymentModule,
+    startDate: string,
+    endDate: string,
+    countryCode?: string,
+  ) {
+    const market = normaliseMarket(countryCode);
+    const inMarket = (qb: SelectQueryBuilder<Payment>) =>
+      market ? qb.andWhere('p.countryCode = :cc', { cc: market }) : qb;
+
+    const stats = await inMarket(
+      this.paymentRepo
+        .createQueryBuilder('p')
+        .select('COUNT(p.id)', 'transactions')
+        .addSelect('COALESCE(SUM(p.amount), 0)', 'grossRevenue')
+        .addSelect('COALESCE(SUM(p."platformCommission"), 0)', 'commission')
+        .addSelect('COALESCE(SUM(p."netSellerAmount"), 0)', 'sellerPayouts')
+        .addSelect('COALESCE(SUM(p."franchiseShare"), 0)', 'franchisePayouts')
+        .addSelect('COALESCE(SUM(p."taxAmount"), 0)', 'tax')
+        .addSelect('COALESCE(SUM(p."refundedAmount"), 0)', 'refunds')
+        .where('p.module = :module', { module })
+        .andWhere('p.createdAt >= :start', { start: new Date(startDate) })
+        .andWhere('p.createdAt <= :end', { end: new Date(endDate) })
+        .andWhere('p.status IN (:...statuses)', {
+          statuses: [
+            PaymentStatus.SUCCESS,
+            PaymentStatus.ESCROW_HOLD,
+            PaymentStatus.ESCROW_RELEASED,
+          ],
+        }),
+    ).getRawOne();
 
     // Daily trend
-    const dailyTrend = await this.paymentRepo.createQueryBuilder('p')
-      .select('DATE(p."createdAt")', 'date')
-      .addSelect('COUNT(p.id)', 'transactions')
-      .addSelect('COALESCE(SUM(p.amount), 0)', 'volume')
-      .where('p.module = :module', { module })
-      .andWhere('p.createdAt >= :start', { start: new Date(startDate) })
-      .andWhere('p.createdAt <= :end', { end: new Date(endDate) })
+    const dailyTrend = await inMarket(
+      this.paymentRepo
+        .createQueryBuilder('p')
+        .select('DATE(p."createdAt")', 'date')
+        .addSelect('COUNT(p.id)', 'transactions')
+        .addSelect('COALESCE(SUM(p.amount), 0)', 'volume')
+        .where('p.module = :module', { module })
+        .andWhere('p.createdAt >= :start', { start: new Date(startDate) })
+        .andWhere('p.createdAt <= :end', { end: new Date(endDate) }),
+    )
       .groupBy('DATE(p."createdAt")')
       .orderBy('DATE(p."createdAt")', 'ASC')
       .getRawMany();
 
-    return { module, startDate, endDate, stats, dailyTrend };
+    return { module, startDate, endDate, countryCode: market ?? null, stats, dailyTrend };
   }
 
   // ── Private Helpers ───────────────────────────────────────────────────────
@@ -543,14 +613,14 @@ export class PaymentOrchestratorService {
       marketplace: 0.12,
       grocery: 0.08,
       restaurant: 0.15,
-      pharmacy: 0.10,
+      pharmacy: 0.1,
       hotel: 0.15,
-      taxi: 0.20,
-      doctor: 0.20,
+      taxi: 0.2,
+      doctor: 0.2,
       wallet_topup: 0,
     };
 
-    const rate = rates[payment.module] ?? 0.10;
+    const rate = rates[payment.module] ?? 0.1;
     const commission = Math.round(Number(payment.amount) * rate * 100) / 100;
     const tax = Math.round(commission * 0.18 * 100) / 100; // 18% GST on commission (India)
     const netSeller = Math.round((Number(payment.amount) - commission) * 100) / 100;
@@ -569,7 +639,7 @@ export class PaymentOrchestratorService {
       stripe: PaymentGateway.STRIPE,
       upi: PaymentGateway.UPI,
       mada: PaymentGateway.MADA,
-            wallet: PaymentGateway.WALLET,
+      wallet: PaymentGateway.WALLET,
     };
     return map[gatewayName] || PaymentGateway.STRIPE;
   }

@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, type SelectQueryBuilder } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
+import { assertInMarket, normaliseMarket, refuseUnattributable } from '@app/common';
 import * as crypto from 'crypto';
 import {
   SettlementRecord,
@@ -35,15 +36,15 @@ export class SettlementEngineService {
     [PaymentModule.MARKETPLACE]: 0.12,
     [PaymentModule.GROCERY]: 0.08,
     [PaymentModule.RESTAURANT]: 0.15,
-    [PaymentModule.PHARMACY]: 0.10,
+    [PaymentModule.PHARMACY]: 0.1,
     [PaymentModule.HOTEL]: 0.15,
-    [PaymentModule.TAXI]: 0.20,
-    [PaymentModule.DOCTOR]: 0.20,
+    [PaymentModule.TAXI]: 0.2,
+    [PaymentModule.DOCTOR]: 0.2,
     [PaymentModule.WALLET_TOPUP]: 0,
   };
 
   /** Default franchise commission share (franchise gets X% of platform commission) */
-  private readonly DEFAULT_FRANCHISE_SHARE_RATE = 0.30;
+  private readonly DEFAULT_FRANCHISE_SHARE_RATE = 0.3;
 
   constructor(
     @InjectRepository(SettlementRecord)
@@ -74,7 +75,7 @@ export class SettlementEngineService {
 
     const records: SettlementRecord[] = [];
     const amount = Number(payment.amount);
-    const commissionRate = this.COMMISSION_RATES[payment.module] ?? 0.10;
+    const commissionRate = this.COMMISSION_RATES[payment.module] ?? 0.1;
     const commissionAmount = Math.round(amount * commissionRate * 100) / 100;
     const taxOnCommission = Math.round(commissionAmount * 0.18 * 100) / 100; // GST on commission
     const period = this.getCurrentSettlementPeriod();
@@ -125,7 +126,7 @@ export class SettlementEngineService {
           module: payment.module,
           orderId: payment.orderId ?? undefined,
           recipientType: SettlementRecipientType.FRANCHISE,
-          recipientId: payment.franchiseId,  // guarded by the `if` above
+          recipientId: payment.franchiseId, // guarded by the `if` above
           grossAmount: commissionAmount,
           commissionRate: franchiseRate ?? undefined,
           commissionAmount: 0,
@@ -147,7 +148,7 @@ export class SettlementEngineService {
     await this.kafka.publish('settlement.created', {
       paymentId: payment.id,
       module: payment.module,
-      records: records.map(r => ({
+      records: records.map((r) => ({
         id: r.id,
         recipientType: r.recipientType,
         recipientId: r.recipientId,
@@ -160,7 +161,7 @@ export class SettlementEngineService {
 
     this.logger.log(
       `Settlement generated for ${payment.paymentNumber}: ` +
-      `${records.length} record(s) | Commission: ${payment.currency} ${commissionAmount}`,
+        `${records.length} record(s) | Commission: ${payment.currency} ${commissionAmount}`,
     );
 
     return records;
@@ -183,22 +184,37 @@ export class SettlementEngineService {
     );
   }
 
-  // ── Super Admin Dashboard Queries ─────────────────────────────────────────
+  // ── Admin Dashboard Queries ───────────────────────────────────────────────
+  //
+  // `countryCode` is the market the gateway resolved for the caller — their own
+  // when they are region-locked, whatever they asked for when they are not.
+  // Every leg of every query below applies it. Three of the four legs here used
+  // to build a fresh query builder that ignored the filter entirely, so a
+  // "Qatar" settlement dashboard showed Qatar totals above a module breakdown,
+  // a status breakdown and a top-seller table drawn from every market.
 
   async getDashboardSummary(filters: {
     startDate?: string;
     endDate?: string;
     countryCode?: string;
   }) {
-    const qb = this.settlementRepo.createQueryBuilder('s')
+    const market = normaliseMarket(filters.countryCode);
+    /** The market predicate, or a no-op for a global caller asking for all markets. */
+    const inMarket = (qb: SelectQueryBuilder<SettlementRecord>) =>
+      market ? qb.andWhere('s.countryCode = :cc', { cc: market }) : qb;
+
+    const qb = this.settlementRepo
+      .createQueryBuilder('s')
       .where('s.status != :excluded', { excluded: SettlementStatus.REVERSED });
 
-    if (filters.startDate) qb.andWhere('s.createdAt >= :start', { start: new Date(filters.startDate) });
+    if (filters.startDate)
+      qb.andWhere('s.createdAt >= :start', { start: new Date(filters.startDate) });
     if (filters.endDate) qb.andWhere('s.createdAt <= :end', { end: new Date(filters.endDate) });
-    if (filters.countryCode) qb.andWhere('s.countryCode = :cc', { cc: filters.countryCode });
+    inMarket(qb);
 
     // Overall revenue
-    const totals = await qb.clone()
+    const totals = await qb
+      .clone()
       .select('COALESCE(SUM(s."grossAmount"), 0)', 'grossRevenue')
       .addSelect('COALESCE(SUM(s."commissionAmount"), 0)', 'totalCommission')
       .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'totalSellerPayouts')
@@ -208,35 +224,48 @@ export class SettlementEngineService {
       .getRawOne();
 
     // Per-module breakdown
-    const moduleBreakdown = await this.settlementRepo.createQueryBuilder('s')
-      .select('s.module', 'module')
-      .addSelect('COALESCE(SUM(s."grossAmount"), 0)', 'grossRevenue')
-      .addSelect('COALESCE(SUM(s."commissionAmount"), 0)', 'commission')
-      .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'sellerPayouts')
-      .addSelect('COALESCE(SUM(s."franchiseShareAmount"), 0)', 'franchisePayouts')
-      .addSelect('COUNT(s.id)', 'settlements')
-      .where('s."recipientType" != :platform', { platform: SettlementRecipientType.PLATFORM })
+    const moduleBreakdown = await inMarket(
+      this.settlementRepo
+        .createQueryBuilder('s')
+        .select('s.module', 'module')
+        .addSelect('COALESCE(SUM(s."grossAmount"), 0)', 'grossRevenue')
+        .addSelect('COALESCE(SUM(s."commissionAmount"), 0)', 'commission')
+        .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'sellerPayouts')
+        .addSelect('COALESCE(SUM(s."franchiseShareAmount"), 0)', 'franchisePayouts')
+        .addSelect('COUNT(s.id)', 'settlements')
+        .where('s."recipientType" != :platform', { platform: SettlementRecipientType.PLATFORM }),
+    )
       .groupBy('s.module')
       .getRawMany();
 
     // Pending vs settled
-    const statusBreakdown = await this.settlementRepo.createQueryBuilder('s')
-      .select('s.status', 'status')
-      .addSelect('COUNT(s.id)', 'count')
-      .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'amount')
+    const statusBreakdown = await inMarket(
+      this.settlementRepo
+        .createQueryBuilder('s')
+        .select('s.status', 'status')
+        .addSelect('COUNT(s.id)', 'count')
+        .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'amount'),
+    )
       .groupBy('s.status')
       .getRawMany();
 
     // Top sellers by commission
-    const topSellers = await this.settlementRepo.createQueryBuilder('s')
-      .select('s."recipientId"', 'sellerId')
-      .addSelect('s."recipientName"', 'sellerName')
-      .addSelect('COALESCE(SUM(s."grossAmount"), 0)', 'grossRevenue')
-      .addSelect('COALESCE(SUM(s."commissionAmount"), 0)', 'commission')
-      .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'netPayout')
-      .where('s."recipientType" IN (:...types)', {
-        types: [SettlementRecipientType.SELLER, SettlementRecipientType.DOCTOR, SettlementRecipientType.HOTEL_OWNER],
-      })
+    const topSellers = await inMarket(
+      this.settlementRepo
+        .createQueryBuilder('s')
+        .select('s."recipientId"', 'sellerId')
+        .addSelect('s."recipientName"', 'sellerName')
+        .addSelect('COALESCE(SUM(s."grossAmount"), 0)', 'grossRevenue')
+        .addSelect('COALESCE(SUM(s."commissionAmount"), 0)', 'commission')
+        .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'netPayout')
+        .where('s."recipientType" IN (:...types)', {
+          types: [
+            SettlementRecipientType.SELLER,
+            SettlementRecipientType.DOCTOR,
+            SettlementRecipientType.HOTEL_OWNER,
+          ],
+        }),
+    )
       .groupBy('s."recipientId"')
       .addGroupBy('s."recipientName"')
       .orderBy('COALESCE(SUM(s."grossAmount"), 0)', 'DESC')
@@ -259,49 +288,86 @@ export class SettlementEngineService {
     };
   }
 
-  async getSellerBalance(sellerId: string) {
-    const stats = await this.settlementRepo.createQueryBuilder('s')
+  /**
+   * One recipient's balance, in one market.
+   *
+   * The market is not a display filter here — it is the authorisation. A
+   * settlement recipient has no row of its own in this service, so "is this
+   * seller in the caller's market?" is answered by the markets their own
+   * settlement rows carry. A region-locked admin asking about a recipient with
+   * no row in their market is refused (audit V8, §13 X-24) rather than handed a
+   * zeroed balance, which reads as "this seller has earned nothing" instead of
+   * "this seller is not yours". A recipient with no rows at all cannot be
+   * attributed to any market yet, and fails closed the same way.
+   */
+  async getSellerBalance(sellerId: string, market?: string, scope?: string) {
+    const lock = normaliseMarket(scope);
+    if (lock) await this.assertRecipientInMarket('recipientId', sellerId, scope, 'seller balance');
+
+    const qb = this.settlementRepo
+      .createQueryBuilder('s')
       .select('s.status', 'status')
       .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'total')
-      .where('s."recipientId" = :sellerId', { sellerId })
-      .groupBy('s.status')
-      .getRawMany();
+      .where('s."recipientId" = :sellerId', { sellerId });
+    const cc = normaliseMarket(market);
+    if (cc) qb.andWhere('s.countryCode = :cc', { cc });
+    const stats = await qb.groupBy('s.status').getRawMany();
 
-    const pending = Number(stats.find(s => s.status === SettlementStatus.PENDING)?.total || 0);
-    const settled = Number(stats.find(s => s.status === SettlementStatus.SETTLED)?.total || 0);
-    const onHold = Number(stats.find(s => s.status === SettlementStatus.ON_HOLD)?.total || 0);
+    const pending = Number(stats.find((s) => s.status === SettlementStatus.PENDING)?.total || 0);
+    const settled = Number(stats.find((s) => s.status === SettlementStatus.SETTLED)?.total || 0);
+    const onHold = Number(stats.find((s) => s.status === SettlementStatus.ON_HOLD)?.total || 0);
 
     return { sellerId, pending, settled, onHold, totalEarned: pending + settled + onHold };
   }
 
-  async getFranchiseEarnings(franchiseId: string) {
-    const earnings = await this.settlementRepo.createQueryBuilder('s')
+  /** One franchise's earnings, in one market — authorised exactly as the balance above. */
+  async getFranchiseEarnings(franchiseId: string, market?: string, scope?: string) {
+    const lock = normaliseMarket(scope);
+    if (lock) {
+      await this.assertRecipientInMarket('franchiseId', franchiseId, scope, 'franchise earnings');
+    }
+
+    const qb = this.settlementRepo
+      .createQueryBuilder('s')
       .select('s.module', 'module')
       .addSelect('COALESCE(SUM(s."franchiseShareAmount"), 0)', 'earnings')
       .addSelect('COUNT(s.id)', 'transactions')
       .where('s."franchiseId" = :franchiseId', { franchiseId })
-      .andWhere('s."recipientType" = :type', { type: SettlementRecipientType.FRANCHISE })
-      .groupBy('s.module')
-      .getRawMany();
+      .andWhere('s."recipientType" = :type', { type: SettlementRecipientType.FRANCHISE });
+    const cc = normaliseMarket(market);
+    if (cc) qb.andWhere('s.countryCode = :cc', { cc });
+    const earnings = await qb.groupBy('s.module').getRawMany();
 
     const total = earnings.reduce((sum: number, e: any) => sum + Number(e.earnings), 0);
 
     return { franchiseId, total, byModule: earnings };
   }
 
-  async getReconciliationReport(date: string) {
+  /**
+   * One day's payments against one day's settlements, in one market.
+   *
+   * Both legs take the market or neither does: a discrepancy computed from one
+   * market's payments and every market's settlements is not a discrepancy, it
+   * is arithmetic on unrelated numbers.
+   */
+  async getReconciliationReport(date: string, market?: string) {
     const startOfDay = new Date(`${date}T00:00:00Z`);
     const endOfDay = new Date(`${date}T23:59:59Z`);
+    const cc = normaliseMarket(market);
 
     const payments = await this.paymentRepo.find({
       where: {
         createdAt: Between(startOfDay, endOfDay),
         status: PaymentStatus.ESCROW_HOLD,
+        ...(cc ? { countryCode: cc } : {}),
       },
     });
 
     const settlements = await this.settlementRepo.find({
-      where: { createdAt: Between(startOfDay, endOfDay) },
+      where: {
+        createdAt: Between(startOfDay, endOfDay),
+        ...(cc ? { countryCode: cc } : {}),
+      },
     });
 
     const paymentTotal = payments.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -314,10 +380,43 @@ export class SettlementEngineService {
       settlements: { count: settlements.length, total: settlementTotal },
       discrepancy,
       isBalanced: discrepancy < 0.01,
+      countryCode: cc ?? null,
     };
   }
 
   // ── Private Helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Refuse a region-locked caller a settlement recipient that is not theirs.
+   *
+   * `column` is `recipientId` or `franchiseId` — both are literals written here,
+   * never caller input, because they are interpolated into the SQL identifier.
+   * The markets come from the recipient's own rows: this service owns no seller
+   * or franchise table, so the rows it settled for them are the record of where
+   * they trade. Every market they appear in must be the caller's; a recipient
+   * spanning two markets is refused rather than partially disclosed, and one
+   * with no rows at all is unattributable and refused too.
+   */
+  private async assertRecipientInMarket(
+    column: 'recipientId' | 'franchiseId',
+    id: string,
+    scope: string | undefined,
+    what: string,
+  ): Promise<void> {
+    const rows = await this.settlementRepo
+      .createQueryBuilder('s')
+      .select('DISTINCT s."countryCode"', 'countryCode')
+      .where(`s."${column}" = :id`, { id })
+      .getRawMany<{ countryCode: string | null }>();
+
+    if (rows.length === 0) {
+      refuseUnattributable(scope, what, this.logger);
+      return;
+    }
+    for (const row of rows) {
+      assertInMarket(row.countryCode, scope, what, this.logger);
+    }
+  }
 
   private getRecipientType(module: PaymentModule): SettlementRecipientType {
     const map: Record<string, SettlementRecipientType> = {
@@ -340,7 +439,10 @@ export class SettlementEngineService {
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
     const week1 = new Date(d.getFullYear(), 0, 4);
-    return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+    return (
+      1 +
+      Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7)
+    );
   }
 
   private async updateDashboardCache(payment: Payment): Promise<void> {

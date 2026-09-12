@@ -1,6 +1,10 @@
 import { Controller, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload, EventPattern } from '@nestjs/microservices';
-import { PaymentOrchestratorService, type InitiatePaymentDto, type DashboardFilters } from './payment.service';
+import {
+  PaymentOrchestratorService,
+  type InitiatePaymentDto,
+  type DashboardFilters,
+} from './payment.service';
 import { SettlementEngineService } from './services/settlement-engine.service';
 import { InvoiceService } from './services/invoice.service';
 import { RealTimeBillingService } from './services/realtime-billing.service';
@@ -89,12 +93,21 @@ export class PaymentController {
   }
 
   @MessagePattern({ cmd: 'taxi_capture' })
-  taxiCapture(@Payload() data: { rideId: string; finalFare: number; tipAmount?: number; discount?: number }) {
-    return this.orchestrator.captureTaxiFare(data.rideId, data.finalFare, data.tipAmount, data.discount);
+  taxiCapture(
+    @Payload() data: { rideId: string; finalFare: number; tipAmount?: number; discount?: number },
+  ) {
+    return this.orchestrator.captureTaxiFare(
+      data.rideId,
+      data.finalFare,
+      data.tipAmount,
+      data.discount,
+    );
   }
 
   @MessagePattern({ cmd: 'taxi_cancel_billing' })
-  taxiCancelBilling(@Payload() data: { rideId: string; cancellationFee: number; cancelledBy: string }) {
+  taxiCancelBilling(
+    @Payload() data: { rideId: string; cancellationFee: number; cancelledBy: string },
+  ) {
     return this.billing.handleCancellation(data);
   }
 
@@ -113,7 +126,9 @@ export class PaymentController {
   // ── Refunds ───────────────────────────────────────────────────────────────
 
   @MessagePattern({ cmd: 'initiate_refund' })
-  initiateRefund(@Payload() data: { paymentId: string; amount: number; reason: string; initiatedBy: string }) {
+  initiateRefund(
+    @Payload() data: { paymentId: string; amount: number; reason: string; initiatedBy: string },
+  ) {
     return this.orchestrator.initiateRefund(data);
   }
 
@@ -144,7 +159,15 @@ export class PaymentController {
     return this.invoices.voidInvoice(data.invoiceId, data.reason);
   }
 
-  // ── Settlement (Super Admin) ──────────────────────────────────────────────
+  // ── Settlement (admin) ────────────────────────────────────────────────────
+  //
+  // `countryCode` is the market the gateway resolved for the caller, and
+  // `scope` is set only when that caller is region-locked. `payments`,
+  // `invoices` and `settlement_records` have all carried `countryCode` since
+  // they were created and none of these six reads predicated on it, so a
+  // QA-locked admin read India's money (audit V8). Every leg of every report
+  // below now filters on the market, because a half-scoped total is worse than
+  // an unscoped one: it looks like an answer.
 
   @MessagePattern({ cmd: 'get_payment_dashboard' })
   getDashboard(@Payload() data: DashboardFilters) {
@@ -152,28 +175,45 @@ export class PaymentController {
   }
 
   @MessagePattern({ cmd: 'get_settlement_dashboard' })
-  getSettlementDashboard(@Payload() data: { startDate?: string; endDate?: string; countryCode?: string }) {
+  getSettlementDashboard(
+    @Payload() data: { startDate?: string; endDate?: string; countryCode?: string },
+  ) {
     return this.settlement.getDashboardSummary(data);
   }
 
   @MessagePattern({ cmd: 'get_seller_balance' })
-  getSellerBalance(@Payload() data: { sellerId: string }) {
-    return this.settlement.getSellerBalance(data.sellerId);
+  getSellerBalance(@Payload() data: { sellerId: string; countryCode?: string; scope?: string }) {
+    return this.settlement.getSellerBalance(data.sellerId, data.countryCode, data.scope);
   }
 
   @MessagePattern({ cmd: 'get_franchise_earnings' })
-  getFranchiseEarnings(@Payload() data: { franchiseId: string }) {
-    return this.settlement.getFranchiseEarnings(data.franchiseId);
+  getFranchiseEarnings(
+    @Payload() data: { franchiseId: string; countryCode?: string; scope?: string },
+  ) {
+    return this.settlement.getFranchiseEarnings(data.franchiseId, data.countryCode, data.scope);
   }
 
   @MessagePattern({ cmd: 'get_module_revenue' })
-  getModuleRevenue(@Payload() data: { module: PaymentModuleEnum; startDate: string; endDate: string }) {
-    return this.orchestrator.getModuleRevenue(data.module, data.startDate, data.endDate);
+  getModuleRevenue(
+    @Payload()
+    data: {
+      module: PaymentModuleEnum;
+      startDate: string;
+      endDate: string;
+      countryCode?: string;
+    },
+  ) {
+    return this.orchestrator.getModuleRevenue(
+      data.module,
+      data.startDate,
+      data.endDate,
+      data.countryCode,
+    );
   }
 
   @MessagePattern({ cmd: 'get_reconciliation' })
-  getReconciliation(@Payload() data: { date: string }) {
-    return this.settlement.getReconciliationReport(data.date);
+  getReconciliation(@Payload() data: { date: string; countryCode?: string }) {
+    return this.settlement.getReconciliationReport(data.date, data.countryCode);
   }
 
   // ── Kafka Event Listeners ─────────────────────────────────────────────────
