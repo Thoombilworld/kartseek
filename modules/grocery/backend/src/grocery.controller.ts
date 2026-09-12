@@ -39,7 +39,13 @@ import { GroceryItem } from './entities/grocery-item.entity';
 import { FlashDealStatus } from './entities/grocery-flash-deal.entity';
 import { Observable, interval, map, switchMap, startWith, from } from 'rxjs';
 import { type Response } from 'express';
-import { type EmptyMessage, RpcAwareExceptionsFilter, requireId, requireValue } from '@app/common';
+import {
+  type EmptyMessage,
+  RpcAwareExceptionsFilter,
+  requireId,
+  requireValue,
+  marketPredicate,
+} from '@app/common';
 import {
   type StoreMsg,
   type StoreProductMsg,
@@ -1136,8 +1142,8 @@ export class GroceryController {
   }
 
   @MessagePattern({ cmd: 'admin.grocery.settings' })
-  tcpAdminSettings(@Payload() _d: EmptyMessage) {
-    return this.admin.getSettings();
+  tcpAdminSettings(@Payload() d: { market?: string; scope?: string }) {
+    return this.admin.getSettings(marketPredicate(d?.scope, d?.market));
   }
 
   @MessagePattern({ cmd: 'admin.grocery.updateSettings' })
