@@ -287,6 +287,34 @@ describe('payout market scope', () => {
       expect(payoutRepo.findAndCount).not.toHaveBeenCalled();
     });
 
+    it('creates nothing when it refuses — a 403 must not be a write', async () => {
+      // `getOrCreateWallet` INSERTs. Asserting after it left a wallet behind for
+      // a seller the caller was never allowed to touch, which a locked admin
+      // could use to enumerate another market's seller ids by watching the
+      // table grow.
+      walletRepo.findOne.mockResolvedValue(null);
+      dataSource.query.mockResolvedValue([{ region_code: 'IN' }]);
+      await expect(service.getSellerPayouts('S9', 1, 20, undefined, 'QA')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(walletRepo.createQueryBuilder).not.toHaveBeenCalled();
+      expect(walletRepo.save).not.toHaveBeenCalled();
+      expect(payoutRepo.findAndCount).not.toHaveBeenCalled();
+    });
+
+    it('proceeds to the history when the caller is allowed the seller', async () => {
+      // The contrast with the test above: the same seller with no wallet row
+      // yet, authorised, reaches `getOrCreateWallet` and then the payout query.
+      walletRepo.findOne
+        .mockResolvedValueOnce(null) // the read-only authorisation probe
+        .mockResolvedValue(wallet({ sellerId: 'S9', regionCode: 'QA' }));
+      dataSource.query.mockResolvedValue([{ region_code: 'QA' }]);
+      await expect(service.getSellerPayouts('S9', 1, 20, undefined, 'QA')).resolves.toMatchObject({
+        sellerId: 'S9',
+      });
+      expect(payoutRepo.findAndCount).toHaveBeenCalled();
+    });
+
     it('serves the caller’s own market', async () => {
       walletRepo.findOne.mockResolvedValue(wallet({ regionCode: 'QA' }));
       await expect(service.getSellerPayouts('S1', 1, 20, undefined, 'QA')).resolves.toMatchObject({

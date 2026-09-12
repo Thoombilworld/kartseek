@@ -37,6 +37,7 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 import { refuseLockedAdmin } from '../guards/market-scope';
+import { applyMarketFilter } from '@app/common';
 import { AdminRole } from '../entities/admin-role.entity';
 import { User } from '../entities/user.entity';
 import {
@@ -338,7 +339,7 @@ export class AdminAccessController {
       });
     }
     if (roleId) qb.andWhere('u.adminRoleId = :roleId', { roleId });
-    if (regionCode) qb.andWhere('UPPER(u.regionCode) = :rc', { rc: regionCode.toUpperCase() });
+    applyMarketFilter(qb, 'UPPER(u.regionCode)', undefined, regionCode);
     const [rows, total] = await qb
       .orderBy('u.createdAt', 'DESC')
       .skip((current - 1) * size)

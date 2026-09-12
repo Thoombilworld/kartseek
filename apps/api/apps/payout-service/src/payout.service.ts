@@ -3,7 +3,12 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { applyMarketFilter, assertRecordMarket, normaliseMarket } from '@app/common';
+import {
+  applyMarketFilter,
+  assertInMarket,
+  assertRecordMarket,
+  normaliseMarket,
+} from '@app/common';
 import { SellerWallet } from './entities/seller-wallet.entity';
 import { Payout } from './entities/payout.entity';
 
@@ -83,15 +88,12 @@ export class PayoutService {
         `SELECT region_code FROM marketplace.sellers WHERE id::text = $1 LIMIT 1`,
         [sellerId],
       );
-      const raw = rows?.[0]?.region_code;
-      // Stricter than `normaliseMarket` alone, deliberately. That helper splits
-      // on `-`/`_` so a stored sub-region ('QA-DOH') normalises to its country,
-      // which also means `NOT-A-COUNTRY` normalises to `NO` — Norway. Dev seller
-      // rows hold exactly that, and `<SCRIPT>ALERT(1)</SCRIPT>` besides. On the
-      // money path an invented market is worse than no market, so the country
-      // part has to be a genuine two-letter pair before it is accepted.
-      if (typeof raw !== 'string' || !/^[A-Za-z]{2}([-_].*)?$/.test(raw.trim())) return null;
-      return normaliseMarket(raw) ?? null;
+      // `normaliseMarket` validates against the region registry, so a seller
+      // row holding `NOT-A-COUNTRY` or `<SCRIPT>ALERT(1)</SCRIPT>` — both of
+      // which dev data does — resolves to `null` rather than to `NO` (Norway)
+      // or `<S`. A local regex guard stood here until the shared helper was
+      // made strict in R11's fix round; one rule is the point of this task.
+      return normaliseMarket(rows?.[0]?.region_code ?? undefined) ?? null;
     } catch (err) {
       this.logger.warn(
         `Could not resolve the market for seller ${sellerId}: ${(err as Error)?.message}. ` +
@@ -352,12 +354,23 @@ export class PayoutService {
     status?: PayoutStatus,
     scope?: string,
   ) {
+    // Authorise BEFORE anything is created. `getOrCreateWallet` inserts a row,
+    // so asserting after it meant a refused read still left a wallet behind for
+    // a seller the caller was never allowed to touch — a write as the side
+    // effect of a 403, and one that a locked admin could use to enumerate
+    // another market's seller ids by watching the table grow.
+    //
+    // The seller's own market is the answer, read-only: an existing wallet
+    // carries it, and otherwise the sellers table does. A locked admin naming
+    // another market's seller gets 403 rather than an empty history, which
+    // would read as "this seller has never been paid".
+    if (normaliseMarket(scope)) {
+      const existing = await this.walletRepo.findOne({ where: { sellerId } });
+      const market = existing?.regionCode ?? (await this.sellerMarket(sellerId));
+      assertInMarket(market, scope, 'seller wallet', this.logger);
+    }
+
     const wallet = await this.getOrCreateWallet(sellerId);
-    // One seller, so the wallet's own market answers the question before any
-    // payout is read — a locked admin naming another market's seller gets 403
-    // rather than an empty history, which would read as "this seller has never
-    // been paid".
-    assertRecordMarket(wallet, 'regionCode', scope, 'seller wallet', this.logger);
 
     const where: any = { sellerId };
     if (status) where.status = status;
@@ -380,6 +393,53 @@ export class PayoutService {
       page,
       limit,
       hasMore: total > page * limit,
+    };
+  }
+
+  /**
+   * Every seller wallet in a market, with the balances this service owns.
+   *
+   * `GET /admin/marketplace/seller-wallets` answered from marketplace-service,
+   * which has no wallet table and so RECOMPUTED a balance from delivered orders
+   * at a hardcoded 10% commission, a 15% "pending settlement" and a 70/30
+   * withdrawn/available split — invented numbers on a finance screen, and a
+   * different answer from the payout queue beside it about the same seller's
+   * money (AUD2-086 / I12). This is the table the money actually lives in.
+   *
+   * Predicated on `seller_wallets.region_code`, so the two surfaces agree on
+   * which market a seller's money is in as well as on how much it is.
+   */
+  async listSellerWallets(scope?: string, requested?: string | null, page = 1, limit = 100) {
+    const qb = this.walletRepo
+      .createQueryBuilder('w')
+      .orderBy('w.availableBalance', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+    applyMarketFilter(qb, 'w.regionCode', scope, requested);
+    const [rows, total] = await qb.getManyAndCount();
+
+    const sumQb = this.walletRepo
+      .createQueryBuilder('w')
+      .select('COALESCE(SUM(w.availableBalance), 0)', 'available')
+      .addSelect('COALESCE(SUM(w.escrowBalance), 0)', 'escrow');
+    applyMarketFilter(sumQb, 'w.regionCode', scope, requested);
+    const totals = await sumQb.getRawOne<{ available: string; escrow: string }>();
+
+    return {
+      data: rows.map((w) => ({
+        sellerId: w.sellerId,
+        regionCode: w.regionCode ?? null,
+        availableBalance: Number(w.availableBalance),
+        escrowBalance: Number(w.escrowBalance),
+        updatedAt: w.updatedAt?.toISOString?.() ?? null,
+      })),
+      total,
+      page,
+      limit,
+      summary: {
+        totalAvailable: Math.round(Number(totals?.available ?? 0) * 100) / 100,
+        totalEscrow: Math.round(Number(totals?.escrow ?? 0) * 100) / 100,
+      },
     };
   }
 

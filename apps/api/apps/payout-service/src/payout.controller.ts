@@ -98,6 +98,21 @@ export class PayoutController {
     return this.svc.creditSellerWallet(d.sellerId, d.amount, d.reason, d.referenceId);
   }
 
+  /**
+   * The admin seller-wallet list, from the table the balances live in.
+   *
+   * Added because the gateway's `seller-wallets` route answered from
+   * marketplace-service, which recomputed a balance from delivered orders at a
+   * hardcoded 10% — so the payout queue and the wallet list disagreed about the
+   * same seller's money (AUD2-086).
+   */
+  @MessagePattern({ cmd: 'list_seller_wallets' })
+  msgSellerWallets(
+    @Payload() d?: { scope?: string; region?: string; page?: number; limit?: number },
+  ) {
+    return this.svc.listSellerWallets(d?.scope, d?.region, d?.page ?? 1, d?.limit ?? 100);
+  }
+
   @MessagePattern({ cmd: 'get_payout_stats' })
   msgPayoutStats(@Payload() d?: { scope?: string; region?: string }) {
     return this.svc.getPayoutStats(d?.scope, d?.region);

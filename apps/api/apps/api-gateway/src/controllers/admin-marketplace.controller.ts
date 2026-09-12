@@ -166,8 +166,12 @@ export class AdminMarketplaceController {
    * award points to. Forwarding `scope` to a service that ignores it would have
    * left a QA-locked admin unable to *read* a points balance while still able
    * to credit a wallet in any market — enforcement in name only. Refused here
-   * instead, before any RPC, until those services carry the market (Plan C1).
-   * A global admin is unaffected.
+   * instead, before any RPC. A global admin is unaffected.
+   *
+   * R11 gave `payout.payouts` and `payout.seller_wallets` a market and flipped
+   * the six payout routes to filtering. It did NOT flip these: a balance is per
+   * user, its market is `users.region_code`, and neither service joins to it.
+   * That is the remaining work, and it is a join rather than a migration.
    */
   private refuseUnattributableBalance(req: any): void {
     refuseLockedAdmin(
@@ -1163,10 +1167,13 @@ export class AdminMarketplaceController {
     // Returned an empty list inline, so the refunds queue was always empty and
     // an admin had no way to tell that from "nothing is pending".
     //
-    // `region`/`scope` go out and refund-service drops both, so this list is
-    // the whole platform's whatever the caller is locked to. Showing it to a
-    // QA admin under a QA heading is the leak; refused until refunds carry a
-    // market (Plan C1).
+    // Refunds have no table. `RefundServiceModule` imports `RedisModule` and
+    // no `TypeOrmModule` at all, so a refund is a Redis key with a 30-day TTL —
+    // there is no row to carry a market and nothing to predicate on. The
+    // blocker is a DATASTORE, not a column: R11 added `region_code` to the
+    // money tables that exist and could not add one here. Showing the whole
+    // platform's queue to a QA admin under a QA heading is the leak, so this
+    // stays refused until refunds are persisted.
     refuseLockedAdmin(req, 'the refund queue');
     const { scope, market } = this.scopeOf(req, country, 'those refunds');
     return this.sendTo(this.refundClient, 'Refund service', 'get_pending_refunds', {
@@ -1184,8 +1191,10 @@ export class AdminMarketplaceController {
   //
   // refund-service destructures a fixed set of fields and never reads `scope`,
   // so forwarding it was enforcement in name only: a QA-locked admin could
-  // approve an Indian refund. Refused here, before any RPC, until refunds carry
-  // a market (Plan C1). Global admins are unaffected.
+  // approve an Indian refund. Refused here, before any RPC. The blocker is that
+  // refunds have no table to attribute — the service is Redis-only — not a
+  // missing column, so this cannot be flipped by a migration. Global admins are
+  // unaffected.
   @Post('refunds/:id/approve')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.refund')
   @ApiOperation({ summary: 'Approve a refund' })
@@ -1262,8 +1271,11 @@ export class AdminMarketplaceController {
     @Query('page', ParsePagePipe) page = 1,
     @Query('country') country?: string,
   ) {
-    // commission-service reads neither `region` nor `scope`; every total below
-    // is platform-wide. Refused for a locked admin until it does (Plan C1).
+    // commission-service reads neither `region` nor `scope`, and cannot: like
+    // refund-service it has no `TypeOrmModule` and keeps commission records in
+    // Redis, so there is no row to attribute to a market. Every total below is
+    // platform-wide and stays refused for a locked admin. A datastore, not a
+    // column (R11).
     refuseLockedAdmin(req, 'commission earnings');
     const { scope, market } = this.scopeOf(req, country, 'that commission');
     // A single seller's ledger, or the platform-wide totals. An unreachable
@@ -1777,10 +1789,14 @@ export class AdminMarketplaceController {
   @Post('bank-offers')
   @ApiOperation({ summary: 'Create a bank offer' })
   async createBankOffer(@Req() req: any, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, undefined, 'this bank offer');
     const regionCode =
       resolveMarket(req, dto?.regionCode ?? dto?.country, 'this bank offer') ?? null;
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_BANK_OFFER, {
-      dto: { ...dto, regionCode },
+      // `isGlobal` is a global admin's decision only: a locked admin's offer
+      // belongs to their market, and "runs everywhere" is not theirs to set.
+      dto: { ...dto, regionCode, ...(scope ? { isGlobal: false } : {}) },
+      scope,
     });
   }
 
@@ -1866,9 +1882,10 @@ export class AdminMarketplaceController {
   @Post('exchange-offers')
   @ApiOperation({ summary: 'Create an exchange offer' })
   async createExchangeOffer(@Req() req: any, @Body() dto: any) {
-    this.scopeOf(req, undefined, 'this exchange offer');
+    const { scope } = this.scopeOf(req, undefined, 'this exchange offer');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_CREATE_EXCHANGE_OFFER, {
       dto: this.scopeExchangeOffer(req, dto),
+      scope,
     });
   }
 
@@ -1878,21 +1895,34 @@ export class AdminMarketplaceController {
    * and an absent list is filled in.
    */
   private scopeExchangeOffer(req: any, dto: any) {
+    // `regionCode` is the market, and `applicableCountries` is no longer one.
+    // This used to write only the array, which is the encoding the entity now
+    // documents as customer-facing eligibility: an admin BOUNDARY compared a
+    // scope against comma-joined text, so an offer stored as 'QA,IN' equalled
+    // no market and was invisible to both markets' admins (C1 / AUD2-082).
     const scope = marketScopeOf(req);
-    if (!scope.locked) return dto;
     const named: string[] = Array.isArray(dto?.applicableCountries) ? dto.applicableCountries : [];
     for (const c of named) resolveMarket(req, c, 'this exchange offer');
-    return { ...dto, applicableCountries: [scope.region] };
+    const regionCode = resolveMarket(req, dto?.regionCode ?? named[0], 'this exchange offer');
+    if (!scope.locked) return { ...dto, regionCode: regionCode ?? null };
+    // A locked admin's offer is their market's, and never a global one.
+    return { ...dto, regionCode: scope.region, isGlobal: false };
   }
 
   @Patch('exchange-offers/:id')
   @ApiOperation({ summary: 'Update an exchange offer' })
   async updateExchangeOffer(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
-    const patch = dto?.applicableCountries !== undefined ? this.scopeExchangeOffer(req, dto) : dto;
+    const { scope } = this.scopeOf(req, undefined, 'this exchange offer');
+    // Scoped whenever the patch touches the market in either encoding, so a
+    // locked admin cannot move an offer out of their own market.
+    const patch =
+      dto?.applicableCountries !== undefined || dto?.regionCode !== undefined
+        ? this.scopeExchangeOffer(req, dto)
+        : dto;
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, {
       id,
       dto: patch,
-      region: marketScopeOf(req).region,
+      scope,
     });
   }
 
@@ -1903,10 +1933,11 @@ export class AdminMarketplaceController {
     @Param('id') id: string,
     @Body('status') status: string,
   ) {
+    const { scope } = this.scopeOf(req, undefined, 'this exchange offer');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_UPDATE_EXCHANGE_OFFER, {
       id,
       dto: { status },
-      region: marketScopeOf(req).region,
+      scope,
     });
   }
 
@@ -2470,10 +2501,37 @@ export class AdminMarketplaceController {
   @ApiQuery({ name: 'country', required: false })
   async getSellerWallets(@Req() req: any, @Query('country') country?: string) {
     const { scope, market } = this.scopeOf(req, country, 'those wallets');
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_WALLETS, {
+    // The BALANCES come from payout-service, which owns `payout.seller_wallets`.
+    // They used to come from marketplace-service, which has no wallet table and
+    // recomputed one from delivered orders at a hardcoded 10% commission, a 15%
+    // "pending settlement" and a 70/30 withdrawn/available split — invented
+    // numbers on a finance screen, and a different answer from the payout queue
+    // beside them about the same seller's money (AUD2-086 / I12).
+    const wallets = await this.sendToPayout<any>('list_seller_wallets', {
       region: market,
       scope,
     });
+    // Never a fabricated zero: "this market's sellers hold nothing" and "we
+    // could not ask" have to look different on a finance screen.
+    if (!wallets)
+      throw new ServiceUnavailableException('Seller wallets are temporarily unavailable.');
+
+    // Seller NAMES are marketplace-service's, and only the names: an unreachable
+    // catalogue costs the list its labels, not its figures.
+    const named = await this.sendToMarketplace<any>(MARKETPLACE_PATTERNS.ADMIN_GET_SELLER_WALLETS, {
+      region: market,
+      scope,
+    }).catch(() => null);
+    const nameOf = new Map<string, string>(
+      (named?.data ?? []).map((s: any) => [String(s.sellerId), s.sellerName]),
+    );
+    return {
+      ...wallets,
+      data: (wallets.data ?? []).map((w: any) => ({
+        ...w,
+        sellerName: nameOf.get(String(w.sellerId)) ?? null,
+      })),
+    };
   }
 
   @Post('seller-wallets/:id/adjust')
@@ -2534,10 +2592,11 @@ export class AdminMarketplaceController {
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('country') country?: string,
   ) {
-    // wallet-service's search reads neither `region` nor `scope`, so the page
-    // below is every market's ledger. Refused for a locked admin until wallet
-    // transactions carry a market (Plan C1); the cache key stays per market so
-    // nothing has to change here when they do.
+    // `wallet.wallet_transactions` is a real table, but a transaction is per
+    // USER rather than per order, so its market is `users.region_code` — which
+    // Task 4 only just made true — and wallet-service holds no join to it.
+    // Deliberately left fail-closed by R11 rather than guessed at; the cache key
+    // is already per market so nothing here changes when the join exists.
     refuseLockedAdmin(req, 'the wallet transaction ledger');
     const { scope, market } = this.scopeOf(req, country, 'those transactions');
     // Cached per market as well as per user: one shared key would have served a

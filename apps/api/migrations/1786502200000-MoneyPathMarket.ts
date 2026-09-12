@@ -55,15 +55,49 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm';
 export class MoneyPathMarket1786502200000 implements MigrationInterface {
   name = 'MoneyPathMarket1786502200000';
 
+  /**
+   * Whether a table exists in THIS database.
+   *
+   * Guarded because of the DataSource split. `payout.payouts` and
+   * `payout.seller_wallets` were created by
+   * `1785840000000-WalletAndPayoutSchemas`, which `data-source.main.ts`'s
+   * classification lists under `data-source.ts` — the MARKETPLACE runner, which
+   * in dev points at a different Postgres instance entirely (:5433) that has no
+   * `payout` schema at all. The tables are in fact in this database, which is
+   * why this migration is registered here; but a deployment that ran the two
+   * runners in a different order, or a genuinely split marketplace database,
+   * would reach `ALTER TABLE` on a table that is not there and fail the whole
+   * migration — taking every later one with it. `ADD COLUMN IF NOT EXISTS`
+   * tolerates a missing COLUMN, never a missing TABLE.
+   */
+  private async has(q: QueryRunner, table: string): Promise<boolean> {
+    const [{ exists }] = await q.query(`SELECT to_regclass('${table}') IS NOT NULL AS exists`);
+    if (!exists) {
+      console.warn(
+        `[MoneyPathMarket] ${table} is not in this database; skipping. If a ` +
+          `region-locked admin still cannot see payouts, this is why: the table ` +
+          `lives wherever the marketplace DataSource points.`,
+      );
+    }
+    return Boolean(exists);
+  }
+
   public async up(q: QueryRunner): Promise<void> {
+    const present: string[] = [];
     for (const table of ['payout.payouts', 'payout.seller_wallets']) {
+      if (!(await this.has(q, table))) continue;
+      present.push(table);
       await q.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS "region_code" varchar(2)`);
     }
+    if (!present.length) return;
 
     // Payouts: the owning seller's market. `payouts.seller_id` is varchar
     // holding the seller uuid as text, so the join casts rather than comparing
-    // a uuid with a varchar (which Postgres refuses outright).
-    await q.query(`
+    // a uuid with a varchar (which Postgres refuses outright). Skipped when the
+    // sellers table is in another database — an unattributed row stays refused,
+    // which is the behaviour it has today.
+    if (present.includes('payout.payouts') && (await this.has(q, 'marketplace.sellers')))
+      await q.query(`
       UPDATE payout.payouts p SET "region_code" = UPPER(s.region_code)
         FROM marketplace.sellers s
        WHERE s.id::text = p.seller_id
@@ -73,7 +107,8 @@ export class MoneyPathMarket1786502200000 implements MigrationInterface {
 
     // Seller wallets: the same seller. The primary key is the quoted camel-case
     // "sellerId" this table was created with, not `seller_id`.
-    await q.query(`
+    if (present.includes('payout.seller_wallets') && (await this.has(q, 'marketplace.sellers')))
+      await q.query(`
       UPDATE payout.seller_wallets w SET "region_code" = UPPER(s.region_code)
         FROM marketplace.sellers s
        WHERE s.id::text = w."sellerId"
@@ -85,6 +120,7 @@ export class MoneyPathMarket1786502200000 implements MigrationInterface {
       ['payout.payouts', 'IDX_payouts_region_code'],
       ['payout.seller_wallets', 'IDX_seller_wallets_region_code'],
     ]) {
+      if (!present.includes(table)) continue;
       await q.query(`CREATE INDEX IF NOT EXISTS "${idx}" ON ${table} ("region_code")`);
     }
   }
@@ -94,6 +130,9 @@ export class MoneyPathMarket1786502200000 implements MigrationInterface {
       ['payout.payouts', 'IDX_payouts_region_code'],
       ['payout.seller_wallets', 'IDX_seller_wallets_region_code'],
     ]) {
+      // Guarded in this direction too: a revert must not fail on a table that
+      // was never there to alter, or the ledger and the schema disagree.
+      if (!(await this.has(q, table))) continue;
       await q.query(`DROP INDEX IF EXISTS ${table.split('.')[0]}."${idx}"`);
       await q.query(`ALTER TABLE ${table} DROP COLUMN IF EXISTS "region_code"`);
     }
