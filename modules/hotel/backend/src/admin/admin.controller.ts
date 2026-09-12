@@ -17,7 +17,6 @@ import {
   type EmptyMessage,
   type IdMessage,
   RpcAwareExceptionsFilter,
-  refuseUnattributable,
   requireId,
 } from '@app/common';
 
@@ -93,26 +92,25 @@ export class HotelAdminController {
   // `scope` is the caller's market when the gateway resolved one for a
   // region-locked administrator, and undefined for a global one. A list narrows
   // to it, a decision is asserted against the hotel's own market, and a report
-  // that cannot yet be attributed to a market refuses rather than answering
-  // with the whole platform's numbers.
+  // is filtered by it — every figure this module produces is attributable, so
+  // none of these refuses any more (R9).
 
   /**
    * Platform statistics span hotels, bookings, revenue and reviews.
-   * `HotelReview` carries only `hotelId`, so the review count cannot be
-   * narrowed to a market without a join, and a half-scoped report is worse
-   * than none: it looks like the market's own figures while the review total
-   * is every market's. Refused for a scoped caller until the report is
-   * rebuilt per market.
+   *
+   * This refused every scoped caller: `HotelReview` carries only `hotelId`, so
+   * the review count could not be narrowed without a join, and a half-scoped
+   * report is worse than none — it looks like the market's own figures while
+   * the review total is every market's. `getAdminAnalytics` takes a market now
+   * (R9) and carries the predicate on all four legs, the reviews through
+   * `hotel_reviews -> hotels.countryCode`, so it answers.
+   *
+   * `scope` first: the lock wins over whatever `countryCode` asked for, and a
+   * global admin's `?countryCode=` still filters.
    */
   @MessagePattern({ cmd: 'admin_hotel_stats' })
   msgStats(@Payload() d: EmptyMessage) {
-    refuseUnattributable(
-      d?.scope,
-      'report',
-      this.logger,
-      'This report cannot be attributed to a market yet.',
-    );
-    return this.svc.getAdminAnalytics();
+    return this.svc.getAdminAnalytics(d?.scope ?? d?.countryCode);
   }
 
   @MessagePattern({ cmd: 'admin_list_hotels' })
@@ -140,16 +138,10 @@ export class HotelAdminController {
     return this.svc.getComplianceData(d?.scope ?? d?.countryCode);
   }
 
-  /** Reads the same unattributable analytics as `admin_hotel_stats`. */
+  /** Reads the same per-market analytics as `admin_hotel_stats`. */
   @MessagePattern({ cmd: 'admin_revenue' })
   msgRevenue(@Payload() d: EmptyMessage) {
-    refuseUnattributable(
-      d?.scope,
-      'report',
-      this.logger,
-      'This report cannot be attributed to a market yet.',
-    );
-    return this.svc.getAdminAnalytics();
+    return this.svc.getAdminAnalytics(d?.scope ?? d?.countryCode);
   }
 
   @MessagePattern({ cmd: 'admin_onboarding' })

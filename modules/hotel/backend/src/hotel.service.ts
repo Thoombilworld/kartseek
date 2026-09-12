@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
-import { assertInMarket } from '@app/common';
+import { assertInMarket, normaliseMarket } from '@app/common';
 
 /** Who is asking, as forwarded by the gateway from the verified token. */
 export interface HotelRequester {
@@ -8,6 +8,7 @@ export interface HotelRequester {
 }
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In, Between, MoreThanOrEqual, LessThanOrEqual, ILike } from 'typeorm';
+import type { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
@@ -584,25 +585,64 @@ export class HotelService {
     return { success: true, hotelId, commissionRate: rate };
   }
 
-  async getAdminAnalytics() {
-    const totalHotels = await this.hotelRepo.count();
-    const activeHotels = await this.hotelRepo.count({ where: { isAcceptingBookings: true } });
-    const totalBookings = await this.bookingRepo.count();
-    const totalReviews = await this.reviewRepo.count();
-
-    const revenueResult = await this.bookingRepo
-      .createQueryBuilder('b')
-      .select('SUM(b.grandTotal)', 'total')
-      .where('b.status IN (:...statuses)', {
-        statuses: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'COMPLETED'],
-      })
-      .getRawOne();
-
-    const cancelledBookings = await this.bookingRepo.count({
-      where: { status: 'CANCELLED' as any },
+  /**
+   * Platform statistics for one market, or all of them.
+   *
+   * This refused every scoped caller because `hotel_reviews` carries only
+   * `hotelId` and a half-scoped report is worse than none (audit F-30). The
+   * join is one hop: `hotel_reviews -> hotels.countryCode`. Bookings need no
+   * join at all — `hotel_bookings.hotelCountryCode` is a snapshot written at
+   * booking time precisely so reports can be attributed without one.
+   *
+   * `undefined` means every market, exactly as `scope` does everywhere else.
+   * Every leg carries the predicate: a report where one counter is the
+   * platform's and the rest are the market's is the failure this replaces.
+   */
+  async getAdminAnalytics(market?: string) {
+    const m = normaliseMarket(market);
+    const hotelWhere = m ? { countryCode: m } : {};
+    const totalHotels = await this.hotelRepo.count({ where: hotelWhere });
+    const activeHotels = await this.hotelRepo.count({
+      where: { ...hotelWhere, isAcceptingBookings: true },
     });
 
+    const bookingQb = this.bookingRepo.createQueryBuilder('b');
+    this.applyMarketFilter(bookingQb, 'b.hotelCountryCode', m);
+    const totalBookings = await bookingQb.getCount();
+
+    const cancelledQb = this.bookingRepo
+      .createQueryBuilder('b')
+      .where('b.status = :status', { status: 'CANCELLED' });
+    this.applyMarketFilter(cancelledQb, 'b.hotelCountryCode', m);
+    const cancelledBookings = await cancelledQb.getCount();
+
+    const revenueQb = this.bookingRepo
+      .createQueryBuilder('b')
+      .select('COALESCE(SUM(b.grandTotal), 0)', 'total')
+      .where('b.status IN (:...statuses)', {
+        statuses: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'COMPLETED'],
+      });
+    this.applyMarketFilter(revenueQb, 'b.hotelCountryCode', m);
+    const revenueResult = await revenueQb.getRawOne<{ total: string }>();
+
+    // Reviews reach a market through their hotel. Counted and averaged in one
+    // query over that join rather than loaded and reduced: `avgRating` was a
+    // hard-coded 0 with a comment promising it would be computed, which reads
+    // on screen as "every hotel in this market is unrated".
+    const reviewQb = this.reviewRepo
+      .createQueryBuilder('r')
+      .leftJoin(Hotel, 'h', 'h.id = r.hotelId');
+    this.applyMarketFilter(reviewQb, 'h.countryCode', m);
+    const totalReviews = await reviewQb.getCount();
+    const ratingRow = await this.reviewRepo
+      .createQueryBuilder('r')
+      .leftJoin(Hotel, 'h', 'h.id = r.hotelId')
+      .select('AVG(r.rating)', 'average');
+    this.applyMarketFilter(ratingRow, 'h.countryCode', m);
+    const rating = await ratingRow.getRawOne<{ average: string | null }>();
+
     return {
+      market: m ?? null,
       totalHotels,
       activeHotels,
       pendingApprovals: totalHotels - activeHotels,
@@ -610,10 +650,31 @@ export class HotelService {
       cancelledBookings,
       cancelRate:
         totalBookings > 0 ? `${((cancelledBookings / totalBookings) * 100).toFixed(1)}%` : '0%',
-      totalRevenue: revenueResult?.total || 0,
+      totalRevenue: Number(revenueResult?.total ?? 0) || 0,
       totalReviews,
-      avgRating: 0, // Will be computed from hotel averages
+      avgRating:
+        rating?.average == null ? null : Math.round((Number(rating.average) || 0) * 10) / 10,
     };
+  }
+
+  /**
+   * The market predicate on a query builder.
+   *
+   * `andWhere`, never `where`: these builders already carry a status or a date
+   * predicate, and `where` replaces the lot — a market filter that silently
+   * deleted the status filter would report every booking as cancelled revenue.
+   *
+   * A private method rather than a shared helper because `@app/common` has no
+   * query-builder half yet and this change may not add one.
+   */
+  private applyMarketFilter<T extends ObjectLiteral>(
+    qb: SelectQueryBuilder<T>,
+    column: string,
+    market?: string,
+  ): SelectQueryBuilder<T> {
+    const m = normaliseMarket(market);
+    if (m) qb.andWhere(`${column} = :market`, { market: m });
+    return qb;
   }
 
   /**

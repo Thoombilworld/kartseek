@@ -163,7 +163,17 @@ describe('Hotel reports that can be attributed to a market are', () => {
   });
 });
 
-describe('Hotel reports that cannot be attributed to a market fail closed', () => {
+/**
+ * The two refusal tests that used to close this file — "refuses platform
+ * statistics to a scoped admin" and "refuses the revenue report to a scoped
+ * admin" — are gone, not skipped. Both reports are real per-market queries now
+ * (R9): `hotels.countryCode`, the `hotel_bookings.hotelCountryCode` snapshot
+ * and `hotel_reviews -> hotels` in one hop. What they asserted is inverted and
+ * extended in `../hotel-report-scope.spec.ts`, which pins the predicate on
+ * every leg and the handler forwarding the market — keeping them would have
+ * asserted the absence this task exists to close.
+ */
+describe('Hotel reports are served to a global admin', () => {
   function controller() {
     const svc = {
       getAdminAnalytics: vi.fn(async () => ({ totalHotels: 3 })),
@@ -174,23 +184,9 @@ describe('Hotel reports that cannot be attributed to a market fail closed', () =
     return { ctrl, svc };
   }
 
-  // Both handlers are synchronous and throw directly rather than returning a
-  // rejected promise, so the call must be wrapped for `.toThrow` to catch it.
-  it('refuses platform statistics to a scoped admin without reading them', () => {
-    const { ctrl, svc } = controller();
-    expect(() => ctrl.msgStats({ scope: 'QA' })).toThrow(ForbiddenException);
-    expect(svc.getAdminAnalytics).not.toHaveBeenCalled();
-  });
-
-  it('refuses the revenue report to a scoped admin without reading it', () => {
-    const { ctrl, svc } = controller();
-    expect(() => ctrl.msgRevenue({ scope: 'QA' })).toThrow(ForbiddenException);
-    expect(svc.getAdminAnalytics).not.toHaveBeenCalled();
-  });
-
-  it('still serves both to a global admin', async () => {
+  it('serves platform statistics unfiltered when there is no market', async () => {
     const { ctrl, svc } = controller();
     await expect(ctrl.msgStats({})).resolves.toMatchObject({ totalHotels: 3 });
-    expect(svc.getAdminAnalytics).toHaveBeenCalled();
+    expect(svc.getAdminAnalytics).toHaveBeenCalledWith(undefined);
   });
 });
