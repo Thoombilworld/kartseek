@@ -36,6 +36,19 @@ function service(sellerRegion: string | null) {
     })),
     update: vi.fn(async () => ({ affected: 1 })),
   };
+  const couponRepo = {
+    findOne: vi.fn(async () => ({
+      id: 'c-1',
+      code: 'SAVE500IN',
+      sellerId: null,
+      regionCode: 'IN',
+      discountType: 'PERCENTAGE',
+    })),
+    update: vi.fn(async () => ({ affected: 1 })),
+  };
+  const couponUsageRepo = {
+    find: vi.fn(async () => [{ id: 'u-1', customerId: 'cust-1', discountApplied: '25.00' }]),
+  };
   const kafka = { publish: vi.fn(async () => undefined) };
   const dataSource = {
     transaction: vi.fn(async () => ({ newQty: 0, sku: 'SKU', lowStockThreshold: 1 })),
@@ -48,11 +61,13 @@ function service(sellerRegion: string | null) {
     productRepo,
     sellerRepo,
     returnRepo,
+    couponRepo,
+    couponUsageRepo,
     kafka,
     dataSource,
     logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
   });
-  return { svc, variantRepo, returnRepo, kafka };
+  return { svc, variantRepo, returnRepo, couponRepo, couponUsageRepo, kafka };
 }
 
 describe('variant writes respect the owning seller market', () => {
@@ -102,5 +117,78 @@ describe('return decisions respect the return market', () => {
     ).rejects.toThrow(ForbiddenException);
     expect(returnRepo.update).not.toHaveBeenCalled();
     expect(kafka.publish).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Coupon redemption history is a read of who bought what with whose discount —
+ * `customerId` and `discountApplied` per row. `assertOwns` short-circuits for
+ * every ADMIN role, so it answers "may this caller act on this seller's rows?"
+ * and never "is this coupon in this caller's market?" (review I-4).
+ */
+describe('coupon redemption reads respect the coupon market', () => {
+  it('refuses an IN coupon’s usage to a QA admin, and reads no redemption row', async () => {
+    const { svc, couponUsageRepo } = service('IN');
+    await expect(svc.getCouponUsageStats('c-1', admin, 'QA')).rejects.toThrow(ForbiddenException);
+    await expect(svc.getCouponUsageStats('c-1', admin, 'QA')).rejects.toThrow(
+      'This coupon belongs to IN, not to the QA market.',
+    );
+    expect(couponUsageRepo.find).not.toHaveBeenCalled();
+  });
+
+  it('allows a global admin and an in-market admin — the controls', async () => {
+    const { svc: global } = service('IN');
+    await expect(global.getCouponUsageStats('c-1', admin)).resolves.toMatchObject({
+      couponId: 'c-1',
+      totalRedemptions: 1,
+    });
+    const { svc: inScope, couponRepo } = service('IN');
+    couponRepo.findOne.mockResolvedValue({
+      id: 'c-2',
+      code: 'SAVE50QA',
+      sellerId: null,
+      regionCode: 'QA',
+      discountType: 'PERCENTAGE',
+    } as any);
+    await expect(inScope.getCouponUsageStats('c-2', admin, 'QA')).resolves.toMatchObject({
+      couponId: 'c-2',
+    });
+  });
+});
+
+/**
+ * `COUPON_WRITABLE` is the whitelist `updateCoupon` picks the patch from, and
+ * three of its entries were not properties of `Coupon` at all — `name`,
+ * `isAutoApply`, `isFirstOrderOnly` against the entity's `title`, `autoApply`,
+ * `firstOrderOnly`. `pick` kept the allowed key and dropped the real one, so an
+ * edit to any of the three answered `{ success: true }` and changed nothing
+ * (review I-1). The admin edit DTO now validates all three, which is what
+ * turned a silent drop into an advertised one.
+ */
+describe('a coupon edit persists every field the admin DTO accepts', () => {
+  it('patches title, autoApply and firstOrderOnly under their real property names', async () => {
+    const { svc, couponRepo } = service('IN');
+    await expect(
+      svc.updateCoupon(
+        'c-1',
+        { title: 'Diwali sale', autoApply: true, firstOrderOnly: true },
+        admin,
+      ),
+    ).resolves.toMatchObject({ success: true });
+    expect(couponRepo.update).toHaveBeenCalledWith('c-1', {
+      title: 'Diwali sale',
+      autoApply: true,
+      firstOrderOnly: true,
+    });
+  });
+
+  it('still refuses to rewrite the code, the owner or the redemption count', async () => {
+    const { svc, couponRepo } = service('IN');
+    await svc.updateCoupon(
+      'c-1',
+      { title: 'Kept', code: 'HIJACK', sellerId: 's-9', usedCount: 0, id: 'c-other' },
+      admin,
+    );
+    expect(couponRepo.update).toHaveBeenCalledWith('c-1', { title: 'Kept' });
   });
 });

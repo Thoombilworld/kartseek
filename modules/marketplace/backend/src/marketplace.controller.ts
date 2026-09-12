@@ -2794,6 +2794,7 @@ export class MarketplaceController {
     return this.fulfillment.getCouponUsageStats(
       typeof data === 'string' ? data : data?.id,
       actorOf(data),
+      typeof data === 'string' ? undefined : data?.scope,
     );
   }
 

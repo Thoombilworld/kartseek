@@ -584,8 +584,14 @@ export class MarketplaceFulfillmentService {
    * would be stolen, and `usedCount` is the ledger that enforces the redemption
    * limit — writable, it makes the limit meaningless.
    */
+  // Three of these read `name`, `isAutoApply` and `isFirstOrderOnly` until the
+  // R2 review: no such property exists on `Coupon` (they are `title`,
+  // `autoApply`, `firstOrderOnly`), so `pick` kept the unusable key, dropped the
+  // real one, and the route answered `{ success: true }` having changed nothing.
+  // A whitelist of property names has to be spelled the way the entity spells
+  // them or it silently whitelists nothing.
   private static readonly COUPON_WRITABLE = [
-    'name',
+    'title',
     'description',
     'discountType',
     'discountValue',
@@ -596,8 +602,8 @@ export class MarketplaceFulfillmentService {
     'validFrom',
     'validUntil',
     'isActive',
-    'isAutoApply',
-    'isFirstOrderOnly',
+    'autoApply',
+    'firstOrderOnly',
     'applicableProductIds',
     'applicableCategoryIds',
     'applicablePaymentMethods',
@@ -650,11 +656,15 @@ export class MarketplaceFulfillmentService {
     return { success: true, id };
   }
 
-  async getCouponUsageStats(couponId: string, actor?: Actor) {
+  async getCouponUsageStats(couponId: string, actor?: Actor, scope?: string) {
     // Redemption rows carry `customerId`, so this is a read of who bought what
     // with whose discount — scoped to the coupon's owner.
     const coupon = await this.couponOwner(couponId);
     await this.assertOwns(actor, coupon.sellerId, 'coupon');
+    // And to the coupon's market. `assertOwns` short-circuits for every ADMIN
+    // role, so without the line below a QA-locked admin read an Indian
+    // campaign's redemption history — customer ids and amounts (review I-4).
+    assertInMarket(coupon.regionCode, scope, 'coupon', this.logger);
 
     const usages = await this.couponUsageRepo.find({
       where: { couponId },
