@@ -88,7 +88,10 @@ export class RestaurantService {
       .where('r.status = :status', { status: RestaurantStatus.APPROVED });
 
     if (countryCode) qb.andWhere('r.countryCode = :cc', { cc: countryCode });
-    if (regionCode) qb.andWhere('r.regionCode = :rc', { rc: regionCode });
+    // Through `scopeToRegion`, not an equality test: this module's rows carry
+    // sub-region codes ('IN-MH', 'QA-DOH') and the market is always ISO-2, so
+    // `r.regionCode = 'IN'` matched none of the Indian restaurants.
+    this.scopeToRegion(qb, regionCode);
     if (isOpen !== undefined) qb.andWhere('r.isOnline = :isOnline', { isOnline: isOpen });
     if (minRating) qb.andWhere('r.rating >= :minRating', { minRating });
     if (cuisine) qb.andWhere(":cuisine = ANY(string_to_array(r.cuisines, ','))", { cuisine });
@@ -988,7 +991,21 @@ export class RestaurantService {
     return { success: true, restaurantId, message: 'Restaurant approved and activated' };
   }
 
-  async rejectRestaurant(restaurantId: string, reason: string) {
+  /**
+   * The one decision of the four that never checked the market.
+   *
+   * `approveRestaurant`, `suspendRestaurant` and the admin list all assert the
+   * restaurant's own market; reject went straight to `update` by id, so a
+   * QA-locked admin could send an Indian restaurant back to KYC (audit I4).
+   */
+  async rejectRestaurant(restaurantId: string, reason: string, scope?: string) {
+    const restaurant = await this.restaurantRepo.findOne({
+      where: { id: restaurantId },
+      select: { id: true, regionCode: true },
+    });
+    if (!restaurant) throw new NotFoundException(`Restaurant ${restaurantId} not found`);
+    assertInMarket(restaurant.regionCode, scope, 'restaurant', this.logger);
+
     await this.restaurantRepo.update(restaurantId, {
       status: RestaurantStatus.PENDING_KYC,
       rejectionReason: reason,
@@ -1037,6 +1054,12 @@ export class RestaurantService {
    * `regionCode`, not `countryCode`: the platform's market identifier is the
    * ISO-2 code, while `countryCode` here carries a legacy alpha-3 default
    * ('KEN') that nothing seeds — filtering on it matched no row in any market.
+   *
+   * The market goes through `scopeToRegion`, the same prefix predicate the
+   * customer reads use. It used to be an equality test on `findAndCount`, so a
+   * restaurant stored as 'IN-MH' or 'QA-DOH' was missing from the very list the
+   * admin who moderates it works from, while the shopper's list showed it
+   * (audit I4).
    */
   async getAdminRestaurantList(opts: {
     status?: string;
@@ -1045,15 +1068,14 @@ export class RestaurantService {
     regionCode?: string;
   }) {
     const { status, page = 1, limit = 50, regionCode } = opts;
-    const where: any = {};
-    if (status && status !== 'all') where.status = status;
-    if (regionCode) where.regionCode = regionCode;
-    const [data, total] = await this.restaurantRepo.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: (page - 1) * limit,
-    });
+    const qb = this.restaurantRepo.createQueryBuilder('r');
+    if (status && status !== 'all') qb.andWhere('r.status = :status', { status });
+    this.scopeToRegion(qb, regionCode);
+    const [data, total] = await qb
+      .orderBy('r.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
     return { data, total, page, limit };
   }
 
@@ -1207,9 +1229,12 @@ export class RestaurantService {
    * nothing and every region-scoped query came back empty. Comparing the first
    * two characters covers both spellings.
    *
-   * Other modules disagree about this column too — grocery stores it as 'QA',
-   * pharmacy as 'MUM-CBD' — so this normalises what restaurant owns and nothing
-   * more.
+   * This is the SQL half of `normaliseMarket` in `@app/common`, which is now
+   * the single statement of the rule: a sub-region code belongs to the country
+   * it names. `assertInMarket` applies the same rule to a loaded row, so the
+   * admin list and the decision taken from it agree — they did not, and a
+   * 'QA-DOH' restaurant was invisible to the QA admin while 403-ing on approve
+   * (audit I4). Every predicate here must stay in step with that function.
    */
   private scopeToRegion<T extends ObjectLiteral>(
     qb: SelectQueryBuilder<T>,

@@ -616,8 +616,8 @@ export class RestaurantController {
   }
 
   @MessagePattern({ cmd: 'reject_restaurant' })
-  tcpRejectRestaurant(@Payload() d: RestaurantScopedMessage & DtoMessage) {
-    return this.svc.rejectRestaurant(requireId(d?.restaurantId, 'restaurant'), d?.reason);
+  tcpRejectRestaurant(@Payload() d: RestaurantScopedMessage & DtoMessage & { scope?: string }) {
+    return this.svc.rejectRestaurant(requireId(d?.restaurantId, 'restaurant'), d?.reason, d?.scope);
   }
 
   @MessagePattern({ cmd: 'remove_staff' })
