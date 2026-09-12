@@ -215,3 +215,122 @@ describe('isGlobalMarket', () => {
     expect(isGlobalMarket({ regionCode: 'QA' })).toBe(false);
   });
 });
+
+/**
+ * An unknown code is not a market, and must never be treated as one.
+ *
+ * `normaliseMarket` split on `-`/`_` and returned the first segment, so
+ * `'NOT-A-COUNTRY'` became `'NO'` — Norway — and `'KEN'` became `'KE'`, Kenya.
+ * `marketplace.sellers.region_code` holds both shapes in dev. Two different
+ * failures came out of that:
+ *
+ *   • a garbage record market normalised to a *valid-looking* country, so a row
+ *     could be filtered into, or asserted against, a market nobody chose;
+ *   • worse, once the helper is strict, an unreadable value returns `undefined`
+ *     — and `undefined` is how this module spells "global admin, no filter". A
+ *     lock that cannot be read must therefore REFUSE, not widen.
+ *
+ * The registry is `@app/region`'s `REGION_CONFIGS`, which is the same list the
+ * storefront and the gateway read. One registry, not a second copy here.
+ */
+describe('normaliseMarket rejects anything that is not a known country', () => {
+  it('accepts a known code in any case', () => {
+    expect(normaliseMarket('qa')).toBe('QA');
+    expect(normaliseMarket(' IN ')).toBe('IN');
+    expect(normaliseMarket('ae')).toBe('AE');
+  });
+
+  it('accepts a sub-region of a known country', () => {
+    expect(normaliseMarket('QA-DOH')).toBe('QA');
+    expect(normaliseMarket('in_mh')).toBe('IN');
+  });
+
+  it('refuses a string that merely starts with two letters', () => {
+    // The whole point: 'NO' is Norway, and nobody meant Norway.
+    expect(normaliseMarket('NOT-A-COUNTRY')).toBeUndefined();
+    expect(normaliseMarket('NOPE')).toBeUndefined();
+  });
+
+  it('refuses an alpha-3 code, which the registry does not map', () => {
+    expect(normaliseMarket('QAT')).toBeUndefined();
+    expect(normaliseMarket('KEN')).toBeUndefined();
+    expect(normaliseMarket('UAE')).toBeUndefined();
+  });
+
+  it('refuses an ISO-2 code the platform has no region for', () => {
+    expect(normaliseMarket('ZZ')).toBeUndefined();
+    expect(normaliseMarket('XX')).toBeUndefined();
+  });
+
+  it('refuses empty, null, non-string and injected input', () => {
+    expect(normaliseMarket('')).toBeUndefined();
+    expect(normaliseMarket('  ')).toBeUndefined();
+    expect(normaliseMarket(null)).toBeUndefined();
+    expect(normaliseMarket(undefined)).toBeUndefined();
+    expect(normaliseMarket(42)).toBeUndefined();
+    expect(normaliseMarket('Q')).toBeUndefined();
+    expect(normaliseMarket('<SCRIPT>ALERT(1)</SCRIPT>')).toBeUndefined();
+  });
+});
+
+describe('an unreadable lock fails closed rather than becoming every market', () => {
+  it('refuses a list predicate built from an unrecognised scope', () => {
+    // Without this, `marketPredicate('NOT-A-COUNTRY')` is `undefined`, which
+    // `applyMarketFilter` reads as "global admin: add no predicate" — every
+    // market's rows, from a lock that was meant to narrow.
+    expect(() => marketPredicate('NOT-A-COUNTRY')).toThrow(ForbiddenException);
+    expect(() => marketPredicate('ZZ')).toThrow(
+      'This market scope cannot be attributed to a market yet.',
+    );
+  });
+
+  it('adds no predicate for a genuinely absent scope', () => {
+    expect(marketPredicate(undefined)).toBeUndefined();
+    expect(marketPredicate('')).toBeUndefined();
+    expect(marketPredicate('   ')).toBeUndefined();
+  });
+
+  it('refuses inside applyMarketFilter too, before any SQL is built', () => {
+    const calls: string[] = [];
+    const qb = {
+      andWhere(e: string) {
+        calls.push(e);
+        return qb;
+      },
+    };
+    expect(() => applyMarketFilter(qb, 'p.regionCode', 'NOT-A-COUNTRY')).toThrow(
+      ForbiddenException,
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a record assert made under an unrecognised scope', () => {
+    expect(() => assertInMarket('QA', 'NOT-A-COUNTRY', 'payout')).toThrow(ForbiddenException);
+    expect(() => assertRecordMarket({ regionCode: 'QA' }, 'regionCode', 'ZZ', 'payout')).toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('refuses refuseUnattributable under an unrecognised scope', () => {
+    expect(() => refuseUnattributable('NOT-A-COUNTRY', 'report')).toThrow(ForbiddenException);
+  });
+
+  it('treats an unrecognised RECORD market as unattributed, not as a country', () => {
+    // The record side stays a refusal rather than a throw-before-compare: a row
+    // whose market is garbage belongs to no market, so it is refused for a
+    // locked reader and left alone for a global one.
+    expect(() => assertInMarket('NOT-A-COUNTRY', 'QA', 'seller')).toThrow(
+      'This seller belongs to every market, not to the QA market.',
+    );
+    expect(() => assertInMarket('NOT-A-COUNTRY', undefined, 'seller')).not.toThrow();
+  });
+
+  it('logs the code it refused, so a bad token claim is diagnosable', () => {
+    const lines: string[] = [];
+    expect(() =>
+      assertInMarket('QA', 'NOT-A-COUNTRY', 'payout', { warn: (m) => lines.push(m) }),
+    ).toThrow(ForbiddenException);
+    expect(lines[0]).toContain('[region-scope-denied]');
+    expect(lines[0]).toContain('NOT-A-COUNTRY');
+  });
+});

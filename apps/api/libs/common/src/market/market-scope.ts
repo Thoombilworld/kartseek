@@ -1,4 +1,9 @@
 import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
+// The leaf config module, not `@app/region`'s barrel: the barrel pulls in the
+// Nest module, guard, middleware and the India pincode dataset, and every
+// service that reads a market scope would carry all of it. `region.config.ts`
+// imports nothing but its own types, so there is no cycle and nothing to bundle.
+import { isSupportedRegion } from '@app/region/region.config';
 
 /**
  * The backend half of staff market scope.
@@ -60,15 +65,65 @@ export function normaliseMarket(value: unknown): string | undefined {
   const v = value.trim().toUpperCase();
   if (!v) return undefined;
   const country = v.split(/[-_]/)[0];
-  return country.length >= 2 ? country.slice(0, 2) : undefined;
+  // Validated against the registry, not just shaped like a code. This used to
+  // be `country.slice(0, 2)`, which turned `NOT-A-COUNTRY` into `NO` (Norway)
+  // and the alpha-3 `KEN` into `KE` (Kenya) — and `marketplace.sellers`
+  // holds both shapes in dev, so a garbage market normalised to a real one.
+  // `REGION_CONFIGS` is the same list the storefront and the gateway read;
+  // a second copy of it here is how one fact came to have four answers.
+  return isSupportedRegion(country) ? country : undefined;
 }
 
-/** The market a list query filters on: the lock wins over whatever was requested. */
+/**
+ * The caller's lock, or `undefined` for a genuinely global caller — and a
+ * refusal for anything in between.
+ *
+ * `undefined` is how this module spells "no lock, add no predicate, assert
+ * nothing". That makes an unreadable lock the dangerous case: once
+ * `normaliseMarket` is strict, a scope of `'NOT-A-COUNTRY'` returns `undefined`
+ * and every caller below would read it as a global admin — a lock that was
+ * meant to narrow would open every market instead. So a scope that is present
+ * but not a known country is refused here, before any query is built or any row
+ * is compared, and the code it refused goes in the log: the only way to get one
+ * is a token claim or an RPC payload that should never have been minted.
+ *
+ * The thrown copy is the platform's fixed unattributable wording. The log
+ * carries the detail, as everywhere else in this file.
+ */
+function resolveLock(
+  scope: string | undefined,
+  what: string,
+  logger: { warn(message: string): void } = fallbackLogger,
+): string | undefined {
+  if (scope === undefined || scope === null || String(scope).trim() === '') return undefined;
+  const lock = normaliseMarket(scope);
+  if (lock) return lock;
+  logger.warn(
+    `[region-scope-denied] scope "${scope}" is not a market this platform knows; ` +
+      `refused rather than widened to every market (${what})`,
+  );
+  throw new ForbiddenException(`This ${what} cannot be attributed to a market yet.`);
+}
+
+/**
+ * The market a list query filters on: the lock wins over whatever was requested.
+ *
+ * An unreadable LOCK is refused (`resolveLock`) — returning `undefined` would
+ * add no predicate at all and hand a locked caller every market's rows.
+ *
+ * An unreadable `requested` is ignored rather than refused. It only ever
+ * reaches here from a global caller — `resolveMarket` in the gateway has
+ * already refused a locked caller who named another market — and a global
+ * caller may see every market anyway, so there is nothing to leak. Validating
+ * `?country=` into a 400 is the DTO's job, not this function's; where a route
+ * still lacks that, a typo silently widens a global admin's own view.
+ */
 export function marketPredicate(
   scope: string | undefined,
   requested?: string | null,
+  logger?: { warn(message: string): void },
 ): string | undefined {
-  return normaliseMarket(scope) ?? normaliseMarket(requested ?? undefined);
+  return resolveLock(scope, 'market scope', logger) ?? normaliseMarket(requested ?? undefined);
 }
 
 /**
@@ -81,7 +136,7 @@ export function refuseUnattributable(
   logger: { warn(message: string): void } = fallbackLogger,
   message?: string,
 ): void {
-  const lock = normaliseMarket(scope);
+  const lock = resolveLock(scope, what, logger);
   if (!lock) return;
   logger.warn(
     `[region-scope-denied] ${what} cannot be attributed to a market yet; refused for a ${lock}-scoped admin`,
@@ -110,8 +165,12 @@ export function assertInMarket(
   logger: { warn(message: string): void } = fallbackLogger,
   opts?: { isGlobal?: boolean | null },
 ): void {
-  const lock = normaliseMarket(scope);
+  const lock = resolveLock(scope, what, logger);
   if (!lock) return;
+  // The RECORD side stays a comparison, not a throw: a row whose market is
+  // garbage belongs to no market, so it reads as unattributed and is refused
+  // for a locked reader while a global one is unaffected. Only the LOCK — which
+  // comes from a signed token — is strict enough to refuse outright.
   const owner = normaliseMarket(recordRegion ?? undefined) ?? null;
   if (owner === lock) return;
   const where =
@@ -145,8 +204,9 @@ export function applyMarketFilter<T extends { andWhere(e: string, p?: object): T
   expression: string,
   scope: string | undefined,
   requested?: string | null,
+  logger?: { warn(message: string): void },
 ): T {
-  const market = marketPredicate(scope, requested);
+  const market = marketPredicate(scope, requested, logger);
   return market ? qb.andWhere(`${expression} = :__market`, { __market: market }) : qb;
 }
 
