@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
-import { applyMarketFilter, assertInMarket, normaliseMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket, normaliseMarket, requireMarket } from '@app/common';
 
 /** Who is asking, as forwarded by the gateway from the verified token. */
 export interface HotelRequester {
@@ -527,7 +527,12 @@ export class HotelService {
   async getAllHotels(page = 1, limit = 20, status?: string, countryCode?: string) {
     const where: any = {};
     if (status) where.status = status;
-    if (countryCode) where.countryCode = countryCode;
+    // `requireMarket`: a truthiness gate on a `where`-object assignment DROPS
+    // the key for a market it cannot read, and a `findAndCount` with no market
+    // key returns every market. Same class as the five R2-1 sites, found by the
+    // uniqueness spec's new where-object test rather than by review.
+    const market = requireMarket(countryCode, 'hotels', this.logger);
+    if (market) where.countryCode = market;
 
     const [data, total] = await this.hotelRepo.findAndCount({
       where,

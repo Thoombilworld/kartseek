@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike, In } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { assertInMarket, refuseUnattributable } from '@app/common';
+import { assertInMarket, refuseUnattributable, requireMarket } from '@app/common';
 
 import {
   PharmacyStore,
@@ -852,7 +852,12 @@ export class PharmacyService {
     const { status, page = 1, limit = 50, regionCode } = params;
     const where: any = {};
     if (status) where.status = status;
-    if (regionCode) where.regionCode = regionCode;
+    // `requireMarket`: a truthiness gate on a `where`-object assignment DROPS
+    // the key for a market it cannot read, and a `findAndCount` with no market
+    // key returns every market. Same class as the five R2-1 sites, found by the
+    // uniqueness spec's new where-object test rather than by review.
+    const market = requireMarket(regionCode, 'stores', this.logger);
+    if (market) where.regionCode = market;
     return this.storeRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },

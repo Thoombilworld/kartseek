@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { HotelService } from './hotel.service';
 import { HotelAdminController } from './admin/admin.controller';
+import { ForbiddenException } from '@nestjs/common';
 
 /**
  * Hotel platform statistics, per market.
@@ -140,5 +141,41 @@ describe('the hotel admin handlers forward the market instead of refusing it', (
     const { ctrl, svc } = controller();
     await ctrl.msgStats({} as any);
     expect(svc.getAdminAnalytics).toHaveBeenCalledWith(undefined);
+  });
+});
+
+/**
+ * A `where`-object market assignment drops the KEY for a market this platform
+ * cannot read, and a `findAndCount`/`find` with no market key returns every
+ * market. Found by `scope-helper-uniqueness.spec.ts`'s where-object test, which
+ * exists because the bare-equality scan cannot see this shape (R11 round 3 / R2-1).
+ */
+describe('the hotel list refuses an unreadable market', () => {
+  it('refuses ZZ, QAT and NOT-A-COUNTRY rather than listing every market', async () => {
+    for (const bad of ['ZZ', 'QAT', 'NOT-A-COUNTRY']) {
+      const { svc } = service();
+      await expect(svc.getAllHotels(1, 20, undefined, bad)).rejects.toThrow(ForbiddenException);
+    }
+  });
+
+  it('narrows to one market for a readable one, and to none for an absent one', async () => {
+    // A local repo: the shared harness mocks `count` for the statistics tests
+    // and has no `findAndCount`, which the list uses.
+    const listing = () => {
+      const findAndCount = vi.fn(async () => [[], 0]);
+      const svc = Object.create(HotelService.prototype) as HotelService;
+      Object.assign(svc, { hotelRepo: { findAndCount }, logger: { warn: vi.fn() } });
+      return { svc, findAndCount };
+    };
+
+    const one = listing();
+    await one.svc.getAllHotels(1, 20, undefined, 'qa');
+    expect(one.findAndCount).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ countryCode: 'QA' }) }),
+    );
+
+    const all = listing();
+    await all.svc.getAllHotels(1, 20);
+    expect('countryCode' in (all.findAndCount.mock.calls[0][0] as any).where).toBe(false);
   });
 });

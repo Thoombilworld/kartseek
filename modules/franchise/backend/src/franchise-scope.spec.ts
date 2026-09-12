@@ -149,3 +149,44 @@ describe('every franchise command refuses out-of-market before it reads anything
     await expect(ctrl.getDashboard({ id: 'fr-1' })).resolves.toMatchObject({ region: 'IN' });
   });
 });
+
+/**
+ * A lock this platform cannot read must not skip the franchise lookup.
+ *
+ * `assertFranchiseInScope` opened with `if (!normaliseMarket(scope)) return
+ * franchiseId;` — a readability gate deciding absent-vs-unreadable for itself.
+ * Once `normaliseMarket` became registry-backed, a lock such as `ZZ` returned
+ * the id WITHOUT loading the franchise, so no market assert ran at all and
+ * every command behind it answered for any estate. Before that change the same
+ * lock filtered to a plausible wrong market; afterwards it filtered to nothing
+ * (R11 fix round 3 / R2-1).
+ */
+describe('an unreadable lock cannot skip the franchise market assert', () => {
+  it('refuses ZZ, QAT and NOT-A-COUNTRY rather than returning the id unchecked', async () => {
+    for (const brokenLock of ['ZZ', 'QAT', 'NOT-A-COUNTRY']) {
+      const { svc, franchiseRepo } = build({ countryCode: 'IN' });
+      await expect(svc.assertFranchiseInScope('fr-1', brokenLock)).rejects.toThrow(
+        ForbiddenException,
+      );
+      // The lookup DID happen — the refusal comes from the row, not from the gate.
+      expect(franchiseRepo.findOne).toHaveBeenCalled();
+    }
+  });
+
+  it('still refuses a readable lock on another market, and allows its own', async () => {
+    const other = build({ countryCode: 'IN' });
+    await expect(other.svc.assertFranchiseInScope('fr-1', 'QA')).rejects.toThrow(
+      ForbiddenException,
+    );
+    const own = build({ countryCode: 'QA' });
+    await expect(own.svc.assertFranchiseInScope('fr-1', 'QA')).resolves.toBe('fr-1');
+  });
+
+  it('skips the lookup only for a genuinely global caller', async () => {
+    for (const noLock of [undefined, '', '   ']) {
+      const { svc, franchiseRepo } = build({ countryCode: 'IN' });
+      await expect(svc.assertFranchiseInScope('fr-1', noLock)).resolves.toBe('fr-1');
+      expect(franchiseRepo.findOne).not.toHaveBeenCalled();
+    }
+  });
+});

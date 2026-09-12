@@ -119,10 +119,19 @@ export class FranchiseService {
    *
    * No lookup at all for an unscoped caller: the question only has an answer
    * worth paying for when it can change the outcome.
+   *
+   * The gate tests PRESENCE, not readability. `if (!normaliseMarket(scope))`
+   * returned the id WITHOUT loading the franchise, so a lock the registry
+   * cannot read skipped the market assert entirely and every franchise command
+   * below answered for any estate. `assertInMarket` is the thing that decides
+   * absent-vs-unreadable — it returns for a genuinely global caller and refuses
+   * a present-but-unreadable lock — and a gate that decides for itself is how
+   * this task's own strict `normaliseMarket` turned "filtered to the wrong one
+   * market" into "not filtered at all" (R11 fix round 3 / R2-1).
    */
   async assertFranchiseInScope(id: string | undefined, scope?: string): Promise<string> {
     const franchiseId = requireId(id, 'franchise');
-    if (!normaliseMarket(scope)) return franchiseId;
+    if (scope === undefined || scope === null || String(scope).trim() === '') return franchiseId;
 
     const franchise = await this.franchiseRepo.findOne({
       where: { id: franchiseId },

@@ -172,3 +172,27 @@ describe('PharmacyService prescription verification is scoped too', () => {
     expect(global.qb.predicates.some((p: string) => p.includes('store.regionCode'))).toBe(false);
   });
 });
+
+/**
+ * A `where`-object market assignment drops the KEY for a market this platform
+ * cannot read, and a `findAndCount`/`find` with no market key returns every
+ * market. Found by `scope-helper-uniqueness.spec.ts`'s where-object test, which
+ * exists because the bare-equality scan cannot see this shape (R11 round 3 / R2-1).
+ */
+describe('the pharmacy admin store list refuses an unreadable market', () => {
+  it('refuses ZZ, QAT and NOT-A-COUNTRY rather than listing every market', async () => {
+    for (const bad of ['ZZ', 'QAT', 'NOT-A-COUNTRY']) {
+      const { svc, storeRepo } = service();
+      await expect(svc.getAdminStoreList({ regionCode: bad })).rejects.toThrow(ForbiddenException);
+      expect(storeRepo.findAndCount).not.toHaveBeenCalled();
+    }
+  });
+
+  it('narrows to one market for a readable one', async () => {
+    const { svc, storeRepo } = service();
+    await svc.getAdminStoreList({ regionCode: 'qa' });
+    expect(storeRepo.findAndCount).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ regionCode: 'QA' }) }),
+    );
+  });
+});

@@ -1,4 +1,4 @@
-import { applyMarketFilter } from '@app/common';
+import { applyMarketFilter, requireMarket } from '@app/common';
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Between, ILike } from 'typeorm';
@@ -321,7 +321,12 @@ export class ComplaintManagementService {
     vendorId?: string;
   }): Promise<TaxiDisciplinaryActionEntity[]> {
     const where: any = {};
-    if (filters?.countryCode) where.countryCode = filters.countryCode;
+    // `requireMarket`: a truthiness gate on a `where`-object assignment DROPS
+    // the key for a market it cannot read, and a `findAndCount` with no market
+    // key returns every market. Same class as the five R2-1 sites, found by the
+    // uniqueness spec's new where-object test rather than by review.
+    const market = requireMarket(filters?.countryCode, 'disciplinary actions', this.logger);
+    if (market) where.countryCode = market;
     if (filters?.targetType) where.targetType = filters.targetType;
     if (filters?.status) where.status = filters.status;
     if (filters?.driverId) where.driverId = filters.driverId;
@@ -383,7 +388,12 @@ export class ComplaintManagementService {
     byAccountability: { vendor: number; platform: number };
   }> {
     const where: any = {};
-    if (countryCode) where.countryCode = countryCode;
+    // `requireMarket`: a truthiness gate on a `where`-object assignment DROPS
+    // the key for a market it cannot read, and a `findAndCount` with no market
+    // key returns every market. Same class as the five R2-1 sites, found by the
+    // uniqueness spec's new where-object test rather than by review.
+    const market = requireMarket(countryCode, 'complaint statistics', this.logger);
+    if (market) where.countryCode = market;
 
     const all = await this.complaintRepo.find({
       where,
