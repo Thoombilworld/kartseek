@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, ILike, IsNull } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
-import { applyMarketFilter, assertInMarket, requireMarket, normaliseMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket, requireMarket } from '@app/common';
 
 import { GroceryStore } from '../entities/grocery-store.entity';
 import { GroceryItem } from '../entities/grocery-item.entity';
@@ -61,8 +61,12 @@ export class GroceryAdminService {
    * products) rather than the platform total.
    */
   async getDashboard(scope?: string) {
+    // `requireMarket`: an unreadable lock dropped the predicate from every
+    // count and sum on this dashboard, reporting the platform's totals as the
+    // caller's market (R3-1).
+    const market = requireMarket(scope, 'grocery dashboard', this.logger);
     const storeWhere = (extra: Record<string, unknown> = {}) =>
-      scope ? { ...extra, regionCode: scope } : extra;
+      market ? { ...extra, regionCode: market } : extra;
 
     const [totalStores, approvedStores, pendingStores, suspendedStores] = await Promise.all([
       this.storeRepo.count({ where: storeWhere() }),
@@ -556,7 +560,13 @@ export class GroceryAdminService {
    * per-market editor exists.
    */
   async getSettings(market?: string) {
-    const m = normaliseMarket(market);
+    // `requireMarket`: `grocery.controller.ts` sends
+    // `marketPredicate(d?.scope, d?.market)` here, so this field carries a LOCK
+    // for a region-locked admin. `normaliseMarket` returned `undefined` for one
+    // it could not read, which silently fell back to the platform defaults
+    // below — settings presented as this market's when they are nobody's
+    // (R3-4).
+    const m = requireMarket(market, 'grocery settings', this.logger);
     const [scoped, global] = await Promise.all([
       m ? this.settingRepo.find({ where: { regionCode: m } }) : Promise.resolve([]),
       this.settingRepo.find({ where: { regionCode: IsNull() } }),
