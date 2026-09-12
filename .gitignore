@@ -138,5 +138,13 @@ apps/api/schema.gql
 
 # Compiled output never belongs next to sources (44 stale .js.map files were once committed under apps/api/libs)
 apps/api/libs/**/*.js.map
+
+# ── Added 2026-09-12, private object storage ──────────────────────────────────
+# Where StorageService's `local` provider writes objects: `var/private-storage`
+# holds KYC identity documents (the private seam) and `var/uploads` the public
+# seam's dev copies. Neither is source, and the first must never be committed
+# or served.
+var/
+
 apps/api/apps/**/*.js.map
 modules/*/backend/src/**/*.js.map
