@@ -1916,7 +1916,11 @@ export class MarketplaceAdminService {
     }
     if (activeOnly) {
       const now = new Date();
-      qb.where('bo.status = :status', { status: 'ACTIVE' })
+      // `andWhere`, never `where`: TypeORM's `where()` REPLACES the whole WHERE
+      // clause, so it discarded the region predicate built ten lines above and
+      // `?activeOnly=true` returned every market's bank offers to a locked
+      // admin (audit V3). Same at `listExchangeOffers` below.
+      qb.andWhere('bo.status = :status', { status: 'ACTIVE' })
         .andWhere('bo.startsAt <= :now', { now })
         .andWhere('bo.expiresAt >= :now', { now });
     }
@@ -1984,7 +1988,7 @@ export class MarketplaceAdminService {
     }
     if (activeOnly) {
       const now = new Date();
-      qb.where('eo.status = :status', { status: 'ACTIVE' })
+      qb.andWhere('eo.status = :status', { status: 'ACTIVE' })
         .andWhere('eo.startsAt <= :now', { now })
         .andWhere('eo.expiresAt >= :now', { now });
     }
