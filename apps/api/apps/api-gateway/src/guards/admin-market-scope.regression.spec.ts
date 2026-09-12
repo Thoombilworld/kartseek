@@ -78,9 +78,10 @@ const CLASS_CLOSE = /^}/;
 
 /**
  * Controllers whose class-level guard performs the market check itself, so the
- * handler bodies legitimately carry no scope call. One entry, and two `it`s
- * below read that guard's source to prove it — an entry here is a claim about
- * code, not a way to be excused from the rule.
+ * handler bodies legitimately carry no scope call. One entry; an `it` below
+ * reads that guard's source to prove the claim, and two more pin which routes
+ * inside such a class the guard can really scope (see `guardCanScope`). An
+ * entry here is a claim about code, not a way to be excused from the rule.
  */
 const GUARD_SCOPED: Array<{ bound: RegExp; guard: string; file: string; why: string }> = [
   {
@@ -92,33 +93,64 @@ const GUARD_SCOPED: Array<{ bound: RegExp; guard: string; file: string; why: str
 ];
 
 /**
- * The params `SellerOwnershipGuard` looks for (`seller-ownership.guard.ts:19`),
- * as they appear in a route path.
+ * The params `SellerOwnershipGuard` resolves as a seller id, in its own order
+ * (`seller-ownership.guard.ts:19`: `const SELLER_PARAMS = ['sellerId', 'id']`).
+ * An `it` below fails if that list changes.
  */
-const SELLER_ID_PARAM = /:(?:sellerId|id)(?:\/|$)/;
+const SELLER_PARAMS = [':sellerId', ':id'] as const;
+
+/** The path segments a route adds after its controller's base path. */
+function segmentsAfterBase(base: string, routePath: string): string[] {
+  const all = routePath
+    .replace(/^\/|\/$/g, '')
+    .split('/')
+    .filter(Boolean);
+  const skip = base
+    .replace(/^\/|\/$/g, '')
+    .split('/')
+    .filter(Boolean).length;
+  return all.slice(skip);
+}
 
 /**
  * Whether the guard named in GUARD_SCOPED can actually scope this route.
  *
  * `canActivate` returns `true` without checking anything when the request
  * carries none of its params (`seller-ownership.guard.ts:91` — "No seller in
- * the path — nothing object-level to authorise here"), so a class-level binding
- * is not a blanket exemption. Two shapes are covered and no others:
+ * the path — nothing object-level to authorise here"), and when it does find
+ * one it looks that id up in the `sellers` table and asserts *that seller's*
+ * market. So a class-level binding is not a blanket exemption; three shapes are
+ * covered and no others:
  *
- *   • the path names a seller (`:sellerId`, or the `:id` the guard also reads)
- *     — the guard resolves that seller and asserts its market;
+ *   • the path carries `:sellerId`, the guard's dedicated param — it resolves
+ *     that seller and asserts its market;
+ *   • the path carries a single `:id` directly after the base path
+ *     (`GET /seller/:id/wallet`) — the class's own resource, so the `id` the
+ *     guard reads really is a seller id;
  *   • the path names no row at all (`GET /seller/orders`) — the subject is the
  *     caller's own account from the JWT, so there is no other market's record to
  *     reach.
  *
- * A route in the same class with some *other* id in its path
- * (`/seller/campaigns/:campaignId`) is neither: the guard waves it through and
- * it must resolve the market itself. Today that set is empty — 115 of the 128
- * guard-scoped routes name a seller and 13 name nothing — and this predicate is
- * what keeps it empty.
+ * Anything else is **not** guard-scoped, even inside a guard-bound class. Four
+ * routes in `seller.controller.ts` are exactly that case — `PUT orders/:id/
+ * status`, `PUT products/:id`, `PATCH products/:id/stock`, `PATCH listings/:id`
+ * — where `:id` is an order, product or listing id. The guard still reads
+ * `request.params.id`, looks it up as a seller, misses, and
+ * `assertRecordInScope(req, null, …)` denies a region-locked admin
+ * (`market-scope.ts:76-78`: a `null` owner never equals a locked scope). That
+ * fails closed, which is why nothing leaks today — but it is a lookup miss, not
+ * a market check on the row the route actually touches, so those four sit in
+ * the exception list with that reason rather than being waved through here.
+ *
+ * 124 routes are exempt on 2026-09-12: 110 carry `:sellerId`, 13 carry no param
+ * at all, and one is `GET /seller/:id/wallet`.
  */
-function guardCanScope(routePath: string): boolean {
-  return SELLER_ID_PARAM.test(routePath) || !routePath.includes(':');
+function guardCanScope(base: string, routePath: string): boolean {
+  const rest = segmentsAfterBase(base, routePath);
+  const params = rest.filter((s) => s.startsWith(':'));
+  if (params.includes(':sellerId')) return true;
+  if (!params.length) return true;
+  return params.length === 1 && rest[0] === ':id';
 }
 
 /**
@@ -147,19 +179,26 @@ const GLOBAL_ROUTES: Array<[RegExp, string]> = [
  * and the plan that owns the fix.
  *
  * This is not an allowlist. Every entry is an exact verb-and-path pair, it says
- * why the route is still open and who is fixing it, and the `it` below fails
- * the moment an entry stops describing a real unscoped route — so a route that
- * gets scoped, renamed or deleted forces its entry out of this file rather than
- * leaving a permanent hole with a comment on it. The list may only shrink.
+ * why the route is still open and who is fixing it, the `it` below fails the
+ * moment an entry stops describing a real unscoped route, and a second `it`
+ * holds the whole set against `EXCEPTION_CENSUS` — so a route that gets scoped,
+ * renamed or deleted forces its entry out of this file, and a new hole cannot be
+ * swapped in under cover of the old one's slot.
  *
- * 27 entries on 2026-09-12, after tasks R1–R7 and R10 of the regional-integrity
- * plan. 22 of the 27 are `@Roles(UserRole.SUPER_ADMIN)` only — no region-locked
- * admin reaches them, because a super admin is global by definition; they are
- * listed anyway because the rule is that a route proves it considered the
- * market, and a locked super admin would otherwise leak silently. The five that
- * a region-locked `ADMIN` can reach today are marked REACHABLE and are the
- * priority: `POST /upload/delivery-proof`, `PUT /marketplace/answers/:answerId/
- * accept` and the three GDPR routes.
+ * 31 entries on 2026-09-12, after tasks R1–R7 and R10 of the regional-integrity
+ * plan:
+ *
+ *   • **22 are `@Roles(UserRole.SUPER_ADMIN)` only** — no region-locked admin
+ *     reaches them, because a super admin is global by definition. They are
+ *     listed anyway because the rule is that a route proves it considered the
+ *     market, and a locked super admin would otherwise leak silently.
+ *   • **5 are reachable by a region-locked `ADMIN` with no check at all**,
+ *     marked REACHABLE, and are the priority: `POST /upload/delivery-proof`,
+ *     `PUT /marketplace/answers/:answerId/accept` and the three GDPR routes.
+ *   • **4 are reachable but fail closed** — the `seller.controller.ts` routes
+ *     whose `:id` SellerOwnershipGuard reads as a seller id and does not find,
+ *     so a locked admin is refused rather than filtered. Nothing leaks; the
+ *     capability is simply missing.
  */
 const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }> = [
   // ── TAXI plan (D2) ────────────────────────────────────────────────────────
@@ -348,6 +387,83 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
     owner: 'unowned — escalated in the R8 report',
     why: 'REACHABLE by a region-locked ADMIN; platform-wide compliance counts across every market',
   },
+
+  // ── MODULES M1 / CONSOLE ──────────────────────────────────────────────────
+  // The four `seller.controller.ts` routes where `:id` is an order, product or
+  // listing rather than a seller. SellerOwnershipGuard reads `params.id`
+  // regardless, looks it up in `sellers`, misses, and assertRecordInScope(req,
+  // null, …) denies a region-locked admin — so they fail closed and nothing
+  // leaks. They are listed rather than exempted because a lookup miss is not a
+  // market check on the row the route touches: a locked admin (and, on the same
+  // path, a seller whose own order id is read as a seller id) is refused instead
+  // of filtered. See guardCanScope() above.
+  {
+    verb: 'PUT',
+    path: '/seller/orders/:id/status',
+    owner: 'MODULES M1/CONSOLE',
+    why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
+  },
+  {
+    verb: 'PUT',
+    path: '/seller/products/:id',
+    owner: 'MODULES M1/CONSOLE',
+    why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
+  },
+  {
+    verb: 'PATCH',
+    path: '/seller/products/:id/stock',
+    owner: 'MODULES M1/CONSOLE',
+    why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
+  },
+  {
+    verb: 'PATCH',
+    path: '/seller/listings/:id',
+    owner: 'MODULES M1/CONSOLE',
+    why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
+  },
+];
+
+/**
+ * The exception list as a census: every entry, by verb and path, sorted.
+ *
+ * A length cap alone lets one entry be swapped for another — delete a fixed
+ * route, add a freshly-introduced unscoped one, and the count still matches.
+ * Asserting the exact set means any change to `DEFERRED`, in either direction,
+ * has to be made here too and shows up in review as what it is: 31 known holes
+ * on 2026-09-12, and the only legitimate edit is a deletion from both places.
+ */
+const EXCEPTION_CENSUS: readonly string[] = [
+  'GET /doctor/admin/appointments',
+  'GET /gdpr/compliance/dashboard',
+  'GET /regions/india/stats',
+  'GET /regions/stats',
+  'GET /regions/stats/region',
+  'GET /taxi/admin/audit-logs',
+  'GET /taxi/admin/dashboard',
+  'GET /taxi/admin/disputes',
+  'GET /taxi/admin/drivers',
+  'GET /taxi/admin/fare-rules',
+  'GET /taxi/admin/sos',
+  'GET /taxi/admin/vendors',
+  'PATCH /seller/listings/:id',
+  'PATCH /seller/products/:id/stock',
+  'POST /gdpr/erasure/:requestId/process',
+  'POST /gdpr/export/:requestId/process',
+  'POST /taxi/admin/drivers/:id/approve',
+  'POST /taxi/admin/fare-rules',
+  'POST /taxi/admin/vendors/:id/approve',
+  'POST /taxi/admin/vendors/:id/reject',
+  'POST /upload/brand-image',
+  'POST /upload/category-image',
+  'POST /upload/delivery-proof',
+  'POST /upload/product-image',
+  'POST /upload/profile-image',
+  'PUT /doctor/clinics/:clinicId/status',
+  'PUT /doctor/doctors/:doctorId/status',
+  'PUT /doctor/hospitals/:hospitalId/status',
+  'PUT /marketplace/answers/:answerId/accept',
+  'PUT /seller/orders/:id/status',
+  'PUT /seller/products/:id',
 ];
 
 /** The handler's own signature line: two-space indent, optional async, a name, an open paren. */
@@ -415,17 +531,25 @@ interface AdminRoute {
  */
 function stripComments(s: string): string {
   let out = '';
-  let state: 'code' | 'line' | 'block' | "'" | '"' | '`' = 'code';
+  let state: 'code' | 'line' | 'block' | 'regex' | "'" | '"' | '`' = 'code';
+  /** Inside a regex's `[...]`, where an unescaped `/` does not end the literal. */
+  let charClass = false;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     const d = s[i + 1];
     if (state === 'code') {
+      // A comment wins over a regex at the same `/`: `//` is never an empty
+      // regex and a regex cannot begin with `*`.
       if (c === '/' && d === '/') {
         state = 'line';
         i++;
       } else if (c === '/' && d === '*') {
         state = 'block';
         i++;
+      } else if (c === '/' && regexStartsHere(out)) {
+        state = 'regex';
+        charClass = false;
+        out += c;
       } else {
         if (c === "'" || c === '"' || c === '`') state = c;
         out += c;
@@ -442,6 +566,24 @@ function stripComments(s: string): string {
       } else if (c === '\n') {
         out += c;
       }
+    } else if (state === 'regex') {
+      // A regex literal is code: emit it, and read to its real end so its
+      // contents cannot open a comment.
+      out += c;
+      if (c === '\\') {
+        out += d ?? '';
+        i++;
+      } else if (c === '[') {
+        charClass = true;
+      } else if (c === ']') {
+        charClass = false;
+      } else if (c === '/' && !charClass) {
+        state = 'code';
+      } else if (c === '\n') {
+        // An unterminated regex cannot span a line; bail out rather than eat
+        // the rest of the file.
+        state = 'code';
+      }
     } else if (c === '\\') {
       out += c + (d ?? '');
       i++;
@@ -451,6 +593,55 @@ function stripComments(s: string): string {
     }
   }
   return out;
+}
+
+/** Punctuators after which a `/` opens a regex literal rather than dividing. */
+const REGEX_PRECEDERS = new Set('(,=:[!&|?{};+-*%~<>^'.split(''));
+/** Keywords after which the same is true. */
+const REGEX_KEYWORDS = new Set([
+  'return',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'new',
+  'delete',
+  'void',
+  'case',
+  'do',
+  'else',
+  'yield',
+  'await',
+  'throw',
+]);
+
+/**
+ * Is the `/` about to be read the start of a regex literal?
+ *
+ * Decided from the last significant token already emitted, the standard way:
+ * after an operator, an opening bracket or one of the keywords above, a `/`
+ * begins a regex; after an identifier, a number, `)` or `]` it divides. Getting
+ * this wrong in the safe direction (reading a regex as division) is what the
+ * first version of this scanner did, and `/\/\//` — a regex matching a literal
+ * `//`, the shape at `health.controller.ts:120` — then looked like a line
+ * comment and swallowed the rest of its line, while a character class such as
+ * `/[/*]/` looked like a *block* comment and would have swallowed the
+ * `@Controller` and `@Roles` lines that followed it. A route decorator lost that
+ * way trips the declared-vs-parsed counter; a lost class-level `@Roles` or
+ * `@Controller` would not, and would silently drop a whole controller from the
+ * scan — the very failure this spec exists to prevent, moved from a filename
+ * filter to a regex edge case.
+ */
+function regexStartsHere(emitted: string): boolean {
+  let k = emitted.length - 1;
+  while (k >= 0 && /\s/.test(emitted[k])) k--;
+  if (k < 0) return true;
+  const p = emitted[k];
+  if (REGEX_PRECEDERS.has(p)) return true;
+  if (!/[A-Za-z0-9_$]/.test(p)) return false;
+  let word = '';
+  while (k >= 0 && /[A-Za-z0-9_$]/.test(emitted[k])) word = emitted[k--] + word;
+  return REGEX_KEYWORDS.has(word);
 }
 
 /**
@@ -519,7 +710,7 @@ function parseController(file: string, text: string): Parsed {
         scoped: SCOPED.test(block),
         global: GLOBAL.test(block),
         adminRole: true,
-        guardScoped: guardBound && guardCanScope(routePath),
+        guardScoped: guardBound && guardCanScope(base, routePath),
       });
     });
   }
@@ -665,6 +856,69 @@ export class FixtureSellerController {
 }
 `;
 
+/**
+ * `seller.controller.ts`'s real shape: a guard-bound class in which `:id` is the
+ * seller on one route and an order, product or listing on four others.
+ */
+const FIXTURE_SELLER_ID_SHAPES = `@UseGuards(JwtAuthGuard, RolesGuard, SellerOwnershipGuard)
+@Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+@Controller('fixture/seller')
+export class FixtureSellerIdController {
+  @Get(':id/wallet')
+  async wallet() {
+    return 1;
+  }
+
+  @Put('orders/:id/status')
+  async orderStatus() {
+    return 2;
+  }
+
+  @Put('products/:id')
+  async updateProduct() {
+    return 3;
+  }
+
+  @Patch('products/:id/stock')
+  async updateStock() {
+    return 4;
+  }
+
+  @Patch('listings/:id')
+  async updateListing() {
+    return 5;
+  }
+}
+`;
+
+/**
+ * Regex literals whose contents look like comments: one ending in `\\/\\/` and
+ * one whose character class holds `/*`. Both sit immediately above the class's
+ * own `@Roles` and `@Controller`, which the first scanner would have swallowed
+ * — silently, because no route decorator is inside the swallowed span.
+ */
+const FIXTURE_REGEX_LITERAL = `const SCHEME = /^https?:\\/\\//;
+const SLASH_OR_STAR = /[/*]/;
+@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+@Controller('fixture/regex')
+export class FixtureRegexController {
+  @Get('rows')
+  async rows(@Req() req: any) {
+    // No this.send( here on purpose: test/gateway-service-contract.spec.ts
+    // greps the repo for gateway commands and would read a fixture's fake one
+    // as a real command with no handler.
+    const { scope } = this.scopeOf(req, undefined, 'those rows');
+    return { scope };
+  }
+
+  @Patch('rows/:rowId')
+  async write(@Req() req: any) {
+    const parts = String(req.body.path).split(/\\/\\//);
+    return parts.length / 2;
+  }
+}
+`;
+
 describe('admin market scope regression', () => {
   const routes = collect();
   const files = new Set(routes.map((r) => r.file));
@@ -736,7 +990,15 @@ describe('admin market scope regression', () => {
       }
     }
     expect(stale.join('\n')).toBe('');
-    expect(DEFERRED.length).toBeLessThanOrEqual(27);
+  });
+
+  it('holds exactly the exceptions the census names — no additions, no swaps', () => {
+    // Stricter than a length cap, which a swap slips through: the two lists must
+    // agree entry for entry, so adding a hole is as visible in review as
+    // removing one, and neither can happen by accident.
+    const listed = DEFERRED.map((d) => `${d.verb} ${d.path}`);
+    expect([...new Set(listed)]).toHaveLength(listed.length);
+    expect([...listed].sort()).toEqual([...EXCEPTION_CENSUS].sort());
   });
 
   it('allows @GlobalEntity on reads only — a write to a global entity must refuse locked admins itself', () => {
@@ -751,7 +1013,7 @@ describe('admin market scope regression', () => {
   it('every guard named in GUARD_SCOPED really performs the market check', () => {
     // The exemption is a claim about a guard's source. Reading it here is what
     // stops GUARD_SCOPED becoming the new filename filter: a guard that stops
-    // calling assertRecordInScope fails this spec, not silently 115 routes.
+    // calling assertRecordInScope fails this spec, not silently 124 routes.
     const failures: string[] = [];
     for (const g of GUARD_SCOPED) {
       const file = path.join(__dirname, g.file);
@@ -762,25 +1024,50 @@ describe('admin market scope regression', () => {
       const src = fs.readFileSync(file, 'utf8');
       if (!/assertRecordInScope\(/.test(src))
         failures.push(`${g.guard}: ${g.why} — but it does not`);
-      // guardCanScope() below depends on these two lines being what they are.
-      if (!/SELLER_PARAMS = \['sellerId', 'id'\]/.test(src))
-        failures.push(`${g.guard}: SELLER_PARAMS changed — update SELLER_ID_PARAM to match`);
+      // guardCanScope() depends on these two lines being what they are: the
+      // params it reads as a seller id, and the no-check early return.
+      const params = `SELLER_PARAMS = [${SELLER_PARAMS.map((p) => `'${p.slice(1)}'`).join(', ')}]`;
+      if (!src.includes(params))
+        failures.push(
+          `${g.guard}: ${params} is no longer its param list — re-check guardCanScope()`,
+        );
       if (!/if \(!sellerId\) return true;/.test(src))
         failures.push(`${g.guard}: the no-param early return changed — re-check guardCanScope()`);
     }
     expect(failures.join('\n')).toBe('');
   });
 
-  it('only exempts a guard-scoped route the guard can actually see a seller in', () => {
-    // A route in a guard-bound class that names some other row is waived by the
-    // guard (`if (!sellerId) return true`) and must scope itself.
-    const exempt = routes.filter((r) => r.guardScoped);
-    expect(exempt.every((r) => guardCanScope(r.path))).toBe(true);
+  it('only exempts a guard-scoped route whose id the guard resolves as a seller', () => {
     const parsed = parseController('fixture.controller.ts', FIXTURE_GUARD_SCOPED);
     expect(parsed.routes.map((r) => `${r.path} ${r.guardScoped}`)).toEqual([
       '/fixture/sellers/:sellerId/orders true',
       '/fixture/sellers/settings true',
       '/fixture/sellers/campaigns/:campaignId false',
+    ]);
+  });
+
+  it('does not treat an order, product or listing id as a seller id', () => {
+    // The real shape of `seller.controller.ts`: one route where `:id` is the
+    // seller, four where it is some other row. The guard reads `params.id`
+    // either way, looks it up in `sellers`, misses, and denies a locked admin —
+    // fail-closed, but not a check on the row the route touches, so the four are
+    // offenders here and carry their reason in DEFERRED.
+    const parsed = parseController('fixture.controller.ts', FIXTURE_SELLER_ID_SHAPES);
+    expect(parsed.routes.map((r) => `${r.verb} ${r.path} ${r.guardScoped}`)).toEqual([
+      'GET /fixture/seller/:id/wallet true',
+      'PUT /fixture/seller/orders/:id/status false',
+      'PUT /fixture/seller/products/:id false',
+      'PATCH /fixture/seller/products/:id/stock false',
+      'PATCH /fixture/seller/listings/:id false',
+    ]);
+    // And on the real tree the same four, and only those four, are the
+    // guard-bound routes this spec refuses to exempt.
+    const bound = routes.filter((r) => r.file === 'seller.controller.ts' && !r.scoped && !r.global);
+    expect(bound.filter((r) => !r.guardScoped).map((r) => `${r.verb} ${r.path}`)).toEqual([
+      'PUT /seller/orders/:id/status',
+      'PUT /seller/products/:id',
+      'PATCH /seller/products/:id/stock',
+      'PATCH /seller/listings/:id',
     ]);
   });
 
@@ -823,6 +1110,24 @@ describe('admin market scope regression', () => {
     const parsed = parseController('fixture.controller.ts', FIXTURE_GLOB_IN_LINE_COMMENT);
     expect(parsed.routes.map((r) => r.path)).toEqual(['/fixture/glob/a']);
     expect(parsed.declared).toBe(parsed.parsed);
+  });
+
+  it('does not read a regex literal as a comment', () => {
+    // The class-level @Roles and @Controller sit on the lines after the regexes,
+    // so a scanner without regex-literal state loses the whole controller and
+    // says nothing: neither route decorator is inside the swallowed span.
+    const parsed = parseController('fixture.controller.ts', FIXTURE_REGEX_LITERAL);
+    expect(parsed.declared).toBe(2);
+    expect(parsed.parsed).toBe(2);
+    expect(parsed.routes.map((r) => `${r.verb} ${r.path} scoped=${r.scoped}`)).toEqual([
+      'GET /fixture/regex/rows scoped=true',
+      'PATCH /fixture/regex/rows/:rowId scoped=false',
+    ]);
+    // And the literals themselves survive stripping, division included.
+    const stripped = stripComments(FIXTURE_REGEX_LITERAL);
+    expect(stripped).toContain('/^https?:\\/\\//');
+    expect(stripped).toContain('/[/*]/');
+    expect(stripped).toContain('parts.length / 2');
   });
 
   it('does not let a helper declared after the last route stand in for that route', () => {
