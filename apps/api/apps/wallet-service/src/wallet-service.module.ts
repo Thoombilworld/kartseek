@@ -7,7 +7,7 @@ import { DatabaseModule } from '@app/database';
 import { WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';
 import { WalletTransaction } from './entities/wallet-transaction.entity';
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 
 const envSchema = buildEnvSchema({
   WALLET_TCP_PORT: Joi.number().default(4014),
@@ -20,6 +20,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'wallet-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

@@ -4,6 +4,16 @@ import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { ReportController } from './report.controller';
 import { ReportService } from './report.service';
+import { HealthModule } from '@app/common';
 
-@Module({ imports: [ConfigModule.forRoot({ isGlobal: true }), RedisModule, KafkaModule], controllers: [ReportController], providers: [ReportService] })
+@Module({
+  imports: [
+    HealthModule.register({ service: 'report-service', database: false, redis: true }),
+    ConfigModule.forRoot({ isGlobal: true }),
+    RedisModule,
+    KafkaModule,
+  ],
+  controllers: [ReportController],
+  providers: [ReportService],
+})
 export class ReportServiceModule {}

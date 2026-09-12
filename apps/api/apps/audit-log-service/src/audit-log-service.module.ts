@@ -7,6 +7,8 @@ import { KafkaModule } from '@app/kafka';
 import { AuditLogController } from './audit-log.controller';
 import { AuditLogService } from './audit-log.service';
 import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
+import { HealthModule } from '@app/common';
+import { MongoHealthCheck } from './mongo-health.check';
 
 const AUDIT_DB = 'kartseek_audit';
 
@@ -33,6 +35,12 @@ export function resolveAuditUri(cfg: ConfigService): string {
 
 @Module({
   imports: [
+    HealthModule.register({
+      service: 'audit-log-service',
+      database: false,
+      redis: true,
+      checks: [MongoHealthCheck],
+    }),
     ConfigModule.forRoot({ isGlobal: true }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],

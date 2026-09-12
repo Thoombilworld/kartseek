@@ -3,8 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from '@app/database';
 import { SecurityModule } from '@app/security';
 import { AuthController } from './auth.controller';
-import { HealthController } from './health.controller';
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 
 const envSchema = buildEnvSchema({
   AUTH_GRPC_PORT: Joi.number().default(5001),
@@ -15,6 +14,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'auth-service', database: true, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -29,7 +29,7 @@ const envSchema = buildEnvSchema({
     DatabaseModule.registerPostgres(),
     SecurityModule,
   ],
-  controllers: [AuthController, HealthController],
+  controllers: [AuthController],
   providers: [],
 })
 export class AuthServiceModule {}

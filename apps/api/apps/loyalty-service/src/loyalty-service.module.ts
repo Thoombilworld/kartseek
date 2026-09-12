@@ -4,7 +4,7 @@ import { KafkaModule } from '@app/kafka';
 import { RedisModule } from '@app/redis';
 import { LoyaltyController } from './loyalty.controller';
 import { LoyaltyService } from './loyalty.service';
-import { buildEnvSchema, Joi } from '@app/common';
+import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 
 const envSchema = buildEnvSchema({
   LOYALTY_TCP_PORT: Joi.number().default(4005),
@@ -17,6 +17,7 @@ const envSchema = buildEnvSchema({
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'loyalty-service', database: false, redis: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

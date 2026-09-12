@@ -4,6 +4,16 @@ import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { CommissionController } from './commission.controller';
 import { CommissionService } from './commission.service';
+import { HealthModule } from '@app/common';
 
-@Module({ imports: [ConfigModule.forRoot({ isGlobal: true }), RedisModule, KafkaModule], controllers: [CommissionController], providers: [CommissionService] })
+@Module({
+  imports: [
+    HealthModule.register({ service: 'commission-service', database: false, redis: true }),
+    ConfigModule.forRoot({ isGlobal: true }),
+    RedisModule,
+    KafkaModule,
+  ],
+  controllers: [CommissionController],
+  providers: [CommissionService],
+})
 export class CommissionServiceModule {}

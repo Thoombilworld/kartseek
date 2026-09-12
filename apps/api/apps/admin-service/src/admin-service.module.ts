@@ -9,9 +9,11 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { PageLayout } from './entities/page-layout.entity';
 import { databaseCredentials } from '@app/database';
+import { HealthModule } from '@app/common';
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'admin-service', database: true, redis: true }),
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

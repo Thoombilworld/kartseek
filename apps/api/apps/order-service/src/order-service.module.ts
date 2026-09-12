@@ -4,17 +4,20 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { KafkaModule } from '@app/kafka';
 import { RedisModule } from '@app/redis';
 import { OrderController } from './order.controller';
-import { HealthController } from './health.controller';
 import { OrderService } from './order.service';
 import { Order } from './entities/order.entity';
 import { databaseCredentials } from '@app/database';
+import { HealthModule } from '@app/common';
 @Module({
   imports: [
+    HealthModule.register({ service: 'order-service', database: true, redis: true }),
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule], inject: [ConfigService],
+      imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        type: 'postgres' as const,        ...databaseCredentials(cfg),
+        type: 'postgres' as const,
+        ...databaseCredentials(cfg),
         schema: 'order',
         // Listed explicitly, never as a `__dirname` glob: the build bundles this
         // service into a single main.js, where a glob matches nothing and fails
@@ -33,7 +36,7 @@ import { databaseCredentials } from '@app/database';
     RedisModule,
     KafkaModule,
   ],
-  controllers: [OrderController, HealthController],
+  controllers: [OrderController],
   providers: [OrderService],
 })
 export class OrderServiceModule {}

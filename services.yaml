@@ -11,12 +11,15 @@
 #
 # Rules: ports are unique across the platform; `env` names the variable each
 # port is read from in main.ts; `health.live` is the route Kubernetes and the
-# smoke test probe today (null = no HTTP health route yet; phase 2 makes every
-# service answer /health); `database` is null for services that own no tables.
+# smoke test probe, and `health.ready` the one that proves the dependencies
+# answer — every Nest deployable now serves both from @app/common's
+# HealthModule, so neither is ever null; `database` is null for services that
+# own no tables, and readiness reports `down` when an entry names a database the
+# process has not actually bound.
 version: 1
 
 defaults:
-  registry: ghcr.io/<github-owner>/kartseek   # set when the GitHub remote exists
+  registry: ghcr.io/<github-owner>/kartseek # set when the GitHub remote exists
   node: 26.5.0
   infra: [postgres, redis, kafka, mongodb, elasticsearch]
 
@@ -41,7 +44,7 @@ services:
     image: kartseek/admin-service
     ports: { http: 3027, tcp: 4017 }
     env: { http: ADMIN_SERVICE_PORT, tcp: ADMIN_TCP_PORT }
-    health: { live: /admin/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_db, schema: admin, envPrefix: DB }
     dependsOn: [postgres, redis, kafka]
 
@@ -52,7 +55,7 @@ services:
     image: kartseek/audit-log-service
     ports: { http: 3028 }
     env: { http: AUDIT_LOG_SERVICE_PORT }
-    health: { live: /audit-logs/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: null
     dependsOn: [mongodb, redis, kafka]
     kafka: { groupId: audit-log-consumers }
@@ -66,7 +69,12 @@ services:
     env: { http: AUTH_SERVICE_PORT, grpc: AUTH_GRPC_PORT }
     health: { live: /health, ready: /health/ready }
     database: { name: kartseek_db, schema: public, envPrefix: DB }
-    dependsOn: [postgres]
+    # redis was missing here. auth-service imports SecurityModule, and that is
+    # where AccountLockoutService and RefreshTokenService live — login throttling
+    # and the one refresh-token slot per user are both Redis keys. The entry said
+    # postgres only, so readiness would not have pinged the store that decides
+    # whether a session can be issued at all.
+    dependsOn: [postgres, redis]
 
   - name: cart-service
     kind: core-service
@@ -75,7 +83,7 @@ services:
     image: kartseek/cart-service
     ports: { http: 3013, tcp: 4003 }
     env: { http: CART_SERVICE_PORT, tcp: CART_TCP_PORT }
-    health: { live: /cart/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: null
     dependsOn: [redis, kafka]
 
@@ -86,8 +94,14 @@ services:
     image: kartseek/commission-service
     ports: { http: 3030, tcp: 4020 }
     env: { http: COMMISSION_SERVICE_PORT, tcp: COMMISSION_TCP_PORT }
-    health: { live: /commission/health, ready: null }
-    database: { name: kartseek_db, schema: commission, envPrefix: DB }
+    health: { live: /health, ready: /health/ready }
+    # Was `kartseek_db / commission`. The schema exists (migration
+    # 1786500200000) but holds no tables: `commission-service.module.ts` — the
+    # module main.ts boots — registers no DataSource, and the sibling
+    # `commission.module.ts` that does is unreferenced dead code declaring
+    # `entities: []`. Readiness runs a real query now, so an entry claiming a
+    # database this process never opens would report `down` for ever.
+    database: null
     dependsOn: [postgres, redis, kafka]
 
   - name: delivery-service
@@ -97,8 +111,11 @@ services:
     image: kartseek/delivery-service
     ports: { http: 3022, grpc: 5008 }
     env: { http: DELIVERY_SERVICE_PORT, grpc: DELIVERY_GRPC_PORT }
-    health: { live: /delivery/health, ready: null }
-    database: { name: kartseek_db, schema: delivery, envPrefix: DB }
+    health: { live: /health, ready: /health/ready }
+    # Same as commission-service: the `delivery` schema is empty and
+    # `delivery-service.module.ts` registers no DataSource — `delivery.module.ts`
+    # is dead code.
+    database: null
     dependsOn: [postgres, redis, kafka]
 
   - name: location-service
@@ -108,7 +125,7 @@ services:
     image: kartseek/location-service
     ports: { http: 3023, tcp: 4013 }
     env: { http: LOCATION_SERVICE_PORT, tcp: LOCATION_TCP_PORT }
-    health: { live: /location/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_db, schema: location, envPrefix: DB }
     dependsOn: [postgres, redis]
 
@@ -119,7 +136,7 @@ services:
     image: kartseek/loyalty-service
     ports: { http: 3015, tcp: 4005 }
     env: { http: LOYALTY_SERVICE_PORT, tcp: LOYALTY_TCP_PORT }
-    health: { live: /loyalty/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: null
     dependsOn: [redis, kafka]
 
@@ -130,7 +147,7 @@ services:
     image: kartseek/notification-service
     ports: { http: 3026, grpc: 5004 }
     env: { http: NOTIFICATION_SERVICE_PORT, grpc: NOTIFICATION_GRPC_PORT }
-    health: { live: /notifications/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: null
     dependsOn: [redis, kafka]
     kafka: { groupId: notification-password-reset }
@@ -164,7 +181,7 @@ services:
     image: kartseek/payout-service
     ports: { http: 3031, tcp: 4021 }
     env: { http: PAYOUT_SERVICE_PORT, tcp: PAYOUT_TCP_PORT }
-    health: { live: /payouts/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_db, schema: payout, envPrefix: DB }
     dependsOn: [postgres, redis, kafka]
 
@@ -175,8 +192,11 @@ services:
     image: kartseek/refund-service
     ports: { http: 3032, tcp: 4022 }
     env: { http: REFUND_SERVICE_PORT, tcp: REFUND_TCP_PORT }
-    health: { live: /refunds/health, ready: null }
-    database: { name: kartseek_db, schema: refund, envPrefix: DB }
+    health: { live: /health, ready: /health/ready }
+    # Same as commission-service: the `refund` schema is empty and
+    # `refund-service.module.ts` registers no DataSource — `refund.module.ts` is
+    # dead code.
+    database: null
     dependsOn: [postgres, redis, kafka]
 
   - name: report-service
@@ -186,8 +206,11 @@ services:
     image: kartseek/report-service
     ports: { http: 3034, tcp: 4024 }
     env: { http: REPORT_SERVICE_PORT, tcp: REPORT_TCP_PORT }
-    health: { live: /reports/health, ready: null }
-    database: { name: kartseek_db, schema: report, envPrefix: DB }
+    health: { live: /health, ready: /health/ready }
+    # Same as commission-service: the `report` schema is empty and
+    # `report-service.module.ts` registers no DataSource — `report.module.ts` is
+    # dead code.
+    database: null
     dependsOn: [postgres, redis, kafka]
 
   - name: search-service
@@ -197,7 +220,7 @@ services:
     image: kartseek/search-service
     ports: { http: 3033, tcp: 4023 }
     env: { http: SEARCH_SERVICE_PORT, tcp: SEARCH_TCP_PORT }
-    health: { live: /search/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: null
     dependsOn: [redis, kafka, elasticsearch]
     kafka: { groupId: search-indexer }
@@ -209,7 +232,7 @@ services:
     image: kartseek/user-service
     ports: { http: 3011, grpc: 5009 }
     env: { http: USER_SERVICE_PORT, grpc: USER_GRPC_PORT }
-    health: { live: null, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_db, schema: user, envPrefix: DB }
     dependsOn: [postgres, redis]
 
@@ -220,7 +243,7 @@ services:
     image: kartseek/wallet-service
     ports: { http: 3024, tcp: 4014 }
     env: { http: WALLET_SERVICE_PORT, tcp: WALLET_TCP_PORT }
-    health: { live: /wallet/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_db, schema: wallet, envPrefix: DB }
     dependsOn: [postgres, redis, kafka]
 
@@ -228,88 +251,88 @@ services:
   - name: doctor-service
     kind: module-service
     path: modules/doctor/backend
-    build: { workspace: "@kartseek/doctor-backend" }
+    build: { workspace: '@kartseek/doctor-backend' }
     image: kartseek/doctor-service
     ports: { http: 3017, tcp: 4007 }
     env: { http: DOCTOR_SERVICE_PORT, tcp: DOCTOR_TCP_PORT }
-    health: { live: /doctors/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_doctor, schema: doctor, envPrefix: DOCTOR_DB }
     dependsOn: [postgres, redis, kafka]
 
   - name: franchise-service
     kind: module-service
     path: modules/franchise/backend
-    build: { workspace: "@kartseek/franchise-backend" }
+    build: { workspace: '@kartseek/franchise-backend' }
     image: kartseek/franchise-service
     ports: { http: 3016, tcp: 4006 }
     env: { http: FRANCHISE_SERVICE_PORT, tcp: FRANCHISE_TCP_PORT }
-    health: { live: null, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_franchise, schema: franchise, envPrefix: FRANCHISE_DB }
     dependsOn: [postgres, redis, kafka]
 
   - name: grocery-service
     kind: module-service
     path: modules/grocery/backend
-    build: { workspace: "@kartseek/grocery-backend" }
+    build: { workspace: '@kartseek/grocery-backend' }
     image: kartseek/grocery-service
     ports: { http: 3018, tcp: 4008, grpc: 5010 }
     env: { http: GROCERY_SERVICE_PORT, tcp: GROCERY_TCP_PORT, grpc: GROCERY_GRPC_PORT }
-    health: { live: /grocery/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_grocery, schema: grocery, envPrefix: GROCERY_DB }
     dependsOn: [postgres, redis, kafka]
 
   - name: hotel-service
     kind: module-service
     path: modules/hotel/backend
-    build: { workspace: "@kartseek/hotel-backend" }
+    build: { workspace: '@kartseek/hotel-backend' }
     image: kartseek/hotel-service
     ports: { http: 3035, tcp: 4025 }
     env: { http: HOTEL_SERVICE_PORT, tcp: HOTEL_TCP_PORT }
-    health: { live: /hotels/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_hotel, schema: hotel, envPrefix: HOTEL_DB }
     dependsOn: [postgres, redis, kafka]
 
   - name: marketplace-service
     kind: module-service
     path: modules/marketplace/backend
-    build: { workspace: "@kartseek/marketplace-backend" }
+    build: { workspace: '@kartseek/marketplace-backend' }
     image: kartseek/marketplace-service
     ports: { http: 3012, tcp: 4002, grpc: 5006 }
     env: { http: MARKETPLACE_SERVICE_PORT, tcp: MARKETPLACE_TCP_PORT, grpc: MARKETPLACE_GRPC_PORT }
-    health: { live: /health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_marketplace, schema: marketplace, envPrefix: MARKETPLACE_DB }
     dependsOn: [postgres, redis, kafka]
 
   - name: pharmacy-service
     kind: module-service
     path: modules/pharmacy/backend
-    build: { workspace: "@kartseek/pharmacy-backend" }
+    build: { workspace: '@kartseek/pharmacy-backend' }
     image: kartseek/pharmacy-service
     ports: { http: 3020, tcp: 4010 }
     env: { http: PHARMACY_SERVICE_PORT, tcp: PHARMACY_TCP_PORT }
-    health: { live: /pharmacy/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_pharmacy, schema: pharmacy, envPrefix: PHARMACY_DB }
     dependsOn: [postgres, redis, kafka]
 
   - name: restaurant-service
     kind: module-service
     path: modules/restaurant/backend
-    build: { workspace: "@kartseek/restaurant-backend" }
+    build: { workspace: '@kartseek/restaurant-backend' }
     image: kartseek/restaurant-service
     ports: { http: 3019, tcp: 4018, grpc: 5005 }
     env: { http: RESTAURANT_SERVICE_PORT, tcp: RESTAURANT_TCP_PORT, grpc: RESTAURANT_GRPC_PORT }
-    health: { live: /restaurants/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_restaurant, schema: restaurant, envPrefix: RESTAURANT_DB }
     dependsOn: [postgres, redis, kafka]
 
   - name: taxi-service
     kind: module-service
     path: modules/taxi/backend
-    build: { workspace: "@kartseek/taxi-backend" }
+    build: { workspace: '@kartseek/taxi-backend' }
     image: kartseek/taxi-service
     ports: { http: 3021, tcp: 4027, grpc: 5007 }
     env: { http: TAXI_SERVICE_PORT, tcp: TAXI_TCP_PORT, grpc: TAXI_GRPC_PORT }
-    health: { live: /taxi/health, ready: null }
+    health: { live: /health, ready: /health/ready }
     database: { name: kartseek_taxi, schema: taxi, envPrefix: TAXI_DB }
     dependsOn: [postgres, redis, kafka]
 
@@ -324,7 +347,7 @@ services:
   - name: marketplace-frontend
     kind: web-zone
     path: modules/marketplace/frontend
-    build: { workspace: "@kartseek/marketplace-frontend" }
+    build: { workspace: '@kartseek/marketplace-frontend' }
     image: kartseek/marketplace-frontend
     ports: { http: 3002 }
     basePath: /marketplace
@@ -332,7 +355,7 @@ services:
   - name: grocery-frontend
     kind: web-zone
     path: modules/grocery/frontend
-    build: { workspace: "@kartseek/grocery-frontend" }
+    build: { workspace: '@kartseek/grocery-frontend' }
     image: kartseek/grocery-frontend
     ports: { http: 3003 }
     basePath: /grocery
@@ -340,7 +363,7 @@ services:
   - name: restaurant-frontend
     kind: web-zone
     path: modules/restaurant/frontend
-    build: { workspace: "@kartseek/restaurant-frontend" }
+    build: { workspace: '@kartseek/restaurant-frontend' }
     image: kartseek/restaurant-frontend
     ports: { http: 3004 }
     basePath: /restaurant
@@ -348,7 +371,7 @@ services:
   - name: pharmacy-frontend
     kind: web-zone
     path: modules/pharmacy/frontend
-    build: { workspace: "@kartseek/pharmacy-frontend" }
+    build: { workspace: '@kartseek/pharmacy-frontend' }
     image: kartseek/pharmacy-frontend
     ports: { http: 3005 }
     basePath: /pharmacy
@@ -356,7 +379,7 @@ services:
   - name: doctor-frontend
     kind: web-zone
     path: modules/doctor/frontend
-    build: { workspace: "@kartseek/doctor-frontend" }
+    build: { workspace: '@kartseek/doctor-frontend' }
     image: kartseek/doctor-frontend
     ports: { http: 3006 }
     basePath: /doctor
@@ -364,7 +387,7 @@ services:
   - name: hotel-frontend
     kind: web-zone
     path: modules/hotel/frontend
-    build: { workspace: "@kartseek/hotel-frontend" }
+    build: { workspace: '@kartseek/hotel-frontend' }
     image: kartseek/hotel-frontend
     ports: { http: 3007 }
     basePath: /hotel-booking
@@ -372,7 +395,7 @@ services:
   - name: taxi-frontend
     kind: web-zone
     path: modules/taxi/frontend
-    build: { workspace: "@kartseek/taxi-frontend" }
+    build: { workspace: '@kartseek/taxi-frontend' }
     image: kartseek/taxi-frontend
     ports: { http: 3008 }
     basePath: /taxi
@@ -380,7 +403,7 @@ services:
   - name: franchise-frontend
     kind: web-zone
     path: modules/franchise/frontend
-    build: { workspace: "@kartseek/franchise-frontend" }
+    build: { workspace: '@kartseek/franchise-frontend' }
     image: kartseek/franchise-frontend
     ports: { http: 3009 }
     basePath: /franchise

@@ -29,3 +29,9 @@ export * from './market/market-scope';
 
 // ─── Admin permission vocabulary & seeded roles ──────────────────────────────
 export * from './admin/permissions';
+
+// ─── Health (the one implementation for every deployable) ────────────────────
+export * from './health/health.types';
+export * from './health/health.service';
+export * from './health/shared-health.controller';
+export * from './health/health.module';

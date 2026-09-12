@@ -6,9 +6,11 @@ import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { RedisModule } from '@app/redis';
 import { databaseCredentials } from '@app/database';
+import { HealthModule } from '@app/common';
 
 @Module({
   imports: [
+    HealthModule.register({ service: 'user-service', database: true, redis: true }),
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

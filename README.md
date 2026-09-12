@@ -68,31 +68,31 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | Name | Kind | Path | HTTP | TCP | gRPC | Database / schema | Health or base path | Depends on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `api-gateway` | API gateway | `apps/api/apps/api-gateway` | 3001 | — | — | kartseek_db / public | `/api/v1/health` | postgres, redis, kafka, mongodb |
-| `admin-service` | core service | `apps/api/apps/admin-service` | 3027 | 4017 | — | kartseek_db / admin | `/admin/health` | postgres, redis, kafka |
-| `audit-log-service` | core service | `apps/api/apps/audit-log-service` | 3028 | — | — | — | `/audit-logs/health` | mongodb, redis, kafka |
-| `auth-service` | core service | `apps/api/apps/auth-service` | 3010 | — | 5001 | kartseek_db / public | `/health` | postgres |
-| `cart-service` | core service | `apps/api/apps/cart-service` | 3013 | 4003 | — | — | `/cart/health` | redis, kafka |
-| `commission-service` | core service | `apps/api/apps/commission-service` | 3030 | 4020 | — | kartseek_db / commission | `/commission/health` | postgres, redis, kafka |
-| `delivery-service` | core service | `apps/api/apps/delivery-service` | 3022 | — | 5008 | kartseek_db / delivery | `/delivery/health` | postgres, redis, kafka |
-| `location-service` | core service | `apps/api/apps/location-service` | 3023 | 4013 | — | kartseek_db / location | `/location/health` | postgres, redis |
-| `loyalty-service` | core service | `apps/api/apps/loyalty-service` | 3015 | 4005 | — | — | `/loyalty/health` | redis, kafka |
-| `notification-service` | core service | `apps/api/apps/notification-service` | 3026 | — | 5004 | — | `/notifications/health` | redis, kafka |
+| `admin-service` | core service | `apps/api/apps/admin-service` | 3027 | 4017 | — | kartseek_db / admin | `/health` | postgres, redis, kafka |
+| `audit-log-service` | core service | `apps/api/apps/audit-log-service` | 3028 | — | — | — | `/health` | mongodb, redis, kafka |
+| `auth-service` | core service | `apps/api/apps/auth-service` | 3010 | — | 5001 | kartseek_db / public | `/health` | postgres, redis |
+| `cart-service` | core service | `apps/api/apps/cart-service` | 3013 | 4003 | — | — | `/health` | redis, kafka |
+| `commission-service` | core service | `apps/api/apps/commission-service` | 3030 | 4020 | — | — | `/health` | postgres, redis, kafka |
+| `delivery-service` | core service | `apps/api/apps/delivery-service` | 3022 | — | 5008 | — | `/health` | postgres, redis, kafka |
+| `location-service` | core service | `apps/api/apps/location-service` | 3023 | 4013 | — | kartseek_db / location | `/health` | postgres, redis |
+| `loyalty-service` | core service | `apps/api/apps/loyalty-service` | 3015 | 4005 | — | — | `/health` | redis, kafka |
+| `notification-service` | core service | `apps/api/apps/notification-service` | 3026 | — | 5004 | — | `/health` | redis, kafka |
 | `order-service` | core service | `apps/api/apps/order-service` | 3014 | 4004 | 5002 | kartseek_db / order | `/health` | postgres, redis, kafka |
 | `payment-service` | core service | `apps/api/apps/payment-service` | 3025 | 4026 | 5003 | kartseek_db / payment | `/health` | postgres, redis, kafka |
-| `payout-service` | core service | `apps/api/apps/payout-service` | 3031 | 4021 | — | kartseek_db / payout | `/payouts/health` | postgres, redis, kafka |
-| `refund-service` | core service | `apps/api/apps/refund-service` | 3032 | 4022 | — | kartseek_db / refund | `/refunds/health` | postgres, redis, kafka |
-| `report-service` | core service | `apps/api/apps/report-service` | 3034 | 4024 | — | kartseek_db / report | `/reports/health` | postgres, redis, kafka |
-| `search-service` | core service | `apps/api/apps/search-service` | 3033 | 4023 | — | — | `/search/health` | redis, kafka, elasticsearch |
-| `user-service` | core service | `apps/api/apps/user-service` | 3011 | — | 5009 | kartseek_db / user | `—` | postgres, redis |
-| `wallet-service` | core service | `apps/api/apps/wallet-service` | 3024 | 4014 | — | kartseek_db / wallet | `/wallet/health` | postgres, redis, kafka |
-| `doctor-service` | module service | `modules/doctor/backend` | 3017 | 4007 | — | kartseek_doctor / doctor | `/doctors/health` | postgres, redis, kafka |
-| `franchise-service` | module service | `modules/franchise/backend` | 3016 | 4006 | — | kartseek_franchise / franchise | `—` | postgres, redis, kafka |
-| `grocery-service` | module service | `modules/grocery/backend` | 3018 | 4008 | 5010 | kartseek_grocery / grocery | `/grocery/health` | postgres, redis, kafka |
-| `hotel-service` | module service | `modules/hotel/backend` | 3035 | 4025 | — | kartseek_hotel / hotel | `/hotels/health` | postgres, redis, kafka |
+| `payout-service` | core service | `apps/api/apps/payout-service` | 3031 | 4021 | — | kartseek_db / payout | `/health` | postgres, redis, kafka |
+| `refund-service` | core service | `apps/api/apps/refund-service` | 3032 | 4022 | — | — | `/health` | postgres, redis, kafka |
+| `report-service` | core service | `apps/api/apps/report-service` | 3034 | 4024 | — | — | `/health` | postgres, redis, kafka |
+| `search-service` | core service | `apps/api/apps/search-service` | 3033 | 4023 | — | — | `/health` | redis, kafka, elasticsearch |
+| `user-service` | core service | `apps/api/apps/user-service` | 3011 | — | 5009 | kartseek_db / user | `/health` | postgres, redis |
+| `wallet-service` | core service | `apps/api/apps/wallet-service` | 3024 | 4014 | — | kartseek_db / wallet | `/health` | postgres, redis, kafka |
+| `doctor-service` | module service | `modules/doctor/backend` | 3017 | 4007 | — | kartseek_doctor / doctor | `/health` | postgres, redis, kafka |
+| `franchise-service` | module service | `modules/franchise/backend` | 3016 | 4006 | — | kartseek_franchise / franchise | `/health` | postgres, redis, kafka |
+| `grocery-service` | module service | `modules/grocery/backend` | 3018 | 4008 | 5010 | kartseek_grocery / grocery | `/health` | postgres, redis, kafka |
+| `hotel-service` | module service | `modules/hotel/backend` | 3035 | 4025 | — | kartseek_hotel / hotel | `/health` | postgres, redis, kafka |
 | `marketplace-service` | module service | `modules/marketplace/backend` | 3012 | 4002 | 5006 | kartseek_marketplace / marketplace | `/health` | postgres, redis, kafka |
-| `pharmacy-service` | module service | `modules/pharmacy/backend` | 3020 | 4010 | — | kartseek_pharmacy / pharmacy | `/pharmacy/health` | postgres, redis, kafka |
-| `restaurant-service` | module service | `modules/restaurant/backend` | 3019 | 4018 | 5005 | kartseek_restaurant / restaurant | `/restaurants/health` | postgres, redis, kafka |
-| `taxi-service` | module service | `modules/taxi/backend` | 3021 | 4027 | 5007 | kartseek_taxi / taxi | `/taxi/health` | postgres, redis, kafka |
+| `pharmacy-service` | module service | `modules/pharmacy/backend` | 3020 | 4010 | — | kartseek_pharmacy / pharmacy | `/health` | postgres, redis, kafka |
+| `restaurant-service` | module service | `modules/restaurant/backend` | 3019 | 4018 | 5005 | kartseek_restaurant / restaurant | `/health` | postgres, redis, kafka |
+| `taxi-service` | module service | `modules/taxi/backend` | 3021 | 4027 | 5007 | kartseek_taxi / taxi | `/health` | postgres, redis, kafka |
 | `web` | web shell | `apps/web` | 3000 | — | — | — | `/` | — |
 | `marketplace-frontend` | web zone | `modules/marketplace/frontend` | 3002 | — | — | — | `/marketplace` | — |
 | `grocery-frontend` | web zone | `modules/grocery/frontend` | 3003 | — | — | — | `/grocery` | — |

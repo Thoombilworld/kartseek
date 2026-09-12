@@ -14,7 +14,6 @@ import { SettlementRecord } from './entities/settlement-record.entity';
 import { PaymentOrchestratorService } from './payment.service';
 import { PaymentController } from './payment.controller';
 import { WebhookController } from './controllers/webhook.controller';
-import { HealthController } from './health.controller';
 
 // Domain Services
 import { SettlementEngineService } from './services/settlement-engine.service';
@@ -29,6 +28,7 @@ import { UpiAdapter } from './adapters/upi.adapter';
 import { MadaAdapter } from './adapters/mada.adapter';
 import { WalletAdapter } from './adapters/wallet.adapter';
 import { databaseCredentials } from '@app/database';
+import { HealthModule } from '@app/common';
 
 /**
  * PaymentServiceModule — NestJS module for the centralized payment microservice.
@@ -44,6 +44,7 @@ import { databaseCredentials } from '@app/database';
  */
 @Module({
   imports: [
+    HealthModule.register({ service: 'payment-service', database: true, redis: true }),
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -53,14 +54,14 @@ import { databaseCredentials } from '@app/database';
         ...databaseCredentials(cfg),
         schema: 'payment',
         entities: [Payment, Invoice, PaymentMethodConfig, SettlementRecord],
-        synchronize: cfg.get('DB_SYNCHRONIZE', 'false') === 'true'
-      })
+        synchronize: cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
+      }),
     }),
     TypeOrmModule.forFeature([Payment, Invoice, PaymentMethodConfig, SettlementRecord]),
     RedisModule,
     KafkaModule,
   ],
-  controllers: [PaymentController, WebhookController, HealthController],
+  controllers: [PaymentController, WebhookController],
   providers: [
     // Core
     PaymentOrchestratorService,
@@ -78,6 +79,6 @@ import { databaseCredentials } from '@app/database';
     WalletAdapter,
     GatewayAdapterFactory,
   ],
-  exports: [PaymentOrchestratorService, SettlementEngineService, InvoiceService]
+  exports: [PaymentOrchestratorService, SettlementEngineService, InvoiceService],
 })
 export class PaymentServiceModule {}

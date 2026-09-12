@@ -931,6 +931,48 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * The honest health answer.
+   *
+   * `ping()` returns 'PONG (memory)' when `useMemory()` is true — which it is
+   * whenever the client is not ready — and the gateway mapped anything starting
+   * with "pong" to `up`. So a Redis outage read as healthy while all 26
+   * processes silently diverged onto private in-process sessions, refresh
+   * slots, rate-limit buckets, OTPs and carts (AUD2-024). The emulator is a
+   * development convenience, never a passing dependency: it reports
+   * `degraded` with `emulated: true`, and only an explicit SKIP_REDIS=true
+   * makes that a deliberate `skipped`.
+   */
+  async health(): Promise<{
+    status: 'up' | 'degraded' | 'down' | 'skipped';
+    latencyMs?: number;
+    detail?: string;
+    error?: string;
+    emulated?: boolean;
+  }> {
+    if (process.env.SKIP_REDIS === 'true') {
+      return { status: 'skipped', emulated: true, detail: 'SKIP_REDIS=true — in-memory emulator' };
+    }
+    if (this.useMemory()) {
+      return {
+        status: 'degraded',
+        emulated: true,
+        detail:
+          'in-memory emulator: sessions, carts, rate limits and OTPs are private to this process',
+        error: this.isSkipped ? 'client not initialised' : `client status: ${this.client?.status}`,
+      };
+    }
+    const t0 = Date.now();
+    try {
+      const pong = await this.client!.ping();
+      return pong === 'PONG'
+        ? { status: 'up', latencyMs: Date.now() - t0, detail: 'PONG' }
+        : { status: 'degraded', latencyMs: Date.now() - t0, detail: pong };
+    } catch (err) {
+      return { status: 'down', error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   // ─── Pipeline / Multi ──────────────────────────────────────────────────────
   pipeline() {
     if (this.useMemory()) {
