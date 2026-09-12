@@ -210,6 +210,38 @@ describe('there is one implementation of the market predicate', () => {
   });
 
   /**
+   * A `where` OBJECT is a predicate too, and the test above cannot see one.
+   *
+   * `findAndCount({ where })` needs no query builder, so
+   * `if (market) where.regionCode = market` reads as ordinary assignment and
+   * sailed past the bare-equality scan — which is exactly how the
+   * delivery-assignments list kept a `normaliseMarket`-only gate after every
+   * builder site had been converted (R2-1). A market assigned onto a `where`
+   * object must come from a refusing helper, so an unreadable value cannot
+   * simply drop the key and return every market.
+   */
+  it('a market assigned onto a where object comes from a refusing helper', () => {
+    const ASSIGN =
+      /where(?:\w*)?(?:\.(?:regionCode|region_code|countryCode|country_code)|\[['"](?:regionCode|region_code|countryCode|country_code)['"]\])\s*=\s*(.+)$/;
+    const offenders: string[] = [];
+    for (const file of sources()) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+        const m = line.match(ASSIGN);
+        if (!m) return;
+        // The assigned value must be a variable a refusing helper produced, or
+        // the helper call itself. Look at this line and the few above it.
+        const context = lines.slice(Math.max(0, i - 6), i + 1).join('\n');
+        if (/requireMarket\(|assertInMarket\(|marketPredicate\(/.test(context)) return;
+        if (/market-boundary-exempt:/.test(context)) return;
+        offenders.push(`${path.relative(REPO, file)}:${i + 1} ${line.trim().slice(0, 90)}`);
+      });
+    }
+    expect(offenders.join('\n')).toBe('');
+  });
+
+  /**
    * No admin authorisation path may read `applicableCountries`.
    *
    * The exchange-offer entity carried its market only in that simple-array,

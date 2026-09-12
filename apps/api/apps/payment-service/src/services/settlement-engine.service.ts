@@ -8,6 +8,7 @@ import {
   assertInMarket,
   normaliseMarket,
   refuseUnattributable,
+  requireMarket,
 } from '@app/common';
 import * as crypto from 'crypto';
 import {
@@ -203,7 +204,11 @@ export class SettlementEngineService {
     endDate?: string;
     countryCode?: string;
   }) {
-    const market = normaliseMarket(filters.countryCode);
+    // `requireMarket`, so an unreadable filter refuses rather than quietly
+    // summing every market under one market's heading. The gateway sends the
+    // caller's resolved market in this field, which for a locked admin IS their
+    // lock — the same collapse the other four R2-1 sites had.
+    const market = requireMarket(filters.countryCode, 'settlement dashboard', this.logger);
     /** The market predicate, or a no-op for a global caller asking for all markets. */
     const inMarket = (qb: SelectQueryBuilder<SettlementRecord>) =>
       applyMarketFilter(qb, 's.countryCode', market);
@@ -306,7 +311,13 @@ export class SettlementEngineService {
    * attributed to any market yet, and fails closed the same way.
    */
   async getSellerBalance(sellerId: string, market?: string, scope?: string) {
-    const lock = normaliseMarket(scope);
+    // `requireMarket`, not `normaliseMarket`: the gate used to be
+    // `if (lock)`, so a lock this platform cannot read skipped the recipient
+    // assert AND left the predicate below to the separate `market` argument —
+    // which is `undefined` for a caller who only sent a scope. Any seller's
+    // balance came back. Present-but-unreadable is a refusal, not a global read
+    // (R2-1); a genuinely absent scope is the documented global path.
+    const lock = requireMarket(scope, 'seller balance', this.logger);
     if (lock) await this.assertRecipientInMarket('recipientId', sellerId, scope, 'seller balance');
 
     const qb = this.settlementRepo
@@ -314,7 +325,11 @@ export class SettlementEngineService {
       .select('s.status', 'status')
       .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'total')
       .where('s."recipientId" = :sellerId', { sellerId });
-    applyMarketFilter(qb, 's.countryCode', market);
+    // The LOCK goes in the scope slot and the caller's filter in the requested
+    // slot, which is the helper's contract: the lock wins. This passed only
+    // `market`, so a locked caller who sent no filter of their own got no
+    // predicate at all and a total summed across every market.
+    applyMarketFilter(qb, 's.countryCode', lock, market);
     const stats = await qb.groupBy('s.status').getRawMany();
 
     const pending = Number(stats.find((s) => s.status === SettlementStatus.PENDING)?.total || 0);
@@ -326,7 +341,8 @@ export class SettlementEngineService {
 
   /** One franchise's earnings, in one market — authorised exactly as the balance above. */
   async getFranchiseEarnings(franchiseId: string, market?: string, scope?: string) {
-    const lock = normaliseMarket(scope);
+    // Same shape, same refusal as `getSellerBalance` above (R2-1).
+    const lock = requireMarket(scope, 'franchise earnings', this.logger);
     if (lock) {
       await this.assertRecipientInMarket('franchiseId', franchiseId, scope, 'franchise earnings');
     }
@@ -338,7 +354,8 @@ export class SettlementEngineService {
       .addSelect('COUNT(s.id)', 'transactions')
       .where('s."franchiseId" = :franchiseId', { franchiseId })
       .andWhere('s."recipientType" = :type', { type: SettlementRecipientType.FRANCHISE });
-    applyMarketFilter(qb, 's.countryCode', market);
+    // The lock wins over the caller's filter — see `getSellerBalance`.
+    applyMarketFilter(qb, 's.countryCode', lock, market);
     const earnings = await qb.groupBy('s.module').getRawMany();
 
     const total = earnings.reduce((sum: number, e: any) => sum + Number(e.earnings), 0);
