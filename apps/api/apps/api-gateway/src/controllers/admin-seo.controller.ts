@@ -158,6 +158,25 @@ export class AdminSeoController {
     // which leaves Nest with no metatype and skips validation entirely — which
     // is how `updatedBy` came to be whatever the caller wrote (audit V17/H-12).
     refuseLockedAdmin(req, 'an SEO override');
+    return this.upsertRow(req, dto);
+  }
+
+  @Post('bulk-update')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:content.manage')
+  async bulkUpdate(@Req() req: any, @Body() dto: BulkSeoDto) {
+    // Refused once, up front — `upsertRow` below does the per-item write
+    // without re-checking scope for every item in the batch.
+    refuseLockedAdmin(req, 'an SEO override');
+    const results: { path: string; status: string }[] = [];
+    for (const item of dto.overrides) {
+      await this.upsertRow(req, item);
+      results.push({ path: item.path, status: 'updated' });
+    }
+    return { success: true, updated: results.length, results };
+  }
+
+  /** The write itself, once the caller's scope has already been confirmed. */
+  private async upsertRow(req: any, dto: SeoOverrideDto) {
     const existing = await this.repo.findOne({ where: { path: dto.path } });
     const row = this.repo.create({
       ...(existing ?? {}),
@@ -171,18 +190,6 @@ export class AdminSeoController {
       message: existing ? 'SEO override updated' : 'SEO override created',
       data: saved,
     };
-  }
-
-  @Post('bulk-update')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:content.manage')
-  async bulkUpdate(@Req() req: any, @Body() dto: BulkSeoDto) {
-    refuseLockedAdmin(req, 'an SEO override');
-    const results: { path: string; status: string }[] = [];
-    for (const item of dto.overrides) {
-      await this.upsertOverride(req, item);
-      results.push({ path: item.path, status: 'updated' });
-    }
-    return { success: true, updated: results.length, results };
   }
 
   @Delete(':id')

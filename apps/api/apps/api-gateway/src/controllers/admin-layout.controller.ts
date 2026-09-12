@@ -104,9 +104,14 @@ export class AdminLayoutController {
     // deliberately left as two stores here, and reconciling them is a MODULES
     // task with a migration, not a scope fix.
     refuseLockedAdmin(req, 'page layouts');
+    // `page_layouts.sections` is `jsonb`/`any[]` in the entity; the DTO's
+    // `sections` is validated as either an array of page-builder sections or
+    // a per-country content map (the taxi landing editor — review C1), so the
+    // column's looser type is the honest one to store either shape under.
+    const sections = dto.sections as unknown as any[];
     let layout = await this.layoutRepo.findOne({ where: { moduleName, pageName } });
-    if (!layout) layout = this.layoutRepo.create({ moduleName, pageName, sections: dto.sections });
-    else layout.sections = dto.sections;
+    if (!layout) layout = this.layoutRepo.create({ moduleName, pageName, sections });
+    else layout.sections = sections;
     return this.layoutRepo.save(layout);
   }
 }
