@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
+  applyMarketFilter,
   assertInMarket,
+  assertRecordMarket,
+  isGlobalMarket,
   marketPredicate,
   normaliseMarket,
   refuseUnattributable,
@@ -90,5 +93,125 @@ describe('refuseUnattributable', () => {
         'Surge zones cannot be attributed to a market yet.',
       ),
     ).toThrow('Surge zones cannot be attributed to a market yet.');
+  });
+});
+
+/**
+ * One predicate, one spelling. These tests exist because the hand-written
+ * copies differed: one used `qb.where`, which REPLACES the clause, so applying
+ * a status filter dropped the market boundary entirely (audit V3).
+ */
+describe('applyMarketFilter', () => {
+  const builder = () => {
+    const calls: Array<{ expression: string; params?: object }> = [];
+    const qb = {
+      calls,
+      andWhere(expression: string, params?: object) {
+        calls.push({ expression, params });
+        return qb;
+      },
+      where() {
+        throw new Error('where() replaces the clause — applyMarketFilter must never call it');
+      },
+    };
+    return qb;
+  };
+
+  it('adds the scope as an andWhere, in the expression the caller named', () => {
+    const qb = builder();
+    applyMarketFilter(qb, 'p.region_code', 'qa');
+    expect(qb.calls).toEqual([
+      { expression: 'p.region_code = :__market', params: { __market: 'QA' } },
+    ]);
+  });
+
+  it('uses the requested market only when there is no lock', () => {
+    const locked = builder();
+    applyMarketFilter(locked, 's.regionCode', 'QA', 'IN');
+    expect(locked.calls[0].params).toEqual({ __market: 'QA' });
+
+    const global = builder();
+    applyMarketFilter(global, 's.regionCode', undefined, 'in');
+    expect(global.calls[0].params).toEqual({ __market: 'IN' });
+  });
+
+  it('adds nothing at all for a global caller with no filter, and chains', () => {
+    const qb = builder();
+    expect(applyMarketFilter(qb, 's.regionCode', undefined, undefined)).toBe(qb);
+    expect(qb.calls).toEqual([]);
+  });
+
+  it('normalises a sub-region lock to its country', () => {
+    const qb = builder();
+    applyMarketFilter(qb, 'r.regionCode', 'QA-DOH');
+    expect(qb.calls[0].params).toEqual({ __market: 'QA' });
+  });
+});
+
+describe('assertRecordMarket', () => {
+  it('reports a missing id as 404, not as a market denial', () => {
+    expect(() => assertRecordMarket(null, 'regionCode' as never, 'QA', 'payout')).toThrow(
+      NotFoundException,
+    );
+    expect(() => assertRecordMarket(undefined, 'regionCode' as never, 'QA', 'payout')).toThrow(
+      'No payout with that id',
+    );
+  });
+
+  it('accepts a row in the caller’s market and refuses one outside it', () => {
+    expect(() =>
+      assertRecordMarket({ regionCode: 'QA' }, 'regionCode', 'QA', 'payout'),
+    ).not.toThrow();
+    expect(() => assertRecordMarket({ regionCode: 'IN' }, 'regionCode', 'QA', 'payout')).toThrow(
+      'This payout belongs to IN, not to the QA market.',
+    );
+  });
+
+  it('reads the column the caller named, so a differently-named market works', () => {
+    expect(() =>
+      assertRecordMarket({ countryCode: 'QA' }, 'countryCode', 'QA', 'settlement'),
+    ).not.toThrow();
+    expect(() =>
+      assertRecordMarket({ countryCode: 'IN' }, 'countryCode', 'QA', 'settlement'),
+    ).toThrow('This settlement belongs to IN, not to the QA market.');
+  });
+
+  it('lets a global caller through, missing id apart', () => {
+    expect(() =>
+      assertRecordMarket({ regionCode: null }, 'regionCode', undefined, 'payout'),
+    ).not.toThrow();
+  });
+
+  it('refuses an explicitly global row, and says so in the log rather than the copy', () => {
+    const lines: string[] = [];
+    expect(() =>
+      assertRecordMarket({ regionCode: null, isGlobal: true }, 'regionCode', 'QA', 'offer', {
+        warn: (m) => lines.push(m),
+      }),
+    ).toThrow('This offer belongs to every market, not to the QA market.');
+    expect(lines[0]).toContain('explicitly global');
+  });
+
+  it('calls an unattributed row unattributed, so a missing backfill is visible', () => {
+    const lines: string[] = [];
+    expect(() =>
+      assertRecordMarket({ regionCode: null }, 'regionCode', 'QA', 'offer', {
+        warn: (m) => lines.push(m),
+      }),
+    ).toThrow(ForbiddenException);
+    expect(lines[0]).toContain('no market yet');
+  });
+});
+
+describe('isGlobalMarket', () => {
+  it('is true only for the explicit flag', () => {
+    expect(isGlobalMarket({ isGlobal: true })).toBe(true);
+    expect(isGlobalMarket({ isGlobal: true, regionCode: null })).toBe(true);
+  });
+  it('is false for an unattributed row, which is not the same thing', () => {
+    expect(isGlobalMarket({ regionCode: null })).toBe(false);
+    expect(isGlobalMarket({ regionCode: null, isGlobal: false })).toBe(false);
+    expect(isGlobalMarket({ regionCode: null, isGlobal: null })).toBe(false);
+    expect(isGlobalMarket({ regionCode: 'QA' })).toBe(false);
   });
 });

@@ -69,7 +69,7 @@ import {
   ForwardedBrandUpdateDto,
 } from '../dto/gateway.dto';
 import { MARKETPLACE_PATTERNS } from '../contracts';
-import { marketScopeOf, refuseLockedAdmin, resolveMarket } from '../guards/market-scope';
+import { marketScopeOf, refuseLockedAdmin, resolveScope } from '../guards/market-scope';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
 import { MarketplaceOrderService } from '../services/marketplace-order.service';
@@ -139,24 +139,9 @@ export class MarketplaceGatewayController {
     };
   }
 
-  /**
-   * The market this request may act in, as `scope` for the backend.
-   *
-   * This controller is not an `/admin/*` controller, but 22 of its routes carry
-   * `@Roles(ADMIN, SUPER_ADMIN)` — and four of them move money or stock. They
-   * forwarded `_actor` and nothing else, so every `assertInMarket(row, scope)`
-   * downstream returned on its first line (audit V2, V4). `market` is the
-   * filter to send; `scope` is set only when the caller is locked and is the
-   * proof the backend checks against the row.
-   */
-  private scopeOf(
-    req: any,
-    requested?: string,
-    what = 'that market',
-  ): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, what);
-    const scope = marketScopeOf(req).locked ? market : undefined;
-    return { scope, market };
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   /**

@@ -24,7 +24,7 @@ import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/securi
 import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { resolveScope } from '../guards/market-scope';
 import { PaymentAdminFilterDto, PaymentDashboardFilterDto } from '../dto/payment.dto';
 import { UserRole, rpcCatch } from '@app/common';
 
@@ -119,21 +119,9 @@ export class PaymentGatewayController {
     }
   }
 
-  /**
-   * The market this request may act in, as `scope` for payment-service.
-   *
-   * `market` is the filter to send; `scope` is set only when the caller is
-   * region-locked and is the proof the backend predicates on. A locked admin
-   * naming any other market is refused here, before payment-service is asked.
-   */
-  private scopeOf(
-    req: any,
-    requested?: string,
-    what = 'that market',
-  ): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, what);
-    const scope = marketScopeOf(req).locked ? market : undefined;
-    return { scope, market };
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   /**

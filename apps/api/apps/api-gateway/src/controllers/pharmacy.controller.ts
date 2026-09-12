@@ -38,7 +38,7 @@ import { RolesGuard } from '../guards/roles.guard';
 import { SellerModuleGuard, SellerModule } from '../guards/seller-module.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, refuseLockedAdmin, resolveMarket } from '../guards/market-scope';
+import { refuseLockedAdmin, resolveScope } from '../guards/market-scope';
 import { IsNumber, Max, Min } from 'class-validator';
 
 /**
@@ -107,23 +107,9 @@ export class PharmacyController {
     }
   }
 
-  /**
-   * The market this request may act in, as `scope` for pharmacy-service.
-   *
-   * The seven admin routes below sent no `scope` at all, and pharmacy-service
-   * had no `assertInMarket` to receive one: a Qatar-locked admin could approve,
-   * suspend and re-price an Indian pharmacy (audit V9 / X-41). Both halves are
-   * in place now — this resolves the caller's market, and the service asserts
-   * the store's own.
-   */
-  private scopeOf(
-    req: any,
-    requested?: string,
-    what = 'that market',
-  ): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, what);
-    const scope = marketScopeOf(req).locked ? market : undefined;
-    return { scope, market };
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

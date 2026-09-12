@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { resolveScope } from '../guards/market-scope';
 import { AuditEntryDto } from '../dto/admin-audit.dto';
 
 /**
@@ -90,15 +90,9 @@ export class AdminAuditController {
     }
   }
 
-  /**
-   * The market this request may read, as `scope` for the service. A locked
-   * admin gets their own market and nothing else — naming another one is
-   * refused and logged; a global admin gets `undefined` (every market) or the
-   * market they filtered on.
-   */
-  private scopeOf(req: any, requested?: string): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, 'that audit trail');
-    return { scope: marketScopeOf(req).locked ? market : undefined, market };
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string) {
+    return resolveScope(req, requested, 'that audit trail');
   }
 
   /** The first address in `X-Forwarded-For`, which is the client's. */

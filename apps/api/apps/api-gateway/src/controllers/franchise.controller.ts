@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '@app/security';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { Public } from '../decorators/public.decorator';
 import { FranchiseAccessGuard } from '../guards/franchise-access.guard';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { resolveScope } from '../guards/market-scope';
 
 /**
  * The franchise console's API surface.
@@ -69,23 +69,16 @@ export class FranchiseGatewayController {
   }
 
   /**
-   * The market this request may act in, as `scope` for franchise-service.
+   * @see resolveScope — the shared implementation.
    *
    * Defence in depth beside `FranchiseAccessGuard`: the guard is a gateway
    * artefact, and franchise-service's TCP surface has to stand on its own —
    * anything else that learns to send `franchise.get_dashboard` would otherwise
-   * be authorised by nothing at all. `scope` is set only for a region-locked
-   * caller and is the market the service checks the franchise's own
-   * `country_code` against.
+   * be authorised by nothing at all. The `scope` this returns is the market the
+   * service checks the franchise's own `country_code` against.
    */
-  private scopeOf(
-    req: any,
-    requested?: string,
-    what = 'that franchise',
-  ): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, what);
-    const scope = marketScopeOf(req).locked ? market : undefined;
-    return { scope, market };
+  private scopeOf(req: any, requested?: string, what = 'that franchise') {
+    return resolveScope(req, requested, what);
   }
 
   @Public()

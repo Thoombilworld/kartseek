@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
-import { marketScopeOf, resolveMarket, refuseLockedAdmin } from '../guards/market-scope';
+import { refuseLockedAdmin, resolveScope } from '../guards/market-scope';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 
 /**
@@ -46,20 +46,9 @@ export class AdminPharmacyController {
     return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
   }
 
-  /**
-   * The market this request may act in, as `scope` for the backend. A locked
-   * admin gets their market (and any other market they name is refused and
-   * logged); a global admin gets undefined — every market — or the market they
-   * filtered on.
-   */
-  private scopeOf(
-    req: any,
-    requested?: string,
-    what = 'that market',
-  ): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, what);
-    const scope = marketScopeOf(req).locked ? market : undefined;
-    return { scope, market };
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   /**

@@ -29,7 +29,7 @@ import { Roles } from '../decorators/roles.decorator';
 import { requestRegion, type RequestWithRegion } from '../services/request-region';
 import { Public } from '../decorators/public.decorator';
 import { GroceryStoreOwnershipGuard } from '../guards/grocery-store-ownership.guard';
-import { marketScopeOf, refuseLockedAdmin, resolveMarket } from '../guards/market-scope';
+import { refuseLockedAdmin, resolveScope } from '../guards/market-scope';
 
 /**
  * Grocery Controller — API Gateway Proxy
@@ -120,24 +120,9 @@ export class GroceryController {
     return String(id);
   }
 
-  /**
-   * The market this request may act in, as `scope` for grocery-service.
-   *
-   * These routes are the admin console's real moderation path — the console
-   * calls `/grocery/admin/products/*` because `/admin/grocery/*` has no
-   * pending-products twin — so they are scoped rather than deleted. They sent
-   * no `scope` at all, which made `assertInMarket(…, undefined)` a no-op and
-   * let any admin approve or reject any market's listings, brands, flash deals
-   * and categories (audit V7).
-   */
-  private scopeOf(
-    req: any,
-    requested?: string,
-    what = 'that market',
-  ): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, what);
-    const scope = marketScopeOf(req).locked ? market : undefined;
-    return { scope, market };
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   /**
