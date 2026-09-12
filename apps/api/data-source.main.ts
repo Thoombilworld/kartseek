@@ -143,6 +143,14 @@ import { DataSource } from 'typeorm';
  *       them (AUD2-030, the actionable half). They live in `public` in *this*
  *       database, so the rename has to run from here.
  *
+ *   1786502600000-QuarantineStaleVerticalSiblings
+ *       The other 41 `public` tables in the same decoy family — every sibling
+ *       and lookup table for the five parents above that also exists, under
+ *       the same name, in the `doctor`/`grocery`/`hotel`/`pharmacy`/
+ *       `restaurant` schema of *this* database. Same rename, same
+ *       `legacy_public_verticals` destination, same reason it belongs here
+ *       rather than the marketplace list.
+ *
  * Deliberately **not** here, though each mentions `users` somewhere:
  *
  *   1719468000000-InitialMarketplaceSchema
@@ -195,6 +203,7 @@ export const MainDataSource = new DataSource({
     'migrations/1786502200000-MoneyPathMarket.ts',
     'migrations/1786502400000-RegionalAdminStaffPermissions.ts',
     'migrations/1786502500000-QuarantineStaleVerticalCopies.ts',
+    'migrations/1786502600000-QuarantineStaleVerticalSiblings.ts',
   ],
   migrationsTableName: 'migrations',
   // One transaction per migration, matching the marketplace DataSource: a

@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { type MigrationInterface, type QueryRunner } from 'typeorm';
 
 /**
  * The main database holds 2024-era copies of five vertical tables whose real
@@ -48,5 +48,18 @@ export class QuarantineStaleVerticalCopies1786502500000 implements MigrationInte
          END $$;`,
       );
     }
+    // `1786502600000-QuarantineStaleVerticalSiblings` shares this schema, so
+    // only drop it once nothing — from either migration — is left in it.
+    // `RESTRICT` (the default) would otherwise throw and abort this whole
+    // migration if the siblings migration hasn't been reverted yet; checking
+    // first makes the drop a no-op in that case instead.
+    await q.query(
+      `DO $$ BEGIN
+         IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                         WHERE table_schema='legacy_public_verticals') THEN
+           EXECUTE 'DROP SCHEMA IF EXISTS "legacy_public_verticals"';
+         END IF;
+       END $$;`,
+    );
   }
 }

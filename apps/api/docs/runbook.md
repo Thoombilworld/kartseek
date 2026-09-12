@@ -83,6 +83,14 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 the schema — `search_path` is `public`, so a bare `orders` either errors or
 builds a shadow table. The same applies to `admin.admin_roles`.
 
+`kartseek_db` also carries two orphan, completely empty schemas: `user` and
+`admin` holds only `admin_roles` (no `page_layouts`). Both predate
+`user-service`/`admin-service` being repointed at `public.users` /
+`public.page_layouts` (AUD2-025, AUD2-026) and neither is dropped — an empty
+schema is not a correctness risk, and dropping one needs a migration with a
+real `down()`, not a runbook note. `\dn` in `kartseek_db` will show them; this
+is why.
+
 ---
 
 ## Incident Response

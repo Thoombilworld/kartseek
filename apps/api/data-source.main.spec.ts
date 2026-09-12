@@ -86,6 +86,7 @@ describe('migration classification', () => {
         '1786502200000-MoneyPathMarket.ts',
         '1786502400000-RegionalAdminStaffPermissions.ts',
         '1786502500000-QuarantineStaleVerticalCopies.ts',
+        '1786502600000-QuarantineStaleVerticalSiblings.ts',
       ].sort(),
     );
   });
