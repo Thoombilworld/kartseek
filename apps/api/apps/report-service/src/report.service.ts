@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
+import { refuseUnattributable } from '@app/common';
 
 // ─── Report Types ────────────────────────────────────────────────────────────
 export enum ReportType {
@@ -36,7 +37,30 @@ export class ReportService {
   }
 
   // ── Revenue Report ─────────────────────────────────────────────────────────
-  async generateRevenueReport(startDate: string, endDate: string, groupBy: 'day' | 'week' | 'month' = 'day') {
+  /**
+   * Fail closed before anyone wires a scoped route to this.
+   *
+   * It reads `admin:counter:revenue:*` and `admin:counter:orders:*`, which had
+   * no market dimension at all until 2026-09-12 and still aggregate GLOBAL
+   * buckets — so a scoped caller would be handed the platform's total under
+   * their own market's name (audit C §2 #5 / AUD2-096). Nothing forwards a
+   * `scope` here today: this service has no gateway client injected and never
+   * had one, which is the only reason the hole has not been reachable.
+   *
+   * `admin-service.getRevenueReport` is the real report — it queries
+   * `"order".orders`, where every row carries its own `region_code`. Left in
+   * place rather than deleted because the service still owns six other reports
+   * and its own compose entry; guarded rather than left open because an
+   * unguarded platform aggregate one `@Inject` away from a route is the shape
+   * of the next finding.
+   */
+  async generateRevenueReport(
+    startDate: string,
+    endDate: string,
+    groupBy: 'day' | 'week' | 'month' = 'day',
+    scope?: string,
+  ) {
+    refuseUnattributable(scope, 'report', this.logger);
     const cacheKey = `report:revenue:${startDate}:${endDate}:${groupBy}`;
     const cached = await this.redis.getJson<any>(cacheKey);
     if (cached) return { ...cached, cached: true };
@@ -52,8 +76,13 @@ export class ReportService {
 
     while (current <= end) {
       const dateKey = current.toISOString().split('T')[0];
-      const dayRevenue = parseFloat(await this.redis.get(`admin:counter:revenue:${dateKey}`) ?? '0');
-      const dayOrders = parseInt(await this.redis.get(`admin:counter:orders:${dateKey}`) ?? '0', 10);
+      const dayRevenue = parseFloat(
+        (await this.redis.get(`admin:counter:revenue:${dateKey}`)) ?? '0',
+      );
+      const dayOrders = parseInt(
+        (await this.redis.get(`admin:counter:orders:${dateKey}`)) ?? '0',
+        10,
+      );
 
       if (groupBy === 'day' || groupBy === 'week' || groupBy === 'month') {
         data.push({
@@ -81,8 +110,8 @@ export class ReportService {
     const moduleBreakdown: Record<string, { revenue: number; orders: number }> = {};
     const modules = ['marketplace', 'grocery', 'restaurant', 'pharmacy', 'doctor', 'hotel', 'taxi'];
     for (const mod of modules) {
-      const modRevenue = parseFloat(await this.redis.get(`admin:counter:revenue:${mod}`) ?? '0');
-      const modOrders = parseInt(await this.redis.get(`admin:counter:orders:${mod}`) ?? '0', 10);
+      const modRevenue = parseFloat((await this.redis.get(`admin:counter:revenue:${mod}`)) ?? '0');
+      const modOrders = parseInt((await this.redis.get(`admin:counter:orders:${mod}`)) ?? '0', 10);
       moduleBreakdown[mod] = { revenue: modRevenue, orders: modOrders };
     }
 
@@ -127,8 +156,8 @@ export class ReportService {
         ? `admin:counter:revenue:${serviceType}:${dateKey}`
         : `admin:counter:revenue:${dateKey}`;
 
-      const dayOrders = parseInt(await this.redis.get(key) ?? '0', 10);
-      const dayRevenue = parseFloat(await this.redis.get(revKey) ?? '0');
+      const dayOrders = parseInt((await this.redis.get(key)) ?? '0', 10);
+      const dayRevenue = parseFloat((await this.redis.get(revKey)) ?? '0');
 
       data.push({ date: dateKey, orders: dayOrders, revenue: dayRevenue });
       totalOrders += dayOrders;
@@ -141,7 +170,8 @@ export class ReportService {
     const statusDistribution: Record<string, number> = {};
     for (const status of statusKeys) {
       statusDistribution[status] = parseInt(
-        await this.redis.get(`admin:counter:orders:${status}`) ?? '0', 10,
+        (await this.redis.get(`admin:counter:orders:${status}`)) ?? '0',
+        10,
       );
     }
 
@@ -171,9 +201,12 @@ export class ReportService {
     if (cached) return { ...cached, cached: true };
 
     // Gather seller metrics from Redis
-    const sellerStats = await this.redis.getJson<any>(`commission:seller:stats:${sellerId}`) ?? {};
-    const commissionHistory = (await this.redis.getJson<any[]>(`commission:history:${sellerId}`)) ?? [];
-    const payoutIndex = (await this.redis.getJson<string[]>(`payout:index:seller:${sellerId}`)) ?? [];
+    const sellerStats =
+      (await this.redis.getJson<any>(`commission:seller:stats:${sellerId}`)) ?? {};
+    const commissionHistory =
+      (await this.redis.getJson<any[]>(`commission:history:${sellerId}`)) ?? [];
+    const payoutIndex =
+      (await this.redis.getJson<string[]>(`payout:index:seller:${sellerId}`)) ?? [];
 
     // Calculate period-specific metrics
     let periodOrders = 0;
@@ -216,7 +249,8 @@ export class ReportService {
         commissions: Math.round(periodCommissions * 100) / 100,
         refunds: refundCount,
         refundAmount: Math.round(refundAmount * 100) / 100,
-        avgOrderValue: periodOrders > 0 ? Math.round((periodRevenue / periodOrders) * 100) / 100 : 0,
+        avgOrderValue:
+          periodOrders > 0 ? Math.round((periodRevenue / periodOrders) * 100) / 100 : 0,
       },
       payoutCount: payoutIndex.length,
       generatedAt: new Date().toISOString(),
@@ -234,7 +268,7 @@ export class ReportService {
     if (cached) return { ...cached, cached: true };
 
     // Gather driver metrics from Redis
-    const driverStats = await this.redis.getJson<any>(`taxi:driver:stats:${driverId}`) ?? {};
+    const driverStats = (await this.redis.getJson<any>(`taxi:driver:stats:${driverId}`)) ?? {};
     const deliveryKeys = await this.redis.keys(`delivery:assignment:*`);
 
     let totalTrips = 0;
@@ -288,15 +322,21 @@ export class ReportService {
     const current = new Date(start);
     while (current <= end) {
       const dateKey = current.toISOString().split('T')[0];
-      const newUsers = parseInt(await this.redis.get(`admin:counter:new_users:${dateKey}`) ?? '0', 10);
-      const activeUsers = parseInt(await this.redis.get(`admin:counter:active_users:${dateKey}`) ?? '0', 10);
+      const newUsers = parseInt(
+        (await this.redis.get(`admin:counter:new_users:${dateKey}`)) ?? '0',
+        10,
+      );
+      const activeUsers = parseInt(
+        (await this.redis.get(`admin:counter:active_users:${dateKey}`)) ?? '0',
+        10,
+      );
 
       data.push({ date: dateKey, newUsers, activeUsers });
       totalNewUsers += newUsers;
       current.setDate(current.getDate() + 1);
     }
 
-    const totalUsers = parseInt(await this.redis.get('admin:counter:users') ?? '0', 10);
+    const totalUsers = parseInt((await this.redis.get('admin:counter:users')) ?? '0', 10);
 
     const report = {
       id: `RPT-${Date.now()}`,
@@ -325,9 +365,9 @@ export class ReportService {
     const moduleMetrics: any[] = [];
 
     for (const mod of modules) {
-      const revenue = parseFloat(await this.redis.get(`admin:counter:revenue:${mod}`) ?? '0');
-      const orders = parseInt(await this.redis.get(`admin:counter:orders:${mod}`) ?? '0', 10);
-      const sellers = parseInt(await this.redis.get(`admin:counter:sellers:${mod}`) ?? '0', 10);
+      const revenue = parseFloat((await this.redis.get(`admin:counter:revenue:${mod}`)) ?? '0');
+      const orders = parseInt((await this.redis.get(`admin:counter:orders:${mod}`)) ?? '0', 10);
+      const sellers = parseInt((await this.redis.get(`admin:counter:sellers:${mod}`)) ?? '0', 10);
 
       moduleMetrics.push({
         module: mod,

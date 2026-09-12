@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { OrderService, OrderStatus } from './order.service';
 import { Order } from './entities/order.entity';
@@ -49,14 +49,19 @@ describe('OrderService', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       count: jest.fn().mockResolvedValue(0),
       createQueryBuilder: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
         take: jest.fn().mockReturnThis(),
         getOne: jest.fn().mockResolvedValue(null),
         getMany: jest.fn().mockResolvedValue([]),
         getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+        getRawMany: jest.fn().mockResolvedValue([]),
       }),
     };
 
@@ -260,6 +265,70 @@ describe('OrderService', () => {
   });
 
   // ── healthCheck ─────────────────────────────────────────────────────────────
+
+  // revenueByPeriod ────────────────────────────────────────────
+
+  /**
+   * The platform's revenue report (R9).
+   *
+   * admin-service answered 501 for every market and a series of zeroes for a
+   * global admin, because it summed Redis counters nothing writes (audit F-27).
+   * The real figures live here, so these tests pin the query rather than the
+   * numbers: that the market reaches the SQL, that a cancelled order is not
+   * revenue, and that two currencies never collapse into one total.
+   */
+  describe('revenueByPeriod', () => {
+    const qb = () => (service as any).orderRepo.createQueryBuilder();
+    const predicates = () => qb().andWhere.mock.calls.map((c: any[]) => String(c[0]));
+
+    it('narrows the aggregate to one market', async () => {
+      await service.revenueByPeriod('2026-08-01', '2026-09-12', 'day', 'qa');
+      expect(predicates().some((p: string) => p.includes('o.regionCode = :market'))).toBe(true);
+      const marketCall = qb().andWhere.mock.calls.find((c: any[]) =>
+        String(c[0]).includes('regionCode'),
+      );
+      // Normalised: 'qa' and 'QA-DOH' are both the QA market.
+      expect(marketCall?.[1]).toEqual({ market: 'QA' });
+    });
+
+    it('adds no market predicate for a global admin', async () => {
+      await service.revenueByPeriod('2026-08-01', '2026-09-12');
+      expect(predicates().some((p: string) => p.includes('regionCode'))).toBe(false);
+    });
+
+    it('never counts a cancelled order as revenue', async () => {
+      await service.revenueByPeriod('2026-08-01', '2026-09-12');
+      const cancelled = qb().andWhere.mock.calls.find((c: any[]) =>
+        String(c[0]).includes('o.status'),
+      );
+      expect(cancelled?.[1]).toEqual({ cancelled: OrderStatus.CANCELLED });
+    });
+
+    it('keeps each currency its own total', async () => {
+      qb().getRawMany.mockResolvedValueOnce([
+        { bucket: '2026-09-01', orders: '2', revenue: '300.50', currency: 'QAR' },
+        { bucket: '2026-09-01', orders: '1', revenue: '900', currency: 'INR' },
+      ]);
+      const res = await service.revenueByPeriod('2026-09-01', '2026-09-02');
+      expect(res.series).toHaveLength(2);
+      expect(res.totals.orders).toBe(3);
+      // One number for QAR + INR would read as revenue and not be any.
+      expect(res.totals.revenue).toEqual({ QAR: 300.5, INR: 900 });
+    });
+
+    it('rejects a missing or unparseable range rather than querying', async () => {
+      await expect(service.revenueByPeriod('', '2026-09-02')).rejects.toThrow(BadRequestException);
+      await expect(service.revenueByPeriod('yesterday', '2026-09-02')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects a groupBy outside the whitelist - it reaches date_trunc as a literal', async () => {
+      await expect(
+        service.revenueByPeriod('2026-09-01', '2026-09-02', "day'); DROP TABLE orders --" as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 
   describe('healthCheck', () => {
     it('should return service status ok', async () => {

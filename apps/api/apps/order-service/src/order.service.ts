@@ -1,6 +1,13 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { normaliseMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { Order } from './entities/order.entity';
@@ -374,6 +381,96 @@ export class OrderService {
       throw new Error('Cannot cancel an order already out for delivery or delivered');
     }
     return this.updateOrderStatus(orderId, OrderStatus.CANCELLED, cancelledBy);
+  }
+
+  // ── Revenue aggregate ──────────────────────────────────────────────────────
+  /**
+   * Revenue and order counts over a date range, per market.
+   *
+   * admin-service owns the admin route but not the orders; `"order".orders`
+   * carries `region_code` and `currency` and lives here. This is the query the
+   * platform's only revenue report was missing — it answered 501 for every
+   * market (audit F-27) after an earlier pass found it synthesising a series
+   * out of Redis counters nothing writes.
+   *
+   * `date_trunc` in the database, not a day-by-day loop in JavaScript: a loop
+   * issues one round trip per bucket and still cannot group by week or month
+   * without re-deriving the calendar. The bucket is rendered as text so a
+   * `date` coming back through the driver cannot shift a day under the reader's
+   * timezone.
+   */
+  async revenueByPeriod(
+    startDate: string,
+    endDate: string,
+    groupBy: 'day' | 'week' | 'month' = 'day',
+    market?: string,
+  ) {
+    if (!startDate || !endDate)
+      throw new BadRequestException('startDate and endDate are required.');
+    // Validated before the query, so a typo is a 400 that names the field
+    // rather than a 500 carrying Postgres' own "invalid input syntax" text.
+    for (const [field, value] of [
+      ['startDate', startDate],
+      ['endDate', endDate],
+    ] as const) {
+      if (Number.isNaN(new Date(value).getTime()))
+        throw new BadRequestException(`${field} must be an ISO date (YYYY-MM-DD).`);
+    }
+    // Whitelisted, never interpolated from the payload: `date_trunc`'s field is
+    // a literal and a caller-supplied one would be an injection point.
+    const trunc = { day: 'day', week: 'week', month: 'month' }[groupBy];
+    if (!trunc) throw new BadRequestException('groupBy must be one of day, week, month.');
+    const m = normaliseMarket(market);
+
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
+      .select(`TO_CHAR(date_trunc('${trunc}', o."placedAt"), 'YYYY-MM-DD')`, 'bucket')
+      .addSelect('COUNT(o.id)', 'orders')
+      .addSelect('COALESCE(SUM(o.totalAmount), 0)', 'revenue')
+      .addSelect('o.currency', 'currency')
+      // `totalAmount`, not a `grandTotal` this table has never had: the money
+      // actually taken for the order, after delivery, discount and wallet.
+      .where('o.placedAt >= :startDate', { startDate })
+      // `CAST(... AS date) + 1` rather than `:endDate::date + 1`: TypeORM's
+      // parameter substitution and Postgres' `::` cast share a colon, and the
+      // inclusive end date has to survive the rewrite intact.
+      .andWhere('o.placedAt < CAST(:endDate AS date) + 1', { endDate })
+      // A cancelled order is not revenue. The enum has no FAILED member, so
+      // naming one would be a predicate that never matches.
+      .andWhere('o.status != :cancelled', { cancelled: OrderStatus.CANCELLED })
+      .groupBy('bucket')
+      .addGroupBy('o.currency')
+      .orderBy('bucket', 'ASC');
+    if (m) qb.andWhere('o.regionCode = :market', { market: m });
+    const rows =
+      (await qb.getRawMany<{
+        bucket: string;
+        orders: string;
+        revenue: string;
+        currency: string | null;
+      }>()) ?? [];
+
+    return {
+      range: { startDate, endDate },
+      groupBy,
+      market: m ?? null,
+      series: rows.map((r) => ({
+        date: String(r.bucket),
+        orders: Number(r.orders) || 0,
+        revenue: Number(r.revenue) || 0,
+        currency: r.currency ?? null,
+      })),
+      totals: {
+        orders: rows.reduce((s, r) => s + (Number(r.orders) || 0), 0),
+        // Deliberately per currency: summing QAR and INR into one number is the
+        // kind of figure that reads as revenue and is not.
+        revenue: rows.reduce<Record<string, number>>((acc, r) => {
+          const key = r.currency ?? 'UNKNOWN';
+          acc[key] = (acc[key] ?? 0) + (Number(r.revenue) || 0);
+          return acc;
+        }, {}),
+      },
+    };
   }
 
   // ── Dynamic Delivery Fee — Uses admin-defined zone rates ───────────────────

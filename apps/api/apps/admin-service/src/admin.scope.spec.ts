@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ForbiddenException, NotImplementedException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
+import { of } from 'rxjs';
 import { AdminService } from './admin.service';
 
 /** Minimal doubles: a Redis with the pending-KYC keys, an EntityManager whose
@@ -15,6 +16,7 @@ function makeService(
     index?: any[];
     rows?: any[];
     dbDown?: boolean;
+    revenue?: any;
   } = {},
 ) {
   const store = new Map<string, any>(Object.entries(overrides.kyc ?? {}));
@@ -77,9 +79,25 @@ function makeService(
       return [{ id: 'user-1' }];
     }),
   };
-  // Constructor order as of 2026-09-11: (redis, kafka, layoutRepo, em).
-  const svc = new AdminService(redis as any, kafka as any, {} as any, overrides.dbDown ? null : em);
-  return { svc, where, selects, kafka, store, queries };
+  // Every `{ cmd }` this service sends to order-service, and the payload it
+  // sent — the revenue report is an RPC now, so what it forwards is the only
+  // place the market can be asserted.
+  const sent: { pattern: any; payload: any }[] = [];
+  const orderClient = {
+    send: vi.fn((pattern: any, payload: any) => {
+      sent.push({ pattern, payload });
+      return of(overrides.revenue ?? { series: [], totals: { orders: 0, revenue: {} } });
+    }),
+  };
+  // Constructor order as of 2026-09-12: (redis, kafka, layoutRepo, em, orderClient).
+  const svc = new AdminService(
+    redis as any,
+    kafka as any,
+    {} as any,
+    overrides.dbDown ? null : em,
+    orderClient as any,
+  );
+  return { svc, where, selects, kafka, store, queries, sent, orderClient };
 }
 
 describe('AdminService market scope', () => {
@@ -141,11 +159,50 @@ describe('AdminService market scope', () => {
     expect(ordersCall?.[1]).toEqual([today, 'QA']);
   });
 
-  it('refuses a scoped revenue report — not tracked per market yet', async () => {
-    const { svc } = makeService();
-    await expect(svc.getRevenueReport('2026-09-01', '2026-09-02', 'day', 'QA')).rejects.toThrow(
-      NotImplementedException,
-    );
+  /**
+   * The revenue report answers per market instead of refusing (R9).
+   *
+   * It threw `NotImplementedException` for every scoped caller, so a regional
+   * admin had no revenue report at all — and the global answer it did serve
+   * summed Redis counters nothing writes, which is to say it answered zero
+   * (audit F-27). `"order".orders` carries `region_code`, so the report is a
+   * query in order-service now and these tests pin what this service forwards:
+   * the market, resolved lock-first, on the pattern order-service implements.
+   */
+  it('forwards a scoped revenue report to order-service with the market', async () => {
+    const { svc, sent } = makeService({
+      revenue: { market: 'QA', series: [{ date: '2026-09-01', orders: 2, revenue: 300 }] },
+    });
+    const res = await svc.getRevenueReport('2026-09-01', '2026-09-02', 'day', 'QA');
+    expect(sent).toHaveLength(1);
+    expect(sent[0].pattern).toEqual({ cmd: 'orders.revenue_by_period' });
+    expect(sent[0].payload).toEqual({
+      startDate: '2026-09-01',
+      endDate: '2026-09-02',
+      groupBy: 'day',
+      market: 'QA',
+    });
+    // The rows come back from the service that owns the orders, not from a
+    // series this one builds.
+    expect(res).toMatchObject({ market: 'QA' });
+  });
+
+  it('sends no market at all for a global admin', async () => {
+    const { svc, sent } = makeService();
+    await svc.getRevenueReport('2026-09-01', '2026-09-02', 'day');
+    expect(sent[0].payload.market).toBeUndefined();
+  });
+
+  it("prefers the caller's lock over a ?country= that disagrees", async () => {
+    const { svc, sent } = makeService();
+    await svc.getRevenueReport('2026-09-01', '2026-09-02', 'day', 'QA', 'IN');
+    expect(sent[0].payload.market).toBe('QA');
+  });
+
+  it('lets a global admin name one market', async () => {
+    const { svc, sent } = makeService();
+    await svc.getRevenueReport('2026-09-01', '2026-09-02', 'month', undefined, 'in');
+    expect(sent[0].payload).toMatchObject({ groupBy: 'month', market: 'IN' });
   });
 
   it('keeps the users list market-scoped when it falls back to the Redis index', async () => {

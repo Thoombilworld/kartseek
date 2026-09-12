@@ -5,14 +5,15 @@ import {
   Inject,
   InternalServerErrorException,
   NotFoundException,
-  NotImplementedException,
 } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
+import type { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
+import { catchError, firstValueFrom, timeout } from 'rxjs';
 import { PageLayout } from './entities/page-layout.entity';
-import { assertInMarket, marketPredicate } from '@app/common';
+import { assertInMarket, marketPredicate, rpcCatch } from '@app/common';
 
 @Injectable()
 export class AdminService {
@@ -23,6 +24,11 @@ export class AdminService {
     private readonly kafka: KafkaProducerService,
     @InjectRepository(PageLayout) private readonly layoutRepo: Repository<PageLayout>,
     @Optional() @Inject(EntityManager) private readonly em: EntityManager | null,
+    // Not optional. The revenue report is one of this service's routes and a
+    // missing client must fail at boot with an UnknownDependenciesException,
+    // where the log shows it, rather than as an unavailable report in
+    // production.
+    @Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy,
   ) {}
 
   private isDbActive(): boolean {
@@ -668,19 +674,28 @@ export class AdminService {
   }
 
   // ── Revenue Report ─────────────────────────────────────────────────────────
-  //
-  // Sums per-day Redis counters — `admin:counter:revenue:<date>` and
-  // `admin:counter:orders:<date>`, a key shape nothing writes: `incrementCounter`
-  // wrote `admin:counter:revenue` with no date at all before it was bucketed by
-  // market, and writes `admin:counter:<kind>:<market>:<date>` now. Both readings
-  // are zero, and that mismatch is older than the market segment.
-  //
-  // Deliberately not repaired by pointing this at the new keys: reading a
-  // `GLOBAL` bucket as if it were a market is the failure both halves of
-  // AUD2-095 exist to prevent, and a scoped admin is refused outright rather
-  // than shown a platform-wide total under their market's name. Plan C1 routes
-  // this report to order-service, where every order carries its own
-  // region_code and per-market revenue is a query rather than a counter.
+  /**
+   * The platform's revenue report, for one market or all of them.
+   *
+   * This used to sum per-day Redis counters — `admin:counter:revenue:<date>`
+   * and `admin:counter:orders:<date>`, a key shape nothing writes: the counter
+   * writer wrote `admin:counter:revenue` with no date at all before it was
+   * bucketed by market, and writes `admin:counter:<kind>:<market>:<date>` now.
+   * Both readings were zero, and that mismatch is older than the market
+   * segment. A scoped caller got a `NotImplementedException` on top, so a
+   * regional admin had no revenue report at all (audit F-27 / §3(b)).
+   *
+   * Pointing it at the new keys would not have fixed it: those buckets include
+   * a `GLOBAL` one for events that carry no market, and reading that as a
+   * market's revenue is the failure AUD2-095 exists to prevent. `"order".orders`
+   * carries `region_code` per row, so the report is a query now — real rows,
+   * grouped and filtered by the database, never a synthesised series.
+   *
+   * `country` is the market a global admin asked for; `scope` is the lock a
+   * regional admin carries. `marketPredicate` puts the lock first, so a locked
+   * admin naming another market gets their own figures rather than that
+   * market's — the gateway has already refused the request outright by then.
+   */
   async getRevenueReport(
     startDate: string,
     endDate: string,
@@ -688,48 +703,14 @@ export class AdminService {
     scope?: string,
     country?: string,
   ) {
-    if (scope || country) {
-      throw new NotImplementedException(
-        'Revenue is not tracked per market yet; Plan C1 routes this report to order-service.',
-      );
-    }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const revenue: any[] = [];
-
-    const current = new Date(start);
-    while (current <= end) {
-      const dateKey = current.toISOString().split('T')[0];
-      const dayRevenue = parseFloat(
-        (await this.redis.get(`admin:counter:revenue:${dateKey}`)) ?? '0',
-      );
-      const dayOrders = parseInt(
-        (await this.redis.get(`admin:counter:orders:${dateKey}`)) ?? '0',
-        10,
-      );
-
-      revenue.push({
-        date: dateKey,
-        revenue: dayRevenue,
-        orders: dayOrders,
-        avgOrderValue: dayOrders > 0 ? Math.round((dayRevenue / dayOrders) * 100) / 100 : 0,
-      });
-
-      current.setDate(current.getDate() + 1);
-    }
-
-    const totalRevenue = revenue.reduce((sum, r) => sum + r.revenue, 0);
-    const totalOrders = revenue.reduce((sum, r) => sum + r.orders, 0);
-
-    return {
-      startDate,
-      endDate,
-      groupBy,
-      revenue,
-      totalRevenue: Math.round(totalRevenue * 100) / 100,
-      totalOrders,
-      avgOrderValue: totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
-    };
+    return firstValueFrom(
+      this.orderClient
+        .send(
+          { cmd: 'orders.revenue_by_period' },
+          { startDate, endDate, groupBy, market: marketPredicate(scope, country) },
+        )
+        .pipe(timeout(10_000), catchError(rpcCatch('Order service unavailable'))),
+    );
   }
 
   // ── Increment Counter (called by other services) ───────────────────────────

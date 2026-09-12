@@ -37,6 +37,9 @@ describe('AdminService', () => {
         { provide: KafkaProducerService, useValue: kafkaMock },
         { provide: getRepositoryToken(PageLayout), useValue: layoutRepoMock },
         { provide: EntityManager, useValue: null },
+        // The revenue report is an RPC to order-service now, so the client is a
+        // required dependency of this service.
+        { provide: 'ORDER_SERVICE', useValue: { send: jest.fn() } },
       ],
     }).compile();
 
@@ -126,6 +129,7 @@ describe('AdminService', () => {
               useValue: { findOne: jest.fn(), create: jest.fn(), save: jest.fn() },
             },
             { provide: EntityManager, useValue: { query } },
+            { provide: 'ORDER_SERVICE', useValue: { send: jest.fn() } },
           ],
         }).compile();
         dbService = module.get<AdminService>(AdminService);

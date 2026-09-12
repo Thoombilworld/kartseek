@@ -14,7 +14,9 @@ export class OrderController {
   constructor(private readonly svc: OrderService) {}
 
   @Get('health')
-  health() { return this.svc.healthCheck(); }
+  health() {
+    return this.svc.healthCheck();
+  }
 
   @Post()
   placeOrder(@Body() dto: any) {
@@ -32,23 +34,37 @@ export class OrderController {
   }
 
   @Get()
-  getOrders(@Query('customerId') customerId: string, @Query('page') page = 1, @Query('limit') limit = 20) {
+  getOrders(
+    @Query('customerId') customerId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
     return this.svc.getOrdersByCustomer(customerId, +page, +limit);
   }
 
   @Put(':id/status')
-  updateStatus(@Param('id') id: string, @Body('status') status: OrderStatus, @Body('updatedBy') updatedBy: string) {
+  updateStatus(
+    @Param('id') id: string,
+    @Body('status') status: OrderStatus,
+    @Body('updatedBy') updatedBy: string,
+  ) {
     return this.svc.updateOrderStatus(id, status, updatedBy);
   }
 
   @Post(':id/cancel')
-  cancelOrder(@Param('id') id: string, @Body('reason') reason: string, @Body('cancelledBy') cancelledBy: string) {
+  cancelOrder(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @Body('cancelledBy') cancelledBy: string,
+  ) {
     return this.svc.cancelOrder(id, reason, cancelledBy);
   }
 
   // ─── Kafka/TCP message handlers ──────────────────────────────────────────
   @MessagePattern({ cmd: 'place_order' })
-  msgPlaceOrder(@Payload() data: any) { return this.svc.placeOrder(data); }
+  msgPlaceOrder(@Payload() data: any) {
+    return this.svc.placeOrder(data);
+  }
 
   @MessagePattern({ cmd: 'get_order_by_id' })
   msgGetOrder(@Payload() data: any) {
@@ -64,7 +80,11 @@ export class OrderController {
   // handler the call had no responder and the request hung until it timed out.
   @MessagePattern({ cmd: 'cancel_order' })
   msgCancelOrder(@Payload() data: any) {
-    return this.svc.cancelOrder(data?.orderId ?? data?.id, data?.reason ?? 'Cancelled by customer', data?.userId ?? 'customer');
+    return this.svc.cancelOrder(
+      data?.orderId ?? data?.id,
+      data?.reason ?? 'Cancelled by customer',
+      data?.userId ?? 'customer',
+    );
   }
 
   @MessagePattern({ cmd: 'get_customer_orders' })
@@ -79,5 +99,31 @@ export class OrderController {
   }
 
   @MessagePattern({ cmd: 'update_order_status' })
-  msgUpdateStatus(@Payload() data: any) { return this.svc.updateOrderStatus(data.orderId, data.status, data.updatedBy); }
+  msgUpdateStatus(@Payload() data: any) {
+    return this.svc.updateOrderStatus(data.orderId, data.status, data.updatedBy);
+  }
+
+  /**
+   * Revenue and order counts over a date range, per market.
+   *
+   * admin-service owns the `/admin/reports/revenue` route but not the orders;
+   * `"order".orders` carries `region_code` and `currency` and lives here. This
+   * is the query the platform's only revenue report was missing — it answered
+   * 501 for every market (audit F-27).
+   *
+   * `market` is already resolved by the caller (the gateway's lock ahead of any
+   * `?country=`), so this handler filters rather than authorises.
+   */
+  @MessagePattern({ cmd: 'orders.revenue_by_period' })
+  msgRevenueByPeriod(
+    @Payload()
+    d: {
+      startDate: string;
+      endDate: string;
+      groupBy?: 'day' | 'week' | 'month';
+      market?: string;
+    },
+  ) {
+    return this.svc.revenueByPeriod(d?.startDate, d?.endDate, d?.groupBy ?? 'day', d?.market);
+  }
 }

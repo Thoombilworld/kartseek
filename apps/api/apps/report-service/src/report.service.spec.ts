@@ -1,4 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import { ForbiddenException } from '@nestjs/common';
 import { ReportService, ReportType } from './report.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
@@ -64,6 +65,23 @@ describe('ReportService', () => {
       const result = await service.generateRevenueReport('2026-07-01', '2026-07-01');
       expect(result.moduleBreakdown).toBeDefined();
       expect(result.moduleBreakdown.marketplace).toBeDefined();
+    });
+
+    /**
+     * The counters this report sums have a GLOBAL bucket and no per-market one,
+     * so a scoped caller cannot be answered from them at all (audit AUD2-096).
+     * Nothing forwards a scope here today; the guard is what makes wiring one
+     * later safe, and reading Redis at all before refusing would already be a
+     * platform aggregate computed on a regional admin's behalf.
+     */
+    it('refuses a scoped caller before reading a single counter', async () => {
+      redis.getJson.mockResolvedValue(null);
+      redis.get.mockResolvedValue('0');
+      await expect(
+        service.generateRevenueReport('2026-07-01', '2026-07-03', 'day', 'QA'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(redis.getJson).not.toHaveBeenCalled();
+      expect(redis.get).not.toHaveBeenCalled();
     });
   });
 
