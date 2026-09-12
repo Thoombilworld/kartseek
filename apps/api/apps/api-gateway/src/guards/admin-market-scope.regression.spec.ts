@@ -237,20 +237,25 @@ const GLOBAL_ROUTES: Array<[RegExp, string]> = [
  * renamed or deleted forces its entry out of this file, and a new hole cannot be
  * swapped in under cover of the old one's slot.
  *
- * 31 entries on 2026-09-12, after tasks R1–R7 and R10 of the regional-integrity
- * plan:
+ * **16 entries on 2026-09-12**, after the final fix wave. Rewritten from the
+ * census below, because this paragraph used to describe 31 entries and name
+ * five REACHABLE routes that R12 had already closed — the paragraph a reader
+ * consults to learn the residual risk, overstating it by fifteen routes
+ * (whole-branch review, finding E-4):
  *
- *   • **22 are `@Roles(UserRole.SUPER_ADMIN)` only** — no region-locked admin
- *     reaches them, because a super admin is global by definition. They are
- *     listed anyway because the rule is that a route proves it considered the
- *     market, and a locked super admin would otherwise leak silently.
- *   • **5 are reachable by a region-locked `ADMIN` with no check at all**,
- *     marked REACHABLE, and are the priority: `POST /upload/delivery-proof`,
- *     `PUT /marketplace/answers/:answerId/accept` and the three GDPR routes.
+ *   • **11 are `@Roles(UserRole.SUPER_ADMIN)` only** — the second taxi admin
+ *     surface. No region-locked admin reaches them, because a super admin is
+ *     global by definition. They are listed anyway because the rule is that a
+ *     route proves it considered the market, and a locked super admin would
+ *     otherwise leak silently. Owner: TAXI plan (D2).
+ *   • **1 is handler-less** — `GET /doctor/admin/appointments` 503s today and
+ *     must send a scope when doctor-service grows the handler. Owner: MODULES.
  *   • **4 are reachable but fail closed** — the `seller.controller.ts` routes
  *     whose `:id` SellerOwnershipGuard reads as a seller id and does not find,
  *     so a locked admin is refused rather than filtered. Nothing leaks; the
- *     capability is simply missing.
+ *     capability is simply missing. Owner: MODULES M1 / CONSOLE.
+ *
+ * Zero are reachable by a region-locked ADMIN with no check at all.
  */
 const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }> = [
   // ── TAXI plan (D2) ────────────────────────────────────────────────────────
@@ -387,8 +392,9 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
  * A length cap alone lets one entry be swapped for another — delete a fixed
  * route, add a freshly-introduced unscoped one, and the count still matches.
  * Asserting the exact set means any change to `DEFERRED`, in either direction,
- * has to be made here too and shows up in review as what it is: 31 known holes
- * on 2026-09-12, and the only legitimate edit is a deletion from both places.
+ * has to be made here too and shows up in review as what it is: 16 known holes
+ * on 2026-09-12 (down from 31 across R8 → R12), and the only legitimate edit is
+ * a deletion from both places.
  */
 const EXCEPTION_CENSUS: readonly string[] = [
   'GET /doctor/admin/appointments',
@@ -770,11 +776,25 @@ describe('admin market scope regression', () => {
   const files = new Set(routes.map((r) => r.file));
 
   it('scans every controller and finds the admin routes in all of them', () => {
-    // 571 admin-role routes across 25 files on 2026-09-12: 365 in the 13 files
-    // the old filename filter admitted, 206 in the 12 it did not, one of which
-    // is libs/gdpr's. The floor is deliberately close to the real number: a
-    // collector that silently stops seeing a controller drops ~100 routes at a
-    // time and must fail here rather than pass with fewer things to check.
+    // **585 routes across 27 files on 2026-09-12**, after the final fix wave.
+    //
+    // It was 571 across 25 when the collector selected on roles alone: 365 in
+    // the 13 files the filename filter before it admitted, 206 in the 12 it did
+    // not, one of which is libs/gdpr's. The fourteen new ones are the routes
+    // that had no role to be selected on — three `/hotels/admin/*` and six
+    // `/geo/admin/*`, now role-gated, plus the five on `payment.controller.ts`
+    // — and the two new files are `hotel.controller.ts` and
+    // `geo-security.controller.ts`, which contributed nothing before because
+    // every admin route in them was undeclared. Four `/hotels/admin/*` were
+    // deleted in favour of their scoped twins, so the arithmetic is
+    // 571 + 3 + 6 + 5 + 4(deleted, never counted) = 585.
+    //
+    // All 585 declare an admin role: `byPath` is 0, which is the point of the
+    // path arm — it is a tripwire, not a population.
+    //
+    // The floor is deliberately close to the real number: a collector that
+    // silently stops seeing a controller drops ~100 routes at a time and must
+    // fail here rather than pass with fewer things to check.
     expect(routes.length).toBeGreaterThan(500);
     expect(files.size).toBeGreaterThanOrEqual(22);
     // The blind spot by name, so it cannot come back unnoticed. The four files
@@ -790,6 +810,9 @@ describe('admin market scope regression', () => {
       'payment.controller.ts',
       'static-pages.controller.ts',
       'gdpr.controller.ts',
+      // The two the role-only collector could not see into at all.
+      'hotel.controller.ts',
+      'geo-security.controller.ts',
     ]) {
       expect(files.has(f)).toBe(true);
     }
