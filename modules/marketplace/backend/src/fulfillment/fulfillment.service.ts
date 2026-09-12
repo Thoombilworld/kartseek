@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike, In, MoreThanOrEqual } from 'typeorm';
-import { assertInMarket, requireId } from '@app/common';
+import { assertInMarket, normaliseMarket, requireId } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { Product } from '../entities/product.entity';
@@ -126,20 +126,29 @@ export class MarketplaceFulfillmentService {
    * demonstrably owns is not a record anybody may edit.
    */
   /**
-   * The market a new coupon is issued for, given who is issuing it: a
-   * region-locked admin's market whatever the body names; the requested one
-   * for a global admin (none = the platform's, runs everywhere); a seller's
-   * own market by default.
+   * The market a new coupon is issued for, given who is issuing it: the
+   * caller's own market when the gateway sent a `scope` (any other market named
+   * in the body is refused); the requested one for a global admin (none = the
+   * platform's, runs everywhere); a seller's own market by default.
+   *
+   * This used to read `actor.regionCode` and refuse through a private
+   * `denyMarket` — a third spelling of a rule that already had two correct
+   * implementations. One drifted copy of an authorisation rule is worse than
+   * one copy in the wrong place, so the private pair is gone and this reads the
+   * same `scope` every other handler reads.
    */
   private async couponMarketFor(
     actor: Actor | undefined,
     requested?: string | null,
+    scope?: string,
   ): Promise<string | null> {
-    const wanted = requested ? String(requested).toUpperCase() : null;
-    if (actor?.regionCode) {
-      const scope = actor.regionCode.toUpperCase();
-      if (wanted && wanted !== scope) this.denyMarket(actor, wanted, 'issue a coupon');
-      return scope;
+    const lock = normaliseMarket(scope);
+    const wanted = normaliseMarket(requested ?? undefined) ?? null;
+    if (lock) {
+      if (wanted && wanted !== lock) {
+        assertInMarket(wanted, lock, 'coupon', this.logger);
+      }
+      return lock;
     }
     if (wanted) return wanted;
     if (MarketplaceFulfillmentService.isAdmin(actor)) return null;
@@ -149,25 +158,7 @@ export class MarketplaceFulfillmentService {
       where: { ownerId } as any,
       select: ['id', 'regionCode'] as any,
     });
-    return seller?.regionCode ? String(seller.regionCode).toUpperCase() : null;
-  }
-
-  /** A region-locked admin may only touch coupons issued for their market. */
-  private assertCouponInMarket(actor: Actor | undefined, coupon: Coupon, what: string): void {
-    if (!actor?.regionCode) return;
-    const owner = coupon.regionCode ? String(coupon.regionCode).toUpperCase() : null;
-    if (owner !== actor.regionCode.toUpperCase())
-      this.denyMarket(actor, owner ?? 'every market', what);
-  }
-
-  private denyMarket(actor: Actor | undefined, target: string, what: string): never {
-    this.logger.warn(
-      `[region-scope-denied] owner=${actor?.ownerId ?? 'anonymous'} role=${actor?.role ?? '-'} ` +
-        `scope=${actor?.regionCode} target=${target} what="${what}"`,
-    );
-    throw new ForbiddenException(
-      `Your account is restricted to the ${actor?.regionCode} market; cannot ${what} for ${target}.`,
-    );
+    return normaliseMarket(seller?.regionCode ?? undefined) ?? null;
   }
 
   private async assertOwns(
@@ -199,6 +190,24 @@ export class MarketplaceFulfillmentService {
       select: ['id', 'seller_id'],
     });
     return { variant, sellerId: product?.seller_id ?? null };
+  }
+
+  /**
+   * The market a seller trades in, for the scope check on catalogue writes.
+   *
+   * A variant carries no market of its own; the seller who owns it does, and
+   * that is the documented attribution join for the whole product tree (see
+   * `admin/admin.service.ts:630-652`). `null` — an unattributed seller — is
+   * refused for a scoped caller by `assertInMarket`, which is the right
+   * default: a row nobody can place is not a regional admin's to edit.
+   */
+  private async sellerMarket(sellerId: string | null | undefined): Promise<string | null> {
+    if (!sellerId) return null;
+    const seller = await this.sellerRepo.findOne({
+      where: { id: sellerId } as any,
+      select: ['id', 'regionCode'] as any,
+    });
+    return seller?.regionCode ?? null;
   }
 
   // ── Return requests ─────────────────────────────────────────────────────────
@@ -357,13 +366,19 @@ export class MarketplaceFulfillmentService {
   }
 
   // ── Coupons ─────────────────────────────────────────────────────────────────
-  async createCoupon(dto: any) {
-    // `_actor` rides in the payload from the gateway: a region-locked admin's
-    // coupon is issued for their market whatever the body names, and a seller's
-    // defaults to the market their store trades in. A coupon with no market is
-    // the platform's own (runs everywhere) — only a global admin issues one.
-    const { _actor: actor, ...fields } = (dto ?? {}) as any;
-    const regionCode = await this.couponMarketFor(actor, fields.regionCode ?? fields.region_code);
+  async createCoupon(dto: any, actor?: Actor, scope?: string) {
+    // `_actor` and `scope` ride in the payload from the gateway: a region-locked
+    // admin's coupon is issued for the market their token is locked to whatever
+    // the body names, and a seller's defaults to the market their store trades
+    // in. A coupon with no market is the platform's own (runs everywhere) —
+    // only a global admin issues one.
+    const { _actor, ...fields } = (dto ?? {}) as any;
+    const who: Actor | undefined = actor ?? _actor;
+    const regionCode = await this.couponMarketFor(
+      who,
+      fields.regionCode ?? fields.region_code,
+      scope,
+    );
     const existing = await this.couponRepo.findOne({ where: { code: fields.code?.toUpperCase() } });
     if (existing) throw new BadRequestException(`Coupon code '${fields.code}' already exists`);
     const entity = this.couponRepo.create({
@@ -596,19 +611,18 @@ export class MarketplaceFulfillmentService {
     return coupon;
   }
 
-  async updateCoupon(id: string, dto: any, actor?: Actor) {
+  async updateCoupon(id: string, dto: any, actor?: Actor, scope?: string) {
     const coupon = await this.couponOwner(id);
     // `sellerId` is NULL for a platform-wide coupon, so assertOwns denies it to
     // every seller and allows it only to an admin. That is the correct reading:
     // a campaign that spans the marketplace is not one seller's to edit.
     await this.assertOwns(actor, coupon.sellerId, 'coupon');
-    this.assertCouponInMarket(actor, coupon, 'edit this coupon');
-    if (
-      actor?.regionCode &&
-      dto?.regionCode &&
-      String(dto.regionCode).toUpperCase() !== actor.regionCode.toUpperCase()
-    ) {
-      this.denyMarket(actor, String(dto.regionCode).toUpperCase(), 'move this coupon');
+    assertInMarket(coupon.regionCode, scope, 'coupon', this.logger);
+    // And it may not be moved out of that market either. `regionCode` is not in
+    // COUPON_WRITABLE, so the move cannot happen — this refuses the attempt
+    // rather than silently dropping the field.
+    if (dto?.regionCode) {
+      assertInMarket(String(dto.regionCode), scope, 'coupon', this.logger);
     }
 
     const patch = MarketplaceFulfillmentService.pick(
@@ -627,10 +641,10 @@ export class MarketplaceFulfillmentService {
     return { success: true, id };
   }
 
-  async deleteCoupon(id: string, actor?: Actor) {
+  async deleteCoupon(id: string, actor?: Actor, scope?: string) {
     const coupon = await this.couponOwner(id);
     await this.assertOwns(actor, coupon.sellerId, 'coupon');
-    this.assertCouponInMarket(actor, coupon, 'deactivate this coupon');
+    assertInMarket(coupon.regionCode, scope, 'coupon', this.logger);
 
     await this.couponRepo.update(id, { isActive: false });
     return { success: true, id };
@@ -796,10 +810,15 @@ export class MarketplaceFulfillmentService {
     return out;
   }
 
-  async createVariant(productId: string, dto: any, actor?: Actor) {
+  async createVariant(productId: string, dto: any, actor?: Actor, scope?: string) {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
     await this.assertOwns(actor, product.seller_id, 'product');
+    // `assertOwns` short-circuits for every ADMIN role, so it answers "may this
+    // caller act on this seller's rows?" and never "is this seller in this
+    // caller's market?". Without the line below a QA-locked admin created,
+    // repriced, deleted and zeroed the stock of Indian listings (audit V4).
+    assertInMarket(await this.sellerMarket(product.seller_id), scope, 'variant', this.logger);
 
     const entity = this.variantRepo.create({
       ...MarketplaceFulfillmentService.pick(dto, MarketplaceFulfillmentService.VARIANT_WRITABLE),
@@ -827,9 +846,10 @@ export class MarketplaceFulfillmentService {
     return variant;
   }
 
-  async updateVariant(id: string, dto: any, actor?: Actor) {
+  async updateVariant(id: string, dto: any, actor?: Actor, scope?: string) {
     const { sellerId } = await this.variantSellerId(id);
     await this.assertOwns(actor, sellerId, 'variant');
+    assertInMarket(await this.sellerMarket(sellerId), scope, 'variant', this.logger);
 
     const patch = MarketplaceFulfillmentService.pick(
       dto,
@@ -843,9 +863,10 @@ export class MarketplaceFulfillmentService {
     return { success: true, id };
   }
 
-  async deleteVariant(id: string, actor?: Actor) {
+  async deleteVariant(id: string, actor?: Actor, scope?: string) {
     const { sellerId } = await this.variantSellerId(id);
     await this.assertOwns(actor, sellerId, 'variant');
+    assertInMarket(await this.sellerMarket(sellerId), scope, 'variant', this.logger);
 
     await this.variantRepo.update(id, { isActive: false });
     return { success: true, id };
@@ -855,9 +876,11 @@ export class MarketplaceFulfillmentService {
     id: string,
     dto: { quantity: number; operation: 'SET' | 'INCREMENT' | 'DECREMENT' },
     actor?: Actor,
+    scope?: string,
   ) {
     const { sellerId } = await this.variantSellerId(id);
     await this.assertOwns(actor, sellerId, 'variant');
+    assertInMarket(await this.sellerMarket(sellerId), scope, 'variant', this.logger);
 
     // Row-lock the variant so concurrent decrements can't oversell.
     const { newQty, sku, lowStockThreshold } = await this.dataSource.transaction(async (mgr) => {

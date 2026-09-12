@@ -2430,7 +2430,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'update_variant_stock' })
   tcpUpdateStock(@Payload() data: any) {
-    return this.fulfillment.updateVariantStock(data?.id, data, actorOf(data));
+    return this.fulfillment.updateVariantStock(data?.id, data, actorOf(data), data?.scope);
   }
 
   // ── Product Q&A ──────────────────────────────────────────────────────────
@@ -2772,17 +2772,21 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'create_coupon' })
   tcpCreateCoupon(@Payload() data: any) {
-    return this.fulfillment.createCoupon(data);
+    return this.fulfillment.createCoupon(data, actorOf(data), data?.scope);
   }
 
   @MessagePattern({ cmd: 'update_coupon' })
   tcpUpdateCoupon(@Payload() data: any) {
-    return this.fulfillment.updateCoupon(data?.id, data?.dto ?? data, actorOf(data));
+    return this.fulfillment.updateCoupon(data?.id, data?.dto ?? data, actorOf(data), data?.scope);
   }
 
   @MessagePattern({ cmd: 'delete_coupon' })
   tcpDeleteCoupon(@Payload() data: any) {
-    return this.fulfillment.deleteCoupon(typeof data === 'string' ? data : data?.id, actorOf(data));
+    return this.fulfillment.deleteCoupon(
+      typeof data === 'string' ? data : data?.id,
+      actorOf(data),
+      typeof data === 'string' ? undefined : data?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'get_coupon_usage' })
@@ -2796,7 +2800,12 @@ export class MarketplaceController {
   // ── Variant CRUD ───────────────────────────────────────────────────────────
   @MessagePattern({ cmd: 'create_variant' })
   tcpCreateVariant(@Payload() data: any) {
-    return this.fulfillment.createVariant(data?.productId, data?.dto ?? data, actorOf(data));
+    return this.fulfillment.createVariant(
+      data?.productId,
+      data?.dto ?? data,
+      actorOf(data),
+      data?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'get_variant_by_id' })
@@ -2806,7 +2815,7 @@ export class MarketplaceController {
 
   @MessagePattern({ cmd: 'update_variant' })
   tcpUpdateVariant(@Payload() data: any) {
-    return this.fulfillment.updateVariant(data?.id, data?.dto ?? data, actorOf(data));
+    return this.fulfillment.updateVariant(data?.id, data?.dto ?? data, actorOf(data), data?.scope);
   }
 
   @MessagePattern({ cmd: 'delete_variant' })
@@ -2814,6 +2823,7 @@ export class MarketplaceController {
     return this.fulfillment.deleteVariant(
       typeof data === 'string' ? data : data?.id,
       actorOf(data),
+      typeof data === 'string' ? undefined : data?.scope,
     );
   }
 
