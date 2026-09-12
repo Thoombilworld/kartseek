@@ -19,6 +19,29 @@ const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'FRANCHISE_ADMIN']);
 const SELLER_PARAMS = ['sellerId', 'id'] as const;
 
 /**
+ * Redis namespace for the guard's per-seller scope entry.
+ *
+ * v2 because the cached value gained the market. A warm v1 entry holds a bare
+ * owner id, which the v2 parser would read as `regionCode = null` — a locked
+ * admin refused on a seller that is in fact theirs. A new key namespace lets
+ * the two builds run side by side through a rollout.
+ */
+export const SELLER_SCOPE_CACHE_PREFIX = 'seller-scope:v2:';
+
+/**
+ * The guard's cache key for one seller.
+ *
+ * Exported, and used by the guard itself, so that the key exists in exactly one
+ * place: `AdminMarketplaceController.applySellerDecision` has to purge this
+ * entry when a decision lands, and when the prefix was private that site went
+ * on deleting `seller-owner:<id>` — a key this guard no longer writes — while
+ * its comment claimed the invalidation still happened.
+ */
+export function sellerScopeCacheKey(sellerId: string): string {
+  return `${SELLER_SCOPE_CACHE_PREFIX}${sellerId}`;
+}
+
+/**
  * SellerOwnershipGuard (API Gateway) — object-level authorisation for `/sellers/:sellerId/*`.
  *
  * The gateway's seller routes were authenticated and role-checked but never verified
@@ -47,13 +70,6 @@ export class SellerOwnershipGuard implements CanActivate {
 
   private static readonly LOOKUP_TIMEOUT_MS = 3000;
   private static readonly CACHE_TTL_SECONDS = 60;
-  /**
-   * v2 because the cached value gained the market. A warm v1 entry holds a bare
-   * owner id, which the v2 parser would read as `regionCode = null` — a locked
-   * admin refused on a seller that is in fact theirs. A new key namespace lets
-   * the two builds run side by side through a rollout.
-   */
-  private static readonly CACHE_PREFIX = 'seller-scope:v2:';
 
   constructor(
     @Inject('SELLER_SERVICE') private readonly sellerClient: ClientProxy,
@@ -121,7 +137,7 @@ export class SellerOwnershipGuard implements CanActivate {
   private async resolveSeller(
     sellerId: string,
   ): Promise<{ ownerId: string | null; regionCode: string | null }> {
-    const cacheKey = `${SellerOwnershipGuard.CACHE_PREFIX}${sellerId}`;
+    const cacheKey = sellerScopeCacheKey(sellerId);
 
     try {
       const cached = await this.redis.get(cacheKey);

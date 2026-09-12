@@ -1,11 +1,22 @@
 import {
-  Controller, Post, Get, Param, Body, Inject, Req, UseGuards,
-  UnauthorizedException, ForbiddenException, ServiceUnavailableException, HttpException,
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  Inject,
+  Req,
+  UseGuards,
+  UnauthorizedException,
+  ForbiddenException,
+  ServiceUnavailableException,
+  HttpException,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom, lastValueFrom, timeout } from 'rxjs';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@app/security';
+import { assertRecordInScope, marketScopeOf } from '../guards/market-scope';
 
 /**
  * Seller business registration — `POST /sellers/register`.
@@ -34,9 +45,41 @@ import { JwtAuthGuard } from '@app/security';
 export class PublicSellersController {
   private static readonly REGISTER_TIMEOUT_MS = 8000;
 
-  constructor(
-    @Inject('SELLER_SERVICE') private readonly sellerClient: ClientProxy,
-  ) {}
+  constructor(@Inject('SELLER_SERVICE') private readonly sellerClient: ClientProxy) {}
+
+  /**
+   * The owner and the market of one seller, read straight off the row.
+   *
+   * One lookup serves both tests on `application-status`: the owner for a
+   * seller, the market for a region-locked admin. `get_seller_owner` is the
+   * same RPC `SellerOwnershipGuard` uses, and it is used here in preference to
+   * the `countryCode` on the `get_seller_profile` projection, which is *not*
+   * authoritative: `SellerService.getSellerProfile` returns
+   * `seller.regionCode || countryCode`, falling back to whatever market the
+   * caller asked for, and it caches that projection under a region-scoped key
+   * shared with other callers. A seller with a NULL `region_code` could
+   * therefore be served a profile stamped with somebody else's market and pass
+   * a scope check it should fail. `region_code` from the seller row has no such
+   * fallback.
+   *
+   * A failed lookup throws 503 rather than resolving to nulls, which is this
+   * route's existing behaviour for the seller path and is still fail-closed:
+   * neither test can pass without an answer.
+   */
+  private async resolveSellerScope(
+    sellerId: string,
+  ): Promise<{ ownerId: string | null; regionCode: string | null }> {
+    try {
+      const res: any = await firstValueFrom(
+        this.sellerClient
+          .send({ cmd: 'get_seller_owner' }, { sellerId })
+          .pipe(timeout(PublicSellersController.REGISTER_TIMEOUT_MS)),
+      );
+      return { ownerId: res?.ownerId ?? null, regionCode: res?.regionCode ?? null };
+    } catch {
+      throw new ServiceUnavailableException('Application status is temporarily unavailable.');
+    }
+  }
 
   @Post('register')
   @ApiOperation({ summary: 'Register the signed-in user as a marketplace seller' })
@@ -104,7 +147,8 @@ export class PublicSellersController {
     let seller: any;
     try {
       seller = await firstValueFrom(
-        this.sellerClient.send({ cmd: 'get_seller_by_owner' }, { ownerId: userId })
+        this.sellerClient
+          .send({ cmd: 'get_seller_by_owner' }, { ownerId: userId })
           .pipe(timeout(PublicSellersController.REGISTER_TIMEOUT_MS)),
       );
     } catch {
@@ -146,6 +190,16 @@ export class PublicSellersController {
    * So this is a deliberately narrow read: lifecycle fields only, nothing
    * tradeable, and only for the owner (or an admin). It does not sit behind the
    * approval guard because being un-approved is the state it exists to report.
+   *
+   * An admin skips the ownership test — support reads applications they do not
+   * own — and that used to mean the market went untested as well, because this
+   * controller carries `JwtAuthGuard` alone and not `SellerOwnershipGuard`. So
+   * this was the one `/sellers/:sellerId/*` route left where a region-locked
+   * admin could read another market's applicant: business name, store slug,
+   * market and KYC state. The market rule is now applied here too, from the
+   * same `assertRecordInScope` the guard calls, so the copy and the audit log
+   * line are identical to every other regional denial — and it runs before the
+   * profile is loaded, so a denied admin never reads the row at all.
    */
   @Get(':sellerId/application-status')
   @ApiOperation({ summary: "Lifecycle status of the caller's own seller application" })
@@ -156,20 +210,18 @@ export class PublicSellersController {
     const role = String(req?.user?.role ?? '').toUpperCase();
     const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
 
-    if (!isAdmin) {
+    if (isAdmin) {
+      // An unlocked admin is global, so the lookup is paid for only when its
+      // answer can change the outcome — the same short-circuit the guard makes.
+      if (marketScopeOf(req).locked) {
+        const { regionCode } = await this.resolveSellerScope(sellerId);
+        assertRecordInScope(req, regionCode, 'this seller');
+      }
+    } else {
       // Ownership is checked against the same `owner_id` every other seller
       // route authorises on, so this cannot be used to read someone else's
       // application by naming its id.
-      let ownerId: string | null;
-      try {
-        const res: any = await firstValueFrom(
-          this.sellerClient.send({ cmd: 'get_seller_owner' }, { sellerId })
-            .pipe(timeout(PublicSellersController.REGISTER_TIMEOUT_MS)),
-        );
-        ownerId = res?.ownerId ?? null;
-      } catch {
-        throw new ServiceUnavailableException('Application status is temporarily unavailable.');
-      }
+      const { ownerId } = await this.resolveSellerScope(sellerId);
       if (!ownerId || ownerId !== userId) {
         throw new ForbiddenException('This application does not belong to you.');
       }
@@ -178,7 +230,8 @@ export class PublicSellersController {
     let profile: any;
     try {
       profile = await firstValueFrom(
-        this.sellerClient.send({ cmd: 'get_seller_profile' }, { sellerId })
+        this.sellerClient
+          .send({ cmd: 'get_seller_profile' }, { sellerId })
           .pipe(timeout(PublicSellersController.REGISTER_TIMEOUT_MS)),
       );
     } catch {

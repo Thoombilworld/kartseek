@@ -44,6 +44,7 @@ import {
   assertRecordInScope,
   refuseLockedAdmin,
 } from '../guards/market-scope';
+import { sellerScopeCacheKey } from '../guards/seller-ownership.guard';
 import { UserRole, rpcCatch } from '@app/common';
 import { User } from '../entities/user.entity';
 import { MARKETPLACE_PATTERNS } from '../contracts';
@@ -288,11 +289,20 @@ export class AdminMarketplaceController {
       );
     }
 
-    // Both guards cache per seller id; without this the old decision stays live
-    // for the remainder of the TTL.
+    // Every per-seller cache keyed on this id; without this the old decision
+    // stays live for the remainder of the TTL.
+    //
+    // Three keys, not two: `SellerOwnershipGuard` moved to `seller-scope:v2:`
+    // when its cached value gained the market, and for a while this site went on
+    // deleting only `seller-owner:` — a key the guard no longer writes — so the
+    // comment above claimed an invalidation that had quietly stopped happening.
+    // `seller-owner:` is still purged because `SellerOwnershipService` (the
+    // WebSocket room check) does still use it. The key is built by the guard's
+    // own exported helper so the two cannot drift apart again.
     await Promise.all([
       this.redis.del(`seller-approval:${sellerId}`).catch((): undefined => undefined),
       this.redis.del(`seller-owner:${sellerId}`).catch((): undefined => undefined),
+      this.redis.del(sellerScopeCacheKey(sellerId)).catch((): undefined => undefined),
     ]);
   }
 

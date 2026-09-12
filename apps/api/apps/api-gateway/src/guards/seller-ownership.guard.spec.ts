@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import { of } from 'rxjs';
-import { SellerOwnershipGuard } from './seller-ownership.guard';
+import { SellerOwnershipGuard, sellerScopeCacheKey } from './seller-ownership.guard';
 
 const ctx = (user: any, sellerId = 'seller-in') =>
   ({
@@ -69,11 +69,56 @@ describe('SellerOwnershipGuard market scope', () => {
     broken.client.send = vi.fn(() => {
       throw new Error('marketplace down');
     });
+    // The seller IS in QA, so an outage must not be mistaken for "wrong market"
+    // either: the denial has to be the unknown-market one, which is the branch
+    // that proves the lookup failure was treated as no answer rather than as a
+    // pass. Asserting only ForbiddenException cannot tell the two apart — the
+    // ownership branch throws the same class.
     await expect(broken.guard.canActivate(ctx(qaAdmin))).rejects.toThrow(ForbiddenException);
+    await expect(broken.guard.canActivate(ctx(qaAdmin))).rejects.toThrow(
+      'Your account is restricted to the QA market; this seller belongs to every market.',
+    );
+    // A failure is never cached, or the next request would inherit the outage.
+    expect(broken.redis.set).not.toHaveBeenCalled();
+    // And the seller path denies on the same failure, with the ownership copy.
+    await expect(broken.guard.canActivate(ctx(owner))).rejects.toThrow(
+      'You do not have access to this seller account.',
+    );
+  });
+
+  it('reads a warm cache entry instead of paying for the lookup', async () => {
+    const warm = build({ ownerId: 'owner-1', regionCode: 'IN' });
+    warm.redis.get = vi.fn(async () => 'owner-1|QA' as any);
+    await expect(warm.guard.canActivate(ctx(qaAdmin))).resolves.toBe(true);
+    await expect(warm.guard.canActivate(ctx(owner))).resolves.toBe(true);
+    expect(warm.client.send).not.toHaveBeenCalled();
+  });
+
+  it('parses a half-empty cache entry as a null, and denies on it', async () => {
+    // 'owner-1|' is a seller with an owner and no market: the seller passes,
+    // the locked admin does not.
+    const noMarket = build({ ownerId: 'owner-1', regionCode: 'QA' });
+    noMarket.redis.get = vi.fn(async () => 'owner-1|' as any);
+    await expect(noMarket.guard.canActivate(ctx(owner))).resolves.toBe(true);
+    await expect(noMarket.guard.canActivate(ctx(qaAdmin))).rejects.toThrow(
+      'this seller belongs to every market',
+    );
+
+    // '|QA' is the reverse: a market with no owner. The locked admin is in
+    // scope, the seller is not the owner of anything.
+    const noOwner = build({ ownerId: 'owner-1', regionCode: 'QA' });
+    noOwner.redis.get = vi.fn(async () => '|QA' as any);
+    await expect(noOwner.guard.canActivate(ctx(qaAdmin))).resolves.toBe(true);
+    await expect(noOwner.guard.canActivate(ctx(owner))).rejects.toThrow(
+      'You do not have access to this seller account.',
+    );
   });
 
   it('caches the market alongside the owner under a versioned key', async () => {
     await sub.guard.canActivate(ctx(owner));
     expect(sub.redis.set).toHaveBeenCalledWith('seller-scope:v2:seller-in', 'owner-1|IN', 60);
+    // The exported builder is the key the invalidation site deletes; if it ever
+    // drifts from what the guard writes, a seller decision stops taking effect.
+    expect(sellerScopeCacheKey('seller-in')).toBe('seller-scope:v2:seller-in');
   });
 });

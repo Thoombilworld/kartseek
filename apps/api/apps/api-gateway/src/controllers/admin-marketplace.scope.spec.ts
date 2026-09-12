@@ -8,6 +8,7 @@ import {
 import { of, throwError } from 'rxjs';
 import { AdminMarketplaceController } from './admin-marketplace.controller';
 import { MARKETPLACE_PATTERNS } from '../contracts/marketplace.patterns';
+import { sellerScopeCacheKey } from '../guards/seller-ownership.guard';
 
 const qaAdmin = { id: 'u-qa', role: 'ADMIN', regionCode: 'QA', regionLocked: true };
 const globalAdmin = { id: 'u-g', role: 'SUPER_ADMIN' };
@@ -18,17 +19,18 @@ function build(sendImpl: (cmd: any, payload: any) => any) {
   const noop = { send: vi.fn(() => of({})) };
   const wallet = { send: vi.fn(() => of({ balance: 10 })) };
   const loyalty = { send: vi.fn(() => of({ points: 10 })) };
+  const redis = {
+    get: vi.fn(async () => null),
+    set: vi.fn(async () => undefined),
+    // Returns a promise: the seller-decision path drops three cache keys with
+    // `.catch()` on the result, which a bare `vi.fn()` would make a TypeError.
+    del: vi.fn(async () => 1),
+    delPattern: vi.fn(async () => undefined),
+    getJson: vi.fn(async () => null),
+    setJson: vi.fn(async () => undefined),
+  };
   const ctrl = new AdminMarketplaceController(
-    {
-      get: vi.fn(async () => null),
-      set: vi.fn(async () => undefined),
-      // Returns a promise: the seller-decision path drops two cache keys with
-      // `.catch()` on the result, which a bare `vi.fn()` would make a TypeError.
-      del: vi.fn(async () => 1),
-      delPattern: vi.fn(async () => undefined),
-      getJson: vi.fn(async () => null),
-      setJson: vi.fn(async () => undefined),
-    } as any, // redis
+    redis as any, // redis
     { publish: vi.fn(async () => undefined) } as any, // kafka
     client as any, // marketplace
     { update: vi.fn(async () => undefined), findOne: vi.fn(async () => null) } as any, // userRepo
@@ -39,7 +41,7 @@ function build(sendImpl: (cmd: any, payload: any) => any) {
     noop as any, // order
     noop as any, // refund
   );
-  return { ctrl, client, wallet, loyalty };
+  return { ctrl, client, wallet, loyalty, redis };
 }
 
 describe('AdminMarketplaceController — sellers and products', () => {
@@ -103,6 +105,24 @@ describe('AdminMarketplaceController — sellers and products', () => {
     )!;
     expect(cmd).toBeTruthy();
     expect(payload).toMatchObject({ scope: 'QA', adminId: 'u-qa' });
+  });
+
+  it('purges the ownership guard’s scope cache on every seller decision', async () => {
+    // The guard caches `{owner, market}` under `seller-scope:v2:<id>` for 60 s.
+    // When that key was renamed from `seller-owner:<id>` this site kept deleting
+    // the old name, so a decision stopped invalidating the guard entirely and
+    // the comment claiming otherwise was false. The key comes from the guard's
+    // own exported builder, so the two cannot drift apart again.
+    const id = '11111111-1111-4111-8111-111111111111';
+    for (const decide of ['approveSeller', 'rejectSeller', 'suspendSeller', 'reactivateSeller']) {
+      const { ctrl, redis } = build(() => ({ success: true, sellerId: 's-1' }));
+      await (ctrl as any)[decide](req(globalAdmin), id, { reason: 'r' });
+      const deleted = redis.del.mock.calls.map((c: any[]) => c[0]);
+      expect(deleted, decide).toContain(sellerScopeCacheKey(id));
+      expect(deleted, decide).toContain(`seller-approval:${id}`);
+      // Still purged: SellerOwnershipService (the WebSocket room check) reads it.
+      expect(deleted, decide).toContain(`seller-owner:${id}`);
+    }
   });
 
   it('refuses a locked admin a product whose seller is in another market', async () => {
