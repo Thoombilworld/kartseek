@@ -9,6 +9,17 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * booting the service with auto-sync on and hoping; that is off by default in
  * every environment now (`src/grocery-service.module.ts`), and this is the schema.
  *
+ * ── It starts from nothing ─────────────────────────────────────────────────
+ *
+ * The first two statements are `CREATE SCHEMA IF NOT EXISTS "grocery"` and
+ * `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`, because a dedicated module
+ * database arrives with neither and every primary key below defaults to
+ * `uuid_generate_v4()`. Nothing else in a deploy creates them: dev
+ * `synchronize` used to create the schema, and IN3 turned that off. This works
+ * only because the ledger lives in `public.grocery_migrations` rather than inside
+ * this schema — TypeORM builds the ledger before the first `up()` runs, so a
+ * ledger in `grocery` would need the schema that this line creates.
+ *
  * ── Why every statement in up() is guarded ──────────────────────────────────
  *
  * The dev and staging databases already hold these tables — `synchronize` built
@@ -31,6 +42,16 @@ export class InitialGrocerySchema1786498100000 implements MigrationInterface {
   name = 'InitialGrocerySchema1786498100000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // The schema itself, and it has to be first. A dedicated module
+    // database is created empty and nothing else in the deploy creates
+    // this schema — dev `synchronize` used to, and IN3 turned that off.
+    // The ledger is deliberately `public.grocery_migrations` (see
+    // data-source.ts), so TypeORM does not need this schema to exist
+    // before this line runs.
+    await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "grocery"`);
+    // Every table below defaults its primary key to uuid_generate_v4().
+    // A plain postgres image does not ship this enabled.
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "grocery"."grocery_categories" ("id" character varying(128) NOT NULL, "name" character varying(128) NOT NULL, "emoji" character varying(8), "gradient" character varying(64), "description" text, "imageUrl" character varying, "translations" jsonb, "level" character varying(16) NOT NULL DEFAULT 'category', "parentId" character varying, "countries" jsonb, "sortOrder" integer NOT NULL DEFAULT '0', "isActive" boolean NOT NULL DEFAULT true, "productCount" integer NOT NULL DEFAULT '0', "subcategoryCount" integer NOT NULL DEFAULT '0', "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "PK_b03f112e4d3f816a1370f69a682" PRIMARY KEY ("id")); COMMENT ON COLUMN "grocery"."grocery_categories"."translations" IS 'Localized translations: { ar: { name, description }, ... }'; COMMENT ON COLUMN "grocery"."grocery_categories"."productCount" IS 'Denormalized product count for fast display'`,
     );
@@ -304,5 +325,13 @@ END $guard$`);
     await queryRunner.query(`DROP INDEX "grocery"."IDX_ab7be67fbea1e44e6615a76085"`);
     await queryRunner.query(`DROP TABLE "grocery"."grocery_items"`);
     await queryRunner.query(`DROP TABLE "grocery"."grocery_categories"`);
+    // The schema last, and only if nothing is left in it. RESTRICT
+    // raises dependent_objects_still_exist when it still holds objects
+    // this migration did not create — exactly the case where dropping it
+    // would take somebody else's tables with it.
+    await queryRunner.query(`DO $guard$ BEGIN
+  DROP SCHEMA IF EXISTS "grocery" RESTRICT;
+EXCEPTION WHEN dependent_objects_still_exist THEN NULL;
+END $guard$`);
   }
 }

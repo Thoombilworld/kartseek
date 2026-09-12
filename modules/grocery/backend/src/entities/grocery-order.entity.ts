@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { GroceryStore } from './grocery-store.entity';
 
@@ -24,17 +33,17 @@ export enum GroceryOrderStatus {
  * Key = current status, Value = set of allowed next statuses.
  */
 export const GROCERY_ORDER_STATUS_TRANSITIONS: Record<GroceryOrderStatus, GroceryOrderStatus[]> = {
-  [GroceryOrderStatus.PLACED]:             [GroceryOrderStatus.CONFIRMED, GroceryOrderStatus.CANCELLED],
-  [GroceryOrderStatus.CONFIRMED]:          [GroceryOrderStatus.PACKING, GroceryOrderStatus.CANCELLED],
-  [GroceryOrderStatus.PACKING]:            [GroceryOrderStatus.READY_FOR_PICKUP, GroceryOrderStatus.CANCELLED],
-  [GroceryOrderStatus.READY_FOR_PICKUP]:   [GroceryOrderStatus.OUT_FOR_DELIVERY],
-  [GroceryOrderStatus.OUT_FOR_DELIVERY]:   [GroceryOrderStatus.DELIVERED],
-  [GroceryOrderStatus.DELIVERED]:          [GroceryOrderStatus.REFUNDED],
-  [GroceryOrderStatus.CANCELLED]:          [],
-  [GroceryOrderStatus.REFUNDED]:           [],
+  [GroceryOrderStatus.PLACED]: [GroceryOrderStatus.CONFIRMED, GroceryOrderStatus.CANCELLED],
+  [GroceryOrderStatus.CONFIRMED]: [GroceryOrderStatus.PACKING, GroceryOrderStatus.CANCELLED],
+  [GroceryOrderStatus.PACKING]: [GroceryOrderStatus.READY_FOR_PICKUP, GroceryOrderStatus.CANCELLED],
+  [GroceryOrderStatus.READY_FOR_PICKUP]: [GroceryOrderStatus.OUT_FOR_DELIVERY],
+  [GroceryOrderStatus.OUT_FOR_DELIVERY]: [GroceryOrderStatus.DELIVERED],
+  [GroceryOrderStatus.DELIVERED]: [GroceryOrderStatus.REFUNDED],
+  [GroceryOrderStatus.CANCELLED]: [],
+  [GroceryOrderStatus.REFUNDED]: [],
 };
 
-@Entity('grocery_orders')
+@Entity({ name: 'grocery_orders', schema: 'grocery' })
 export class GroceryOrder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -138,7 +147,11 @@ export class GroceryOrder {
     lng?: number;
   };
 
-  @Column({ type: 'jsonb', nullable: true, comment: '{ date, startTime, endTime } for scheduled deliveries' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: '{ date, startTime, endTime } for scheduled deliveries',
+  })
   deliverySlot: {
     date: string;
     startTime: string;

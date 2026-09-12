@@ -1,7 +1,16 @@
-import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 
-@Entity('grocery_categories')
+@Entity({ name: 'grocery_categories', schema: 'grocery' })
 export class GroceryCategory {
   /**
    * Slug, namespaced by ancestors — e.g.
@@ -30,7 +39,11 @@ export class GroceryCategory {
   @Column({ type: 'varchar', nullable: true })
   imageUrl: string | null;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Localized translations: { ar: { name, description }, ... }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Localized translations: { ar: { name, description }, ... }',
+  })
   translations: Record<string, { name?: string; description?: string }>;
 
   // ── Self-referencing catalogue tree ────────────────────────────────────────

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { resolveGroceryDbConfig, GROCERY_MIGRATIONS_TABLE } from './src/db-config';
 import {
   GroceryBrand,
   GroceryProductVariant,
@@ -79,19 +80,29 @@ import {
  * procedure in `docs/guides/database-migrations.md` greps the generated SQL
  * for DROP before the file is kept. `apps/api/test/module-data-sources.spec.ts`
  * holds the rest of the shape.
+ *
+ * ── The schema, and where the ledger lives ──────────────────────────────────
+ *
+ * This DataSource deliberately declares **no `schema`**. TypeORM builds the
+ * migration ledger inside `options.schema` and does it *before* the first
+ * migration's `up()` runs, so with `schema: 'grocery'` a fresh dedicated database
+ * died on `CREATE TABLE "grocery"."migrations"` — schema does not exist — and no
+ * `CREATE SCHEMA` inside a migration could ever run early enough to help. The
+ * ledger is `public.grocery_migrations` (see `src/db-config.ts`), and
+ * `migrations/*-InitialGrocerySchema.ts` creates the schema as its first
+ * statement. Each entity names `schema: 'grocery'` itself, so `migration:generate`
+ * still diffs the right schema.
+ *
+ * Connection details come from `resolveGroceryDbConfig` — the same function
+ * `src/grocery-service.module.ts` calls, so the runner and the service cannot
+ * resolve to different databases. `GROCERY_DB_*` wins, `DB_*` answers next.
  */
 export const GroceryDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.GROCERY_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.GROCERY_DB_PORT || process.env.DB_PORT || 5432),
-  username: process.env.GROCERY_DB_USER || process.env.DB_USER || 'postgres',
-  password:
-    process.env.GROCERY_DB_PASSWORD ||
-    process.env.DB_PASSWORD ||
-    process.env.DB_PASS ||
-    'kartseek123',
-  database: process.env.GROCERY_DB_NAME || process.env.DB_NAME || 'kartseek_db',
-  schema: 'grocery',
+  // One resolver, shared with the service — see src/db-config.ts.
+  ...resolveGroceryDbConfig((key) => process.env[key]),
+  // No `schema` here on purpose: TypeORM would build the ledger inside it,
+  // before the first migration could create it. The entities name it instead.
   entities: [
     GroceryBrand,
     GroceryProductVariant,
@@ -112,7 +123,7 @@ export const GroceryDataSource = new DataSource({
     'migrations/1786498100000-InitialGrocerySchema.ts',
     'migrations/1786502400000-GrocerySettingsMarket.ts',
   ],
-  migrationsTableName: 'migrations',
+  migrationsTableName: GROCERY_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.
   migrationsTransactionMode: 'each',

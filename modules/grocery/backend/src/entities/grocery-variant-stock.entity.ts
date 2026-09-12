@@ -1,6 +1,4 @@
-import {
-  Entity, Column, PrimaryGeneratedColumn, Index, Unique, UpdateDateColumn,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index, Unique, UpdateDateColumn } from 'typeorm';
 
 /**
  * How much of one variant sits in one location.
@@ -14,7 +12,7 @@ import {
  * storefront reads it on every product query, and a sum across locations for
  * every variant on every page load is the wrong trade.
  */
-@Entity('grocery_variant_stock')
+@Entity({ name: 'grocery_variant_stock', schema: 'grocery' })
 @Unique(['variantId', 'warehouseId'])
 @Index(['warehouseId'])
 export class GroceryVariantStock {

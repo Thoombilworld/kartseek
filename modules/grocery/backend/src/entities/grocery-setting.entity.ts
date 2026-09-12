@@ -47,7 +47,7 @@ export const PLATFORM_MARKET = '*';
  * keeps them valid and readable as exactly what they were: the platform
  * defaults.
  */
-@Entity('grocery_settings')
+@Entity({ name: 'grocery_settings', schema: 'grocery' })
 export class GrocerySetting {
   @PrimaryColumn({ type: 'varchar', length: 64 })
   key: string;

@@ -1,9 +1,17 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { GroceryItem } from './grocery-item.entity';
 import { GroceryOrder } from './grocery-order.entity';
 
-@Entity('grocery_stores')
+@Entity({ name: 'grocery_stores', schema: 'grocery' })
 export class GroceryStore {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -14,7 +22,11 @@ export class GroceryStore {
   @Column({ type: 'varchar', unique: true, length: 128, nullable: true })
   slug: string | null;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Localized translations for store name and address' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Localized translations for store name and address',
+  })
   translations: Record<string, any> | null;
 
   @Column({ type: 'varchar', nullable: true, default: '' })
@@ -38,16 +50,32 @@ export class GroceryStore {
   @Column({ default: true })
   isHyperlocalDeliveryAvailable: boolean; // Flags for 10km radius delivery
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 10.0, comment: 'Delivery radius in km' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 10.0,
+    comment: 'Delivery radius in km',
+  })
   deliveryRadius: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Minimum order amount for delivery' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Minimum order amount for delivery',
+  })
   minOrderAmount: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   deliveryFee: number;
 
-  @Column({ type: 'jsonb', nullable: true, comment: '{ mon: { open: "06:00", close: "22:00" }, ... }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: '{ mon: { open: "06:00", close: "22:00" }, ... }',
+  })
   openingHours: Record<string, { open: string; close: string }>;
 
   @Column('simple-array', { nullable: true })

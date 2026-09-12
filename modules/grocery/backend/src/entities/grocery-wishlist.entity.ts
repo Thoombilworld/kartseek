@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index, Unique, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Index,
+  Unique,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { GroceryItem } from './grocery-item.entity';
 import { GroceryStore } from './grocery-store.entity';
@@ -17,7 +26,7 @@ import { GroceryStore } from './grocery-store.entity';
  * uuids, which is also why the service validates it with `requireId` rather
  * than `requireUuid`.
  */
-@Entity('grocery_wishlists')
+@Entity({ name: 'grocery_wishlists', schema: 'grocery' })
 @Unique(['customerId', 'productId'])
 export class GroceryWishlist {
   @PrimaryGeneratedColumn('uuid')

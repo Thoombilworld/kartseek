@@ -1,6 +1,10 @@
 import {
-  Entity, Column, PrimaryGeneratedColumn, Index,
-  CreateDateColumn, UpdateDateColumn,
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  Index,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 /**
@@ -15,7 +19,7 @@ import {
  * listings are moderated: `approvalStatus` gates whether it can be used, and
  * the request records who asked so the decision can be traced back.
  */
-@Entity('grocery_brands')
+@Entity({ name: 'grocery_brands', schema: 'grocery' })
 @Index(['approvalStatus'])
 export class GroceryBrand {
   @PrimaryGeneratedColumn('uuid')

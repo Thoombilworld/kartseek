@@ -22,6 +22,7 @@ import { GroceryDeliveryZone } from './entities/grocery-delivery-zone.entity';
 import { GrocerySetting } from './entities/grocery-setting.entity';
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
+import { resolveGroceryDbConfig, GROCERY_DB_SCHEMA } from './db-config';
 import {
   GroceryBrand,
   GroceryProductVariant,
@@ -80,33 +81,34 @@ const envSchema = buildEnvSchema({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres',
-        // Dedicated GROCERY_DB_* values win; anything unset falls back to the
-        // shared DB_* credentials, so pointing this module at its own database
-        // is config, not a code change, and a partial override is valid.
-        // `databaseCredentials` still supplies the password default and its
-        // production guard.
+        // Kept for the two things it owns: the SSL policy, and the production
+        // guard that refuses to boot with the built-in development password
+        // when NODE_ENV=production. The connection target itself is overridden
+        // immediately below, by the resolver the CLI runner shares.
         ...databaseCredentials(cfg),
-        host: cfg.get<string>('GROCERY_DB_HOST') || cfg.get<string>('DB_HOST', 'localhost'),
-        port: cfg.get<number>('GROCERY_DB_PORT') || cfg.get<number>('DB_PORT', 5432),
-        username: cfg.get<string>('GROCERY_DB_USER') || cfg.get<string>('DB_USER', 'postgres'),
-        password: cfg.get<string>('GROCERY_DB_PASSWORD') || databaseCredentials(cfg).password,
-        database: cfg.get<string>('GROCERY_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
-        // Fixed, not configurable: the same entity definitions must work whether
-        // this points at the dedicated instance or back at shared Postgres.
-        schema: 'grocery',
+        // One resolver, shared with data-source.ts — see ./db-config.ts. The
+        // two used to resolve these five values separately, with different
+        // last resorts, so without a module .env the CLI and the service
+        // reached different databases.
+        ...resolveGroceryDbConfig((key) => cfg.get<string>(key)),
+        // Fixed, not configurable: each entity names this schema too.
+        schema: GROCERY_DB_SCHEMA,
         entities: GROCERY_ENTITIES,
-        // Keyed on DB_SYNCHRONIZE so `validateDatabaseConfig()` and this factory
-        // read the same value, and wrapped so a boot with auto-sync on under
-        // NODE_ENV=production fails here rather than rewriting the schema
-        // (AUD2-070).
+        // Auto-sync is refused, everywhere, by two independent guards:
         //
-        // The default is OFF in every environment, development included. This
-        // module's schema comes from `migrations/` and nothing else (IN3): the
-        // previous `NODE_ENV !== 'production'` meant annotating an existing
-        // column made dev auto-sync DROP and recreate it, which emptied the
-        // column three times during the regional plan. Set DB_SYNCHRONIZE=true
-        // deliberately, for an afternoon of entity iteration, and never against
-        // a database whose rows matter.
+        //   • `validateDatabaseConfig()` in main.ts throws on DB_SYNCHRONIZE=true
+        //     in EVERY environment — there is no dev escape hatch, and asking
+        //     for one is a fatal boot, not a warning;
+        //   • `assertSynchronizeAllowed()` here throws when auto-sync survives
+        //     as far as this factory under NODE_ENV=production — reachable when
+        //     SKIP_DB=true has skipped the first guard (AUD2-070).
+        //
+        // The schema comes from `migrations/` and nothing else (IN3). To iterate
+        // on entities, generate a migration against a scratch database:
+        // `docs/guides/database-migrations.md`, "Generating a migration". The
+        // previous `NODE_ENV !== 'production'` default is why annotating an
+        // existing column made dev auto-sync DROP and recreate it — which
+        // emptied that column three times during the regional plan.
         synchronize: assertSynchronizeAllowed(
           cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
           cfg.get('NODE_ENV', 'development'),

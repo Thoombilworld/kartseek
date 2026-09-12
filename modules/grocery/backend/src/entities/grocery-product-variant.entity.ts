@@ -1,6 +1,12 @@
 import {
-  Entity, Column, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn,
-  CreateDateColumn, UpdateDateColumn,
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  Index,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { GroceryItem } from './grocery-item.entity';
@@ -18,7 +24,7 @@ import { GroceryItem } from './grocery-item.entity';
  * price and stock. The jsonb column is kept in step by the service so anything
  * still reading it keeps working while callers migrate.
  */
-@Entity('grocery_product_variants')
+@Entity({ name: 'grocery_product_variants', schema: 'grocery' })
 @Index(['productId'])
 export class GroceryProductVariant {
   @PrimaryGeneratedColumn('uuid')

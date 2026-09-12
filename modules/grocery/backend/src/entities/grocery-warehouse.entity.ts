@@ -1,6 +1,10 @@
 import {
-  Entity, Column, PrimaryGeneratedColumn, Index,
-  CreateDateColumn, UpdateDateColumn,
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  Index,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 /**
@@ -17,7 +21,7 @@ import {
  */
 export type WarehouseType = 'STORE_FRONT' | 'WAREHOUSE' | 'DARK_STORE';
 
-@Entity('grocery_warehouses')
+@Entity({ name: 'grocery_warehouses', schema: 'grocery' })
 @Index(['storeId'])
 export class GroceryWarehouse {
   @PrimaryGeneratedColumn('uuid')

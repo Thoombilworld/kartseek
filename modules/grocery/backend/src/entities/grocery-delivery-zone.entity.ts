@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 /**
  * A serviceable delivery area for the grocery vertical.
@@ -12,7 +19,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
  * Zones are matched to an order by pincode first (exact, cheap) and by radius from
  * the zone centre otherwise, which is why both are held here.
  */
-@Entity('grocery_delivery_zones')
+@Entity({ name: 'grocery_delivery_zones', schema: 'grocery' })
 export class GroceryDeliveryZone {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -38,7 +45,13 @@ export class GroceryDeliveryZone {
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
   centerLng: number | null;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 10, comment: 'Radius in km from the zone centre' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 10,
+    comment: 'Radius in km from the zone centre',
+  })
   radiusKm: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })

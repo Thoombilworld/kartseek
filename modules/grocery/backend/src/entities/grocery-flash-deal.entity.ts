@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { GroceryStore } from './grocery-store.entity';
 import { GroceryItem } from './grocery-item.entity';
@@ -13,7 +22,7 @@ export enum FlashDealStatus {
   REJECTED = 'rejected',
 }
 
-@Entity('grocery_flash_deals')
+@Entity({ name: 'grocery_flash_deals', schema: 'grocery' })
 export class GroceryFlashDeal {
   @PrimaryGeneratedColumn('uuid')
   id: string;

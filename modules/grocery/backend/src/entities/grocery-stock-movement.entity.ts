@@ -1,6 +1,4 @@
-import {
-  Entity, Column, PrimaryGeneratedColumn, Index, CreateDateColumn,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index, CreateDateColumn } from 'typeorm';
 
 /**
  * Every change to a variant's stock, and why.
@@ -32,7 +30,7 @@ export type StockMovementType =
   | 'TRANSFER_IN'
   | 'TRANSFER_OUT';
 
-@Entity('grocery_stock_movements')
+@Entity({ name: 'grocery_stock_movements', schema: 'grocery' })
 @Index(['variantId', 'createdAt'])
 @Index(['storeId', 'createdAt'])
 @Index(['batchNumber'])
