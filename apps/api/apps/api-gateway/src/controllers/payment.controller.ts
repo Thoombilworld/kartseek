@@ -12,17 +12,20 @@ import {
   HttpException,
   Logger,
   Optional,
+  Req,
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { of } from 'rxjs';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
+import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { PaymentAdminFilterDto } from '../dto/payment.dto';
 import { UserRole, rpcCatch } from '@app/common';
 
 // Inline payment methods by country (avoids @app/region JS build cache issues)
@@ -114,6 +117,23 @@ export class PaymentGatewayController {
       this.logger.error(`payment-service [${cmd}] failed: ${(error as Error)?.message}`);
       throw new HttpException('Payment service unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     }
+  }
+
+  /**
+   * The market this request may act in, as `scope` for payment-service.
+   *
+   * `market` is the filter to send; `scope` is set only when the caller is
+   * region-locked and is the proof the backend predicates on. A locked admin
+   * naming any other market is refused here, before payment-service is asked.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
   }
 
   /**
@@ -339,57 +359,91 @@ export class PaymentGatewayController {
     return this.send('void_invoice', { invoiceId, reason });
   }
 
-  // ── Settlement (Super Admin) ──────────────────────────────────────────────
+  // ── Settlement (admin) ────────────────────────────────────────────────────
+  //
+  // These six read money across markets. `payments.countryCode` and
+  // `invoices.countryCode` have existed the whole time and nothing read them,
+  // so `GET /payments/admin/settlement/seller/<IN-seller>` answered 200 for a
+  // QA-locked admin (audit V8). `filters` is no longer forwarded verbatim: a
+  // client-supplied `scope` key would otherwise reach payment-service as if the
+  // gateway had written it.
 
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.view')
   @Get('admin/dashboard')
-  @ApiOperation({ summary: 'Super Admin: Payment dashboard' })
-  async getDashboard(@Query() filters: any) {
-    return this.send('get_payment_dashboard', filters);
+  @ApiOperation({ summary: 'Payment dashboard for one market, or all' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getDashboard(@Req() req: any, @Query() filters: PaymentAdminFilterDto) {
+    const { scope, market } = this.scopeOf(req, filters?.countryCode, 'that dashboard');
+    return this.send('get_payment_dashboard', {
+      startDate: filters?.startDate,
+      endDate: filters?.endDate,
+      countryCode: market,
+      scope,
+    });
   }
 
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.view')
   @Get('admin/settlement/dashboard')
-  @ApiOperation({ summary: 'Super Admin: Settlement dashboard' })
-  async getSettlementDashboard(@Query() filters: any) {
-    return this.send('get_settlement_dashboard', filters);
+  @ApiOperation({ summary: 'Settlement dashboard for one market, or all' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getSettlementDashboard(@Req() req: any, @Query() filters: PaymentAdminFilterDto) {
+    const { scope, market } = this.scopeOf(req, filters?.countryCode, 'that dashboard');
+    return this.send('get_settlement_dashboard', {
+      startDate: filters?.startDate,
+      endDate: filters?.endDate,
+      countryCode: market,
+      scope,
+    });
   }
 
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.view')
   @Get('admin/settlement/seller/:sellerId')
-  @ApiOperation({ summary: 'Super Admin: Seller balance' })
-  async getSellerBalance(@Param('sellerId') sellerId: string) {
-    return this.send('get_seller_balance', { sellerId });
+  @ApiOperation({ summary: "A seller's settlement balance" })
+  async getSellerBalance(@Req() req: any, @Param('sellerId') sellerId: string) {
+    const { scope, market } = this.scopeOf(req, undefined, "that seller's balance");
+    return this.send('get_seller_balance', { sellerId, countryCode: market, scope });
   }
 
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.view')
   @Get('admin/settlement/franchise/:franchiseId')
-  @ApiOperation({ summary: 'Super Admin: Franchise earnings' })
-  async getFranchiseEarnings(@Param('franchiseId') franchiseId: string) {
-    return this.send('get_franchise_earnings', { franchiseId });
+  @ApiOperation({ summary: "A franchise's earnings" })
+  async getFranchiseEarnings(@Req() req: any, @Param('franchiseId') franchiseId: string) {
+    const { scope, market } = this.scopeOf(req, undefined, "that franchise's earnings");
+    return this.send('get_franchise_earnings', { franchiseId, countryCode: market, scope });
   }
 
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.reports')
   @Get('admin/revenue/:module')
-  @ApiOperation({ summary: 'Super Admin: Module revenue with daily trend' })
+  @ApiOperation({ summary: 'Module revenue with daily trend' })
+  @ApiQuery({ name: 'countryCode', required: false })
   async getModuleRevenue(
+    @Req() req: any,
     @Param('module') module: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
+    @Query('countryCode') countryCode?: string,
   ) {
-    return this.send('get_module_revenue', { module, startDate, endDate });
+    const { scope, market } = this.scopeOf(req, countryCode, 'that report');
+    return this.send('get_module_revenue', {
+      module,
+      startDate,
+      endDate,
+      countryCode: market,
+      scope,
+    });
   }
 
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.reports')
   @Get('admin/reconciliation/:date')
-  @ApiOperation({ summary: 'Super Admin: Daily reconciliation report' })
-  async getReconciliation(@Param('date') date: string) {
+  @ApiOperation({ summary: 'Daily reconciliation report' })
+  async getReconciliation(@Req() req: any, @Param('date') date: string) {
     // A calendar date, or a 400. Anything else reached payment-service, threw
     // inside the report query, and came back to the caller as a 500
     // "Payment service unavailable" for what was a typo in the URL.
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) {
       throw new BadRequestException('date must be a calendar date in YYYY-MM-DD form.');
     }
-    return this.send('get_reconciliation', { date });
+    const { scope, market } = this.scopeOf(req, undefined, 'that reconciliation');
+    return this.send('get_reconciliation', { date, countryCode: market, scope });
   }
 }

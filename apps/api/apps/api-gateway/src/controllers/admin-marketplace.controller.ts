@@ -776,7 +776,10 @@ export class AdminMarketplaceController {
   @Put('categories/:id')
   @ApiOperation({ summary: 'Update a category (PUT alias)' })
   async putCategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
-    this.scopeOf(req, undefined, 'that taxonomy');
+    // The rule, not a resolution of it. This called `this.scopeOf(req, ...)` and
+    // leaned on the handler below to refuse — a market resolved for a row that
+    // has none, stated in one place and enforced in another (audit I8).
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.updateCategory(req, id, data);
   }
 
@@ -817,7 +820,7 @@ export class AdminMarketplaceController {
   @Put('subcategories/:id')
   @ApiOperation({ summary: 'Update subcategory (PUT alias)' })
   async putSubcategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
-    this.scopeOf(req, undefined, 'that taxonomy');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.updateSubcategory(req, id, data);
   }
 
@@ -864,7 +867,7 @@ export class AdminMarketplaceController {
   @Put('attributes/:id')
   @ApiOperation({ summary: 'Update attribute (PUT alias)' })
   async putAttribute(@Req() req: any, @Param('id') id: string, @Body() data: any) {
-    this.scopeOf(req, undefined, 'that taxonomy');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.updateAttribute(req, id, data);
   }
 
@@ -908,7 +911,7 @@ export class AdminMarketplaceController {
   @Patch('brands/:id')
   @ApiOperation({ summary: 'Update a brand (PATCH alias)' })
   async patchBrand(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
-    this.scopeOf(req, undefined, 'that taxonomy');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.updateBrand(req, id, dto);
   }
 
@@ -3375,7 +3378,7 @@ export class AdminMarketplaceController {
   @Put('hsn-codes/:id')
   @ApiOperation({ summary: 'Update HSN code (PUT alias)' })
   async putHsnCode(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
-    this.scopeOf(req, undefined, 'that taxonomy');
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.updateHsnCode(req, id, dto);
   }
 

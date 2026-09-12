@@ -69,7 +69,7 @@ import {
   ForwardedBrandUpdateDto,
 } from '../dto/gateway.dto';
 import { MARKETPLACE_PATTERNS } from '../contracts';
-import { marketScopeOf, resolveMarket } from '../guards/market-scope';
+import { marketScopeOf, refuseLockedAdmin, resolveMarket } from '../guards/market-scope';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
 import { MarketplaceOrderService } from '../services/marketplace-order.service';
@@ -745,19 +745,37 @@ export class MarketplaceGatewayController {
     });
   }
 
+  // A product report has no market of its own: it is attributed through the
+  // reported listing to the seller who owns it, which is the same join every
+  // admin product list uses (`admin/admin.service.ts` adminProductQuery). Both
+  // routes were unscoped, so the moderation queue showed every market's reports
+  // to every regional admin and any of them could resolve any report (audit
+  // V10).
   @Get('admin/product-reports')
   @UseGuards(JwtAuthGuard, RolesGuard)
+  // No `perm:` key here, unlike the /admin controllers: this controller binds
+  // `RolesGuard` from `@app/guards`, which compares role names only, and its
+  // `@Roles` comes from `@app/decorators` typed `(...roles: UserRole[])`. A
+  // `perm:` entry would be inert — a padlock drawn on the route rather than a
+  // check — so the key is left off until this controller moves to the
+  // permission-aware pair. Recorded for the ledger.
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Product report queue (admin)' })
+  @ApiQuery({ name: 'country', required: false })
   async listProductReports(
+    @Req() req: any,
     @Query('status') status?: string,
     @Query('productId') productId?: string,
+    @Query('country') country?: string,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
+    const { scope, market } = this.scopeOf(req, country, 'those reports');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.LIST_PRODUCT_REPORTS, {
       status,
       productId,
+      region: market,
+      scope,
       page: +page,
       limit: +limit,
     });
@@ -777,6 +795,7 @@ export class MarketplaceGatewayController {
       status: body?.status,
       resolutionNote: body?.resolutionNote,
       adminId: req.user?.userId ?? req.user?.sub,
+      scope: this.scopeOf(req, undefined, 'that report').scope,
     });
   }
 
@@ -795,8 +814,18 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Assign pickup for a return (admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async assignReturnPickup(@Param('id') id: string, @Body() payload: ForwardedPickupDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ASSIGN_RETURN_PICKUP, { id, ...payload });
+  async assignReturnPickup(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: ForwardedPickupDto,
+  ) {
+    // `scope` last, after the spread: the pickup body is forwarded and a
+    // `scope` key in it would otherwise arrive looking like the gateway's.
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.ASSIGN_RETURN_PICKUP, {
+      id,
+      ...payload,
+      scope: this.scopeOf(req, undefined, 'that return').scope,
+    });
   }
 
   // ── Coupons ────────────────────────────────────────────────────────────────
@@ -939,9 +968,13 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Add a tracking event (seller/driver/admin)' })
   @UsePipes(ForwardingValidationPipe)
   async addTrackingEvent(@Req() req: any, @Body() payload: ForwardedTrackingEventDto) {
+    // A tracking event that reads DELIVERED settles the order, so it carries the
+    // caller's market like every other write: the order's own `region_code` is
+    // what the backend checks it against.
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.ADD_TRACKING_EVENT, {
       ...payload,
       _actor: this.actor(req),
+      scope: this.scopeOf(req, undefined, 'that order').scope,
     });
   }
 
@@ -1038,6 +1071,7 @@ export class MarketplaceGatewayController {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_LOW_STOCK_VARIANTS, {
       sellerId,
       _actor: this.actor(req),
+      scope: this.scopeOf(req, undefined, "that seller's stock").scope,
     });
   }
 
@@ -1133,22 +1167,33 @@ export class MarketplaceGatewayController {
   }
 
   // ── Delivery Assignments ───────────────────────────────────────────────────
-
+  //
+  // `delivery_assignments.region_code` has existed since the table did and
+  // nothing ever read it (audit V12): every route below was market-blind, so a
+  // regional admin listed, read, created and progressed shipments in every
+  // market — including the OTP verification that closes a delivery, and
+  // commission is charged at delivery.
   @Get('delivery-assignments')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DRIVER, UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'List delivery assignments' })
+  @ApiQuery({ name: 'country', required: false })
   async getDeliveryAssignments(
+    @Req() req: any,
     @Query('partnerId') partnerId?: string,
     @Query('orderId') orderId?: string,
     @Query('status') status?: string,
+    @Query('country') country?: string,
     @Query('page', ParsePagePipe) page = 1,
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
   ) {
+    const { scope, market } = this.scopeOf(req, country, 'those assignments');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_DELIVERY_ASSIGNMENTS, {
       partnerId,
       orderId,
       status,
+      region: market,
+      scope,
       page: +page,
       limit: +limit,
     });
@@ -1167,8 +1212,11 @@ export class MarketplaceGatewayController {
    * longer travels regardless; narrowing the roles closes the rest of the read
    * (partner name and phone, the customer's address through the order relation).
    */
-  async getDeliveryAssignmentById(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_DELIVERY_ASSIGNMENT_BY_ID, { id });
+  async getDeliveryAssignmentById(@Req() req: any, @Param('id') id: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_DELIVERY_ASSIGNMENT_BY_ID, {
+      id,
+      scope: this.scopeOf(req, undefined, 'that assignment').scope,
+    });
   }
 
   @Post('delivery-assignments')
@@ -1176,8 +1224,13 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create a delivery assignment (admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async createDeliveryAssignment(@Body() payload: ForwardedDeliveryAssignmentDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_DELIVERY_ASSIGNMENT, payload);
+  async createDeliveryAssignment(@Req() req: any, @Body() payload: ForwardedDeliveryAssignmentDto) {
+    // No `regionCode` from the body: the backend stamps it from the order being
+    // assigned. A market the caller chose is not a market.
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_DELIVERY_ASSIGNMENT, {
+      ...payload,
+      scope: this.scopeOf(req, undefined, 'that assignment').scope,
+    });
   }
 
   @Put('delivery-assignments/:id/status')
@@ -1185,18 +1238,31 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update delivery status (driver/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async updateDeliveryStatus(@Param('id') id: string, @Body() payload: ForwardedDeliveryStatusDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_DELIVERY_STATUS, { id, ...payload });
+  async updateDeliveryStatus(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: ForwardedDeliveryStatusDto,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_DELIVERY_STATUS, {
+      id,
+      ...payload,
+      scope: this.scopeOf(req, undefined, 'that assignment').scope,
+    });
   }
 
   @Post('delivery-assignments/:id/verify-otp')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Verify delivery OTP (driver/admin)' })
-  async verifyDeliveryOtp(@Param('id') id: string, @Body() payload: VerifyDeliveryOtpDto) {
+  async verifyDeliveryOtp(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: VerifyDeliveryOtpDto,
+  ) {
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.VERIFY_DELIVERY_OTP, {
       id,
       otp: payload.otp,
+      scope: this.scopeOf(req, undefined, 'that assignment').scope,
     });
   }
 
@@ -1205,8 +1271,16 @@ export class MarketplaceGatewayController {
   @Roles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Submit delivery proof (driver/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async submitDeliveryProof(@Param('id') id: string, @Body() payload: ForwardedDeliveryProofDto) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_DELIVERY_STATUS, { id, ...payload });
+  async submitDeliveryProof(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() payload: ForwardedDeliveryProofDto,
+  ) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_DELIVERY_STATUS, {
+      id,
+      ...payload,
+      scope: this.scopeOf(req, undefined, 'that assignment').scope,
+    });
   }
 
   @Get('delivery-assignments/partner/:partnerId/active')
@@ -2154,7 +2228,16 @@ export class MarketplaceGatewayController {
   @SellerModule('marketplace')
   @ApiOperation({ summary: 'Create a brand update (seller/admin)' })
   @UsePipes(ForwardingValidationPipe)
-  async createBrandUpdate(@Param('id') brandId: string, @Body() body: ForwardedBrandUpdateDto) {
+  async createBrandUpdate(
+    @Req() req: any,
+    @Param('id') brandId: string,
+    @Body() body: ForwardedBrandUpdateDto,
+  ) {
+    // A brand is platform content, shared by every market: there is no market
+    // to resolve for one, so a region-locked admin is refused outright rather
+    // than handed a market this row cannot have. Sellers are unaffected — only
+    // a locked staff account is refused.
+    refuseLockedAdmin(req, 'catalogue taxonomy', 'Catalogue taxonomy is managed globally.');
     return this.sendToMarketplace('brand_create_update', { brandId, ...body });
   }
 }
