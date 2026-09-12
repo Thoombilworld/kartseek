@@ -20,6 +20,8 @@ export interface ListParams {
   status?: string;
   category?: string;
   search?: string;
+  /** Named for the query param the gateway controller actually reads (`@Query('countryCode')`). */
+  countryCode?: string;
 }
 
 export interface ApiResponse<T> {
@@ -44,6 +46,7 @@ function buildQuery(params: ListParams): string {
   if (params.status) q.set('status', params.status);
   if (params.category) q.set('category', params.category);
   if (params.search) q.set('search', params.search);
+  if (params.countryCode) q.set('countryCode', params.countryCode);
   return q.toString() ? `?${q.toString()}` : '';
 }
 
@@ -51,7 +54,8 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
   try {
     const res = await fetch(url, { headers: getHeaders(), ...options });
     const json = await res.json();
-    if (!res.ok) return { success: false, data: null as T, error: json.message || 'Request failed' };
+    if (!res.ok)
+      return { success: false, data: null as T, error: json.message || 'Request failed' };
     return { success: true, data: json.data ?? json, message: json.message };
   } catch (err) {
     return { success: false, data: null as T, error: 'Network error — please check API Gateway' };
@@ -60,45 +64,73 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
 
 export const adminPharmacyApi = {
   // ── Dashboard ─────────────────────────────────────────────────
-  getDashboard: () => apiCall(`${BASE_URL}/admin/pharmacy/dashboard`),
+  getDashboard: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/dashboard${buildQuery({ countryCode })}`),
 
   // ── Stores (Pharmacies) ───────────────────────────────────────
-  getStores:     (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/pharmacy/stores${buildQuery(p)}`),
-  getStoreById:  (id: string)         => apiCall(`${BASE_URL}/admin/pharmacy/stores/${id}`),
-  approveStore:  (id: string)         => apiCall(`${BASE_URL}/admin/pharmacy/stores/${id}/approve`, { method: 'PATCH' }),
-  suspendStore:  (id: string, reason?: string) => apiCall(`${BASE_URL}/admin/pharmacy/stores/${id}/suspend`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
+  getStores: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/pharmacy/stores${buildQuery(p)}`),
+  getStoreById: (id: string) => apiCall(`${BASE_URL}/admin/pharmacy/stores/${id}`),
+  approveStore: (id: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/stores/${id}/approve`, { method: 'PATCH' }),
+  suspendStore: (id: string, reason?: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/stores/${id}/suspend`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
 
   // ── Products ──────────────────────────────────────────────────
-  getProducts:    (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/pharmacy/products${buildQuery(p)}`),
-  approveProduct: (id: string)         => apiCall(`${BASE_URL}/admin/pharmacy/products/${id}/approve`, { method: 'PATCH' }),
+  getProducts: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/products${buildQuery(p)}`),
+  approveProduct: (id: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/products/${id}/approve`, { method: 'PATCH' }),
 
   // ── Orders ────────────────────────────────────────────────────
   getOrders: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/pharmacy/orders${buildQuery(p)}`),
 
   // ── Prescriptions ─────────────────────────────────────────────
-  getPrescriptions:    (page = 1) => apiCall(`${BASE_URL}/admin/pharmacy/prescriptions?page=${page}`),
-  approvePrescription: (id: string) => apiCall(`${BASE_URL}/admin/pharmacy/prescriptions/${id}/approve`, { method: 'PATCH' }),
+  getPrescriptions: (page = 1, countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/prescriptions${buildQuery({ page, countryCode })}`),
+  approvePrescription: (id: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/prescriptions/${id}/approve`, { method: 'PATCH' }),
 
   // ── Verifications ─────────────────────────────────────────────
-  getVerifications: (status?: string) => apiCall(`${BASE_URL}/admin/pharmacy/verifications${status ? `?status=${status}` : ''}`),
-  verifyLicense:    (id: string, data: { verified: boolean; notes?: string }) => apiCall(`${BASE_URL}/admin/pharmacy/verifications/${id}/verify`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getVerifications: (status?: string, countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/verifications${buildQuery({ status, countryCode })}`),
+  verifyLicense: (id: string, data: { verified: boolean; notes?: string }) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/verifications/${id}/verify`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   // ── Categories ────────────────────────────────────────────────
-  getCategories:  ()                                    => apiCall(`${BASE_URL}/admin/pharmacy/categories`),
-  createCategory: (data: { name: string; icon?: string }) => apiCall(`${BASE_URL}/admin/pharmacy/categories`, { method: 'POST', body: JSON.stringify(data) }),
+  // Taxonomy, not a market's own list — no countryCode: `/admin/pharmacy/categories`
+  // carries no `@Query('countryCode')` on the gateway.
+  getCategories: () => apiCall(`${BASE_URL}/admin/pharmacy/categories`),
+  createCategory: (data: { name: string; icon?: string }) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/categories`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   // ── Commissions ───────────────────────────────────────────────
-  getCommissions: () => apiCall(`${BASE_URL}/admin/pharmacy/commissions`),
+  getCommissions: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/commissions${buildQuery({ countryCode })}`),
 
   // ── Settlements ───────────────────────────────────────────────
-  getSettlements: (page = 1) => apiCall(`${BASE_URL}/admin/pharmacy/settlements?page=${page}`),
+  getSettlements: (page = 1, countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/settlements${buildQuery({ page, countryCode })}`),
 
   // ── Reports ───────────────────────────────────────────────────
-  getReports: (period = '30d') => apiCall(`${BASE_URL}/admin/pharmacy/reports?period=${period}`),
+  getReports: (period = '30d', countryCode?: string) =>
+    apiCall(
+      `${BASE_URL}/admin/pharmacy/reports?period=${period}${countryCode ? `&countryCode=${encodeURIComponent(countryCode)}` : ''}`,
+    ),
 
   // ── Settings ──────────────────────────────────────────────────
-  getSettings:    ()                              => apiCall(`${BASE_URL}/admin/pharmacy/settings`),
-  updateSettings: (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/pharmacy/settings`, { method: 'POST', body: JSON.stringify(data) }),
+  getSettings: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/settings${buildQuery({ countryCode })}`),
+  updateSettings: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/pharmacy/settings`, { method: 'POST', body: JSON.stringify(data) }),
 } as const;
 
 export default adminPharmacyApi;

@@ -182,7 +182,8 @@ export const adminMarketplaceApi = {
     api.patch(`/admin/marketplace/products/${id}/suspend`, { adminId }),
 
   // ── Featured Products ─────────────────────────────────────────
-  getFeaturedProducts: () => api.get<Paginated<any>>('/admin/marketplace/featured'),
+  getFeaturedProducts: (country?: string) =>
+    api.get<Paginated<any>>('/admin/marketplace/featured', country ? { country } : undefined),
 
   addFeaturedProduct: (dto: { productId: string; section?: string; sortOrder?: number }) =>
     api.post('/admin/marketplace/featured', dto),
@@ -212,7 +213,11 @@ export const adminMarketplaceApi = {
   getSellers: (params?: { search?: string; status?: string; country?: string }) =>
     api.get<Paginated<AdminSeller>>('/admin/marketplace/sellers', params as any),
 
-  getPendingSellers: () => api.get<Paginated<any>>('/admin/marketplace/sellers/pending'),
+  getPendingSellers: (country?: string) =>
+    api.get<Paginated<any>>(
+      '/admin/marketplace/sellers/pending',
+      country ? { country } : undefined,
+    ),
 
   // ── Regional approvals ────────────────────────────────────────
   // Scoped by market: approving a Qatari seller means checking a Commercial
@@ -245,13 +250,13 @@ export const adminMarketplaceApi = {
   getSellerHealth: (id: string) => api.get<any>(`/admin/marketplace/sellers/${id}/health`),
 
   // ── Orders ────────────────────────────────────────────────────
-  getOrders: (params?: { userId?: string; sellerId?: string; status?: string }) =>
+  getOrders: (params?: { userId?: string; sellerId?: string; status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/orders', params as any),
 
   getOrderById: (id: string) => api.get<any>('/admin/marketplace/orders/' + id),
 
   // ── Returns Adjudication ──────────────────────────────────────
-  getReturns: (params?: { sellerId?: string; status?: string; page?: number }) =>
+  getReturns: (params?: { sellerId?: string; status?: string; page?: number; country?: string }) =>
     api.get<Paginated<AdminReturn>>('/admin/marketplace/returns', params as any),
 
   approveReturn: (id: string) => api.post(`/admin/marketplace/returns/${id}/approve`),
@@ -260,14 +265,14 @@ export const adminMarketplaceApi = {
     api.post(`/admin/marketplace/returns/${id}/reject`, dto),
 
   // ── Refunds Adjudication ──────────────────────────────────────
-  getRefunds: (params?: { sellerId?: string; status?: string; page?: number }) =>
+  getRefunds: (params?: { sellerId?: string; status?: string; page?: number; country?: string }) =>
     api.get<Paginated<AdminRefund>>('/admin/marketplace/refunds', params as any),
 
   approveRefund: (id: string, adminId: string) =>
     api.post(`/admin/marketplace/refunds/${id}/approve`, { adminId }),
 
   // ── Payments ──────────────────────────────────────────────────
-  getPayments: (params?: { status?: string }) =>
+  getPayments: (params?: { status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/payouts', params as any),
 
   // ── Banners ───────────────────────────────────────────────────
@@ -306,7 +311,7 @@ export const adminMarketplaceApi = {
     api.patch('/admin/marketplace/flash-deals/nominations/' + nominationId + '/reject', { reason }),
 
   // ── Campaigns ─────────────────────────────────────────────────
-  getCampaigns: (params?: { status?: string }) =>
+  getCampaigns: (params?: { status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/campaigns', params as any),
 
   createCampaign: (dto: any) => api.post('/admin/marketplace/campaigns', dto),
@@ -337,21 +342,26 @@ export const adminMarketplaceApi = {
   updatePromotion: (id: string, dto: any) => api.put('/admin/marketplace/promotions/' + id, dto),
 
   // ── Commissions ───────────────────────────────────────────────
-  getCommissions: () => api.get<Paginated<any>>('/admin/marketplace/commissions'),
+  // commission-service keeps its records in Redis with no market column
+  // (R11) — the route accepts `country` and stays refused for a locked
+  // admin regardless; a global admin's filter narrows nothing today, and is
+  // passed through for the day a datastore exists to narrow it against.
+  getCommissions: (country?: string) =>
+    api.get<Paginated<any>>('/admin/marketplace/commissions', country ? { country } : undefined),
 
   createCommission: (dto: any) => api.post('/admin/marketplace/commissions', dto),
 
   updateCommission: (id: string, dto: any) => api.put('/admin/marketplace/commissions/' + id, dto),
 
   // ── Payouts ───────────────────────────────────────────────────
-  getPayouts: (params?: { status?: string }) =>
+  getPayouts: (params?: { status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/payouts', params as any),
 
   processPayout: (id: string, data?: any) =>
     api.post(`/admin/marketplace/payouts/${id}/process`, data),
 
   // ── Reviews ───────────────────────────────────────────────────
-  getReviews: (params?: { status?: string; rating?: number }) =>
+  getReviews: (params?: { status?: string; rating?: number; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/reviews', params as any),
 
   flagReview: (id: string, reason: string) =>
@@ -360,19 +370,20 @@ export const adminMarketplaceApi = {
   hideReview: (id: string) => api.patch(`/admin/marketplace/reviews/${id}/hide`),
 
   // ── Complaints ────────────────────────────────────────────────
-  getComplaints: (params?: { status?: string }) =>
+  getComplaints: (params?: { status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/complaints', params as any),
 
   updateComplaint: (id: string, dto: any) => api.put('/admin/marketplace/complaints/' + id, dto),
 
   // ── QA Moderation ─────────────────────────────────────────────
-  getQAItems: (params?: { status?: string }) =>
+  getQAItems: (params?: { status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/qa-moderation', params as any),
 
   moderateQAItem: (id: string, dto: any) => api.put('/admin/marketplace/qa-moderation/' + id, dto),
 
   // ── Notifications ─────────────────────────────────────────────
-  getNotifications: () => api.get<Paginated<any>>('/admin/marketplace/notifications'),
+  getNotifications: (country?: string) =>
+    api.get<Paginated<any>>('/admin/marketplace/notifications', country ? { country } : undefined),
 
   sendNotification: (dto: any) => api.post('/admin/marketplace/notifications', dto),
 
@@ -413,7 +424,8 @@ export const adminMarketplaceApi = {
   updateHsnCode: (id: string, dto: any) => api.put('/admin/marketplace/hsn-codes/' + id, dto),
 
   // ── Bank Offers ───────────────────────────────────────────────
-  getBankOffers: () => api.get<Paginated<any>>('/admin/marketplace/bank-offers'),
+  getBankOffers: (country?: string) =>
+    api.get<Paginated<any>>('/admin/marketplace/bank-offers', country ? { country } : undefined),
 
   createBankOffer: (dto: any) => api.post('/admin/marketplace/bank-offers', dto),
 
@@ -422,7 +434,11 @@ export const adminMarketplaceApi = {
   deleteBankOffer: (id: string) => api.delete('/admin/marketplace/bank-offers/' + id),
 
   // ── Exchange Offers ───────────────────────────────────────────
-  getExchangeOffers: () => api.get<Paginated<any>>('/admin/marketplace/exchange-offers'),
+  getExchangeOffers: (country?: string) =>
+    api.get<Paginated<any>>(
+      '/admin/marketplace/exchange-offers',
+      country ? { country } : undefined,
+    ),
 
   createExchangeOffer: (dto: any) => api.post('/admin/marketplace/exchange-offers', dto),
 
@@ -430,7 +446,7 @@ export const adminMarketplaceApi = {
     api.put('/admin/marketplace/exchange-offers/' + id, dto),
 
   // ── Sponsored Products ────────────────────────────────────────
-  getSponsoredProducts: (params?: { status?: string }) =>
+  getSponsoredProducts: (params?: { status?: string; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/sponsored', params as any),
 
   updateSponsoredProduct: (id: string, dto: any) =>
@@ -443,13 +459,14 @@ export const adminMarketplaceApi = {
     api.put('/admin/marketplace/compliance/countries/' + code, dto),
 
   // ── Customers ─────────────────────────────────────────────────
-  getCustomers: (params?: { search?: string; page?: number }) =>
+  getCustomers: (params?: { search?: string; page?: number; country?: string }) =>
     api.get<Paginated<any>>('/admin/marketplace/customers', params as any),
 
   blockCustomer: (id: string) => api.put('/admin/marketplace/customers/' + id + '/block'),
 
   // ── Seller Wallets ────────────────────────────────────────────
-  getSellerWallets: () => api.get<Paginated<any>>('/admin/marketplace/seller-wallets'),
+  getSellerWallets: (country?: string) =>
+    api.get<Paginated<any>>('/admin/marketplace/seller-wallets', country ? { country } : undefined),
 
   adjustSellerWallet: (id: string, dto: { amount: number; reason: string }) =>
     api.post(`/admin/marketplace/seller-wallets/${id}/adjust`, dto),

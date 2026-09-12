@@ -20,6 +20,8 @@ export interface ListParams {
   status?: string;
   specialty?: string;
   search?: string;
+  /** Named for the query param the gateway controller actually reads (`@Query('countryCode')`). */
+  countryCode?: string;
 }
 
 export interface ApiResponse<T> {
@@ -44,6 +46,7 @@ function buildQuery(params: ListParams): string {
   if (params.status) q.set('status', params.status);
   if (params.specialty) q.set('specialty', params.specialty);
   if (params.search) q.set('search', params.search);
+  if (params.countryCode) q.set('countryCode', params.countryCode);
   return q.toString() ? `?${q.toString()}` : '';
 }
 
@@ -51,7 +54,8 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
   try {
     const res = await fetch(url, { headers: getHeaders(), ...options });
     const json = await res.json();
-    if (!res.ok) return { success: false, data: null as T, error: json.message || 'Request failed' };
+    if (!res.ok)
+      return { success: false, data: null as T, error: json.message || 'Request failed' };
     return { success: true, data: json.data ?? json, message: json.message };
   } catch (err) {
     return { success: false, data: null as T, error: 'Network error — please check API Gateway' };
@@ -60,35 +64,53 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
 
 export const adminDoctorApi = {
   // ── Dashboard ─────────────────────────────────────────────────
-  getDashboard: () => apiCall(`${BASE_URL}/admin/doctor/dashboard`),
+  getDashboard: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/doctor/dashboard${buildQuery({ countryCode })}`),
 
   // ── Clinics ───────────────────────────────────────────────────
-  getClinics:     (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/doctor/clinics${buildQuery(p)}`),
-  getClinicById:  (id: string)         => apiCall(`${BASE_URL}/admin/doctor/clinics/${id}`),
-  approveClinic:  (id: string)         => apiCall(`${BASE_URL}/admin/doctor/clinics/${id}/approve`, { method: 'PATCH' }),
+  getClinics: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/doctor/clinics${buildQuery(p)}`),
+  getClinicById: (id: string) => apiCall(`${BASE_URL}/admin/doctor/clinics/${id}`),
+  approveClinic: (id: string) =>
+    apiCall(`${BASE_URL}/admin/doctor/clinics/${id}/approve`, { method: 'PATCH' }),
 
   // ── Doctors ───────────────────────────────────────────────────
-  getDoctors:      (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/doctor/doctors${buildQuery(p)}`),
-  getDoctorById:   (id: string)         => apiCall(`${BASE_URL}/admin/doctor/doctors/${id}`),
-  verifyDoctor:    (id: string, data: { verified: boolean; notes?: string }) => apiCall(`${BASE_URL}/admin/doctor/doctors/${id}/verify`, { method: 'PATCH', body: JSON.stringify(data) }),
-  suspendDoctor:   (id: string, reason: string) => apiCall(`${BASE_URL}/admin/doctor/doctors/${id}/suspend`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
+  getDoctors: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/doctor/doctors${buildQuery(p)}`),
+  getDoctorById: (id: string) => apiCall(`${BASE_URL}/admin/doctor/doctors/${id}`),
+  verifyDoctor: (id: string, data: { verified: boolean; notes?: string }) =>
+    apiCall(`${BASE_URL}/admin/doctor/doctors/${id}/verify`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  suspendDoctor: (id: string, reason: string) =>
+    apiCall(`${BASE_URL}/admin/doctor/doctors/${id}/suspend`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
 
   // ── Appointments ──────────────────────────────────────────────
-  getAppointments: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/doctor/appointments${buildQuery(p)}`),
+  getAppointments: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/doctor/appointments${buildQuery(p)}`),
 
   // ── Specialties ───────────────────────────────────────────────
-  getSpecialties:   ()                                                  => apiCall(`${BASE_URL}/admin/doctor/specialties`),
-  createSpecialty:  (data: { name: string; icon?: string; description?: string }) => apiCall(`${BASE_URL}/admin/doctor/specialties`, { method: 'POST', body: JSON.stringify(data) }),
+  getSpecialties: () => apiCall(`${BASE_URL}/admin/doctor/specialties`),
+  createSpecialty: (data: { name: string; icon?: string; description?: string }) =>
+    apiCall(`${BASE_URL}/admin/doctor/specialties`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Prescriptions ─────────────────────────────────────────────
-  getPrescriptions: (page = 1) => apiCall(`${BASE_URL}/admin/doctor/prescriptions?page=${page}`),
+  getPrescriptions: (page = 1, countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/doctor/prescriptions${buildQuery({ page, countryCode })}`),
 
   // ── Reports ───────────────────────────────────────────────────
-  getReports: (period = '30d') => apiCall(`${BASE_URL}/admin/doctor/reports?period=${period}`),
+  getReports: (period = '30d', countryCode?: string) =>
+    apiCall(
+      `${BASE_URL}/admin/doctor/reports?period=${period}${countryCode ? `&countryCode=${encodeURIComponent(countryCode)}` : ''}`,
+    ),
 
   // ── Settings ──────────────────────────────────────────────────
-  getSettings:    ()                              => apiCall(`${BASE_URL}/admin/doctor/settings`),
-  updateSettings: (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/doctor/settings`, { method: 'POST', body: JSON.stringify(data) }),
+  getSettings: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/doctor/settings${buildQuery({ countryCode })}`),
+  updateSettings: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/doctor/settings`, { method: 'POST', body: JSON.stringify(data) }),
 } as const;
 
 export default adminDoctorApi;

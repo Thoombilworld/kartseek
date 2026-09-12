@@ -126,7 +126,8 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
 export const adminMarketplaceApi = {
-  getDashboard: () => apiCall(`${BASE_URL}/admin/marketplace/dashboard`),
+  getDashboard: (country?: string) =>
+    apiCall(`${BASE_URL}/admin/marketplace/dashboard${buildQuery({ country })}`),
 
   // ── Sellers ────────────────────────────────────────────────────────────────
   getSellers: (p: ListParams = {}) =>

@@ -20,6 +20,8 @@ export interface ListParams {
   status?: string;
   type?: string;
   search?: string;
+  /** Named for the query param the gateway controller actually reads (`@Query('countryCode')`). */
+  countryCode?: string;
 }
 
 export interface ApiResponse<T> {
@@ -44,6 +46,7 @@ function buildQuery(params: ListParams): string {
   if (params.status) q.set('status', params.status);
   if (params.type) q.set('type', params.type);
   if (params.search) q.set('search', params.search);
+  if (params.countryCode) q.set('countryCode', params.countryCode);
   return q.toString() ? `?${q.toString()}` : '';
 }
 
@@ -51,7 +54,8 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
   try {
     const res = await fetch(url, { headers: getHeaders(), ...options });
     const json = await res.json();
-    if (!res.ok) return { success: false, data: null as T, error: json.message || 'Request failed' };
+    if (!res.ok)
+      return { success: false, data: null as T, error: json.message || 'Request failed' };
     return { success: true, data: json.data ?? json, message: json.message };
   } catch (err) {
     return { success: false, data: null as T, error: 'Network error — please check API Gateway' };
@@ -60,39 +64,68 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
 
 export const adminRestaurantApi = {
   // ── Dashboard ─────────────────────────────────────────────────
-  getDashboard: () => apiCall(`${BASE_URL}/admin/restaurant/dashboard`),
+  getDashboard: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/dashboard${buildQuery({ countryCode })}`),
 
   // ── Restaurants ───────────────────────────────────────────────
-  getRestaurants:     (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/restaurant/restaurants${buildQuery(p)}`),
-  getRestaurantById:  (id: string)         => apiCall(`${BASE_URL}/admin/restaurant/restaurants/${id}`),
-  approveRestaurant:  (id: string)         => apiCall(`${BASE_URL}/admin/restaurant/restaurants/${id}/approve`, { method: 'PATCH' }),
-  suspendRestaurant:  (id: string, reason?: string) => apiCall(`${BASE_URL}/admin/restaurant/restaurants/${id}/suspend`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
+  getRestaurants: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/restaurant/restaurants${buildQuery(p)}`),
+  getRestaurantById: (id: string) => apiCall(`${BASE_URL}/admin/restaurant/restaurants/${id}`),
+  approveRestaurant: (id: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/restaurants/${id}/approve`, { method: 'PATCH' }),
+  suspendRestaurant: (id: string, reason?: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/restaurants/${id}/suspend`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
 
   // ── Orders ────────────────────────────────────────────────────
   getOrders: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/restaurant/orders${buildQuery(p)}`),
 
   // ── Menu Approvals ────────────────────────────────────────────
-  getMenuApprovals: (page = 1) => apiCall(`${BASE_URL}/admin/restaurant/menu-approvals?page=${page}`),
-  approveMenuItem:  (id: string) => apiCall(`${BASE_URL}/admin/restaurant/menu-approvals/${id}/approve`, { method: 'PATCH' }),
+  getMenuApprovals: (page = 1, countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/menu-approvals${buildQuery({ page, countryCode })}`),
+  approveMenuItem: (id: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/menu-approvals/${id}/approve`, { method: 'PATCH' }),
 
   // ── Complaints ────────────────────────────────────────────────
-  getComplaints:    (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/restaurant/complaints${buildQuery(p)}`),
-  resolveComplaint: (id: string, resolution: string) => apiCall(`${BASE_URL}/admin/restaurant/complaints/${id}/resolve`, { method: 'PATCH', body: JSON.stringify({ resolution }) }),
+  getComplaints: (p: ListParams = {}) =>
+    apiCall(`${BASE_URL}/admin/restaurant/complaints${buildQuery(p)}`),
+  resolveComplaint: (id: string, resolution: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/complaints/${id}/resolve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resolution }),
+    }),
 
   // ── Commissions ───────────────────────────────────────────────
-  getCommissions:    () => apiCall(`${BASE_URL}/admin/restaurant/commissions`),
-  updateCommissions: (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/restaurant/commissions`, { method: 'POST', body: JSON.stringify(data) }),
+  getCommissions: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/commissions${buildQuery({ countryCode })}`),
+  updateCommissions: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/restaurant/commissions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   // ── Cuisines ──────────────────────────────────────────────────
-  getCuisines:   ()                                 => apiCall(`${BASE_URL}/admin/restaurant/cuisines`),
-  createCuisine: (data: { name: string; icon?: string }) => apiCall(`${BASE_URL}/admin/restaurant/cuisines`, { method: 'POST', body: JSON.stringify(data) }),
+  // Taxonomy, not a market's own list — no countryCode on the gateway route.
+  getCuisines: () => apiCall(`${BASE_URL}/admin/restaurant/cuisines`),
+  createCuisine: (data: { name: string; icon?: string }) =>
+    apiCall(`${BASE_URL}/admin/restaurant/cuisines`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   // ── Analytics ─────────────────────────────────────────────────
-  getAnalytics: (period = '7d') => apiCall(`${BASE_URL}/admin/restaurant/analytics?period=${period}`),
+  getAnalytics: (period = '7d', countryCode?: string) =>
+    apiCall(
+      `${BASE_URL}/admin/restaurant/analytics?period=${period}${countryCode ? `&countryCode=${encodeURIComponent(countryCode)}` : ''}`,
+    ),
 
   // ── Zones ─────────────────────────────────────────────────────
-  getZones:   ()                              => apiCall(`${BASE_URL}/admin/restaurant/zones`),
-  createZone: (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/restaurant/zones`, { method: 'POST', body: JSON.stringify(data) }),
+  getZones: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/restaurant/zones${buildQuery({ countryCode })}`),
+  createZone: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/restaurant/zones`, { method: 'POST', body: JSON.stringify(data) }),
 } as const;
 
 export default adminRestaurantApi;

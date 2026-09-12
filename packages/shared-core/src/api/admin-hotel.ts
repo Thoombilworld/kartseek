@@ -20,6 +20,8 @@ export interface ListParams {
   status?: string;
   hotelId?: string;
   search?: string;
+  /** Named for the query param the gateway controller actually reads (`@Query('countryCode')`). */
+  countryCode?: string;
 }
 
 export interface ApiResponse<T> {
@@ -44,6 +46,7 @@ function buildQuery(params: ListParams): string {
   if (params.status) q.set('status', params.status);
   if (params.hotelId) q.set('hotelId', params.hotelId);
   if (params.search) q.set('search', params.search);
+  if (params.countryCode) q.set('countryCode', params.countryCode);
   return q.toString() ? `?${q.toString()}` : '';
 }
 
@@ -51,7 +54,8 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
   try {
     const res = await fetch(url, { headers: getHeaders(), ...options });
     const json = await res.json();
-    if (!res.ok) return { success: false, data: null as T, error: json.message || 'Request failed' };
+    if (!res.ok)
+      return { success: false, data: null as T, error: json.message || 'Request failed' };
     return { success: true, data: json.data ?? json, message: json.message };
   } catch (err) {
     return { success: false, data: null as T, error: 'Network error — please check API Gateway' };
@@ -60,39 +64,57 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
 
 export const adminHotelApi = {
   // ── Dashboard ─────────────────────────────────────────────────
-  getDashboard: () => apiCall(`${BASE_URL}/admin/hotel/dashboard`),
+  getDashboard: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/hotel/dashboard${buildQuery({ countryCode })}`),
 
   // ── Hotels ────────────────────────────────────────────────────
-  getHotels:      (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/hotel/hotels${buildQuery(p)}`),
-  getHotelById:   (id: string)         => apiCall(`${BASE_URL}/admin/hotel/hotels/${id}`),
-  approveHotel:   (id: string)         => apiCall(`${BASE_URL}/admin/hotel/hotels/${id}/approve`, { method: 'PATCH' }),
-  suspendHotel:   (id: string, reason?: string) => apiCall(`${BASE_URL}/admin/hotel/hotels/${id}/suspend`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
+  getHotels: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/hotel/hotels${buildQuery(p)}`),
+  getHotelById: (id: string) => apiCall(`${BASE_URL}/admin/hotel/hotels/${id}`),
+  approveHotel: (id: string) =>
+    apiCall(`${BASE_URL}/admin/hotel/hotels/${id}/approve`, { method: 'PATCH' }),
+  suspendHotel: (id: string, reason?: string) =>
+    apiCall(`${BASE_URL}/admin/hotel/hotels/${id}/suspend`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
 
   // ── Rooms ─────────────────────────────────────────────────────
   getRooms: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/hotel/rooms${buildQuery(p)}`),
 
   // ── Bookings ──────────────────────────────────────────────────
-  getBookings:    (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/hotel/bookings${buildQuery(p)}`),
-  getBookingById: (id: string)         => apiCall(`${BASE_URL}/admin/hotel/bookings/${id}`),
+  getBookings: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/hotel/bookings${buildQuery(p)}`),
+  getBookingById: (id: string) => apiCall(`${BASE_URL}/admin/hotel/bookings/${id}`),
 
   // ── Amenities ─────────────────────────────────────────────────
-  getAmenities:   ()                                                    => apiCall(`${BASE_URL}/admin/hotel/amenities`),
-  createAmenity:  (data: { name: string; icon?: string; category?: string }) => apiCall(`${BASE_URL}/admin/hotel/amenities`, { method: 'POST', body: JSON.stringify(data) }),
+  getAmenities: () => apiCall(`${BASE_URL}/admin/hotel/amenities`),
+  createAmenity: (data: { name: string; icon?: string; category?: string }) =>
+    apiCall(`${BASE_URL}/admin/hotel/amenities`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Pricing ───────────────────────────────────────────────────
-  getPricing:    ()                              => apiCall(`${BASE_URL}/admin/hotel/pricing`),
-  updatePricing: (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/hotel/pricing`, { method: 'POST', body: JSON.stringify(data) }),
+  getPricing: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/hotel/pricing${buildQuery({ countryCode })}`),
+  updatePricing: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/hotel/pricing`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Reports ───────────────────────────────────────────────────
-  getReports: (period = '30d') => apiCall(`${BASE_URL}/admin/hotel/reports?period=${period}`),
+  getReports: (period = '30d', countryCode?: string) =>
+    apiCall(
+      `${BASE_URL}/admin/hotel/reports?period=${period}${countryCode ? `&countryCode=${encodeURIComponent(countryCode)}` : ''}`,
+    ),
 
   // ── Reviews ───────────────────────────────────────────────────
-  getReviews:      (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/hotel/reviews${buildQuery(p)}`),
-  moderateReview:  (id: string, data: { action: 'approve' | 'remove'; reason?: string }) => apiCall(`${BASE_URL}/admin/hotel/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getReviews: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/hotel/reviews${buildQuery(p)}`),
+  moderateReview: (id: string, data: { action: 'approve' | 'remove'; reason?: string }) =>
+    apiCall(`${BASE_URL}/admin/hotel/reviews/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   // ── Settings ──────────────────────────────────────────────────
-  getSettings:    ()                              => apiCall(`${BASE_URL}/admin/hotel/settings`),
-  updateSettings: (data: Record<string, unknown>) => apiCall(`${BASE_URL}/admin/hotel/settings`, { method: 'POST', body: JSON.stringify(data) }),
+  getSettings: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/hotel/settings${buildQuery({ countryCode })}`),
+  updateSettings: (data: Record<string, unknown>) =>
+    apiCall(`${BASE_URL}/admin/hotel/settings`, { method: 'POST', body: JSON.stringify(data) }),
 } as const;
 
 export default adminHotelApi;

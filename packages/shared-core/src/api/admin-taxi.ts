@@ -241,7 +241,8 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<ApiRespon
 
 export const adminTaxiApi = {
   // ── Dashboard ─────────────────────────────────────────────────
-  getDashboard: () => apiCall(`${BASE_URL}/admin/taxi/dashboard`),
+  getDashboard: (countryCode?: string) =>
+    apiCall(`${BASE_URL}/admin/taxi/dashboard${buildQuery({ countryCode })}`),
 
   // ── Vendors ───────────────────────────────────────────────────
   getVendors: (p: ListParams = {}) => apiCall(`${BASE_URL}/admin/taxi/vendors${buildQuery(p)}`),
