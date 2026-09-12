@@ -67,9 +67,12 @@ describe('migration classification', () => {
   });
 
   it('sends the main-database migrations to the main-database DataSource', () => {
-    // The seven whose `up()` targets `users`, `order.orders`, `admin.*`, or a
-    // table the gateway process itself owns. `data-source.main.ts` carries the
-    // reasoning per file; this is the list that reasoning produced.
+    // The nine whose `up()` targets `users`, `order.orders`, `admin.*`, or a
+    // table the gateway process itself owns — `payout.*` included: the
+    // marketplace database has no `payout` schema, so those tables were applied
+    // to this one and a migration altering them has to run from here.
+    // `data-source.main.ts` carries the reasoning per file; this is the list
+    // that reasoning produced.
     expect(main.sort()).toEqual(
       [
         '1785600000000-UserSellerType.ts',
@@ -80,6 +83,7 @@ describe('migration classification', () => {
         '1786501900000-UserMarketBackfill.ts',
         '1786502000000-UserBanColumns.ts',
         '1786502100000-SeoOverrides.ts',
+        '1786502200000-MoneyPathMarket.ts',
       ].sort(),
     );
   });

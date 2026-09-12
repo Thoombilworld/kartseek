@@ -51,7 +51,7 @@ import { DataSource } from 'typeorm';
  * a shadow table there.
  *
  * ═══════════════════════════════════════════════════════════════════════════
- * CLASSIFICATION — why these seven files and no others
+ * CLASSIFICATION — why these nine files and no others
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Every migration's `up()` was read and assigned to exactly one DataSource.
@@ -112,6 +112,18 @@ import { DataSource } from 'typeorm';
  *       `page_layouts`/`static_pages` above, so it belongs here rather than
  *       with the marketplace list (R7, audit V17 / H-12).
  *
+ *   1786502200000-MoneyPathMarket
+ *       `payout.payouts.region_code` and `payout.seller_wallets.region_code`,
+ *       backfilled from `marketplace.sellers`. Both tables live in **this**
+ *       database — checked, not assumed: the marketplace database has no
+ *       `payout` schema at all, so the wallet/payout tables that
+ *       `1785840000000-WalletAndPayoutSchemas` is credited with below were
+ *       applied here. A migration altering them therefore has to run from this
+ *       DataSource, whatever list created them. It reads `marketplace.sellers`
+ *       in the backfill, the same cross-schema read `1785600000000-
+ *       UserSellerType` already does: harmless where the two databases are one
+ *       instance, a no-op backfill where they are split (R11, AUD2-089).
+ *
  * Deliberately **not** here, though each mentions `users` somewhere:
  *
  *   1719468000000-InitialMarketplaceSchema
@@ -161,6 +173,7 @@ export const MainDataSource = new DataSource({
     'migrations/1786501900000-UserMarketBackfill.ts',
     'migrations/1786502000000-UserBanColumns.ts',
     'migrations/1786502100000-SeoOverrides.ts',
+    'migrations/1786502200000-MoneyPathMarket.ts',
   ],
   migrationsTableName: 'migrations',
   // One transaction per migration, matching the marketplace DataSource: a
