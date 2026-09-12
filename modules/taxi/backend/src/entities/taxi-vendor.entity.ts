@@ -17,7 +17,7 @@ import { TaxiDocumentEntity } from './taxi-document.entity';
  * Vendors register under a specific country, manage a fleet of drivers,
  * and are subject to Super Admin approval for all lifecycle transitions.
  */
-@Entity('taxi_vendors')
+@Entity({ name: 'taxi_vendors', schema: 'taxi' })
 export class TaxiVendorEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

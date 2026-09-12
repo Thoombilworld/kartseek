@@ -9,6 +9,17 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * booting the service with auto-sync on and hoping; that is off by default in
  * every environment now (`src/taxi-service.module.ts`), and this is the schema.
  *
+ * ── It starts from nothing ─────────────────────────────────────────────────
+ *
+ * The first two statements are `CREATE SCHEMA IF NOT EXISTS "taxi"` and
+ * `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`, because a dedicated module
+ * database arrives with neither and every primary key below defaults to
+ * `uuid_generate_v4()`. Nothing else in a deploy creates them: dev
+ * `synchronize` used to create the schema, and IN3 turned that off. This works
+ * only because the ledger lives in `public.taxi_migrations` rather than inside
+ * this schema — TypeORM builds the ledger before the first `up()` runs, so a
+ * ledger in `taxi` would need the schema that this line creates.
+ *
  * ── Why every statement in up() is guarded ──────────────────────────────────
  *
  * The dev and staging databases already hold these tables — `synchronize` built
@@ -31,6 +42,16 @@ export class InitialTaxiSchema1786498600000 implements MigrationInterface {
   name = 'InitialTaxiSchema1786498600000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // The schema itself, and it has to be first. A dedicated module
+    // database is created empty and nothing else in the deploy creates
+    // this schema — dev `synchronize` used to, and IN3 turned that off.
+    // The ledger is deliberately `public.taxi_migrations` (see
+    // data-source.ts), so TypeORM does not need this schema to exist
+    // before this line runs.
+    await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "taxi"`);
+    // Every table below defaults its primary key to uuid_generate_v4().
+    // A plain postgres image does not ship this enabled.
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await queryRunner.query(`DO $guard$ BEGIN
   CREATE TYPE "taxi"."taxi_drivers_status_enum" AS ENUM('pending', 'onboarding', 'active', 'suspended', 'blocked', 'rejected');
 EXCEPTION WHEN duplicate_object THEN NULL;
@@ -327,5 +348,13 @@ END $guard$`);
     await queryRunner.query(`DROP INDEX "taxi"."IDX_8eca486c5f357ddd89f1cbda77"`);
     await queryRunner.query(`DROP TABLE "taxi"."taxi_drivers"`);
     await queryRunner.query(`DROP TYPE "taxi"."taxi_drivers_status_enum"`);
+    // The schema last, and only if nothing is left in it. RESTRICT
+    // raises dependent_objects_still_exist when it still holds objects
+    // this migration did not create — exactly the case where dropping it
+    // would take somebody else's tables with it.
+    await queryRunner.query(`DO $guard$ BEGIN
+  DROP SCHEMA IF EXISTS "taxi" RESTRICT;
+EXCEPTION WHEN dependent_objects_still_exist THEN NULL;
+END $guard$`);
   }
 }

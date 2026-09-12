@@ -1,6 +1,12 @@
 import {
-  Entity, PrimaryColumn, Column, CreateDateColumn,
-  UpdateDateColumn, ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { TaxiDriverEntity } from './taxi-driver.entity';
@@ -19,7 +25,7 @@ import { TaxiDriverEntity } from './taxi-driver.entity';
  *   SEARCHING_DRIVER → DRIVER_ASSIGNED → DRIVER_ARRIVING → DRIVER_ARRIVED
  *   → RIDE_STARTED → RIDE_COMPLETED / CANCELLED
  */
-@Entity('taxi_rides')
+@Entity({ name: 'taxi_rides', schema: 'taxi' })
 export class TaxiRideEntity {
   @PrimaryColumn({ length: 50 })
   id: string;
@@ -66,10 +72,18 @@ export class TaxiRideEntity {
   @Column({
     type: 'enum',
     enum: [
-      'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING',
-      'DRIVER_ARRIVED', 'RIDE_STARTED', 'RIDE_COMPLETED',
-      'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_DRIVER', 'CANCELLED_BY_ADMIN',
-      'NO_DRIVER_FOUND', 'EXPIRED', 'PAYMENT_FAILED',
+      'SEARCHING_DRIVER',
+      'DRIVER_ASSIGNED',
+      'DRIVER_ARRIVING',
+      'DRIVER_ARRIVED',
+      'RIDE_STARTED',
+      'RIDE_COMPLETED',
+      'CANCELLED_BY_CUSTOMER',
+      'CANCELLED_BY_DRIVER',
+      'CANCELLED_BY_ADMIN',
+      'NO_DRIVER_FOUND',
+      'EXPIRED',
+      'PAYMENT_FAILED',
     ],
     default: 'SEARCHING_DRIVER',
   })
@@ -176,8 +190,14 @@ export class TaxiRideEntity {
   // ── Computed ──────────────────────────────────────────────────────────────
 
   get isActive(): boolean {
-    return !['RIDE_COMPLETED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_DRIVER',
-      'CANCELLED_BY_ADMIN', 'NO_DRIVER_FOUND', 'EXPIRED', 'PAYMENT_FAILED',
+    return ![
+      'RIDE_COMPLETED',
+      'CANCELLED_BY_CUSTOMER',
+      'CANCELLED_BY_DRIVER',
+      'CANCELLED_BY_ADMIN',
+      'NO_DRIVER_FOUND',
+      'EXPIRED',
+      'PAYMENT_FAILED',
     ].includes(this.status);
   }
 

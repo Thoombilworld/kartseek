@@ -1,6 +1,4 @@
-import {
-  Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 /**
  * TaxiCountryConfigEntity — Per-country taxi module configuration.
@@ -17,7 +15,7 @@ import {
  * The countryCode (ISO 3166-1 alpha-2) is the primary key.
  * Each country gets exactly one configuration row.
  */
-@Entity('taxi_country_configs')
+@Entity({ name: 'taxi_country_configs', schema: 'taxi' })
 export class TaxiCountryConfigEntity {
   @PrimaryColumn({ length: 5 })
   countryCode: string;
@@ -67,14 +65,20 @@ export class TaxiCountryConfigEntity {
    * Required document types for vendor registration.
    * e.g. ['business_license', 'tax_certificate', 'insurance_certificate']
    */
-  @Column({ type: 'jsonb', default: '["business_license", "tax_certificate", "insurance_certificate"]' })
+  @Column({
+    type: 'jsonb',
+    default: '["business_license", "tax_certificate", "insurance_certificate"]',
+  })
   requiredVendorDocuments: string[];
 
   /**
    * Required document types for driver onboarding.
    * e.g. ['driving_license', 'vehicle_registration', 'vehicle_insurance', 'identity_proof']
    */
-  @Column({ type: 'jsonb', default: '["driving_license", "vehicle_registration", "vehicle_insurance", "identity_proof"]' })
+  @Column({
+    type: 'jsonb',
+    default: '["driving_license", "vehicle_registration", "vehicle_insurance", "identity_proof"]',
+  })
   requiredDriverDocuments: string[];
 
   // ─── Financial Configuration ──────────────────────────────────────────────
@@ -93,7 +97,10 @@ export class TaxiCountryConfigEntity {
 
   // ─── Surge Pricing ────────────────────────────────────────────────────────
 
-  @Column({ type: 'jsonb', default: '{"minMultiplier": 1.0, "maxMultiplier": 3.0, "autoEnabled": true}' })
+  @Column({
+    type: 'jsonb',
+    default: '{"minMultiplier": 1.0, "maxMultiplier": 3.0, "autoEnabled": true}',
+  })
   surgeLimits: {
     minMultiplier: number;
     maxMultiplier: number;

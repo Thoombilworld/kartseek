@@ -1,6 +1,10 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 /**
@@ -14,7 +18,7 @@ import {
  * Vendors and drivers can view their payout history but cannot
  * initiate or modify payouts directly.
  */
-@Entity('taxi_payout_records')
+@Entity({ name: 'taxi_payout_records', schema: 'taxi' })
 export class TaxiPayoutRecordEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

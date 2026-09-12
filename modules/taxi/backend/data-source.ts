@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { resolveTaxiDbConfig, TAXI_MIGRATIONS_TABLE } from './src/db-config';
 import {
   TaxiVendorEntity,
   TaxiDriverEntity,
@@ -55,16 +56,29 @@ import {
  * these scripts from this directory**. Run them from the repository root and
  * `TAXI_DB_*` is unset, `DB_*` answers instead, and the migration lands in the
  * shared database's `taxi` schema.
+ *
+ * ── The schema, and where the ledger lives ──────────────────────────────────
+ *
+ * This DataSource deliberately declares **no `schema`**. TypeORM builds the
+ * migration ledger inside `options.schema` and does it *before* the first
+ * migration's `up()` runs, so with `schema: 'taxi'` a fresh dedicated database
+ * died on `CREATE TABLE "taxi"."migrations"` — schema does not exist — and no
+ * `CREATE SCHEMA` inside a migration could ever run early enough to help. The
+ * ledger is `public.taxi_migrations` (see `src/db-config.ts`), and
+ * `migrations/*-InitialTaxiSchema.ts` creates the schema as its first
+ * statement. Each entity names `schema: 'taxi'` itself, so `migration:generate`
+ * still diffs the right schema.
+ *
+ * Connection details come from `resolveTaxiDbConfig` — the same function
+ * `src/taxi-service.module.ts` calls, so the runner and the service cannot
+ * resolve to different databases. `TAXI_DB_*` wins, `DB_*` answers next.
  */
 export const TaxiDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.TAXI_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.TAXI_DB_PORT || process.env.DB_PORT || 5439),
-  username: process.env.TAXI_DB_USER || process.env.DB_USER || 'taxi_user',
-  password:
-    process.env.TAXI_DB_PASSWORD || process.env.DB_PASSWORD || process.env.DB_PASS || 'postgres',
-  database: process.env.TAXI_DB_NAME || process.env.DB_NAME || 'kartseek_taxi',
-  schema: 'taxi',
+  // One resolver, shared with the service — see src/db-config.ts.
+  ...resolveTaxiDbConfig((key) => process.env[key]),
+  // No `schema` here on purpose: TypeORM would build the ledger inside it,
+  // before the first migration could create it. The entities name it instead.
   entities: [
     TaxiVendorEntity,
     TaxiDriverEntity,
@@ -77,7 +91,7 @@ export const TaxiDataSource = new DataSource({
     TaxiRideEntity,
   ],
   migrations: ['migrations/1786498600000-InitialTaxiSchema.ts'],
-  migrationsTableName: 'migrations',
+  migrationsTableName: TAXI_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.
   migrationsTransactionMode: 'each',

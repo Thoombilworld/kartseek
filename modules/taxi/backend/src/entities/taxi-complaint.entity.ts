@@ -1,6 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { TaxiDriverEntity } from './taxi-driver.entity';
@@ -13,7 +19,7 @@ import { TaxiVendorEntity } from './taxi-vendor.entity';
  * Links to the trip, driver, and optionally the vendor for accountability tracing.
  * Super Admins use this to enforce disciplinary actions per local regulations.
  */
-@Entity('taxi_complaints')
+@Entity({ name: 'taxi_complaints', schema: 'taxi' })
 export class TaxiComplaintEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -49,11 +55,20 @@ export class TaxiComplaintEntity {
   @Column({
     type: 'enum',
     enum: [
-      'safety_incident', 'fare_dispute', 'driver_behavior',
-      'vehicle_condition', 'route_deviation', 'overcharging',
-      'payment_issue', 'harassment', 'discrimination',
-      'damage_to_property', 'lost_item', 'cancellation_abuse',
-      'no_show', 'other',
+      'safety_incident',
+      'fare_dispute',
+      'driver_behavior',
+      'vehicle_condition',
+      'route_deviation',
+      'overcharging',
+      'payment_issue',
+      'harassment',
+      'discrimination',
+      'damage_to_property',
+      'lost_item',
+      'cancellation_abuse',
+      'no_show',
+      'other',
     ],
   })
   @Index()
@@ -128,18 +143,33 @@ export class TaxiComplaintEntity {
     paymentMethod: string;
     tripDate: string;
     tripDuration: number; // minutes
-    tripDistance: number;  // km
+    tripDistance: number; // km
   };
 
   // ─── Resolution Workflow ────────────────────────────────────────────────────
 
   @Column({
     type: 'enum',
-    enum: ['open', 'investigating', 'pending_response', 'escalated', 'resolved', 'dismissed', 'closed'],
+    enum: [
+      'open',
+      'investigating',
+      'pending_response',
+      'escalated',
+      'resolved',
+      'dismissed',
+      'closed',
+    ],
     default: 'open',
   })
   @Index()
-  status: 'open' | 'investigating' | 'pending_response' | 'escalated' | 'resolved' | 'dismissed' | 'closed';
+  status:
+    | 'open'
+    | 'investigating'
+    | 'pending_response'
+    | 'escalated'
+    | 'resolved'
+    | 'dismissed'
+    | 'closed';
 
   @Column({ type: 'varchar', nullable: true })
   assignedTo: string | null;

@@ -1,6 +1,11 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 
 /**
@@ -12,7 +17,7 @@ import {
  * Documents are required based on per-country configuration
  * (see TaxiCountryConfigEntity.requiredVendorDocuments / requiredDriverDocuments).
  */
-@Entity('taxi_documents')
+@Entity({ name: 'taxi_documents', schema: 'taxi' })
 export class TaxiDocumentEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

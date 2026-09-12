@@ -1,6 +1,11 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, Index, Unique,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+  Unique,
 } from 'typeorm';
 
 /**
@@ -12,7 +17,7 @@ import {
  * Rate cards are cached in Redis (key: `fare:rate:{countryCode}:{vehicleType}`)
  * and refreshed on update.
  */
-@Entity('taxi_rate_cards')
+@Entity({ name: 'taxi_rate_cards', schema: 'taxi' })
 @Unique(['countryCode', 'vehicleType'])
 export class TaxiRateCardEntity {
   @PrimaryGeneratedColumn('uuid')

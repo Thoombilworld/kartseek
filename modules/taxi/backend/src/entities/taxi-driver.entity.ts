@@ -23,7 +23,7 @@ import { TaxiDocumentEntity } from './taxi-document.entity';
  * All drivers are subject to Super Admin approval and document verification
  * regardless of how they were registered.
  */
-@Entity('taxi_drivers')
+@Entity({ name: 'taxi_drivers', schema: 'taxi' })
 export class TaxiDriverEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

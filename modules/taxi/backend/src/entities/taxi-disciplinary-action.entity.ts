@@ -1,6 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { TaxiComplaintEntity } from './taxi-complaint.entity';
@@ -15,7 +21,7 @@ import { TaxiVendorEntity } from './taxi-vendor.entity';
  * duration (for suspensions), and compliance with local legal standards.
  * Used by the Super Admin panel for enforcement tracking across jurisdictions.
  */
-@Entity('taxi_disciplinary_actions')
+@Entity({ name: 'taxi_disciplinary_actions', schema: 'taxi' })
 export class TaxiDisciplinaryActionEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -68,10 +74,15 @@ export class TaxiDisciplinaryActionEntity {
   @Column({
     type: 'enum',
     enum: [
-      'verbal_warning', 'written_warning', 'fine',
-      'temporary_suspension', 'permanent_suspension',
-      'license_revocation', 'platform_ban',
-      'retraining_required', 'probation',
+      'verbal_warning',
+      'written_warning',
+      'fine',
+      'temporary_suspension',
+      'permanent_suspension',
+      'license_revocation',
+      'platform_ban',
+      'retraining_required',
+      'probation',
     ],
   })
   actionType: string;
