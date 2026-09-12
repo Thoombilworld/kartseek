@@ -51,7 +51,7 @@ import { DataSource } from 'typeorm';
  * a shadow table there.
  *
  * ═══════════════════════════════════════════════════════════════════════════
- * CLASSIFICATION — why these nine files and no others
+ * CLASSIFICATION — why these ten files and no others
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Every migration's `up()` was read and assigned to exactly one DataSource.
@@ -124,6 +124,16 @@ import { DataSource } from 'typeorm';
  *       UserSellerType` already does: harmless where the two databases are one
  *       instance, a no-op backfill where they are split (R11, AUD2-089).
  *
+ *   1786502400000-RegionalAdminStaffPermissions
+ *       `UPDATE "admin"."admin_roles"` — grants the seeded `regional_admin`
+ *       role the two staff keys R12's own-market staff routes require. The
+ *       `admin` schema lives in this database, so it belongs here for the same
+ *       reason `AdminRoles` does. It exists because the first attempt edited
+ *       `AdminRoles`' seed instead, and a migration that has already run does
+ *       not run again: the grant reached no provisioned environment (R12 fix
+ *       round, review C2). A permission change is a data change and needs its
+ *       own file.
+ *
  * Deliberately **not** here, though each mentions `users` somewhere:
  *
  *   1719468000000-InitialMarketplaceSchema
@@ -174,6 +184,7 @@ export const MainDataSource = new DataSource({
     'migrations/1786502000000-UserBanColumns.ts',
     'migrations/1786502100000-SeoOverrides.ts',
     'migrations/1786502200000-MoneyPathMarket.ts',
+    'migrations/1786502400000-RegionalAdminStaffPermissions.ts',
   ],
   migrationsTableName: 'migrations',
   // One transaction per migration, matching the marketplace DataSource: a

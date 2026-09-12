@@ -502,26 +502,29 @@ describe('AdminAccessController', () => {
       }
     });
 
-    it('keeps role writes and minting a staff account to SUPER_ADMIN holding staff.manage', () => {
-      // Reading the directory is not the authority to mint an account in it —
-      // and neither is editing your own market's staff the authority to write
-      // the platform's permission vocabulary.
-      for (const method of ['createRole', 'updateRole', 'deleteRole', 'createStaff'] as const) {
+    it('keeps the permission vocabulary itself to SUPER_ADMIN holding staff.manage', () => {
+      // Editing your own market's staff is not the authority to write the
+      // platform's permission vocabulary. The role routes are the one part of
+      // this controller a regional admin never reaches at all.
+      for (const method of ['createRole', 'updateRole', 'deleteRole'] as const) {
         expect(declared(method)).toEqual([UserRole.SUPER_ADMIN, 'perm:staff.manage']);
       }
     });
 
-    it('admits a global ADMIN holding staff.manage to updateStaff — narrowed to their own market in the handler', () => {
-      // `updateStaff` is the one write a region-locked admin may reach at all,
-      // and only for staff already locked to their own market (R12, audit
-      // F-31): the route-level gate widens, the handler body is what actually
-      // narrows it back down (`this.scopeOf` + `assertInMarket`, and the
-      // explicit refusals on a role grant or a market-lock change).
-      expect(declared('updateStaff')).toEqual([
-        UserRole.SUPER_ADMIN,
-        UserRole.ADMIN,
-        'perm:staff.manage',
-      ]);
+    it('admits a global ADMIN holding staff.manage to both staff writes — bounded in the handler', () => {
+      // The two writes a region-locked admin may reach, and only for staff in
+      // their own market at a rank below their own (R12 + its fix round, audit
+      // F-31, review C1/I5): the route-level gate widens, the handler body is
+      // what narrows it back down — `this.scopeOf` + `assertInMarket`, the
+      // rank table, and the refusals on a role assignment, a market lock, a
+      // self-write and a global mint.
+      for (const method of ['createStaff', 'updateStaff'] as const) {
+        expect(declared(method)).toEqual([
+          UserRole.SUPER_ADMIN,
+          UserRole.ADMIN,
+          'perm:staff.manage',
+        ]);
+      }
     });
 
     it('names only keys the vocabulary defines', () => {

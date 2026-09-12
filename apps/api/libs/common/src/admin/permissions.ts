@@ -96,10 +96,14 @@ export interface SystemRole {
 /**
  * The roles the migration seeds, spelled in TypeScript.
  *
- * These must stay byte-identical to the `INSERT` in
- * `apps/api/migrations/1786501800000-AdminRoles.ts` — `permissions.spec.ts`
- * parses that file and compares, because two copies of a permission set that
- * are allowed to drift are worse than one copy in the wrong place.
+ * These must equal what a fresh database actually ends up holding:
+ * the `INSERT` in `apps/api/migrations/1786501800000-AdminRoles.ts`, plus every
+ * later migration that grants a key to a seeded role.
+ * `permissions.spec.ts` parses both and compares the resulting sets, because
+ * two copies of a permission set that are allowed to drift are worse than one
+ * copy in the wrong place — and because comparing against the seed alone is
+ * what let R12's `regional_admin` grant look applied while no provisioned
+ * database had ever received it (review C2).
  *
  * A system role cannot be deleted, and `super_admin` cannot be edited: an
  * operator who could narrow it could lock every administrator out of the
@@ -161,12 +165,21 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRole> = [
     // No `franchise.manage`, `system.health`: franchises and platform health
     // are global entities, and the market lock is enforced separately
     // (guards/market-scope.ts) — this list is the second half of the same
-    // rule, not a substitute for it. `staff.view`/`staff.manage` DO belong
-    // here now: staff are global as a DIRECTORY but regional as RECORDS
-    // (audit F-31, R12) — `GET /admin/staff` and `PATCH /admin/staff/:id`
-    // narrow to the caller's own market in the handler, the same way every
-    // other list above does; `POST /admin/staff` and the role routes stay
-    // SUPER_ADMIN-only regardless of this key.
+    // rule, not a substitute for it.
+    //
+    // `staff.view`/`staff.manage` DO belong here now: staff are global as a
+    // DIRECTORY but regional as RECORDS (audit F-31, R12) — all three staff
+    // routes narrow to the caller's own market in the handler, the same way
+    // every other list above does, and rank bounds what a regional admin may
+    // then write (`ROLE_RANK` in `admin-access.controller.ts`); the seven role
+    // routes stay SUPER_ADMIN-only regardless of this key.
+    //
+    // They are LAST in this array on purpose. An existing database receives
+    // them from `1786502400000-RegionalAdminStaffPermissions`, which appends
+    // rather than replacing so an operator's own edits to this role survive —
+    // and `permissions.spec.ts` compares the ORDER a fresh database ends up
+    // with against this list, so "seeded, then appended" has to read the same
+    // here as it does in Postgres.
     permissions: [
       'dashboard.view',
       'orders.view',
@@ -191,8 +204,6 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRole> = [
       'delivery.manage',
       'support.view',
       'support.respond',
-      'staff.view',
-      'staff.manage',
       'wallet.audit',
       'loyalty.view',
       'modules.marketplace',
@@ -202,6 +213,9 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRole> = [
       'modules.doctor',
       'modules.hotel',
       'modules.taxi',
+      // Appended by 1786502400000-RegionalAdminStaffPermissions — see above.
+      'staff.view',
+      'staff.manage',
     ],
   },
   {

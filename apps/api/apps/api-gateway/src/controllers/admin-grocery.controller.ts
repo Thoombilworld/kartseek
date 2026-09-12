@@ -335,9 +335,13 @@ export class AdminGroceryController {
   // ── Settings ──────────────────────────────────────────────────
   // A delivery fee, a minimum basket and a service radius are market facts
   // (audit I9) — the read takes a market, with a platform-wide fallback row.
-  // The write stays global-only below: nothing yet lets an operator save a
-  // market's own row, so a locked admin is refused rather than silently
-  // editing every market at once.
+  // The write takes one too, and stays closed to a region-locked admin: a
+  // GLOBAL admin saves one market's row by naming it (`?country=QA`) or the
+  // platform row by naming nothing — which is what makes the read's
+  // `source: 'market'` reachable at all, since nothing else creates a market
+  // row — while an admin confined to one market has no console for this yet and
+  // is refused rather than silently editing every market (review C3/I6, and the
+  // brief's own ruling on the locked case).
   @Get('settings')
   @ApiOperation({ summary: 'Get grocery admin settings' })
   @ApiQuery({ name: 'country', required: false })
@@ -347,15 +351,16 @@ export class AdminGroceryController {
   }
 
   @Post('settings')
-  @ApiOperation({ summary: 'Update grocery settings' })
-  async updateSettings(@Req() req: any, @Body() body: any) {
-    const { scope } = this.scopeOf(req, undefined, 'those settings');
+  @ApiOperation({ summary: 'Update grocery settings, for one market or the platform' })
+  @ApiQuery({ name: 'country', required: false })
+  async updateSettings(@Req() req: any, @Body() body: any, @Query('country') country?: string) {
+    const { scope, market } = this.scopeOf(req, country, 'those settings');
     // Refused here too, not only by grocery-service: a locked admin's request
-    // should never reach the wire for a write that can only ever be platform
-    // wide.
+    // should never reach the wire for a write they may not make.
     refuseLockedAdmin(req, 'grocery settings', 'Grocery settings are managed globally.');
     return this.send('admin.grocery.updateSettings', {
       ...body,
+      market,
       actorId: this.actorId(req),
       scope,
     });

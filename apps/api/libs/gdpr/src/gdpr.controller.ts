@@ -15,26 +15,34 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { type Request } from 'express';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
-import { RolesGuard } from '@app/guards';
 import { UserRole } from '@app/common';
 import { GdprService, type ConsentType } from './gdpr.service';
 // `libs/gdpr` is mounted by `api-gateway.module.ts`, so it runs inside the
-// gateway process, but it is a shared library and these three are the
+// gateway process, but it is a shared library and these four are the
 // gateway APP's own files — not a `@app/*` package. Reaching them by
 // relative path reuses the one canonical implementation instead of a second
 // copy (`scope-helper-uniqueness.spec.ts` proves `resolveScope` has exactly
 // one declaration, in that file) rather than reimplementing the lock check
 // and the denial copy here.
 //
-// `Roles` in particular replaces `@app/decorators`'s (whose signature is
-// `(...roles: UserRole[])`, so it cannot type a `'perm:...'` key at all) —
-// the gateway's own accepts `UserRole | string` and writes the same `'roles'`
-// metadata key `@app/guards`'s `RolesGuard` already reads, so the class-level
-// guard binding below needs no change for these three routes to carry a
-// permission key like every other admin route.
+// `RolesGuard` and `Roles` come from here for a stronger reason than reuse:
+// they have to be the SAME pair. The gateway's guard requires the role **and**
+// every `perm:` key; `@app/guards`'s runs one flat `some()` over the whole
+// argument list, so under it a `'perm:system.settings'` entry matched nobody
+// and enforced nothing — an inert key on three routes that handle personal
+// data, while this file's own comment said the opposite (review I2/I3). The
+// role half (`SUPER_ADMIN` alone) was doing all the work. With the
+// permission-aware guard bound below, the key is real: a SUPER_ADMIN signs in
+// carrying `'*'`, and any future non-SUPER_ADMIN entry in these lists is
+// narrowed by the key instead of silently widened by it.
+//
+// `GdprModule` imports `SecurityModule` so this guard's `JwtService` resolves
+// in that module's injector — `@app/guards`'s took only a `Reflector`, which
+// is why the swap is a two-file change.
 import { refuseLockedAdmin } from '../../../apps/api-gateway/src/guards/market-scope';
 import { GlobalEntity } from '../../../apps/api-gateway/src/decorators/global-entity.decorator';
 import { Roles } from '../../../apps/api-gateway/src/decorators/roles.decorator';
+import { RolesGuard } from '../../../apps/api-gateway/src/guards/roles.guard';
 
 /**
  * Roles that may act on any data subject's records: the people who handle

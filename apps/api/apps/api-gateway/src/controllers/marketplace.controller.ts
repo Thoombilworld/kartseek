@@ -73,8 +73,18 @@ import { marketScopeOf, refuseLockedAdmin, resolveScope } from '../guards/market
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
 import { MarketplaceOrderService } from '../services/marketplace-order.service';
-import { RolesGuard } from '@app/guards';
-import { Roles } from '@app/decorators';
+// The gateway's own pair, not `@app/guards`/`@app/decorators`. The two
+// `RolesGuard` implementations gave the identical decorator opposite meanings:
+// this one is role **AND** every `perm:` key, while `@app/guards`'s is a single
+// flat `some()` over the whole argument list, so `@Roles(ADMIN, 'perm:x')` read
+// as "an ADMIN who holds x" under one and "any ADMIN, or anyone whose role is
+// literally 'perm:x'" under the other (review I2/I3). No route in this file
+// carried a `perm:` key — they are all role-only lists, where role-∧-perm
+// reduces to the same test — so this changes no route's behaviour today and
+// closes the trap the next `perm:` key would have fallen into.
+// `guards/one-roles-guard.spec.ts` fails if the other pair comes back.
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
 import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagination.pipe';
 import { ForwardingValidationPipe } from '../pipes/forwarding-validation.pipe';
@@ -738,12 +748,14 @@ export class MarketplaceGatewayController {
   // V10).
   @Get('admin/product-reports')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  // No `perm:` key here, unlike the /admin controllers: this controller binds
-  // `RolesGuard` from `@app/guards`, which compares role names only, and its
-  // `@Roles` comes from `@app/decorators` typed `(...roles: UserRole[])`. A
-  // `perm:` entry would be inert — a padlock drawn on the route rather than a
-  // check — so the key is left off until this controller moves to the
-  // permission-aware pair. Recorded for the ledger.
+  // Role-only, deliberately. The reason this comment used to give — that a
+  // `perm:` key here would be inert, "a padlock drawn on the route rather than
+  // a check", because this controller bound `@app/guards`'s role-only guard —
+  // no longer holds: the class now binds the gateway's permission-aware pair
+  // (see the import). Adding a key would therefore really narrow these two
+  // moderation routes, which is a change to who can work the queue and belongs
+  // with the console page that calls them, not to a guard swap. Recorded for
+  // the ledger so the next reader knows which of the two it is.
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Product report queue (admin)' })
   @ApiQuery({ name: 'country', required: false })

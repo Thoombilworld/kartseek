@@ -67,7 +67,7 @@ describe('migration classification', () => {
   });
 
   it('sends the main-database migrations to the main-database DataSource', () => {
-    // The nine whose `up()` targets `users`, `order.orders`, `admin.*`, or a
+    // The ten whose `up()` targets `users`, `order.orders`, `admin.*`, or a
     // table the gateway process itself owns — `payout.*` included: the
     // marketplace database has no `payout` schema, so those tables were applied
     // to this one and a migration altering them has to run from here.
@@ -84,6 +84,7 @@ describe('migration classification', () => {
         '1786502000000-UserBanColumns.ts',
         '1786502100000-SeoOverrides.ts',
         '1786502200000-MoneyPathMarket.ts',
+        '1786502400000-RegionalAdminStaffPermissions.ts',
       ].sort(),
     );
   });

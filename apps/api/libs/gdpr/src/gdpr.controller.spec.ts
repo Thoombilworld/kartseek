@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import request from 'supertest';
+import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '@app/security';
 import { GdprController } from './gdpr.controller';
 import { GdprService } from './gdpr.service';
@@ -25,6 +26,15 @@ import { GdprService } from './gdpr.service';
  * The real JwtAuthGuard is swapped for one that reads the user out of the
  * bearer token as base64 JSON; RolesGuard and ResourceOwnershipGuard run for
  * real, which is the point.
+ *
+ * The `RolesGuard` that runs here is the GATEWAY's — role **and** every `perm:`
+ * key. The controller used to bind `@app/guards`'s, which runs one flat
+ * `some()` over the argument list, so `'perm:system.settings'` on these three
+ * routes matched nobody and enforced nothing (review I2/I3). Tokens therefore
+ * carry `adminPermissions` the way a real sign-in does — `['*']` for a
+ * SUPER_ADMIN, the seeded `admin` set (no `system.settings`) for a global
+ * ADMIN — and one `it` below proves the key is now doing work by refusing a
+ * SUPER_ADMIN role claim that carries no permissions at all.
  */
 
 const SUBJECT = 'user-subject-1';
@@ -44,9 +54,30 @@ class FakeJwtAuthGuard implements CanActivate {
   }
 }
 
+/**
+ * The permission claim `gateway.controller.ts:adminPermissionsFor` really signs
+ * for a role: the wildcard for the platform owner, the seeded `admin` keys for
+ * a global ADMIN (which do NOT include `system.settings`), nothing for a
+ * customer or a seller.
+ */
+const PERMISSIONS_FOR: Record<string, string[] | undefined> = {
+  SUPER_ADMIN: ['*'],
+  ADMIN: ['dashboard.view', 'orders.view', 'users.view', 'staff.view', 'audit.logs'],
+};
+
 /** A bearer token for `userId`, shaped like JwtStrategy.validate()'s result. */
 const as = (userId: string, role: string) =>
-  `Bearer ${Buffer.from(JSON.stringify({ userId, id: userId, sub: userId, role })).toString('base64')}`;
+  token({
+    userId,
+    id: userId,
+    sub: userId,
+    role,
+    adminPermissions: PERMISSIONS_FOR[role.toUpperCase()],
+  });
+
+/** Any claim set, encoded the way FakeJwtAuthGuard reads it. */
+const token = (claims: object) =>
+  `Bearer ${Buffer.from(JSON.stringify(claims)).toString('base64')}`;
 
 describe('GdprController authorization', () => {
   let app: INestApplication;
@@ -77,6 +108,12 @@ describe('GdprController authorization', () => {
     };
 
     const moduleRef = await Test.createTestingModule({
+      // The gateway's `RolesGuard` injects `JwtService` for the case where
+      // `JwtAuthGuard` has not run — `GdprModule` gets it from `SecurityModule`
+      // in the application; here the register call is the same dependency by a
+      // shorter route. Nothing in these tests reaches the decode fallback: the
+      // fake auth guard always populates `req.user`.
+      imports: [JwtModule.register({ secret: 'gdpr-spec-secret' })],
       controllers: [GdprController],
       providers: [{ provide: GdprService, useValue: service }],
     })
@@ -282,17 +319,38 @@ describe('GdprController authorization', () => {
       expect(service.getComplianceDashboard).not.toHaveBeenCalled();
     });
 
+    /**
+     * The permission key is real now, not decorative.
+     *
+     * Under `@app/guards`'s role-only guard this token passed: the flat
+     * `some()` matched `SUPER_ADMIN` and never looked at
+     * `'perm:system.settings'`, so the key narrowed nothing and the file's own
+     * comment claiming otherwise was wrong (review I2). A SUPER_ADMIN always
+     * signs in with `['*']`, so the claim below cannot occur in practice — it
+     * is the shape that tells the two guards apart, which is exactly what this
+     * asserts.
+     */
+    it('enforces the permission key, not only the role name', async () => {
+      const noPerms = token({ userId: ADMIN, id: ADMIN, sub: ADMIN, role: 'SUPER_ADMIN' });
+      await http()
+        .post(`/gdpr/export/${EXPORT_ID}/process`)
+        .set('Authorization', noPerms)
+        .expect(403);
+      await http().get('/gdpr/compliance/dashboard').set('Authorization', noPerms).expect(403);
+      expect(service.processDataExport).not.toHaveBeenCalled();
+      expect(service.getComplianceDashboard).not.toHaveBeenCalled();
+    });
+
     it('refuses a region-locked admin outright — personal-data requests are platform-wide', async () => {
-      const locked = `Bearer ${Buffer.from(
-        JSON.stringify({
-          userId: ADMIN,
-          id: ADMIN,
-          sub: ADMIN,
-          role: 'SUPER_ADMIN',
-          regionCode: 'QA',
-          regionLocked: true,
-        }),
-      ).toString('base64')}`;
+      const locked = token({
+        userId: ADMIN,
+        id: ADMIN,
+        sub: ADMIN,
+        role: 'SUPER_ADMIN',
+        adminPermissions: ['*'],
+        regionCode: 'QA',
+        regionLocked: true,
+      });
       // A locked SUPER_ADMIN cannot exist in practice (`marketScopeOf` treats
       // SUPER_ADMIN as always global), so the realistic locked case is an
       // ADMIN — already refused above by role alone. This proves the second

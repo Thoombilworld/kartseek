@@ -37,7 +37,7 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 import { refuseLockedAdmin, resolveScope } from '../guards/market-scope';
-import { applyMarketFilter, assertInMarket, requireMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket, normaliseMarket, requireMarket } from '@app/common';
 import { AdminRole } from '../entities/admin-role.entity';
 import { User } from '../entities/user.entity';
 import {
@@ -62,6 +62,51 @@ const MAX_PAGE_SIZE = 100;
 const REVOCATION_TTL_SECONDS = 3600;
 
 /**
+ * STAFF AUTHORITY, RANKED — one table, read in exactly one place.
+ *
+ * `users.role` is the gate `RolesGuard` reads for every role-gated route in the
+ * gateway, so "who may write it" is the whole question. R12 let a region-locked
+ * admin edit their own market's staff and checked the market, the role
+ * *assignment* (`admin_role_id`) and the lock — but not `role` itself. A locked
+ * `SUPPORT_AGENT` holding `staff.manage` could therefore `PATCH` its own record
+ * to `role: 'ADMIN'`, and a `SUPER_ADMIN` row that happened to carry the
+ * caller's market lock could be demoted or deactivated by that market's admin
+ * (review C1/I5).
+ *
+ * Ranking the roles turns both of those into one rule that can be stated in a
+ * sentence and enforced in one method: **you may only administer an account
+ * below your own rank, and only assign a role below your own rank.** So a
+ * regional admin (ADMIN) may create and manage `SUPPORT_AGENT`,
+ * `FINANCE_MANAGER` and `PRODUCT_MANAGER` inside their market and nothing else;
+ * `SUPER_ADMIN` is assignable by a `SUPER_ADMIN` alone; and nobody — of any
+ * rank — rewrites their own authority (see `assertNotOwnAuthority`).
+ *
+ * The two managers share a rank on purpose: neither has any authority over the
+ * other, and equal rank already means "cannot administer", which is the answer.
+ * A role absent from this table ranks 0: a CUSTOMER or a SELLER can administer
+ * nobody, and `STAFF_ROLES` keeps them out of these routes anyway.
+ */
+const ROLE_RANK: Readonly<Record<string, number>> = {
+  SUPER_ADMIN: 40,
+  ADMIN: 30,
+  FINANCE_MANAGER: 20,
+  PRODUCT_MANAGER: 20,
+  SUPPORT_AGENT: 10,
+};
+
+/** A role's rank, or 0 for anything the table does not name. */
+function rankOf(role: unknown): number {
+  return ROLE_RANK[String(role ?? '').toUpperCase()] ?? 0;
+}
+
+/**
+ * The fields that decide what an account may do. A change to any of them is an
+ * authority change, which is what the rank rules and the self-check govern;
+ * `firstName`, `lastName` and `phone` are contact details and are not.
+ */
+const AUTHORITY_FIELDS = ['role', 'adminRoleId', 'regionCode', 'regionLocked', 'isActive'] as const;
+
+/**
  * Roles & staff.
  *
  * Both `/admin/roles` and `/admin/staff` used to be static arrays inside the
@@ -75,18 +120,26 @@ const REVOCATION_TTL_SECONDS = 3600;
  * refused outright on every `/admin/roles` route, reads included.
  *
  * Staff are different: global as a DIRECTORY, regional as RECORDS (audit
- * F-31). `GET /admin/staff` and `PATCH /admin/staff/:id` admit a region-locked
- * admin, narrowed to staff whose own `regionCode` equals theirs — see
- * `scopeOf`/`assertInMarket` in each handler. Neither route lets a locked
- * caller grant a role or touch the market lock itself (that would be an
- * escalation performed one PATCH at a time), and `POST /admin/staff` — minting
- * an account — stays SUPER_ADMIN only: creating an unlocked account is a
- * platform act no market's administrator should hold.
+ * F-31). All three staff routes admit a region-locked admin, narrowed to staff
+ * whose own `regionCode` equals theirs — see `scopeOf`/`assertInMarket` in each
+ * handler — and every write is then bounded by rank (`ROLE_RANK`):
+ *
+ *   • a regional admin (ADMIN, locked) creates and manages `SUPPORT_AGENT`,
+ *     `FINANCE_MANAGER` and `PRODUCT_MANAGER` accounts inside their own
+ *     market, with the lock forced on;
+ *   • `admin_role_id` and the market lock are SUPER_ADMIN's alone — the
+ *     permission vocabulary is platform-wide and an account that can unlock
+ *     itself is an account that can go global one PATCH at a time;
+ *   • an account never changes its own role, lock or active flag, whatever its
+ *     rank: a self-write is the one change no second administrator has seen;
+ *   • minting an account with no market at all stays SUPER_ADMIN's act.
  *
  * The reads also admit a global ADMIN holding `staff.view`; every write also
- * requires `staff.manage`. The seeded `regional_admin` role carries both keys
- * (it did not, before this: a region-locked admin was refused the whole
- * screen, so the gap was never noticed).
+ * requires `staff.manage`. The seeded `regional_admin` role carries both keys —
+ * it did not before R12 (a region-locked admin was refused the whole screen, so
+ * the gap was never noticed), and the grant reaches an already-provisioned
+ * database through `migrations/1786502400000-RegionalAdminStaffPermissions.ts`
+ * rather than by editing the seed of a migration that has already run.
  */
 @ApiTags('👑 Admin — Access')
 @ApiBearerAuth('JWT')
@@ -172,6 +225,104 @@ export class AdminAccessController {
   /** @see resolveScope — the shared implementation. */
   private scopeOf(req: any, requested?: string, what = 'that market') {
     return resolveScope(req, requested, what);
+  }
+
+  /** The caller's own role, upper-cased, from the verified token. */
+  private callerRole(req: any): string {
+    return String(req?.user?.role ?? '').toUpperCase();
+  }
+
+  /**
+   * The caller must outrank the account they are about to change.
+   *
+   * Applied to the authority writes only (`role`, `isActive`), so a market's
+   * administrator can still correct a peer's name — and never their authority.
+   * A `SUPER_ADMIN` target is refused for every other rank by the same
+   * comparison, which is the specific escalation review C1 names: a SUPER_ADMIN
+   * row carrying `region_locked = true` with a regional admin's market passed
+   * the market check and could then be demoted or deactivated by them.
+   */
+  private assertOutranksTarget(req: any, targetRole: unknown, what: string): void {
+    const caller = this.callerRole(req);
+    if (rankOf(caller) > rankOf(targetRole)) return;
+    this.logger.warn(
+      `[staff-rank-denied] user=${this.actorId(req)} role=${caller} ` +
+        `target=${String(targetRole ?? '').toUpperCase()} what="${what}"`,
+    );
+    throw new ForbiddenException(
+      'You may only manage staff accounts whose role is below your own.',
+    );
+  }
+
+  /** A role may only be granted downwards: SUPER_ADMIN is a SUPER_ADMIN's to give. */
+  private assertMayAssignRole(req: any, role: unknown): void {
+    const caller = this.callerRole(req);
+    if (rankOf(caller) > rankOf(role)) return;
+    this.logger.warn(
+      `[staff-rank-denied] user=${this.actorId(req)} role=${caller} ` +
+        `grant=${String(role ?? '').toUpperCase()}`,
+    );
+    throw new ForbiddenException('You may only assign a role below your own.');
+  }
+
+  /**
+   * Nobody rewrites their own authority, whatever their rank.
+   *
+   * `isActive: false` keeps its own older wording because it is the case an
+   * operator actually meets (the console's own "deactivate" button on their own
+   * row); the rest share one message. The deeper reason is the same for all of
+   * them: a self-write is the one change no second administrator has seen, so
+   * an account that can promote itself is an account with no ceiling —
+   * `users.role` is what every role gate in the gateway reads.
+   */
+  private assertNotOwnAuthority(req: any, dto: Partial<Record<string, unknown>>): void {
+    if (dto.isActive === false) {
+      throw new BadRequestException('You cannot deactivate your own account.');
+    }
+    const touched = AUTHORITY_FIELDS.filter((f) => dto[f] !== undefined);
+    if (!touched.length) return;
+    this.logger.warn(
+      `[staff-self-authority-denied] user=${this.actorId(req)} ` +
+        `role=${this.callerRole(req)} fields=${touched.join(',')}`,
+    );
+    throw new ForbiddenException(
+      'You cannot change your own role, market lock or active flag — another administrator must.',
+    );
+  }
+
+  /**
+   * Validate the RESULTING lock state, and validate it strictly.
+   *
+   * Two ways an account ends up drawn as locked while behaving as global, and
+   * both are refused here rather than in the DTO — either field may be omitted
+   * from a request while the other one changes it, so only the resulting pair
+   * is checkable (audit H-13):
+   *
+   *   • no market at all — `{"regionCode": null}` on a locked account left
+   *     `region_locked = true, region_code = NULL`, and `marketScopeOf` reads
+   *     that as `locked: false`: a silent promotion to global admin while the
+   *     console went on drawing its "region locked" badge.
+   *   • a market this platform cannot read — `{"regionCode": "ZZ"}` passes the
+   *     DTO's `/^[A-Za-z]{2}$/` and every scoped route then refuses that
+   *     account with the unattributable copy. Fail-closed, but bricked, and
+   *     invisible to a `region_code IS NULL` tripwire (review I4). This task
+   *     added `requireMarket` to the READ precisely because an unreadable
+   *     market must refuse rather than widen; the write that creates one has to
+   *     refuse too.
+   */
+  private assertLockState(market: string | null | undefined, locked: boolean | undefined): void {
+    if (!locked) return;
+    if (!market) {
+      throw new BadRequestException(
+        'A locked account needs a market: set a market, or clear the lock in the same request.',
+      );
+    }
+    if (!normaliseMarket(market)) {
+      throw new BadRequestException(
+        `A locked account needs a market this platform knows: "${market}" ` +
+          `cannot be attributed to a market yet.`,
+      );
+    }
   }
 
   /**
@@ -377,10 +528,39 @@ export class AdminAccessController {
   }
 
   @Post('staff')
-  @Roles(UserRole.SUPER_ADMIN, 'perm:staff.manage')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, 'perm:staff.manage')
   @ApiOperation({ summary: 'Create a staff account; a temporary password is emailed' })
   async createStaff(@Req() req: any, @Body() dto: CreateStaffDto) {
-    refuseLockedAdmin(req, 'roles and staff', 'Roles and staff are managed globally.');
+    // A market's administrator may staff their own market — and only their own
+    // market, only below their own rank, and only with the lock on. Passing
+    // `dto.regionCode` through `scopeOf` is what refuses "QA creates an IN
+    // account": `resolveMarket` answers 403 for a locked caller who names
+    // another market, and hands a locked caller their own market back when the
+    // request names none.
+    const { scope, market } = this.scopeOf(req, dto.regionCode ?? undefined, 'that staff account');
+    // Minting an account with NO market is a platform act, and it is the one
+    // this route always refused: before R12 the role gate was SUPER_ADMIN
+    // alone. Widening it so an actual regional admin can reach the route must
+    // not hand account creation to every global ADMIN holding `staff.manage`,
+    // so the global case is refused in the handler instead (review I5).
+    if (!scope && this.callerRole(req) !== 'SUPER_ADMIN') {
+      throw new ForbiddenException(
+        'Only a SUPER_ADMIN may create a staff account outside a single market.',
+      );
+    }
+    // "Cannot change any lock" includes the lock on an account they create: a
+    // regional admin who could mint an unlocked account could mint themselves
+    // a global colleague.
+    if (scope && dto.regionLocked === false) {
+      throw new ForbiddenException('Only a global administrator may change a market lock.');
+    }
+    // Rank, not the DTO's enum: `ASSIGNABLE_STAFF_ROLES` admits `ADMIN`, which
+    // a regional admin must not grant. The created account's own `users.role`
+    // is the ceiling on everything it can reach — every admin route in the
+    // gateway requires `UserRole.ADMIN` or `UserRole.SUPER_ADMIN` alongside its
+    // `perm:` key, so a SUPPORT_AGENT cannot reach one whatever permission set
+    // its `admin_role_id` carries.
+    this.assertMayAssignRole(req, dto.role);
     const email = dto.email.toLowerCase().trim();
     if (await this.userRepo.findOne({ where: { email } })) {
       throw new ConflictException('An account with this email already exists');
@@ -392,10 +572,12 @@ export class AdminAccessController {
         'SUPER_ADMIN accounts are created by an operator, not through the console.',
       );
     }
-    const market = dto.regionCode?.toUpperCase() ?? null;
-    if (dto.regionLocked === true && !market) {
-      throw new BadRequestException('A locked account needs a market');
-    }
+    // A locked caller's new account is forced into their own market with the
+    // lock on; a global caller still says both explicitly. Either way the
+    // resulting pair is validated, not the request (`assertLockState`).
+    const nextMarket = scope ?? dto.regionCode?.toUpperCase() ?? null;
+    const nextLocked = scope ? true : dto.regionLocked === true;
+    this.assertLockState(nextMarket, nextLocked);
 
     // Generated here, hashed before it is stored, and delivered out of band.
     // The caller never chooses it: an operator who could set the password could
@@ -416,8 +598,8 @@ export class AdminAccessController {
       // fails with "invalid input value for enum"; `staffView` upper-cases it
       // again on the way out.
       role: dto.role.toLowerCase() as UserRole,
-      regionCode: market,
-      regionLocked: dto.regionLocked === true,
+      regionCode: nextMarket,
+      regionLocked: nextLocked,
       adminRoleId: role.id,
       isActive: true,
       status: 'active',
@@ -468,6 +650,21 @@ export class AdminAccessController {
     if (!user || !(STAFF_ROLES as readonly string[]).includes(String(user.role).toUpperCase())) {
       throw new NotFoundException('Staff member not found');
     }
+    // The platform owner's record is nobody else's to touch — not its name
+    // either. Refused here, ahead of the market check, because a SUPER_ADMIN
+    // row that happens to carry `region_locked = true` with a regional admin's
+    // market passes that check: R12 left such a row demotable and deactivatable
+    // by the market's own admin (review C1).
+    if (
+      String(user.role).toUpperCase() === 'SUPER_ADMIN' &&
+      this.callerRole(req) !== 'SUPER_ADMIN'
+    ) {
+      this.logger.warn(
+        `[staff-rank-denied] user=${this.actorId(req)} role=${this.callerRole(req)} ` +
+          `target=SUPER_ADMIN id=${id}`,
+      );
+      throw new ForbiddenException('A SUPER_ADMIN account can only be changed by a SUPER_ADMIN.');
+    }
     // A locked admin may edit staff in their own market — and only staff who
     // are themselves locked to it. A global account belongs to every market.
     if (scope) {
@@ -475,10 +672,23 @@ export class AdminAccessController {
         refuseLockedAdmin(req, 'a global staff account');
       }
       assertInMarket(user.regionCode, scope, 'staff account', this.logger);
-      // Two things a market's administrator must not do to their own staff:
-      // grant a role (the permission vocabulary is platform-wide) and unlock
-      // the account (which would make it global — an escalation performed one
-      // PATCH at a time).
+    }
+    // Then the four rules that do not depend on the lock, in one place and in
+    // this order, so a refusal names the nearest reason:
+    //
+    //   1. nobody rewrites their own authority — including their own `role`,
+    //      which R12 left falling through to the assignment below (review C1);
+    //   2. the permission vocabulary and the market lock stay SUPER_ADMIN's.
+    //      They were gated on `if (scope)`, so widening the route's role gate
+    //      to admit the regional admin also handed both to every *global*
+    //      ADMIN holding `staff.manage` — which before R12 was SUPER_ADMIN-only
+    //      (review I5);
+    //   3. you may only administer an account below your own rank;
+    //   4. you may only grant a role below your own rank.
+    if (user.id === this.actorId(req)) {
+      this.assertNotOwnAuthority(req, dto as Record<string, unknown>);
+    }
+    if (this.callerRole(req) !== 'SUPER_ADMIN') {
       if (dto.adminRoleId !== undefined) {
         throw new ForbiddenException('Only a global administrator may change a role assignment.');
       }
@@ -486,9 +696,10 @@ export class AdminAccessController {
         throw new ForbiddenException('Only a global administrator may change a market lock.');
       }
     }
-    if (user.id === this.actorId(req) && dto.isActive === false) {
-      throw new BadRequestException('You cannot deactivate your own account.');
+    if (dto.role !== undefined || dto.isActive !== undefined) {
+      this.assertOutranksTarget(req, user.role, 'that staff account');
     }
+    if (dto.role !== undefined) this.assertMayAssignRole(req, dto.role);
     if (dto.adminRoleId) {
       const role = await this.roleRepo.findOne({ where: { id: dto.adminRoleId } });
       if (!role) throw new BadRequestException('Unknown admin role');
@@ -499,16 +710,9 @@ export class AdminAccessController {
     const nextMarket =
       dto.regionCode !== undefined ? (dto.regionCode?.toUpperCase() ?? null) : user.regionCode;
     const nextLocked = dto.regionLocked !== undefined ? dto.regionLocked : user.regionLocked;
-    // The RESULTING pair, not the request. `{"regionCode": null}` on a locked
-    // account passed the old check — `dto.regionLocked` was undefined — and left
-    // `region_locked = true` with `region_code = null`. `marketScopeOf` reads
-    // that as `locked: false`, so the account quietly became a GLOBAL admin
-    // while the console went on drawing its "region locked" badge (audit H-13).
-    if (nextLocked && !nextMarket) {
-      throw new BadRequestException(
-        'A locked account needs a market: set a market, or clear the lock in the same request.',
-      );
-    }
+    // The RESULTING pair, not the request — see `assertLockState` for both of
+    // the states it refuses and why the DTO cannot do this.
+    this.assertLockState(nextMarket, nextLocked);
 
     if (dto.firstName !== undefined) user.firstName = dto.firstName;
     if (dto.lastName !== undefined) user.lastName = dto.lastName;

@@ -157,9 +157,15 @@ export class UpdateStaffDto {
    * are deliberately distinct.
    *
    * This DTO does not validate the pair against `regionLocked`: the controller
-   * (`updateStaff`) checks the RESULTING `(regionCode, regionLocked)` state,
-   * because either field may be omitted from a given request while the other
-   * changes it (audit H-13).
+   * (`assertLockState`, called by both `createStaff` and `updateStaff`) checks
+   * the RESULTING `(regionCode, regionLocked)` state, because either field may
+   * be omitted from a given request while the other changes it (audit H-13).
+   *
+   * Nor does the pattern below say the code is a market this platform knows:
+   * `'ZZ'` matches it. A locked account carrying one is refused by every scoped
+   * route and is therefore useless, so the controller's check is against
+   * `normaliseMarket` and not against truthiness — which is why that check, and
+   * not this one, is where "a locked account needs a readable market" lives.
    */
   @ApiPropertyOptional({ example: 'AE', nullable: true })
   @IsOptional()

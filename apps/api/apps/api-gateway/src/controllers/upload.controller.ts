@@ -91,6 +91,16 @@ export class UploadController {
     )
     file: any,
   ): KycUploadResponseDto {
+    // NOT STORED. This handler validates the file, mints an opaque reference
+    // and discards the bytes — `this.storage.upload` is never called and no row
+    // records the document, so the reference resolves to nothing and the
+    // message below is aspirational. Pre-existing (the same shape
+    // `/upload/profile-image` had until the R12 fix round wired it), recorded
+    // here rather than silently: wiring it means deciding where KYC documents
+    // live, who may read one back and what the approval queue reads, which is
+    // the KYC owner's decision and not a scope fix. No market is stamped on the
+    // path for the same reason — a market on a path nothing writes is
+    // decoration.
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
     const documentRef = generateDocumentId('KYC');
@@ -126,7 +136,7 @@ export class UploadController {
   @ApiCreatedResponse({ type: ProfileImageUploadDto, description: 'Profile image updated' })
   @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid file type or size' })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
-  uploadProfileImage(
+  async uploadProfileImage(
     @Req() req: any,
     @UploadedFile(
       new ParseFilePipe({
@@ -137,14 +147,27 @@ export class UploadController {
       }),
     )
     file: any,
-  ): ProfileImageUploadDto {
+  ): Promise<ProfileImageUploadDto> {
     // A profile photo has no market of its own, but the audit trail of who
     // uploaded it, from which market, does — stamped on the storage path so a
     // region-locked admin's own uploads are distinguishable from the platform's.
+    //
+    // The file is actually STORED, which it was not: this handler built the same
+    // CDN string as a literal and discarded `file.buffer`, so R12 stamped a
+    // market onto the path of an object that never existed and the probe that
+    // read the URL back looked like proof of a working upload (review I7).
+    // `this.storage.upload` is the same call the other four uploads make, and
+    // the market is a real path segment in the bucket rather than decoration on
+    // a fabricated string.
     const { market } = this.scopeOf(req, undefined, 'that upload');
     const userId = req.user?.userId ?? 'anonymous';
     const fileKey = generateFileKey(userId, file.originalname);
-    const cdnUrl = `https://cdn.kartseek.com/profiles/${market ? `${market}/` : ''}${fileKey}`;
+    const cdnUrl = await this.storage.upload(
+      market ? `profiles/${market}` : 'profiles',
+      fileKey,
+      file.buffer,
+      file.mimetype,
+    );
     return { message: 'Profile image uploaded successfully.', url: cdnUrl };
   }
 
