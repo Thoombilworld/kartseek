@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { assertInMarket } from '@app/common';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
 import * as crypto from 'crypto';
@@ -36,7 +37,10 @@ export class InvoiceService {
 
   // ── Generate Invoice ──────────────────────────────────────────────────────
 
-  async generateInvoiceForPayment(paymentId: string, orderDetails?: OrderDetails): Promise<Invoice> {
+  async generateInvoiceForPayment(
+    paymentId: string,
+    orderDetails?: OrderDetails,
+  ): Promise<Invoice> {
     const payment = await this.paymentRepo.findOne({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException(`Payment ${paymentId} not found`);
 
@@ -54,7 +58,10 @@ export class InvoiceService {
     const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
 
     // Tax breakdown
-    const taxBreakdown = calculateTaxBreakdown(Number(payment.platformCommission), payment.countryCode);
+    const taxBreakdown = calculateTaxBreakdown(
+      Number(payment.platformCommission),
+      payment.countryCode,
+    );
     const totalTax = taxBreakdown.reduce((sum, t) => sum + t.amount, 0);
 
     // Create invoice
@@ -65,8 +72,8 @@ export class InvoiceService {
       orderId: payment.orderId,
       customerId: payment.customerId,
       customerName: orderDetails?.customerName,
-      customerEmail: orderDetails?.customerEmail,   // Will be encrypted by PiiInterceptor
-      customerPhone: orderDetails?.customerPhone,   // Will be encrypted by PiiInterceptor
+      customerEmail: orderDetails?.customerEmail, // Will be encrypted by PiiInterceptor
+      customerPhone: orderDetails?.customerPhone, // Will be encrypted by PiiInterceptor
       sellerId: payment.sellerId,
       sellerName: orderDetails?.sellerName,
       sellerGstin: orderDetails?.sellerGstin,
@@ -110,7 +117,9 @@ export class InvoiceService {
       currency: invoice.currency,
     });
 
-    this.logger.log(`Invoice generated: ${invoiceNumber} | Payment: ${payment.paymentNumber} | ${invoice.currency} ${invoice.grandTotal}`);
+    this.logger.log(
+      `Invoice generated: ${invoiceNumber} | Payment: ${payment.paymentNumber} | ${invoice.currency} ${invoice.grandTotal}`,
+    );
 
     return invoice;
   }
@@ -123,9 +132,11 @@ export class InvoiceService {
    * In production, uses pdfkit or puppeteer to generate the PDF.
    * The PDF is encrypted and uploaded to S3 with a user-scoped key.
    */
-  async generatePdf(invoiceId: string): Promise<{ pdfUrl: string; expiresAt: Date }> {
-    const invoice = await this.invoiceRepo.findOne({ where: { id: invoiceId } });
-    if (!invoice) throw new NotFoundException(`Invoice ${invoiceId} not found`);
+  async generatePdf(
+    invoiceId: string,
+    scope?: string,
+  ): Promise<{ pdfUrl: string; expiresAt: Date }> {
+    const invoice = await this.getInvoiceById(invoiceId, scope);
 
     // TODO: Replace with actual PDF generation (pdfkit/puppeteer)
     // const pdfBuffer = await this.renderPdf(invoice);
@@ -151,14 +162,34 @@ export class InvoiceService {
 
   // ── Queries ───────────────────────────────────────────────────────────────
 
-  async getInvoiceById(invoiceId: string): Promise<Invoice> {
+  /**
+   * One invoice, refused if it is not the caller's market to read.
+   *
+   * `scope` is the caller's market as the gateway resolved it from the signed
+   * token, and it is set only when that caller is region-locked. Until the
+   * final fix wave `GET /payments/invoices/:invoiceId` declared no role at all
+   * (whole-branch review, finding A-7), so any authenticated caller read any
+   * invoice by id — customer name, address, line items and what was paid —
+   * across every market. The gateway now gates and scopes it; this is where
+   * the row is compared, because this service also answers TCP callers
+   * directly and `invoices.countryCode` is the only thing that actually knows.
+   *
+   * 404 before 403 on purpose: a missing id is a missing id in every market,
+   * and answering 403 for one would turn this into an existence oracle.
+   */
+  async getInvoiceById(invoiceId: string, scope?: string): Promise<Invoice> {
     const invoice = await this.invoiceRepo.findOne({ where: { id: invoiceId } });
     if (!invoice) throw new NotFoundException(`Invoice ${invoiceId} not found`);
+    assertInMarket(invoice.countryCode, scope, 'that invoice', this.logger);
     return invoice;
   }
 
-  async getInvoiceByPayment(paymentId: string): Promise<Invoice | null> {
-    return this.invoiceRepo.findOne({ where: { paymentId } });
+  /** The same rule by payment id. A miss stays `null` — it is not an error here. */
+  async getInvoiceByPayment(paymentId: string, scope?: string): Promise<Invoice | null> {
+    const invoice = await this.invoiceRepo.findOne({ where: { paymentId } });
+    if (!invoice) return null;
+    assertInMarket(invoice.countryCode, scope, 'that invoice', this.logger);
+    return invoice;
   }
 
   async getCustomerInvoices(customerId: string, page = 1, limit = 20) {
@@ -181,8 +212,8 @@ export class InvoiceService {
     return { data, total, page, limit, hasMore: total > page * limit };
   }
 
-  async voidInvoice(invoiceId: string, reason: string): Promise<Invoice> {
-    const invoice = await this.getInvoiceById(invoiceId);
+  async voidInvoice(invoiceId: string, reason: string, scope?: string): Promise<Invoice> {
+    const invoice = await this.getInvoiceById(invoiceId, scope);
     invoice.status = InvoiceStatus.VOID;
     await this.invoiceRepo.save(invoice);
     this.logger.warn(`Invoice VOIDED: ${invoice.invoiceNumber} — ${reason}`);
@@ -194,9 +225,16 @@ export class InvoiceService {
   private buildLineItems(
     payment: Payment,
     details?: OrderDetails,
-  ): Array<{ name: string; description?: string; quantity: number; unitPrice: number; total: number; hsnCode?: string }> {
+  ): Array<{
+    name: string;
+    description?: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    hsnCode?: string;
+  }> {
     if (details?.items?.length) {
-      return details.items.map(item => ({
+      return details.items.map((item) => ({
         name: item.name,
         description: item.description,
         quantity: item.quantity,
@@ -218,13 +256,15 @@ export class InvoiceService {
       [PaymentModule.WALLET_TOPUP]: 'Wallet Recharge',
     };
 
-    return [{
-      name: moduleLabels[payment.module] || 'Service Payment',
-      description: `Order: ${payment.orderId}`,
-      quantity: 1,
-      unitPrice: Number(payment.amount),
-      total: Number(payment.amount),
-    }];
+    return [
+      {
+        name: moduleLabels[payment.module] || 'Service Payment',
+        description: `Order: ${payment.orderId}`,
+        quantity: 1,
+        unitPrice: Number(payment.amount),
+        total: Number(payment.amount),
+      },
+    ];
   }
 
   /**

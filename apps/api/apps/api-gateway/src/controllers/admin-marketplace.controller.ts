@@ -1076,11 +1076,30 @@ export class AdminMarketplaceController {
 
   @Get('orders/:id')
   @ApiOperation({ summary: 'Get order details by ID' })
-  async getOrderById(@Req() req: any, @Param('id') id: string) {
-    // Still a stub, and deliberately not "improved": inventing a status for an
-    // order nobody read is how this surface used to lie.
-    this.scopeOf(req, undefined, 'that order');
-    return { data: { id, status: 'PENDING' } };
+  @ApiQuery({ name: 'country', required: false })
+  async getOrderById(@Req() req: any, @Param('id') id: string, @Query('country') country?: string) {
+    // This used to `return { data: { id, status: 'PENDING' } }` for any id —
+    // one that does not exist included — under a comment saying that inventing
+    // a status for an order nobody read is how this surface used to lie, and
+    // then inventing `PENDING` (whole-branch review, finding A-5).
+    //
+    // `order-service` has implemented `get_order_by_id` all along
+    // (`apps/order-service/src/order.controller.ts:69`), and
+    // `getOrderByIdForRequester` now asserts the order's own `region_code`
+    // against the scope forwarded here — so a locked admin reading another
+    // market's order is refused by the ROW, a missing id is a 404, and an
+    // unreachable order-service is a 503 rather than a plausible status.
+    //
+    // No `refuseLockedAdmin`: unlike the order WRITES below, a read is
+    // attributable — `orders.region_code` exists and the revenue path already
+    // predicates on it (`order.service.ts:449`).
+    const { scope } = this.scopeOf(req, country, 'that order');
+    return {
+      data: await this.sendTo(this.orderClient, 'Order service', 'get_order_by_id', {
+        orderId: id,
+        scope,
+      }),
+    };
   }
 
   @Put('orders/:id')

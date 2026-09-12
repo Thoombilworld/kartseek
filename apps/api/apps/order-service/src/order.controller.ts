@@ -73,7 +73,11 @@ export class OrderController {
     const orderId = typeof data === 'string' ? data : (data?.orderId ?? data?.id);
     const requester =
       data && typeof data === 'object' ? { userId: data.userId, role: data.role } : undefined;
-    return this.svc.getOrderByIdForRequester(orderId, requester);
+    // `scope` is the gateway's market claim. It was forwarded and dropped here;
+    // the service asserts the order's own `region_code` against it now, which
+    // matters because the ownership check above is bypassed for an admin role.
+    const scope = data && typeof data === 'object' ? data.scope : undefined;
+    return this.svc.getOrderByIdForRequester(orderId, requester, scope);
   }
 
   // The gateway's PUT /marketplace/orders/:id/cancel sends this; without a

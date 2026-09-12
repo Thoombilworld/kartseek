@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { applyMarketFilter, normaliseMarket, requireMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket, normaliseMarket, requireMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { Order } from './entities/order.entity';
@@ -224,9 +224,27 @@ export class OrderService {
    * The caller (API Gateway) passes the authenticated requester derived from the JWT.
    * A non-privileged user may only read their own order; ADMIN/SUPER_ADMIN/STAFF bypass.
    * When no requester is supplied (legacy internal string calls), no check is applied.
+   *
+   * `scope` is the caller's market, set by the gateway only when that caller is
+   * region-locked — and the ownership bypass above is exactly why it matters:
+   * an ADMIN skips the customer check, so the market is the only thing left
+   * between a QA-locked administrator and an Indian customer's order. The
+   * gateway forwarded `scope` on this command before and this service ignored
+   * it (whole-branch review, A-5 and the `order.service.ts` minor); the payload
+   * was dead only because `GET /admin/marketplace/orders/:id` invented its
+   * answer instead of asking. It asks now, so this is where the row decides.
+   *
+   * 404 before 403: `getOrderById` throws for a missing id first, in every
+   * market, so this cannot be used to test whether an order number exists
+   * somewhere else.
    */
-  async getOrderByIdForRequester(orderId: string, requester?: { userId?: string; role?: string }) {
+  async getOrderByIdForRequester(
+    orderId: string,
+    requester?: { userId?: string; role?: string },
+    scope?: string,
+  ) {
     const order = await this.getOrderById(orderId);
+    assertInMarket(order?.regionCode, scope, 'that order', this.logger);
     if (requester?.userId) {
       const role = (requester.role || '').toLowerCase();
       const privileged = role === 'admin' || role === 'super_admin' || role === 'staff';

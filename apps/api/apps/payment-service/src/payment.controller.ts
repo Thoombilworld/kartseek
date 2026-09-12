@@ -125,9 +125,23 @@ export class PaymentController {
 
   // ── Refunds ───────────────────────────────────────────────────────────────
 
+  // `scope` is the caller's market, set by the gateway only when the caller is
+  // region-locked, and the services below compare it against the row's own
+  // `countryCode`. It arrives on all five of these because the five gateway
+  // routes that address them declared no role at all until the final fix wave
+  // (whole-branch review, finding A-7) and now resolve a market like every
+  // other admin route. Forwarding it and not reading it would be enforcement
+  // in name only — the shape R11 found on refund-service.
   @MessagePattern({ cmd: 'initiate_refund' })
   initiateRefund(
-    @Payload() data: { paymentId: string; amount: number; reason: string; initiatedBy: string },
+    @Payload()
+    data: {
+      paymentId: string;
+      amount: number;
+      reason: string;
+      initiatedBy: string;
+      scope?: string;
+    },
   ) {
     return this.orchestrator.initiateRefund(data);
   }
@@ -135,13 +149,13 @@ export class PaymentController {
   // ── Invoices ──────────────────────────────────────────────────────────────
 
   @MessagePattern({ cmd: 'get_invoice' })
-  getInvoice(@Payload() data: { invoiceId: string }) {
-    return this.invoices.getInvoiceById(data.invoiceId);
+  getInvoice(@Payload() data: { invoiceId: string; scope?: string }) {
+    return this.invoices.getInvoiceById(data.invoiceId, data.scope);
   }
 
   @MessagePattern({ cmd: 'get_invoice_by_payment' })
-  getInvoiceByPayment(@Payload() data: { paymentId: string }) {
-    return this.invoices.getInvoiceByPayment(data.paymentId);
+  getInvoiceByPayment(@Payload() data: { paymentId: string; scope?: string }) {
+    return this.invoices.getInvoiceByPayment(data.paymentId, data.scope);
   }
 
   @MessagePattern({ cmd: 'get_customer_invoices' })
@@ -150,13 +164,13 @@ export class PaymentController {
   }
 
   @MessagePattern({ cmd: 'generate_invoice_pdf' })
-  generateInvoicePdf(@Payload() data: { invoiceId: string }) {
-    return this.invoices.generatePdf(data.invoiceId);
+  generateInvoicePdf(@Payload() data: { invoiceId: string; scope?: string }) {
+    return this.invoices.generatePdf(data.invoiceId, data.scope);
   }
 
   @MessagePattern({ cmd: 'void_invoice' })
-  voidInvoice(@Payload() data: { invoiceId: string; reason: string }) {
-    return this.invoices.voidInvoice(data.invoiceId, data.reason);
+  voidInvoice(@Payload() data: { invoiceId: string; reason: string; scope?: string }) {
+    return this.invoices.voidInvoice(data.invoiceId, data.reason, data.scope);
   }
 
   // ── Settlement (admin) ────────────────────────────────────────────────────

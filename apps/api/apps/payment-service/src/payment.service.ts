@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { applyMarketFilter, normaliseMarket, requireMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket, normaliseMarket, requireMarket } from '@app/common';
 import * as crypto from 'crypto';
 import { Payment, PaymentStatus, PaymentModule, PaymentGateway } from './entities/payment.entity';
 import { GatewayAdapterFactory } from './adapters/gateway-adapter.factory';
@@ -350,8 +350,20 @@ export class PaymentOrchestratorService {
     amount: number;
     reason: string;
     initiatedBy: string;
+    /** The caller's market, set by the gateway only when the caller is locked. */
+    scope?: string;
   }): Promise<RefundResult> {
     const payment = await this.findPaymentOrFail(dto.paymentId);
+
+    // The row decides, not the URL. `POST /payments/refund` declared no role at
+    // all until the final fix wave, so this money path had never been asked
+    // whose market the payment was in — and the gateway alone would not be
+    // enough anyway: this service answers TCP callers directly. `payments
+    // .countryCode` is the same column the dashboard and settlement predicates
+    // read (R6/R11), and `assertInMarket` normalises both sides, so a 'QA-DOH'
+    // payment resolves to QA while a market the registry cannot read is
+    // unattributed and refused for a locked caller.
+    assertInMarket(payment.countryCode, dto.scope, 'that payment', this.logger);
 
     if (
       ![PaymentStatus.SUCCESS, PaymentStatus.ESCROW_HOLD, PaymentStatus.ESCROW_RELEASED].includes(
