@@ -3,7 +3,9 @@ import {
   IsDateString,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   Length,
   Matches,
@@ -155,4 +157,45 @@ export class PaymentDashboardFilterDto extends PaymentAdminFilterDto {
   @Min(1)
   @Max(200)
   limit?: number;
+}
+
+/**
+ * `POST /payments/refund`.
+ *
+ * The body was `dto: any`, forwarded verbatim to payment-service, on a route
+ * that declared no role at all — so a refund could be initiated on any payment
+ * id by any authenticated caller, with `initiatedBy` set to whatever the body
+ * said (whole-branch review, finding A-7). Declaring the shape closes three
+ * things at once, in the order they bite:
+ *
+ *  * `scope` cannot be sent. It is the gateway's own key, written by the
+ *    handler from the verified token; under `GatewayValidationPipe`'s
+ *    `whitelist` + `forbidNonWhitelisted` an undeclared `scope` is a 400 before
+ *    the handler runs, rather than a market the gateway never resolved.
+ *  * `initiatedBy` cannot be sent either. The actor on a money movement comes
+ *    from the token, not from the request.
+ *  * `amount` is bounded and positive. A zero or negative amount reached
+ *    `initiateRefund`'s `amount > maxRefundable` check, passed it, and asked
+ *    the provider to refund a nonsense sum.
+ */
+export class PaymentRefundDto {
+  @ApiPropertyOptional({ description: 'The payment to refund' })
+  @IsString()
+  @Length(1, 64)
+  paymentId!: string;
+
+  @ApiPropertyOptional({ description: 'Amount to refund, in the payment currency' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  amount!: number;
+
+  @ApiPropertyOptional({ description: 'Why the refund is being made — recorded on the refund' })
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
+
+  @ApiPropertyOptional({ description: 'ISO 3166-1 alpha-2 market, e.g. QA' })
+  @IsOptional()
+  @Matches(/^[A-Za-z]{2}$/, { message: 'countryCode must be an ISO 3166-1 alpha-2 code.' })
+  countryCode?: string;
 }

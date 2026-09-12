@@ -27,9 +27,18 @@ import {
  *
  * The contract for every later plan: a route is in scope here when its class
  * block or its own handler block carries `@Roles(...)` naming `UserRole.ADMIN`
- * or `UserRole.SUPER_ADMIN`, whatever the file is called. A new admin route in
- * a brand-new controller is covered the moment it is written — no registration
- * step, no filename convention.
+ * or `UserRole.SUPER_ADMIN`, **or** when its full path carries an `admin`
+ * segment (`/admin/…`, `/<module>/admin/…`), whatever the file is called. A new
+ * admin route in a brand-new controller is covered the moment it is written —
+ * no registration step, no filename convention.
+ *
+ * The path arm exists because the role arm has its own blind spot, and the
+ * whole-branch review found eighteen routes sitting in it: a route that
+ * declares NO `@Roles` was dropped before any assertion ran, so the gate was
+ * green while `PUT /hotels/admin/hotels/:id/suspend`, `POST /geo/admin/rules`,
+ * `POST /geo/admin/whitelist` and `POST /payments/refund` were reachable by any
+ * authenticated customer. A route collected with no role at all is an offender
+ * in its own right ("no role gate"), not an exemption.
  *
  * If this fails on a route you added, one of these is true:
  *   • it touches a row that has a market → resolve it (`this.scopeOf(req, …)`)
@@ -72,6 +81,47 @@ const SCOPED =
 const GLOBAL = /@GlobalEntity\(/;
 const ADMIN_ROLE =
   /@Roles\([^)]*(?:UserRole\.(?:SUPER_ADMIN|ADMIN)|'(?:SUPER_ADMIN|ADMIN)'|"(?:SUPER_ADMIN|ADMIN)")/;
+/**
+ * An `admin` PATH segment — `/admin/...` or `/<module>/admin/...`.
+ *
+ * The role filter alone could not see a route that declares no role at all,
+ * and three clusters of exactly that shape were live on the gateway when the
+ * whole-branch review found them: seven `/hotels/admin/*` (including approve
+ * and suspend), six `/geo/admin/*` (including a rule rewrite and an IP
+ * whitelist) and five on `payment.controller.ts` (including
+ * `POST /payments/refund`). Every one was invisible here, because
+ * `parseController` dropped a route with no `@Roles` naming ADMIN before any
+ * assertion ran — the gate green-lit `PUT /hotels/admin/hotels/:id/suspend`.
+ *
+ * A path is the second way a route says it is administrative, and it is the
+ * one a forgotten decorator cannot erase. Collecting on it too means the
+ * missing decorator itself becomes the finding (see the "no role gate" test).
+ */
+const ADMIN_SEGMENT = /(^|\/)admin(\/|$)/;
+/** Any `@Roles(...)` at all, whatever it names — the "no role gate" test's input. */
+const ANY_ROLE = /@Roles\(/;
+/**
+ * THE THIRD SHAPE, AND WHY IT IS NOT A GATE HERE.
+ *
+ * `payment.controller.ts`'s five (refund, two invoice reads, invoice pdf,
+ * invoice void) had no `admin` segment in their paths and no `@Roles` of their
+ * own, inside a class that binds `RolesGuard` — so neither arm above sees them,
+ * and the guard returned `true` for exactly those five while their six
+ * settlement neighbours were gated (`roles.guard.ts:32-34`).
+ *
+ * "Every route in a `RolesGuard`-bound class declares a role" was measured as a
+ * candidate rule and is not one: it reports 80 routes, almost all of them
+ * legitimate — `restaurant.controller.ts`'s storefront and cart surface,
+ * `payment.controller.ts`'s customer payment routes, `libs/gdpr`'s nine
+ * subject-scoped routes (which authorise on `@ResourceOwner` rather than on a
+ * role) and `POST /upload/review-image`. A gate whose waiver list is 80 entries
+ * long is a filename filter with extra steps.
+ *
+ * So the five are pinned where their shape is legible instead:
+ * `controllers/payment-admin-gate.spec.ts` reads this controller's source and
+ * asserts each of the five carries an admin role, a `perm:` key and a scope
+ * call; `route-exposure.regression.spec.ts` holds the `/admin`-path rule.
+ */
 /** Every `@Roles(...)` argument list, so a form this scan cannot read can fail. */
 const ROLES_CALL = /@Roles\(([^)]*)\)/g;
 const CONTROLLER = /@Controller\(/;
@@ -359,6 +409,30 @@ const EXCEPTION_CENSUS: readonly string[] = [
   'PUT /seller/products/:id',
 ];
 
+/**
+ * Admin paths that declare NO role at all, each one named in full.
+ *
+ * Separate from `DEFERRED` on purpose: that list holds routes an admin reaches
+ * *legitimately* and which do not yet resolve a market. This one holds routes
+ * with no authorisation at all — any signed-in customer reaches them — which is
+ * a different and worse fault, and it is the one the role-only collector could
+ * not see. An entry needs an `owner`, because unlike a missing market predicate
+ * there is no honest reason to leave one open: the only defensible entry is a
+ * route somebody is deleting this week.
+ *
+ * **Empty on 2026-09-12**, after the final fix wave closed all eighteen:
+ * `hotel.controller.ts` (four deleted in favour of their scoped
+ * `/admin/hotel/*` twins, three role-gated and scoped),
+ * `geo-security.controller.ts` (six `SUPER_ADMIN` + `security.manage`) and
+ * `payment.controller.ts` (five `ADMIN`/`SUPER_ADMIN` with a finance or refund
+ * key). It is pinned empty by `NO_ROLE_GATE_CENSUS`, so the next one has to be
+ * argued for in review rather than added quietly.
+ */
+const NO_ROLE_GATE: Array<{ verb: string; path: string; owner: string; why: string }> = [];
+
+/** The same census discipline as `EXCEPTION_CENSUS`: an exact set, so a swap shows. */
+const NO_ROLE_GATE_CENSUS: readonly string[] = [];
+
 /** The handler's own signature line: two-space indent, optional async, a name, an open paren. */
 const SIGNATURE = /^ {2}(?:async\s+)?[A-Za-z_]\w*\s*\(/;
 /**
@@ -407,6 +481,14 @@ interface AdminRoute {
   global: boolean;
   /** The route or its class declares an ADMIN / SUPER_ADMIN role. */
   adminRole: boolean;
+  /**
+   * The route or its class declares **some** `@Roles(...)`, whatever it names.
+   * `false` is the "no role gate" offence: an admin path behind
+   * `JwtAuthGuard` alone, reachable by any signed-in customer.
+   */
+  anyRole: boolean;
+  /** Collected because its path carries an `admin` segment, not because of a role. */
+  byPath: boolean;
   /** Its class binds a guard that does the market check, and can do it here. */
   guardScoped: boolean;
 }
@@ -433,6 +515,7 @@ function parseController(file: string, text: string): Parsed {
   for (const cls of classBlocks(src)) {
     if (!CONTROLLER.test(cls.head)) continue;
     const classAdminRole = ADMIN_ROLE.test(cls.head);
+    const classAnyRole = ANY_ROLE.test(cls.head);
     const guardBound = GUARD_SCOPED.some((g) => g.bound.test(cls.head));
     const base = (cls.head.match(BASE) || [])[1] ?? '';
     const routeLines: number[] = [];
@@ -443,16 +526,24 @@ function parseController(file: string, text: string): Parsed {
       const { start, end } = handlerBlock(src, line, nextRoute);
       const block = src.slice(start, end).join('\n');
       parsed++;
-      if (!(classAdminRole || ADMIN_ROLE.test(block))) return;
       const sub = m[2] ?? m[3] ?? m[4] ?? '';
       const routePath = ('/' + base + (sub ? '/' + sub : '')).replace(/\/+/g, '/');
+      // Admin-reachable by EITHER declaration: a role that names ADMIN /
+      // SUPER_ADMIN, or an `admin` segment in the full path. The second arm is
+      // what makes a missing `@Roles` visible instead of exempting the route
+      // from the whole spec — see ADMIN_SEGMENT above.
+      const adminRole = classAdminRole || ADMIN_ROLE.test(block);
+      const anyRole = classAnyRole || ANY_ROLE.test(block);
+      if (!(adminRole || ADMIN_SEGMENT.test(routePath))) return;
       routes.push({
         file,
         verb: m[1].toUpperCase(),
         path: routePath,
         scoped: SCOPED.test(block),
         global: GLOBAL.test(block),
-        adminRole: true,
+        adminRole,
+        anyRole,
+        byPath: !adminRole,
         guardScoped: guardBound && guardCanScope(base, routePath),
       });
     });
@@ -622,6 +713,31 @@ export class FixtureSellerIdController {
 `;
 
 /**
+ * An admin path behind `JwtAuthGuard` alone — the shape the role-only collector
+ * dropped. Both routes must be COLLECTED (so the market rule applies to them)
+ * and both must be reported as "no role gate".
+ */
+const FIXTURE_NO_ROLE_GATE = `@UseGuards(JwtAuthGuard)
+@Controller('fixture/hotels')
+export class FixtureNoRoleGateController {
+  @Get('admin/rows')
+  async listRows() {
+    return 1;
+  }
+
+  @Put('admin/rows/:id/suspend')
+  async suspendRow() {
+    return 2;
+  }
+
+  @Get('rooms')
+  async publicRooms() {
+    return 3;
+  }
+}
+`;
+
+/**
  * Regex literals whose contents look like comments: one ending in `\\/\\/` and
  * one whose character class holds `/*`. Both sit immediately above the class's
  * own `@Roles` and `@Controller`, which the first scanner would have swallowed
@@ -692,6 +808,60 @@ describe('admin market scope regression', () => {
     );
     const report = offenders.map((r) => `  ${r.verb} ${r.path}   (${r.file})`).join('\n');
     expect(report).toBe('');
+  });
+
+  it('an admin path must declare an admin role — no route ships behind JwtAuthGuard alone', () => {
+    // The gap the role-only filter left. `@UseGuards(JwtAuthGuard)` makes a
+    // route authenticated, not authorised: the gateway's RolesGuard returns
+    // `true` when there is no `@Roles` metadata, so a route with none is open
+    // to every signed-in account of every role in every market. Eighteen were
+    // live when the whole-branch review found them, four of them writes
+    // (approve and suspend a hotel, rewrite a geo rule, whitelist an IP,
+    // refund a payment, void an invoice).
+    const waived = new Set(NO_ROLE_GATE.map((d) => `${d.verb} ${d.path}`));
+    const offenders = routes.filter((r) => !r.anyRole && !waived.has(`${r.verb} ${r.path}`));
+    const report = offenders
+      .map((r) => `  ${r.verb} ${r.path}   (${r.file}) — no role gate`)
+      .join('\n');
+    expect(report).toBe('');
+  });
+
+  it('holds exactly the no-role-gate waivers the census names, each with an owner', () => {
+    const listed = NO_ROLE_GATE.map((d) => `${d.verb} ${d.path}`);
+    expect([...new Set(listed)]).toHaveLength(listed.length);
+    expect([...listed].sort()).toEqual([...NO_ROLE_GATE_CENSUS].sort());
+    // An unowned waiver is an unowned hole. And it must still describe a real
+    // route with no role gate, or it outlives the thing it excuses.
+    const stale: string[] = [];
+    for (const d of NO_ROLE_GATE) {
+      if (!d.owner.trim()) stale.push(`  ${d.verb} ${d.path} — a waiver needs an owner`);
+      const matches = routes.filter((r) => r.verb === d.verb && r.path === d.path);
+      if (matches.length !== 1) {
+        stale.push(
+          `  ${d.verb} ${d.path} — matches ${matches.length} routes; delete or make exact`,
+        );
+        continue;
+      }
+      if (matches[0].anyRole) {
+        stale.push(`  ${d.verb} ${d.path} — now role-gated; delete this waiver`);
+      }
+    }
+    expect(stale.join('\n')).toBe('');
+  });
+
+  it('collects an admin path with no role at all, and reports it', () => {
+    const parsed = parseController('fixture.controller.ts', FIXTURE_NO_ROLE_GATE);
+    expect(parsed.declared).toBe(3);
+    expect(parsed.parsed).toBe(3);
+    // The two admin paths are collected (by path), the storefront route is not.
+    expect(
+      parsed.routes.map((r) => `${r.verb} ${r.path} admin=${r.adminRole} role=${r.anyRole}`),
+    ).toEqual([
+      'GET /fixture/hotels/admin/rows admin=false role=false',
+      'PUT /fixture/hotels/admin/rows/:id/suspend admin=false role=false',
+    ]);
+    // And being collected by path means the market rule reaches them too.
+    expect(parsed.routes.every((r) => r.byPath && !r.scoped && !r.global)).toBe(true);
   });
 
   it('every deferred exception still names a real, still-unscoped route', () => {

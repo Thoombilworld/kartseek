@@ -25,7 +25,11 @@ import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { resolveScope } from '../guards/market-scope';
-import { PaymentAdminFilterDto, PaymentDashboardFilterDto } from '../dto/payment.dto';
+import {
+  PaymentAdminFilterDto,
+  PaymentDashboardFilterDto,
+  PaymentRefundDto,
+} from '../dto/payment.dto';
 import { UserRole, rpcCatch } from '@app/common';
 
 // Inline payment methods by country (avoids @app/region JS build cache issues)
@@ -73,10 +77,18 @@ const REGION_PAYMENT_METHODS: Record<
  */
 @ApiTags('💳 Payments')
 @ApiBearerAuth('JWT')
-// RolesGuard is mandatory here: this controller has six @Roles(ADMIN, SUPER_ADMIN)
-// routes (refunds, settlements, reconciliation). It previously relied on the global
-// RolesGuard, which was removed in main.ts — without a local one those routes would
-// be reachable by any authenticated user.
+// RolesGuard is mandatory here: this controller has eleven @Roles(ADMIN,
+// SUPER_ADMIN) routes — six settlement and reconciliation reads, a refund, and
+// four invoice routes. It previously relied on the global RolesGuard, which was
+// removed in main.ts — without a local one those routes would be reachable by
+// any authenticated user.
+//
+// This comment used to say "six … routes (refunds, settlements,
+// reconciliation)". Refunds was NOT one of the six: `POST /refund` and the four
+// invoice routes declared no `@Roles` at all, and the guard skips a route with
+// no metadata, so the comment described the state a reader would assume rather
+// than the state the file was in. The count here is load-bearing — if it stops
+// matching, one of the eleven has lost its decorator.
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('payments')
 export class PaymentGatewayController {
@@ -297,25 +309,74 @@ export class PaymentGatewayController {
   }
 
   // ── Refunds ───────────────────────────────────────────────────────────────
+  //
+  // THIS ROUTE AND THE FOUR INVOICE ROUTES BELOW DECLARED NO `@Roles`.
+  //
+  // The class binds `RolesGuard` (see the class comment), but the guard returns
+  // `true` when a route carries no metadata (`guards/roles.guard.ts:32-34`) —
+  // so for these five alone the guard was a no-op, and any authenticated
+  // caller could read any invoice by id, **void** any invoice and **initiate a
+  // refund on any payment**, in any market. `payment.service.ts:348-378` checks
+  // the payment's status and refundable amount and nothing else: not ownership,
+  // not role, not market. The six settlement routes immediately below were
+  // gated the whole time, which is what made the gap easy to read past
+  // (whole-branch review, finding A-7).
+  //
+  // `payments.countryCode` and `invoices.countryCode` have always existed and
+  // R6/R11 gave this service the predicate, so a refund is *scopable* — unlike
+  // the refund QUEUE on `admin-marketplace.controller.ts`, which is Redis-only
+  // and stays `refuseLockedAdmin`. A region-locked admin may refund a payment
+  // in their own market; the market is resolved here and asserted against the
+  // row by `payment.service.ts` / `invoice.service.ts`, so a path id from
+  // another market answers 403 rather than moving money.
+  //
+  // Keys: `orders.refund` is the platform's "Process Refunds" key and is what
+  // all five refund routes on `admin-marketplace.controller.ts` use;
+  // `finance.view` matches the four sibling settlement reads in this file and
+  // `finance.reports` the two report reads; `finance.payouts` is the finance
+  // write key for a void. Roles stay ADMIN + SUPER_ADMIN, as on the siblings.
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:orders.refund')
   @Post('refund')
-  @ApiOperation({ summary: 'Initiate a full or partial refund' })
-  async initiateRefund(@Body() dto: any) {
-    return this.send('initiate_refund', dto);
+  @ApiOperation({ summary: 'Initiate a full or partial refund, in the caller market' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  async initiateRefund(@Req() req: any, @Body() dto: PaymentRefundDto) {
+    const { scope, market } = this.scopeOf(req, dto?.countryCode, 'that refund');
+    // Named keys, never the body: `scope` is the gateway's own and must not be
+    // forgeable, and `countryCode` is the market this gateway resolved — a body
+    // carrying either would otherwise reach payment-service as if the gateway
+    // had written it.
+    return this.send('initiate_refund', {
+      paymentId: dto?.paymentId,
+      amount: dto?.amount,
+      reason: dto?.reason,
+      initiatedBy: req?.user?.userId ?? req?.user?.id ?? req?.user?.sub ?? 'unknown',
+      countryCode: market,
+      scope,
+    });
   }
 
   // ── Invoices ──────────────────────────────────────────────────────────────
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.view')
   @Get('invoices/:invoiceId')
-  @ApiOperation({ summary: 'Get invoice by ID' })
-  async getInvoice(@Param('invoiceId') invoiceId: string) {
-    return this.send('get_invoice', { invoiceId });
+  @ApiOperation({ summary: 'Get invoice by ID (admin)' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  async getInvoice(
+    @Req() req: any,
+    @Param('invoiceId') invoiceId: string,
+    @Query('countryCode') countryCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that invoice');
+    return this.send('get_invoice', { invoiceId, countryCode: market, scope });
   }
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.view')
   @Get('invoices/payment/:paymentId')
-  @ApiOperation({ summary: 'Get invoice by payment ID' })
-  async getInvoiceByPayment(@Param('paymentId') paymentId: string) {
-    return this.send('get_invoice_by_payment', { paymentId });
+  @ApiOperation({ summary: 'Get invoice by payment ID (admin)' })
+  async getInvoiceByPayment(@Req() req: any, @Param('paymentId') paymentId: string) {
+    const { scope, market } = this.scopeOf(req, undefined, 'that invoice');
+    return this.send('get_invoice_by_payment', { paymentId, countryCode: market, scope });
   }
 
   @UseGuards(ResourceOwnershipGuard)
@@ -334,17 +395,26 @@ export class PaymentGatewayController {
     });
   }
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.reports')
   @Post('invoices/:invoiceId/pdf')
-  @ApiOperation({ summary: 'Generate invoice PDF' })
-  async generateInvoicePdf(@Param('invoiceId') invoiceId: string) {
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    return this.send('generate_invoice_pdf', { invoiceId });
+  @ApiOperation({ summary: 'Generate invoice PDF (admin)' })
+  async generateInvoicePdf(@Req() req: any, @Param('invoiceId') invoiceId: string) {
+    // The `expiresAt` that used to be computed here was never used: the expiry
+    // that matters is the one `InvoiceService.generatePdf` signs the URL with.
+    const { scope, market } = this.scopeOf(req, undefined, 'that invoice');
+    return this.send('generate_invoice_pdf', { invoiceId, countryCode: market, scope });
   }
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:finance.payouts')
   @Post('invoices/:invoiceId/void')
-  @ApiOperation({ summary: 'Void an invoice' })
-  async voidInvoice(@Param('invoiceId') invoiceId: string, @Body('reason') reason: string) {
-    return this.send('void_invoice', { invoiceId, reason });
+  @ApiOperation({ summary: 'Void an invoice (admin)' })
+  async voidInvoice(
+    @Req() req: any,
+    @Param('invoiceId') invoiceId: string,
+    @Body('reason') reason: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, undefined, 'that invoice');
+    return this.send('void_invoice', { invoiceId, reason, countryCode: market, scope });
   }
 
   // ── Settlement (admin) ────────────────────────────────────────────────────

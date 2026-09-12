@@ -64,7 +64,17 @@ const PUBLIC_PREFIXES: Array<[RegExp, string]> = [
     /^\/regions(?!\/stats|\/india\/stats)/,
     'region detection and PIN lookup; the stats routes are admin and excluded here',
   ],
-  [/^\/geo\//, 'pre-login geo/VPN check'],
+  [
+    // Two routes, not the whole prefix. `/^\/geo\//` allowlisted
+    // `GeoSecurityController`'s six `/geo/admin/*` routes as well — the event
+    // log, the rule set, the IP whitelist and its two writes — so this spec
+    // would not have failed even if their per-route `JwtAuthGuard` were
+    // deleted, and it never noticed that none of them declared a role
+    // (whole-branch review, finding A-2). The admin six are now
+    // SUPER_ADMIN + `security.manage`, and the pre-login surface is named.
+    /^\/geo\/(check|verify)/,
+    'pre-login geo/VPN check and the GPS-vs-IP location check',
+  ],
   [/^\/marketplace\//, 'storefront catalogue browsing'],
   [/^\/pharmacy\/(home|stores|search|scan|categories)/, 'pharmacy storefront browsing'],
   [/^\/doctor\/(specialties|hospitals|clinics|doctors|reviews)/, 'doctor directory browsing'],
@@ -116,6 +126,14 @@ function codeOf(file: string): string {
 }
 
 const ADMIN_ROLE = /@Roles\([^)]*(UserRole\.(SUPER_ADMIN|ADMIN)|'(SUPER_ADMIN|ADMIN)')/;
+/**
+ * An `admin` path SEGMENT — the same expression `ADMIN_SEGMENT` holds in
+ * `admin-market-scope.regression.spec.ts`, deliberately. The two specs measure
+ * different things about the same set of routes, and a route that one of them
+ * counts as administrative and the other does not is how thirteen unrolled
+ * admin routes stayed green in both.
+ */
+const ADMIN_SEGMENT = /(^|\/)admin(\/|$)/;
 /** The base path: `@Controller('x')` and the doubled-mount `@Controller(['x', …])`. */
 const BASE = /@Controller\(\s*\[?\s*['"`]([^'"`]*)['"`]/;
 const CONTROLLER_DECORATOR = /@Controller\(/;
@@ -208,10 +226,19 @@ describe('gateway route exposure', () => {
     expect(report).toBe('');
   });
 
-  it('requires an admin role on every /admin route', () => {
+  it('requires an admin role on every route with an admin path segment', () => {
     // A JwtAuthGuard alone admits any signed-in customer. /admin/security was
     // exactly that: authenticated, unrolled, and able to ban IPs.
-    const unrolled = routes.filter((r) => r.path.startsWith('/admin') && !r.adminRole);
+    //
+    // `startsWith('/admin')` was too narrow, and the same width as the market-
+    // scope collector's old role-only filter: it saw nothing under
+    // `/hotels/admin/*` (seven routes, including approve and suspend) or
+    // `/geo/admin/*` (six, including a rule rewrite and an IP whitelist), all
+    // of them reachable by any authenticated customer. The two specs now agree
+    // on one rule — an `admin` SEGMENT anywhere in the path — which is why
+    // `ADMIN_SEGMENT` here and in `admin-market-scope.regression.spec.ts` are
+    // the same expression. If one of them is widened again, widen both.
+    const unrolled = routes.filter((r) => ADMIN_SEGMENT.test(r.path) && !r.adminRole);
     const report = unrolled.map((r) => `  ${r.verb} ${r.path}   (${r.file})`).join('\n');
     expect(report).toBe('');
   });

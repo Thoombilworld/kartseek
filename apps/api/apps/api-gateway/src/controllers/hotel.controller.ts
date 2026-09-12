@@ -19,11 +19,14 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { rpcCatch } from '@app/common';
+import { UserRole, rpcCatch } from '@app/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import { JwtAuthGuard } from '@app/security';
 import { Public } from '../decorators/public.decorator';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
+import { resolveScope } from '../guards/market-scope';
 
 /**
  * Hotel Controller — API Gateway Proxy
@@ -36,15 +39,28 @@ import { Public } from '../decorators/public.decorator';
  *
  * Uses timeout + catchError fallback so the gateway stays operational even when
  * the hotel-service microservice is unavailable.
+ *
+ * `RolesGuard` is bound at the class alongside `JwtAuthGuard` because the three
+ * `/hotels/admin/*` routes below need it. The guard returns `true` for a route
+ * that declares no `@Roles` (`roles.guard.ts:32-34`), so binding it changes
+ * nothing for the storefront, booking and owner routes — and without it a
+ * per-route `@Roles` on this controller would be metadata nothing reads, which
+ * is the failure mode the whole-branch review found on `payment.controller.ts`
+ * in reverse.
  */
 @ApiTags('🏨 Hotels')
 @ApiBearerAuth('JWT')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('hotels')
 export class HotelController {
   private readonly logger = new Logger(HotelController.name);
 
   constructor(@Inject('HOTEL_SERVICE') private readonly hotelClient: ClientProxy) {}
+
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
+  }
 
   /** Helper — sends TCP message with 5s timeout and graceful fallback. */
   /**
@@ -260,59 +276,67 @@ export class HotelController {
 
   // ── Admin ─────────────────────────────────────────────────────────────
   //
-  // `GET /hotels/admin/stats` used to live here: `@UseGuards(JwtAuthGuard)` is
-  // this whole controller's CLASS-level guard, with no per-route `@Roles`, so
-  // any authenticated caller — any role, any market — read platform-wide
-  // hotel figures. It duplicated the properly scoped
-  // `GET /admin/hotel/dashboard` in `admin-hotel.controller.ts` (which does
-  // carry `@Roles` and forwards the caller's market), had no caller anywhere
-  // in `apps/web`, `packages/shared-core` or `apps/api/scripts` (checked by
-  // grep), and is deleted rather than fixed in place.
-
-  @Get('admin/hotels')
-  @ApiOperation({ summary: 'Admin: list all hotels with filters' })
-  adminListHotels(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('status') status?: string,
-  ) {
-    return this.send('admin_list_hotels', { page, limit, status });
-  }
-
-  @Put('admin/hotels/:id/approve')
-  @ApiOperation({ summary: 'Admin: approve a hotel listing' })
-  approveHotel(@Param('id') hotelId: string) {
-    return this.send('admin_approve_hotel', { hotelId });
-  }
-
-  @Put('admin/hotels/:id/suspend')
-  @ApiOperation({ summary: 'Admin: suspend a hotel' })
-  suspendHotel(@Param('id') hotelId: string, @Body('reason') reason: string) {
-    return this.send('admin_suspend_hotel', { hotelId, reason });
-  }
+  // THIS BLOCK USED TO BE EIGHT ROUTES BEHIND `JwtAuthGuard` AND NOTHING ELSE.
+  //
+  // `@UseGuards(JwtAuthGuard)` was this controller's only class-level guard and
+  // no route below declared `@Roles`, so **any authenticated caller — any role,
+  // any market** — could approve a hotel listing, suspend a hotel, and read
+  // platform-wide revenue, fraud, compliance and onboarding figures from a
+  // customer token. `GET /hotels/admin/stats` was deleted in the R12 fix round
+  // for exactly that reason; its seven siblings stayed, four lines below the
+  // comment explaining why it had to go, and the whole-branch review found them
+  // (finding A-1). They were invisible to `admin-market-scope.regression.spec.ts`
+  // because that collector dropped any route with no admin `@Roles` — which is
+  // why the same fix wave widened it to collect on the `admin` PATH segment too.
+  //
+  // Four are gone, in favour of the scoped twins on `admin-hotel.controller.ts`
+  // that already carry `@Roles` and forward the caller's market. No caller
+  // anywhere (`apps/web/src`, `packages/`, `packages/shared-mobile`,
+  // `apps/api/scripts`, every module frontend — checked by grep) asked for any
+  // of them:
+  //
+  //   GET  /hotels/admin/hotels            → GET   /admin/hotel/hotels
+  //   PUT  /hotels/admin/hotels/:id/approve → PATCH /admin/hotel/hotels/:id/approve
+  //   PUT  /hotels/admin/hotels/:id/suspend → PATCH /admin/hotel/hotels/:id/suspend
+  //   GET  /hotels/admin/revenue           → GET   /admin/hotel/dashboard
+  //     (`admin_revenue` and `admin_hotel_stats` are the SAME service method,
+  //      `HotelAdminService.getAdminAnalytics` — hotel/backend admin.controller.ts:142)
+  //
+  // The three below have no twin on `admin-hotel.controller.ts`, so deleting
+  // them would delete a capability rather than a duplicate. They keep their
+  // paths and gain what the twins have: an admin role, the hotel module
+  // permission key, and the caller's market resolved and forwarded so
+  // `HotelAdminService` can predicate on `hotels.countryCode` (R9).
+  //
+  // `modules.hotel` is the key, not `hotels.manage`: `ADMIN_PERMISSIONS`
+  // (`libs/common/src/admin/permissions.ts`) has no per-entity hotel key — the
+  // module key is the vocabulary the console's role grid actually offers.
 
   @Get('admin/fraud/flags')
-  @ApiOperation({ summary: 'Admin: get fraud detection flags' })
-  getFraudFlags() {
-    return this.send('admin_fraud_flags', {});
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.hotel')
+  @ApiOperation({ summary: 'Admin: get fraud detection flags, for one market or all' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  getFraudFlags(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'those fraud flags');
+    return this.send('admin_fraud_flags', { countryCode: market, scope });
   }
 
   @Get('admin/compliance')
-  @ApiOperation({ summary: 'Admin: get hotel compliance status' })
-  getCompliance() {
-    return this.send('admin_compliance', {});
-  }
-
-  @Get('admin/revenue')
-  @ApiOperation({ summary: 'Admin: revenue analytics' })
-  getRevenue(@Query('period') period?: string) {
-    return this.send('admin_revenue', { period });
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.hotel')
+  @ApiOperation({ summary: 'Admin: get hotel compliance status, for one market or all' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  getCompliance(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that compliance report');
+    return this.send('admin_compliance', { countryCode: market, scope });
   }
 
   @Get('admin/onboarding')
-  @ApiOperation({ summary: 'Admin: hotel onboarding pipeline' })
-  getOnboarding() {
-    return this.send('admin_onboarding', {});
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.hotel')
+  @ApiOperation({ summary: 'Admin: hotel onboarding pipeline, for one market or all' })
+  @ApiQuery({ name: 'countryCode', required: false })
+  getOnboarding(@Req() req: any, @Query('countryCode') countryCode?: string) {
+    const { scope, market } = this.scopeOf(req, countryCode, 'that onboarding pipeline');
+    return this.send('admin_onboarding', { countryCode: market, scope });
   }
 
   // ══════════════════════════════════════════════════════════════════════
