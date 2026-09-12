@@ -465,14 +465,18 @@ export class PharmacyController {
     return this.svc.getAnalytics(d.storeId);
   }
 
+  // `scope` is the caller's market when the gateway resolved one for a
+  // region-locked administrator, and undefined for a global one. Each decision
+  // is asserted against the store's own `regionCode` inside the service, before
+  // anything is written or published.
   @MessagePattern({ cmd: 'approve_pharmacy_store' })
-  msgApproveStore(@Payload() d: { storeId: string }) {
-    return this.svc.approveStore(d.storeId);
+  msgApproveStore(@Payload() d: { storeId: string; scope?: string }) {
+    return this.svc.approveStore(d.storeId, d?.scope);
   }
 
   @MessagePattern({ cmd: 'suspend_pharmacy_store' })
-  msgSuspendStore(@Payload() d: { storeId: string; reason?: string }) {
-    return this.svc.suspendStore(d.storeId, d.reason);
+  msgSuspendStore(@Payload() d: { storeId: string; reason?: string; scope?: string }) {
+    return this.svc.suspendStore(d.storeId, d.reason, d?.scope);
   }
 
   // `scope` is the caller's market when the gateway resolved one for a
@@ -485,18 +489,20 @@ export class PharmacyController {
   }
 
   @MessagePattern({ cmd: 'set_pharmacy_commission' })
-  msgSetCommission(@Payload() d: { storeId: string; rate: number }) {
-    return this.svc.setCommission(d.storeId, d.rate);
+  msgSetCommission(@Payload() d: { storeId: string; rate: number; scope?: string }) {
+    return this.svc.setCommission(d.storeId, d.rate, d?.scope);
   }
 
   @MessagePattern({ cmd: 'verify_prescription' })
   msgVerifyPrescription(@Payload() d: EmptyMessage) {
+    // `scope` travels inside the dto here: the service reads it alongside the
+    // decision, and the prescription's market is the target pharmacy's.
     return this.svc.verifyPrescription(d.prescId, d);
   }
 
   @MessagePattern({ cmd: 'get_pending_prescriptions' })
   msgGetPendingPrescriptions(@Payload() d: EmptyMessage) {
-    return this.svc.getPendingPrescriptions(d.page, d.limit);
+    return this.svc.getPendingPrescriptions(d.page, d.limit, d?.scope);
   }
 
   @MessagePattern({ cmd: 'pharmacy_home' })

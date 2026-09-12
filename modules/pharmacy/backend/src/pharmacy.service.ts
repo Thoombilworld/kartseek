@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike, In } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
+import { assertInMarket, refuseUnattributable } from '@app/common';
 
 import {
   PharmacyStore,
@@ -714,10 +715,24 @@ export class PharmacyService {
       adminId: string;
       rejectionReason?: string;
       pharmacistNotes?: string;
+      scope?: string;
     },
   ) {
     const presc = await this.prescriptionRepo.findOneBy({ id: prescId });
     if (!presc) throw new NotFoundException(`Prescription ${prescId} not found`);
+    // A prescription belongs to the market of the pharmacy it was uploaded for.
+    // One with no target store cannot be attributed to a market, so a locked
+    // admin is refused rather than deciding it for every market.
+    if (presc.storeId) {
+      assertInMarket(
+        await this.storeMarket(presc.storeId),
+        dto?.scope,
+        'prescription',
+        this.logger,
+      );
+    } else {
+      refuseUnattributable(dto?.scope, 'prescription', this.logger);
+    }
     presc.status = dto.status;
     presc.verifiedByAdminId = dto.adminId;
     presc.verifiedAt = new Date();
@@ -745,22 +760,61 @@ export class PharmacyService {
     return saved;
   }
 
-  async getPendingPrescriptions(page = 1, limit = 20) {
-    return this.prescriptionRepo.findAndCount({
-      where: { status: PrescriptionStatus.PENDING_VERIFICATION },
-      order: { createdAt: 'ASC' },
-      skip: (page - 1) * limit,
-      take: limit,
+  /**
+   * The verification queue, narrowed to the caller's market.
+   *
+   * The market is a predicate rather than a post-filter: filtering after
+   * `take(limit)` returns a short page that reads as "nothing awaiting
+   * verification". A prescription with no target store is attributable to no
+   * market, so it is not in a locked admin's queue at all.
+   */
+  async getPendingPrescriptions(page = 1, limit = 20, scope?: string) {
+    const qb = this.prescriptionRepo
+      .createQueryBuilder('presc')
+      .where('presc.status = :status', { status: PrescriptionStatus.PENDING_VERIFICATION });
+    if (scope) {
+      // `store.id` is uuid and `prescriptions."storeId"` is varchar, so the
+      // join needs the cast: without it Postgres answers `operator does not
+      // exist: uuid = character varying` and the queue 500s.
+      qb.innerJoin(PharmacyStore, 'store', 'store.id::text = presc.storeId').andWhere(
+        'store.regionCode = :scope',
+        { scope },
+      );
+    }
+    return qb
+      .orderBy('presc.createdAt', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+  }
+
+  /** The market a pharmacy store trades in — how its prescriptions are attributed. */
+  private async storeMarket(storeId: string | null | undefined): Promise<string | null> {
+    if (!storeId) return null;
+    const store = await this.storeRepo.findOne({
+      where: { id: storeId },
+      select: ['id', 'regionCode'],
     });
+    return store?.regionCode ?? null;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  Admin — Store Management
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async approveStore(storeId: string) {
+  /**
+   * `scope` is the caller's market when the gateway resolved one for a
+   * region-locked administrator, and undefined for a global one. The market is
+   * `regionCode`, the platform's ISO-2 identifier — not `countryCode`, which
+   * carries a legacy alpha-3 default ('KEN') that nothing seeds.
+   */
+  async approveStore(storeId: string, scope?: string) {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
+    // The first `assertInMarket` in this module. Until now suspend, approve and
+    // commission decisions crossed markets freely — `PUT /pharmacy/admin/<IN
+    // store>/commission {"rate":90}` answered 200 for a QA admin (audit V9).
+    assertInMarket(store.regionCode, scope, 'pharmacy', this.logger);
     store.status = PharmacyStoreStatus.APPROVED;
     store.isOnline = true;
     store.isTemporarilyClosed = false;
@@ -769,9 +823,10 @@ export class PharmacyService {
     return saved;
   }
 
-  async suspendStore(storeId: string, reason?: string) {
+  async suspendStore(storeId: string, reason?: string, scope?: string) {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
+    assertInMarket(store.regionCode, scope, 'pharmacy', this.logger);
     store.status = PharmacyStoreStatus.SUSPENDED;
     store.isOnline = false;
     if (reason) store.rejectionReason = reason;
@@ -806,7 +861,12 @@ export class PharmacyService {
     });
   }
 
-  async setCommission(storeId: string, rate: number) {
+  async setCommission(storeId: string, rate: number, scope?: string) {
+    const store = await this.storeRepo.findOneBy({ id: storeId });
+    if (!store) throw new NotFoundException(`Store ${storeId} not found`);
+    assertInMarket(store.regionCode, scope, 'pharmacy', this.logger);
+    // `update(storeId, …)` used to write without reading, so there was no row
+    // to check a market against and no 404 for an id that matched nothing.
     await this.storeRepo.update(storeId, { commissionRate: rate });
     return { success: true, storeId, commissionRate: rate };
   }
