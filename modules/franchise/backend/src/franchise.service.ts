@@ -6,6 +6,7 @@ import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Franchise } from './entities/franchise.entity';
+import { assertInMarket, normaliseMarket, requireId } from '@app/common';
 import { REGION_CONFIGS, type SupportedCountryCode } from '@app/region';
 
 /**
@@ -56,7 +57,12 @@ export class FranchiseService {
    * degrade-rather-than-500 behaviour — but the failure is now a real
    * transport/service error worth alerting on, not a silent schema mismatch.
    */
-  private async call<T>(client: ClientProxy, cmd: string, payload: Record<string, unknown>, fallback: T): Promise<T> {
+  private async call<T>(
+    client: ClientProxy,
+    cmd: string,
+    payload: Record<string, unknown>,
+    fallback: T,
+  ): Promise<T> {
     return firstValueFrom(
       client.send<T>({ cmd }, payload).pipe(
         timeout(FranchiseService.RPC_TIMEOUT_MS),
@@ -93,6 +99,64 @@ export class FranchiseService {
 
   async healthCheck() {
     return { service: 'franchise-service', status: 'ok', timestamp: new Date().toISOString() };
+  }
+
+  // ─── MARKET SCOPE ──────────────────────────────────────────────────────────
+
+  /**
+   * The franchise a caller named, once they are allowed to name it.
+   *
+   * A franchise belongs to exactly one country (`franchises.country_code`, and
+   * `registerFranchise` refuses anything that is not an active market), so a
+   * region-locked caller may reach it only when that country is theirs. One
+   * comparison, not a set intersection.
+   *
+   * The id is validated first. Every one of the fifty commands below used to
+   * pass `data.id` straight into `findOne({ where: { id } })`, and TypeORM
+   * treats `where: { id: undefined }` as no predicate at all — it returns the
+   * *first* franchise in the table. A command sent without an id therefore
+   * answered with somebody's estate.
+   *
+   * No lookup at all for an unscoped caller: the question only has an answer
+   * worth paying for when it can change the outcome.
+   */
+  async assertFranchiseInScope(id: string | undefined, scope?: string): Promise<string> {
+    const franchiseId = requireId(id, 'franchise');
+    if (!normaliseMarket(scope)) return franchiseId;
+
+    const franchise = await this.franchiseRepo.findOne({
+      where: { id: franchiseId },
+      select: ['id', 'countryCode'],
+    });
+    // A franchise nobody can place is not a regional operator's: an unknown id
+    // resolves to a null market, which `assertInMarket` refuses.
+    assertInMarket(franchise?.countryCode ?? null, scope, 'franchise', this.logger);
+    return franchiseId;
+  }
+
+  /**
+   * Owner and market of one franchise — the gateway's `FranchiseAccessGuard`
+   * asks this before it lets a request reach any other franchise route.
+   *
+   * Three columns and nothing else. The guard needs to know who owns the estate
+   * and which market it trades in; it has no use for its revenue, and a lookup
+   * that answers an authorisation question should not be able to leak the thing
+   * it is protecting. Nulls for an unknown id, which deny in both directions.
+   */
+  async getFranchiseAccess(
+    id: string | undefined,
+  ): Promise<{ id: string | null; ownerId: string | null; countryCode: string | null }> {
+    if (!id) return { id: null, ownerId: null, countryCode: null };
+    const franchise = await this.franchiseRepo.findOne({
+      where: { id },
+      select: ['id', 'ownerId', 'countryCode'],
+    });
+    if (!franchise) return { id: null, ownerId: null, countryCode: null };
+    return {
+      id: franchise.id,
+      ownerId: franchise.ownerId ?? null,
+      countryCode: franchise.countryCode ?? null,
+    };
   }
 
   /**
@@ -171,9 +235,19 @@ export class FranchiseService {
 
   async submitComplianceReport(franchiseId: string, storeId: string, dto: Record<string, unknown>) {
     const reportId = `COMP-${Date.now()}`;
-    const report = { id: reportId, franchiseId, storeId, ...dto, submittedAt: new Date().toISOString() };
+    const report = {
+      id: reportId,
+      franchiseId,
+      storeId,
+      ...dto,
+      submittedAt: new Date().toISOString(),
+    };
     await this.redis.setJson(`compliance:${reportId}`, report, 86400 * 30);
-    await this.kafka.publish('franchise.compliance.submitted', { id: reportId, franchiseId, storeId });
+    await this.kafka.publish('franchise.compliance.submitted', {
+      id: reportId,
+      franchiseId,
+      storeId,
+    });
     return { success: true, report };
   }
 
@@ -205,7 +279,9 @@ export class FranchiseService {
     });
     const saved = await this.franchiseRepo.save(franchise);
     await this.kafka.publish('franchise.registered', {
-      id: saved.id, name: saved.businessName, countryCode: saved.countryCode,
+      id: saved.id,
+      name: saved.businessName,
+      countryCode: saved.countryCode,
     });
     return { success: true, franchise: saved, region: this.buildRegionSettings(saved.countryCode) };
   }
@@ -220,15 +296,21 @@ export class FranchiseService {
    */
   private ratesForMarket(market: SupportedCountryCode, requested: Record<string, number> = {}) {
     const DEFAULTS: Record<string, number> = {
-      marketplace: 8, grocery: 12, restaurant: 18, pharmacy: 10,
-      doctor: 12, taxi: 20, 'hotel-booking': 15,
+      marketplace: 8,
+      grocery: 12,
+      restaurant: 18,
+      pharmacy: 10,
+      doctor: 12,
+      taxi: 20,
+      'hotel-booking': 15,
     };
     const enabled = REGION_CONFIGS[market].enabledModules.filter((m) => m !== 'franchise');
     const rates: Record<string, number> = {};
     for (const m of enabled) {
-      if (!(m in DEFAULTS)) continue;      // wallet, loyalty, delivery take no commission
+      if (!(m in DEFAULTS)) continue; // wallet, loyalty, delivery take no commission
       const supplied = Number(requested[m]);
-      rates[m] = Number.isFinite(supplied) && supplied >= 0 && supplied <= 100 ? supplied : DEFAULTS[m];
+      rates[m] =
+        Number.isFinite(supplied) && supplied >= 0 && supplied <= 100 ? supplied : DEFAULTS[m];
     }
     return rates;
   }
@@ -240,7 +322,13 @@ export class FranchiseService {
       this.marketplace,
       'franchise_marketplace_kpis',
       { franchiseId },
-      { activeSellers: 0, totalProducts: 0, totalOrders: 0, retailRevenue: 0, categoryDistribution: {} },
+      {
+        activeSellers: 0,
+        totalProducts: 0,
+        totalOrders: 0,
+        retailRevenue: 0,
+        categoryDistribution: {},
+      },
     );
     return {
       activeSellers: kpis.activeSellers,
@@ -251,7 +339,12 @@ export class FranchiseService {
     };
   }
 
-  async getMarketplaceSellers(franchiseId: string, search?: string, category?: string, status?: string) {
+  async getMarketplaceSellers(
+    franchiseId: string,
+    search?: string,
+    category?: string,
+    status?: string,
+  ) {
     const { sellers, total } = await this.call(
       this.marketplace,
       'franchise_marketplace_sellers',
@@ -267,9 +360,15 @@ export class FranchiseService {
       products: s.totalProducts || 0,
       orders: s.totalOrders || 0,
       status:
-        s.verificationStatus === 'VERIFIED' ? 'active' : s.verificationStatus === 'SUSPENDED' ? 'suspended' : 'pending',
+        s.verificationStatus === 'VERIFIED'
+          ? 'active'
+          : s.verificationStatus === 'SUSPENDED'
+            ? 'suspended'
+            : 'pending',
       joined: s.createdAt
-        ? new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date(s.createdAt))
+        ? new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(
+            new Date(s.createdAt),
+          )
         : 'Unknown',
     }));
 
@@ -285,7 +384,10 @@ export class FranchiseService {
     );
     if (result.success) {
       await this.kafka.publish('franchise.marketplace.seller_status_updated', {
-        franchiseId, sellerId, newStatus: status, updatedAt: new Date().toISOString(),
+        franchiseId,
+        sellerId,
+        newStatus: status,
+        updatedAt: new Date().toISOString(),
       });
     }
     return result;
@@ -309,15 +411,30 @@ export class FranchiseService {
   }
 
   async getGroceryStores(franchiseId: string, search?: string, status?: string) {
-    return this.call(this.grocery, 'franchise_grocery_stores', { franchiseId, search, status }, { stores: [], total: 0 });
+    return this.call(
+      this.grocery,
+      'franchise_grocery_stores',
+      { franchiseId, search, status },
+      { stores: [], total: 0 },
+    );
   }
 
   async getGroceryOrders(franchiseId: string, page = 1, status?: string) {
-    return this.call(this.grocery, 'franchise_grocery_orders', { franchiseId, page, status }, { orders: [], total: 0, page });
+    return this.call(
+      this.grocery,
+      'franchise_grocery_orders',
+      { franchiseId, page, status },
+      { orders: [], total: 0, page },
+    );
   }
 
   async getGroceryProducts(franchiseId: string, search?: string, category?: string) {
-    return this.call(this.grocery, 'franchise_grocery_products', { franchiseId, search, category }, { products: [], total: 0 });
+    return this.call(
+      this.grocery,
+      'franchise_grocery_products',
+      { franchiseId, search, category },
+      { products: [], total: 0 },
+    );
   }
 
   async getGroceryAnalytics(franchiseId: string, period?: string) {
@@ -335,8 +452,10 @@ export class FranchiseService {
 
   async updateGroceryStoreStatus(franchiseId: string, storeId: string, status: string) {
     return this.updateModuleEntityStatus(
-      this.grocery, 'franchise_grocery_update_store_status',
-      { franchiseId, storeId, status }, 'franchise.grocery.store_status_updated',
+      this.grocery,
+      'franchise_grocery_update_store_status',
+      { franchiseId, storeId, status },
+      'franchise.grocery.store_status_updated',
       { franchiseId, entityId: storeId, status },
     );
   }
@@ -360,36 +479,46 @@ export class FranchiseService {
 
   async getRestaurants(franchiseId: string, search?: string, status?: string) {
     return this.call(
-      this.restaurant, 'franchise_restaurant_list',
-      { franchiseId, search, status }, { restaurants: [], total: 0 },
+      this.restaurant,
+      'franchise_restaurant_list',
+      { franchiseId, search, status },
+      { restaurants: [], total: 0 },
     );
   }
 
   async getRestaurantOrders(franchiseId: string, page = 1, status?: string) {
     return this.call(
-      this.restaurant, 'franchise_restaurant_orders',
-      { franchiseId, page, status }, { orders: [], total: 0, page },
+      this.restaurant,
+      'franchise_restaurant_orders',
+      { franchiseId, page, status },
+      { orders: [], total: 0, page },
     );
   }
 
   async getRestaurantMenuStats(franchiseId: string) {
     return this.call(
-      this.restaurant, 'franchise_restaurant_menu_stats',
-      { franchiseId }, { totalItems: 0, categories: [] },
+      this.restaurant,
+      'franchise_restaurant_menu_stats',
+      { franchiseId },
+      { totalItems: 0, categories: [] },
     );
   }
 
   async getRestaurantAnalytics(franchiseId: string, period?: string) {
     return this.call(
-      this.restaurant, 'franchise_restaurant_analytics',
-      { franchiseId, period }, { revenue: 0, orders: 0, period: period || '30d' },
+      this.restaurant,
+      'franchise_restaurant_analytics',
+      { franchiseId, period },
+      { revenue: 0, orders: 0, period: period || '30d' },
     );
   }
 
   async updateRestaurantStatus(franchiseId: string, restaurantId: string, status: string) {
     return this.updateModuleEntityStatus(
-      this.restaurant, 'franchise_restaurant_update_status',
-      { franchiseId, restaurantId, status }, 'franchise.restaurant.status_updated',
+      this.restaurant,
+      'franchise_restaurant_update_status',
+      { franchiseId, restaurantId, status },
+      'franchise.restaurant.status_updated',
       { franchiseId, entityId: restaurantId, status },
     );
   }
@@ -416,32 +545,56 @@ export class FranchiseService {
   }
 
   async getPharmacyStores(franchiseId: string, search?: string, status?: string) {
-    return this.call(this.pharmacy, 'franchise_pharmacy_stores', { franchiseId, search, status }, { stores: [], total: 0 });
+    return this.call(
+      this.pharmacy,
+      'franchise_pharmacy_stores',
+      { franchiseId, search, status },
+      { stores: [], total: 0 },
+    );
   }
 
   async getPharmacyOrders(franchiseId: string, page = 1, status?: string) {
-    return this.call(this.pharmacy, 'franchise_pharmacy_orders', { franchiseId, page, status }, { orders: [], total: 0, page });
+    return this.call(
+      this.pharmacy,
+      'franchise_pharmacy_orders',
+      { franchiseId, page, status },
+      { orders: [], total: 0, page },
+    );
   }
 
   async getPharmacyInventory(franchiseId: string) {
-    return this.call(this.pharmacy, 'franchise_pharmacy_inventory', { franchiseId }, { items: [], lowStock: 0 });
+    return this.call(
+      this.pharmacy,
+      'franchise_pharmacy_inventory',
+      { franchiseId },
+      { items: [], lowStock: 0 },
+    );
   }
 
   async getPharmacyCompliance(franchiseId: string) {
-    return this.call(this.pharmacy, 'franchise_pharmacy_compliance', { franchiseId }, { compliant: 0, total: 0, issues: [] });
+    return this.call(
+      this.pharmacy,
+      'franchise_pharmacy_compliance',
+      { franchiseId },
+      { compliant: 0, total: 0, issues: [] },
+    );
   }
 
   async getPharmacyAnalytics(franchiseId: string, period?: string) {
     return this.call(
-      this.pharmacy, 'franchise_pharmacy_analytics',
-      { franchiseId, period }, { revenue: 0, orders: 0, period: period || '30d' },
+      this.pharmacy,
+      'franchise_pharmacy_analytics',
+      { franchiseId, period },
+      { revenue: 0, orders: 0, period: period || '30d' },
     );
   }
 
   async updatePharmacyStoreStatus(franchiseId: string, storeId: string, status: string) {
     return this.updateModuleEntityStatus(
-      this.pharmacy, 'franchise_pharmacy_update_store_status',
-      { franchiseId, storeId, status }, 'franchise.pharmacy.store_status_updated',
+      this.pharmacy,
+      'franchise_pharmacy_update_store_status',
+      { franchiseId, storeId, status },
+      'franchise.pharmacy.store_status_updated',
       { franchiseId, entityId: storeId, status },
     );
   }
@@ -468,31 +621,47 @@ export class FranchiseService {
   }
 
   async getDoctorClinics(franchiseId: string, search?: string, status?: string) {
-    return this.call(this.doctor, 'franchise_doctor_clinics', { franchiseId, search, status }, { clinics: [], total: 0 });
+    return this.call(
+      this.doctor,
+      'franchise_doctor_clinics',
+      { franchiseId, search, status },
+      { clinics: [], total: 0 },
+    );
   }
 
   async getDoctorAppointments(franchiseId: string, page = 1, status?: string) {
     return this.call(
-      this.doctor, 'franchise_doctor_appointments',
-      { franchiseId, page, status }, { appointments: [], total: 0, page },
+      this.doctor,
+      'franchise_doctor_appointments',
+      { franchiseId, page, status },
+      { appointments: [], total: 0, page },
     );
   }
 
   async getDoctors(franchiseId: string, specialty?: string) {
-    return this.call(this.doctor, 'franchise_doctor_doctors', { franchiseId, search: specialty }, { doctors: [], total: 0 });
+    return this.call(
+      this.doctor,
+      'franchise_doctor_doctors',
+      { franchiseId, search: specialty },
+      { doctors: [], total: 0 },
+    );
   }
 
   async getDoctorAnalytics(franchiseId: string, period?: string) {
     return this.call(
-      this.doctor, 'franchise_doctor_analytics',
-      { franchiseId, period }, { revenue: 0, orders: 0, period: period || '30d' },
+      this.doctor,
+      'franchise_doctor_analytics',
+      { franchiseId, period },
+      { revenue: 0, orders: 0, period: period || '30d' },
     );
   }
 
   async updateDoctorClinicStatus(franchiseId: string, clinicId: string, status: string) {
     return this.updateModuleEntityStatus(
-      this.doctor, 'franchise_doctor_update_clinic_status',
-      { franchiseId, clinicId, status }, 'franchise.doctor.clinic_status_updated',
+      this.doctor,
+      'franchise_doctor_update_clinic_status',
+      { franchiseId, clinicId, status },
+      'franchise.doctor.clinic_status_updated',
       { franchiseId, entityId: clinicId, status },
     );
   }
@@ -529,7 +698,10 @@ export class FranchiseService {
 
   async updateTaxiDriverStatus(franchiseId: string, driverId: string, status: string) {
     await this.kafka.publish('franchise.taxi.driver_status_updated', {
-      franchiseId, driverId, status, updatedAt: new Date().toISOString(),
+      franchiseId,
+      driverId,
+      status,
+      updatedAt: new Date().toISOString(),
     });
     return { success: true, message: `Driver ${driverId} status updated to ${status}` };
   }
@@ -543,7 +715,9 @@ export class FranchiseService {
 
   async getHotelKpis(franchiseId: string) {
     const cached = await this.redis.getJson(`franchise:${franchiseId}:hotel:kpis`);
-    return cached || { activeHotels: 0, totalRooms: 0, todayBookings: 0, avgOccupancy: 0, revenue: '₹0' };
+    return (
+      cached || { activeHotels: 0, totalRooms: 0, todayBookings: 0, avgOccupancy: 0, revenue: '₹0' }
+    );
   }
 
   async getHotels(franchiseId: string, search?: string, status?: string) {
@@ -565,7 +739,10 @@ export class FranchiseService {
 
   async updateHotelStatus(franchiseId: string, hotelId: string, status: string) {
     await this.kafka.publish('franchise.hotel.status_updated', {
-      franchiseId, hotelId, status, updatedAt: new Date().toISOString(),
+      franchiseId,
+      hotelId,
+      status,
+      updatedAt: new Date().toISOString(),
     });
     return { success: true, message: `Hotel ${hotelId} status updated to ${status}` };
   }
@@ -620,9 +797,10 @@ export class FranchiseService {
     kafkaTopic: string,
     event: Record<string, unknown>,
   ) {
-    const result = await this.call<{ success: boolean; message: string }>(
-      client, cmd, payload, { success: false, message: 'Module service unavailable' },
-    );
+    const result = await this.call<{ success: boolean; message: string }>(client, cmd, payload, {
+      success: false,
+      message: 'Module service unavailable',
+    });
     if (result.success) {
       await this.kafka.publish(kafkaTopic, { ...event, updatedAt: new Date().toISOString() });
     }
@@ -644,9 +822,11 @@ export class FranchiseService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /** The markets a franchise may operate in. */
-  static readonly SUPPORTED_MARKETS: SupportedCountryCode[] =
-    (Object.keys(REGION_CONFIGS) as SupportedCountryCode[])
-      .filter((c) => REGION_CONFIGS[c].isActive && REGION_CONFIGS[c].enabledModules.includes('franchise'));
+  static readonly SUPPORTED_MARKETS: SupportedCountryCode[] = (
+    Object.keys(REGION_CONFIGS) as SupportedCountryCode[]
+  ).filter(
+    (c) => REGION_CONFIGS[c].isActive && REGION_CONFIGS[c].enabledModules.includes('franchise'),
+  );
 
   /**
    * Resolve a country code to a market this module can operate in.
@@ -716,7 +896,11 @@ export class FranchiseService {
     if (!franchise) {
       return { franchiseId, ...this.buildRegionSettings(null) };
     }
-    return { franchiseId, businessName: franchise.businessName, ...this.buildRegionSettings(franchise.countryCode) };
+    return {
+      franchiseId,
+      businessName: franchise.businessName,
+      ...this.buildRegionSettings(franchise.countryCode),
+    };
   }
 
   /** The markets a franchise may be registered in, for the registration form. */
@@ -728,7 +912,11 @@ export class FranchiseService {
           code: r.code,
           name: r.name,
           flag: r.flag,
-          currency: { code: r.currencyCode, symbol: r.currencySymbol, decimals: r.currencyDecimals },
+          currency: {
+            code: r.currencyCode,
+            symbol: r.currencySymbol,
+            decimals: r.currencyDecimals,
+          },
           tax: r.tax,
           timezone: r.timezone,
           callingCode: r.callingCode,
