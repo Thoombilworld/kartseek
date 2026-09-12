@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { resolveFranchiseDbConfig, FRANCHISE_MIGRATIONS_TABLE } from './src/db-config';
 import { Franchise } from './src/entities/franchise.entity';
 
 /**
@@ -47,22 +48,32 @@ import { Franchise } from './src/entities/franchise.entity';
  * these scripts from this directory**. Run them from the repository root and
  * `FRANCHISE_DB_*` is unset, `DB_*` answers instead, and the migration lands in
  * the shared database's `franchise` schema.
+ *
+ * ── The schema, and where the ledger lives ──────────────────────────────────
+ *
+ * This DataSource deliberately declares **no `schema`**. TypeORM builds the
+ * migration ledger inside `options.schema` and does it *before* the first
+ * migration's `up()` runs, so with `schema: 'franchise'` a fresh dedicated database
+ * died on `CREATE TABLE "franchise"."migrations"` — schema does not exist — and no
+ * `CREATE SCHEMA` inside a migration could ever run early enough to help. The
+ * ledger is `public.franchise_migrations` (see `src/db-config.ts`), and
+ * `migrations/*-InitialFranchiseSchema.ts` creates the schema as its first
+ * statement. Each entity names `schema: 'franchise'` itself, so `migration:generate`
+ * still diffs the right schema.
+ *
+ * Connection details come from `resolveFranchiseDbConfig` — the same function
+ * `src/franchise-service.module.ts` calls, so the runner and the service cannot
+ * resolve to different databases. `FRANCHISE_DB_*` wins, `DB_*` answers next.
  */
 export const FranchiseDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.FRANCHISE_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.FRANCHISE_DB_PORT || process.env.DB_PORT || 5440),
-  username: process.env.FRANCHISE_DB_USER || process.env.DB_USER || 'franchise_user',
-  password:
-    process.env.FRANCHISE_DB_PASSWORD ||
-    process.env.DB_PASSWORD ||
-    process.env.DB_PASS ||
-    'postgres',
-  database: process.env.FRANCHISE_DB_NAME || process.env.DB_NAME || 'kartseek_franchise',
-  schema: 'franchise',
+  // One resolver, shared with the service — see src/db-config.ts.
+  ...resolveFranchiseDbConfig((key) => process.env[key]),
+  // No `schema` here on purpose: TypeORM would build the ledger inside it,
+  // before the first migration could create it. The entities name it instead.
   entities: [Franchise],
   migrations: ['migrations/1786498700000-InitialFranchiseSchema.ts'],
-  migrationsTableName: 'migrations',
+  migrationsTableName: FRANCHISE_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.
   migrationsTransactionMode: 'each',
