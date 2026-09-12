@@ -1403,11 +1403,6 @@ export class MarketplaceFulfillmentService {
    * attribution join as `reportMarket`: the answer names a question, the
    * question names a product, and the product's seller carries the market.
    * REACHABLE by a region-locked ADMIN (`@Roles(SELLER, ADMIN, SUPER_ADMIN)`
-    const question = await this.questionRepo.findOne({
-      where: { id: answer.questionId },
-      select: ['id', 'productId'],
-    });
-    assertInMarket(await this.reportMarket(question?.productId), scope, 'answer', this.logger);
    * at the gateway); left unscoped by both R2 and R6 and claimed by no brief
    * until now.
    */
