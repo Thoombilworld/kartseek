@@ -1,4 +1,4 @@
-import { applyMarketFilter } from '@app/common';
+import { applyMarketFilter, assertInMarket, refuseUnattributable } from '@app/common';
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
@@ -359,9 +359,27 @@ export class DoctorService {
   }
 
   // ── Admin / Provider Methods ──────────────────────────────────────────────
-  async updateDoctorStatus(doctorId: string, status: string) {
+  /**
+   * `doctors` carries no market column of its own (see `tcpAdminGetDoctors`'s
+   * own note) — resolve one through the clinic the practitioner is attached
+   * to, the same relation `getDoctorsByClinic` reads. A doctor attached only
+   * to a hospital (which itself carries no market yet, below) or to neither
+   * cannot be attributed, so a locked caller is refused rather than shown a
+   * check against nothing.
+   */
+  async updateDoctorStatus(doctorId: string, status: string, scope?: string) {
     const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
     if (!doctor) throw new NotFoundException(`Doctor ${doctorId} not found`);
+    if (scope) {
+      const clinic = doctor.clinicId
+        ? await this.clinicRepo.findOne({ where: { id: doctor.clinicId } })
+        : null;
+      if (clinic) {
+        assertInMarket(clinic.regionCode, scope, 'doctor', this.logger);
+      } else {
+        refuseUnattributable(scope, 'doctor', this.logger);
+      }
+    }
 
     doctor.status = status as any;
     await this.doctorRepo.save(doctor);
@@ -371,9 +389,16 @@ export class DoctorService {
     return { success: true, doctorId, status };
   }
 
-  async updateHospitalStatus(hospitalId: string, status: string) {
+  /**
+   * `hospitals` has no market column at all — unlike `clinics.regionCode`,
+   * there is no dimension to check a locked caller's scope against yet, so a
+   * locked caller is refused outright (`refuseUnattributable`) rather than
+   * silently allowed to edit a hospital in every market.
+   */
+  async updateHospitalStatus(hospitalId: string, status: string, scope?: string) {
     const hospital = await this.hospitalRepo.findOne({ where: { id: hospitalId } });
     if (!hospital) throw new NotFoundException(`Hospital ${hospitalId} not found`);
+    refuseUnattributable(scope, 'hospital', this.logger);
 
     hospital.status = status as any;
     await this.hospitalRepo.save(hospital);
@@ -382,9 +407,10 @@ export class DoctorService {
     return { success: true, hospitalId, status };
   }
 
-  async updateClinicStatus(clinicId: string, status: string) {
+  async updateClinicStatus(clinicId: string, status: string, scope?: string) {
     const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
     if (!clinic) throw new NotFoundException(`Clinic ${clinicId} not found`);
+    assertInMarket(clinic.regionCode, scope, 'clinic', this.logger);
 
     clinic.status = status as any;
     await this.clinicRepo.save(clinic);

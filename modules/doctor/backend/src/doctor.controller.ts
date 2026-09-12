@@ -204,8 +204,8 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'update_hospital_status' })
-  msgUpdateHospitalStatus(@Payload() d: { id: string; status: string }) {
-    return this.svc.updateHospitalStatus(d.id, d.status);
+  msgUpdateHospitalStatus(@Payload() d: { id: string; status: string; scope?: string }) {
+    return this.svc.updateHospitalStatus(d.id, d.status, d.scope);
   }
 
   @MessagePattern({ cmd: 'get_clinics' })
@@ -219,8 +219,8 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'update_clinic_status' })
-  msgUpdateClinicStatus(@Payload() d: { id: string; status: string }) {
-    return this.svc.updateClinicStatus(d.id, d.status);
+  msgUpdateClinicStatus(@Payload() d: { id: string; status: string; scope?: string }) {
+    return this.svc.updateClinicStatus(d.id, d.status, d.scope);
   }
 
   @MessagePattern({ cmd: 'get_doctors' })
@@ -239,8 +239,8 @@ export class DoctorController {
   }
 
   @MessagePattern({ cmd: 'update_doctor_status' })
-  msgUpdateDoctorStatus(@Payload() d: { id: string; status: string }) {
-    return this.svc.updateDoctorStatus(d.id, d.status);
+  msgUpdateDoctorStatus(@Payload() d: { id: string; status: string; scope?: string }) {
+    return this.svc.updateDoctorStatus(d.id, d.status, d.scope);
   }
 
   @MessagePattern({ cmd: 'book_appointment' })
