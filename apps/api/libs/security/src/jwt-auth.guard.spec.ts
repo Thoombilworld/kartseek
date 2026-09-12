@@ -237,3 +237,94 @@ describe('JwtAuthGuard user revocation', () => {
     await expect(new JwtAuthGuard(notPublic, redis as any).canActivate(ctx)).resolves.toBe(true);
   });
 });
+
+/**
+ * A `@Public()` route that carries a token must verify it as thoroughly as a
+ * protected one before calling the caller authenticated.
+ *
+ * The public branch used to run only passport's signature/expiry check and
+ * return, never reaching the `type`, `revoked-tokens:<jti>` or
+ * `revoked-users:<id>` checks below it. That was harmless while `request.user`
+ * on a public route was only a personalisation nicety — and stopped being
+ * harmless the moment a real authorisation decision hung off it: the gateway's
+ * health board shows every internal port, gRPC URL and the Kafka broker list to
+ * ADMIN/SUPER_ADMIN, and those routes are `@Public()` so the kubelet can reach
+ * them without a token. A just-deactivated administrator's unexpired JWT would
+ * therefore still open the full board — precisely the population that should
+ * lose it first, and precisely the disclosure AUD2-072 exists to close.
+ *
+ * "Unusable" now includes "revoked": the request continues, anonymously.
+ */
+describe('JwtAuthGuard on a public route', () => {
+  const parentProto = Object.getPrototypeOf(JwtAuthGuard.prototype);
+  const realCanActivate = parentProto.canActivate;
+  const env = process.env;
+
+  /** Reflector stub: the route IS @Public(). */
+  const isPublic = { getAllAndOverride: () => true } as any;
+
+  const authenticateAs = (user: Record<string, unknown>) => {
+    parentProto.canActivate = function (ctx: any) {
+      ctx.switchToHttp().getRequest().user = user;
+      return true;
+    };
+  };
+  const redisWith = (keys: Record<string, string>) => ({
+    get: async (k: string) => keys[k] ?? null,
+  });
+  const admin = { sub: 'u-adm', userId: 'u-adm', role: 'SUPER_ADMIN', type: 'access', jti: 'j1' };
+
+  beforeEach(() => {
+    process.env = { ...env, NODE_ENV: 'test', DEV_AUTH_BYPASS: 'false' };
+    authenticateAs(admin);
+  });
+  afterEach(() => {
+    parentProto.canActivate = realCanActivate;
+    process.env = env;
+  });
+
+  it('populates the user for a usable token — the additive behaviour stays', async () => {
+    const { ctx, request } = contextFor({ authorization: 'Bearer fresh.access.token' });
+    await expect(new JwtAuthGuard(isPublic, redisWith({}) as any).canActivate(ctx)).resolves.toBe(
+      true,
+    );
+    expect(request.user.role).toBe('SUPER_ADMIN');
+  });
+
+  it('admits the request but drops a revoked user, so the caller is anonymous', async () => {
+    const redis = redisWith({ 'revoked-users:u-adm': 'staff-deactivated' });
+    const { ctx, request } = contextFor({ authorization: 'Bearer fresh.access.token' });
+    await expect(new JwtAuthGuard(isPublic, redis as any).canActivate(ctx)).resolves.toBe(true);
+    expect(request.user).toBeUndefined();
+  });
+
+  it('drops a token revoked by jti, on a public route too', async () => {
+    const redis = redisWith({ 'revoked-tokens:j1': 'logout' });
+    const { ctx, request } = contextFor({ authorization: 'Bearer logged.out.token' });
+    await expect(new JwtAuthGuard(isPublic, redis as any).canActivate(ctx)).resolves.toBe(true);
+    expect(request.user).toBeUndefined();
+  });
+
+  it('drops a refresh token presented as a bearer credential', async () => {
+    authenticateAs({ ...admin, type: 'refresh' });
+    const { ctx, request } = contextFor({ authorization: 'Bearer refresh.token' });
+    await expect(new JwtAuthGuard(isPublic, redisWith({}) as any).canActivate(ctx)).resolves.toBe(
+      true,
+    );
+    expect(request.user).toBeUndefined();
+  });
+
+  it('leaves an unauthenticated request anonymous without consulting passport', async () => {
+    let called = false;
+    parentProto.canActivate = function () {
+      called = true;
+      return true;
+    };
+    const { ctx, request } = contextFor();
+    await expect(new JwtAuthGuard(isPublic, redisWith({}) as any).canActivate(ctx)).resolves.toBe(
+      true,
+    );
+    expect(request.user).toBeUndefined();
+    expect(called).toBe(false);
+  });
+});

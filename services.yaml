@@ -102,7 +102,10 @@ services:
     # `entities: []`. Readiness runs a real query now, so an entry claiming a
     # database this process never opens would report `down` for ever.
     database: null
-    dependsOn: [postgres, redis, kafka]
+    # postgres dropped with the `database` entry above: this service opens no
+    # connection, so listing it would keep compose and the k8s manifests waiting
+    # on a store it never speaks to.
+    dependsOn: [redis, kafka]
 
   - name: delivery-service
     kind: core-service
@@ -116,7 +119,10 @@ services:
     # `delivery-service.module.ts` registers no DataSource — `delivery.module.ts`
     # is dead code.
     database: null
-    dependsOn: [postgres, redis, kafka]
+    # postgres dropped with the `database` entry above: this service opens no
+    # connection, so listing it would keep compose and the k8s manifests waiting
+    # on a store it never speaks to.
+    dependsOn: [redis, kafka]
 
   - name: location-service
     kind: core-service
@@ -197,7 +203,10 @@ services:
     # `refund-service.module.ts` registers no DataSource — `refund.module.ts` is
     # dead code.
     database: null
-    dependsOn: [postgres, redis, kafka]
+    # postgres dropped with the `database` entry above: this service opens no
+    # connection, so listing it would keep compose and the k8s manifests waiting
+    # on a store it never speaks to.
+    dependsOn: [redis, kafka]
 
   - name: report-service
     kind: core-service
@@ -211,7 +220,10 @@ services:
     # `report-service.module.ts` registers no DataSource — `report.module.ts` is
     # dead code.
     database: null
-    dependsOn: [postgres, redis, kafka]
+    # postgres dropped with the `database` entry above: this service opens no
+    # connection, so listing it would keep compose and the k8s manifests waiting
+    # on a store it never speaks to.
+    dependsOn: [redis, kafka]
 
   - name: search-service
     kind: core-service

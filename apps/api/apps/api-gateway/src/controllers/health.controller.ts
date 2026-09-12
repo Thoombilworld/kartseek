@@ -1,13 +1,27 @@
-import { Controller, Get, Inject, Optional, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, Optional, Req, Res, UseGuards } from '@nestjs/common';
 import * as net from 'node:net';
 import { DataSource } from 'typeorm';
 import { SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@app/security';
-import { UserRole } from '@app/common';
+import {
+  UserRole,
+  publicReadiness,
+  readinessHttpStatus,
+  worstOf,
+  type DependencyStatus,
+} from '@app/common';
 import { RedisService } from '@app/redis';
 import { Public } from '../decorators/public.decorator';
 import { MarketplaceCatalogService } from '../services/marketplace-catalog.service';
+
+/**
+ * Just the sliver of the HTTP response this controller touches — see the
+ * identically-named type in `@app/common`'s shared health controller.
+ */
+interface StatusSink {
+  status(code: number): unknown;
+}
 
 /** One dependency's verdict. The index signature carries the gRPC counters. */
 interface Check {
@@ -27,9 +41,11 @@ interface Check {
  * Used by Docker HEALTHCHECK, Kubernetes liveness/readiness probes, and monitoring.
  *
  * Endpoints:
- *  GET /health           → liveness + the one-line dependency roll-up
- *  GET /health/ready     → readiness probe (a real query, a real PING, socket connects)
- *  GET /health/metrics   → runtime memory & CPU metrics
+ *  GET /health           → liveness; 200 while the process runs, no dependency touched
+ *  GET /health/ready     → readiness; a real query, a real PING, socket connects,
+ *                          and **503 when a dependency is down** — the status line
+ *                          is the only part a readinessProbe reads
+ *  GET /health/metrics   → runtime memory & CPU metrics (staff only)
  *  GET /health/services  → catalog of every configured microservice (staff only)
  *
  * Every route here is `@Public()` under `JwtAuthGuard`, which is *optional*
@@ -89,31 +105,32 @@ export class HealthController {
   // Skip throttle: Kubernetes/load balancers probe health frequently.
   // Global throttler (100 req/60s) would cause false unavailability alerts.
   /**
-   * Liveness, plus the one-line roll-up of what the gateway can actually reach.
+   * Liveness: the process, and nothing it talks to. Always 200 while it runs.
    *
-   * It answers HTTP 200 whatever the dependencies say — a liveness probe that
-   * can fail restarts a healthy process when a store blinks — so the summary is
-   * in the body: `dependencies` is one word per dependency and nothing else.
-   * `/health/ready` is where the detail lives, and it is what a readiness probe
-   * or a load balancer should read.
+   * This briefly called `readiness()` on every hit, to carry a one-line
+   * dependency roll-up. That was the wrong shape twice over: it spent a query,
+   * a PING and two socket connects per probe interval, and it made what
+   * liveness reports depend on a store — so the moment anyone points a
+   * `livenessProbe` here, a blinking dependency starts restarting healthy pods.
+   * The aggregate lives on `/health/ready`, which is what a readiness probe and
+   * a load balancer should read, and which carries the status code to match.
    */
   @SkipThrottle()
   @Public()
   @Get('health')
   @ApiOperation({
-    summary: 'Liveness probe — 200 while the process runs, plus a dependency roll-up',
+    summary: 'Liveness probe — 200 while the process runs; no dependency is touched',
   })
   @ApiOkResponse({ description: 'Service is alive' })
-  async liveness() {
-    const ready = await this.readiness();
+  liveness() {
     return {
-      status: ready.status === 'ready' ? 'ok' : ready.status,
+      status: 'ok',
       service: 'api-gateway',
       version: process.env.npm_package_version ?? '1.0.0',
       nodeVersion: process.version,
       environment: process.env.NODE_ENV ?? 'development',
       uptime: Math.round(process.uptime()),
-      dependencies: Object.fromEntries(Object.entries(ready.checks).map(([k, v]) => [k, v.status])),
+      readiness: '/api/v1/health/ready',
       timestamp: new Date().toISOString(),
     };
   }
@@ -125,7 +142,7 @@ export class HealthController {
   @Get('health/ready')
   @ApiOperation({ summary: 'Readiness probe — a real query, a real PING; detail for admins only' })
   @ApiOkResponse({ description: 'All dependencies are connected and ready' })
-  async readiness(@Req() req?: unknown) {
+  async readiness(@Res({ passthrough: true }) res: StatusSink, @Req() req?: unknown) {
     const checks: Record<string, Check> = {};
 
     // ── Redis: the store's own verdict ─────────────────────────────────────
@@ -206,26 +223,24 @@ export class HealthController {
     // `down` beats `degraded` beats ready. The old roll-up looked only for
     // `down`, so an emulated Redis or a half-failing gRPC channel still
     // answered `ready`.
-    const worst = Object.values(checks).map((c) => c.status);
-    const status = worst.includes('down')
-      ? 'down'
-      : worst.includes('degraded')
-        ? 'degraded'
-        : 'ready';
+    const status = worstOf(checks as Record<string, DependencyStatus>);
 
-    const envelope = {
-      status,
-      service: 'api-gateway',
-      version: process.env.npm_package_version ?? '1.0.0',
-      nodeVersion: process.version,
-      environment: process.env.NODE_ENV ?? 'development',
-      uptime: Math.round(process.uptime()),
-      timestamp: new Date().toISOString(),
-    };
+    // The status line is the only part a `readinessProbe` or a `curl -f`
+    // HEALTHCHECK reads. `down` is a 503 that takes this process out of the
+    // Service's endpoint list; `degraded` stays 200, because a process serving
+    // on an emulated cache is still serving and evicting it would turn a
+    // warm-cache problem into an outage.
+    res.status(readinessHttpStatus(status));
 
     if (this.isStaff(req)) {
       return {
-        ...envelope,
+        status,
+        service: 'api-gateway',
+        version: process.env.npm_package_version ?? '1.0.0',
+        nodeVersion: process.version,
+        environment: process.env.NODE_ENV ?? 'development',
+        uptime: Math.round(process.uptime()),
+        timestamp: new Date().toISOString(),
         checks,
         config: {
           skipDb: process.env.SKIP_DB === 'true',
@@ -236,25 +251,14 @@ export class HealthController {
       };
     }
 
-    // Anonymous: the verdict, not the topology. `detail` is what named the
-    // database, the broker list and the Mongo URI (AUD2-072); `status` and
-    // `latencyMs` are what a load balancer actually reads, and `error` is kept
-    // because an unauthenticated readiness probe that cannot say why it is not
-    // ready is the thing this whole task is removing.
-    return {
-      ...envelope,
-      checks: Object.fromEntries(
-        Object.entries(checks).map(([name, c]) => [
-          name,
-          {
-            status: c.status,
-            ...(c.latencyMs === undefined ? {} : { latencyMs: c.latencyMs }),
-            ...(c.error === undefined ? {} : { error: c.error }),
-            ...(c.emulated === undefined ? {} : { emulated: c.emulated }),
-          },
-        ]),
-      ) as Record<string, Check>,
-    };
+    // Anonymous: the verdict and one word per dependency. `detail` named the
+    // database, the broker list and the Mongo URI, and `error` is a driver
+    // message — a connection-level Postgres failure throws
+    // `connect ECONNREFUSED <host>:<port>`, so keeping it handed an anonymous
+    // caller the internal address of the database during the one moment, a real
+    // outage, when that matters most (AUD2-072). The reason is not lost: it is
+    // in this process's log and in the staff board above.
+    return publicReadiness({ status, checks: checks as Record<string, DependencyStatus> });
   }
 
   // ── Runtime Metrics ────────────────────────────────────────────────────────
@@ -262,8 +266,16 @@ export class HealthController {
   @SkipThrottle()
   @Public()
   @Get('health/metrics')
-  @ApiOperation({ summary: 'Runtime memory, CPU & WebSocket latency metrics' })
-  async metrics() {
+  @ApiOperation({
+    summary: 'Runtime memory, CPU & WebSocket latency metrics — admins only; a status otherwise',
+  })
+  async metrics(@Req() req?: unknown) {
+    // Gated the same way as the service board: process memory, CPU, WebSocket
+    // latency and ack-failure counts describe the inside of the platform, and
+    // an anonymous caller has no reason to read them. Liveness already answers
+    // "is this process up" for everyone.
+    if (!this.isStaff(req)) return { status: 'ok' };
+
     const mem = process.memoryUsage();
 
     // Fetch WebSocket latency stats from Redis

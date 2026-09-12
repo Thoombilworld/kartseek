@@ -39,7 +39,7 @@ describe('HealthService', () => {
     });
     const svc = new HealthService('order-service', { query } as any, upRedis as any, []);
     const r = await svc.ready();
-    expect(r.status).toBe('degraded');
+    expect(r.status).toBe('down');
     expect(r.checks.database.status).toBe('down');
     expect(r.checks.database.error).toContain('password authentication failed');
   });
@@ -68,7 +68,7 @@ describe('HealthService', () => {
     ]);
     const r = await svc.ready();
     expect(r.checks.mongodb.status).toBe('down');
-    expect(r.status).toBe('degraded');
+    expect(r.status).toBe('down');
   });
 
   it('liveness never touches a dependency', async () => {
@@ -88,7 +88,7 @@ describe('HealthService', () => {
   it('reports a declared database as down when no DataSource is bound', async () => {
     const svc = new HealthService('order-service', null, upRedis as any, [], true, true);
     const r = await svc.ready();
-    expect(r.status).toBe('degraded');
+    expect(r.status).toBe('down');
     expect(r.checks.database.status).toBe('down');
     expect(r.checks.database.error).toContain('no DataSource');
   });
@@ -97,8 +97,34 @@ describe('HealthService', () => {
     const query = vi.fn(async () => [{ ok: 1 }]);
     const svc = new HealthService('order-service', { query } as any, null, [], true, true);
     const r = await svc.ready();
-    expect(r.status).toBe('degraded');
+    expect(r.status).toBe('down');
     expect(r.checks.redis.status).toBe('down');
     expect(r.checks.redis.error).toContain('no RedisService');
+  });
+  /**
+   * `down` and `degraded` are not the same verdict, because the HTTP status the
+   * controller sets keys off this field: a dependency that is *down* takes the
+   * process out of the load balancer (503), while an emulated Redis or a
+   * half-failing cache stays in it (200). Collapsing both into `degraded` — as
+   * this service first did — makes a dead database indistinguishable from a
+   * warm cache miss, and 503 unreachable.
+   */
+  it('separates a down dependency from a merely degraded one', async () => {
+    const emulatedOnly = new HealthService('cart-service', null, emulatedRedis as any, []);
+    expect((await emulatedOnly.ready()).status).toBe('degraded');
+
+    const query = vi.fn(async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:5432');
+    });
+    const dbDown = new HealthService('order-service', { query } as any, emulatedRedis as any, []);
+    const r = await dbDown.ready();
+    expect(r.status).toBe('down');
+    expect(r.checks.redis.status).toBe('degraded');
+  });
+
+  it('is ready when every dependency answers', async () => {
+    const query = vi.fn(async () => [{ ok: 1 }]);
+    const svc = new HealthService('order-service', { query } as any, upRedis as any, []);
+    expect((await svc.ready()).status).toBe('ready');
   });
 });

@@ -47,8 +47,27 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       if (req?.headers?.['authorization']) {
         try {
           await super.canActivate(context);
+          /**
+           * The same verification a protected route gets, before this counts
+           * as a session.
+           *
+           * This branch used to stop at passport — signature and expiry — and
+           * return, never reaching the `type` / `revoked-tokens` /
+           * `revoked-users` checks below. Harmless while `request.user` on a
+           * public route was only a personalisation nicety, and not harmless
+           * once a real authorisation decision hung off it: the gateway's
+           * health board is `@Public()` so the kubelet can reach it without a
+           * token, and it shows ADMIN/SUPER_ADMIN every internal port, gRPC URL
+           * and the Kafka broker list. A just-deactivated administrator's
+           * unexpired JWT would still have opened it — the population that
+           * should lose it first.
+           */
+          await this.assertSessionUsable(req);
         } catch {
-          // An unusable token on a public route is simply not a session.
+          // An unusable token on a public route is simply not a session, and
+          // "unusable" includes revoked, deactivated and wrong-type. The
+          // request continues; it continues anonymously.
+          delete req.user;
         }
       }
       return true;
@@ -103,6 +122,20 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const result = await (super.canActivate(context) as Promise<boolean>);
     if (!result) return false;
 
+    await this.assertSessionUsable(request);
+    return true;
+  }
+
+  /**
+   * Everything that must hold after passport has accepted the signature.
+   *
+   * Kept as one method so the `@Public()` branch and the protected path cannot
+   * drift: for two years they did, and the public branch was the weaker of the
+   * two by exactly these three checks. Throws `UnauthorizedException`; the
+   * protected path lets that become a 401, the public branch catches it and
+   * drops the user.
+   */
+  private async assertSessionUsable(request: any): Promise<void> {
     // A refresh token must not work as a Bearer credential. The two used to carry
     // identical claims apart from `exp`, which made the 30-day refresh token a
     // 30-day access token on every protected route. Tokens minted before `type`
@@ -140,8 +173,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         }
       }
     }
-
-    return true;
   }
 
   handleRequest(err: any, user: any, info: any) {

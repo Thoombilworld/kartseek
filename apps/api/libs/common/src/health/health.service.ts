@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { RedisService } from '@app/redis';
-import { HEALTH_CHECK, type DependencyStatus, type HealthCheck } from './health.types';
+import { HEALTH_CHECK, worstOf, type DependencyStatus, type HealthCheck } from './health.types';
 
 export const HEALTH_SERVICE_NAME = Symbol('HEALTH_SERVICE_NAME');
 /** What the registry says this service owns — see the constructor's last two arguments. */
@@ -75,9 +75,13 @@ export class HealthService {
 
     for (const c of this.extra ?? []) checks[c.name] = await this.guard(c);
 
-    const down = Object.values(checks).some((c) => c.status === 'down' || c.status === 'degraded');
+    // `down` and `degraded` are separate verdicts because the controller turns
+    // this field into the HTTP status a readiness probe reads: `down` is a 503
+    // that takes the process out of the load balancer, `degraded` is a 200 that
+    // keeps it in. Collapsing both — as this first did — makes a dead database
+    // indistinguishable from an emulated cache and 503 unreachable.
     return {
-      status: down ? 'degraded' : 'ready',
+      status: worstOf(checks),
       service: this.serviceName,
       timestamp: new Date().toISOString(),
       checks,
