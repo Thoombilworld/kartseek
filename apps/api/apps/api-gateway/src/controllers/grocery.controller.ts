@@ -1,4 +1,24 @@
-import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, Req, Inject, DefaultValuePipe, ParseIntPipe, UseGuards, Logger, HttpException, HttpStatus, ForbiddenException, ParseUUIDPipe} from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  Req,
+  Inject,
+  DefaultValuePipe,
+  ParseIntPipe,
+  UseGuards,
+  Logger,
+  HttpException,
+  HttpStatus,
+  ForbiddenException,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { rpcCatch, UserRole } from '@app/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
@@ -9,6 +29,7 @@ import { Roles } from '../decorators/roles.decorator';
 import { requestRegion, type RequestWithRegion } from '../services/request-region';
 import { Public } from '../decorators/public.decorator';
 import { GroceryStoreOwnershipGuard } from '../guards/grocery-store-ownership.guard';
+import { marketScopeOf, refuseLockedAdmin, resolveMarket } from '../guards/market-scope';
 
 /**
  * Grocery Controller — API Gateway Proxy
@@ -41,9 +62,7 @@ import { GroceryStoreOwnershipGuard } from '../guards/grocery-store-ownership.gu
 export class GroceryController {
   private readonly logger = new Logger(GroceryController.name);
 
-  constructor(
-    @Inject('GROCERY_SERVICE') private readonly groceryClient: ClientProxy,
-  ) {}
+  constructor(@Inject('GROCERY_SERVICE') private readonly groceryClient: ClientProxy) {}
 
   /**
    * Forward to grocery-service, preserving the failure.
@@ -60,10 +79,7 @@ export class GroceryController {
       return await lastValueFrom(
         this.groceryClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Grocery service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Grocery service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -91,8 +107,10 @@ export class GroceryController {
     return {
       actorId: this.callerId(req),
       actorRole: req?.user?.role,
-      actorIp: (req?.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim()
-        || req?.ip || req?.socket?.remoteAddress,
+      actorIp:
+        (req?.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim() ||
+        req?.ip ||
+        req?.socket?.remoteAddress,
     };
   }
 
@@ -100,6 +118,26 @@ export class GroceryController {
     const id = req?.user?.id ?? req?.user?.userId ?? req?.user?.sub;
     if (!id) throw new ForbiddenException('Could not identify the signed-in user.');
     return String(id);
+  }
+
+  /**
+   * The market this request may act in, as `scope` for grocery-service.
+   *
+   * These routes are the admin console's real moderation path — the console
+   * calls `/grocery/admin/products/*` because `/admin/grocery/*` has no
+   * pending-products twin — so they are scoped rather than deleted. They sent
+   * no `scope` at all, which made `assertInMarket(…, undefined)` a no-op and
+   * let any admin approve or reject any market's listings, brands, flash deals
+   * and categories (audit V7).
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
   }
 
   /**
@@ -113,7 +151,8 @@ export class GroceryController {
     const role = String(req?.user?.role ?? '').toUpperCase();
     if (role === 'SUPER_ADMIN' || role === 'ADMIN') return customerId;
     const id = this.callerId(req);
-    if (id !== customerId) throw new ForbiddenException('You can only access your own grocery data.');
+    if (id !== customerId)
+      throw new ForbiddenException('You can only access your own grocery data.');
     return id;
   }
 
@@ -169,28 +208,37 @@ export class GroceryController {
     return this.send('get_grocery_category', { id });
   }
 
+  /**
+   * The grocery category tree is one taxonomy for the whole platform — the same
+   * rule marketplace's taxonomy follows. A region-locked admin is refused
+   * rather than silently editing every market's catalogue, which is what these
+   * three routes did: they took no market and sent no `scope` (audit X-12).
+   */
   @Post('categories')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: create a new grocery category' })
-  createCategory(@Body() data: any) {
+  createCategory(@Req() req: any, @Body() data: any) {
+    refuseLockedAdmin(req, 'grocery taxonomy', 'The grocery category tree is managed globally.');
     return this.send('create_grocery_category', data);
   }
 
   @Patch('categories/:id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: update a grocery category' })
   @ApiParam({ name: 'id', example: 'fruits-vegetables' })
-  updateCategory(@Param('id') id: string, @Body() data: any) {
+  updateCategory(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    refuseLockedAdmin(req, 'grocery taxonomy', 'The grocery category tree is managed globally.');
     return this.send('update_grocery_category', { id, ...data });
   }
 
   @Delete('categories/cache')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: invalidate the category cache' })
-  invalidateCategoryCache() {
+  invalidateCategoryCache(@Req() req: any) {
+    refuseLockedAdmin(req, 'grocery taxonomy', 'The grocery category tree is managed globally.');
     return this.send('invalidate_grocery_cache', {});
   }
 
@@ -201,10 +249,14 @@ export class GroceryController {
   @ApiOperation({ summary: 'List nearby grocery stores' })
   // The examples were Nairobi's coordinates, left over from an earlier market.
   @ApiQuery({ name: 'lat', required: false, example: 25.2854 })
-  @ApiQuery({ name: 'lng', required: false, example: 51.5310 })
+  @ApiQuery({ name: 'lng', required: false, example: 51.531 })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 20 })
-  @ApiQuery({ name: 'category', required: false, description: 'Only stores stocking this category or subcategory' })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Only stores stocking this category or subcategory',
+  })
   getStores(
     @Req() req: RequestWithRegion,
     @Query('lat') lat?: string,
@@ -221,7 +273,8 @@ export class GroceryController {
       // prompt is offered every store on the platform regardless of country.
       regionCode: requestRegion(req),
       category: category || undefined,
-      page, limit,
+      page,
+      limit,
     });
   }
 
@@ -244,7 +297,10 @@ export class GroceryController {
   @Public()
   @ApiOperation({ summary: 'Brands that have products, with counts' })
   @ApiQuery({ name: 'limit', required: false })
-  getBrands(@Req() req: any, @Query('limit', new DefaultValuePipe(40), ParseIntPipe) limit?: number) {
+  getBrands(
+    @Req() req: any,
+    @Query('limit', new DefaultValuePipe(40), ParseIntPipe) limit?: number,
+  ) {
     return this.send('get_grocery_brands', { regionCode: requestRegion(req), limit });
   }
 
@@ -254,7 +310,7 @@ export class GroceryController {
    */
   @Get('brands/:slug/products')
   @Public()
-  @ApiOperation({ summary: "Every product sold under one brand" })
+  @ApiOperation({ summary: 'Every product sold under one brand' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   getProductsByBrand(
@@ -264,19 +320,22 @@ export class GroceryController {
     @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit?: number,
   ) {
     return this.send('get_grocery_products_by_brand', {
-      brand: slug, regionCode: requestRegion(req), page, limit,
+      brand: slug,
+      regionCode: requestRegion(req),
+      page,
+      limit,
     });
   }
 
-
+  /** Platform-wide catalogue maintenance: it rewrites every market's tree. */
   @Post('admin/catalog/rebuild-tree')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: rebuild the catalogue tree (idempotent)' })
-  rebuildCatalogTree() {
+  rebuildCatalogTree(@Req() req: any) {
+    refuseLockedAdmin(req, 'grocery catalogue maintenance');
     return this.send('rebuild_grocery_catalog_tree', {});
   }
-
 
   // ══════════════════════════════════════════════════════════════════════════
   // BRANDS — sellers request, moderators approve
@@ -287,7 +346,11 @@ export class GroceryController {
 
   @Get('brands/catalog')
   @ApiOperation({ summary: 'Brands a seller may list under' })
-  listBrands(@Query('status') status?: string, @Query('page') page?: number, @Query('limit') limit?: number) {
+  listBrands(
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
     return this.send('list_grocery_brands', { status, page, limit });
   }
 
@@ -301,28 +364,42 @@ export class GroceryController {
 
   @Patch('admin/brands/:brandId/approve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: approve a brand request' })
-  approveBrand(@Param('brandId', ParseUUIDPipe) brandId: string) {
-    return this.send('set_grocery_brand_approval', { brandId, status: 'APPROVED' });
+  approveBrand(@Req() req: any, @Param('brandId', ParseUUIDPipe) brandId: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that brand request');
+    return this.send('set_grocery_brand_approval', { brandId, status: 'APPROVED', scope });
   }
 
   @Patch('admin/brands/:brandId/reject')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: reject a brand request, with a reason' })
-  rejectBrand(@Param('brandId', ParseUUIDPipe) brandId: string, @Body() dto: { reason?: string }) {
-    return this.send('set_grocery_brand_approval', { brandId, status: 'REJECTED', reason: dto?.reason });
+  rejectBrand(
+    @Req() req: any,
+    @Param('brandId', ParseUUIDPipe) brandId: string,
+    @Body() dto: { reason?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that brand request');
+    return this.send('set_grocery_brand_approval', {
+      brandId,
+      status: 'REJECTED',
+      reason: dto?.reason,
+      scope,
+    });
   }
 
+  /** Platform-wide catalogue maintenance: it walks every market's listings. */
   @Post('admin/catalog/backfill-entities')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Admin: promote brand strings and weight variants into rows (idempotent)' })
-  backfillCatalogEntities() {
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
+  @ApiOperation({
+    summary: 'Admin: promote brand strings and weight variants into rows (idempotent)',
+  })
+  backfillCatalogEntities(@Req() req: any) {
+    refuseLockedAdmin(req, 'grocery catalogue maintenance');
     return this.send('backfill_grocery_catalog_entities', {});
   }
-
 
   // ══════════════════════════════════════════════════════════════════════════
   // INVENTORY — stock as a ledger, not a number in a blob
@@ -334,7 +411,11 @@ export class GroceryController {
   @Get('stores/:storeId/inventory/low-stock')
   @UseGuards(GroceryStoreOwnershipGuard)
   @ApiOperation({ summary: 'Variants at or below their low-stock threshold' })
-  @ApiQuery({ name: 'threshold', required: false, description: 'Overrides each variant’s own threshold' })
+  @ApiQuery({
+    name: 'threshold',
+    required: false,
+    description: 'Overrides each variant’s own threshold',
+  })
   lowStockVariants(
     @Param('storeId', ParseUUIDPipe) storeId: string,
     @Query('threshold') threshold?: number,
@@ -380,7 +461,6 @@ export class GroceryController {
     return this.send('get_grocery_stock_history', { variantId, page, limit });
   }
 
-
   // ══════════════════════════════════════════════════════════════════════════
   // WAREHOUSES — multiple stock locations per store
   // ══════════════════════════════════════════════════════════════════════════
@@ -393,7 +473,8 @@ export class GroceryController {
     @Query('includeInactive') includeInactive?: string,
   ) {
     return this.send('list_grocery_warehouses', {
-      storeId, includeInactive: includeInactive === 'true',
+      storeId,
+      includeInactive: includeInactive === 'true',
     });
   }
 
@@ -435,15 +516,21 @@ export class GroceryController {
     @Body() dto: any,
   ) {
     return this.send('audit_grocery_warehouse_stock', {
-      ...dto, warehouseId, actorId: this.callerId(req),
+      ...dto,
+      warehouseId,
+      actorId: this.callerId(req),
     });
   }
 
+  /** Platform-wide catalogue maintenance: it seats every market's stores. */
   @Post('admin/catalog/backfill-warehouses')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Admin: give every store a default location and seat existing balances' })
-  backfillWarehouses() {
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
+  @ApiOperation({
+    summary: 'Admin: give every store a default location and seat existing balances',
+  })
+  backfillWarehouses(@Req() req: any) {
+    refuseLockedAdmin(req, 'grocery catalogue maintenance');
     return this.send('backfill_grocery_warehouses', {});
   }
 
@@ -490,8 +577,12 @@ export class GroceryController {
     // their own moderation queue or a shopper browsing the catalogue.
     const actor = this.optionalCaller(req);
     return this.send('get_grocery_products', {
-      storeId, category, page, limit,
-      actorId: actor.id, actorRole: actor.role,
+      storeId,
+      category,
+      page,
+      limit,
+      actorId: actor.id,
+      actorRole: actor.role,
     });
   }
 
@@ -515,7 +606,10 @@ export class GroceryController {
   @ApiOperation({ summary: 'Get a single product with weight variants' })
   @ApiParam({ name: 'storeId', example: 'store-uuid' })
   @ApiParam({ name: 'productId', example: 'product-uuid' })
-  getProduct(@Param('storeId', ParseUUIDPipe) storeId: string, @Param('productId', ParseUUIDPipe) productId: string) {
+  getProduct(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+  ) {
     return this.send('get_grocery_product', { storeId, productId });
   }
 
@@ -523,7 +617,11 @@ export class GroceryController {
   @Public()
   @ApiOperation({ summary: 'Get product with translations applied' })
   @ApiQuery({ name: 'locale', required: true, example: 'hi' })
-  getTranslatedProduct(@Param('storeId', ParseUUIDPipe) storeId: string, @Param('productId', ParseUUIDPipe) productId: string, @Query('locale') locale: string) {
+  getTranslatedProduct(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Query('locale') locale: string,
+  ) {
     return this.send('get_product_translated', { storeId, productId, locale });
   }
 
@@ -553,7 +651,11 @@ export class GroceryController {
     // Without the region this answered with the whole platform's catalogue, so a
     // Doha shopper browsing a category saw products from shops in four countries.
     return this.send('get_grocery_products', {
-      storeId, category, page, limit, regionCode: requestRegion(req),
+      storeId,
+      category,
+      page,
+      limit,
+      regionCode: requestRegion(req),
     });
   }
 
@@ -613,10 +715,20 @@ export class GroceryController {
 
   @Post('stores/:storeId/products/:productId/reviews')
   @ApiOperation({ summary: 'Submit a product review' })
-  submitReview(@Req() req: any, @Param('storeId', ParseUUIDPipe) storeId: string, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: any) {
+  submitReview(
+    @Req() req: any,
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() dto: any,
+  ) {
     // The reviewer is the caller. Taking `customerId` from the body let anyone post
     // a review under someone else's identity — including a "verified purchase" one.
-    return this.send('submit_grocery_review', { ...dto, storeId, productId, customerId: this.callerId(req) });
+    return this.send('submit_grocery_review', {
+      ...dto,
+      storeId,
+      productId,
+      customerId: this.callerId(req),
+    });
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -640,36 +752,58 @@ export class GroceryController {
   @Put('stores/:storeId/products/:productId')
   @UseGuards(GroceryStoreOwnershipGuard)
   @ApiOperation({ summary: 'Seller: update a product' })
-  updateProduct(@Param('storeId', ParseUUIDPipe) storeId: string, @Param('productId', ParseUUIDPipe) productId: string, @Body() data: any) {
+  updateProduct(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() data: any,
+  ) {
     return this.send('update_grocery_product', { ...data, storeId, productId });
   }
 
   @Delete('stores/:storeId/products/:productId')
   @UseGuards(GroceryStoreOwnershipGuard)
   @ApiOperation({ summary: 'Seller: delete a product' })
-  deleteProduct(@Param('storeId', ParseUUIDPipe) storeId: string, @Param('productId', ParseUUIDPipe) productId: string) {
+  deleteProduct(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+  ) {
     return this.send('delete_grocery_product', { storeId, productId });
   }
 
   @Patch('stores/:storeId/products/:productId/translations')
   @UseGuards(GroceryStoreOwnershipGuard)
   @ApiOperation({ summary: 'Update product translation for a locale' })
-  updateTranslation(@Param('storeId', ParseUUIDPipe) storeId: string, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: any) {
+  updateTranslation(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() dto: any,
+  ) {
     return this.send('update_product_translation', { ...dto, storeId, productId });
   }
 
   @Patch('stores/:storeId/products/:productId/promote')
   @UseGuards(GroceryStoreOwnershipGuard)
   @ApiOperation({ summary: 'Seller: toggle product promotion' })
-  togglePromotion(@Param('storeId', ParseUUIDPipe) storeId: string, @Param('productId', ParseUUIDPipe) productId: string, @Body() body: any) {
-    return this.send('toggle_grocery_promotion', { storeId, productId, promoted: !!body?.promoted });
+  togglePromotion(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() body: any,
+  ) {
+    return this.send('toggle_grocery_promotion', {
+      storeId,
+      productId,
+      promoted: !!body?.promoted,
+    });
   }
 
   @Get('stores/:storeId/analytics')
   @UseGuards(GroceryStoreOwnershipGuard)
   @ApiOperation({ summary: 'Seller: get store analytics' })
   @ApiQuery({ name: 'period', required: false, example: '7d' })
-  getStoreAnalytics(@Param('storeId', ParseUUIDPipe) storeId: string, @Query('period') period?: string) {
+  getStoreAnalytics(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Query('period') period?: string,
+  ) {
     return this.send('get_grocery_store_analytics', { storeId, period });
   }
 
@@ -691,7 +825,10 @@ export class GroceryController {
   @UseGuards(GroceryStoreOwnershipGuard)
   @ApiOperation({ summary: 'Seller: get low-stock items' })
   @ApiQuery({ name: 'threshold', required: false, example: 10 })
-  getLowStock(@Param('storeId', ParseUUIDPipe) storeId: string, @Query('threshold') threshold?: string) {
+  getLowStock(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Query('threshold') threshold?: string,
+  ) {
     return this.send('get_grocery_low_stock', { storeId, threshold: threshold ? +threshold : 10 });
   }
 
@@ -739,20 +876,31 @@ export class GroceryController {
      `invalid input syntax for type uuid`. A 500 tells a caller the server broke
      when in fact their input was wrong, and it leaks the column type. */
   getOrder(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
-    return this.send('get_grocery_order', { orderId: id, requesterId: this.callerId(req), requesterRole: req?.user?.role });
+    return this.send('get_grocery_order', {
+      orderId: id,
+      requesterId: this.callerId(req),
+      requesterRole: req?.user?.role,
+    });
   }
 
   @Get('orders/:id/tracking')
   @ApiOperation({ summary: 'Get order tracking status' })
   getOrderTracking(@Req() req: any, @Param('id') id: string) {
-    return this.send('get_grocery_order_tracking', { orderId: id, requesterId: this.callerId(req), requesterRole: req?.user?.role });
+    return this.send('get_grocery_order_tracking', {
+      orderId: id,
+      requesterId: this.callerId(req),
+      requesterRole: req?.user?.role,
+    });
   }
 
   @Patch('orders/:id/status')
   @ApiOperation({ summary: 'Update order status (seller/admin)' })
   updateOrderStatus(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
     return this.send('update_grocery_order_status', {
-      ...dto, orderId: id, actorId: this.callerId(req), actorRole: req?.user?.role,
+      ...dto,
+      orderId: id,
+      actorId: this.callerId(req),
+      actorRole: req?.user?.role,
     });
   }
 
@@ -761,7 +909,6 @@ export class GroceryController {
   reorder(@Req() req: any, @Param('id') id: string) {
     return this.send('reorder_grocery', { orderId: id, customerId: this.callerId(req) });
   }
-
 
   // ══════════════════════════════════════════════════════════════════════════
   // LISTING MODERATION — super-admin only
@@ -773,36 +920,63 @@ export class GroceryController {
 
   @Get('admin/products/pending')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: listings awaiting approval' })
+  @ApiQuery({
+    name: 'regionCode',
+    required: false,
+    description: 'Market to review (global admins)',
+  })
   pendingProducts(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit?: number,
     @Query('storeId') storeId?: string,
+    @Query('regionCode') regionCode?: string,
   ) {
-    return this.send('get_grocery_pending_products', { page, limit, storeId });
+    const { scope, market } = this.scopeOf(req, regionCode, 'those listings');
+    return this.send('get_grocery_pending_products', {
+      page,
+      limit,
+      storeId,
+      regionCode: market,
+      scope,
+    });
   }
 
   @Patch('admin/products/:productId/approve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: approve a listing so customers can see it' })
   approveProduct(@Req() req: any, @Param('productId', ParseUUIDPipe) productId: string) {
     // The acting admin travels with the decision. Without it the service could
     // record that a listing was approved but not by whom, which is the one fact
     // an approval audit exists to answer.
+    const { scope } = this.scopeOf(req, undefined, 'that listing');
     return this.send('set_grocery_product_approval', {
-      productId, status: 'APPROVED', ...this.actor(req),
+      productId,
+      status: 'APPROVED',
+      ...this.actor(req),
+      scope,
     });
   }
 
   @Patch('admin/products/:productId/reject')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: reject a listing, with a reason for the seller' })
-  rejectProduct(@Req() req: any, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: { reason?: string }) {
+  rejectProduct(
+    @Req() req: any,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() dto: { reason?: string },
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that listing');
     return this.send('set_grocery_product_approval', {
-      productId, status: 'REJECTED', reason: dto?.reason, ...this.actor(req),
+      productId,
+      status: 'REJECTED',
+      reason: dto?.reason,
+      ...this.actor(req),
+      scope,
     });
   }
 
@@ -826,13 +1000,24 @@ export class GroceryController {
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit?: number,
   ) {
-    return this.send('get_grocery_wishlist', { customerId: this.assertSelf(req, customerId), page, limit });
+    return this.send('get_grocery_wishlist', {
+      customerId: this.assertSelf(req, customerId),
+      page,
+      limit,
+    });
   }
 
   @Delete('wishlist/:customerId/:productId')
   @ApiOperation({ summary: 'Remove product from wishlist' })
-  removeFromWishlist(@Req() req: any, @Param('customerId') customerId: string, @Param('productId', ParseUUIDPipe) productId: string) {
-    return this.send('remove_from_grocery_wishlist', { customerId: this.assertSelf(req, customerId), productId });
+  removeFromWishlist(
+    @Req() req: any,
+    @Param('customerId') customerId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+  ) {
+    return this.send('remove_from_grocery_wishlist', {
+      customerId: this.assertSelf(req, customerId),
+      productId,
+    });
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -893,7 +1078,9 @@ export class GroceryController {
     // The caller travels with the payload: `storeId` comes from the body, so
     // the service has to be able to check who is asking.
     return this.send('create_flash_deal', {
-      ...dto, actorId: this.callerId(req), actorRole: req?.user?.role,
+      ...dto,
+      actorId: this.callerId(req),
+      actorRole: req?.user?.role,
     });
   }
 
@@ -901,7 +1088,9 @@ export class GroceryController {
   @ApiOperation({ summary: 'Seller: submit flash deal for approval' })
   submitFlashDeal(@Req() req: any, @Param('id') id: string) {
     return this.send('submit_flash_deal', {
-      dealId: id, actorId: this.callerId(req), actorRole: req?.user?.role,
+      dealId: id,
+      actorId: this.callerId(req),
+      actorRole: req?.user?.role,
     });
   }
 
@@ -909,7 +1098,9 @@ export class GroceryController {
   @ApiOperation({ summary: 'Pause an active flash deal' })
   pauseFlashDeal(@Req() req: any, @Param('id') id: string) {
     return this.send('pause_flash_deal', {
-      dealId: id, actorId: this.callerId(req), actorRole: req?.user?.role,
+      dealId: id,
+      actorId: this.callerId(req),
+      actorRole: req?.user?.role,
     });
   }
 
@@ -917,7 +1108,9 @@ export class GroceryController {
   @ApiOperation({ summary: 'Resume a paused flash deal' })
   resumeFlashDeal(@Req() req: any, @Param('id') id: string) {
     return this.send('resume_flash_deal', {
-      dealId: id, actorId: this.callerId(req), actorRole: req?.user?.role,
+      dealId: id,
+      actorId: this.callerId(req),
+      actorRole: req?.user?.role,
     });
   }
 
@@ -925,17 +1118,25 @@ export class GroceryController {
   // were reachable by anyone at all.
   @Patch('flash-deals/:id/approve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: approve a flash deal' })
   approveFlashDeal(@Req() req: any, @Param('id') id: string) {
-    return this.send('approve_flash_deal', { dealId: id, approvedBy: this.callerId(req) });
+    // grocery-service has asserted the deal's own market since R2; it was never
+    // sent one, so the assertion was a no-op on every call.
+    const { scope } = this.scopeOf(req, undefined, 'that flash deal');
+    return this.send('approve_flash_deal', {
+      dealId: id,
+      approvedBy: this.callerId(req),
+      scope,
+    });
   }
 
   @Patch('flash-deals/:id/reject')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.grocery')
   @ApiOperation({ summary: 'Admin: reject a flash deal' })
-  rejectFlashDeal(@Param('id') id: string, @Body() dto: any) {
-    return this.send('reject_flash_deal', { dealId: id, ...dto });
+  rejectFlashDeal(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const { scope } = this.scopeOf(req, undefined, 'that flash deal');
+    return this.send('reject_flash_deal', { dealId: id, ...dto, scope });
   }
 }

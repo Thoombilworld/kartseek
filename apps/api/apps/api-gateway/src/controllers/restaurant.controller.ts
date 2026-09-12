@@ -28,7 +28,6 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
-  ApiUnauthorizedResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { RolesGuard } from '../guards/roles.guard';
@@ -649,9 +648,9 @@ export class RestaurantController {
 
   @Get(':id/analytics')
   @UseGuards(RolesGuard, SellerModuleGuard)
-  @Roles(UserRole.SELLER, UserRole.ADMIN)
+  @Roles(UserRole.SELLER)
   @SellerModule('restaurant')
-  @ApiOperation({ summary: 'Restaurant analytics (Seller/Admin)' })
+  @ApiOperation({ summary: 'Restaurant analytics (Seller)' })
   @ApiParam({ name: 'id', example: 'RST-001' })
   @ApiQuery({ name: 'period', example: '7d', required: false })
   getRestaurantAnalytics(@Param('id') id: string, @Query('period') period = '7d') {
@@ -662,7 +661,7 @@ export class RestaurantController {
 
   @Get(':id/orders')
   @UseGuards(RolesGuard, SellerModuleGuard)
-  @Roles(UserRole.SELLER, UserRole.ADMIN)
+  @Roles(UserRole.SELLER)
   @SellerModule('restaurant')
   @ApiOperation({ summary: 'List orders for restaurant (Seller)' })
   @ApiQuery({ name: 'status', required: false })
@@ -784,7 +783,7 @@ export class RestaurantController {
 
   @Get(':id/payouts')
   @UseGuards(RolesGuard, SellerModuleGuard)
-  @Roles(UserRole.SELLER, UserRole.ADMIN)
+  @Roles(UserRole.SELLER)
   @SellerModule('restaurant')
   @ApiOperation({ summary: 'Payout history' })
   getPayouts(@Param('id') id: string) {
@@ -1007,247 +1006,24 @@ export class RestaurantController {
     return this.send('update_inventory_item', { restaurantId: id, itemId, ...body });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  Admin
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  @Get('approvals/pending')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get pending restaurant approvals (Admin)' })
-  getPendingApprovals() {
-    return this.send('get_pending_approvals', {});
-  }
-
-  @Post(':id/approve')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Approve restaurant registration (Admin)' })
-  @ApiParam({ name: 'id', example: 'REQ-77821' })
-  approveRestaurant(@Param('id') id: string, @Body('adminId') adminId: string) {
-    return this.send('approve_restaurant', { restaurantId: id, adminId });
-  }
-
-  @Post(':id/reject')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Reject restaurant registration (Admin)' })
-  rejectRestaurant(@Param('id') id: string, @Body('reason') reason: string) {
-    return this.send('reject_restaurant', { restaurantId: id, reason });
-  }
-
-  @Get('admin/list')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'List all restaurants (Admin)' })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'status', required: false })
-  adminListRestaurants(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('status') status?: string,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
-  ) {
-    return this.send('admin_list_restaurants', { page, status, limit });
-  }
-
-  // ── Literal routes, declared before the `:slug` catch-all ──────────────
+  // The 30 admin routes that used to live here (`/restaurants/admin/*`,
+  // `/restaurants/:id/{approve,reject,analytics,orders,payouts}`,
+  // `/restaurants/approvals/pending`) were deleted on 2026-09-12. They carried
+  // `@Roles(ADMIN, SUPER_ADMIN)`, called no scope helper and sent no `scope`,
+  // so they were an unscoped twin of decisions `/admin/restaurant/*` already
+  // scopes — `POST /restaurants/admin/<IN-id>/block` answered 200 for a
+  // QA-locked admin (audit V5). No client called them: the console's
+  // `admin-restaurant.ts` uses `/admin/restaurant/*` throughout. New restaurant
+  // admin work belongs in `admin-restaurant.controller.ts`, never here.
   //
-  // Nest matches routes in declaration order. These sat *after* `@Get(':slug')`,
-  // so /restaurants/favorites, /cart, /addresses, /gift-cards, /my-reservations
-  // and /subscriptions were all captured as a slug and reached Postgres as a
-  // uuid lookup -- `invalid input syntax for type uuid: "favorites"`. Every one
-  // of these customer routes was a 500, hidden as an empty 200 by the old
-  // gateway fallback. Keep literal paths above parameterised ones.
-
-  @Get('admin/menu-approvals')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'List menu items pending moderation (Admin)' })
-  adminMenuApprovals(@Query('status') status?: string) {
-    return this.send('get_menu_approvals', { status });
-  }
-
-  @Get('admin/complaints')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'List restaurant complaints (Admin)' })
-  adminListComplaints(@Query('status') status?: string, @Query('priority') priority?: string) {
-    return this.send('list_complaints', { status, priority });
-  }
-
-  @Get('admin/:id')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Restaurant detail (Admin)' })
-  adminRestaurantDetail(@Param('id') id: string) {
-    return this.send('get_restaurant_by_id', { id });
-  }
-
-  @Post('admin/:id/suspend')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Suspend restaurant (Admin)' })
-  adminSuspendRestaurant(@Param('id') id: string) {
-    return this.send('suspend_restaurant', { id });
-  }
-
-  @Post('admin/:id/unsuspend')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Unsuspend restaurant (Admin)' })
-  adminUnsuspendRestaurant(@Param('id') id: string) {
-    return this.send('unsuspend_restaurant', { id });
-  }
-
-  @Post('admin/:id/block')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Block restaurant (Admin)' })
-  adminBlockRestaurant(@Param('id') id: string) {
-    return this.send('block_restaurant', { id });
-  }
-
-  @Post('admin/:id/unblock')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Unblock restaurant (Admin)' })
-  adminUnblockRestaurant(@Param('id') id: string) {
-    return this.send('unblock_restaurant', { id });
-  }
-
-  @Put('admin/:id/commission')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Update restaurant commission rate (Admin)' })
-  adminUpdateCommission(@Param('id') id: string, @Body('rate') rate: number) {
-    return this.send('set_commission', { restaurantId: id, rate });
-  }
-
-  // ── Admin — Menu Moderation ─────────────────────────────────────────────
-
-  @Post('admin/menu-approvals/:changeId/approve')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Approve menu change (Admin)' })
-  adminApproveMenuChange(@Param('changeId') changeId: string) {
-    return this.send('approve_menu_change', { changeId });
-  }
-
-  @Post('admin/menu-approvals/:changeId/reject')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Reject menu change (Admin)' })
-  adminRejectMenuChange(@Param('changeId') changeId: string, @Body('reason') reason: string) {
-    return this.send('reject_menu_change', { changeId, reason });
-  }
-
-  @Get('admin/:id/menu-audit')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Audit restaurant menu (Admin)' })
-  adminMenuAudit(@Param('id') id: string) {
-    return this.send('get_menu_audit', { id });
-  }
-
-  // ── Admin — Complaints ──────────────────────────────────────────────────
-
-  @Get('admin/complaints/:complaintId')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Complaint detail (Admin)' })
-  adminComplaintDetail(@Param('complaintId') complaintId: string) {
-    return this.send('get_complaint', { complaintId });
-  }
-
-  @Post('admin/complaints/:complaintId/resolve')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Resolve complaint (Admin)' })
-  adminResolveComplaint(@Param('complaintId') complaintId: string, @Body() body: any) {
-    return this.send('resolve_complaint', { complaintId, ...body });
-  }
-
-  @Post('admin/complaints/:complaintId/escalate')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Escalate complaint (Admin)' })
-  adminEscalateComplaint(@Param('complaintId') complaintId: string, @Body() body: any) {
-    return this.send('escalate_complaint', { complaintId, ...body });
-  }
-
-  @Get('admin/:id/quality-score')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Restaurant quality score (Admin)' })
-  adminQualityScore(@Param('id') id: string) {
-    return this.send('get_quality_score', { id });
-  }
-
-  // ── Admin — Analytics ───────────────────────────────────────────────────
-
-  @Get('admin/analytics/overview')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Platform restaurant overview (Admin)' })
-  adminAnalyticsOverview() {
-    return this.send('admin_analytics_overview', {});
-  }
-
-  @Get('admin/analytics/revenue')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Revenue analytics by region (Admin)' })
-  adminAnalyticsRevenue(@Query('period') period?: string, @Query('groupBy') groupBy?: string) {
-    return this.send('admin_analytics_revenue', { period, groupBy });
-  }
-
-  @Get('admin/analytics/orders')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Order volume analytics (Admin)' })
-  adminAnalyticsOrders(@Query('period') period?: string, @Query('groupBy') groupBy?: string) {
-    return this.send('admin_analytics_orders', { period, groupBy });
-  }
-
-  @Get('admin/analytics/cuisines')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Cuisine popularity analytics (Admin)' })
-  adminAnalyticsCuisines(@Query('period') period?: string) {
-    return this.send('admin_analytics_cuisines', { period });
-  }
-
-  @Get('admin/analytics/top-restaurants')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Top performing restaurants (Admin)' })
-  adminTopRestaurants(@Query('metric') metric?: string, @Query('limit') limit?: string) {
-    return this.send('admin_top_restaurants', { metric, limit: Number(limit) || 10 });
-  }
-
-  @Get('admin/analytics/bottom-restaurants')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Bottom performing restaurants (Admin)' })
-  adminBottomRestaurants(@Query('metric') metric?: string, @Query('limit') limit?: string) {
-    return this.send('admin_bottom_restaurants', { metric, limit: Number(limit) || 10 });
-  }
-
-  @Get('admin/reports/compliance')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Restaurant compliance report (Admin)' })
-  adminComplianceReport() {
-    return this.send('admin_compliance_report', {});
-  }
-
-  @Get('admin/reports/payouts')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Restaurant payout summary (Admin)' })
-  adminPayoutReport(@Query('period') period?: string) {
-    return this.send('admin_payout_report', { period });
-  }
+  // Three of the thirty were not admin-only: `:id/analytics`, `:id/orders` and
+  // `:id/payouts` are the restaurant seller portal's own routes
+  // (`packages/shared-core/src/api/vendor-restaurant.ts` calls all three) that
+  // also admitted ADMIN, and `SellerModuleGuard` waves an admin role through.
+  // Deleting them would have taken a working seller capability with it, which
+  // the mandate forbids, so what was removed there is the admin surface: they
+  // are `@Roles(UserRole.SELLER)` now and a locked admin has no unscoped read
+  // through them either. They keep their seller behaviour unchanged.
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  Delivery Partner

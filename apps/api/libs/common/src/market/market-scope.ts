@@ -12,10 +12,24 @@ import { ForbiddenException, Logger } from '@nestjs/common';
  */
 const fallbackLogger = new Logger('MarketScope');
 
+/**
+ * A market code, normalised to the platform's ISO-2 form.
+ *
+ * Sub-region codes ('QA-DOH', 'IN-MH') normalise to their country, because the
+ * platform's unit of scope is the country: `users.region_code`, the JWT claim
+ * and every `?country=` filter are ISO-2. Restaurant stored sub-regions and
+ * then matched them two different ways — a prefix on the customer read, an
+ * exact string on the admin read — so a 'QA-DOH' restaurant was invisible to
+ * the QA admin who was supposed to moderate it and 403'd on approve (audit I4).
+ * Normalising here means one rule serves both sides and no caller has to
+ * remember which.
+ */
 export function normaliseMarket(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const v = value.trim().toUpperCase();
-  return v.length > 0 ? v : undefined;
+  if (!v) return undefined;
+  const country = v.split(/[-_]/)[0];
+  return country.length >= 2 ? country.slice(0, 2) : undefined;
 }
 
 /** The market a list query filters on: the lock wins over whatever was requested. */

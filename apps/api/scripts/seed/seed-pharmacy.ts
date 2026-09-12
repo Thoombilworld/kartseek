@@ -7,6 +7,13 @@
  *   - 50+ medicines with real compositions
  *   - Staff, promotions, reviews, orders, prescriptions
  *
+ * `regionCode` is 'IN' on every store, not the 'MUM-CBD' / 'MUM-WST' city zones
+ * it used to be. The platform's unit of market scope is the ISO-2 country:
+ * `users.region_code`, the JWT claim and `normaliseMarket` in `@app/common` all
+ * speak ISO-2, and `normaliseMarket('MUM-CBD')` reads as 'MU' — Mauritius — so
+ * an Indian admin was refused an Indian pharmacy (audit F-34). The city and
+ * `zoneId` carry the sub-market detail; `regionCode` carries the market.
+ *
  * Usage:
  *   npx ts-node --transpile-only -r tsconfig-paths/register scripts/seed-pharmacy.ts
  */
@@ -176,7 +183,7 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     pincode: '00100',
     latitude: 19.076,
     longitude: 72.8777,
-    regionCode: 'MUM-CBD',
+    regionCode: 'IN',
     countryCode: 'IND',
     phone: '+91-700-111-001',
     email: 'cbd@healthplus.co.in',
@@ -207,7 +214,7 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     pincode: '00100',
     latitude: 19.0544,
     longitude: 72.8403,
-    regionCode: 'MUM-CBD',
+    regionCode: 'IN',
     countryCode: 'IND',
     phone: '+91-700-111-002',
     email: 'info@medpluschemist.co.in',
@@ -238,7 +245,7 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     pincode: '400053',
     latitude: 19.1176,
     longitude: 72.8271,
-    regionCode: 'MUM-WST',
+    regionCode: 'IN',
     countryCode: 'IND',
     phone: '+91-700-111-003',
     email: 'Andheri West@rxMumbai.co.in',
@@ -269,7 +276,7 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     pincode: '400049',
     latitude: 19.1075,
     longitude: 72.8263,
-    regionCode: 'MUM-JHU',
+    regionCode: 'IN',
     countryCode: 'IND',
     phone: '+91-700-111-004',
     email: 'Juhu@dawapharmacy.co.in',
@@ -300,7 +307,7 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     pincode: '00100',
     latitude: 19.0178,
     longitude: 72.8478,
-    regionCode: 'MUM-CBD',
+    regionCode: 'IN',
     countryCode: 'IND',
     phone: '+91-700-111-005',
     email: 'support@quickmeds.co.in',
@@ -331,7 +338,7 @@ const STORES: Array<Partial<PharmacyStore> & { slug: string }> = [
     pincode: '400076',
     latitude: 19.1197,
     longitude: 72.9051,
-    regionCode: 'MUM-PWI',
+    regionCode: 'IN',
     countryCode: 'IND',
     phone: '+91-700-111-006',
     email: 'hello@naturecarewellness.co.in',

@@ -16,6 +16,11 @@ describe('normaliseMarket', () => {
     expect(normaliseMarket(undefined)).toBeUndefined();
     expect(normaliseMarket(42)).toBeUndefined();
   });
+  it('normalises a sub-region code to its country', () => {
+    expect(normaliseMarket('QA-DOH')).toBe('QA');
+    expect(normaliseMarket('in_mh')).toBe('IN');
+    expect(normaliseMarket('Q')).toBeUndefined();
+  });
 });
 
 describe('assertInMarket', () => {
@@ -24,6 +29,14 @@ describe('assertInMarket', () => {
   });
   it('accepts a record in the scoped market, case-insensitively', () => {
     expect(() => assertInMarket('qa', 'QA', 'seller')).not.toThrow();
+  });
+  it("accepts a record stored as a sub-region of the caller's country", () => {
+    // Restaurant stores 'IN-MH' and 'QA-DOH'; the scope is always ISO-2. Both
+    // sides go through normaliseMarket, so one rule covers both spellings.
+    expect(() => assertInMarket('QA-DOH', 'QA', 'restaurant')).not.toThrow();
+    expect(() => assertInMarket('IN-MH', 'QA', 'restaurant')).toThrow(
+      'This restaurant belongs to IN, not to the QA market.',
+    );
   });
   it('refuses a record from another market with the platform wording and a log line', () => {
     const lines: string[] = [];

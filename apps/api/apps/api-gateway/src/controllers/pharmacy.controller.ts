@@ -1,17 +1,71 @@
-import { Controller, Get, Post, Put, Delete, Inject, Param, Body, Query, Req, UseGuards, DefaultValuePipe, ParseIntPipe, ParseUUIDPipe, Logger, HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Inject,
+  Param,
+  Body,
+  Query,
+  Req,
+  UseGuards,
+  DefaultValuePipe,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  Logger,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiParam, ApiQuery, ApiBody,
-  ApiOkResponse, ApiCreatedResponse,
-  ApiForbiddenResponse, ApiNotFoundResponse,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+  ApiProperty,
+  ApiQuery,
+  ApiBody,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { SellerModuleGuard, SellerModule } from '../guards/seller-module.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
+import { marketScopeOf, refuseLockedAdmin, resolveMarket } from '../guards/market-scope';
+import { IsNumber, Max, Min } from 'class-validator';
+
+/**
+ * A commission rate, as a percentage.
+ *
+ * `@Body('rate') rate: number` extracted one property and validated nothing, so
+ * `{"rate":"ninety"}` reached `pharmacy_stores.commissionRate` as text and
+ * `{"rate":-5}` as a negative percentage. A class gives the route a metatype,
+ * which is the only thing that makes Nest's ValidationPipe run at all.
+ *
+ * Deliberately not exported, and deliberately above the controller. Nest reads
+ * it through `design:paramtypes`, emitted while `PharmacyController`'s
+ * decorators evaluate, so a class declared *below* the controller would be in
+ * its temporal dead zone and throw at import. And `route-exposure.regression.
+ * spec.ts` takes the first `/^export class/` line in a controller file as the
+ * controller itself, so an exported class here makes it read `@Controller()` as
+ * empty and report all twelve public pharmacy routes as unguarded. Nothing
+ * outside this file needs the type; R8 owns that collector and can drop the
+ * constraint.
+ */
+class PharmacyCommissionDto {
+  @ApiProperty({ example: 12, minimum: 0, maximum: 100 })
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  rate: number;
+}
 
 /**
  * Pharmacy Controller — API Gateway Proxy
@@ -26,11 +80,10 @@ import { UserRole, rpcCatch } from '@app/common';
 export class PharmacyController {
   private readonly logger = new Logger(PharmacyController.name);
 
-  constructor(
-    @Inject('PHARMACY_SERVICE') private readonly pharmacyClient: ClientProxy) {}
+  constructor(@Inject('PHARMACY_SERVICE') private readonly pharmacyClient: ClientProxy) {}
 
   /** Helper — sends TCP message with 5s timeout and graceful fallback. */
-    /**
+  /**
    * Forward to pharmacy-service, preserving the failure.
    *
    * This helper used to take a `fallback` and return it as a 200 whenever the
@@ -45,10 +98,7 @@ export class PharmacyController {
       return await lastValueFrom(
         this.pharmacyClient
           .send<T>({ cmd }, payload)
-          .pipe(
-            timeout(5000),
-            catchError(rpcCatch('Pharmacy service unavailable')),
-          ),
+          .pipe(timeout(5000), catchError(rpcCatch('Pharmacy service unavailable'))),
       );
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -57,12 +107,34 @@ export class PharmacyController {
     }
   }
 
+  /**
+   * The market this request may act in, as `scope` for pharmacy-service.
+   *
+   * The seven admin routes below sent no `scope` at all, and pharmacy-service
+   * had no `assertInMarket` to receive one: a Qatar-locked admin could approve,
+   * suspend and re-price an Indian pharmacy (audit V9 / X-41). Both halves are
+   * in place now — this resolves the caller's market, and the service asserts
+   * the store's own.
+   */
+  private scopeOf(
+    req: any,
+    requested?: string,
+    what = 'that market',
+  ): { scope?: string; market?: string } {
+    const market = resolveMarket(req, requested, what);
+    const scope = marketScopeOf(req).locked ? market : undefined;
+    return { scope, market };
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  Customer — Home
   // ═══════════════════════════════════════════════════════════════════════════
 
   @Get('home')
-  @ApiOperation({ summary: 'Pharmacy home screen', description: 'Returns featured stores, categories, and active promotions.' })
+  @ApiOperation({
+    summary: 'Pharmacy home screen',
+    description: 'Returns featured stores, categories, and active promotions.',
+  })
   @ApiOkResponse({ description: 'Home screen data (featuredStores, categories, promotions)' })
   getPharmacyHome() {
     return this.send('pharmacy_home', {});
@@ -89,14 +161,16 @@ export class PharmacyController {
     @Query('lng') lng?: string,
     @Query('radius') radius?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('list_pharmacy_stores', {
       search,
       is24hr: is24hr === 'true' ? true : undefined,
       lat: lat ? parseFloat(lat) : undefined,
       lng: lng ? parseFloat(lng) : undefined,
       radius: radius ? parseFloat(radius) : undefined,
-      page, limit,
+      page,
+      limit,
     });
   }
 
@@ -122,7 +196,8 @@ export class PharmacyController {
   search(
     @Query('q') q: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('search_medicines', { query: q, page, limit });
   }
 
@@ -169,7 +244,8 @@ export class PharmacyController {
     @Query('category') categoryId?: string,
     @Query('search') search?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('get_pharmacy_medicines', { storeId, categoryId, search, page, limit });
   }
 
@@ -257,9 +333,11 @@ export class PharmacyController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'List my pharmacy orders' })
-  getMyOrders(@Req() req: any,
+  getMyOrders(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     const customerId = req?.user?.id ?? req?.user?.userId ?? req?.user?.sub;
     if (!customerId) throw new UnauthorizedException('Authenticated customer required');
     return this.send('get_customer_pharmacy_orders', { customerId, page, limit });
@@ -271,9 +349,11 @@ export class PharmacyController {
 
   @Get('stores/:storeId/reviews')
   @ApiOperation({ summary: 'Get store reviews' })
-  getReviews(@Param('storeId') storeId: string,
+  getReviews(
+    @Param('storeId') storeId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('get_pharmacy_reviews', { storeId, page, limit });
   }
 
@@ -308,9 +388,12 @@ export class PharmacyController {
   @Roles(UserRole.SELLER)
   @SellerModule('pharmacy')
   @ApiOperation({ summary: 'Seller: list orders' })
-  getSellerOrders(@Param('storeId') storeId: string, @Query('status') status?: string,
+  getSellerOrders(
+    @Param('storeId') storeId: string,
+    @Query('status') status?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
     return this.send('get_pharmacy_seller_orders', { storeId, status, page, limit });
   }
 
@@ -464,69 +547,124 @@ export class PharmacyController {
 
   @Post('admin/:storeId/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.pharmacy')
   @ApiOperation({ summary: 'Admin: approve pharmacy store' })
-  approveStore(@Param('storeId') storeId: string) {
-    return this.send('approve_pharmacy_store', { storeId });
+  approveStore(@Req() req: any, @Param('storeId', ParseUUIDPipe) storeId: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that pharmacy');
+    return this.send('approve_pharmacy_store', { storeId, scope });
   }
 
   @Post('admin/:storeId/suspend')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.pharmacy')
   @ApiOperation({ summary: 'Admin: suspend pharmacy store' })
-  suspendStore(@Param('storeId') storeId: string, @Body('reason') reason?: string) {
-    return this.send('suspend_pharmacy_store', { storeId, reason });
+  suspendStore(
+    @Req() req: any,
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Body('reason') reason?: string,
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that pharmacy');
+    return this.send('suspend_pharmacy_store', { storeId, reason, scope });
   }
 
   @Get('admin/stores')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.pharmacy')
   @ApiOperation({ summary: 'Admin: list all stores' })
-  adminListStores(@Query('status') status?: string,
+  @ApiQuery({ name: 'regionCode', required: false, description: 'Market to list (global admins)' })
+  adminListStores(
+    @Req() req: any,
+    @Query('status') status?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number) {
-    return this.send('admin_list_pharmacy_stores', { status, page, limit });
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
+    @Query('regionCode') regionCode?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, regionCode, 'those pharmacies');
+    return this.send('admin_list_pharmacy_stores', {
+      status,
+      page,
+      limit,
+      regionCode: market,
+      scope,
+    });
   }
 
   @Put('admin/:storeId/commission')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.pharmacy')
   @ApiOperation({ summary: 'Admin: set store commission rate' })
-  setCommission(@Param('storeId') storeId: string, @Body('rate') rate: number) {
-    return this.send('set_pharmacy_commission', { storeId, rate });
+  setCommission(
+    @Req() req: any,
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Body() dto: PharmacyCommissionDto,
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that pharmacy');
+    return this.send('set_pharmacy_commission', { storeId, rate: dto.rate, scope });
   }
 
+  /**
+   * `UserRole.PHARMACIST` is off these two routes. `perm:modules.pharmacy` is
+   * required on every admin route, and PHARMACIST is not a staff role, so it
+   * carries no `adminPermissions` claim and would be denied by the permission
+   * check whether or not the role stayed in the list — keeping it would have
+   * been decoration. No account holds the role and no client calls these, so
+   * nothing working changed; a pharmacist-facing verification surface belongs
+   * on the seller routes, where the store is known.
+   */
   @Post('admin/prescriptions/:prescId/verify')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.pharmacy')
   @ApiOperation({ summary: 'Admin: verify prescription' })
-  verifyPrescription(@Param('prescId') prescId: string, @Body() body: any) {
-    return this.send('verify_prescription', { prescId, ...body });
+  verifyPrescription(
+    @Req() req: any,
+    @Param('prescId', ParseUUIDPipe) prescId: string,
+    @Body() body: any,
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'that prescription');
+    return this.send('verify_prescription', { prescId, ...body, scope });
   }
 
   @Get('admin/prescriptions/pending')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.pharmacy')
   @ApiOperation({ summary: 'Admin: get pending prescriptions' })
   getPendingPrescriptions(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
-    return this.send('get_pending_prescriptions', { page, limit });
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
+    const { scope } = this.scopeOf(req, undefined, 'those prescriptions');
+    return this.send('get_pending_prescriptions', { page, limit, scope });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  Franchise
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * A franchise estate is scoped by ownership, not by market — a franchisee may
+   * hold stores in more than one country. Until franchise tenancy is resolved
+   * (the owner check belongs here) the rule is fail closed: a region-locked
+   * admin is refused rather than reading an estate that spans markets.
+   *
+   * No `perm:` key, unlike the seven admin routes above: this is a franchise
+   * route, and `FRANCHISE_OWNER` is not a staff role, so it signs in with no
+   * `adminPermissions` claim at all — a permission requirement here would deny
+   * the route's own audience. `SUPER_ADMIN` is added because it was missing:
+   * the platform owner was refused a route every regional ADMIN could call.
+   */
   @Get('franchise/:franchiseId/stores')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.FRANCHISE_OWNER)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.FRANCHISE_OWNER)
   @ApiOperation({ summary: 'Franchise: list pharmacy stores by franchise' })
   @ApiParam({ name: 'franchiseId', example: 'franchise-uuid' })
   getStoresByFranchise(
+    @Req() req: any,
     @Param('franchiseId') franchiseId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number) {
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
+    refuseLockedAdmin(req, 'franchise estates');
     return this.send('get_pharmacy_stores_by_franchise', { franchiseId, page, limit });
   }
 }
