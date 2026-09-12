@@ -13,7 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { catchError, firstValueFrom, timeout } from 'rxjs';
 import { PageLayout } from './entities/page-layout.entity';
-import { assertInMarket, marketPredicate, rpcCatch } from '@app/common';
+import { applyMarketFilter, assertInMarket, marketPredicate, rpcCatch } from '@app/common';
 
 @Injectable()
 export class AdminService {
@@ -281,8 +281,10 @@ export class AdminService {
         // `users.region_code`, and `users.country` carries an 'IN' DEFAULT that
         // made every customer look Indian (audit V6). A scoped caller also gets
         // NULL rows excluded — an unattributable user is nobody's to moderate.
-        if (scope) qb.andWhere('u.region_code = :scope', { scope: market });
-        else if (market) qb.andWhere('u.region_code = :market', { market });
+        // One predicate for both the lock and a global admin's filter: the two
+        // branches here bound the same column with two different parameter
+        // names, which is how a repeated name silently takes the last value.
+        applyMarketFilter(qb, 'u.region_code', scope, country);
         if (search) {
           // `u.name` does not exist on this table — the name is two columns —
           // so the old predicate turned any search into a 42703 and, through

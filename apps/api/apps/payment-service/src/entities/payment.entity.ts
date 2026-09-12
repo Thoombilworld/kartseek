@@ -1,6 +1,10 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
@@ -34,7 +38,7 @@ export enum PaymentGateway {
   RAZORPAY = 'razorpay',
   STRIPE = 'stripe',
   MADA = 'mada',
-    UPI = 'upi',
+  UPI = 'upi',
   WALLET = 'wallet',
   COD = 'cod',
   PAY_AT_VENUE = 'pay_at_venue',
@@ -76,7 +80,11 @@ export class Payment {
   @Index()
   customerId: string;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Seller / vendor / doctor / hotel owner receiving payment' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Seller / vendor / doctor / hotel owner receiving payment',
+  })
   @Index()
   sellerId: string | null;
 
@@ -91,25 +99,61 @@ export class Payment {
   @Column({ length: 3 })
   currency: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Platform commission deducted' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Platform commission deducted',
+  })
   platformCommission: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 4, default: 0, comment: 'Commission rate applied (e.g. 0.1200 = 12%)' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 4,
+    default: 0,
+    comment: 'Commission rate applied (e.g. 0.1200 = 12%)',
+  })
   commissionRate: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   taxAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Amount payable to seller after commission + tax' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Amount payable to seller after commission + tax',
+  })
   netSellerAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Franchise share (if franchise model)' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Franchise share (if franchise model)',
+  })
   franchiseShare: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Wallet amount used in split payment' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Wallet amount used in split payment',
+  })
   walletAmountUsed: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Amount refunded so far' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Amount refunded so far',
+  })
   refundedAmount: number;
 
   // ── Gateway ───────────────────────────────────────────────────────────────
@@ -145,11 +189,26 @@ export class Payment {
 
   // ── Region ────────────────────────────────────────────────────────────────
 
+  /**
+   * MARKET COLUMN — ISO-2, the platform's `region_code` under another name.
+   *
+   * Payment predates the convention and calls it `countryCode`; every scope
+   * check in this module reads THIS column, and a new entity here uses
+   * `regionCode` (2026-09-12 audit I7). The register of exceptions lives in
+   * `libs/common/src/market/market-scope.ts`, above `normaliseMarket` — which is
+   * what every one of those checks passes through, so one rule serves both
+   * spellings and no caller has to remember which.
+   */
   @Column({ length: 2, comment: 'ISO country code from RegionService' })
   @Index()
   countryCode: string;
 
-  @Column({ type: 'varchar', length: 30, nullable: true, comment: 'Payment method type (card, upi, upi, wallet, cod)' })
+  @Column({
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+    comment: 'Payment method type (card, upi, upi, wallet, cod)',
+  })
   methodType: string | null;
 
   // ── Invoice ───────────────────────────────────────────────────────────────
@@ -159,7 +218,11 @@ export class Payment {
 
   // ── Metadata ──────────────────────────────────────────────────────────────
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Module-specific metadata (items, tip, promo, etc.)' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Module-specific metadata (items, tip, promo, etc.)',
+  })
   metadata: Record<string, unknown> | null;
 
   @Column({ type: 'varchar', nullable: true })

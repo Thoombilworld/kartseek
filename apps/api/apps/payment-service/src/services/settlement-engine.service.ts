@@ -3,7 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, type SelectQueryBuilder } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
-import { assertInMarket, normaliseMarket, refuseUnattributable } from '@app/common';
+import {
+  applyMarketFilter,
+  assertInMarket,
+  normaliseMarket,
+  refuseUnattributable,
+} from '@app/common';
 import * as crypto from 'crypto';
 import {
   SettlementRecord,
@@ -201,7 +206,7 @@ export class SettlementEngineService {
     const market = normaliseMarket(filters.countryCode);
     /** The market predicate, or a no-op for a global caller asking for all markets. */
     const inMarket = (qb: SelectQueryBuilder<SettlementRecord>) =>
-      market ? qb.andWhere('s.countryCode = :cc', { cc: market }) : qb;
+      applyMarketFilter(qb, 's.countryCode', market);
 
     const qb = this.settlementRepo
       .createQueryBuilder('s')
@@ -309,8 +314,7 @@ export class SettlementEngineService {
       .select('s.status', 'status')
       .addSelect('COALESCE(SUM(s."netAmount"), 0)', 'total')
       .where('s."recipientId" = :sellerId', { sellerId });
-    const cc = normaliseMarket(market);
-    if (cc) qb.andWhere('s.countryCode = :cc', { cc });
+    applyMarketFilter(qb, 's.countryCode', market);
     const stats = await qb.groupBy('s.status').getRawMany();
 
     const pending = Number(stats.find((s) => s.status === SettlementStatus.PENDING)?.total || 0);
@@ -334,8 +338,7 @@ export class SettlementEngineService {
       .addSelect('COUNT(s.id)', 'transactions')
       .where('s."franchiseId" = :franchiseId', { franchiseId })
       .andWhere('s."recipientType" = :type', { type: SettlementRecipientType.FRANCHISE });
-    const cc = normaliseMarket(market);
-    if (cc) qb.andWhere('s.countryCode = :cc', { cc });
+    applyMarketFilter(qb, 's.countryCode', market);
     const earnings = await qb.groupBy('s.module').getRawMany();
 
     const total = earnings.reduce((sum: number, e: any) => sum + Number(e.earnings), 0);

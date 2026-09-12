@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { normaliseMarket } from '@app/common';
+import { applyMarketFilter, normaliseMarket } from '@app/common';
 import * as crypto from 'crypto';
 import { Payment, PaymentStatus, PaymentModule, PaymentGateway } from './entities/payment.entity';
 import { GatewayAdapterFactory } from './adapters/gateway-adapter.factory';
@@ -455,7 +455,7 @@ export class PaymentOrchestratorService {
     const market = normaliseMarket(filters.countryCode);
     /** The market predicate, or a no-op when the caller may see every market. */
     const inMarket = (qb: SelectQueryBuilder<Payment>) =>
-      market ? qb.andWhere('p.countryCode = :cc', { cc: market }) : qb;
+      applyMarketFilter(qb, 'p.countryCode', market);
 
     const qb = this.paymentRepo.createQueryBuilder('p');
 
@@ -553,7 +553,7 @@ export class PaymentOrchestratorService {
   ) {
     const market = normaliseMarket(countryCode);
     const inMarket = (qb: SelectQueryBuilder<Payment>) =>
-      market ? qb.andWhere('p.countryCode = :cc', { cc: market }) : qb;
+      applyMarketFilter(qb, 'p.countryCode', market);
 
     const stats = await inMarket(
       this.paymentRepo

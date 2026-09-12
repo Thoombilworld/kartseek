@@ -1,6 +1,10 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { PaymentModule } from './payment.entity';
 
@@ -107,7 +111,11 @@ export class Invoice {
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   walletDeduction: number;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Tax breakdown by type (GST, CGST, SGST, VAT, etc.)' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Tax breakdown by type (GST, CGST, SGST, VAT, etc.)',
+  })
   taxBreakdown: Array<{
     taxType: string;
     rate: number;
@@ -147,6 +155,16 @@ export class Invoice {
 
   // ── Region ────────────────────────────────────────────────────────────────
 
+  /**
+   * MARKET COLUMN — ISO-2, the platform's `region_code` under another name.
+   *
+   * Payment predates the convention and calls it `countryCode`; every scope
+   * check in this module reads THIS column, and a new entity here uses
+   * `regionCode` (2026-09-12 audit I7). The register of exceptions lives in
+   * `libs/common/src/market/market-scope.ts`, above `normaliseMarket` — which is
+   * what every one of those checks passes through, so one rule serves both
+   * spellings and no caller has to remember which.
+   */
   @Column({ length: 2 })
   countryCode: string;
 

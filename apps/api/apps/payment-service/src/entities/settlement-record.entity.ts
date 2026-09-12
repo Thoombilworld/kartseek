@@ -1,6 +1,10 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { PaymentModule } from './payment.entity';
 
@@ -74,7 +78,12 @@ export class SettlementRecord {
   @Column({ type: 'decimal', precision: 12, scale: 2, comment: 'Gross payment amount' })
   grossAmount: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 4, comment: 'Commission rate applied (e.g. 0.1500 = 15%)' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 4,
+    comment: 'Commission rate applied (e.g. 0.1500 = 15%)',
+  })
   commissionRate: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
@@ -105,6 +114,22 @@ export class SettlementRecord {
 
   // ── Region ────────────────────────────────────────────────────────────────
 
+  /**
+   * MARKET COLUMN — ISO-2, the platform's `region_code` under another name.
+   *
+   * Payment predates the convention and calls it `countryCode`; every scope
+   * check in this module reads THIS column, and a new entity here uses
+   * `regionCode` (2026-09-12 audit I7). The register of exceptions lives in
+   * `libs/common/src/market/market-scope.ts`, above `normaliseMarket` — which is
+   * what every one of those checks passes through, so one rule serves both
+   * spellings and no caller has to remember which.
+   *
+   * This is why `1786502200000-MoneyPathMarket` does NOT add a `region_code` to
+   * `settlement_records`: the market is already here, NOT NULL and indexed, and
+   * `settlement-engine.service.ts` already predicates on it. A second column
+   * beside it would be the dead pair F-35 records on `restaurants` and
+   * `pharmacy_stores`.
+   */
   @Column({ length: 2 })
   @Index()
   countryCode: string;
@@ -123,7 +148,12 @@ export class SettlementRecord {
 
   // ── Settlement Period ─────────────────────────────────────────────────────
 
-  @Column({ type: 'varchar', length: 20, nullable: true, comment: 'Settlement cycle identifier (e.g. 2026-W27, 2026-07-07)' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+    comment: 'Settlement cycle identifier (e.g. 2026-W27, 2026-07-07)',
+  })
   @Index()
   settlementPeriod: string | null;
 

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { normaliseMarket } from '@app/common';
+import { applyMarketFilter, normaliseMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { Order } from './entities/order.entity';
@@ -441,7 +441,7 @@ export class OrderService {
       .groupBy('bucket')
       .addGroupBy('o.currency')
       .orderBy('bucket', 'ASC');
-    if (m) qb.andWhere('o.regionCode = :market', { market: m });
+    applyMarketFilter(qb, 'o.regionCode', m);
     const rows =
       (await qb.getRawMany<{
         bucket: string;

@@ -3,6 +3,11 @@ import { ForbiddenException } from '@nestjs/common';
 import { of } from 'rxjs';
 import { AdminService } from './admin.service';
 
+// `:__market` is the one parameter name `applyMarketFilter` binds, platform-wide
+// (`libs/common/src/market/market-scope.ts`). Deliberately not `:scope` or
+// `:market`: a predicate that reuses a name the caller also binds is one a later
+// clause can silently overwrite with a different value.
+
 /** Minimal doubles: a Redis with the pending-KYC keys, an EntityManager whose
  *  query builder records the predicates it was given, a Kafka that swallows.
  *
@@ -237,7 +242,7 @@ describe('AdminService scopes users on the market the claim is minted from', () 
   it('narrows the users list on u.region_code, not on u.country', async () => {
     const { svc, where } = makeService();
     await svc.getUsersList(1, 20, undefined, undefined, undefined, 'QA');
-    expect(where.some((w) => w.includes('u.region_code = :scope'))).toBe(true);
+    expect(where.some((w) => w.includes('u.region_code = :__market'))).toBe(true);
     // `users.country` defaults to 'IN' on every row, so scoping on it handed an
     // IN admin every customer on the platform and a QA admin none (audit V6).
     expect(where.some((w) => w.includes('u.country'))).toBe(false);
@@ -246,13 +251,13 @@ describe('AdminService scopes users on the market the claim is minted from', () 
   it('ignores a conflicting ?country= filter when the caller is locked', async () => {
     const { svc, where } = makeService();
     await svc.getUsersList(1, 20, undefined, 'IN', undefined, 'QA');
-    expect(where.filter((w) => w.includes('region_code'))).toEqual(['u.region_code = :scope']);
+    expect(where.filter((w) => w.includes('region_code'))).toEqual(['u.region_code = :__market']);
   });
 
   it('lets a global admin filter by market without a scope predicate', async () => {
     const { svc, where } = makeService();
     await svc.getUsersList(1, 20, undefined, 'in', undefined, undefined);
-    expect(where).toContain('u.region_code = :market');
+    expect(where).toContain('u.region_code = :__market');
     expect(where.some((w) => w.includes(':scope'))).toBe(false);
   });
 

@@ -6,6 +6,11 @@ import { Order } from './entities/order.entity';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 
+// `:__market` is the one parameter name `applyMarketFilter` binds, platform-wide
+// (`libs/common/src/market/market-scope.ts`). Deliberately not `:scope` or
+// `:market`: a predicate that reuses a name the caller also binds is one a later
+// clause can silently overwrite with a different value.
+
 describe('OrderService', () => {
   let service: OrderService;
   let redis: jest.Mocked<RedisService>;
@@ -283,12 +288,12 @@ describe('OrderService', () => {
 
     it('narrows the aggregate to one market', async () => {
       await service.revenueByPeriod('2026-08-01', '2026-09-12', 'day', 'qa');
-      expect(predicates().some((p: string) => p.includes('o.regionCode = :market'))).toBe(true);
+      expect(predicates().some((p: string) => p.includes('o.regionCode = :__market'))).toBe(true);
       const marketCall = qb().andWhere.mock.calls.find((c: any[]) =>
         String(c[0]).includes('regionCode'),
       );
       // Normalised: 'qa' and 'QA-DOH' are both the QA market.
-      expect(marketCall?.[1]).toEqual({ market: 'QA' });
+      expect(marketCall?.[1]).toEqual({ __market: 'QA' });
     });
 
     it('adds no market predicate for a global admin', async () => {

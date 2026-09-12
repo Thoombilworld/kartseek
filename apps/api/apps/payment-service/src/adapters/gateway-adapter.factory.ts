@@ -10,6 +10,7 @@ import { MadaAdapter } from './mada.adapter';
 import { WalletAdapter } from './wallet.adapter';
 import { RedisService } from '@app/redis';
 import { getRegionConfig } from '@app/region';
+import { normaliseMarket } from '@app/common';
 
 /**
  * GatewayAdapterFactory — Resolves the correct payment gateway adapter
@@ -110,9 +111,20 @@ export class GatewayAdapterFactory {
     const cached = await this.redis.getJson<PaymentMethodInfo[]>(cacheKey);
     if (cached) return cached;
 
+    // A CONFIG LOOKUP, not a market boundary, and deliberately not through
+    // `applyMarketFilter`: the market here is the checkout's own country and the
+    // answer is "which methods does this country offer", so an unknown code must
+    // return an empty method list rather than refuse the request or — worse —
+    // drop the predicate and offer every country's methods. `.where` is the
+    // FIRST clause on a fresh builder, so it adds rather than replaces; the
+    // market column is normalised so a sub-region cannot miss every row.
     let query = this.configRepo
       .createQueryBuilder('pmc')
-      .where('pmc.countryCode = :countryCode', { countryCode })
+      // market-boundary-exempt: a config key, not an authorisation boundary —
+      // "which payment methods does this country offer". An unknown code must
+      // return an empty method list, not refuse the checkout and not drop the
+      // predicate and offer every country's methods.
+      .where('pmc.countryCode = :countryCode', { countryCode: normaliseMarket(countryCode) ?? '' })
       .andWhere('pmc.isActive = :active', { active: true })
       .orderBy('pmc.sortOrder', 'ASC');
 
