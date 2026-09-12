@@ -2,8 +2,62 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * Admin market-scope regression.
+ *
+ * Every route an admin can reach must resolve the caller's market before it
+ * reads or writes a row. This spec walks the gateway's controllers and fails on
+ * any admin-reachable route whose handler never asks the question.
+ *
+ * **A route is an ADMIN route when it says so, not when its file is called
+ * `admin-something`.** The filter this replaced selected *filenames* —
+ * `/^(admin-.*|ddos-admin)\.controller\.ts$/` — which admitted 13 files and 365
+ * routes, all of them passing, and never looked at the 206 admin-reachable
+ * routes in the other 12 controllers: `seller-marketplace` (111), `marketplace`
+ * (22), `seller` (17), `grocery` (13), `taxi` (11), `pharmacy` (7), `payment`
+ * (6), `upload` (5), `doctor` (4), `static-pages` (4), `region` (3) and `gdpr`
+ * (3). Every P0 cross-region vector in the 2026-09-12 audit lived in that blind
+ * spot, and this spec was green for the whole time they were open (AUD2-066).
+ *
+ * The contract for every later plan: a route is in scope here when its class
+ * block or its own handler block carries `@Roles(...)` naming `UserRole.ADMIN`
+ * or `UserRole.SUPER_ADMIN`, whatever the file is called. A new admin route in
+ * a brand-new controller is covered the moment it is written — no registration
+ * step, no filename convention.
+ *
+ * If this fails on a route you added, one of these is true:
+ *   • it touches a row that has a market → resolve it (`this.scopeOf(req, …)`)
+ *     and forward `scope` to the service, which asserts it;
+ *   • its target genuinely has no market dimension → `@GlobalEntity(reason)`,
+ *     reads only;
+ *   • it is a global write → call `refuseLockedAdmin(req, …)` so a region-locked
+ *     caller is refused rather than silently editing every market.
+ */
+
 const CONTROLLERS = path.join(__dirname, '..', 'controllers');
+/**
+ * `api-gateway.module.ts:250` imports `GdprModule`, so `libs/gdpr`'s controller
+ * is mounted on the same gateway under the same rule — and it holds three
+ * `@Roles(ADMIN, SUPER_ADMIN)` routes (export processing, erasure processing and
+ * the compliance dashboard) that no filename filter would ever have reached.
+ * `route-exposure.regression.spec.ts` already scans this root for the same
+ * reason; a scan of `controllers/` alone is not a scan of the gateway.
+ */
+const LIBS = path.join(__dirname, '..', '..', '..', '..', 'libs');
+
 const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)?\s*\)/;
+/**
+ * Every route decorator that sits at the start of a line in the **raw** source.
+ * Comment bodies start with `//` or `*`, so this counts declarations and not
+ * prose — and, unlike a count taken after comment stripping, it stays honest
+ * when the stripper itself loses code. That is not hypothetical: the previous
+ * stripper removed block comments first, so the `//` line comment at
+ * `admin-seo.controller.ts:64` (which mentions `/admin/seo/*`) opened a phantom
+ * block comment that swallowed the `@Controller` and five of that file's six
+ * routes. Declared and parsed both fell together, the counter stayed balanced,
+ * and the scan quietly skipped them.
+ */
+const DECLARED = /^[ \t]*@(?:Get|Post|Put|Patch|Delete|All)\(/gm;
 // `refuseLockedAdmin(` counts: it reads `marketScopeOf(req)` itself and refuses
 // a region-locked caller outright, which is how a route whose target has no
 // market dimension yet resolves the caller's scope. It is not an exemption —
@@ -11,6 +65,290 @@ const HTTP = /^\s*@(Get|Post|Put|Patch|Delete|All)\(\s*(?:'([^']*)'|"([^"]*)"|`(
 const SCOPED =
   /resolveMarket\(|marketScopeOf\(|assertRecordInScope\(|this\.scopeOf\(|refuseLockedAdmin\(/;
 const GLOBAL = /@GlobalEntity\(/;
+const ADMIN_ROLE =
+  /@Roles\([^)]*(?:UserRole\.(?:SUPER_ADMIN|ADMIN)|'(?:SUPER_ADMIN|ADMIN)'|"(?:SUPER_ADMIN|ADMIN)")/;
+/** Every `@Roles(...)` argument list, so a form this scan cannot read can fail. */
+const ROLES_CALL = /@Roles\(([^)]*)\)/g;
+const CONTROLLER = /@Controller\(/;
+/** The base path: `@Controller('x')` and the doubled-mount `@Controller(['x', …])`. */
+const BASE = /@Controller\(\s*\[?\s*['"`]([^'"`]*)['"`]/;
+/** A top-level class declaration and a class's closing brace, both at column 0. */
+const CLASS_LINE = /^(?:export\s+)?(?:abstract\s+)?class\s/;
+const CLASS_CLOSE = /^}/;
+
+/**
+ * Controllers whose class-level guard performs the market check itself, so the
+ * handler bodies legitimately carry no scope call. One entry, and two `it`s
+ * below read that guard's source to prove it — an entry here is a claim about
+ * code, not a way to be excused from the rule.
+ */
+const GUARD_SCOPED: Array<{ bound: RegExp; guard: string; file: string; why: string }> = [
+  {
+    bound: /@UseGuards\([^)]*SellerOwnershipGuard/,
+    guard: 'SellerOwnershipGuard',
+    file: 'seller-ownership.guard.ts',
+    why: 'resolves the seller and calls assertRecordInScope for a locked admin (R1)',
+  },
+];
+
+/**
+ * The params `SellerOwnershipGuard` looks for (`seller-ownership.guard.ts:19`),
+ * as they appear in a route path.
+ */
+const SELLER_ID_PARAM = /:(?:sellerId|id)(?:\/|$)/;
+
+/**
+ * Whether the guard named in GUARD_SCOPED can actually scope this route.
+ *
+ * `canActivate` returns `true` without checking anything when the request
+ * carries none of its params (`seller-ownership.guard.ts:91` — "No seller in
+ * the path — nothing object-level to authorise here"), so a class-level binding
+ * is not a blanket exemption. Two shapes are covered and no others:
+ *
+ *   • the path names a seller (`:sellerId`, or the `:id` the guard also reads)
+ *     — the guard resolves that seller and asserts its market;
+ *   • the path names no row at all (`GET /seller/orders`) — the subject is the
+ *     caller's own account from the JWT, so there is no other market's record to
+ *     reach.
+ *
+ * A route in the same class with some *other* id in its path
+ * (`/seller/campaigns/:campaignId`) is neither: the guard waves it through and
+ * it must resolve the market itself. Today that set is empty — 115 of the 128
+ * guard-scoped routes name a seller and 13 name nothing — and this predicate is
+ * what keeps it empty.
+ */
+function guardCanScope(routePath: string): boolean {
+  return SELLER_ID_PARAM.test(routePath) || !routePath.includes(':');
+}
+
+/**
+ * Routes that are market-free by nature. Anything else an admin can reach must
+ * resolve a market in its handler body. Add here only with a reason.
+ */
+const GLOBAL_ROUTES: Array<[RegExp, string]> = [
+  [
+    /^\/admin\/security\//,
+    'DDoS board is per gateway; every mutation calls refuseLockedAdmin (R7)',
+  ],
+  [/^\/admin\/platform\/health$/, 'service liveness'],
+  [
+    /^\/admin\/layouts\//,
+    'page layouts are per module page, not per market; the write calls refuseLockedAdmin (R7)',
+  ],
+  [
+    /^\/admin\/seo/,
+    'SEO overrides are per path; a market-specific path carries its market in the path, and every write calls refuseLockedAdmin (R7)',
+  ],
+  [/^\/admin\/marketplace\/system-health$/, 'service liveness'],
+];
+
+/**
+ * Admin routes that are still unscoped, each one named in full, with the reason
+ * and the plan that owns the fix.
+ *
+ * This is not an allowlist. Every entry is an exact verb-and-path pair, it says
+ * why the route is still open and who is fixing it, and the `it` below fails
+ * the moment an entry stops describing a real unscoped route — so a route that
+ * gets scoped, renamed or deleted forces its entry out of this file rather than
+ * leaving a permanent hole with a comment on it. The list may only shrink.
+ *
+ * 27 entries on 2026-09-12, after tasks R1–R7 and R10 of the regional-integrity
+ * plan. 22 of the 27 are `@Roles(UserRole.SUPER_ADMIN)` only — no region-locked
+ * admin reaches them, because a super admin is global by definition; they are
+ * listed anyway because the rule is that a route proves it considered the
+ * market, and a locked super admin would otherwise leak silently. The five that
+ * a region-locked `ADMIN` can reach today are marked REACHABLE and are the
+ * priority: `POST /upload/delivery-proof`, `PUT /marketplace/answers/:answerId/
+ * accept` and the three GDPR routes.
+ */
+const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }> = [
+  // ── TAXI plan (D2) ────────────────────────────────────────────────────────
+  // `/taxi/admin/*` is a second taxi admin surface beside the scoped
+  // `/admin/taxi/*` (38 routes, all scoped). It cannot be deleted the way Task 5
+  // deleted restaurant's dead admin surface: it has live callers —
+  // `packages/shared-mobile/lib/core/api/api_client.dart:209-210` asks for
+  // `/taxi/admin/dashboard` and `/taxi/admin/vendors` — so D2 has to scope it,
+  // and the mobile client keeps working while it does. SUPER_ADMIN-only today.
+  {
+    verb: 'GET',
+    path: '/taxi/admin/dashboard',
+    owner: 'TAXI plan (D2)',
+    why: 'second taxi admin surface; live Dart caller (api_client.dart:209)',
+  },
+  {
+    verb: 'GET',
+    path: '/taxi/admin/vendors',
+    owner: 'TAXI plan (D2)',
+    why: 'second taxi admin surface; live Dart caller (api_client.dart:210)',
+  },
+  {
+    verb: 'POST',
+    path: '/taxi/admin/vendors/:id/approve',
+    owner: 'TAXI plan (D2)',
+    why: 'vendor approval on the unscoped taxi admin surface',
+  },
+  {
+    verb: 'POST',
+    path: '/taxi/admin/vendors/:id/reject',
+    owner: 'TAXI plan (D2)',
+    why: 'vendor rejection on the unscoped taxi admin surface',
+  },
+  {
+    verb: 'GET',
+    path: '/taxi/admin/drivers',
+    owner: 'TAXI plan (D2)',
+    why: 'driver list on the unscoped taxi admin surface',
+  },
+  {
+    verb: 'POST',
+    path: '/taxi/admin/drivers/:id/approve',
+    owner: 'TAXI plan (D2)',
+    why: 'driver approval on the unscoped taxi admin surface',
+  },
+  {
+    verb: 'GET',
+    path: '/taxi/admin/fare-rules',
+    owner: 'TAXI plan (D2)',
+    why: 'fare rules are per market; AUD2-018/019 is the same root cause',
+  },
+  {
+    verb: 'POST',
+    path: '/taxi/admin/fare-rules',
+    owner: 'TAXI plan (D2)',
+    why: 'fare-rule write with no market — prices every market off one card',
+  },
+  {
+    verb: 'GET',
+    path: '/taxi/admin/sos',
+    owner: 'TAXI plan (D2)',
+    why: 'SOS alerts carry a rider location; unscoped on this surface',
+  },
+  {
+    verb: 'GET',
+    path: '/taxi/admin/disputes',
+    owner: 'TAXI plan (D2)',
+    why: 'disputes list on the unscoped taxi admin surface',
+  },
+  {
+    verb: 'GET',
+    path: '/taxi/admin/audit-logs',
+    owner: 'TAXI plan (D2)',
+    why: 'audit trail on the unscoped taxi admin surface',
+  },
+
+  // ── REGIONAL follow-up (this plan, R8 Step 3 — descoped) ──────────────────
+  // Task 8's brief assigned the doctor, upload and region fixes to this task.
+  // The coordinator then narrowed R8 to the spec file alone (ledger: "Task 8
+  // (R8): … regression collector widening; only the spec file"), so they need a
+  // follow-up dispatch. The brief's prescriptions are recorded per entry so that
+  // dispatch is mechanical.
+  {
+    verb: 'PUT',
+    path: '/doctor/hospitals/:hospitalId/status',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'cross-region status write of the V7/V9 shape; clinics.region_code exists — add scopeOf + assert the market in doctor.service.ts',
+  },
+  {
+    verb: 'PUT',
+    path: '/doctor/clinics/:clinicId/status',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'cross-region status write; clinics.region_code exists — add scopeOf + assert the market in doctor.service.ts',
+  },
+  {
+    verb: 'PUT',
+    path: '/doctor/doctors/:doctorId/status',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'cross-region status write; resolve the doctor through their clinic market',
+  },
+  {
+    verb: 'GET',
+    path: '/regions/stats',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: "registry statistics, not one market's data — takes @GlobalEntity('region statistics are the registry itself'), which this spec permits on a GET",
+  },
+  {
+    verb: 'GET',
+    path: '/regions/stats/region',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'per-region registry statistics — same @GlobalEntity marker as /regions/stats',
+  },
+  {
+    verb: 'GET',
+    path: '/regions/india/stats',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'India registry statistics — the market is in the path; same @GlobalEntity marker',
+  },
+  {
+    verb: 'POST',
+    path: '/upload/profile-image',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'a file has no market but the audit trail of who uploaded it from which market does — stamp marketScopeOf(req) on the stored object',
+  },
+  {
+    verb: 'POST',
+    path: '/upload/product-image',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'same as /upload/profile-image — stamp the resolved market on the object metadata',
+  },
+  {
+    verb: 'POST',
+    path: '/upload/delivery-proof',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'REACHABLE by a region-locked ADMIN (@Roles DRIVER, ADMIN, SUPER_ADMIN) — highest priority of the five uploads',
+  },
+  {
+    verb: 'POST',
+    path: '/upload/brand-image',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'same as /upload/profile-image — stamp the resolved market on the object metadata',
+  },
+  {
+    verb: 'POST',
+    path: '/upload/category-image',
+    owner: 'REGIONAL follow-up (R8 Step 3)',
+    why: 'same as /upload/profile-image — stamp the resolved market on the object metadata',
+  },
+
+  // ── MODULES plan ──────────────────────────────────────────────────────────
+  {
+    verb: 'GET',
+    path: '/doctor/admin/appointments',
+    owner: 'MODULES plan',
+    why: 'no handler exists in doctor-service (plan §2(a) row 37) — the route 503s; it must still send scope when the handler lands',
+  },
+  {
+    verb: 'PUT',
+    path: '/marketplace/answers/:answerId/accept',
+    owner: 'MODULES plan',
+    why: 'REACHABLE by a region-locked ADMIN; forwards only answerId. R2 and R6 both left it and the ledger records it as claimed by no brief; marketplace.controller.ts also binds the second RolesGuard implementation, which R11 must unify first',
+  },
+
+  // ── Unowned — escalated to the coordinator by R8 ───────────────────────────
+  // Newly surfaced by this widening: libs/gdpr is mounted by
+  // api-gateway.module.ts:250 and no brief in this plan mentions GDPR. All three
+  // are REACHABLE by a region-locked ADMIN, and the module has no market
+  // dimension at all (no region/country column anywhere in libs/gdpr), so the
+  // interim fix is refuseLockedAdmin(req, …) until the subject's
+  // users.region_code is joined.
+  {
+    verb: 'POST',
+    path: '/gdpr/export/:requestId/process',
+    owner: 'unowned — escalated in the R8 report',
+    why: "REACHABLE by a region-locked ADMIN; processes another market's data-export request. libs/gdpr has no market column — refuseLockedAdmin is the interim",
+  },
+  {
+    verb: 'POST',
+    path: '/gdpr/erasure/:requestId/process',
+    owner: 'unowned — escalated in the R8 report',
+    why: "REACHABLE by a region-locked ADMIN; erases another market's subject data. libs/gdpr has no market column — refuseLockedAdmin is the interim",
+  },
+  {
+    verb: 'GET',
+    path: '/gdpr/compliance/dashboard',
+    owner: 'unowned — escalated in the R8 report',
+    why: 'REACHABLE by a region-locked ADMIN; platform-wide compliance counts across every market',
+  },
+];
 
 /** The handler's own signature line: two-space indent, optional async, a name, an open paren. */
 const SIGNATURE = /^ {2}(?:async\s+)?[A-Za-z_]\w*\s*\(/;
@@ -51,86 +389,354 @@ function handlerBlock(
   return { start, end };
 }
 
-/**
- * Routes that are market-free by nature. Anything else under /admin must
- * resolve a market in its handler body. Add here only with a reason.
- */
-const GLOBAL_ROUTES: Array<[RegExp, string]> = [
-  [
-    /^\/admin\/security\//,
-    'DDoS board is per gateway; every mutation calls refuseLockedAdmin (R7)',
-  ],
-  [/^\/admin\/platform\/health$/, 'service liveness'],
-  [
-    /^\/admin\/layouts\//,
-    'page layouts are per module page, not per market; the write calls refuseLockedAdmin (R7)',
-  ],
-  [
-    /^\/admin\/seo/,
-    'SEO overrides are per path; a market-specific path carries its market in the path, and every write calls refuseLockedAdmin (R7)',
-  ],
-  [/^\/admin\/marketplace\/system-health$/, 'service liveness'],
-];
-
 interface AdminRoute {
+  /** Basename; asserted unique across the scanned roots. */
   file: string;
   verb: string;
   path: string;
   scoped: boolean;
   global: boolean;
+  /** The route or its class declares an ADMIN / SUPER_ADMIN role. */
+  adminRole: boolean;
+  /** Its class binds a guard that does the market check, and can do it here. */
+  guardScoped: boolean;
 }
 
+/**
+ * Remove comments without removing code.
+ *
+ * A scanner, not two regexes: it tracks strings and template literals so a
+ * quoted `//` stays, and — the reason it exists — it never lets a `/*` inside a
+ * line comment open a block comment. `.replace(/\/\*[\s\S]*?\*\//g, '')`
+ * followed by a line-comment pass does exactly that, and it cost this spec five
+ * of `admin-seo.controller.ts`'s six routes plus every route in `loyalty`,
+ * `partner` and `seller` (64 in all), silently, for as long as the file existed.
+ * Newlines inside block comments are kept so line numbers survive.
+ */
 function stripComments(s: string): string {
-  return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  let out = '';
+  let state: 'code' | 'line' | 'block' | "'" | '"' | '`' = 'code';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    const d = s[i + 1];
+    if (state === 'code') {
+      if (c === '/' && d === '/') {
+        state = 'line';
+        i++;
+      } else if (c === '/' && d === '*') {
+        state = 'block';
+        i++;
+      } else {
+        if (c === "'" || c === '"' || c === '`') state = c;
+        out += c;
+      }
+    } else if (state === 'line') {
+      if (c === '\n') {
+        state = 'code';
+        out += c;
+      }
+    } else if (state === 'block') {
+      if (c === '*' && d === '/') {
+        state = 'code';
+        i++;
+      } else if (c === '\n') {
+        out += c;
+      }
+    } else if (c === '\\') {
+      out += c + (d ?? '');
+      i++;
+    } else {
+      if (c === state) state = 'code';
+      out += c;
+    }
+  }
+  return out;
+}
+
+/**
+ * One region per top-level class: the decorator block above it, and its body.
+ *
+ * Not "everything above the first `export class`". `static-pages.controller.ts`
+ * holds two controllers with different base paths (`admin/static-pages` and
+ * `pages`), and a file may open with an exported DTO class above the controller
+ * — the shape that makes `route-exposure.regression.spec.ts` misread a file
+ * (noted by R5). Taking the first class would give every route in such a file
+ * the wrong base path and the wrong class-level decorators. Walking up from the
+ * class to the previous class's closing brace also picks up a prettier-wrapped
+ * `@Roles(` or `@UseGuards(`, which a "while the line above starts with @" walk
+ * stops at (see the note at `admin-audit.controller.ts:52`).
+ */
+function classBlocks(src: string[]): Array<{ head: string; from: number; to: number }> {
+  const closes: number[] = [];
+  const decls: number[] = [];
+  src.forEach((line, i) => {
+    if (CLASS_CLOSE.test(line)) closes.push(i);
+    if (CLASS_LINE.test(line)) decls.push(i);
+  });
+  return decls.map((at) => {
+    const before = closes.filter((c) => c < at);
+    const prevClose = before.length ? before[before.length - 1] : -1;
+    const nextClose = closes.find((c) => c > at) ?? src.length;
+    return { head: src.slice(prevClose + 1, at + 1).join('\n'), from: at + 1, to: nextClose };
+  });
+}
+
+interface Parsed {
+  routes: AdminRoute[];
+  /** Route decorators in the raw file against route lines the scan reached. */
+  declared: number;
+  parsed: number;
+  /** `@Roles(...)` argument lists this scan cannot decide (spread, bare const). */
+  undecidable: string[];
+}
+
+/** Parse one controller file. Takes text, so the fixtures below can use it too. */
+function parseController(file: string, text: string): Parsed {
+  const joined = stripComments(text);
+  const src = joined.split('\n');
+  const routes: AdminRoute[] = [];
+  let parsed = 0;
+  for (const cls of classBlocks(src)) {
+    if (!CONTROLLER.test(cls.head)) continue;
+    const classAdminRole = ADMIN_ROLE.test(cls.head);
+    const guardBound = GUARD_SCOPED.some((g) => g.bound.test(cls.head));
+    const base = (cls.head.match(BASE) || [])[1] ?? '';
+    const routeLines: number[] = [];
+    for (let i = cls.from; i < cls.to; i++) if (HTTP.test(src[i])) routeLines.push(i);
+    routeLines.forEach((line, idx) => {
+      const m = src[line].match(HTTP)!;
+      const nextRoute = idx + 1 < routeLines.length ? routeLines[idx + 1] : cls.to;
+      const { start, end } = handlerBlock(src, line, nextRoute);
+      const block = src.slice(start, end).join('\n');
+      parsed++;
+      if (!(classAdminRole || ADMIN_ROLE.test(block))) return;
+      const sub = m[2] ?? m[3] ?? m[4] ?? '';
+      const routePath = ('/' + base + (sub ? '/' + sub : '')).replace(/\/+/g, '/');
+      routes.push({
+        file,
+        verb: m[1].toUpperCase(),
+        path: routePath,
+        scoped: SCOPED.test(block),
+        global: GLOBAL.test(block),
+        adminRole: true,
+        guardScoped: guardBound && guardCanScope(routePath),
+      });
+    });
+  }
+  // A `@Roles(...)` that names no role this scan recognises and spreads or
+  // references something instead could be hiding ADMIN inside a const. One
+  // exists today and is decidable — `@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN,
+  // ...AUDIT_STAFF, 'perm:audit.logs')` — because ADMIN is named inline.
+  const undecidable: string[] = [];
+  for (const call of joined.matchAll(ROLES_CALL)) {
+    const args = call[1];
+    if (ADMIN_ROLE.test(`@Roles(${args})`)) continue;
+    const opaque = args
+      .split(',')
+      .map((a) => a.trim())
+      .filter((a) => a && !/^['"`]/.test(a) && !/^UserRole\./.test(a));
+    if (opaque.length) undecidable.push(`${file}: @Roles(${args.trim()})`);
+  }
+  return {
+    routes,
+    declared: (text.match(DECLARED) ?? []).length,
+    parsed,
+    undecidable,
+  };
+}
+
+/** Every `*.controller.ts` under `dir`, recursively, skipping build output. */
+function controllerFiles(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== 'node_modules' && entry.name !== 'dist')
+        found.push(...controllerFiles(full));
+    } else if (entry.name.endsWith('.controller.ts')) {
+      found.push(full);
+    }
+  }
+  return found;
 }
 
 const parserGaps: string[] = [];
+const undecidableRoles: string[] = [];
+const duplicateNames: string[] = [];
 
 function collect(): AdminRoute[] {
   const out: AdminRoute[] = [];
-  for (const file of fs
-    .readdirSync(CONTROLLERS)
-    .filter((f) => /^(admin-.*|ddos-admin)\.controller\.ts$/.test(f))) {
-    const src = stripComments(fs.readFileSync(path.join(CONTROLLERS, file), 'utf8')).split('\n');
-    const declared = (src.join('\n').match(/@(?:Get|Post|Put|Patch|Delete|All)\(/g) ?? []).length;
-    const base = (src.join('\n').match(/@Controller\(\s*['"`]([^'"`]*)['"`]/) || [])[1] ?? '';
-    const routeLines = src.map((l, i) => ({ l, i })).filter(({ l }) => HTTP.test(l));
-    routeLines.forEach(({ l, i }, idx) => {
-      const m = l.match(HTTP)!;
-      const nextRoute = idx + 1 < routeLines.length ? routeLines[idx + 1].i : src.length;
-      const { start, end } = handlerBlock(src, i, nextRoute);
-      const block = src.slice(start, end).join('\n');
-      const sub = m[2] ?? m[3] ?? m[4] ?? '';
-      out.push({
-        file,
-        verb: m[1].toUpperCase(),
-        path: ('/' + base + (sub ? '/' + sub : '')).replace(/\/+/g, '/'),
-        scoped: SCOPED.test(block),
-        global: GLOBAL.test(block),
-      });
-    });
-    if (declared !== routeLines.length) {
+  const seen = new Map<string, string>();
+  for (const full of [...controllerFiles(CONTROLLERS), ...controllerFiles(LIBS)]) {
+    const file = path.basename(full);
+    const previous = seen.get(file);
+    if (previous) duplicateNames.push(`${file}: both ${previous} and ${full}`);
+    seen.set(file, full);
+    const result = parseController(file, fs.readFileSync(full, 'utf8'));
+    out.push(...result.routes);
+    undecidableRoles.push(...result.undecidable);
+    if (result.declared !== result.parsed) {
       parserGaps.push(
-        `${file}: ${declared} route decorators declared, ${routeLines.length} parsed (multi-line decorator?)`,
+        `${file}: ${result.declared} route decorators declared, ${result.parsed} parsed (multi-line decorator? a route outside any @Controller class?)`,
       );
     }
   }
   return out;
 }
 
+// ── Fixtures: the file shapes that have broken this kind of scan before ──────
+
+/** An exported class above the controller — the shape R5 found misparsed. */
+const FIXTURE_DTO_ABOVE = `import { Controller, Get } from '@nestjs/common';
+
+export class UploadedFileDto {
+  url!: string;
+}
+
+@ApiTags('fixture')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+@Controller('fixture/admin')
+export class FixtureAdminController {
+  @Get('rows')
+  async listRows() {
+    return this.svc.rows();
+  }
+}
+`;
+
+/** Two controllers in one file with different bases — `static-pages` today. */
+const FIXTURE_TWO_CONTROLLERS = `@Controller('fixture/admin/pages')
+@Roles(UserRole.ADMIN)
+export class FixtureAdminPagesController {
+  @Get('list')
+  async list() {
+    const { scope } = this.scopeOf(req, undefined, 'pages');
+    return scope;
+  }
+}
+
+@Controller('fixture/pages')
+export class FixturePublicPagesController {
+  @Get(':slug')
+  async read() {
+    return 1;
+  }
+
+  @Patch(':slug')
+  @Roles(UserRole.SUPER_ADMIN)
+  async write() {
+    return 2;
+  }
+}
+`;
+
+/** A `//` comment mentioning a glob — the phantom block comment. */
+const FIXTURE_GLOB_IN_LINE_COMMENT = `// the console asks for /fixture/admin/* here, and that is fine
+@Roles(UserRole.ADMIN)
+@Controller('fixture/glob')
+export class FixtureGlobController {
+  @Get('a')
+  async a() {
+    return this.scopeOf(req, undefined, 'a');
+  }
+}
+`;
+
+/** A class bound to the guard, with all three shapes of route path. */
+const FIXTURE_GUARD_SCOPED = `@UseGuards(JwtAuthGuard, RolesGuard, SellerOwnershipGuard)
+@Roles(UserRole.SELLER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+@Controller('fixture/sellers')
+export class FixtureSellerController {
+  @Get(':sellerId/orders')
+  async scopedByGuard() {
+    return 1;
+  }
+
+  @Get('settings')
+  async ownAccount() {
+    return 2;
+  }
+
+  @Get('campaigns/:campaignId')
+  async someoneElsesRow() {
+    return 3;
+  }
+}
+`;
+
 describe('admin market scope regression', () => {
   const routes = collect();
+  const files = new Set(routes.map((r) => r.file));
 
-  it('parses every admin controller', () => {
-    expect(routes.length).toBeGreaterThan(300);
+  it('scans every controller and finds the admin routes in all of them', () => {
+    // 571 admin-role routes across 25 files on 2026-09-12: 365 in the 13 files
+    // the old filename filter admitted, 206 in the 12 it did not, one of which
+    // is libs/gdpr's. The floor is deliberately close to the real number: a
+    // collector that silently stops seeing a controller drops ~100 routes at a
+    // time and must fail here rather than pass with fewer things to check.
+    expect(routes.length).toBeGreaterThan(500);
+    expect(files.size).toBeGreaterThanOrEqual(22);
+    // The blind spot by name, so it cannot come back unnoticed. The four files
+    // whose routes this plan's successors may delete outright — taxi, doctor,
+    // upload, region — are held instead by the DEFERRED entries below, which
+    // fail if their routes disappear.
+    for (const f of [
+      'seller-marketplace.controller.ts',
+      'seller.controller.ts',
+      'marketplace.controller.ts',
+      'grocery.controller.ts',
+      'pharmacy.controller.ts',
+      'payment.controller.ts',
+      'static-pages.controller.ts',
+      'gdpr.controller.ts',
+    ]) {
+      expect(files.has(f)).toBe(true);
+    }
+    expect(duplicateNames.join('\n')).toBe('');
   });
 
-  it('resolves a market on every /admin route that is not declared global', () => {
+  it('resolves a market on every admin route that is not global, guard-scoped or deferred', () => {
+    const deferred = new Set(DEFERRED.map((d) => `${d.verb} ${d.path}`));
     const offenders = routes.filter(
-      (r) => !r.scoped && !r.global && !GLOBAL_ROUTES.some(([re]) => re.test(r.path)),
+      (r) =>
+        !r.scoped &&
+        !r.global &&
+        !r.guardScoped &&
+        !GLOBAL_ROUTES.some(([re]) => re.test(r.path)) &&
+        !deferred.has(`${r.verb} ${r.path}`),
     );
     const report = offenders.map((r) => `  ${r.verb} ${r.path}   (${r.file})`).join('\n');
     expect(report).toBe('');
+  });
+
+  it('every deferred exception still names a real, still-unscoped route', () => {
+    // The list may only shrink. An entry whose route has been scoped, renamed or
+    // deleted has to leave this file — otherwise the exceptions outlive the holes
+    // they describe and the next reader cannot tell which is which.
+    const stale: string[] = [];
+    for (const d of DEFERRED) {
+      const matches = routes.filter((r) => r.verb === d.verb && r.path === d.path);
+      if (!matches.length) {
+        stale.push(`  ${d.verb} ${d.path} — no such admin route any more; delete this entry`);
+        continue;
+      }
+      if (matches.length > 1) {
+        stale.push(
+          `  ${d.verb} ${d.path} — matches ${matches.length} routes; make the entry exact`,
+        );
+        continue;
+      }
+      const r = matches[0];
+      if (r.scoped || r.global || r.guardScoped) {
+        stale.push(`  ${d.verb} ${d.path} — now scoped (${r.file}); delete this entry`);
+      }
+      if (!d.owner.trim() || !d.why.trim()) {
+        stale.push(`  ${d.verb} ${d.path} — an exception needs both an owner and a reason`);
+      }
+    }
+    expect(stale.join('\n')).toBe('');
+    expect(DEFERRED.length).toBeLessThanOrEqual(27);
   });
 
   it('allows @GlobalEntity on reads only — a write to a global entity must refuse locked admins itself', () => {
@@ -142,8 +748,81 @@ describe('admin market scope regression', () => {
     expect(report).toBe('');
   });
 
+  it('every guard named in GUARD_SCOPED really performs the market check', () => {
+    // The exemption is a claim about a guard's source. Reading it here is what
+    // stops GUARD_SCOPED becoming the new filename filter: a guard that stops
+    // calling assertRecordInScope fails this spec, not silently 115 routes.
+    const failures: string[] = [];
+    for (const g of GUARD_SCOPED) {
+      const file = path.join(__dirname, g.file);
+      if (!fs.existsSync(file)) {
+        failures.push(`${g.guard}: ${g.file} does not exist — was the guard renamed?`);
+        continue;
+      }
+      const src = fs.readFileSync(file, 'utf8');
+      if (!/assertRecordInScope\(/.test(src))
+        failures.push(`${g.guard}: ${g.why} — but it does not`);
+      // guardCanScope() below depends on these two lines being what they are.
+      if (!/SELLER_PARAMS = \['sellerId', 'id'\]/.test(src))
+        failures.push(`${g.guard}: SELLER_PARAMS changed — update SELLER_ID_PARAM to match`);
+      if (!/if \(!sellerId\) return true;/.test(src))
+        failures.push(`${g.guard}: the no-param early return changed — re-check guardCanScope()`);
+    }
+    expect(failures.join('\n')).toBe('');
+  });
+
+  it('only exempts a guard-scoped route the guard can actually see a seller in', () => {
+    // A route in a guard-bound class that names some other row is waived by the
+    // guard (`if (!sellerId) return true`) and must scope itself.
+    const exempt = routes.filter((r) => r.guardScoped);
+    expect(exempt.every((r) => guardCanScope(r.path))).toBe(true);
+    const parsed = parseController('fixture.controller.ts', FIXTURE_GUARD_SCOPED);
+    expect(parsed.routes.map((r) => `${r.path} ${r.guardScoped}`)).toEqual([
+      '/fixture/sellers/:sellerId/orders true',
+      '/fixture/sellers/settings true',
+      '/fixture/sellers/campaigns/:campaignId false',
+    ]);
+  });
+
   it('sees every route decorator it counts — a multi-line decorator must fail here, not vanish', () => {
     expect(parserGaps.join('\n')).toBe('');
+  });
+
+  it('can decide, for every @Roles it reads, whether ADMIN is in it', () => {
+    // A `@Roles(...ADMIN_ROLES)` would name no role this scan recognises and
+    // would drop its route from the whole spec. Name the roles inline instead.
+    expect(undecidableRoles.join('\n')).toBe('');
+  });
+
+  it('reads the @Controller class, not the first class in the file', () => {
+    // An exported DTO above the controller used to take the class block with it,
+    // which loses the base path and every class-level decorator (R5's finding on
+    // route-exposure.regression.spec.ts).
+    const parsed = parseController('fixture.controller.ts', FIXTURE_DTO_ABOVE);
+    expect(parsed.declared).toBe(1);
+    expect(parsed.parsed).toBe(1);
+    expect(parsed.routes).toHaveLength(1);
+    expect(parsed.routes[0].path).toBe('/fixture/admin/rows');
+    expect(parsed.routes[0].adminRole).toBe(true);
+    // And it bites: an admin route with no scope call is reported, not waived.
+    expect(parsed.routes[0].scoped).toBe(false);
+  });
+
+  it('gives each controller in a two-controller file its own base and roles', () => {
+    const parsed = parseController('fixture.controller.ts', FIXTURE_TWO_CONTROLLERS);
+    expect(parsed.declared).toBe(3);
+    expect(parsed.parsed).toBe(3);
+    // The public GET is not an admin route; the second class's own @Roles is.
+    expect(parsed.routes.map((r) => `${r.verb} ${r.path} scoped=${r.scoped}`)).toEqual([
+      'GET /fixture/admin/pages/list scoped=true',
+      'PATCH /fixture/pages/:slug scoped=false',
+    ]);
+  });
+
+  it('does not let a // comment containing a glob swallow the rest of the file', () => {
+    const parsed = parseController('fixture.controller.ts', FIXTURE_GLOB_IN_LINE_COMMENT);
+    expect(parsed.routes.map((r) => r.path)).toEqual(['/fixture/glob/a']);
+    expect(parsed.declared).toBe(parsed.parsed);
   });
 
   it('does not let a helper declared after the last route stand in for that route', () => {
