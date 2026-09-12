@@ -6,10 +6,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, ILike } from 'typeorm';
+import { Repository, In, ILike, IsNull } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
-import { applyMarketFilter, assertInMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket, requireMarket, normaliseMarket } from '@app/common';
 
 import { GroceryStore } from '../entities/grocery-store.entity';
 import { GroceryItem } from '../entities/grocery-item.entity';
@@ -172,7 +172,12 @@ export class GroceryAdminService {
     const limit = Math.min(100, Math.max(1, Number(opts.limit) || 20));
 
     const qb = this.storeRepo.createQueryBuilder('s');
-    applyMarketFilter(qb, 's.regionCode', undefined, opts.regionCode);
+    // `requireMarket`, not the permissive `requested` slot: `grocery.controller.ts`
+    // collapses the lock into this field (`regionCode: d?.scope ?? d?.regionCode`),
+    // and an unreadable value in the `requested` slot is IGNORED — which would
+    // turn a lock meant to narrow into no predicate at all, and hand a
+    // QA-confined admin every market's rows (N1).
+    applyMarketFilter(qb, 's.regionCode', requireMarket(opts.regionCode, 'market', this.logger));
     if (opts.status && opts.status !== 'All') {
       qb.andWhere('s.status = :status', { status: opts.status });
     }
@@ -295,7 +300,13 @@ export class GroceryAdminService {
 
     const qb = this.orderRepo.createQueryBuilder('o').leftJoinAndSelect('o.store', 'store');
     if (opts.regionCode) {
-      applyMarketFilter(qb, 'store.regionCode', undefined, opts.regionCode);
+      // `requireMarket` — see the note in `listStores`: the lock arrives in
+      // this field, so an unreadable one must refuse rather than widen (N1).
+      applyMarketFilter(
+        qb,
+        'store.regionCode',
+        requireMarket(opts.regionCode, 'market', this.logger),
+      );
     }
     if (opts.status && opts.status !== 'All')
       qb.andWhere('o.status = :status', { status: opts.status });
@@ -416,7 +427,12 @@ export class GroceryAdminService {
     }
 
     const qb = this.flashDealRepo.createQueryBuilder('d').leftJoin('d.store', 'store');
-    applyMarketFilter(qb, 'store.regionCode', undefined, opts.regionCode);
+    // `requireMarket` — see the note in `listStores` (N1).
+    applyMarketFilter(
+      qb,
+      'store.regionCode',
+      requireMarket(opts.regionCode, 'market', this.logger),
+    );
     if (opts.storeId) qb.andWhere('d.storeId = :storeId', { storeId: opts.storeId });
     if (status) qb.andWhere('d.status = :status', { status });
 
@@ -524,14 +540,38 @@ export class GroceryAdminService {
 
   // ── Settings ───────────────────────────────────────────────────────────────
 
-  /** Stored settings merged over the shipped defaults. */
-  async getSettings() {
-    const rows = await this.settingRepo.find();
-    const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  /**
+   * Grocery settings for one market, falling back to the platform defaults.
+   *
+   * Marketplace's own settings read is platform-wide by deliberate design
+   * (`getMarketplaceSettings`, one Redis record — no market has its own
+   * commission or return window); grocery's took nothing either, so one
+   * admin screen showed a delivery fee, a minimum basket and a service radius
+   * that read as every market's at once (audit I9), when a delivery fee and a
+   * service radius really are a market's own facts. `source` says which row
+   * answered, so the console can show "inherited from platform defaults"
+   * rather than implying the market set these values — and today it always
+   * will, because nothing yet writes a market-scoped row (see the entity's
+   * docstring): the write stays platform-only until the MODULES plan's
+   * per-market editor exists.
+   */
+  async getSettings(market?: string) {
+    const m = normaliseMarket(market);
+    const [scoped, global] = await Promise.all([
+      m ? this.settingRepo.find({ where: { regionCode: m } }) : Promise.resolve([]),
+      this.settingRepo.find({ where: { regionCode: IsNull() } }),
+    ]);
+    const globalStored = Object.fromEntries(global.map((r) => [r.key, r.value]));
+    const scopedStored = Object.fromEntries(scoped.map((r) => [r.key, r.value]));
+    const rows = [...global, ...scoped];
     return {
-      settings: { ...GROCERY_SETTING_DEFAULTS, ...stored },
-      defaults: GROCERY_SETTING_DEFAULTS,
-      overridden: rows.map((r) => r.key),
+      settings: { ...GROCERY_SETTING_DEFAULTS, ...globalStored, ...scopedStored },
+      defaults: { ...GROCERY_SETTING_DEFAULTS, ...globalStored },
+      // Every key that has a persisted row, global or market-scoped — the keys
+      // that differ from the shipped `GROCERY_SETTING_DEFAULTS` constant.
+      overridden: [...new Set(rows.map((r) => r.key))],
+      market: m ?? null,
+      source: scoped.length ? 'market' : 'platform',
       updatedAt: rows.reduce<string | null>(
         (latest, r) =>
           !latest || r.updatedAt > new Date(latest) ? r.updatedAt.toISOString() : latest,

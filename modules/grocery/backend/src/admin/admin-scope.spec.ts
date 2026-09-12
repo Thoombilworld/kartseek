@@ -39,6 +39,61 @@ describe('GroceryAdminService market scope', () => {
     expect(where).toContain('store.regionCode = :__market');
   });
 
+  /**
+   * The lock arrives in this field, so an unreadable one must refuse.
+   *
+   * `grocery.controller.ts` collapses the two slots — `regionCode: d?.scope ??
+   * d?.regionCode` — so a region-locked admin's market lands in the FILTER
+   * slot, where `applyMarketFilter` deliberately ignores a value it cannot
+   * read. Ignored means no predicate: every market's stores, orders and flash
+   * deals, to an admin restricted to one (N1). The gateway refuses such a lock
+   * at source now; this is the service-side line for a TCP caller and for a
+   * global admin's typo.
+   */
+  it('refuses an unreadable market filter rather than listing every market', async () => {
+    for (const bad of ['NOT-A-COUNTRY', 'ZZ', 'QAT']) {
+      const stores = qbRecorder();
+      const svcS = Object.create(GroceryAdminService.prototype) as GroceryAdminService;
+      Object.assign(svcS, {
+        storeRepo: { createQueryBuilder: () => stores.qb },
+        logger: { warn: vi.fn() },
+      });
+      await expect(svcS.listStores({ regionCode: bad })).rejects.toThrow(ForbiddenException);
+      expect(stores.where).toEqual([]);
+
+      const orders = qbRecorder();
+      const svcO = Object.create(GroceryAdminService.prototype) as GroceryAdminService;
+      Object.assign(svcO, {
+        orderRepo: { createQueryBuilder: () => orders.qb },
+        logger: { warn: vi.fn() },
+      });
+      await expect(svcO.listOrders({ regionCode: bad })).rejects.toThrow(ForbiddenException);
+      expect(orders.where).toEqual([]);
+    }
+  });
+
+  it('still lists one market for a readable filter', async () => {
+    const { qb, where } = qbRecorder();
+    const svc = Object.create(GroceryAdminService.prototype) as GroceryAdminService;
+    Object.assign(svc, {
+      storeRepo: { createQueryBuilder: () => qb },
+      logger: { warn: vi.fn() },
+    });
+    await svc.listStores({ regionCode: 'qa' });
+    expect(where).toContain('s.regionCode = :__market');
+  });
+
+  it('lists every market only when no filter is given at all', async () => {
+    const { qb, where } = qbRecorder();
+    const svc = Object.create(GroceryAdminService.prototype) as GroceryAdminService;
+    Object.assign(svc, {
+      storeRepo: { createQueryBuilder: () => qb },
+      logger: { warn: vi.fn() },
+    });
+    await svc.listStores({});
+    expect(where.filter((w) => w.includes('regionCode'))).toEqual([]);
+  });
+
   it('refuses to change the status of a store in another market', async () => {
     const svc = Object.create(GroceryAdminService.prototype) as GroceryAdminService;
     const storeRepo = {
