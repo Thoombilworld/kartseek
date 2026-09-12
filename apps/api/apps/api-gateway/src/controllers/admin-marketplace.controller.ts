@@ -1654,12 +1654,18 @@ export class AdminMarketplaceController {
     const key = `marketplace:${type}-banners`;
     const existing: any[] = (await this.redis.getJson(key)) || [];
     const target = existing.find((b: any) => b.id === id);
-    if (target)
-      assertRecordInScope(req, AdminMarketplaceController.bannerMarket(target), 'this banner');
+    // 404 before anything else. The assertion used to sit inside `if (target)`,
+    // so a banner id that matched nothing skipped the market check entirely and
+    // fell through to `invalidateHomeFeeds(null)` — a home-feed flush for every
+    // market on the platform, triggerable by any locked admin with a typo
+    // (audit V14).
+    if (!target) throw new NotFoundException(`Banner ${id} not found`);
+    assertRecordInScope(req, AdminMarketplaceController.bannerMarket(target), 'this banner');
+
     const filtered = existing.filter((b: any) => b.id !== id);
     await this.redis.setJson(key, filtered, 0);
     await this.invalidateHomeFeeds(
-      Array.isArray(target?.regions) && target.regions.length ? target.regions : null,
+      Array.isArray(target.regions) && target.regions.length ? target.regions : null,
     );
     await this.kafka.publish(KAFKA_TOPICS.MARKETPLACE_HOME_UPDATED || 'marketplace.home.updated', {
       type,
