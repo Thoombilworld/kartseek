@@ -580,9 +580,20 @@ export class GroceryController {
 
   @MessagePattern({ cmd: 'set_grocery_brand_approval' })
   msgSetBrandApproval(
-    @Payload() d: { brandId: string; status: 'APPROVED' | 'REJECTED'; reason?: string },
+    @Payload()
+    d: {
+      brandId: string;
+      status: 'APPROVED' | 'REJECTED';
+      reason?: string;
+      scope?: string;
+    },
   ) {
-    return this.svc.setBrandApproval(requireId(d?.brandId, 'brand'), d?.status, d?.reason);
+    return this.svc.setBrandApproval(
+      requireId(d?.brandId, 'brand'),
+      d?.status,
+      d?.reason,
+      d?.scope,
+    );
   }
 
   @MessagePattern({ cmd: 'list_grocery_brands' })
@@ -654,7 +665,14 @@ export class GroceryController {
     return this.svc.getProducts(d.storeId, d.category, d.page, d.limit, d.regionCode, actorOf(d));
   }
 
-  /** Moderation: approve or reject a listing. Gateway restricts to admins. */
+  /**
+   * Moderation: approve or reject a listing. Gateway restricts to admins.
+   *
+   * `scope` is the caller's market when the gateway resolved one for a
+   * region-locked administrator, and undefined for a global one. A grocery item
+   * carries no market of its own, so the service resolves the market of the
+   * store that stocks it and asserts against that.
+   */
   @MessagePattern({ cmd: 'set_grocery_product_approval' })
   msgSetProductApproval(
     @Payload()
@@ -665,19 +683,24 @@ export class GroceryController {
       actorId?: string;
       actorRole?: string;
       actorIp?: string;
+      scope?: string;
     },
   ) {
-    return this.svc.setProductApproval(requireId(d?.productId, 'product'), d?.status, d?.reason, {
-      actorId: d?.actorId,
-      actorRole: d?.actorRole,
-      actorIp: d?.actorIp,
-    });
+    return this.svc.setProductApproval(
+      requireId(d?.productId, 'product'),
+      d?.status,
+      d?.reason,
+      { actorId: d?.actorId, actorRole: d?.actorRole, actorIp: d?.actorIp },
+      d?.scope,
+    );
   }
 
   /** Moderation queue. */
   @MessagePattern({ cmd: 'get_grocery_pending_products' })
-  msgPendingProducts(@Payload() d: { page?: number; limit?: number; storeId?: string }) {
-    return this.svc.getPendingProducts(d?.page, d?.limit, d?.storeId);
+  msgPendingProducts(
+    @Payload() d: { page?: number; limit?: number; storeId?: string; scope?: string },
+  ) {
+    return this.svc.getPendingProducts(d?.page, d?.limit, d?.storeId, d?.scope);
   }
 
   @MessagePattern({ cmd: 'create_grocery_order' })

@@ -47,7 +47,7 @@ import {
   ReorderDto,
   ProductTranslationDto,
 } from './dto/flash-deal.dto';
-import { requireId, requireUuid, assertInMarket } from '@app/common';
+import { requireId, requireUuid, assertInMarket, refuseUnattributable } from '@app/common';
 
 // ── Canonical categories — used ONLY for initial DB seeding ─────────────────
 // After seeding, all reads go through the grocery_categories table.
@@ -1143,11 +1143,34 @@ export class GroceryService {
     return { success: true, alreadyExists: false, brand };
   }
 
-  /** Moderation decision on a brand request. */
-  async setBrandApproval(brandId: string, status: 'APPROVED' | 'REJECTED', reason?: string) {
+  /**
+   * Moderation decision on a brand request.
+   *
+   * `scope` is the caller's market when the gateway resolved one for a
+   * region-locked administrator. A brand row carries no market — it is a
+   * platform-wide name — so the request is attributed to the market of the
+   * store owned by the seller who asked for it. A request nobody asked for is
+   * refused for a locked admin rather than approved on every market's behalf.
+   */
+  async setBrandApproval(
+    brandId: string,
+    status: 'APPROVED' | 'REJECTED',
+    reason?: string,
+    scope?: string,
+  ) {
     if (!brandId) throw new BadRequestException('A brand id is required.');
     const brand = await this.brandRepo.findOne({ where: { id: brandId } });
     if (!brand) throw new NotFoundException(`Brand ${brandId} not found`);
+    if (brand.requestedBySellerId) {
+      assertInMarket(
+        await this.sellerMarket(brand.requestedBySellerId),
+        scope,
+        'brand request',
+        this.logger,
+      );
+    } else {
+      refuseUnattributable(scope, 'brand request', this.logger);
+    }
 
     brand.approvalStatus = status;
     brand.rejectionReason = status === 'REJECTED' ? (reason ?? null) : null;
@@ -2494,10 +2517,15 @@ export class GroceryService {
     status: 'APPROVED' | 'REJECTED',
     reason?: string,
     actor?: { actorId?: string; actorRole?: string; actorIp?: string },
+    scope?: string,
   ) {
     if (!productId) throw new BadRequestException('A product id is required.');
     const product = await this.itemRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
+    // A grocery item carries no market of its own; the store that stocks it
+    // does, and that join is the documented attribution for the whole grocery
+    // catalogue (`admin/admin.service.ts`).
+    assertInMarket(await this.storeMarket(product.storeId), scope, 'listing', this.logger);
 
     // Captured before the write: the audit trail has to say what the listing was,
     // not only what it became.
@@ -2556,12 +2584,16 @@ export class GroceryService {
   }
 
   /** Listings awaiting a moderation decision, newest first. */
-  async getPendingProducts(page = 1, limit = 30, storeId?: string) {
+  async getPendingProducts(page = 1, limit = 30, storeId?: string, scope?: string) {
     ({ page, limit } = paginate(page, limit, 30));
     const qb = this.itemRepo
       .createQueryBuilder('item')
+      .leftJoin('item.store', 'store')
       .where('item.approvalStatus = :status', { status: 'PENDING' });
     if (storeId) qb.andWhere('item.storeId = :storeId', { storeId });
+    // In the query, not after it: a post-filter over `take(limit)` rows returns
+    // a short page that looks like "no listings awaiting review" (audit X-57).
+    if (scope) qb.andWhere('store.regionCode = :scope', { scope });
 
     const [data, total] = await qb
       .orderBy('item.createdAt', 'DESC')
@@ -2570,6 +2602,30 @@ export class GroceryService {
       .getManyAndCount();
 
     return { data, total, page, limit };
+  }
+
+  /** The market a grocery store trades in — the attribution join for its items. */
+  private async storeMarket(storeId: string | null | undefined): Promise<string | null> {
+    if (!storeId) return null;
+    const store = await this.storeRepo.findOne({
+      where: { id: storeId },
+      select: ['id', 'regionCode'],
+    });
+    return store?.regionCode ?? null;
+  }
+
+  /**
+   * The market a seller trades in, through the store they own — how a brand
+   * request, which has no market column of its own, is attributed to one.
+   */
+  private async sellerMarket(ownerId: string | null | undefined): Promise<string | null> {
+    if (!ownerId) return null;
+    const store = await this.storeRepo.findOne({
+      where: { ownerId },
+      select: ['id', 'regionCode'],
+      order: { createdAt: 'ASC' },
+    });
+    return store?.regionCode ?? null;
   }
 
   private async maySeeUnapproved(
