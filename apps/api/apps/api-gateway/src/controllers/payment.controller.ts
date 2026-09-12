@@ -25,7 +25,7 @@ import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { marketScopeOf, resolveMarket } from '../guards/market-scope';
-import { PaymentAdminFilterDto } from '../dto/payment.dto';
+import { PaymentAdminFilterDto, PaymentDashboardFilterDto } from '../dto/payment.dto';
 import { UserRole, rpcCatch } from '@app/common';
 
 // Inline payment methods by country (avoids @app/region JS build cache issues)
@@ -372,11 +372,27 @@ export class PaymentGatewayController {
   @Get('admin/dashboard')
   @ApiOperation({ summary: 'Payment dashboard for one market, or all' })
   @ApiQuery({ name: 'countryCode', required: false })
-  async getDashboard(@Req() req: any, @Query() filters: PaymentAdminFilterDto) {
+  @ApiQuery({ name: 'module', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'gateway', required: false })
+  @ApiQuery({ name: 'sellerId', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async getDashboard(@Req() req: any, @Query() filters: PaymentDashboardFilterDto) {
     const { scope, market } = this.scopeOf(req, filters?.countryCode, 'that dashboard');
+    // Named keys, never a spread of the query: `scope` is the gateway's own and
+    // must not be forgeable. Every other field the dashboard query reads is
+    // forwarded, because a filter declared on the DTO but dropped here is a
+    // control the console can send and nothing acts on.
     return this.send('get_payment_dashboard', {
+      module: filters?.module,
+      status: filters?.status,
+      gateway: filters?.gateway,
+      sellerId: filters?.sellerId,
       startDate: filters?.startDate,
       endDate: filters?.endDate,
+      page: filters?.page,
+      limit: filters?.limit,
       countryCode: market,
       scope,
     });

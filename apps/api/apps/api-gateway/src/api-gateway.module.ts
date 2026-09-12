@@ -96,6 +96,7 @@ import { MarketplaceOrderService } from './services/marketplace-order.service';
 import { StaffMfaService } from './services/staff-mfa.service';
 import { SellerOwnershipGuard } from './guards/seller-ownership.guard';
 import { GroceryStoreOwnershipGuard } from './guards/grocery-store-ownership.guard';
+import { FranchiseAccessGuard } from './guards/franchise-access.guard';
 import { SellerModuleGuard } from './guards/seller-module.guard';
 import { SellerApprovalGuard } from './guards/seller-approval.guard';
 import {
@@ -518,6 +519,9 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
     // Object-level authorisation for /grocery/stores/:storeId/* routes — resolves
     // ownership from `grocery_stores.ownerId`, which SellerOwnershipGuard cannot see
     GroceryStoreOwnershipGuard,
+    // Object-level authorisation for /franchise/:id/* routes — the franchise twin
+    // of SellerOwnershipGuard, resolving owner and market from `franchises`
+    FranchiseAccessGuard,
     // Module-level authorisation — keeps a seller inside their own portal's API
     SellerModuleGuard,
     // Lifecycle authorisation — keeps an unapproved or suspended seller out of it
