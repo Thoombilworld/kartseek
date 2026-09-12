@@ -1,4 +1,5 @@
 import { ForbiddenException, Logger } from '@nestjs/common';
+import { normaliseMarket } from '@app/common';
 
 /**
  * The market an authenticated staff request may act in.
@@ -45,6 +46,26 @@ export function marketScopeOf(req: any): MarketScope {
  * and a request that names any other one is refused and logged: that is the
  * "Qatar admin asks for India's coupons" case, and it has to be visible in
  * the logs, not just denied.
+ *
+ * ── A lock this platform cannot read is refused HERE, at the source ─────────
+ *
+ * `users.region_code` is admin-editable, so a staff account can carry a market
+ * the registry has never heard of. Downstream, the value is only safe while it
+ * stays in the `scope` slot: `resolveLock` in `@app/common` refuses an
+ * unreadable lock there. But controllers routinely collapse the two slots into
+ * one payload field — `region: d?.scope ?? d?.regionCode` — and in the
+ * `requested` slot an unreadable value is deliberately IGNORED, which turns a
+ * lock that was meant to narrow into no predicate at all: every market's rows,
+ * to an admin restricted to one.
+ *
+ * That is worse than the bug the strict `normaliseMarket` fixed. Before it, a
+ * malformed claim normalised to a plausible market and these lists filtered to
+ * the wrong ONE market; afterwards they would have returned ALL of them. So the
+ * refusal belongs at the point the lock is first read, before any controller can
+ * put it anywhere: a locked caller whose own market does not normalise cannot
+ * address any market at all. The thrown copy is the platform's fixed
+ * unattributable wording; the log names the claim that caused it, because the
+ * only way to hold one is a token minted from a bad `users.region_code` row.
  */
 export function resolveMarket(
   req: any,
@@ -55,6 +76,16 @@ export function resolveMarket(
   const wanted =
     typeof requested === 'string' && requested.trim() ? requested.trim().toUpperCase() : undefined;
   if (!scope.locked) return wanted;
+  if (!normaliseMarket(scope.region)) {
+    logger.warn(
+      `[region-scope-denied] user=${scope.userId ?? 'unknown'} role=${scope.role} ` +
+        `scope="${scope.region}" is not a market this platform knows; refused rather than ` +
+        `widened to every market what="${what}" route=${req?.method ?? ''} ` +
+        `${req?.originalUrl ?? req?.url ?? ''} ` +
+        `requestId=${req?.headers?.['x-request-id'] ?? req?.id ?? '-'}`,
+    );
+    throw new ForbiddenException(`This ${what} cannot be attributed to a market yet.`);
+  }
   if (wanted && wanted !== scope.region) {
     denyOutOfScope(req, scope, wanted, what);
   }

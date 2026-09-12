@@ -104,3 +104,76 @@ describe('refuseLockedAdmin', () => {
     }
   });
 });
+
+/**
+ * A lock this platform cannot read is refused at the source.
+ *
+ * `users.region_code` is admin-editable, so a staff account can carry a market
+ * the registry has never heard of. Downstream that value is only safe while it
+ * stays in the `scope` slot — and controllers routinely collapse the two slots
+ * into one payload field (`region: d?.scope ?? d?.regionCode`), where an
+ * unreadable value is deliberately IGNORED. Ignored means no predicate: every
+ * market's rows, to an admin restricted to one.
+ *
+ * That is strictly worse than the bug the strict `normaliseMarket` fixed. Before
+ * it, a malformed claim normalised to a plausible market and the list filtered
+ * to the wrong ONE market; afterwards it would have returned ALL of them. So
+ * the refusal has to happen before any controller can put the value anywhere.
+ */
+describe('an unreadable lock cannot address any market', () => {
+  const brokenLock = { id: 'u-x', role: 'ADMIN', regionCode: 'NOT-A-COUNTRY', regionLocked: true };
+  const alphaThree = { id: 'u-3', role: 'ADMIN', regionCode: 'QAT', regionLocked: true };
+  const unknownIso = { id: 'u-z', role: 'ADMIN', regionCode: 'ZZ', regionLocked: true };
+
+  it('refuses resolveMarket for a claim that is not a known market', () => {
+    for (const user of [brokenLock, alphaThree, unknownIso]) {
+      expect(() => resolveMarket(reqAs(user), undefined, 'those stores')).toThrow(
+        ForbiddenException,
+      );
+    }
+  });
+
+  it('uses the fixed unattributable copy, and logs the claim that caused it', () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(() => resolveMarket(reqAs(brokenLock), undefined, 'those stores')).toThrow(
+        'This those stores cannot be attributed to a market yet.',
+      );
+      const line = warn.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(line).toContain('[region-scope-denied]');
+      expect(line).toContain('NOT-A-COUNTRY');
+      expect(line).toContain('rather than');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('refuses whatever the request names, so a filter cannot rescue it', () => {
+    // The collapse `d?.scope ?? d?.regionCode` would otherwise put the broken
+    // lock into the filter slot and lose the predicate entirely.
+    expect(() => resolveMarket(reqAs(brokenLock), 'QA', 'those stores')).toThrow(
+      ForbiddenException,
+    );
+    expect(() => resolveMarket(reqAs(brokenLock), 'NOT-A-COUNTRY', 'those stores')).toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('still serves a locked admin whose market IS known', () => {
+    expect(resolveMarket(reqAs(qaAdmin), undefined, 'those stores')).toBe('QA');
+    expect(resolveMarket(reqAs({ ...qaAdmin, regionCode: 'qa' }), undefined, 'x')).toBe('QA');
+    // A stored sub-region normalises to its country and is not a broken lock.
+    expect(resolveMarket(reqAs({ ...qaAdmin, regionCode: 'QA-DOH' }), undefined, 'x')).toBe(
+      'QA-DOH',
+    );
+  });
+
+  it('leaves a global admin alone — there is no lock to be unreadable', () => {
+    expect(resolveMarket(reqAs(globalAdmin), 'NOT-A-COUNTRY', 'x')).toBe('NOT-A-COUNTRY');
+    expect(resolveMarket(reqAs(globalAdmin), undefined, 'x')).toBeUndefined();
+    // SUPER_ADMIN is never locked, so a junk claim on one is inert.
+    expect(
+      resolveMarket(reqAs({ ...superAdmin, regionCode: 'ZZ' }), undefined, 'x'),
+    ).toBeUndefined();
+  });
+});

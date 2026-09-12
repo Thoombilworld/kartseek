@@ -8,6 +8,7 @@ import {
   marketPredicate,
   normaliseMarket,
   refuseUnattributable,
+  requireMarket,
 } from './market-scope';
 
 describe('normaliseMarket', () => {
@@ -330,6 +331,48 @@ describe('an unreadable lock fails closed rather than becoming every market', ()
     expect(() =>
       assertInMarket('QA', 'NOT-A-COUNTRY', 'payout', { warn: (m) => lines.push(m) }),
     ).toThrow(ForbiddenException);
+    expect(lines[0]).toContain('[region-scope-denied]');
+    expect(lines[0]).toContain('NOT-A-COUNTRY');
+  });
+});
+
+/**
+ * An ADMIN list filter that cannot be read must refuse, not widen.
+ *
+ * `marketPredicate` ignores an unreadable `requested` on purpose — a global
+ * caller may see every market anyway. That reasoning breaks where a controller
+ * collapses the two slots into one payload field, because then a LOCK arrives
+ * in the `requested` slot and "ignored" means "no predicate at all": every
+ * market's rows, to an admin confined to one (N1).
+ */
+describe('requireMarket', () => {
+  it('is undefined for an absent filter — every market, deliberately', () => {
+    expect(requireMarket(undefined)).toBeUndefined();
+    expect(requireMarket(null)).toBeUndefined();
+    expect(requireMarket('')).toBeUndefined();
+    expect(requireMarket('   ')).toBeUndefined();
+  });
+
+  it('normalises a known market, sub-regions included', () => {
+    expect(requireMarket('qa')).toBe('QA');
+    expect(requireMarket(' IN ')).toBe('IN');
+    expect(requireMarket('QA-DOH')).toBe('QA');
+  });
+
+  it('refuses anything else rather than dropping the predicate', () => {
+    for (const bad of ['NOT-A-COUNTRY', 'ZZ', 'QAT', 'KEN', 'NOPE']) {
+      expect(() => requireMarket(bad)).toThrow(ForbiddenException);
+    }
+    expect(() => requireMarket('ZZ', 'market')).toThrow(
+      'This market cannot be attributed to a market yet.',
+    );
+  });
+
+  it('logs the value it refused, so a bad claim is diagnosable', () => {
+    const lines: string[] = [];
+    expect(() => requireMarket('NOT-A-COUNTRY', 'market', { warn: (m) => lines.push(m) })).toThrow(
+      ForbiddenException,
+    );
     expect(lines[0]).toContain('[region-scope-denied]');
     expect(lines[0]).toContain('NOT-A-COUNTRY');
   });

@@ -27,9 +27,7 @@ const fallbackLogger = new Logger('MarketScope');
  * normalise through this file. The exception is recorded here, where anyone
  * writing a scope check will read it, rather than only in a plan ledger:
  *
- *   hotel      `hotels.country_code`            — and an unused `regionCode`
- *                                                 beside it, which is dead and
- *                                                 must not be written (I13)
+ *   hotel      `hotels.country_code`
  *   taxi       `taxi_drivers.country_code`, `taxi_vendors.country_code`,
  *              `taxi_payouts.country_code`
  *   franchise  `franchises.country_code`
@@ -38,9 +36,23 @@ const fallbackLogger = new Logger('MarketScope');
  *                `region_code` to settlements: it already has the market, and a
  *                second column would be the dead pair F-35 records
  *
- * And two modules carry BOTH, where the second is dead: `restaurants` and
- * `pharmacy_stores` hold an alpha-3 `countryCode` defaulting to `'KEN'` beside
- * the `regionCode` every scope check actually reads (F-35).
+ * Three tables USED to carry a second, dead market column beside the live one.
+ * All three are gone, dropped by the `1786502400000-DropDeadMarketColumns`
+ * migration in each module's own runner (R11), and this paragraph is past tense
+ * on purpose — a register that still lists a column a reader cannot find is
+ * worse than no register:
+ *
+ *   `hotels.region_code`               held sub-regions ('AE-DU', 'IN-MH') that
+ *                                      nothing read; `countryCode` is the market
+ *   `restaurants."countryCode"`        alpha-3, `'KEN'` on every row, and
+ *                                      `listRestaurants` filtered an ISO-2 value
+ *                                      against it — so it matched nothing, always
+ *   `pharmacy_stores."countryCode"`    alpha-3, `'IND'` on every row, beside a
+ *                                      `region_code` of `'IN'`
+ *
+ * Each table now has exactly ONE market column, which is the whole point: two
+ * of them with one written and both readable is how a predicate comes to be
+ * written against the wrong one (F-35 / I13).
  *
  * A scope check reads the column its module actually writes, and passes it
  * through `normaliseMarket` so one rule serves every spelling. `assertRecordMarket`
@@ -179,6 +191,42 @@ export function assertInMarket(
   throw new ForbiddenException(
     `This ${what} belongs to ${owner ?? 'every market'}, not to the ${lock} market.`,
   );
+}
+
+/**
+ * A market an ADMIN list may be narrowed to, or a refusal — never "all markets".
+ *
+ * `marketPredicate` is deliberately permissive about `requested`: an unreadable
+ * `?country=` from a GLOBAL caller is ignored, because a global caller may see
+ * every market anyway and there is nothing to leak.
+ *
+ * That reasoning breaks the moment a controller collapses the two slots into
+ * one payload field — `region: d?.scope ?? d?.regionCode`, which several of
+ * them do — because then a LOCK arrives in the `requested` slot and "ignored"
+ * means "no predicate": every market's rows, to an admin confined to one. The
+ * gateway now refuses an unreadable lock at source (`resolveMarket`), so that
+ * cannot arrive over HTTP; this is the second line, for a service reached
+ * directly over TCP and for a global admin's typo.
+ *
+ * Use it wherever the narrowing value is an admin filter rather than a
+ * storefront region: absent stays absent (every market, deliberately), a known
+ * market normalises, and anything else is refused with the platform's fixed
+ * unattributable copy. A filter that silently widens on a typo is the same
+ * class of wrong as a boundary that silently disappears.
+ */
+export function requireMarket(
+  value: unknown,
+  what = 'market',
+  logger: { warn(message: string): void } = fallbackLogger,
+): string | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return undefined;
+  const market = normaliseMarket(value);
+  if (market) return market;
+  logger.warn(
+    `[region-scope-denied] "${String(value)}" is not a market this platform knows; ` +
+      `refused rather than widened to every market (${what})`,
+  );
+  throw new ForbiddenException(`This ${what} cannot be attributed to a market yet.`);
 }
 
 /**
