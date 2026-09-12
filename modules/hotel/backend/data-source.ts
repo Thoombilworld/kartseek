@@ -1,5 +1,14 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { Hotel } from './src/entities/hotel.entity';
+import { HotelRoom } from './src/entities/hotel-room.entity';
+import { HotelBooking } from './src/entities/hotel-booking.entity';
+import { HotelReview } from './src/entities/hotel-review.entity';
+import { HotelOwner } from './src/entities/hotel-owner.entity';
+import { HotelGuest } from './src/entities/hotel-guest.entity';
+import { HotelPayout } from './src/entities/hotel-payout.entity';
+import { HotelStaff } from './src/entities/hotel-staff.entity';
+import { HotelSeasonalPricing } from './src/entities/hotel-seasonal-pricing.entity';
 
 /**
  * The TypeORM CLI's DataSource for the **hotel module's own** database.
@@ -34,11 +43,22 @@ import { DataSource } from 'typeorm';
  *     never reach different databases;
  *   • `schema: 'hotel'`, because the `migrations` ledger has to live
  *     beside the tables it describes;
- *   • `entities: []` — a loaded entity set permits `schema:sync` and
- *     `migration:generate` from here, and a generate run against a partial set
- *     emits DROPs;
  *   • migrations listed explicitly, never a glob: a bundled build makes a
  *     `__dirname` glob match nothing.
+ *
+ * ── The entity list ─────────────────────────────────────────────────────────
+ *
+ * It used to be `entities: []`, for the reason `data-source.main.ts` gives: a
+ * loaded set permits `schema:sync` and `migration:generate` from here, and a
+ * generate run against a *partial* set emits a DROP per table it cannot see.
+ * IN3 needs it populated — `migration:generate` diffs entities against a
+ * database, and an empty list diffs nothing against everything, which emits a
+ * DROP for every table there is. The hazard is the same one, so the list is
+ * written out explicitly and copied verbatim from the service module's own,
+ * never a `__dirname` glob (a bundled build makes one match nothing), and the
+ * procedure in `docs/guides/database-migrations.md` greps the generated SQL
+ * for DROP before the file is kept. `apps/api/test/module-data-sources.spec.ts`
+ * holds the rest of the shape.
  */
 export const HotelDataSource = new DataSource({
   type: 'postgres',
@@ -49,8 +69,21 @@ export const HotelDataSource = new DataSource({
     process.env.HOTEL_DB_PASSWORD || process.env.DB_PASSWORD || process.env.DB_PASS || 'postgres',
   database: process.env.HOTEL_DB_NAME || process.env.DB_NAME || 'kartseek_hotel',
   schema: 'hotel',
-  entities: [],
-  migrations: ['migrations/1786502400000-DropDeadMarketColumns.ts'],
+  entities: [
+    Hotel,
+    HotelRoom,
+    HotelBooking,
+    HotelReview,
+    HotelOwner,
+    HotelGuest,
+    HotelPayout,
+    HotelStaff,
+    HotelSeasonalPricing,
+  ],
+  migrations: [
+    'migrations/1786498500000-InitialHotelSchema.ts',
+    'migrations/1786502400000-DropDeadMarketColumns.ts',
+  ],
   migrationsTableName: 'migrations',
   migrationsTransactionMode: 'each',
   synchronize: false,
