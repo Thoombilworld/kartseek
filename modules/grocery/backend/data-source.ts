@@ -1,5 +1,21 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import {
+  GroceryBrand,
+  GroceryProductVariant,
+  GroceryStockMovement,
+  GroceryWarehouse,
+  GroceryVariantStock,
+  GroceryCategory,
+  GroceryStore,
+  GroceryItem,
+  GroceryOrder,
+  GroceryFlashDeal,
+  GroceryReview,
+  GroceryWishlist,
+  GroceryDeliveryZone,
+  GrocerySetting,
+} from './src/entities';
 
 /**
  * The TypeORM CLI's DataSource for the **grocery module's own** database.
@@ -41,9 +57,6 @@ import { DataSource } from 'typeorm';
  *     shared instance on :5432;
  *   • `schema: 'grocery'`, because the `migrations` ledger has to live beside
  *     the tables it describes and the module owns a dedicated schema;
- *   • `entities: []`, for the same reason `data-source.main.ts` says so — a
- *     loaded entity set permits `schema:sync` and `migration:generate` from
- *     here, and a generate run against a partial set emits DROPs;
  *   • migrations listed explicitly rather than by glob: a bundled build makes a
  *     `__dirname` glob match nothing (`project_typeorm_entity_glob_webpack`).
  *
@@ -52,6 +65,20 @@ import { DataSource } from 'typeorm';
  * which is also where `nest start` runs the service from. Run them from the
  * repository root and `GROCERY_DB_*` is unset, `DB_*` answers instead, and the
  * migration lands in the shared database's `grocery` schema.
+ *
+ * ── The entity list ─────────────────────────────────────────────────────────
+ *
+ * It used to be `entities: []`, for the reason `data-source.main.ts` gives: a
+ * loaded set permits `schema:sync` and `migration:generate` from here, and a
+ * generate run against a *partial* set emits a DROP per table it cannot see.
+ * IN3 needs it populated — `migration:generate` diffs entities against a
+ * database, and an empty list diffs nothing against everything, which emits a
+ * DROP for every table there is. The hazard is the same one, so the list is
+ * written out explicitly and copied verbatim from the service module's own,
+ * never a `__dirname` glob (a bundled build makes one match nothing), and the
+ * procedure in `docs/guides/database-migrations.md` greps the generated SQL
+ * for DROP before the file is kept. `apps/api/test/module-data-sources.spec.ts`
+ * holds the rest of the shape.
  */
 export const GroceryDataSource = new DataSource({
   type: 'postgres',
@@ -65,8 +92,26 @@ export const GroceryDataSource = new DataSource({
     'kartseek123',
   database: process.env.GROCERY_DB_NAME || process.env.DB_NAME || 'kartseek_db',
   schema: 'grocery',
-  entities: [],
-  migrations: ['migrations/1786502400000-GrocerySettingsMarket.ts'],
+  entities: [
+    GroceryBrand,
+    GroceryProductVariant,
+    GroceryStockMovement,
+    GroceryWarehouse,
+    GroceryVariantStock,
+    GroceryCategory,
+    GroceryStore,
+    GroceryItem,
+    GroceryOrder,
+    GroceryFlashDeal,
+    GroceryReview,
+    GroceryWishlist,
+    GroceryDeliveryZone,
+    GrocerySetting,
+  ],
+  migrations: [
+    'migrations/1786498100000-InitialGrocerySchema.ts',
+    'migrations/1786502400000-GrocerySettingsMarket.ts',
+  ],
   migrationsTableName: 'migrations',
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.
