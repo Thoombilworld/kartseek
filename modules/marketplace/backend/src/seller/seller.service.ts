@@ -306,13 +306,28 @@ export class SellerService {
     };
   }
 
-  async getSellerOwner(sellerId: string): Promise<{ sellerId: string; ownerId: string | null }> {
-    if (!sellerId) return { sellerId, ownerId: null };
+  /**
+   * The owner and the market of one seller, for the gateway's
+   * SellerOwnershipGuard.
+   *
+   * `regionCode` is here because the guard short-circuits for any ADMIN role
+   * and had nothing to check a market against: a QA-locked admin could read and
+   * write an Indian seller's orders, wallet, bank accounts, staff and products
+   * across 111 routes. Read-only, no PII.
+   */
+  async getSellerOwner(
+    sellerId: string,
+  ): Promise<{ sellerId: string; ownerId: string | null; regionCode: string | null }> {
+    if (!sellerId) return { sellerId, ownerId: null, regionCode: null };
     const seller = await this.sellerRepo.findOne({
       where: { id: sellerId },
-      select: ['id', 'ownerId'],
+      select: ['id', 'ownerId', 'regionCode'],
     });
-    return { sellerId, ownerId: seller?.ownerId ?? null };
+    return {
+      sellerId,
+      ownerId: seller?.ownerId ?? null,
+      regionCode: seller?.regionCode ?? null,
+    };
   }
 
   /**

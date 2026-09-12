@@ -10,6 +10,7 @@ import {
 import { ClientProxy } from '@nestjs/microservices';
 import { RedisService } from '@app/redis';
 import { firstValueFrom, timeout } from 'rxjs';
+import { assertRecordInScope, marketScopeOf } from './market-scope';
 
 /** Roles allowed to act on any seller (support, moderation, back-office). */
 const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'FRANCHISE_ADMIN']);
@@ -35,9 +36,10 @@ const SELLER_PARAMS = ['sellerId', 'id'] as const;
  * (`get_seller_owner`) and cached briefly in Redis — ownership changes about as often
  * as an account is created, so a short TTL is ample and keeps this off the hot path.
  *
- * Fail-closed throughout: an unknown seller, a seller with no `owner_id`, or an
- * unreachable lookup all deny. A 403 (never 404) is returned for a non-owner so seller
- * ids cannot be probed for existence.
+ * Fail-closed throughout: an unknown seller, a seller with no `owner_id`, a
+ * seller with no `region_code` reached by a region-locked admin, or an
+ * unreachable lookup all deny. A 403 (never 404) is returned for a non-owner so
+ * seller ids cannot be probed for existence.
  */
 @Injectable()
 export class SellerOwnershipGuard implements CanActivate {
@@ -45,6 +47,13 @@ export class SellerOwnershipGuard implements CanActivate {
 
   private static readonly LOOKUP_TIMEOUT_MS = 3000;
   private static readonly CACHE_TTL_SECONDS = 60;
+  /**
+   * v2 because the cached value gained the market. A warm v1 entry holds a bare
+   * owner id, which the v2 parser would read as `regionCode = null` — a locked
+   * admin refused on a seller that is in fact theirs. A new key namespace lets
+   * the two builds run side by side through a rollout.
+   */
+  private static readonly CACHE_PREFIX = 'seller-scope:v2:';
 
   constructor(
     @Inject('SELLER_SERVICE') private readonly sellerClient: ClientProxy,
@@ -61,18 +70,29 @@ export class SellerOwnershipGuard implements CanActivate {
       throw new UnauthorizedException('You must be logged in to access seller resources.');
     }
 
-    if (ADMIN_ROLES.has(String(user.role ?? '').toUpperCase())) return true;
-
     const sellerId = this.extractSellerId(request);
     // No seller in the path — nothing object-level to authorise here.
     if (!sellerId) return true;
+
+    // An admin skips the OWNERSHIP test — support and moderation act on
+    // accounts they do not own — but never the MARKET test. This used to be a
+    // bare `return true`, which is what opened all 111 `/sellers/:sellerId/*`
+    // routes to a region-locked admin from every other market (audit V1).
+    // A global admin is not locked, so the lookup is paid for only when its
+    // answer can change the outcome.
+    if (ADMIN_ROLES.has(String(user.role ?? '').toUpperCase())) {
+      if (!marketScopeOf(request).locked) return true;
+      const { regionCode } = await this.resolveSeller(sellerId);
+      assertRecordInScope(request, regionCode, 'this seller');
+      return true;
+    }
 
     const userId = user.id ?? user.userId ?? user.sub;
     if (!userId) {
       throw new ForbiddenException('You do not have access to this seller account.');
     }
 
-    const ownerId = await this.resolveOwner(sellerId);
+    const { ownerId } = await this.resolveSeller(sellerId);
     if (ownerId && ownerId === userId) return true;
 
     this.logger.warn(
@@ -90,39 +110,56 @@ export class SellerOwnershipGuard implements CanActivate {
     return undefined;
   }
 
-  /** Returns the owning user id, or null when unknown / unresolvable (deny). */
-  private async resolveOwner(sellerId: string): Promise<string | null> {
-    const cacheKey = `seller-owner:${sellerId}`;
+  /**
+   * The owning user and the market of a seller, or nulls when unknown.
+   *
+   * Nulls deny in both directions: an unresolvable owner denies a seller, and an
+   * unresolvable market denies a locked admin (`assertRecordInScope` refuses a
+   * `null` region). A failed lookup is neither cached nor retried into a pass —
+   * a marketplace-service outage must not become an authorisation bypass.
+   */
+  private async resolveSeller(
+    sellerId: string,
+  ): Promise<{ ownerId: string | null; regionCode: string | null }> {
+    const cacheKey = `${SellerOwnershipGuard.CACHE_PREFIX}${sellerId}`;
 
     try {
       const cached = await this.redis.get(cacheKey);
-      // '' is the cached form of "no owner" — still a deny, but avoids re-querying.
-      if (cached !== null && cached !== undefined) return cached === '' ? null : cached;
+      if (cached !== null && cached !== undefined) {
+        const [o, r] = String(cached).split('|');
+        return { ownerId: o || null, regionCode: r || null };
+      }
     } catch {
       // Cache miss or Redis down — fall through to the authoritative lookup.
     }
 
-    let ownerId: string | null;
+    let row: { ownerId: string | null; regionCode: string | null };
     try {
       const res = await firstValueFrom(
         this.sellerClient
-          .send<{ sellerId: string; ownerId: string | null }>({ cmd: 'get_seller_owner' }, { sellerId })
+          .send<{
+            sellerId: string;
+            ownerId: string | null;
+            regionCode: string | null;
+          }>({ cmd: 'get_seller_owner' }, { sellerId })
           .pipe(timeout(SellerOwnershipGuard.LOOKUP_TIMEOUT_MS)),
       );
-      ownerId = res?.ownerId ?? null;
+      row = { ownerId: res?.ownerId ?? null, regionCode: res?.regionCode ?? null };
     } catch (e) {
-      // Deny on lookup failure. Returning null here is what makes this fail-closed:
-      // a marketplace-service outage must not become an authorisation bypass.
       this.logger.error(`Ownership lookup failed for seller=${sellerId}: ${(e as Error).message}`);
-      return null;
+      return { ownerId: null, regionCode: null };
     }
 
     try {
-      await this.redis.set(cacheKey, ownerId ?? '', SellerOwnershipGuard.CACHE_TTL_SECONDS);
+      await this.redis.set(
+        cacheKey,
+        `${row.ownerId ?? ''}|${row.regionCode ?? ''}`,
+        SellerOwnershipGuard.CACHE_TTL_SECONDS,
+      );
     } catch {
       // Caching is best-effort.
     }
 
-    return ownerId;
+    return row;
   }
 }
