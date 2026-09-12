@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
-import { assertInMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket } from '@app/common';
 import { TaxiDriverEntity } from '../entities/taxi-driver.entity';
 import { TaxiDocumentEntity } from '../entities/taxi-document.entity';
 import { TaxiVendorEntity } from '../entities/taxi-vendor.entity';
@@ -257,11 +257,7 @@ export class DriverOnboardingService {
     if (filters.ownerType) {
       qb.andWhere('d.ownerType = :ot', { ot: filters.ownerType });
     }
-    if (filters.countryCode) {
-      qb.andWhere('COALESCE(drv.countryCode, ven.countryCode) = :cc', {
-        cc: filters.countryCode.toUpperCase(),
-      });
-    }
+    applyMarketFilter(qb, 'COALESCE(drv.countryCode, ven.countryCode)', filters.countryCode);
 
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
@@ -433,9 +429,7 @@ export class DriverOnboardingService {
   }): Promise<{ data: TaxiDriverEntity[]; total: number }> {
     const qb = this.driverRepo.createQueryBuilder('d').leftJoinAndSelect('d.vendor', 'vendor');
 
-    if (filters.countryCode) {
-      qb.andWhere('d.countryCode = :cc', { cc: filters.countryCode });
-    }
+    applyMarketFilter(qb, 'd.countryCode', filters.countryCode);
     if (filters.vendorId) {
       qb.andWhere('d.vendorId = :vid', { vid: filters.vendorId });
     }

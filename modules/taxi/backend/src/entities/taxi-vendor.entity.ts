@@ -1,6 +1,11 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, OneToMany, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  Index,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { TaxiDriverEntity } from './taxi-driver.entity';
@@ -20,6 +25,20 @@ export class TaxiVendorEntity {
   @Column({ length: 200 })
   name: string;
 
+  /**
+   * MARKET COLUMN — ISO-2, the platform's `region_code` under another name.
+   *
+   * Taxi predates the convention and calls it `countryCode`; every scope
+   * check in this module reads THIS column, and a new entity here uses
+   * `regionCode` (2026-09-12 audit I7). The register of exceptions lives in
+   * `libs/common/src/market/market-scope.ts`, above `normaliseMarket` — which is
+   * what every one of those checks passes through, so one rule serves both
+   * spellings and no caller has to remember which.
+   *
+   * A driver inherits this vendor’s market when their own is null, which is
+   * why `driver-onboarding.service.ts` predicates on
+   * `COALESCE(drv.countryCode, ven.countryCode)`.
+   */
   @Column({ length: 5 })
   @Index()
   countryCode: string;

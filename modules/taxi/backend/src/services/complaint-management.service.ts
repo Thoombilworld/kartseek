@@ -1,3 +1,4 @@
+import { applyMarketFilter } from '@app/common';
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Between, ILike } from 'typeorm';
@@ -95,12 +96,12 @@ export class ComplaintManagementService {
       medium: 72,
       low: 168, // 1 week
     };
-    complaint.slaDeadline = new Date(
-      Date.now() + (slaHours[dto.severity] || 72) * 60 * 60 * 1000,
-    );
+    complaint.slaDeadline = new Date(Date.now() + (slaHours[dto.severity] || 72) * 60 * 60 * 1000);
 
     const saved = await this.complaintRepo.save(complaint);
-    this.logger.log(`Complaint filed: ${saved.id} | Trip: ${saved.tripId} | Severity: ${saved.severity} | Accountability: ${saved.accountability}`);
+    this.logger.log(
+      `Complaint filed: ${saved.id} | Trip: ${saved.tripId} | Severity: ${saved.severity} | Accountability: ${saved.accountability}`,
+    );
 
     // Auto-escalate critical complaints
     if (dto.severity === 'critical') {
@@ -127,11 +128,12 @@ export class ComplaintManagementService {
   }): Promise<{ data: TaxiComplaintEntity[]; total: number }> {
     const qb = this.complaintRepo.createQueryBuilder('c');
 
-    if (filters.countryCode) qb.andWhere('c.countryCode = :cc', { cc: filters.countryCode });
+    applyMarketFilter(qb, 'c.countryCode', filters.countryCode);
     if (filters.status) qb.andWhere('c.status = :status', { status: filters.status });
     if (filters.category) qb.andWhere('c.category = :cat', { cat: filters.category });
     if (filters.severity) qb.andWhere('c.severity = :sev', { sev: filters.severity });
-    if (filters.accountability) qb.andWhere('c.accountability = :acc', { acc: filters.accountability });
+    if (filters.accountability)
+      qb.andWhere('c.accountability = :acc', { acc: filters.accountability });
     if (filters.vendorId) qb.andWhere('c.vendorId = :vid', { vid: filters.vendorId });
     if (filters.driverId) qb.andWhere('c.driverId = :did', { did: filters.driverId });
     if (filters.search) {
@@ -162,11 +164,14 @@ export class ComplaintManagementService {
   }
 
   /** Get complaints scoped to a vendor (vendor portal view) */
-  async getVendorComplaints(vendorId: string, filters?: {
-    status?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ data: TaxiComplaintEntity[]; total: number }> {
+  async getVendorComplaints(
+    vendorId: string,
+    filters?: {
+      status?: string;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{ data: TaxiComplaintEntity[]; total: number }> {
     return this.listComplaints({ ...filters, vendorId });
   }
 
@@ -181,7 +186,11 @@ export class ComplaintManagementService {
   // ─── Complaint Lifecycle ────────────────────────────────────────────────────
 
   /** Assign a complaint to an admin for investigation */
-  async assignComplaint(id: string, assignedTo: string, assignedToName: string): Promise<TaxiComplaintEntity> {
+  async assignComplaint(
+    id: string,
+    assignedTo: string,
+    assignedToName: string,
+  ): Promise<TaxiComplaintEntity> {
     const complaint = await this.getComplaint(id);
     complaint.assignedTo = assignedTo;
     complaint.assignedToName = assignedToName;
@@ -190,23 +199,34 @@ export class ComplaintManagementService {
   }
 
   /** Escalate a complaint to higher priority */
-  async escalateComplaint(id: string, escalatedBy: string, reason: string): Promise<TaxiComplaintEntity> {
+  async escalateComplaint(
+    id: string,
+    escalatedBy: string,
+    reason: string,
+  ): Promise<TaxiComplaintEntity> {
     const complaint = await this.getComplaint(id);
     complaint.escalationLevel += 1;
     complaint.escalatedAt = new Date();
     complaint.status = 'escalated';
-    complaint.internalNotes = [complaint.internalNotes, `[ESCALATED L${complaint.escalationLevel} by ${escalatedBy}] ${reason}`]
-      .filter(Boolean).join('\n');
+    complaint.internalNotes = [
+      complaint.internalNotes,
+      `[ESCALATED L${complaint.escalationLevel} by ${escalatedBy}] ${reason}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
     return this.complaintRepo.save(complaint);
   }
 
   /** Resolve a complaint with an action */
-  async resolveComplaint(id: string, dto: {
-    resolution: string;
-    actionTaken: string;
-    compensationAmount?: number;
-    resolvedBy: string;
-  }): Promise<TaxiComplaintEntity> {
+  async resolveComplaint(
+    id: string,
+    dto: {
+      resolution: string;
+      actionTaken: string;
+      compensationAmount?: number;
+      resolvedBy: string;
+    },
+  ): Promise<TaxiComplaintEntity> {
     const complaint = await this.getComplaint(id);
     complaint.status = 'resolved';
     complaint.resolution = dto.resolution;
@@ -221,7 +241,11 @@ export class ComplaintManagementService {
   }
 
   /** Dismiss a complaint */
-  async dismissComplaint(id: string, reason: string, dismissedBy: string): Promise<TaxiComplaintEntity> {
+  async dismissComplaint(
+    id: string,
+    reason: string,
+    dismissedBy: string,
+  ): Promise<TaxiComplaintEntity> {
     const complaint = await this.getComplaint(id);
     complaint.status = 'dismissed';
     complaint.resolution = `DISMISSED: ${reason}`;
@@ -282,7 +306,9 @@ export class ComplaintManagementService {
       await this.applyVendorDiscipline(dto.vendorId, dto.actionType);
     }
 
-    this.logger.log(`Disciplinary action issued: ${saved.id} | ${dto.actionType} → ${dto.targetType} ${dto.targetName}`);
+    this.logger.log(
+      `Disciplinary action issued: ${saved.id} | ${dto.actionType} → ${dto.targetType} ${dto.targetName}`,
+    );
     return saved;
   }
 
@@ -309,7 +335,10 @@ export class ComplaintManagementService {
   }
 
   /** Handle an appeal */
-  async handleAppeal(actionId: string, appealReason: string): Promise<TaxiDisciplinaryActionEntity> {
+  async handleAppeal(
+    actionId: string,
+    appealReason: string,
+  ): Promise<TaxiDisciplinaryActionEntity> {
     const action = await this.actionRepo.findOne({ where: { id: actionId } });
     if (!action) throw new NotFoundException(`Action ${actionId} not found`);
     action.status = 'appealed';
@@ -319,7 +348,11 @@ export class ComplaintManagementService {
   }
 
   /** Resolve an appeal */
-  async resolveAppeal(actionId: string, resolution: string, overturn: boolean): Promise<TaxiDisciplinaryActionEntity> {
+  async resolveAppeal(
+    actionId: string,
+    resolution: string,
+    overturn: boolean,
+  ): Promise<TaxiDisciplinaryActionEntity> {
     const action = await this.actionRepo.findOne({ where: { id: actionId } });
     if (!action) throw new NotFoundException(`Action ${actionId} not found`);
     action.appealResolution = resolution;
@@ -352,25 +385,28 @@ export class ComplaintManagementService {
     const where: any = {};
     if (countryCode) where.countryCode = countryCode;
 
-    const all = await this.complaintRepo.find({ where, select: { status: true, severity: true, accountability: true, slaBreached: true } });
+    const all = await this.complaintRepo.find({
+      where,
+      select: { status: true, severity: true, accountability: true, slaBreached: true },
+    });
 
     const stats = {
       total: all.length,
-      open: all.filter(c => c.status === 'open').length,
-      investigating: all.filter(c => c.status === 'investigating').length,
-      escalated: all.filter(c => c.status === 'escalated').length,
-      resolved: all.filter(c => c.status === 'resolved').length,
-      dismissed: all.filter(c => c.status === 'dismissed').length,
-      slaBreached: all.filter(c => c.slaBreached).length,
+      open: all.filter((c) => c.status === 'open').length,
+      investigating: all.filter((c) => c.status === 'investigating').length,
+      escalated: all.filter((c) => c.status === 'escalated').length,
+      resolved: all.filter((c) => c.status === 'resolved').length,
+      dismissed: all.filter((c) => c.status === 'dismissed').length,
+      slaBreached: all.filter((c) => c.slaBreached).length,
       bySeverity: {
-        critical: all.filter(c => c.severity === 'critical').length,
-        high: all.filter(c => c.severity === 'high').length,
-        medium: all.filter(c => c.severity === 'medium').length,
-        low: all.filter(c => c.severity === 'low').length,
+        critical: all.filter((c) => c.severity === 'critical').length,
+        high: all.filter((c) => c.severity === 'high').length,
+        medium: all.filter((c) => c.severity === 'medium').length,
+        low: all.filter((c) => c.severity === 'low').length,
       },
       byAccountability: {
-        vendor: all.filter(c => c.accountability === 'vendor').length,
-        platform: all.filter(c => c.accountability === 'platform').length,
+        vendor: all.filter((c) => c.accountability === 'vendor').length,
+        platform: all.filter((c) => c.accountability === 'platform').length,
       },
     };
 
@@ -380,7 +416,12 @@ export class ComplaintManagementService {
   // ─── Private Helpers ────────────────────────────────────────────────────────
 
   private async applyDriverDiscipline(driverId: string, actionType: string) {
-    const suspendActions = ['temporary_suspension', 'permanent_suspension', 'platform_ban', 'license_revocation'];
+    const suspendActions = [
+      'temporary_suspension',
+      'permanent_suspension',
+      'platform_ban',
+      'license_revocation',
+    ];
     if (suspendActions.includes(actionType)) {
       await this.driverRepo.update(driverId, { status: 'suspended' });
       this.logger.warn(`Driver ${driverId} suspended due to disciplinary action: ${actionType}`);

@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
-import { assertInMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket } from '@app/common';
 import { TaxiPayoutRecordEntity } from '../entities/taxi-payout-record.entity';
 import { TaxiCountryConfigEntity } from '../entities/taxi-country-config.entity';
 import { TaxiVendorEntity } from '../entities/taxi-vendor.entity';
@@ -178,9 +178,7 @@ export class TaxiPayoutService {
   }): Promise<{ data: TaxiPayoutRecordEntity[]; total: number }> {
     const qb = this.payoutRepo.createQueryBuilder('p');
 
-    if (filters.countryCode) {
-      qb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });
-    }
+    applyMarketFilter(qb, 'p.countryCode', filters.countryCode);
     if (filters.recipientType) {
       qb.andWhere('p.recipientType = :rt', { rt: filters.recipientType });
     }
@@ -369,9 +367,7 @@ export class TaxiPayoutService {
       .addSelect('COALESCE(SUM(p.vendorCommission), 0)', 'totalVendorCommission')
       .addSelect('COUNT(*)', 'totalRecords');
 
-    if (filters.countryCode) {
-      qb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });
-    }
+    applyMarketFilter(qb, 'p.countryCode', filters.countryCode);
     if (filters.startDate) {
       qb.andWhere('p.createdAt >= :start', { start: filters.startDate });
     }
@@ -387,7 +383,7 @@ export class TaxiPayoutService {
       .select('COALESCE(SUM(p.netPayout), 0)', 'amount')
       .addSelect('COUNT(*)', 'count')
       .where('p.status IN (:...statuses)', { statuses: ['pending', 'approved'] });
-    if (filters.countryCode) pendingQb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });
+    applyMarketFilter(pendingQb, 'p.countryCode', filters.countryCode);
     const pendingResult = await pendingQb.getRawOne();
 
     // Settled breakdown
@@ -395,7 +391,7 @@ export class TaxiPayoutService {
       .createQueryBuilder('p')
       .select('COALESCE(SUM(p.netPayout), 0)', 'amount')
       .where('p.status = :status', { status: 'settled' });
-    if (filters.countryCode) settledQb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });
+    applyMarketFilter(settledQb, 'p.countryCode', filters.countryCode);
     const settledResult = await settledQb.getRawOne();
 
     // Failed breakdown
@@ -403,7 +399,7 @@ export class TaxiPayoutService {
       .createQueryBuilder('p')
       .select('COALESCE(SUM(p.netPayout), 0)', 'amount')
       .where('p.status = :status', { status: 'failed' });
-    if (filters.countryCode) failedQb.andWhere('p.countryCode = :cc', { cc: filters.countryCode });
+    applyMarketFilter(failedQb, 'p.countryCode', filters.countryCode);
     const failedResult = await failedQb.getRawOne();
 
     return {

@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike, In, SelectQueryBuilder, type ObjectLiteral, IsNull } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { assertInMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket } from '@app/common';
 
 import {
   Restaurant,
@@ -71,23 +71,17 @@ export class RestaurantService {
     page?: number;
     limit?: number;
     regionCode?: string;
-    countryCode?: string;
   }) {
-    const {
-      cuisine,
-      minRating,
-      sortBy,
-      isOpen,
-      page = 1,
-      limit = 20,
-      regionCode,
-      countryCode,
-    } = opts;
+    const { cuisine, minRating, sortBy, isOpen, page = 1, limit = 20, regionCode } = opts;
     const qb = this.restaurantRepo
       .createQueryBuilder('r')
       .where('r.status = :status', { status: RestaurantStatus.APPROVED });
 
-    if (countryCode) qb.andWhere('r.countryCode = :cc', { cc: countryCode });
+    // A `countryCode` filter stood here over the alpha-3 column, which was
+    // `'KEN'` on every row — so passing an ISO-2 market returned an empty list,
+    // always. Nothing ever passed one (the gateway's `list_restaurants` payload
+    // has no such field), so a dead option hid a dead column. Both are gone;
+    // the market is `regionCode` and nothing else (F-35).
     // Through `scopeToRegion`, not an equality test: this module's rows carry
     // sub-region codes ('IN-MH', 'QA-DOH') and the market is always ISO-2, so
     // `r.regionCode = 'IN'` matched none of the Indian restaurants.
@@ -1240,10 +1234,12 @@ export class RestaurantService {
     qb: SelectQueryBuilder<T>,
     regionCode?: string,
   ): SelectQueryBuilder<T> {
-    if (!regionCode) return qb;
-    return qb.andWhere('LEFT(r.regionCode, 2) = :country', {
-      country: regionCode.slice(0, 2).toUpperCase(),
-    });
+    // `LEFT(..., 2)` stays: this module stores sub-regions ('QA-DOH') and the
+    // scope is always ISO-2, so the column is narrowed in SQL while the VALUE is
+    // narrowed by `normaliseMarket` inside the shared predicate. The old
+    // `regionCode.slice(0, 2)` did that by truncation, which turned
+    // 'NOT-A-COUNTRY' into 'NO' — Norway — and matched real Norwegian rows.
+    return applyMarketFilter(qb, 'LEFT(r.regionCode, 2)', regionCode);
   }
 
   /** Approved and currently open for business — the only rows a customer should see. */

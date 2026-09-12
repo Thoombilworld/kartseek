@@ -1,4 +1,11 @@
-import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { applyMarketFilter } from '@app/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
@@ -120,7 +127,11 @@ export class VendorManagementService {
   /**
    * Suspend an active vendor. Their drivers will be prevented from going online.
    */
-  async suspendVendor(vendorId: string, adminId: string, reason: string): Promise<TaxiVendorEntity> {
+  async suspendVendor(
+    vendorId: string,
+    adminId: string,
+    reason: string,
+  ): Promise<TaxiVendorEntity> {
     const vendor = await this.getVendorOrFail(vendorId);
 
     vendor.status = 'suspended';
@@ -202,12 +213,9 @@ export class VendorManagementService {
     page?: number;
     limit?: number;
   }): Promise<{ data: TaxiVendorEntity[]; total: number }> {
-    const qb = this.vendorRepo.createQueryBuilder('v')
-      .leftJoinAndSelect('v.drivers', 'drivers');
+    const qb = this.vendorRepo.createQueryBuilder('v').leftJoinAndSelect('v.drivers', 'drivers');
 
-    if (filters.countryCode) {
-      qb.andWhere('v.countryCode = :cc', { cc: filters.countryCode });
-    }
+    applyMarketFilter(qb, 'v.countryCode', filters.countryCode);
     if (filters.status) {
       qb.andWhere('v.status = :status', { status: filters.status });
     }
@@ -292,17 +300,20 @@ export class VendorManagementService {
   /**
    * Add a driver to a vendor's fleet.
    */
-  async addDriverToVendor(vendorId: string, dto: {
-    firstName: string;
-    lastName: string;
-    phone: string;
-    email: string;
-    vehicleType?: string;
-    vehiclePlate?: string;
-    vehicleModel?: string;
-    vehicleColor?: string;
-    licenseNumber?: string;
-  }): Promise<TaxiDriverEntity> {
+  async addDriverToVendor(
+    vendorId: string,
+    dto: {
+      firstName: string;
+      lastName: string;
+      phone: string;
+      email: string;
+      vehicleType?: string;
+      vehiclePlate?: string;
+      vehicleModel?: string;
+      vehicleColor?: string;
+      licenseNumber?: string;
+    },
+  ): Promise<TaxiDriverEntity> {
     const vendor = await this.getVendorOrFail(vendorId);
 
     if (vendor.status !== 'active') {

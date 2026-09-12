@@ -123,7 +123,10 @@ describe('GroceryService.getPendingProducts puts the market in the query', () =>
     const { svc, qb } = service({});
     await svc.getPendingProducts(1, 30, undefined, 'QA');
     expect(qb.predicates.some((p: string) => p.includes('store.regionCode'))).toBe(true);
-    expect(qb.params.scope).toBe('QA');
+    // Bound as `__market`, the one parameter name `applyMarketFilter` uses:
+    // a predicate that reused the caller's own `:scope` could be overwritten by
+    // a later clause binding the same name.
+    expect(qb.params.__market).toBe('QA');
   });
 
   it('adds no market predicate for a global admin', async () => {

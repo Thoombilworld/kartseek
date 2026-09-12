@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { MenuCategory } from './menu-category.entity';
 import { RestaurantOrder } from './restaurant-order.entity';
@@ -59,14 +67,27 @@ export class Restaurant {
   @Column({ type: 'decimal', precision: 10, scale: 7 })
   longitude: number;
 
+  /**
+   * MARKET COLUMN — the platform's ISO-2 market identifier.
+   *
+   * `length: 8` because this module stores SUB-REGIONS ('IN-MH', 'QA-DOH') as
+   * well as plain markets, which is why every scope check here goes through
+   * `normaliseMarket` (it narrows a sub-region to its country) and why
+   * `scopeToRegion` narrows the COLUMN with `LEFT(r.regionCode, 2)`. An
+   * equality against a bare market matched none of the Indian restaurants
+   * before that (audit I4).
+   *
+   * The alpha-3 `countryCode` that sat beside this is GONE. It defaulted to
+   * `'KEN'` and was `'KEN'` on all twelve rows, so `listRestaurants` filtering
+   * it against an ISO-2 market returned an empty list every time — and the
+   * caller that would have passed one never did, so the dead option hid the
+   * dead column. Dropped by `1786502400000-DropDeadMarketColumns` (F-35).
+   */
   @Column({ type: 'varchar', name: 'region_code', length: 8, nullable: true })
   regionCode: string | null;
 
   @Column({ type: 'varchar', name: 'zone_id', nullable: true })
   zoneId: string | null;
-
-  @Column({ length: 3, default: 'KEN', comment: 'ISO 3166-1 alpha-3 country code' })
-  countryCode: string;
 
   // ── Restaurant Info ─────────────────────────────────────────────────────────
 
@@ -96,7 +117,11 @@ export class Restaurant {
 
   // ── Operating Configuration ─────────────────────────────────────────────────
 
-  @Column({ type: 'jsonb', nullable: true, comment: '{ mon: { open: "10:00", close: "23:00" }, ... }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: '{ mon: { open: "10:00", close: "23:00" }, ... }',
+  })
   openingHours: Record<string, { open: string; close: string }>;
 
   @Column({ type: 'jsonb', nullable: true, comment: 'Array of ISO dates for holidays' })
@@ -122,10 +147,22 @@ export class Restaurant {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   deliveryFee: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 10.0, comment: 'Delivery radius in km' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 10.0,
+    comment: 'Delivery radius in km',
+  })
   deliveryRadius: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Packaging fee per order' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Packaging fee per order',
+  })
   packagingFee: number;
 
   @Column({ type: 'int', default: 600, comment: 'Cost for two persons in local currency' })
@@ -158,7 +195,13 @@ export class Restaurant {
 
   // ── Commission & Financials ─────────────────────────────────────────────────
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 15.0, comment: 'Platform commission percentage' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 15.0,
+    comment: 'Platform commission percentage',
+  })
   commissionRate: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, comment: 'GST/VAT percentage' })

@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { HotelRoom } from './hotel-room.entity';
 import { HotelBooking } from './hotel-booking.entity';
@@ -61,7 +69,12 @@ export class Hotel {
   @Column({ comment: 'Links to Auth Service user (hotel owner)' })
   ownerId: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true, comment: 'Hotel owner / management company name' })
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    comment: 'Hotel owner / management company name',
+  })
   ownerName: string | null;
 
   // ── Location ────────────────────────────────────────────────────────────────
@@ -78,7 +91,23 @@ export class Hotel {
   @Column({ type: 'varchar', length: 20, nullable: true })
   pincode: string | null;
 
-  @Column({ length: 3, comment: 'ISO 3166-1 alpha-2 country code e.g. AE, IN, GB' })
+  /**
+   * MARKET COLUMN — ISO-2, the platform's `region_code` under another name.
+   *
+   * Hotel predates the convention and calls it `countryCode`; every scope check
+   * in this module reads THIS column and a new entity here should use
+   * `regionCode` (2026-09-12 audit I7/I13). The registry of exceptions lives in
+   * `libs/common/src/market/market-scope.ts`, above `normaliseMarket`, which is
+   * what every one of those checks passes through.
+   *
+   * The unused `regionCode` that sat beside this is GONE. It held sub-region
+   * codes ('AE-DU', 'IN-MH') that nothing read — `grep -rn '\.regionCode'` over
+   * this module's source matched nothing outside its own declaration — while
+   * `countryCode` held the real ISO-2 market. Two market columns, one written,
+   * both readable, and no way to tell from the schema which the scope check
+   * honoured. Dropped by `1786502400000-DropDeadMarketColumns` (F-35).
+   */
+  @Column({ length: 3, comment: 'ISO 3166-1 alpha-2 market code e.g. AE, IN, GB' })
   countryCode: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 7 })
@@ -87,13 +116,16 @@ export class Hotel {
   @Column({ type: 'decimal', precision: 10, scale: 7 })
   longitude: number;
 
-  @Column({ type: 'varchar', name: 'region_code', length: 8, nullable: true })
-  regionCode: string | null;
-
   @Column({ type: 'text', nullable: true, comment: 'Nearest landmark or point of interest' })
   landmark: string | null;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, comment: 'Distance from city center in km' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    comment: 'Distance from city center in km',
+  })
   distanceFromCenter: number | null;
 
   // ── Hotel Info ──────────────────────────────────────────────────────────────
@@ -104,10 +136,16 @@ export class Hotel {
   @Column({ type: 'smallint', default: 3, comment: '1-5 star rating classification' })
   starRating: number;
 
-  @Column('simple-array', { nullable: true, comment: 'e.g. Pool, Spa, Gym, Restaurant, WiFi, Parking' })
+  @Column('simple-array', {
+    nullable: true,
+    comment: 'e.g. Pool, Spa, Gym, Restaurant, WiFi, Parking',
+  })
   amenities: string[];
 
-  @Column('simple-array', { nullable: true, comment: 'e.g. Luxury, Family-Friendly, Pet-Friendly, Beach' })
+  @Column('simple-array', {
+    nullable: true,
+    comment: 'e.g. Luxury, Family-Friendly, Pet-Friendly, Beach',
+  })
   tags: string[];
 
   @Column({ type: 'varchar', nullable: true })
@@ -180,12 +218,24 @@ export class Hotel {
   @Column({ type: 'int', default: 0 })
   totalBookings: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, comment: 'Occupancy rate percentage' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 0,
+    comment: 'Occupancy rate percentage',
+  })
   occupancyRate: number;
 
   // ── Commission & Financials ─────────────────────────────────────────────────
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 15.0, comment: 'Platform commission percentage' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 15.0,
+    comment: 'Platform commission percentage',
+  })
   commissionRate: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, comment: 'GST/VAT percentage' })

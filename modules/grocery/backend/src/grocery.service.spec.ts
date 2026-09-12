@@ -551,8 +551,8 @@ describe('GroceryService', () => {
         ...qb.where.mock.calls.map((c: unknown[]) => String(c[0])),
         ...qb.andWhere.mock.calls.map((c: unknown[]) => String(c[0])),
       ].join(' | ');
-      expect(wheres).toContain('s.region_code = :regionCode');
-      expect(qb.andWhere).toHaveBeenCalledWith('s.region_code = :regionCode', { regionCode: 'QA' });
+      expect(wheres).toContain('s.region_code = :__market');
+      expect(qb.andWhere).toHaveBeenCalledWith('s.region_code = :__market', { __market: 'QA' });
       expect(wheres).toContain('d.status = :status');
       expect(qb.take).toHaveBeenCalledWith(10);
     });

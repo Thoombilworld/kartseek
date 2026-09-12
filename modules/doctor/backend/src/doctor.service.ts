@@ -1,3 +1,4 @@
+import { applyMarketFilter } from '@app/common';
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
@@ -114,7 +115,7 @@ export class DoctorService {
       qb.andWhere('c.specialties LIKE :spec', { spec: `%${specialty}%` });
     }
     if (regionCode) {
-      qb.andWhere('c.regionCode = :rc', { rc: regionCode });
+      applyMarketFilter(qb, 'c.regionCode', regionCode);
     }
 
     qb.orderBy('c.rating', 'DESC')

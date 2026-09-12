@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { PharmacyCategory } from './pharmacy-category.entity';
 import { PharmacyItem } from './pharmacy-item.entity';
@@ -55,14 +63,24 @@ export class PharmacyStore {
   @Column({ type: 'decimal', precision: 10, scale: 7 })
   longitude: number;
 
+  /**
+   * MARKET COLUMN — the platform's ISO-2 market identifier.
+   *
+   * `length: 8` because this module can store a sub-region as well as a plain
+   * market; every scope check goes through `normaliseMarket`, which narrows one
+   * to its country.
+   *
+   * The alpha-3 `countryCode` that sat beside this is GONE. It defaulted to
+   * `'KEN'` and held `'IND'` on all six rows while `region_code` held the real
+   * `'IN'` — two market columns, one written, and nothing to say from the schema
+   * which the scope check honoured. Dropped by
+   * `1786502400000-DropDeadMarketColumns` (F-35).
+   */
   @Column({ type: 'varchar', name: 'region_code', length: 8, nullable: true })
   regionCode: string | null;
 
   @Column({ type: 'varchar', name: 'zone_id', nullable: true })
   zoneId: string | null;
-
-  @Column({ length: 3, default: 'KEN', comment: 'ISO 3166-1 alpha-3 country code' })
-  countryCode: string;
 
   // ── Store Info ──────────────────────────────────────────────────────────────
 
@@ -86,7 +104,11 @@ export class PharmacyStore {
 
   // ── Operating Configuration ─────────────────────────────────────────────────
 
-  @Column({ type: 'jsonb', nullable: true, comment: '{ mon: { open: "08:00", close: "22:00" }, ... }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: '{ mon: { open: "08:00", close: "22:00" }, ... }',
+  })
   openingHours: Record<string, { open: string; close: string }>;
 
   @Column({ default: false, comment: '24-hour pharmacy' })
@@ -107,7 +129,13 @@ export class PharmacyStore {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   deliveryFee: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 5.0, comment: 'Delivery radius in km' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 5.0,
+    comment: 'Delivery radius in km',
+  })
   deliveryRadius: number;
 
   @Column({ default: true })
@@ -118,7 +146,11 @@ export class PharmacyStore {
 
   // ── Licensing & Compliance ──────────────────────────────────────────────────
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Drug license number (e.g. DL-20B-KEN-12345)' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Drug license number (e.g. DL-20B-KEN-12345)',
+  })
   drugLicenseNumber: string | null;
 
   @Column({ type: 'date', nullable: true })
@@ -155,7 +187,13 @@ export class PharmacyStore {
 
   // ── Commission & Financials ─────────────────────────────────────────────────
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 12.0, comment: 'Platform commission percentage' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 12.0,
+    comment: 'Platform commission percentage',
+  })
   commissionRate: number;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, comment: 'GST/VAT percentage' })

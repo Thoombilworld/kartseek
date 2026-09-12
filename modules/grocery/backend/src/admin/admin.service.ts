@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, ILike } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
-import { assertInMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket } from '@app/common';
 
 import { GroceryStore } from '../entities/grocery-store.entity';
 import { GroceryItem } from '../entities/grocery-item.entity';
@@ -80,10 +80,11 @@ export class GroceryAdminService {
     let pendingProducts: number;
     if (scope) {
       const productsQb = () =>
-        this.itemRepo
-          .createQueryBuilder('item')
-          .innerJoin('item.store', 'store')
-          .andWhere('store.regionCode = :scope', { scope });
+        applyMarketFilter(
+          this.itemRepo.createQueryBuilder('item').innerJoin('item.store', 'store'),
+          'store.regionCode',
+          scope,
+        );
       totalProducts = await productsQb().getCount();
       pendingProducts = await productsQb()
         .andWhere('item.approvalStatus = :pending', { pending: 'PENDING' })
@@ -100,27 +101,29 @@ export class GroceryAdminService {
       .createQueryBuilder('o')
       .where('o.createdAt >= :since', { since });
     if (scope)
-      revenueQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+      applyMarketFilter(revenueQb.innerJoin('o.store', 'store'), 'store.regionCode', scope);
     const revenueRow = await revenueQb
       .select('COALESCE(SUM(o.grandTotal), 0)', 'revenue')
       .addSelect('COUNT(o.id)', 'orders')
       .getRawOne<{ revenue: string; orders: string }>();
 
     const totalOrders = scope
-      ? await this.orderRepo
-          .createQueryBuilder('o')
-          .innerJoin('o.store', 'store')
-          .andWhere('store.regionCode = :scope', { scope })
-          .getCount()
+      ? await applyMarketFilter(
+          this.orderRepo.createQueryBuilder('o').innerJoin('o.store', 'store'),
+          'store.regionCode',
+          scope,
+        ).getCount()
       : await this.orderRepo.count();
 
     const pendingFlashDeals = scope
-      ? await this.flashDealRepo
-          .createQueryBuilder('d')
-          .innerJoin('d.store', 'store')
-          .where('d.status = :status', { status: FlashDealStatus.PENDING })
-          .andWhere('store.regionCode = :scope', { scope })
-          .getCount()
+      ? await applyMarketFilter(
+          this.flashDealRepo
+            .createQueryBuilder('d')
+            .innerJoin('d.store', 'store')
+            .where('d.status = :status', { status: FlashDealStatus.PENDING }),
+          'store.regionCode',
+          scope,
+        ).getCount()
       : await this.flashDealRepo.count({ where: { status: FlashDealStatus.PENDING } });
 
     // One grouped query rather than one per status — the status breakdown is what
@@ -130,7 +133,7 @@ export class GroceryAdminService {
       .select('o.status', 'status')
       .addSelect('COUNT(o.id)', 'count');
     if (scope)
-      byStatusQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+      applyMarketFilter(byStatusQb.innerJoin('o.store', 'store'), 'store.regionCode', scope);
     const byStatus = await byStatusQb
       .groupBy('o.status')
       .getRawMany<{ status: string; count: string }>();
@@ -169,9 +172,7 @@ export class GroceryAdminService {
     const limit = Math.min(100, Math.max(1, Number(opts.limit) || 20));
 
     const qb = this.storeRepo.createQueryBuilder('s');
-    if (opts.regionCode) {
-      qb.andWhere('s.regionCode = :regionCode', { regionCode: opts.regionCode.toUpperCase() });
-    }
+    applyMarketFilter(qb, 's.regionCode', undefined, opts.regionCode);
     if (opts.status && opts.status !== 'All') {
       qb.andWhere('s.status = :status', { status: opts.status });
     }
@@ -294,7 +295,7 @@ export class GroceryAdminService {
 
     const qb = this.orderRepo.createQueryBuilder('o').leftJoinAndSelect('o.store', 'store');
     if (opts.regionCode) {
-      qb.andWhere('store.regionCode = :regionCode', { regionCode: opts.regionCode.toUpperCase() });
+      applyMarketFilter(qb, 'store.regionCode', undefined, opts.regionCode);
     }
     if (opts.status && opts.status !== 'All')
       qb.andWhere('o.status = :status', { status: opts.status });
@@ -414,10 +415,8 @@ export class GroceryAdminService {
       return { data, total, page, limit };
     }
 
-    const qb = this.flashDealRepo
-      .createQueryBuilder('d')
-      .leftJoin('d.store', 'store')
-      .andWhere('store.regionCode = :regionCode', { regionCode: opts.regionCode.toUpperCase() });
+    const qb = this.flashDealRepo.createQueryBuilder('d').leftJoin('d.store', 'store');
+    applyMarketFilter(qb, 'store.regionCode', undefined, opts.regionCode);
     if (opts.storeId) qb.andWhere('d.storeId = :storeId', { storeId: opts.storeId });
     if (status) qb.andWhere('d.status = :status', { status });
 
@@ -441,24 +440,20 @@ export class GroceryAdminService {
     const dailyQb = this.orderRepo
       .createQueryBuilder('o')
       .where('o.createdAt >= :since', { since });
-    if (scope)
-      dailyQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+    if (scope) applyMarketFilter(dailyQb.innerJoin('o.store', 'store'), 'store.regionCode', scope);
 
     const topStoresQb = this.orderRepo.createQueryBuilder('o').leftJoin('o.store', 'store');
     topStoresQb.where('o.createdAt >= :since', { since });
-    if (scope) topStoresQb.andWhere('store.regionCode = :scope', { scope });
+    applyMarketFilter(topStoresQb, 'store.regionCode', scope);
 
     const byCategoryQb = this.itemRepo.createQueryBuilder('item');
     if (scope)
-      byCategoryQb
-        .innerJoin('item.store', 'store')
-        .andWhere('store.regionCode = :scope', { scope });
+      applyMarketFilter(byCategoryQb.innerJoin('item.store', 'store'), 'store.regionCode', scope);
 
     const totalsQb = this.orderRepo
       .createQueryBuilder('o')
       .where('o.createdAt >= :since', { since });
-    if (scope)
-      totalsQb.innerJoin('o.store', 'store').andWhere('store.regionCode = :scope', { scope });
+    if (scope) applyMarketFilter(totalsQb.innerJoin('o.store', 'store'), 'store.regionCode', scope);
 
     const [daily, topStores, byCategory, totals] = await Promise.all([
       dailyQb

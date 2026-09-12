@@ -3,6 +3,11 @@ import { ForbiddenException } from '@nestjs/common';
 import { RestaurantService } from '../restaurant.service';
 import { RestaurantStatus } from '../entities';
 
+// `:__market` is the one parameter name `applyMarketFilter` binds, platform-wide
+// (`libs/common/src/market/market-scope.ts`). It is deliberately not `:country`,
+// `:cc` or `:rc`: a predicate that reuses a name the caller also binds is a
+// predicate a later clause can silently overwrite with a different value.
+
 /**
  * A region-locked administrator carries their market as `scope` on every admin
  * message. These tests pin the two halves of that contract inside
@@ -40,10 +45,10 @@ function recordingQb(rows: Row[]) {
   const matched = () =>
     rows.filter((r) =>
       predicates.every((p) => {
-        if (p.includes('LEFT(r.regionCode, 2) = :country'))
-          return (r.regionCode ?? '').slice(0, 2).toUpperCase() === params.country;
-        if (p.includes('r.regionCode = :rc'))
-          return (r.regionCode ?? '').toUpperCase() === String(params.rc ?? '').toUpperCase();
+        if (p.includes('LEFT(r.regionCode, 2) = :__market'))
+          return (r.regionCode ?? '').slice(0, 2).toUpperCase() === params.__market;
+        if (p.includes('r.regionCode = :__market'))
+          return (r.regionCode ?? '').toUpperCase() === String(params.__market ?? '').toUpperCase();
         if (p.includes('r.status = :status')) return r.status === params.status;
         if (p.includes('r.isOnline = true')) return r.isOnline !== false;
         if (p.includes('r.isTemporarilyClosed = false')) return r.isTemporarilyClosed !== true;
@@ -117,8 +122,8 @@ describe('RestaurantService.getAdminRestaurantList narrows to the caller market'
   it('adds the region predicate when a market is given', async () => {
     const { svc, builders } = service();
     await svc.getAdminRestaurantList({ regionCode: 'QA' });
-    expect(marketPredicates(builders[0])).toEqual(['LEFT(r.regionCode, 2) = :country']);
-    expect(builders[0].params.country).toBe('QA');
+    expect(marketPredicates(builders[0])).toEqual(['LEFT(r.regionCode, 2) = :__market']);
+    expect(builders[0].params.__market).toBe('QA');
   });
 
   it('leaves the list unfiltered for a global admin', async () => {
@@ -198,7 +203,7 @@ describe('one market match on both sides of the restaurant reads', () => {
     expect(adminRows.data.map((r: any) => r.id).sort()).toEqual(['r-doh', 'r-qa']);
     expect(publicRows.data.map((r: any) => r.id).sort()).toEqual(['r-doh', 'r-qa']);
     expect(marketPredicates(admin)).toEqual(marketPredicates(discovery));
-    expect(marketPredicates(admin)).toEqual(['LEFT(r.regionCode, 2) = :country']);
+    expect(marketPredicates(admin)).toEqual(['LEFT(r.regionCode, 2) = :__market']);
   });
 
   it('approves a QA-DOH restaurant for a QA-scoped admin', async () => {

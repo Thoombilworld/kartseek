@@ -3,6 +3,11 @@ import { ForbiddenException } from '@nestjs/common';
 import { DoctorService } from '../doctor.service';
 import { DoctorController } from '../doctor.controller';
 
+// `:__market` is the one parameter name `applyMarketFilter` binds, platform-wide
+// (`libs/common/src/market/market-scope.ts`). It is deliberately not `:country`,
+// `:cc` or `:rc`: a predicate that reuses a name the caller also binds is a
+// predicate a later clause can silently overwrite with a different value.
+
 /**
  * A region-locked administrator carries their market as `scope` on every admin
  * message. Clinics carry a `regionCode`, so the clinic list narrows to it.
@@ -35,13 +40,13 @@ describe('DoctorService.getClinics narrows to the caller market', () => {
   it('adds the region predicate when a market is given', async () => {
     const { svc, where } = service();
     await svc.getClinics(undefined, undefined, 1, 20, 'QA');
-    expect(where).toContain('c.regionCode = :rc');
+    expect(where).toContain('c.regionCode = :__market');
   });
 
   it('leaves the list unfiltered for a global admin', async () => {
     const { svc, where } = service();
     await svc.getClinics(undefined, undefined, 1, 20);
-    expect(where).not.toContain('c.regionCode = :rc');
+    expect(where).not.toContain('c.regionCode = :__market');
   });
 });
 

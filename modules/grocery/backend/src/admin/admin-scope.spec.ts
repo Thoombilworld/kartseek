@@ -28,7 +28,7 @@ describe('GroceryAdminService market scope', () => {
     const svc = Object.create(GroceryAdminService.prototype) as GroceryAdminService;
     Object.assign(svc, { storeRepo: { createQueryBuilder: () => qb } });
     await svc.listStores({ regionCode: 'QA' });
-    expect(where).toContain('s.regionCode = :regionCode');
+    expect(where).toContain('s.regionCode = :__market');
   });
 
   it("filters orders through the store's market", async () => {
@@ -36,7 +36,7 @@ describe('GroceryAdminService market scope', () => {
     const svc = Object.create(GroceryAdminService.prototype) as GroceryAdminService;
     Object.assign(svc, { orderRepo: { createQueryBuilder: () => qb } });
     await svc.listOrders({ regionCode: 'QA' });
-    expect(where).toContain('store.regionCode = :regionCode');
+    expect(where).toContain('store.regionCode = :__market');
   });
 
   it('refuses to change the status of a store in another market', async () => {
@@ -145,7 +145,7 @@ describe('GroceryService.getProducts market visibility', () => {
   it('drops the approved-store filter for a privileged (admin) actor in-market', async () => {
     const { svc, predicates } = buildProductsDouble();
     await svc.getProducts(undefined, undefined, 1, 30, 'QA', { role: 'ADMIN' });
-    expect(predicates).toContain('rs.region_code = :regionCode');
+    expect(predicates).toContain('rs.region_code = :__market');
     expect(predicates).not.toContain("rs.status = 'APPROVED'");
     expect(predicates).not.toContain('rs."isOnline" = true');
   });
@@ -153,7 +153,7 @@ describe('GroceryService.getProducts market visibility', () => {
   it('keeps the approved-store filter for the public storefront in the same market', async () => {
     const { svc, predicates } = buildProductsDouble();
     await svc.getProducts(undefined, undefined, 1, 30, 'QA', undefined);
-    expect(predicates).toContain('rs.region_code = :regionCode');
+    expect(predicates).toContain('rs.region_code = :__market');
     expect(predicates).toContain("rs.status = 'APPROVED'");
     expect(predicates).toContain('rs."isOnline" = true');
   });

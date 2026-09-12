@@ -42,7 +42,13 @@ import {
   ReorderDto,
   ProductTranslationDto,
 } from './dto/flash-deal.dto';
-import { requireId, requireUuid, assertInMarket, refuseUnattributable } from '@app/common';
+import {
+  applyMarketFilter,
+  requireId,
+  requireUuid,
+  assertInMarket,
+  refuseUnattributable,
+} from '@app/common';
 
 // ── Canonical categories — used ONLY for initial DB seeding ─────────────────
 // After seeding, all reads go through the grocery_categories table.
@@ -652,7 +658,7 @@ export class GroceryService {
       // deliver. Region is a property of the store row and does not depend on
       // the browser granting anything.
       if (regionCode) {
-        qb = qb.andWhere('s.regionCode = :regionCode', { regionCode });
+        qb = applyMarketFilter(qb, 's.regionCode', regionCode);
       }
 
       // Stores that actually stock the category.
@@ -1959,11 +1965,10 @@ export class GroceryService {
      * how `getStores` decides what exists in a market.
      */
     if (regionCode) {
-      qb.innerJoin(GroceryStore, 'rs', 'rs.id = item."storeId"').andWhere(
-        'rs.region_code = :regionCode',
-        {
-          regionCode,
-        },
+      applyMarketFilter(
+        qb.innerJoin(GroceryStore, 'rs', 'rs.id = item."storeId"'),
+        'rs.region_code',
+        regionCode,
       );
       // The storefront only ever shows approved, online shops — a shopper
       // browsing a market should not see a suspended store's catalogue. A
@@ -2056,7 +2061,7 @@ export class GroceryService {
       .addOrderBy('i.brand', 'ASC')
       .limit(Math.min(100, Math.max(1, Number(limit) || 40)));
 
-    if (regionCode) qb.andWhere('s.region_code = :regionCode', { regionCode });
+    applyMarketFilter(qb, 's.region_code', regionCode);
 
     const rows = await qb.getRawMany<{
       brand: string;
@@ -2110,7 +2115,7 @@ export class GroceryService {
       .andWhere('s."isOnline" = true')
       .andWhere('i.brand = :brand', { brand: match.name });
 
-    if (regionCode) qb.andWhere('s.region_code = :regionCode', { regionCode });
+    applyMarketFilter(qb, 's.region_code', regionCode);
 
     const [data, total] = await qb
       .orderBy('i.name', 'ASC')
@@ -2600,7 +2605,7 @@ export class GroceryService {
     if (storeId) qb.andWhere('item.storeId = :storeId', { storeId });
     // In the query, not after it: a post-filter over `take(limit)` rows returns
     // a short page that looks like "no listings awaiting review" (audit X-57).
-    if (scope) qb.andWhere('store.regionCode = :scope', { scope });
+    applyMarketFilter(qb, 'store.regionCode', scope);
 
     const [data, total] = await qb
       .orderBy('item.createdAt', 'DESC')
@@ -3523,7 +3528,7 @@ export class GroceryService {
       .orderBy('d.endTime', 'ASC')
       .take(take);
 
-    if (regionCode) qb.andWhere('s.region_code = :regionCode', { regionCode });
+    applyMarketFilter(qb, 's.region_code', regionCode);
 
     const deals = await qb.getMany();
 

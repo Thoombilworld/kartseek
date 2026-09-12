@@ -4,6 +4,11 @@ import { DriverOnboardingService } from '../services/driver-onboarding.service';
 import { TaxiPayoutService } from '../services/taxi-payout.service';
 import { TaxiController } from '../taxi.controller';
 
+// `:__market` is the one parameter name `applyMarketFilter` binds, platform-wide
+// (`libs/common/src/market/market-scope.ts`). It is deliberately not `:country`,
+// `:cc` or `:rc`: a predicate that reuses a name the caller also binds is a
+// predicate a later clause can silently overwrite with a different value.
+
 describe('DriverOnboardingService.getDrivers scopes by country', () => {
   function service() {
     const where: string[] = [];
@@ -31,7 +36,7 @@ describe('DriverOnboardingService.getDrivers scopes by country', () => {
   it('adds the country predicate when a country is given', async () => {
     const { svc, where } = service();
     await svc.getDrivers({ countryCode: 'QA' });
-    expect(where).toContain('d.countryCode = :cc');
+    expect(where).toContain('d.countryCode = :__market');
   });
 });
 
@@ -217,13 +222,13 @@ describe('DriverOnboardingService.getPendingDocuments joins the owner for the ma
     const { svc, where, joins } = service();
     await svc.getPendingDocuments({ countryCode: 'qa' });
     expect(joins.map((j) => j.alias)).toEqual(['drv', 'ven']);
-    expect(where).toContain('COALESCE(drv.countryCode, ven.countryCode) = :cc');
+    expect(where).toContain('COALESCE(drv.countryCode, ven.countryCode) = :__market');
   });
 
   it('leaves the queue unfiltered when no country is given', async () => {
     const { svc, where } = service();
     await svc.getPendingDocuments({});
-    expect(where).not.toContain('COALESCE(drv.countryCode, ven.countryCode) = :cc');
+    expect(where).not.toContain('COALESCE(drv.countryCode, ven.countryCode) = :__market');
   });
 });
 
