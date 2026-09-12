@@ -511,6 +511,127 @@ export class AdminService {
     };
   }
 
+  /**
+   * Record a submitted KYC document, and put its owner in the approval queue.
+   *
+   * `getPendingKyc` scans `admin:kyc:pending:*`, and until now NOTHING wrote
+   * those keys: the gateway's KYC upload stored a document and left the queue
+   * empty, so the console's KYC panel was honest about an empty queue that
+   * could never fill (whole-branch review MUST FIX 9, re-review RF-1 item 4).
+   * `POST /upload/kyc-document` calls this, and the row it writes is what the
+   * queue reads.
+   *
+   * Two keys, deliberately:
+   *
+   *   • `admin:kyc:pending:<entityType>:<owner>` — the QUEUE row, in the shape
+   *     `getPendingKyc` sorts and `approveKyc`/`rejectKyc` rebuild from
+   *     `entityType` + `entityId`. A second document from the same applicant
+   *     appends to the same row rather than queueing them twice.
+   *   • `admin:kyc:document:<key>` — the DOCUMENT record, holding the owner and
+   *     the market that `GET /admin/kyc/documents/:key` authorises against. It
+   *     outlives the queue row on purpose: a decision removes the row, and the
+   *     document a decision was made on still has to be readable afterwards.
+   *
+   * `market` may be null — a seller account carries no region lock, so nothing
+   * attributes one today (re-review RF-2). Null is recorded as null rather than
+   * guessed at, and `assertInMarket` refuses a locked reviewer against it,
+   * which is the fail-closed direction.
+   */
+  async recordKycDocument(d: {
+    key: string;
+    owner: string;
+    entityType?: string;
+    market?: string | null;
+    mime?: string;
+    size?: number;
+    uploadedAt?: string;
+  }) {
+    const key = String(d?.key ?? '').trim();
+    const owner = String(d?.owner ?? '').trim();
+    if (!key || !owner) {
+      throw new InternalServerErrorException(
+        'A KYC document record needs both a storage key and an owner.',
+      );
+    }
+    const entityType = (d.entityType || 'seller').toLowerCase();
+    const market = d.market ? String(d.market).trim().toUpperCase() : null;
+    const uploadedAt = d.uploadedAt || new Date().toISOString();
+
+    const document = {
+      key,
+      owner,
+      entityType,
+      market,
+      mime: d.mime ?? null,
+      size: typeof d.size === 'number' ? d.size : null,
+      uploadedAt,
+    };
+    // A year, matching `admin:kyc:verified:*` — the retention question belongs
+    // to the compliance schema (MODULES M9), not to an upload handler.
+    await this.redis.setJson(`admin:kyc:document:${key}`, document, 86400 * 365);
+
+    const queueKey = `admin:kyc:pending:${entityType}:${owner}`;
+    const existing = await this.redis.getJson<any>(queueKey);
+    const entry = {
+      name: key.split('/').pop() ?? key,
+      type: d.mime ?? 'application/octet-stream',
+      size: typeof d.size === 'number' ? `${Math.max(1, Math.round(d.size / 1024))} KB` : undefined,
+      key,
+      // The gateway path that streams it. Relative to the API base, and it
+      // needs the reviewer's bearer token — there is no public or signed URL
+      // for an identity document, by design.
+      url: `/admin/kyc/documents/${Buffer.from(key, 'utf8').toString('base64url')}`,
+    };
+
+    const row = existing ?? {
+      entityId: owner,
+      entityType,
+      ownerId: owner,
+      country: market,
+      submittedAt: uploadedAt,
+      documents: [] as any[],
+    };
+    row.documents = [...(Array.isArray(row.documents) ? row.documents : []), entry];
+    // A market arriving on a later document attributes a row that had none;
+    // it never overwrites one that is already attributed.
+    if (!row.country && market) row.country = market;
+    await this.redis.setJson(queueKey, row);
+
+    if (!existing) {
+      const pending = parseInt((await this.redis.get('admin:counter:pending_kyc')) ?? '0', 10);
+      await this.redis.set('admin:counter:pending_kyc', String((pending || 0) + 1));
+    }
+
+    await this.kafka.publish('admin.kyc.submitted', {
+      entityId: owner,
+      entityType,
+      key,
+      market,
+      uploadedAt,
+    });
+    this.logger.log(`KYC document queued: ${entityType}/${owner} (${key})`);
+    return { success: true, key, entityId: owner, entityType, status: 'PENDING_ADMIN_APPROVAL' };
+  }
+
+  /**
+   * One document's record, for the gateway's authenticated read route.
+   *
+   * The market check is here as well as on the gateway, for the same reason
+   * every other scoped read asserts twice: the gateway's `scope` claim is
+   * proof of a lock, and the service is where the row it applies to lives.
+   */
+  async getKycDocument(key: string, scope?: string) {
+    const record = await this.redis.getJson<any>(`admin:kyc:document:${String(key ?? '').trim()}`);
+    if (!record) throw new NotFoundException('No stored identity document with that key');
+    assertInMarket(
+      record.market ?? record.country ?? null,
+      scope,
+      'identity document',
+      this.logger,
+    );
+    return record;
+  }
+
   async approveKyc(entityId: string, entityType: string, adminId: string, scope?: string) {
     const key = `admin:kyc:pending:${entityType}:${entityId}`;
     const pending = await this.redis.getJson<any>(key);

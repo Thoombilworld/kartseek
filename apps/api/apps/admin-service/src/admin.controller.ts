@@ -117,6 +117,33 @@ export class AdminController {
     return this.svc.getPendingKyc(d?.page, d?.limit, d?.scope);
   }
 
+  /**
+   * Written by `POST /upload/kyc-document` on the gateway — the one producer of
+   * the `admin:kyc:pending:*` keys `admin_kyc_pending` reads. Nothing wrote them
+   * before, so the approval queue could not fill.
+   */
+  @MessagePattern({ cmd: 'admin_kyc_document_submitted' })
+  msgRecordKycDocument(
+    @Payload()
+    d: {
+      key: string;
+      owner: string;
+      entityType?: string;
+      market?: string | null;
+      mime?: string;
+      size?: number;
+      uploadedAt?: string;
+    },
+  ) {
+    return this.svc.recordKycDocument(d);
+  }
+
+  /** One document's owner and market, for the gateway's authenticated read route. */
+  @MessagePattern({ cmd: 'admin_kyc_document' })
+  msgKycDocument(@Payload() d: { key: string; scope?: string }) {
+    return this.svc.getKycDocument(d?.key, d?.scope);
+  }
+
   @MessagePattern({ cmd: 'admin_kyc_approve' })
   msgApproveKyc(
     @Payload() d: { entityId: string; entityType: string; adminId: string; scope?: string },
