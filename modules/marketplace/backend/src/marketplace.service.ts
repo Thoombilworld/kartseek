@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
-import { assertInMarket, marketPredicate } from '@app/common';
+import { assertInMarket, requireMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
@@ -304,7 +304,12 @@ export class MarketplaceService {
     // The third place the market is enforced: the query itself. Without the
     // predicate a QA-locked admin's queue listed every market's pending offers
     // — the moderation screen leaked the catalogue it could not decide on.
-    const market = marketPredicate(scope);
+    // `requireMarket`, not `marketPredicate`. Both refuse an unreadable LOCK, so
+    // this was correct — but `marketPredicate` deliberately IGNORES an
+    // unreadable `requested` value, which makes it only half a refusal and no
+    // longer proof of one to the uniqueness gate (R3-2). One helper for a
+    // boundary, and it is the one that always refuses.
+    const market = requireMarket(scope, 'pending listings', this.logger);
     const where: Record<string, unknown> = { approvalStatus: 'PENDING' };
     if (market) where.seller = { regionCode: market };
 

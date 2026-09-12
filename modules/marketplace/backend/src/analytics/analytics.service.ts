@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository } from 'typeorm';
 import type { SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
-import { applyMarketFilter, normaliseMarket } from '@app/common';
+import { applyMarketFilter, normaliseMarket, requireMarket } from '@app/common';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
 import { Category } from '../entities/category.entity';
@@ -49,7 +49,10 @@ export class MarketplaceAnalyticsService {
    * everywhere else on the platform.
    */
   private marketWhere<T extends object>(where: T, market?: string): T {
-    const m = normaliseMarket(market);
+    // `requireMarket`: every analytics read funnels through here, so a market
+    // this platform cannot read used to drop the predicate on all ten of them
+    // at once (R3-1).
+    const m = requireMarket(market, 'analytics', this.logger);
     return m ? ({ ...where, regionCode: m } as T) : where;
   }
 
@@ -93,7 +96,7 @@ export class MarketplaceAnalyticsService {
   async getRevenueAnalytics(period?: string, market?: string) {
     const now = new Date();
     const days = period === 'week' ? 7 : period === 'month' ? 30 : period === 'quarter' ? 90 : 30;
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
 
     // Totals in SQL rather than a reduce over the most recent 500 rows.
     //
@@ -186,7 +189,7 @@ export class MarketplaceAnalyticsService {
 
   // ── Conversion & rankings ───────────────────────────────────────────────────
   async getConversionFunnel(period?: string, market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     const totalOrders = await this.orderRepo.count({ where: this.marketWhere({}, m) });
     const cartEstimate = Math.floor(totalOrders * 3.5);
     const viewEstimate = Math.floor(cartEstimate * 8);
@@ -235,7 +238,7 @@ export class MarketplaceAnalyticsService {
   }
 
   async getSellerRankings(sortBy?: string, market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     // The seller list carries the market; every per-seller figure below filters
     // by `sellerId`, so each one inherits it without a second predicate.
     const sellers = await this.sellerRepo.find({ where: this.marketWhere({}, m) });
@@ -286,7 +289,7 @@ export class MarketplaceAnalyticsService {
 
   // ── Performance breakdowns ──────────────────────────────────────────────────
   async getCategoryPerformance(market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     const categories = await this.categoryRepo.find();
     const performance = await Promise.all(
       categories.map(async (cat) => {
@@ -343,7 +346,7 @@ export class MarketplaceAnalyticsService {
    * a regional heading.
    */
   async getRegionalPerformance(market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     // Real aggregation from the orders themselves over the recent window.
     const orders = await this.orderRepo.find({
       where: this.marketWhere({}, m),
@@ -387,7 +390,7 @@ export class MarketplaceAnalyticsService {
 
   // ── Inventory & returns ─────────────────────────────────────────────────────
   async getInventoryAging(market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     // Through the seller join: a product carries no market of its own, and a
     // post-filter over the oldest 50 rows platform-wide would hand a QA admin
     // a page of Indian stock (or an empty one) under their own heading.
@@ -442,7 +445,7 @@ export class MarketplaceAnalyticsService {
   }
 
   async getReturnRateAnalysis(market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     // Both legs, or the rate is a market's returns over the platform's orders.
     const returns = await this.returnRepo.find({
       where: this.marketWhere({}, m),
@@ -491,7 +494,7 @@ export class MarketplaceAnalyticsService {
 
   // ── Risk & compliance ───────────────────────────────────────────────────────
   async getFraudAlerts(market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     // Keyed by market. One shared key would serve whichever market asked first
     // to every admin for the next two minutes — a cache is as capable of
     // leaking another market's figures as a query is.
@@ -560,7 +563,7 @@ export class MarketplaceAnalyticsService {
   }
 
   async getSLACompliance(sellerId?: string, market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     // A named seller is looked up *with* the market on the where, so a scoped
     // admin naming another market's seller gets an empty report rather than
     // that seller's figures. The unnamed case narrows the whole list.
@@ -603,7 +606,7 @@ export class MarketplaceAnalyticsService {
   }
 
   async getPenaltyLedger(sellerId?: string, market?: string) {
-    const m = normaliseMarket(market);
+    const m = requireMarket(market, 'analytics', this.logger);
     const cacheKey = `admin:penalties:${m ?? 'ALL'}:${sellerId || 'all'}`;
     const cached = await this.redis.getJson(cacheKey);
     if (cached) return cached;

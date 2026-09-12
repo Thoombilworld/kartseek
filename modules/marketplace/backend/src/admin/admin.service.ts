@@ -179,7 +179,11 @@ export class MarketplaceAdminService {
     weekStart.setDate(weekStart.getDate() - 7);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const inRegion = region ? { regionCode: region } : {};
+    // `requireMarket`, not a raw upper-case: `region` is the caller's resolved
+    // market, and an unreadable one dropped this predicate from every count
+    // below — the platform's dashboard under one market's heading (R3-1).
+    const market = requireMarket(region, 'admin dashboard', this.logger);
+    const inRegion = market ? { regionCode: market } : {};
     const [sellerTotal, sellerActive, sellerPending, sellerSuspended] = await Promise.all([
       this.sellerRepo.count({ where: { ...inRegion } }),
       this.sellerRepo.count({ where: { ...inRegion, verificationStatus: 'VERIFIED' } }),
@@ -871,7 +875,12 @@ export class MarketplaceAdminService {
         `\`regionCode\` must be a market this platform operates in; got \`${dto.regionCode}\`.`,
       );
     }
-    const lock = normaliseMarket(scope);
+    // `requireMarket`, not `normaliseMarket`. On an UPDATE the row assert above
+    // has already refused an unreadable lock, but a CREATE reaches here first —
+    // and `normaliseMarket` returning `undefined` meant such a caller was
+    // treated as a GLOBAL admin, free to stamp any market or `is_global` on a
+    // new offer. Found while tightening the uniqueness gate for R3-1.
+    const lock = requireMarket(scope, what, this.logger);
     const patch: any = { ...dto };
     if (lock) {
       // Refused by the same assert a read uses, so the denial reads the same.
@@ -1150,12 +1159,16 @@ export class MarketplaceAdminService {
    * with offers nobody had made.
    */
   async getAllNominations(status?: string, region?: string) {
+    // `requireMarket`: the ternary below drops the whole predicate for a market
+    // this platform cannot read, and a nomination queue with no market key is
+    // every market's (R3-1).
+    const market = requireMarket(region, 'nominations', this.logger);
     const where: any = {
       ...(status && status !== 'all'
         ? { status: status.toUpperCase() as FlashDealNomination['status'] }
         : {}),
       // Through the campaign: a nomination belongs to the market its deal runs in.
-      ...(region ? { deal: { regionCode: region.toUpperCase() } } : {}),
+      ...(market ? { deal: { regionCode: market } } : {}),
     };
     const [data, total] = await this.nominationRepo.findAndCount({
       where,
@@ -2222,9 +2235,13 @@ export class MarketplaceAdminService {
    * payout-service and takes only the NAMES from here.
    */
   async getSellerWallets(scope?: string) {
-    const sellers = await this.sellerRepo.find(
-      scope ? { where: { regionCode: scope.toUpperCase() } } : {},
-    );
+    // `requireMarket`, not `scope.toUpperCase()`. The raw upper-case was not
+    // normalised at all, so a stored sub-region lock ('QA-DOH') matched no
+    // seller and the list read as "this market has none" — and an unreadable
+    // lock passed straight into the predicate. One refusing helper does both
+    // (R3-4).
+    const market = requireMarket(scope, 'seller wallets', this.logger);
+    const sellers = await this.sellerRepo.find(market ? { where: { regionCode: market } } : {});
     const wallets = await Promise.all(
       sellers.map(async (s) => {
         // `marketplace_orders_status_enum` is upper-case. Postgres rejects a
