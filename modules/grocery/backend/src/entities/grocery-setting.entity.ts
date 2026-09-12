@@ -1,7 +1,20 @@
 import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
 
 /**
- * Platform-level grocery configuration, one row per key.
+ * The `region_code` of the row every market inherits from.
+ *
+ * Not `NULL`, because this column is half of the primary key and Postgres will
+ * not take NULL there; not `'ALL'`, because the column is `varchar(2)` to match
+ * the platform's ISO-2 market codes and widening it would be a second
+ * migration for a sentinel. `'*'` is the spelling already used for "everything"
+ * in the admin permission vocabulary, and it is not a country code, so
+ * `normaliseMarket` reads it as no market at all — which is exactly what a
+ * platform-default row is.
+ */
+export const PLATFORM_MARKET = '*';
+
+/**
+ * Grocery configuration, one row per key **per market**.
  *
  * `admin.grocery.settings` / `updateSettings` had no handler and no storage, so the
  * admin Settings screen rendered defaults and its Save button reported success
@@ -9,25 +22,51 @@ import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
  * settings are added one at a time by operations and a new one should not need a
  * migration.
  *
- * `regionCode` is additive: `key` stays the sole primary key, so the existing
- * upsert-by-key write in `updateSettings` is untouched and every row written
- * before this column existed reads back as the platform default (`NULL`). A
- * delivery fee, a minimum basket and a service radius are market facts (audit
- * I9) — grocery's settings read used to answer with one row for every market
- * at once, the way marketplace's read never did. `getSettings(market)` reads a
- * market's own row when one exists and falls back to this platform row
- * otherwise; nothing here adds a way to WRITE a market's row yet — that is the
- * MODULES plan's per-market editor, and a read that distinguishes markets
- * while the write cannot is honest about which half exists.
+ * A delivery fee, a minimum basket and a service radius are market facts (audit
+ * I9) — grocery's settings read used to answer with one row for every market at
+ * once, the way marketplace's read never did.
+ *
+ * ── Why `region_code` is part of the PRIMARY KEY ────────────────────────────
+ *
+ * The first attempt added it as an ordinary nullable column while `key` stayed
+ * the sole primary key, and called that "additive". It was — and it made the
+ * feature impossible: `('defaultDeliveryFee', NULL)` and
+ * `('defaultDeliveryFee', 'QA')` cannot coexist under a primary key on `key`
+ * alone, so the market row the read looks for could never be written and
+ * `source` could only ever answer `'platform'` (review I6). The key is
+ * therefore composite, and `region_code` is NOT NULL — Postgres does not accept
+ * NULL in a primary key — with `PLATFORM_MARKET` as the sentinel for the
+ * fallback row.
+ *
+ * `'*'` is that sentinel: one character, so it fits the existing `varchar(2)`
+ * ISO-2 column without widening it; it is the spelling this platform already
+ * uses for "every market" in `ALL_PERMISSIONS`; and `normaliseMarket('*')`
+ * returns `undefined`, so a platform row can never be mistaken for a market's
+ * own by any scope check. Rows written before the column existed are backfilled
+ * to it by `migrations/1786502400000-GrocerySettingsMarket.ts`, which is what
+ * keeps them valid and readable as exactly what they were: the platform
+ * defaults.
  */
 @Entity('grocery_settings')
 export class GrocerySetting {
   @PrimaryColumn({ type: 'varchar', length: 64 })
   key: string;
 
-  /** `NULL` = the platform default row. Not part of the primary key: see above. */
-  @Column({ type: 'varchar', length: 2, nullable: true })
-  regionCode: string | null;
+  /**
+   * The market this row configures, or `PLATFORM_MARKET` for the fallback row
+   * every market inherits from. Part of the primary key — see the class
+   * docstring — so a write must always name it: `save()` upserts on the full
+   * key, and an entity created without this field would INSERT and collide.
+   *
+   * `name: 'region_code'` is not decoration: without it TypeORM calls the
+   * column `regionCode`, which is what R12's annotation-only change created in
+   * every database where `synchronize` ran. `region_code` is the platform's one
+   * spelling for this fact (see the register in `@app/common`'s market-scope),
+   * `grocery_stores` and `grocery_delivery_zones` already use it, and a fifth
+   * spelling of the market column is the defect AUD2-082 exists to stop.
+   */
+  @PrimaryColumn({ type: 'varchar', name: 'region_code', length: 2, default: PLATFORM_MARKET })
+  regionCode: string;
 
   @Column({ type: 'jsonb' })
   value: unknown;

@@ -1148,8 +1148,11 @@ export class GroceryController {
 
   @MessagePattern({ cmd: 'admin.grocery.updateSettings' })
   tcpAdminUpdateSettings(@Payload() d: DtoPayload) {
-    const { actorId, scope, ...rest } = d ?? {};
-    return this.admin.updateSettings(rest, actorId, scope);
+    // `market` is stripped out of the body like `actorId` and `scope`: it names
+    // the ROW to write, not a setting to store, and letting it through would
+    // fail the unknown-key check on every market-scoped save.
+    const { actorId, scope, market, ...rest } = d ?? {};
+    return this.admin.updateSettings(rest, actorId, scope, market);
   }
 
   // ── Flash-deal listing (seller + admin, with filters) ──────────────────────

@@ -17,7 +17,11 @@ import { GroceryItem } from '../entities/grocery-item.entity';
 import { GroceryOrder } from '../entities/grocery-order.entity';
 import { GroceryFlashDeal, FlashDealStatus } from '../entities/grocery-flash-deal.entity';
 import { GroceryDeliveryZone } from '../entities/grocery-delivery-zone.entity';
-import { GrocerySetting, GROCERY_SETTING_DEFAULTS } from '../entities/grocery-setting.entity';
+import {
+  GrocerySetting,
+  GROCERY_SETTING_DEFAULTS,
+  PLATFORM_MARKET,
+} from '../entities/grocery-setting.entity';
 
 describe('GroceryAdminService', () => {
   let service: GroceryAdminService;
@@ -62,7 +66,10 @@ describe('GroceryAdminService', () => {
       providers: [
         GroceryAdminService,
         { provide: RedisService, useValue: { del: jest.fn().mockResolvedValue(1) } },
-        { provide: KafkaProducerService, useValue: { publish: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: KafkaProducerService,
+          useValue: { publish: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: getRepositoryToken(GroceryStore), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryItem), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(GroceryOrder), useFactory: mockRepoFactory },
@@ -86,10 +93,10 @@ describe('GroceryAdminService', () => {
   describe('getDashboard', () => {
     it('returns store, product, order and moderation counters', async () => {
       storeRepo.count
-        .mockResolvedValueOnce(11)  // total
-        .mockResolvedValueOnce(8)   // approved
-        .mockResolvedValueOnce(2)   // pending
-        .mockResolvedValueOnce(1);  // suspended
+        .mockResolvedValueOnce(11) // total
+        .mockResolvedValueOnce(8) // approved
+        .mockResolvedValueOnce(2) // pending
+        .mockResolvedValueOnce(1); // suspended
       const builder = qb();
       builder.getRawOne.mockResolvedValue({ revenue: '48250.50', orders: '96' });
       builder.getRawMany.mockResolvedValue([{ status: 'PLACED', count: '4' }]);
@@ -109,7 +116,13 @@ describe('GroceryAdminService', () => {
   // ── Store lifecycle ───────────────────────────────────────────────────────
 
   describe('setStoreStatus', () => {
-    const store = { id: 's-1', name: 'FreshMart', status: 'PENDING_KYC', isOnline: true, ownerId: 'owner-1' };
+    const store = {
+      id: 's-1',
+      name: 'FreshMart',
+      status: 'PENDING_KYC',
+      isOnline: true,
+      ownerId: 'owner-1',
+    };
 
     it('approves a store and notifies the owner', async () => {
       storeRepo.findOne.mockResolvedValue({ ...store } as any);
@@ -137,7 +150,9 @@ describe('GroceryAdminService', () => {
     });
 
     it('rejects a status the lifecycle does not define', async () => {
-      await expect(service.setStoreStatus('s-1', 'BLOCKED' as any)).rejects.toThrow(BadRequestException);
+      await expect(service.setStoreStatus('s-1', 'BLOCKED' as any)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(storeRepo.save).not.toHaveBeenCalled();
     });
 
@@ -164,7 +179,9 @@ describe('GroceryAdminService', () => {
     });
 
     it('rejects an unknown status rather than silently listing everything', async () => {
-      await expect(service.listFlashDeals({ status: 'almost-live' })).rejects.toThrow(BadRequestException);
+      await expect(service.listFlashDeals({ status: 'almost-live' })).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('treats "All" as no status filter', async () => {
@@ -180,7 +197,10 @@ describe('GroceryAdminService', () => {
 
   describe('createDeliveryZone', () => {
     it('normalises a comma-separated pincode list', async () => {
-      await service.createDeliveryZone({ name: 'Bandra West', pincodes: '400050, 400051 ,' } as any);
+      await service.createDeliveryZone({
+        name: 'Bandra West',
+        pincodes: '400050, 400051 ,',
+      } as any);
 
       expect(zoneRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ pincodes: ['400050', '400051'] }),
@@ -208,12 +228,16 @@ describe('GroceryAdminService', () => {
     });
 
     it('rejects an unknown key instead of storing it', async () => {
-      await expect(service.updateSettings({ comissionPercent: 15 })).rejects.toThrow(/Unknown setting/);
+      await expect(service.updateSettings({ comissionPercent: 15 })).rejects.toThrow(
+        /Unknown setting/,
+      );
       expect(settingRepo.save).not.toHaveBeenCalled();
     });
 
     it('rejects a value of the wrong type', async () => {
-      await expect(service.updateSettings({ commissionPercent: '15' })).rejects.toThrow(/must be a number/);
+      await expect(service.updateSettings({ commissionPercent: '15' })).rejects.toThrow(
+        /must be a number/,
+      );
     });
 
     it('persists a valid change and announces it', async () => {
@@ -224,8 +248,68 @@ describe('GroceryAdminService', () => {
       expect(settingRepo.save).toHaveBeenCalledTimes(2);
       expect(kafka.publish).toHaveBeenCalledWith(
         'grocery.settings.updated',
-        expect.objectContaining({ keys: ['commissionPercent', 'autoApproveStores'], actorId: 'admin-9' }),
+        expect.objectContaining({
+          keys: ['commissionPercent', 'autoApproveStores'],
+          actorId: 'admin-9',
+        }),
       );
+    });
+
+    // ── Per market ──────────────────────────────────────────────────────────
+    //
+    // `key` used to be the sole primary key, so a market's row could not
+    // coexist with the platform row: `getSettings`' scoped branch always came
+    // back empty and `source` could only ever say `'platform'` — a read that
+    // distinguished markets in its shape and never in its answer (review I6).
+    // The key is now `(key, region_code)` with `'*'` as the platform row.
+
+    it('reads the platform row by its sentinel, not by IS NULL', async () => {
+      settingRepo.find.mockResolvedValue([]);
+      await service.getSettings();
+      expect(settingRepo.find).toHaveBeenCalledWith({ where: { regionCode: PLATFORM_MARKET } });
+    });
+
+    it("answers source: 'market' when the market has its own row", async () => {
+      settingRepo.find.mockImplementation((async (opts: any) =>
+        opts?.where?.regionCode === 'QA'
+          ? [{ key: 'defaultDeliveryFee', value: 9, updatedAt: new Date('2026-09-01') }]
+          : [{ key: 'defaultDeliveryFee', value: 25, updatedAt: new Date('2026-08-01') }]) as any);
+
+      const qa = await service.getSettings('QA');
+      expect({ source: qa.source, fee: qa.settings.defaultDeliveryFee }).toEqual({
+        source: 'market',
+        fee: 9,
+      });
+      // And the platform row is what `defaults` reports, so the console can say
+      // "overridden" rather than implying the market chose 25.
+      expect(qa.defaults.defaultDeliveryFee).toBe(25);
+    });
+
+    it('writes the platform row when no market is named', async () => {
+      settingRepo.find.mockResolvedValue([]);
+      await service.updateSettings({ commissionPercent: 15 }, 'admin-9');
+      expect(settingRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'commissionPercent', regionCode: PLATFORM_MARKET }),
+      );
+    });
+
+    it("writes one market's row when a global admin names it", async () => {
+      settingRepo.find.mockResolvedValue([]);
+      await service.updateSettings({ commissionPercent: 15 }, 'admin-9', undefined, 'qa');
+      expect(settingRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'commissionPercent', regionCode: 'QA' }),
+      );
+      expect(kafka.publish).toHaveBeenCalledWith(
+        'grocery.settings.updated',
+        expect.objectContaining({ market: 'QA' }),
+      );
+    });
+
+    it('refuses a market it cannot read rather than writing every market', async () => {
+      await expect(
+        service.updateSettings({ commissionPercent: 15 }, 'admin-9', undefined, 'ZZ'),
+      ).rejects.toThrow(/cannot be attributed to a market yet/);
+      expect(settingRepo.save).not.toHaveBeenCalled();
     });
   });
 
@@ -234,7 +318,13 @@ describe('GroceryAdminService', () => {
   describe('getReports', () => {
     it('derives the cancellation rate from the period totals', async () => {
       const builder = qb();
-      builder.getRawOne.mockResolvedValue({ orders: '200', revenue: '90000', aov: '450', cancelled: '14', delivered: '170' });
+      builder.getRawOne.mockResolvedValue({
+        orders: '200',
+        revenue: '90000',
+        aov: '450',
+        cancelled: '14',
+        delivered: '170',
+      });
       builder.getRawMany.mockResolvedValue([]);
       orderRepo.createQueryBuilder.mockReturnValue(builder as any);
 

@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, ILike, IsNull } from 'typeorm';
+import { Repository, In, ILike } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
 import { RedisService } from '@app/redis';
 import { applyMarketFilter, assertInMarket, requireMarket } from '@app/common';
@@ -16,7 +16,11 @@ import { GroceryItem } from '../entities/grocery-item.entity';
 import { GroceryOrder, GroceryOrderStatus } from '../entities/grocery-order.entity';
 import { GroceryFlashDeal, FlashDealStatus } from '../entities/grocery-flash-deal.entity';
 import { GroceryDeliveryZone } from '../entities/grocery-delivery-zone.entity';
-import { GrocerySetting, GROCERY_SETTING_DEFAULTS } from '../entities/grocery-setting.entity';
+import {
+  GrocerySetting,
+  GROCERY_SETTING_DEFAULTS,
+  PLATFORM_MARKET,
+} from '../entities/grocery-setting.entity';
 
 /**
  * GroceryAdminService — the super-admin console's read/write surface.
@@ -554,10 +558,14 @@ export class GroceryAdminService {
    * that read as every market's at once (audit I9), when a delivery fee and a
    * service radius really are a market's own facts. `source` says which row
    * answered, so the console can show "inherited from platform defaults"
-   * rather than implying the market set these values — and today it always
-   * will, because nothing yet writes a market-scoped row (see the entity's
-   * docstring): the write stays platform-only until the MODULES plan's
-   * per-market editor exists.
+   * rather than implying the market set these values.
+   *
+   * `source: 'market'` is genuinely reachable as of the R12 fix round; it was
+   * not before. `key` was the sole primary key, so a market's row could not
+   * coexist with the platform row and this branch came back empty however it
+   * was called — the read distinguished markets in its shape and never in its
+   * answer (review I6). `1786502400000-GrocerySettingsMarket` makes the key
+   * composite and `PLATFORM_MARKET` is the fallback row's own market code.
    */
   async getSettings(market?: string) {
     // `requireMarket`: `grocery.controller.ts` sends
@@ -569,7 +577,7 @@ export class GroceryAdminService {
     const m = requireMarket(market, 'grocery settings', this.logger);
     const [scoped, global] = await Promise.all([
       m ? this.settingRepo.find({ where: { regionCode: m } }) : Promise.resolve([]),
-      this.settingRepo.find({ where: { regionCode: IsNull() } }),
+      this.settingRepo.find({ where: { regionCode: PLATFORM_MARKET } }),
     ]);
     const globalStored = Object.fromEntries(global.map((r) => [r.key, r.value]));
     const scopedStored = Object.fromEntries(scoped.map((r) => [r.key, r.value]));
@@ -594,17 +602,32 @@ export class GroceryAdminService {
    * Writes only keys the platform actually recognises. An unknown key is rejected
    * rather than stored, so a typo cannot look saved and then be silently ignored
    * by every reader.
+   *
+   * `market` names the row to write: a market's own, or the platform row every
+   * market inherits from when it is absent. A region-locked admin is still
+   * refused outright — the brief's ruling, unchanged: an operator confined to
+   * one market has no console for this yet, and a write that silently edited
+   * every market would be worse than no write. What is new is that a GLOBAL
+   * admin can now target one market (`?country=QA`), which is the only way a
+   * market row comes to exist and therefore the only way `getSettings` can ever
+   * answer `source: 'market'` (review I6).
    */
-  async updateSettings(body: Record<string, unknown>, actorId?: string, scope?: string) {
-    // Grocery settings apply to the whole platform — a market-locked admin has
-    // no market of their own to write them into, so the write is refused
-    // outright rather than silently applied to every market.
+  async updateSettings(
+    body: Record<string, unknown>,
+    actorId?: string,
+    scope?: string,
+    market?: string,
+  ) {
     if (scope) {
       this.logger.warn(
         `[region-scope-denied] grocery settings write refused for a ${scope}-scoped admin`,
       );
       throw new ForbiddenException('Grocery settings are managed globally.');
     }
+    // Refused, never widened: a `?country=` this platform cannot read must not
+    // fall through to the platform row, which would edit every market under the
+    // name of one.
+    const target = requireMarket(market, 'grocery settings', this.logger) ?? PLATFORM_MARKET;
     const entries = Object.entries(body ?? {}).filter(([k]) => k !== 'actorId');
     if (!entries.length) throw new BadRequestException('No settings supplied');
 
@@ -622,21 +645,47 @@ export class GroceryAdminService {
           `Setting "${key}" must be a ${expected}, received ${typeof value}`,
         );
       }
-      await this.settingRepo.save(this.settingRepo.create({ key, value, updatedBy: actorId }));
+      // `regionCode` is named explicitly because it is half of the primary
+      // key: `save()` upserts on the full key, and an entity created without
+      // it would INSERT and collide with the row it meant to replace.
+      await this.settingRepo.save(
+        this.settingRepo.create({ key, regionCode: target, value, updatedBy: actorId }),
+      );
     }
 
     await this.kafka.publish('grocery.settings.updated', {
       keys: entries.map(([k]) => k),
+      market: target === PLATFORM_MARKET ? null : target,
       actorId: actorId ?? null,
       updatedAt: new Date().toISOString(),
     });
-    this.logger.log(`Grocery settings updated: ${entries.map(([k]) => k).join(', ')}`);
-    return this.getSettings();
+    this.logger.log(
+      `Grocery settings updated for ${target === PLATFORM_MARKET ? 'every market' : target}: ` +
+        `${entries.map(([k]) => k).join(', ')}`,
+    );
+    return this.getSettings(market);
   }
 
-  /** Single setting read, used by the storefront/seller paths that need a policy value. */
-  async getSetting<T = unknown>(key: string): Promise<T> {
-    const row = await this.settingRepo.findOne({ where: { key } });
+  /**
+   * Single setting read, used by the storefront/seller paths that need a policy
+   * value: a market's own row when one exists, otherwise the platform default.
+   *
+   * `market` is optional because a platform-wide caller has none to hand, and
+   * it goes through `requireMarket` like every other market this module reads:
+   * a code it cannot read is refused, not quietly answered with the platform
+   * value under that market's name. (`normaliseMarket` here would be the
+   * fail-open shape `scope-helper-uniqueness.spec.ts` exists to catch.)
+   *
+   * The two `findOne` calls are deliberate. `where: { key }` alone was correct
+   * while `key` was the whole primary key; with the market in it, that query
+   * matches ANY market's row for the key and returns whichever Postgres hands
+   * back first — one market's value served as the platform default.
+   */
+  async getSetting<T = unknown>(key: string, market?: string): Promise<T> {
+    const m = requireMarket(market, 'grocery setting', this.logger);
+    const row =
+      (m ? await this.settingRepo.findOne({ where: { key, regionCode: m } }) : null) ??
+      (await this.settingRepo.findOne({ where: { key, regionCode: PLATFORM_MARKET } }));
     return (row?.value ?? GROCERY_SETTING_DEFAULTS[key]) as T;
   }
 }
