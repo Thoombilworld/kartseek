@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { PharmacyStore } from './pharmacy-store.entity';
 
@@ -19,7 +28,7 @@ export enum DosageForm {
   OTHER = 'OTHER',
 }
 
-@Entity('pharmacy_items')
+@Entity({ name: 'pharmacy_items', schema: 'pharmacy' })
 export class PharmacyItem {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -39,10 +48,19 @@ export class PharmacyItem {
   @Column({ type: 'varchar', length: 128, nullable: true })
   slug: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true, comment: 'Generic/salt name e.g. Paracetamol' })
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    comment: 'Generic/salt name e.g. Paracetamol',
+  })
   genericName: string | null;
 
-  @Column({ type: 'text', nullable: true, comment: 'Full composition e.g. Paracetamol 500mg + Caffeine 50mg' })
+  @Column({
+    type: 'text',
+    nullable: true,
+    comment: 'Full composition e.g. Paracetamol 500mg + Caffeine 50mg',
+  })
   composition: string | null;
 
   @Column({ type: 'text', nullable: true })
@@ -59,7 +77,13 @@ export class PharmacyItem {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, default: 0 })
   price: number | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Maximum Retail Price' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Maximum Retail Price',
+  })
   mrp: number | null;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, comment: 'Tax percentage' })
@@ -73,7 +97,12 @@ export class PharmacyItem {
   @Column({ type: 'varchar', length: 50, nullable: true, comment: 'e.g. 500mg, 250ml' })
   strength: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true, comment: 'e.g. Strip of 10 tablets, Bottle of 100ml' })
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    comment: 'e.g. Strip of 10 tablets, Bottle of 100ml',
+  })
   packSize: string | null;
 
   @Column({ default: false })
@@ -100,13 +129,23 @@ export class PharmacyItem {
   // ── Barcode / Product Identification ────────────────────────────────────────
 
   @Index()
-  @Column({ type: 'varchar', length: 20, nullable: true, comment: 'EAN-13 / EAN-8 / UPC-A barcode' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+    comment: 'EAN-13 / EAN-8 / UPC-A barcode',
+  })
   barcode: string | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true, comment: 'Global Trade Item Number' })
   gtin: string | null;
 
-  @Column({ type: 'varchar', length: 64, nullable: true, comment: 'Manufacturer SKU / internal code' })
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    comment: 'Manufacturer SKU / internal code',
+  })
   sku: string | null;
 
   // ── Images ──────────────────────────────────────────────────────────────────

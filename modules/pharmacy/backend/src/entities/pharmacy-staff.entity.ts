@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { PharmacyStore } from './pharmacy-store.entity';
 
@@ -10,7 +19,7 @@ export enum PharmacyStaffRole {
   INVENTORY_MANAGER = 'INVENTORY_MANAGER',
 }
 
-@Entity('pharmacy_staff')
+@Entity({ name: 'pharmacy_staff', schema: 'pharmacy' })
 export class PharmacyStaff {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -35,7 +44,11 @@ export class PharmacyStaff {
   @Column({ type: 'enum', enum: PharmacyStaffRole, default: PharmacyStaffRole.CASHIER })
   role: PharmacyStaffRole;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Pharmacist registration number (for PHARMACIST role)' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Pharmacist registration number (for PHARMACIST role)',
+  })
   registrationNumber: string | null;
 
   @Column({ default: true })

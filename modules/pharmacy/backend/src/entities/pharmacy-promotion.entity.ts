@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { PharmacyStore } from './pharmacy-store.entity';
 
@@ -9,7 +18,7 @@ export enum PharmacyPromoType {
   FREE_DELIVERY = 'FREE_DELIVERY',
 }
 
-@Entity('pharmacy_promotions')
+@Entity({ name: 'pharmacy_promotions', schema: 'pharmacy' })
 export class PharmacyPromotion {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -35,13 +44,30 @@ export class PharmacyPromotion {
   @Column({ type: 'enum', enum: PharmacyPromoType, default: PharmacyPromoType.PERCENTAGE })
   type: PharmacyPromoType;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Discount value (percent or flat amount)' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    comment: 'Discount value (percent or flat amount)',
+  })
   value: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Min order amount to apply' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Min order amount to apply',
+  })
   minOrderAmount: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Max discount cap (for percentage type)' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Max discount cap (for percentage type)',
+  })
   maxDiscountAmount: number | null;
 
   @Column({ type: 'int', default: 0, comment: 'Max uses across all customers; 0 = unlimited' })

@@ -1,4 +1,11 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 export enum PrescriptionStatus {
   PENDING_VERIFICATION = 'PENDING_VERIFICATION',
@@ -8,7 +15,7 @@ export enum PrescriptionStatus {
   REJECTED_UNREADABLE = 'REJECTED_UNREADABLE',
 }
 
-@Entity('prescriptions')
+@Entity({ name: 'prescriptions', schema: 'pharmacy' })
 export class Prescription {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -49,7 +56,11 @@ export class Prescription {
 
   // ── Verification ────────────────────────────────────────────────────────────
 
-  @Column({ type: 'enum', enum: PrescriptionStatus, default: PrescriptionStatus.PENDING_VERIFICATION })
+  @Column({
+    type: 'enum',
+    enum: PrescriptionStatus,
+    default: PrescriptionStatus.PENDING_VERIFICATION,
+  })
   status: PrescriptionStatus;
 
   @Column({ type: 'varchar', nullable: true, comment: 'Pharmacist/admin who verified' })

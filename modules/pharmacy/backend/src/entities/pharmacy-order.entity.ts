@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { PharmacyStore } from './pharmacy-store.entity';
 
@@ -41,7 +50,7 @@ export enum PharmacyPaymentStatus {
   PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
 }
 
-@Entity('pharmacy_orders')
+@Entity({ name: 'pharmacy_orders', schema: 'pharmacy' })
 export class PharmacyOrder {
   @PrimaryGeneratedColumn('uuid')
   id: string;

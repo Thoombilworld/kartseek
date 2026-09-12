@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { resolvePharmacyDbConfig, PHARMACY_MIGRATIONS_TABLE } from './src/db-config';
 import {
   PharmacyStore,
   PharmacyCategory,
@@ -60,19 +61,29 @@ import {
  * procedure in `docs/guides/database-migrations.md` greps the generated SQL
  * for DROP before the file is kept. `apps/api/test/module-data-sources.spec.ts`
  * holds the rest of the shape.
+ *
+ * ── The schema, and where the ledger lives ──────────────────────────────────
+ *
+ * This DataSource deliberately declares **no `schema`**. TypeORM builds the
+ * migration ledger inside `options.schema` and does it *before* the first
+ * migration's `up()` runs, so with `schema: 'pharmacy'` a fresh dedicated database
+ * died on `CREATE TABLE "pharmacy"."migrations"` — schema does not exist — and no
+ * `CREATE SCHEMA` inside a migration could ever run early enough to help. The
+ * ledger is `public.pharmacy_migrations` (see `src/db-config.ts`), and
+ * `migrations/*-InitialPharmacySchema.ts` creates the schema as its first
+ * statement. Each entity names `schema: 'pharmacy'` itself, so `migration:generate`
+ * still diffs the right schema.
+ *
+ * Connection details come from `resolvePharmacyDbConfig` — the same function
+ * `src/pharmacy-service.module.ts` calls, so the runner and the service cannot
+ * resolve to different databases. `PHARMACY_DB_*` wins, `DB_*` answers next.
  */
 export const PharmacyDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.PHARMACY_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.PHARMACY_DB_PORT || process.env.DB_PORT || 5436),
-  username: process.env.PHARMACY_DB_USER || process.env.DB_USER || 'pharmacy_user',
-  password:
-    process.env.PHARMACY_DB_PASSWORD ||
-    process.env.DB_PASSWORD ||
-    process.env.DB_PASS ||
-    'postgres',
-  database: process.env.PHARMACY_DB_NAME || process.env.DB_NAME || 'kartseek_pharmacy',
-  schema: 'pharmacy',
+  // One resolver, shared with the service — see src/db-config.ts.
+  ...resolvePharmacyDbConfig((key) => process.env[key]),
+  // No `schema` here on purpose: TypeORM would build the ledger inside it,
+  // before the first migration could create it. The entities name it instead.
   entities: [
     PharmacyStore,
     PharmacyCategory,
@@ -87,7 +98,7 @@ export const PharmacyDataSource = new DataSource({
     'migrations/1786498300000-InitialPharmacySchema.ts',
     'migrations/1786502400000-DropDeadMarketColumns.ts',
   ],
-  migrationsTableName: 'migrations',
+  migrationsTableName: PHARMACY_MIGRATIONS_TABLE,
   migrationsTransactionMode: 'each',
   synchronize: false,
   logging: ['error', 'migration', 'schema'],

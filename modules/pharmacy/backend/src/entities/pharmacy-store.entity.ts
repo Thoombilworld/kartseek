@@ -24,7 +24,7 @@ export enum PharmacyStoreStatus {
   CLOSED = 'CLOSED',
 }
 
-@Entity('pharmacy_stores')
+@Entity({ name: 'pharmacy_stores', schema: 'pharmacy' })
 export class PharmacyStore {
   @PrimaryGeneratedColumn('uuid')
   id: string;

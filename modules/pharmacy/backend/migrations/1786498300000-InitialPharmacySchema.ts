@@ -9,6 +9,17 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * booting the service with auto-sync on and hoping; that is off by default in
  * every environment now (`src/pharmacy-service.module.ts`), and this is the schema.
  *
+ * ── It starts from nothing ─────────────────────────────────────────────────
+ *
+ * The first two statements are `CREATE SCHEMA IF NOT EXISTS "pharmacy"` and
+ * `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`, because a dedicated module
+ * database arrives with neither and every primary key below defaults to
+ * `uuid_generate_v4()`. Nothing else in a deploy creates them: dev
+ * `synchronize` used to create the schema, and IN3 turned that off. This works
+ * only because the ledger lives in `public.pharmacy_migrations` rather than inside
+ * this schema — TypeORM builds the ledger before the first `up()` runs, so a
+ * ledger in `pharmacy` would need the schema that this line creates.
+ *
  * ── Why every statement in up() is guarded ──────────────────────────────────
  *
  * The dev and staging databases already hold these tables — `synchronize` built
@@ -31,6 +42,16 @@ export class InitialPharmacySchema1786498300000 implements MigrationInterface {
   name = 'InitialPharmacySchema1786498300000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // The schema itself, and it has to be first. A dedicated module
+    // database is created empty and nothing else in the deploy creates
+    // this schema — dev `synchronize` used to, and IN3 turned that off.
+    // The ledger is deliberately `public.pharmacy_migrations` (see
+    // data-source.ts), so TypeORM does not need this schema to exist
+    // before this line runs.
+    await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "pharmacy"`);
+    // Every table below defaults its primary key to uuid_generate_v4().
+    // A plain postgres image does not ship this enabled.
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await queryRunner.query(`DO $guard$ BEGIN
   CREATE TYPE "pharmacy"."pharmacy_items_dosageform_enum" AS ENUM('TABLET', 'CAPSULE', 'SYRUP', 'INJECTION', 'CREAM', 'OINTMENT', 'DROPS', 'INHALER', 'POWDER', 'GEL', 'SPRAY', 'PATCH', 'SUPPOSITORY', 'OTHER');
 EXCEPTION WHEN duplicate_object THEN NULL;
@@ -206,5 +227,13 @@ END $guard$`);
     await queryRunner.query(`DROP INDEX "pharmacy"."IDX_3319243b86b749f5c75b0799c4"`);
     await queryRunner.query(`DROP TABLE "pharmacy"."pharmacy_items"`);
     await queryRunner.query(`DROP TYPE "pharmacy"."pharmacy_items_dosageform_enum"`);
+    // The schema last, and only if nothing is left in it. RESTRICT
+    // raises dependent_objects_still_exist when it still holds objects
+    // this migration did not create — exactly the case where dropping it
+    // would take somebody else's tables with it.
+    await queryRunner.query(`DO $guard$ BEGIN
+  DROP SCHEMA IF EXISTS "pharmacy" RESTRICT;
+EXCEPTION WHEN dependent_objects_still_exist THEN NULL;
+END $guard$`);
   }
 }
