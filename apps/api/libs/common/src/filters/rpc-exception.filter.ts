@@ -70,6 +70,25 @@ export class RpcAwareExceptionsFilter extends AllExceptionsFilter {
     // is a 404, and the caller needs to be able to tell "this id does not exist"
     // from "the service is broken". Matched by name because importing typeorm
     // here would pull a driver dependency into every consumer of @app/common.
+    // A store this handler depends on is unavailable and there is no emulator to
+    // answer from — `RedisService` throws this in production rather than serving
+    // from a private in-process Map.
+    //
+    // The HTTP half of this filter learned the mapping and `toRpcError()` did
+    // not, so the same outage answered 503 to a direct HTTP call and 500 —
+    // "an unexpected error occurred" — through a `@MessagePattern`. cart-service
+    // and order-service are both heavy Redis users reached over TCP, so that was
+    // the common path. 503 is what tells a caller to retry and a load balancer
+    // to look elsewhere; 500 says the code crashed. Matched by name for the same
+    // reason as EntityNotFoundError above.
+    if (exception instanceof Error && exception.name === 'RedisUnavailableError') {
+      return {
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        message: 'A required service is temporarily unavailable. Please retry.',
+        errorCode: 'REDIS_UNAVAILABLE',
+      };
+    }
+
     if (exception instanceof Error && exception.name === 'EntityNotFoundError') {
       return {
         statusCode: HttpStatus.NOT_FOUND,

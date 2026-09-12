@@ -1,8 +1,18 @@
-import { Controller, NotFoundException, BadRequestException, Module, UseFilters } from '@nestjs/common';
+import {
+  Controller,
+  NotFoundException,
+  BadRequestException,
+  Module,
+  UseFilters,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
-  ClientProxy, ClientProxyFactory, MessagePattern, type MicroserviceOptions,
-  Payload, Transport,
+  ClientProxy,
+  ClientProxyFactory,
+  MessagePattern,
+  type MicroserviceOptions,
+  Payload,
+  Transport,
 } from '@nestjs/microservices';
 import { type INestApplication } from '@nestjs/common';
 import { lastValueFrom } from 'rxjs';
@@ -45,7 +55,9 @@ class ProbeController {
   /** What TypeORM's `findOneOrFail` throws: a plain Error with this name. */
   @MessagePattern({ cmd: 'probe_entity_missing' })
   entityMissing() {
-    const err = new Error('Could not find any entity of type "BankOffer" matching:\n {\n  "id": "abc"\n }');
+    const err = new Error(
+      'Could not find any entity of type "BankOffer" matching:\n {\n  "id": "abc"\n }',
+    );
     err.name = 'EntityNotFoundError';
     throw err;
   }
@@ -65,6 +77,20 @@ class ProbeController {
     const err: any = new Error('insert or update violates foreign key constraint');
     err.code = '23503';
     err.detail = 'Key (brand_id) is not present in table "brands".';
+    throw err;
+  }
+
+  /**
+   * What `RedisService` throws in production once the emulator is gone. A plain
+   * Error with this name, exactly as the real class produces it — matched by
+   * name so `@app/common` needs no import from `@app/redis`.
+   */
+  @MessagePattern({ cmd: 'probe_redis_down' })
+  redisDown() {
+    const err = new Error(
+      'Redis is unavailable and this environment has no in-memory fallback (not-ready).',
+    );
+    err.name = 'RedisUnavailableError';
     throw err;
   }
 
@@ -118,7 +144,9 @@ describe('RpcAwareExceptionsFilter (over a real TCP transport)', () => {
   };
 
   it('passes successful responses through untouched', async () => {
-    await expect(lastValueFrom(client.send({ cmd: 'probe_ok' }, {}))).resolves.toEqual({ id: 'p1' });
+    await expect(lastValueFrom(client.send({ cmd: 'probe_ok' }, {}))).resolves.toEqual({
+      id: 'p1',
+    });
   });
 
   it('preserves 404 for a missing record', async () => {
@@ -148,7 +176,7 @@ describe('RpcAwareExceptionsFilter (over a real TCP transport)', () => {
     // `findOneOrFail` throws a plain Error, so this used to arrive as a 500 and
     // "no such bank offer" was indistinguishable from a crashed service.
     expect(err.statusCode).toBe(404);
-    expect(err.message).not.toMatch(/\n/);          // criteria collapsed to one line
+    expect(err.message).not.toMatch(/\n/); // criteria collapsed to one line
     expect(err.message).toContain('BankOffer');
   });
 
@@ -165,5 +193,29 @@ describe('RpcAwareExceptionsFilter (over a real TCP transport)', () => {
     expect(err.statusCode).toBe(400);
     expect(err.errorCode).toBe('REFERENCED_RECORD_NOT_FOUND');
     expect(err.message).toContain('brand_id');
+  });
+  /**
+   * The HTTP half of this filter learned `RedisUnavailableError` → 503 in fix
+   * round 2, and `toRpcError()` did not: it fell through to the generic
+   * `INTERNAL_ERROR`/500 branch. So a Redis outage inside a `@MessagePattern`
+   * handler — cart-service and order-service both bind this filter, and both
+   * are heavy Redis users over TCP — failed loudly but arrived at the gateway
+   * as "an unexpected error occurred", which reads as a crash rather than as an
+   * unavailable dependency. 503 is what tells a caller to retry and a load
+   * balancer to look elsewhere.
+   */
+  it('maps a store-unavailable error to 503, not the generic 500', async () => {
+    const err = await callAndCatch('probe_redis_down');
+
+    expect(err.statusCode).toBe(503);
+    expect(err.errorCode).toBe('REDIS_UNAVAILABLE');
+  });
+
+  it('still maps a genuinely unexpected error to 500', async () => {
+    // The 503 branch must be the named one, not a widening of the fallback.
+    const err = await callAndCatch('probe_boom');
+
+    expect(err.statusCode).toBe(500);
+    expect(err.errorCode).toBe('INTERNAL_ERROR');
   });
 });
