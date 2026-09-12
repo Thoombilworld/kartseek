@@ -5,7 +5,7 @@ import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { FranchiseController } from './franchise.controller';
 import { FranchiseService } from './franchise.service';
-import { databaseCredentials } from '@app/database';
+import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Franchise } from './entities/franchise.entity';
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
@@ -65,7 +65,23 @@ const envSchema = buildEnvSchema({
         database: cfg.get<string>('FRANCHISE_DB_NAME') || cfg.get<string>('DB_NAME', 'kartseek_db'),
         schema: 'franchise',
         entities: [Franchise],
-        synchronize: cfg.get('NODE_ENV', 'development') !== 'production',
+        // Keyed on DB_SYNCHRONIZE so `validateDatabaseConfig()` and this factory
+        // read the same value, and wrapped so a boot with auto-sync on under
+        // NODE_ENV=production fails here rather than rewriting the schema
+        // (AUD2-070).
+        //
+        // The default is OFF in every environment, development included. This
+        // module's schema comes from `migrations/` and nothing else (IN3): the
+        // previous `NODE_ENV !== 'production'` meant annotating an existing
+        // column made dev auto-sync DROP and recreate it, which emptied the
+        // column three times during the regional plan. Set DB_SYNCHRONIZE=true
+        // deliberately, for an afternoon of entity iteration, and never against
+        // a database whose rows matter.
+        synchronize: assertSynchronizeAllowed(
+          cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
+          cfg.get('NODE_ENV', 'development'),
+          'franchise-service',
+        ),
       }),
     }),
     TypeOrmModule.forFeature([Franchise]),
