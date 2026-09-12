@@ -27,7 +27,7 @@ import {
   TaxiRideEntity,
 } from './entities';
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
-import { databaseCredentials } from '@app/database';
+import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
 
 const envSchema = buildEnvSchema({
   TAXI_TCP_PORT: Joi.number().default(4027),
@@ -101,7 +101,23 @@ const ENTITIES = [
         // With a dedicated kartseek_taxi database that risk is gone: an
         // auto-sync here cannot reach another service's tables. Production
         // still uses migrations.
-        synchronize: cfg.get('NODE_ENV', 'development') !== 'production',
+        // Keyed on DB_SYNCHRONIZE so `validateDatabaseConfig()` and this factory
+        // read the same value, and wrapped so a boot with auto-sync on under
+        // NODE_ENV=production fails here rather than rewriting the schema
+        // (AUD2-070).
+        //
+        // The default is OFF in every environment, development included. This
+        // module's schema comes from `migrations/` and nothing else (IN3): the
+        // previous `NODE_ENV !== 'production'` meant annotating an existing
+        // column made dev auto-sync DROP and recreate it, which emptied the
+        // column three times during the regional plan. Set DB_SYNCHRONIZE=true
+        // deliberately, for an afternoon of entity iteration, and never against
+        // a database whose rows matter.
+        synchronize: assertSynchronizeAllowed(
+          cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
+          cfg.get('NODE_ENV', 'development'),
+          'taxi-service',
+        ),
       }),
     }),
     TypeOrmModule.forFeature(ENTITIES),
