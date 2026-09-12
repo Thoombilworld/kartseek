@@ -214,3 +214,109 @@ describe('AuditLogService.query', () => {
     expect(calls[0].createdAt.$lte).toBeInstanceOf(Date);
   });
 });
+
+/**
+ * An `'ALL'` row's PAYLOAD is not a locked reader's to see.
+ *
+ * The scope filter is `country ∈ [scope, 'ALL']`, as the B5 plan ruled: a
+ * global action should be visible to a regional administrator rather than
+ * invisible, because "nothing happened here" is the lie the trail exists to
+ * prevent. That ruling stands — and it is a reason to disclose the FACT of the
+ * action, not its contents (whole-branch review, finding A-4).
+ *
+ * A console row is stamped `scope ?? x-region-code ?? 'ALL'`
+ * (`admin-audit.controller.ts:181`), so a global administrator acting with no
+ * market selected files under `'ALL'` — and every regional administrator then
+ * read that row's `metadata`, `reason`, `oldValue` and `newValue`: entity ids,
+ * stated reasons and before/after values for actions taken in other markets.
+ *
+ * So an `'ALL'` row reaches a locked reader with its payload withheld and a
+ * marker saying so, and with everything that makes it visible intact: who,
+ * what action, on what kind of entity, when. A row in the reader's OWN market
+ * is untouched.
+ */
+const rowsForRedaction = () => [
+  {
+    _id: 'a1',
+    actionType: 'console.settings.update',
+    actorId: 'u-global',
+    actorEmail: 'ops@kartseek.com',
+    actorRole: 'SUPER_ADMIN',
+    entityType: 'settings',
+    entityId: 'e-1',
+    reason: 'raised the IN commission rate',
+    metadata: { source: 'console', details: { from: 10, to: 12 } },
+    oldValue: { rate: 10 },
+    newValue: { rate: 12 },
+    country: 'ALL',
+  },
+  {
+    _id: 'a2',
+    actionType: 'console.seller.approve',
+    actorId: 'u-qa',
+    actorEmail: 'qa@kartseek.com',
+    entityType: 'sellers',
+    entityId: 'e-2',
+    reason: 'documents verified',
+    metadata: { source: 'console' },
+    oldValue: { status: 'PENDING' },
+    newValue: { status: 'ACTIVE' },
+    country: 'QA',
+  },
+];
+
+describe('query withholds an ALL row payload from a locked reader', () => {
+  it('keeps the fact of the action and drops the payload', async () => {
+    const { model } = modelWith(rowsForRedaction());
+    const res = await serviceWith(model).query({ scope: 'QA' });
+    const [global] = res.data as any[];
+    // Visible: who, what, on what, when — the reason the row is included.
+    expect(global.actionType).toBe('console.settings.update');
+    expect(global.actorId).toBe('u-global');
+    expect(global.entityType).toBe('settings');
+    expect(global.country).toBe('ALL');
+    // Withheld, with a marker rather than a silent absence.
+    expect(global.metadata).toEqual({
+      withheld: 'platform-wide action; payload not in your market',
+    });
+    expect(global.reason).toBeUndefined();
+    expect(global.oldValue).toBeUndefined();
+    expect(global.newValue).toBeUndefined();
+    expect(global.entityId).toBeUndefined();
+  });
+
+  it('leaves a row in the reader own market completely alone', async () => {
+    const { model } = modelWith(rowsForRedaction());
+    const res = await serviceWith(model).query({ scope: 'QA' });
+    const own = (res.data as any[])[1];
+    expect(own.reason).toBe('documents verified');
+    expect(own.metadata).toEqual({ source: 'console' });
+    expect(own.oldValue).toEqual({ status: 'PENDING' });
+    expect(own.entityId).toBe('e-2');
+  });
+
+  it('leaves everything alone for a global reader', async () => {
+    const { model } = modelWith(rowsForRedaction());
+    const res = await serviceWith(model).query({});
+    for (const row of res.data as any[]) {
+      expect(row.metadata).not.toMatchObject({ withheld: expect.anything() });
+    }
+    expect((res.data as any[])[0].reason).toBe('raised the IN commission rate');
+  });
+
+  it('still counts the withheld row — the total is not a second leak in reverse', async () => {
+    // Redacting in the projection rather than in the filter is deliberate: a
+    // filter change would make the row vanish, and a locked admin comparing
+    // page totals would learn nothing about whether a global action happened.
+    const { model } = modelWith(rowsForRedaction());
+    const res = await serviceWith(model).query({ scope: 'QA' });
+    expect(res.total).toBe(2);
+    expect(res.data).toHaveLength(2);
+  });
+
+  it('keeps the B5 filter exactly as ruled', async () => {
+    const { model, calls } = modelWith(rowsForRedaction());
+    await serviceWith(model).query({ scope: 'qa' });
+    expect(calls[0].country).toEqual({ $in: ['QA', 'ALL'] });
+  });
+});

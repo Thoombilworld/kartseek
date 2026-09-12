@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
+import { marketScopeOf } from '../guards/market-scope';
 
 /** Anything that can carry an event to the audit topic. */
 export interface AuditSink {
@@ -60,56 +61,68 @@ export class AuditInterceptor implements NestInterceptor {
 
     const now = Date.now();
 
-    return next
-      .handle()
-      .pipe(
-        tap(() => {
-          const responseTime = Date.now() - now;
-          const statusCode = res.statusCode;
+    return next.handle().pipe(
+      tap(() => {
+        const responseTime = Date.now() - now;
+        const statusCode = res.statusCode;
 
-          this.logger.log(
-            JSON.stringify({
-              event: 'AUDIT',
-              requestId,
-              user,
-              method,
-              url,
-              ip,
-              statusCode,
-              responseTime: `${responseTime}ms`,
-              userAgent,
-              timestamp: new Date().toISOString(),
-            })
-          );
+        this.logger.log(
+          JSON.stringify({
+            event: 'AUDIT',
+            requestId,
+            user,
+            method,
+            url,
+            ip,
+            statusCode,
+            responseTime: `${responseTime}ms`,
+            userAgent,
+            timestamp: new Date().toISOString(),
+          }),
+        );
 
-          this.record(req, { requestId, user, method, url, ip, userAgent, statusCode, outcome: 'success' });
-        }),
-        catchError((error) => {
-          const responseTime = Date.now() - now;
-          this.logger.warn(
-            JSON.stringify({
-              event: 'AUDIT_ERROR',
-              requestId,
-              user,
-              method,
-              url,
-              ip,
-              statusCode: error.status || 500,
-              error: error.message?.substring(0, 200),
-              responseTime: `${responseTime}ms`,
-              timestamp: new Date().toISOString(),
-            })
-          );
-
-          this.record(req, {
-            requestId, user, method, url, ip, userAgent,
+        this.record(req, {
+          requestId,
+          user,
+          method,
+          url,
+          ip,
+          userAgent,
+          statusCode,
+          outcome: 'success',
+        });
+      }),
+      catchError((error) => {
+        const responseTime = Date.now() - now;
+        this.logger.warn(
+          JSON.stringify({
+            event: 'AUDIT_ERROR',
+            requestId,
+            user,
+            method,
+            url,
+            ip,
             statusCode: error.status || 500,
-            outcome: 'error',
             error: error.message?.substring(0, 200),
-          });
-          throw error;
-        }),
-      );
+            responseTime: `${responseTime}ms`,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+
+        this.record(req, {
+          requestId,
+          user,
+          method,
+          url,
+          ip,
+          userAgent,
+          statusCode: error.status || 500,
+          outcome: 'error',
+          error: error.message?.substring(0, 200),
+        });
+        throw error;
+      }),
+    );
   }
 
   /**
@@ -145,12 +158,51 @@ export class AuditInterceptor implements NestInterceptor {
           outcome: entry.outcome,
           error: entry.error,
         },
-        country: req.headers?.['x-region-code'] ?? req.user?.regionCode ?? 'UNKNOWN',
+        // THE CLAIM FIRST, and for a locked caller the claim ONLY.
+        //
+        // This was `req.headers?.['x-region-code'] ?? req.user?.regionCode ??
+        // 'UNKNOWN'`: the client-controlled header ahead of the signed token,
+        // the one place on the branch where a market came from a header before
+        // a claim (whole-branch review, finding A-4). A QA-locked admin could
+        // send `x-region-code: IN` and file their own mutation under IN — out
+        // of the trail their own market reads back, since
+        // `audit-log.service.ts` narrows a locked reader to
+        // `country ∈ [scope, 'ALL']`. An audit row is the record of who did
+        // what, where; its market is not the actor's to choose.
+        //
+        // An UNLOCKED caller may still narrow with the header. That is the
+        // console saying which market the operator was working in, and an
+        // unlocked account is entitled to every market anyway, so the header
+        // can only narrow — never widen. `marketScopeOf` is the same reader
+        // every guard uses, so SUPER_ADMIN counts as unlocked here too.
+        country: this.marketOf(req),
         service: 'api-gateway',
       })
-      .catch((err: Error) =>
-        this.logger.warn(`audit publish failed for ${url}: ${err?.message}`),
-      );
+      .catch((err: Error) => this.logger.warn(`audit publish failed for ${url}: ${err?.message}`));
+  }
+
+  /**
+   * The market an audit row is filed under.
+   *
+   * Locked caller → their own market, from the token, and nothing else.
+   * Unlocked caller → the `x-region-code` header if they sent one, else their
+   * own `regionCode` claim if they have one, else `'UNKNOWN'`.
+   *
+   * `'UNKNOWN'` and not `'ALL'`: `'ALL'` means "this action belongs to every
+   * market" and every locked administrator reads those rows back
+   * (`audit-log.service.ts` `country ∈ [scope, 'ALL']`), so it is written only
+   * by the console's own `audit.record` route and only for an unlocked caller.
+   * An HTTP request the interceptor cannot attribute is unattributable, which
+   * is what `'UNKNOWN'` says, and no locked reader sees it.
+   */
+  private marketOf(req: any): string {
+    const scope = marketScopeOf(req);
+    if (scope.locked && scope.region) return scope.region;
+    const header = req?.headers?.['x-region-code'];
+    const named = typeof header === 'string' && header.trim() ? header : undefined;
+    return String(named ?? req?.user?.regionCode ?? 'UNKNOWN')
+      .trim()
+      .toUpperCase();
   }
 
   /**
@@ -160,8 +212,10 @@ export class AuditInterceptor implements NestInterceptor {
    */
   private entityFromUrl(url: string): { entityType?: string; entityId?: string } {
     const parts = url.split('?')[0].split('/').filter(Boolean);
-    const idAt = parts.findIndex((p) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p) || /^\d+$/.test(p),
+    const idAt = parts.findIndex(
+      (p) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p) ||
+        /^\d+$/.test(p),
     );
     if (idAt > 0) return { entityType: parts[idAt - 1], entityId: parts[idAt] };
     return { entityType: parts[parts.length - 1] };

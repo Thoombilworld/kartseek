@@ -19,6 +19,38 @@ function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+/**
+ * An `'ALL'` row as a locked reader may see it: the fact, not the payload.
+ *
+ * The scope filter is `country ∈ [scope, 'ALL']`, as the B5 plan ruled (task-5
+ * report: "**not** `country = scope`") — because a global action that a
+ * regional administrator cannot see at all reads as "nothing happened in my
+ * market", which is the lie this trail exists to prevent. That ruling is about
+ * DISCLOSING THE FACT of the action. It is not a reason to ship its contents:
+ * a console row is stamped `scope ?? x-region-code ?? 'ALL'`, so a global
+ * administrator acting with no market selected filed under `'ALL'` and every
+ * regional administrator then read that row's `metadata`, `reason` and
+ * before/after values — entity ids, stated reasons and the values themselves,
+ * for actions taken in other markets (whole-branch review, finding A-4).
+ *
+ * Withheld in the PROJECTION and not in the filter, deliberately: dropping the
+ * row would change the totals a locked reader sees, and a marker that says
+ * "there is a platform-wide action here and its payload is not yours" is both
+ * more honest and less informative than a gap in the page. Everything that
+ * makes the row visible survives — actor, action type, entity TYPE, service,
+ * timestamps.
+ *
+ * A row in the reader's own market is untouched, and a global reader (no
+ * `scope`) sees everything.
+ */
+const WITHHELD = 'platform-wide action; payload not in your market';
+
+function withholdGlobalPayload<T extends Record<string, any>>(row: T): T {
+  if (String(row?.country ?? '').toUpperCase() !== 'ALL') return row;
+  const { reason, oldValue, newValue, entityId, metadata, ...rest } = row;
+  return { ...rest, metadata: { withheld: WITHHELD } } as unknown as T;
+}
+
 /** One end of the `createdAt` range, dropped unless it parses to a real date. */
 function dateBound(op: '$gte' | '$lte', value: unknown): Record<string, Date> {
   const text = str(value);
@@ -202,6 +234,10 @@ export class AuditLogService {
    * no market to attribute it to. Handing those rows to a locked administrator
    * would leak exactly the cross-market activity the lock exists to hide, so an
    * unattributable row is withheld rather than shared.
+   *
+   * An `'ALL'` row reaches a locked reader with its payload withheld — see
+   * `withholdGlobalPayload` above for why the fact and the contents are
+   * different questions.
    */
   async query(f: {
     page?: number;
@@ -252,7 +288,12 @@ export class AuditLogService {
         .lean(),
       this.auditModel.countDocuments(filter),
     ]);
-    return { data, total, page, limit };
+    return {
+      data: scope ? data.map((row) => withholdGlobalPayload(row)) : data,
+      total,
+      page,
+      limit,
+    };
   }
 
   /** Full history for one entity — previously a hardcoded `[]`. */
