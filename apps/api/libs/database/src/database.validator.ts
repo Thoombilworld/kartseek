@@ -1,6 +1,6 @@
 /**
  * Database Configuration Validation
- * 
+ *
  * Prevents misconfigurations that could corrupt shared database tables
  * when multiple services share one PostgreSQL instance.
  */
@@ -11,11 +11,11 @@ const logger = new Logger('DatabaseConfig');
 
 /**
  * Validates database configuration before app bootstrap
- * 
+ *
  * CRITICAL: Multiple services share one PostgreSQL database.
  * If even one service enables AUTO_SCHEMA_SYNC (synchronize: true),
  * it will auto-alter shared tables and corrupt data.
- * 
+ *
  * All schema changes must be made through migrations, not auto-sync.
  */
 export function validateDatabaseConfig(): void {
@@ -64,4 +64,33 @@ export function logDatabaseConfig(): void {
   };
 
   logger.log(`📊 Database Configuration:\n${JSON.stringify(config, null, 2)}`);
+}
+
+/**
+ * The last line before TypeORM writes DDL.
+ *
+ * `validateDatabaseConfig()` guards DB_SYNCHRONIZE only, and all eight module
+ * backends keyed `synchronize` on `NODE_ENV !== 'production'` instead — which
+ * the validator never sees, and which Compose (declaring NODE_ENV nowhere)
+ * resolves to `development` on a staging box, running auto-sync against real
+ * data (AUD2-070). This runs inside the useFactory, where the value actually is.
+ *
+ * It is deliberately a throw and not a coercion to false. A service that would
+ * have rewritten the schema is misconfigured, and a silent downgrade leaves the
+ * misconfiguration in place for the next deploy to find; the boot failure names
+ * the runner that should have built the schema instead.
+ */
+export function assertSynchronizeAllowed(
+  synchronize: boolean,
+  nodeEnv: string,
+  service: string,
+): boolean {
+  if (synchronize && nodeEnv === 'production') {
+    throw new Error(
+      `${service}: synchronize is true with NODE_ENV=production. TypeORM would ALTER live ` +
+        `tables from this service's entity definitions. Use migrations: ` +
+        `npm run migration:run -w @kartseek/${service.replace('-service', '')}-backend`,
+    );
+  }
+  return synchronize;
 }
