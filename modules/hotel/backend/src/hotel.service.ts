@@ -603,7 +603,12 @@ export class HotelService {
    * platform's and the rest are the market's is the failure this replaces.
    */
   async getAdminAnalytics(market?: string) {
-    const m = normaliseMarket(market);
+    // `requireMarket`, not `normaliseMarket`: this field carries the market the
+    // gateway resolved for the caller, which for a region-locked admin IS their
+    // lock. `normaliseMarket` returns `undefined` for a code it cannot read, and
+    // every predicate below then disappears — the platform's numbers under one
+    // market's heading (R3-1).
+    const m = requireMarket(market, 'hotel analytics', this.logger);
     const hotelWhere = m ? { countryCode: m } : {};
     const totalHotels = await this.hotelRepo.count({ where: hotelWhere });
     const activeHotels = await this.hotelRepo.count({
