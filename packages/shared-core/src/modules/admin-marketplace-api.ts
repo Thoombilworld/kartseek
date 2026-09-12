@@ -319,11 +319,14 @@ export const adminMarketplaceApi = {
   getCoupons: (params?: { country?: string; isActive?: boolean }) =>
     api.get<Paginated<any>>('/admin/marketplace/coupons', params as any),
 
-  createCoupon: (dto: any) => api.post('/marketplace/coupons', dto),
+  // The admin routes, not the seller ones: reads and writes for the promotions
+  // screen now sit on the same controller, behind the same guard stack, and the
+  // market a coupon is issued for is decided from the admin's own token.
+  createCoupon: (dto: any) => api.post('/admin/marketplace/coupons', dto),
 
-  updateCoupon: (id: string, dto: any) => api.put('/marketplace/coupons/' + id, dto),
+  updateCoupon: (id: string, dto: any) => api.put('/admin/marketplace/coupons/' + id, dto),
 
-  deleteCoupon: (id: string) => api.delete('/marketplace/coupons/' + id),
+  deleteCoupon: (id: string) => api.delete('/admin/marketplace/coupons/' + id),
 
   // ── Promotions (run by sellers; listed per market through the seller) ──
   getPromotions: (params?: { country?: string }) =>
