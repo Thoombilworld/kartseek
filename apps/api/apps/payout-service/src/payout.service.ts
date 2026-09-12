@@ -364,7 +364,17 @@ export class PayoutService {
     // carries it, and otherwise the sellers table does. A locked admin naming
     // another market's seller gets 403 rather than an empty history, which
     // would read as "this seller has never been paid".
-    if (normaliseMarket(scope)) {
+    //
+    // The gate tests PRESENCE, not readability. It was `if (normaliseMarket(
+    // scope))`, and that is a fail-open: a lock the registry cannot read
+    // normalises to `undefined`, the condition goes false, and both the probe
+    // AND the assert are skipped — so `get_seller_payouts` returned any
+    // seller's payout history to a caller who was supposed to be confined to
+    // one market. `assertInMarket` is the thing that decides: it returns for a
+    // genuinely absent scope (a global caller) and REFUSES a present-but-
+    // unreadable one, which is exactly the distinction this gate must not make
+    // for itself.
+    if (scope !== undefined && scope !== null && String(scope).trim() !== '') {
       const existing = await this.walletRepo.findOne({ where: { sellerId } });
       const market = existing?.regionCode ?? (await this.sellerMarket(sellerId));
       assertInMarket(market, scope, 'seller wallet', this.logger);

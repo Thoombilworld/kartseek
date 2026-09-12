@@ -302,6 +302,20 @@ describe('payout market scope', () => {
       expect(payoutRepo.findAndCount).not.toHaveBeenCalled();
     });
 
+    it('refuses an unreadable lock instead of serving every seller (N1)', async () => {
+      // The gate was `if (normaliseMarket(scope))`, which is a fail-open: a lock
+      // the registry cannot read normalises to `undefined`, the condition goes
+      // false, and both the probe AND the assert are skipped — so this returned
+      // any seller's payout history to a caller confined to one market.
+      walletRepo.findOne.mockResolvedValue(wallet({ regionCode: 'IN' }));
+      for (const brokenLock of ['NOT-A-COUNTRY', 'ZZ', 'QAT']) {
+        await expect(service.getSellerPayouts('S1', 1, 20, undefined, brokenLock)).rejects.toThrow(
+          ForbiddenException,
+        );
+      }
+      expect(payoutRepo.findAndCount).not.toHaveBeenCalled();
+    });
+
     it('proceeds to the history when the caller is allowed the seller', async () => {
       // The contrast with the test above: the same seller with no wallet row
       // yet, authorised, reaches `getOrCreateWallet` and then the payout query.
