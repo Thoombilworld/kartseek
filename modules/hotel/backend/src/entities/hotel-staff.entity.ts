@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Hotel } from './hotel.entity';
 
@@ -15,7 +24,7 @@ export enum HotelStaffRole {
   F_AND_B_MANAGER = 'F_AND_B_MANAGER',
 }
 
-@Entity('hotel_staff')
+@Entity({ name: 'hotel_staff', schema: 'hotel' })
 export class HotelStaff {
   @PrimaryGeneratedColumn('uuid')
   id: string;

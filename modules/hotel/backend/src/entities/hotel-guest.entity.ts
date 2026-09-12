@@ -1,6 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index } from 'typeorm';
 
-@Entity('hotel_guests')
+@Entity({ name: 'hotel_guests', schema: 'hotel' })
 export class HotelGuest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -14,7 +14,11 @@ export class HotelGuest {
   hotelId: string;
 
   @Index()
-  @Column({ type: 'varchar', nullable: true, comment: 'Links to Auth Service user (if registered)' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Links to Auth Service user (if registered)',
+  })
   customerId: string | null;
 
   @Column({ length: 128 })
@@ -32,7 +36,12 @@ export class HotelGuest {
   @Column({ type: 'varchar', length: 100, nullable: true })
   nationality: string | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, comment: 'e.g. Passport, National ID, Driving License' })
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+    comment: 'e.g. Passport, National ID, Driving License',
+  })
   idType: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
@@ -80,7 +89,11 @@ export class HotelGuest {
   @Column({ type: 'text', nullable: true })
   specialRequests: string | null;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Guest preferences e.g. pillow type, floor preference' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Guest preferences e.g. pillow type, floor preference',
+  })
   preferences: Record<string, string> | null;
 
   @Column({ default: false, comment: 'VIP/loyalty guest flag' })

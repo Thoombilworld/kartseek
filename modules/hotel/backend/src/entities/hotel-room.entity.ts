@@ -1,4 +1,14 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Hotel } from './hotel.entity';
 import { HotelBooking } from './hotel-booking.entity';
@@ -37,7 +47,7 @@ export enum RoomStatus {
 
 // ── Entity ────────────────────────────────────────────────────────────────────
 
-@Entity('hotel_rooms')
+@Entity({ name: 'hotel_rooms', schema: 'hotel' })
 export class HotelRoom {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -84,16 +94,34 @@ export class HotelRoom {
   @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Base price per night' })
   pricePerNight: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Rack rate (original price before discount)' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Rack rate (original price before discount)',
+  })
   rackRate: number | null;
 
   @Column({ length: 3, default: 'AED', comment: 'Currency ISO code' })
   currency: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Extra bed charge per night' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Extra bed charge per night',
+  })
   extraBedCharge: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, comment: 'Tax percentage applied to this room' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 0,
+    comment: 'Tax percentage applied to this room',
+  })
   taxPercentage: number;
 
   // ── Inventory ───────────────────────────────────────────────────────────────
@@ -106,7 +134,10 @@ export class HotelRoom {
 
   // ── Amenities & Photos ──────────────────────────────────────────────────────
 
-  @Column('simple-array', { nullable: true, comment: 'Room-specific amenities e.g. Mini Bar, Safe, City View' })
+  @Column('simple-array', {
+    nullable: true,
+    comment: 'Room-specific amenities e.g. Mini Bar, Safe, City View',
+  })
   amenities: string[];
 
   @Column({ type: 'jsonb', nullable: true })
@@ -114,7 +145,12 @@ export class HotelRoom {
 
   // ── View & Features ─────────────────────────────────────────────────────────
 
-  @Column({ type: 'varchar', length: 100, nullable: true, comment: 'e.g. City View, Sea View, Garden View, Pool View' })
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    comment: 'e.g. City View, Sea View, Garden View, Pool View',
+  })
   view: string | null;
 
   @Column({ default: false })

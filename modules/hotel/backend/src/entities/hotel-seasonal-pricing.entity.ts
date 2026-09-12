@@ -1,9 +1,18 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Hotel } from './hotel.entity';
 import { HotelRoom } from './hotel-room.entity';
 
-@Entity('hotel_seasonal_pricing')
+@Entity({ name: 'hotel_seasonal_pricing', schema: 'hotel' })
 export class HotelSeasonalPricing {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -21,7 +30,12 @@ export class HotelSeasonalPricing {
   @JoinColumn({ name: 'room_id' })
   room: Relation<HotelRoom>;
 
-  @Column({ type: 'varchar', name: 'room_id', nullable: true, comment: 'Null = applies to all rooms' })
+  @Column({
+    type: 'varchar',
+    name: 'room_id',
+    nullable: true,
+    comment: 'Null = applies to all rooms',
+  })
   roomId: string | null;
 
   @Column({ length: 128, comment: 'e.g. Summer Peak, Eid Holiday, Winter Special' })
@@ -35,13 +49,29 @@ export class HotelSeasonalPricing {
   @Column({ type: 'date' })
   endDate: string;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, comment: 'Multiplier (1.25 = 25% increase)' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    comment: 'Multiplier (1.25 = 25% increase)',
+  })
   multiplier: number | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true, comment: 'Fixed price override (takes priority over multiplier)' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    comment: 'Fixed price override (takes priority over multiplier)',
+  })
   fixedPrice: number | null;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Day-of-week overrides: { "friday": 1.3, "saturday": 1.3 }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Day-of-week overrides: { "friday": 1.3, "saturday": 1.3 }',
+  })
   dayOfWeekMultipliers: Record<string, number>;
 
   @Column({ type: 'int', default: 0, comment: 'Higher priority wins conflicts' })

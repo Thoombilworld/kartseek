@@ -1,8 +1,16 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Hotel } from './hotel.entity';
 
-@Entity('hotel_reviews')
+@Entity({ name: 'hotel_reviews', schema: 'hotel' })
 export class HotelReview {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -59,10 +67,20 @@ export class HotelReview {
   @Column({ type: 'jsonb', nullable: true })
   photos: string[];
 
-  @Column({ type: 'varchar', length: 50, nullable: true, comment: 'e.g. Solo, Couple, Family, Business, Group' })
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+    comment: 'e.g. Solo, Couple, Family, Business, Group',
+  })
   stayType: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true, comment: 'Room type the guest stayed in' })
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    comment: 'Room type the guest stayed in',
+  })
   roomType: string | null;
 
   @Column({ type: 'date', nullable: true, comment: 'When the guest stayed' })

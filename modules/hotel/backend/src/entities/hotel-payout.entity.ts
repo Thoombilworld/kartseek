@@ -8,7 +8,7 @@ export enum PayoutStatus {
   ON_HOLD = 'ON_HOLD',
 }
 
-@Entity('hotel_payouts')
+@Entity({ name: 'hotel_payouts', schema: 'hotel' })
 export class HotelPayout {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -30,22 +30,57 @@ export class HotelPayout {
   @Column({ length: 50, comment: 'Payout period e.g. Jun 2026' })
   period: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, comment: 'Gross booking revenue for the period' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    comment: 'Gross booking revenue for the period',
+  })
   grossAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Platform commission deducted' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Platform commission deducted',
+  })
   commissionAmount: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 15, comment: 'Commission rate applied' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 15,
+    comment: 'Commission rate applied',
+  })
   commissionRate: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Tax deducted (TDS/WHT)' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Tax deducted (TDS/WHT)',
+  })
   taxDeducted: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Refunds deducted from payout' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Refunds deducted from payout',
+  })
   refundsDeducted: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, comment: 'Adjustments (penalties, bonuses)' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    comment: 'Adjustments (penalties, bonuses)',
+  })
   adjustments: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, comment: 'Net payout amount' })
@@ -78,7 +113,11 @@ export class HotelPayout {
 
   // ── Payment Info ────────────────────────────────────────────────────────────
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Bank account used for this payout (snapshot)' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Bank account used for this payout (snapshot)',
+  })
   bankDetails: {
     bankName: string;
     accountHolder: string;

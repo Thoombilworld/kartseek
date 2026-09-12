@@ -1,4 +1,11 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 // ── Status Enum ───────────────────────────────────────────────────────────────
 
@@ -11,7 +18,7 @@ export enum HotelOwnerStatus {
 
 // ── Entity ────────────────────────────────────────────────────────────────────
 
-@Entity('hotel_owners')
+@Entity({ name: 'hotel_owners', schema: 'hotel' })
 export class HotelOwner {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -43,7 +50,11 @@ export class HotelOwner {
 
   // ── KYC ─────────────────────────────────────────────────────────────────────
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Business registration / trade license number' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Business registration / trade license number',
+  })
   registrationNumber: string | null;
 
   @Column({ type: 'varchar', nullable: true, comment: 'Tax registration number (GST/VAT)' })
@@ -89,7 +100,13 @@ export class HotelOwner {
   @Column({ type: 'int', default: 0, comment: 'Number of properties managed' })
   propertyCount: number;
 
-  @Column({ type: 'decimal', precision: 3, scale: 1, default: 0, comment: 'Average rating across all properties' })
+  @Column({
+    type: 'decimal',
+    precision: 3,
+    scale: 1,
+    default: 0,
+    comment: 'Average rating across all properties',
+  })
   avgRating: number;
 
   // ── Timestamps ──────────────────────────────────────────────────────────────

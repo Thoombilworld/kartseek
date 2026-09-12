@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Hotel } from './hotel.entity';
 import { HotelRoom } from './hotel-room.entity';
@@ -38,21 +47,34 @@ export enum HotelPaymentStatus {
 // ── Status Transitions ────────────────────────────────────────────────────────
 
 export const BOOKING_STATUS_TRANSITIONS: Record<HotelBookingStatus, HotelBookingStatus[]> = {
-  [HotelBookingStatus.PENDING]:                  [HotelBookingStatus.CONFIRMED, HotelBookingStatus.CANCELLED],
-  [HotelBookingStatus.CONFIRMED]:                [HotelBookingStatus.MODIFICATION_REQUESTED, HotelBookingStatus.CHECKED_IN, HotelBookingStatus.CANCELLED, HotelBookingStatus.NO_SHOW],
-  [HotelBookingStatus.MODIFICATION_REQUESTED]:   [HotelBookingStatus.MODIFIED, HotelBookingStatus.CONFIRMED, HotelBookingStatus.CANCELLED],
-  [HotelBookingStatus.MODIFIED]:                 [HotelBookingStatus.CHECKED_IN, HotelBookingStatus.CANCELLED, HotelBookingStatus.NO_SHOW],
-  [HotelBookingStatus.CHECKED_IN]:               [HotelBookingStatus.CHECKED_OUT],
-  [HotelBookingStatus.CHECKED_OUT]:              [HotelBookingStatus.COMPLETED, HotelBookingStatus.REFUNDED],
-  [HotelBookingStatus.COMPLETED]:                [HotelBookingStatus.REFUNDED],
-  [HotelBookingStatus.CANCELLED]:                [HotelBookingStatus.REFUNDED],
-  [HotelBookingStatus.NO_SHOW]:                  [HotelBookingStatus.REFUNDED],
-  [HotelBookingStatus.REFUNDED]:                 [],
+  [HotelBookingStatus.PENDING]: [HotelBookingStatus.CONFIRMED, HotelBookingStatus.CANCELLED],
+  [HotelBookingStatus.CONFIRMED]: [
+    HotelBookingStatus.MODIFICATION_REQUESTED,
+    HotelBookingStatus.CHECKED_IN,
+    HotelBookingStatus.CANCELLED,
+    HotelBookingStatus.NO_SHOW,
+  ],
+  [HotelBookingStatus.MODIFICATION_REQUESTED]: [
+    HotelBookingStatus.MODIFIED,
+    HotelBookingStatus.CONFIRMED,
+    HotelBookingStatus.CANCELLED,
+  ],
+  [HotelBookingStatus.MODIFIED]: [
+    HotelBookingStatus.CHECKED_IN,
+    HotelBookingStatus.CANCELLED,
+    HotelBookingStatus.NO_SHOW,
+  ],
+  [HotelBookingStatus.CHECKED_IN]: [HotelBookingStatus.CHECKED_OUT],
+  [HotelBookingStatus.CHECKED_OUT]: [HotelBookingStatus.COMPLETED, HotelBookingStatus.REFUNDED],
+  [HotelBookingStatus.COMPLETED]: [HotelBookingStatus.REFUNDED],
+  [HotelBookingStatus.CANCELLED]: [HotelBookingStatus.REFUNDED],
+  [HotelBookingStatus.NO_SHOW]: [HotelBookingStatus.REFUNDED],
+  [HotelBookingStatus.REFUNDED]: [],
 };
 
 // ── Entity ────────────────────────────────────────────────────────────────────
 
-@Entity('hotel_bookings')
+@Entity({ name: 'hotel_bookings', schema: 'hotel' })
 export class HotelBooking {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -133,10 +155,20 @@ export class HotelBooking {
 
   // ── Pricing ─────────────────────────────────────────────────────────────────
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Price per night at time of booking' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    comment: 'Price per night at time of booking',
+  })
   pricePerNight: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Room total = pricePerNight × nights × rooms' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    comment: 'Room total = pricePerNight × nights × rooms',
+  })
   roomTotal: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
@@ -157,7 +189,13 @@ export class HotelBooking {
   @Column({ type: 'int', default: 0, comment: 'Loyalty points redeemed' })
   pointsRedeemed: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Monetary value of redeemed points' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Monetary value of redeemed points',
+  })
   pointsDiscount: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Final amount charged' })
@@ -177,12 +215,23 @@ export class HotelBooking {
   @Column({ type: 'varchar', nullable: true, comment: 'Payment gateway transaction ID' })
   paymentTransactionId: string | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Amount paid from wallet' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Amount paid from wallet',
+  })
   walletAmountUsed: number;
 
   // ── Meal Plan ───────────────────────────────────────────────────────────────
 
-  @Column({ type: 'varchar', length: 50, nullable: true, comment: 'e.g. Room Only, Breakfast, Half Board, Full Board, All Inclusive' })
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+    comment: 'e.g. Room Only, Breakfast, Half Board, Full Board, All Inclusive',
+  })
   mealPlan: string | null;
 
   // ── Status ──────────────────────────────────────────────────────────────────
@@ -193,7 +242,11 @@ export class HotelBooking {
   @Column({ type: 'text', nullable: true })
   cancelReason: string | null;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Who cancelled: customer, hotel, admin, system' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Who cancelled: customer, hotel, admin, system',
+  })
   cancelledBy: string | null;
 
   // ── Refund ──────────────────────────────────────────────────────────────────
@@ -249,7 +302,12 @@ export class HotelBooking {
   @Column({ type: 'timestamptz', nullable: true })
   cancelledAt: Date | null;
 
-  @Column({ type: 'varchar', length: 36, nullable: true, comment: 'Idempotency key to prevent duplicate bookings' })
+  @Column({
+    type: 'varchar',
+    length: 36,
+    nullable: true,
+    comment: 'Idempotency key to prevent duplicate bookings',
+  })
   idempotencyKey: string | null;
 
   @CreateDateColumn()

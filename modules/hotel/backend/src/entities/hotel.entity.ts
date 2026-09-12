@@ -47,7 +47,7 @@ export enum HotelStarRating {
 
 // ── Entity ────────────────────────────────────────────────────────────────────
 
-@Entity('hotels')
+@Entity({ name: 'hotels', schema: 'hotel' })
 export class Hotel {
   @PrimaryGeneratedColumn('uuid')
   id: string;
