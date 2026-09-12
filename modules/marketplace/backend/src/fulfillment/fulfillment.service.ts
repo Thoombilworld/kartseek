@@ -382,7 +382,9 @@ export class MarketplaceFulfillmentService {
       pickupScheduledAt: scheduledAt,
       status: 'PICKUP_ASSIGNED',
     });
-    await this.kafka.publish('return.pickup-assigned', { id, ...dto });
+    // Without `scope` — see `updateDeliveryStatus`.
+    const { scope: _authorisedBy, ...event } = dto;
+    await this.kafka.publish('return.pickup-assigned', { id, ...event });
     return { success: true, id };
   }
 
@@ -1530,7 +1532,11 @@ export class MarketplaceFulfillmentService {
     if (dto.status === 'FAILED' || dto.status === 'RETURNED')
       update.failureReason = dto.failureReason;
     await this.deliveryAssignmentRepo.update(id, update);
-    await this.kafka.publish('delivery.status-updated', { id, ...dto });
+    // `scope` authorised this call; it is not part of what happened. Stripped
+    // rather than spread, as `addTrackingEvent` does — an event that carries
+    // the caller's market invites a consumer to read authorisation off the bus.
+    const { scope: _authorisedBy, ...event } = dto;
+    await this.kafka.publish('delivery.status-updated', { id, ...event });
     this.logger.log(`Delivery ${id} status → ${dto.status}`);
     return { success: true, id, status: dto.status };
   }

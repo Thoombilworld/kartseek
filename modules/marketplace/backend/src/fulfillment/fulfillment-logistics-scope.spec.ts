@@ -211,6 +211,17 @@ describe('delivery assignments respect the assignment market', () => {
     expect(kafka.publish).not.toHaveBeenCalled();
   });
 
+  it('publishes the status event without the `scope` that authorised it', async () => {
+    // An event carrying the caller's market invites a consumer to read
+    // authorisation off the bus, and `scope` is not part of what happened.
+    const { svc, kafka } = logistics({ assignmentRegion: 'QA' });
+    await svc.updateDeliveryStatus('da-1', { status: 'DELIVERED', scope: 'QA' });
+    expect(kafka.publish).toHaveBeenCalledWith(
+      'delivery.status-updated',
+      expect.not.objectContaining({ scope: 'QA' }),
+    );
+  });
+
   it('filters the list on the market the gateway resolved', async () => {
     const { svc, deliveryAssignmentRepo } = logistics();
     await svc.getDeliveryAssignments({ region: 'qa', status: 'PENDING' });
@@ -298,5 +309,18 @@ describe('a return pickup respects the return market', () => {
     ).rejects.toThrow('This return request belongs to IN, not to the QA market.');
     expect(returnRepo.update).not.toHaveBeenCalled();
     expect(kafka.publish).not.toHaveBeenCalled();
+  });
+
+  it('publishes the pickup event without the `scope` that authorised it', async () => {
+    const { svc, kafka } = logistics();
+    await svc.assignReturnPickup('r-1', {
+      pickupPartnerId: 'pp-1',
+      pickupScheduledAt: '2026-09-20T10:00:00Z',
+      scope: 'IN',
+    });
+    expect(kafka.publish).toHaveBeenCalledWith(
+      'return.pickup-assigned',
+      expect.not.objectContaining({ scope: 'IN' }),
+    );
   });
 });
