@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { PayoutService, PayoutStatus, PayoutMethod } from './payout.service';
 import { SellerWallet } from './entities/seller-wallet.entity';
 import { Payout } from './entities/payout.entity';
@@ -12,6 +12,7 @@ describe('PayoutService', () => {
   let kafka: jest.Mocked<KafkaProducerService>;
   let walletRepo: any;
   let payoutRepo: any;
+  let dataSource: any;
 
   const mockWallet = { sellerId: 'S1', availableBalance: 5000, escrowBalance: 1000 };
 
@@ -27,9 +28,17 @@ describe('PayoutService', () => {
     };
     const repoMock = {
       findOne: jest.fn().mockResolvedValue({ ...mockWallet }),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        insert: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnThis(),
+        orIgnore: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({}),
+      }),
       create: jest.fn().mockImplementation((dto) => dto),
       save: jest.fn().mockImplementation((e) => Promise.resolve(e)),
     };
+
+    dataSource = { query: jest.fn().mockResolvedValue([{ region_code: 'QA' }]) };
 
     // Payout records moved from Redis (90-day TTL) to `payout.payouts`.
     payoutRepo = {
@@ -41,7 +50,14 @@ describe('PayoutService', () => {
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        // The market predicate is always an `andWhere`: `where` replaces the
+        // clause, which is how a hand-written predicate came to be discarded.
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
         getRawOne: jest.fn().mockResolvedValue({ sum: '0' }),
         getRawMany: jest.fn().mockResolvedValue([]),
       }),
@@ -54,6 +70,11 @@ describe('PayoutService', () => {
         { provide: KafkaProducerService, useValue: kafkaMock },
         { provide: getRepositoryToken(SellerWallet), useValue: repoMock },
         { provide: getRepositoryToken(Payout), useValue: payoutRepo },
+        // `sellerMarket()` reads `marketplace.sellers` through the connection:
+        // the sellers table is another service's and this one owns no entity
+        // for it. A market the seller row cannot supply stays null, which keeps
+        // the payout refused for a locked admin.
+        { provide: getDataSourceToken(), useValue: dataSource },
       ],
     }).compile();
 
@@ -73,7 +94,10 @@ describe('PayoutService', () => {
   describe('createPayoutRequest', () => {
     it('should create payout request with sufficient balance', async () => {
       const result = await service.createPayoutRequest({
-        sellerId: 'S1', amount: 2000, method: PayoutMethod.BANK, bankAccount: '123456789',
+        sellerId: 'S1',
+        amount: 2000,
+        method: PayoutMethod.BANK,
+        bankAccount: '123456789',
       });
       expect(result.success).toBe(true);
       expect(result.payout).toBeDefined();
@@ -83,9 +107,16 @@ describe('PayoutService', () => {
     });
 
     it('should reject when insufficient balance', async () => {
-      walletRepo.findOne.mockResolvedValue({ sellerId: 'S1', availableBalance: 500, escrowBalance: 0 });
+      walletRepo.findOne.mockResolvedValue({
+        sellerId: 'S1',
+        availableBalance: 500,
+        escrowBalance: 0,
+      });
       const result = await service.createPayoutRequest({
-        sellerId: 'S1', amount: 2000, method: PayoutMethod.BANK, bankAccount: '123',
+        sellerId: 'S1',
+        amount: 2000,
+        method: PayoutMethod.BANK,
+        bankAccount: '123',
       });
       expect(result.success).toBe(false);
       expect(result.reason).toContain('Insufficient');
@@ -93,7 +124,10 @@ describe('PayoutService', () => {
 
     it('should reject below minimum payout amount', async () => {
       const result = await service.createPayoutRequest({
-        sellerId: 'S1', amount: 50, method: PayoutMethod.UPI, upiId: '254700000000',
+        sellerId: 'S1',
+        amount: 50,
+        method: PayoutMethod.UPI,
+        upiId: '254700000000',
       });
       expect(result.success).toBe(false);
       expect(result.reason).toContain('Minimum');
@@ -108,11 +142,15 @@ describe('PayoutService', () => {
     sellerId: 'S1',
     amount: 1000,
     method: 'bank',
-    bankAccount: null as string | null, ifscCode: null as string | null, upiId: null as string | null,
+    bankAccount: null as string | null,
+    ifscCode: null as string | null,
+    upiId: null as string | null,
     status: PayoutStatus.PENDING,
     requestedAt: new Date(),
-    processedBy: null as string | null, processedAt: null as Date | null,
-    failureReason: null as string | null, transactionRef: null as string | null,
+    processedBy: null as string | null,
+    processedAt: null as Date | null,
+    failureReason: null as string | null,
+    transactionRef: null as string | null,
     ...over,
   });
 
@@ -130,7 +168,9 @@ describe('PayoutService', () => {
     });
 
     it('should reject approving non-pending payout', async () => {
-      payoutRepo.findOne.mockResolvedValue(row({ id: 'PAYOUT-002', status: PayoutStatus.PROCESSED }));
+      payoutRepo.findOne.mockResolvedValue(
+        row({ id: 'PAYOUT-002', status: PayoutStatus.PROCESSED }),
+      );
       const result = await service.approvePayout('PAYOUT-002', 'ADMIN-001');
       expect(result.success).toBe(false);
     });
@@ -146,8 +186,10 @@ describe('PayoutService', () => {
   describe('getSellerPayouts', () => {
     it('should return seller payouts with wallet balance', async () => {
       payoutRepo.findAndCount.mockResolvedValue([
-        [row({ id: 'PAYOUT-1', amount: 1000, status: PayoutStatus.PROCESSED }),
-          row({ id: 'PAYOUT-2', amount: 2000, status: PayoutStatus.PENDING })],
+        [
+          row({ id: 'PAYOUT-1', amount: 1000, status: PayoutStatus.PROCESSED }),
+          row({ id: 'PAYOUT-2', amount: 2000, status: PayoutStatus.PENDING }),
+        ],
         2,
       ]);
 
@@ -165,15 +207,17 @@ describe('PayoutService', () => {
 
   describe('getPendingPayouts', () => {
     it('should return pending payouts oldest first', async () => {
-      payoutRepo.findAndCount.mockResolvedValue([[row({ id: 'PAYOUT-1', amount: 3000 })], 1]);
-      payoutRepo.createQueryBuilder().getRawOne.mockResolvedValue({ sum: '3000' });
+      // A query builder rather than `findAndCount`, because the market has to
+      // be a predicate the page is built from, not a filter applied after
+      // `take(limit)` — see `getPendingPayouts`.
+      const qb = payoutRepo.createQueryBuilder();
+      qb.getManyAndCount.mockResolvedValue([[row({ id: 'PAYOUT-1', amount: 3000 })], 1]);
+      qb.getRawOne.mockResolvedValue({ sum: '3000' });
 
       const result = await service.getPendingPayouts();
       expect(result.total).toBe(1);
       expect(result.totalAmount).toBe(3000);
-      expect(payoutRepo.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({ order: { requestedAt: 'ASC' } }),
-      );
+      expect(qb.orderBy).toHaveBeenCalledWith('p.requestedAt', 'ASC');
     });
   });
 
@@ -190,7 +234,7 @@ describe('PayoutService', () => {
       // from `DEFAULT_COMMISSION_RATE` that appeared on no statement.
       // Commission belongs to commission-service; this only moves money.
       const result = await service.releaseEscrowToSellerWallet('S1', 1000);
-      expect(result.escrowBalance).toBe(0);       // 1000 − 1000
+      expect(result.escrowBalance).toBe(0); // 1000 − 1000
       expect(result.availableBalance).toBe(6000); // 5000 + 1000, no second cut
     });
 

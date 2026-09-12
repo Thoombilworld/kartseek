@@ -102,11 +102,35 @@ export class BankOffer {
   isFeatured: boolean;
 
   /**
-   * The market this offer runs in — a bank's cards are one country's. NULL is
-   * every market, the shape every row had before offers were scoped.
+   * MARKET COLUMN — ISO-2, the platform's one spelling (2026-09-12 audit I7).
+   *
+   * A bank's cards are one country's. Every scope check on this entity reads
+   * THIS column; `applicableCountries` above is display metadata the offer
+   * carousel renders and is NOT a boundary — two encodings of the same fact is
+   * how "which market does this run in" came to have four answers (AUD2-082).
+   *
+   * Deliberately NO `length: 2`, unlike the new columns this task adds. This
+   * column already exists as an unbounded varchar, and narrowing it is a
+   * destructive ALTER under `synchronize`: doing so in dev dropped and recreated
+   * the column, silently emptying the two rows that had a market. The values
+   * here are ISO-2 by convention and by `normaliseMarket`, and tightening the
+   * type needs a marketplace migration rather than a type annotation.
    */
   @Column({ name: 'region_code', type: 'varchar', nullable: true })
   regionCode: string | null;
+
+  /**
+   * "Runs in every market", said explicitly rather than by absence.
+   *
+   * A NULL `region_code` meant two different things — an offer that genuinely
+   * runs everywhere, and one nobody has attributed yet — and `assertInMarket`
+   * had to refuse both to be safe, which it still does. The flag is what lets
+   * an operator reading `[region-scope-denied]` tell a global offer from a
+   * missing backfill. Read it through `isGlobalMarket(row)`, never as
+   * `!row.regionCode`.
+   */
+  @Column({ name: 'is_global', type: 'boolean', default: false })
+  isGlobal: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

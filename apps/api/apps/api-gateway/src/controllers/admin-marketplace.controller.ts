@@ -39,10 +39,11 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
 import {
-  marketScopeOf,
-  resolveMarket,
   assertRecordInScope,
+  marketScopeOf,
   refuseLockedAdmin,
+  resolveMarket,
+  resolveScope,
 } from '../guards/market-scope';
 import { sellerScopeCacheKey } from '../guards/seller-ownership.guard';
 import { UserRole, rpcCatch } from '@app/common';
@@ -145,23 +146,9 @@ export class AdminMarketplaceController {
     };
   }
 
-  /**
-   * The market this request may act in.
-   *
-   * `scope` is set only when the caller is region-locked — it is what the
-   * backend asserts the record against. `market` is the filter to apply: a
-   * locked admin's own market, or whatever a global admin asked for (possibly
-   * nothing, meaning every market). Naming another market as a locked admin is
-   * refused here, before the service is called.
-   */
-  private scopeOf(
-    req: any,
-    requested?: string,
-    what = 'that market',
-  ): { scope?: string; market?: string } {
-    const market = resolveMarket(req, requested, what);
-    const scope = marketScopeOf(req).locked ? market : undefined;
-    return { scope, market };
+  /** @see resolveScope — the shared implementation. */
+  private scopeOf(req: any, requested?: string, what = 'that market') {
+    return resolveScope(req, requested, what);
   }
 
   // Catalogue taxonomy — categories, subcategories, attributes, brands, HSN
@@ -206,13 +193,37 @@ export class AdminMarketplaceController {
     );
   }
 
+  /**
+   * Send to payout-service, preserving an authorisation decision.
+   *
+   * `null` still means "could not ask", so each caller can say "unavailable"
+   * in its own words rather than reporting an empty payout queue or a zeroed
+   * total. But it must NOT mean "refused": payout-service now asserts a
+   * payout's own `region_code` and answers 403 for a cross-market decision
+   * (R11), and the previous `.catch(() => null)` turned that into
+   * `503 Payouts are temporarily unavailable` — an authorisation denial
+   * reported as an outage, which sends an operator to check a service that is
+   * running perfectly well.
+   *
+   * `rpcCatch` reconstructs the service's own HttpException, as
+   * `sendToMarketplace` beside this has always done. A decision — 403, 404, 400
+   * — is re-thrown; a 503 is the channel rather than the service's answer, so it
+   * comes back as `null` and the route still owns the wording.
+   */
   private async sendToPayout<T = any>(cmd: string, payload: object): Promise<T | null> {
-    return lastValueFrom(this.payoutClient.send<T>({ cmd }, payload).pipe(timeout(8000))).catch(
-      (err): null => {
-        this.logger.error(`payout-service [${cmd}] unreachable: ${err?.message}`);
-        return null;
-      },
-    );
+    try {
+      return await lastValueFrom(
+        this.payoutClient
+          .send<T>({ cmd }, payload)
+          .pipe(timeout(8000), catchError(rpcCatch('Payouts are temporarily unavailable.'))),
+      );
+    } catch (err) {
+      if (err instanceof HttpException && err.getStatus() !== HttpStatus.SERVICE_UNAVAILABLE) {
+        throw err;
+      }
+      this.logger.error(`payout-service [${cmd}] unreachable: ${(err as Error)?.message}`);
+      return null;
+    }
   }
 
   /**
@@ -1391,8 +1402,10 @@ export class AdminMarketplaceController {
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('country') country?: string,
   ) {
-    // payout-service ignores `region`/`scope`: this is every market's queue.
-    refuseLockedAdmin(req, 'the payout queue');
+    // payout-service predicates on `payouts.region_code` now, so this is the
+    // caller's own market rather than every market's queue: a filter, not a
+    // refusal (R11, AUD2-089). Rows that could not be attributed to a market
+    // stay out of a locked admin's page and visible to a global one.
     const { scope, market } = this.scopeOf(req, country, 'those payouts');
     const cmd = sellerId ? 'get_seller_payouts' : 'get_pending_payouts';
     const payload = sellerId
@@ -1411,7 +1424,8 @@ export class AdminMarketplaceController {
   @ApiOperation({ summary: 'Payout volume and success rate' })
   @ApiQuery({ name: 'country', required: false })
   async getPayoutStats(@Req() req: any, @Query('country') country?: string) {
-    refuseLockedAdmin(req, 'payout statistics');
+    // Aggregated under the same predicate as the queue, so the totals on the
+    // page and the rows beneath them are the same market's money.
     const { scope, market } = this.scopeOf(req, country, 'that report');
     const stats = await this.sendToPayout('get_payout_stats', { region: market, scope });
     if (!stats) throw new ServiceUnavailableException('Payouts are temporarily unavailable.');
@@ -1422,7 +1436,9 @@ export class AdminMarketplaceController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Approve a payout request' })
   async approvePayout(@Req() req: any, @Param('id') id: string) {
-    refuseLockedAdmin(req, 'a payout decision');
+    // payout-service asserts the payout's own `region_code` against this
+    // `scope`, so a locked admin approving another market's payout is refused
+    // by the row rather than by the route (R11).
     const { scope } = this.scopeOf(req, undefined, 'that payout');
     const result = await this.sendToPayout('approve_payout', {
       payoutId: id,
@@ -1437,7 +1453,6 @@ export class AdminMarketplaceController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Execute an approved payout' })
   async processPayout(@Req() req: any, @Param('id') id: string) {
-    refuseLockedAdmin(req, 'a payout decision');
     const { scope } = this.scopeOf(req, undefined, 'that payout');
     const result = await this.sendToPayout('process_payout', {
       payoutId: id,
@@ -1458,7 +1473,6 @@ export class AdminMarketplaceController {
   async retryPayout(@Req() req: any, @Param('id') id: string) {
     // Was `return { success: true, status: 'processing' }` — it reported a retry
     // it had not started, so a stuck payout looked as though it had been requeued.
-    refuseLockedAdmin(req, 'a payout decision');
     const { scope } = this.scopeOf(req, undefined, 'that payout');
     const result = await this.sendToPayout('retry_payout', {
       payoutId: id,
@@ -1529,6 +1543,23 @@ export class AdminMarketplaceController {
     return regions.length === 1 ? String(regions[0]).toUpperCase() : null;
   }
 
+  /**
+   * Whether a banner deliberately runs in every market.
+   *
+   * Banners encode their market as `regions[]` in Redis, which is one of the
+   * four spellings the platform had for "which market this runs in" (audit I7 /
+   * AUD2-082). The shape is not migrated — this reader is what distinguishes
+   * the two things `bannerMarket() === null` used to mean: an empty `regions`
+   * is "targets everybody", which is what an untargeted banner has always
+   * meant, while several entries is a multi-market banner nobody has reduced to
+   * one market. Neither is a locked admin's to edit, and both still refuse; the
+   * difference now reaches the log line.
+   */
+  private static bannerIsGlobal(banner: any): boolean {
+    const regions = Array.isArray(banner?.regions) ? banner.regions : [];
+    return regions.length === 0;
+  }
+
   @Get('banners/:type')
   @ApiOperation({ summary: 'Get banners by type (hero, campaign, country)' })
   @ApiParam({ name: 'type', enum: ['hero', 'campaign', 'country'] })
@@ -1597,6 +1628,7 @@ export class AdminMarketplaceController {
           req,
           AdminMarketplaceController.bannerMarket(existing[idx]),
           'this banner',
+          AdminMarketplaceController.bannerIsGlobal(existing[idx]),
         );
     }
     const payload = { ...body, ...(regions ? { regions } : {}) };
@@ -1663,7 +1695,12 @@ export class AdminMarketplaceController {
     // market on the platform, triggerable by any locked admin with a typo
     // (audit V14).
     if (!target) throw new NotFoundException(`Banner ${id} not found`);
-    assertRecordInScope(req, AdminMarketplaceController.bannerMarket(target), 'this banner');
+    assertRecordInScope(
+      req,
+      AdminMarketplaceController.bannerMarket(target),
+      'this banner',
+      AdminMarketplaceController.bannerIsGlobal(target),
+    );
 
     const filtered = existing.filter((b: any) => b.id !== id);
     await this.redis.setJson(key, filtered, 0);
@@ -3428,7 +3465,6 @@ export class AdminMarketplaceController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.payouts')
   @ApiOperation({ summary: 'Execute an approved payout (POST alias)' })
   async postProcessPayout(@Req() req: any, @Param('id') id: string) {
-    refuseLockedAdmin(req, 'a payout decision');
     this.scopeOf(req, undefined, 'that payout');
     return this.processPayout(req, id);
   }

@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { applyMarketFilter, assertRecordMarket, normaliseMarket } from '@app/common';
 import { SellerWallet } from './entities/seller-wallet.entity';
 import { Payout } from './entities/payout.entity';
 
@@ -18,7 +19,7 @@ export enum PayoutStatus {
 
 export enum PayoutMethod {
   BANK = 'bank',
-    PAYPAL = 'paypal',
+  PAYPAL = 'paypal',
   UPI = 'upi',
 }
 
@@ -36,6 +37,8 @@ export interface PayoutRecord {
   processedAt?: string;
   failureReason?: string;
   transactionRef?: string;
+  /** The market this payout belongs to; `null` when it has never been attributed. */
+  regionCode?: string | null;
 }
 
 @Injectable()
@@ -50,7 +53,53 @@ export class PayoutService {
     // Payouts are financial records. They used to live only in Redis under a
     // 90-day TTL, so the history of money paid to a seller deleted itself.
     @InjectRepository(Payout) private readonly payoutRepo: Repository<Payout>,
+    // Only for `sellerMarket()` below: the sellers table is another service's,
+    // and this service owns no entity for it.
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * The market a seller trades in, read from the seller and nowhere else.
+   *
+   * A payout has to carry a market for a regional admin to be able to see it
+   * (AUD2-089), and the only honest source is the seller who requested it —
+   * `marketplace.sellers.region_code`, the same cross-schema read the
+   * `MoneyPathMarket` migration's backfill and `1785600000000-UserSellerType`
+   * already do. NOT the request: a market a caller supplies is a market a
+   * caller chose, and a seller portal that can name its own market can name
+   * someone else's.
+   *
+   * Returns `null` rather than throwing when the sellers table is out of reach
+   * (the databases genuinely split, the seller deleted) or holds something that
+   * is not an ISO-2 pair — dev data includes `NOT-A-COUNTRY`. `null` leaves the
+   * row unattributed, which keeps it refused: failing closed here costs a
+   * regional admin a row they cannot see, while guessing costs the platform a
+   * payout shown to the wrong market's staff.
+   */
+  private async sellerMarket(sellerId: string): Promise<string | null> {
+    if (!sellerId) return null;
+    try {
+      const rows: Array<{ region_code: string | null }> = await this.dataSource.query(
+        `SELECT region_code FROM marketplace.sellers WHERE id::text = $1 LIMIT 1`,
+        [sellerId],
+      );
+      const raw = rows?.[0]?.region_code;
+      // Stricter than `normaliseMarket` alone, deliberately. That helper splits
+      // on `-`/`_` so a stored sub-region ('QA-DOH') normalises to its country,
+      // which also means `NOT-A-COUNTRY` normalises to `NO` — Norway. Dev seller
+      // rows hold exactly that, and `<SCRIPT>ALERT(1)</SCRIPT>` besides. On the
+      // money path an invented market is worse than no market, so the country
+      // part has to be a genuine two-letter pair before it is accepted.
+      if (typeof raw !== 'string' || !/^[A-Za-z]{2}([-_].*)?$/.test(raw.trim())) return null;
+      return normaliseMarket(raw) ?? null;
+    } catch (err) {
+      this.logger.warn(
+        `Could not resolve the market for seller ${sellerId}: ${(err as Error)?.message}. ` +
+          `The payout stays unattributed, and therefore refused for a region-locked admin.`,
+      );
+      return null;
+    }
+  }
 
   /** Present a row in the shape callers already expect. */
   private toRecord(row: Payout): PayoutRecord {
@@ -68,6 +117,7 @@ export class PayoutService {
       processedAt: row.processedAt?.toISOString?.() ?? undefined,
       failureReason: row.failureReason ?? undefined,
       transactionRef: row.transactionRef ?? undefined,
+      regionCode: row.regionCode ?? null,
     };
   }
 
@@ -100,8 +150,13 @@ export class PayoutService {
     }
 
     const payoutId = `PAYOUT-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // Stamped from the seller, not from the request: a market a caller supplies
+    // is a market a caller chose. The wallet already carries it where this
+    // seller has been seen before; the sellers table is the source either way.
+    const regionCode = wallet.regionCode ?? (await this.sellerMarket(dto.sellerId));
     const payout: PayoutRecord = {
       id: payoutId,
+      regionCode,
       sellerId: dto.sellerId,
       amount: dto.amount,
       method: dto.method,
@@ -119,16 +174,19 @@ export class PayoutService {
     // Durable record. The Redis keys and the two hand-maintained index keys
     // (`payout:index:seller:*`, `payout:queue:pending`) are gone: indexes on the
     // table do that job and cannot drift out of sync with the records.
-    await this.payoutRepo.save(this.payoutRepo.create({
-      id: payoutId,
-      sellerId: dto.sellerId,
-      amount: dto.amount,
-      method: dto.method,
-      bankAccount: dto.bankAccount ?? null,
-      ifscCode: dto.ifscCode ?? null,
-      upiId: dto.upiId ?? null,
-      status: PayoutStatus.PENDING,
-    }));
+    await this.payoutRepo.save(
+      this.payoutRepo.create({
+        id: payoutId,
+        sellerId: dto.sellerId,
+        amount: dto.amount,
+        method: dto.method,
+        bankAccount: dto.bankAccount ?? null,
+        ifscCode: dto.ifscCode ?? null,
+        upiId: dto.upiId ?? null,
+        status: PayoutStatus.PENDING,
+        regionCode,
+      }),
+    );
 
     // Publish event
     await this.kafka.publish('payout.requested', {
@@ -138,14 +196,19 @@ export class PayoutService {
       method: dto.method,
     });
 
-    this.logger.log(`Payout requested: ${payoutId} for seller ${dto.sellerId} — ${dto.amount} via ${dto.method}`);
+    this.logger.log(
+      `Payout requested: ${payoutId} for seller ${dto.sellerId} — ${dto.amount} via ${dto.method}`,
+    );
     return { success: true, payout };
   }
 
   // ── Approve Payout (Admin) ─────────────────────────────────────────────────
-  async approvePayout(payoutId: string, adminId: string) {
+  async approvePayout(payoutId: string, adminId: string, scope?: string) {
     const row = await this.payoutRepo.findOne({ where: { id: payoutId } });
     if (!row) return { success: false, reason: 'Payout not found' };
+    // The row decides, not the request: a locked admin who reaches this pattern
+    // by any route — TCP included — is refused by the payout's own market.
+    assertRecordMarket(row, 'regionCode', scope, 'payout', this.logger);
     if (row.status !== PayoutStatus.PENDING) {
       return { success: false, reason: `Cannot approve payout in ${row.status} status` };
     }
@@ -159,9 +222,10 @@ export class PayoutService {
   }
 
   // ── Process Payout (Execute Payment) ───────────────────────────────────────
-  async processPayout(payoutId: string, adminId?: string) {
+  async processPayout(payoutId: string, adminId?: string, scope?: string) {
     const row = await this.payoutRepo.findOne({ where: { id: payoutId } });
     if (!row) return { success: false, reason: 'Payout not found' };
+    assertRecordMarket(row, 'regionCode', scope, 'payout', this.logger);
     if (row.status !== PayoutStatus.APPROVED) {
       return { success: false, reason: `Cannot process payout in ${row.status} status` };
     }
@@ -195,7 +259,9 @@ export class PayoutService {
         type: 'payment',
       });
 
-      this.logger.log(`Payout PROCESSED: ${payoutId} — ${payout.amount} → ${payout.sellerId} (by ${adminId ?? 'system'})`);
+      this.logger.log(
+        `Payout PROCESSED: ${payoutId} — ${payout.amount} → ${payout.sellerId} (by ${adminId ?? 'system'})`,
+      );
       return { success: true, payoutId, status: PayoutStatus.PROCESSED, transactionRef: txnRef };
     } catch (err) {
       // Mark as failed and return balance to seller
@@ -210,34 +276,42 @@ export class PayoutService {
       await this.walletRepo.save(wallet);
 
       this.logger.error(`Payout FAILED: ${payoutId} — ${(err as Error).message}`);
-      return { success: false, payoutId, status: PayoutStatus.FAILED, reason: (err as Error).message };
+      return {
+        success: false,
+        payoutId,
+        status: PayoutStatus.FAILED,
+        reason: (err as Error).message,
+      };
     }
   }
 
   // ── Batch Approve Payouts ──────────────────────────────────────────────────
-  async approvePayoutBatch(payoutIds: string[], adminId: string) {
+  async approvePayoutBatch(payoutIds: string[], adminId: string, scope?: string) {
     const results: any[] = [];
     for (const id of payoutIds) {
-      const result = await this.approvePayout(id, adminId);
+      // Each one asserted on its own market: a batch is not a way to act on a
+      // payout a caller could not act on singly.
+      const result = await this.approvePayout(id, adminId, scope);
       results.push({ payoutId: id, ...result });
     }
     return { success: true, processed: results.length, results };
   }
 
   // ── Batch Process Payouts ──────────────────────────────────────────────────
-  async processPayoutBatch(payoutIds: string[]) {
+  async processPayoutBatch(payoutIds: string[], scope?: string) {
     const results: any[] = [];
     for (const id of payoutIds) {
-      const result = await this.processPayout(id);
+      const result = await this.processPayout(id, undefined, scope);
       results.push({ payoutId: id, ...result });
     }
     return { success: true, processed: results.length, results };
   }
 
   // ── Retry Failed Payout ────────────────────────────────────────────────────
-  async retryPayout(payoutId: string) {
+  async retryPayout(payoutId: string, scope?: string) {
     const row = await this.payoutRepo.findOne({ where: { id: payoutId } });
     if (!row) return { success: false, reason: 'Payout not found' };
+    assertRecordMarket(row, 'regionCode', scope, 'payout', this.logger);
     if (row.status !== PayoutStatus.FAILED) {
       return { success: false, reason: 'Only failed payouts can be retried' };
     }
@@ -252,13 +326,14 @@ export class PayoutService {
     wallet.availableBalance = Number(wallet.availableBalance) - payout.amount;
     await this.walletRepo.save(wallet);
 
-    return this.processPayout(payoutId);
+    return this.processPayout(payoutId, undefined, scope);
   }
 
   // ── Get Payout by ID ───────────────────────────────────────────────────────
-  async getPayoutById(payoutId: string) {
+  async getPayoutById(payoutId: string, scope?: string) {
     const row = await this.payoutRepo.findOne({ where: { id: payoutId } });
     if (!row) return { success: false, reason: 'Payout not found' };
+    assertRecordMarket(row, 'regionCode', scope, 'payout', this.logger);
     return { success: true, ...this.toRecord(row) };
   }
 
@@ -270,7 +345,20 @@ export class PayoutService {
    * any record whose 90-day TTL had elapsed silently vanished from their
    * history while the id stayed in the index. One indexed query now.
    */
-  async getSellerPayouts(sellerId: string, page = 1, limit = 20, status?: PayoutStatus) {
+  async getSellerPayouts(
+    sellerId: string,
+    page = 1,
+    limit = 20,
+    status?: PayoutStatus,
+    scope?: string,
+  ) {
+    const wallet = await this.getOrCreateWallet(sellerId);
+    // One seller, so the wallet's own market answers the question before any
+    // payout is read — a locked admin naming another market's seller gets 403
+    // rather than an empty history, which would read as "this seller has never
+    // been paid".
+    assertRecordMarket(wallet, 'regionCode', scope, 'seller wallet', this.logger);
+
     const where: any = { sellerId };
     if (status) where.status = status;
 
@@ -280,8 +368,6 @@ export class PayoutService {
       skip: (page - 1) * limit,
       take: limit,
     });
-
-    const wallet = await this.getOrCreateWallet(sellerId);
 
     return {
       sellerId,
@@ -298,20 +384,29 @@ export class PayoutService {
   }
 
   // ── Get Pending Payouts (Admin) ────────────────────────────────────────────
-  async getPendingPayouts(page = 1, limit = 20) {
-    const [rows, total] = await this.payoutRepo.findAndCount({
-      where: { status: PayoutStatus.PENDING },
+  async getPendingPayouts(page = 1, limit = 20, scope?: string, requested?: string | null) {
+    // A query builder rather than `findAndCount`, because the market has to be
+    // a predicate: filtering rows out after `take(limit)` returns a short page
+    // that reads as "this market has nothing to approve", which is exactly as
+    // wrong as showing another market's queue.
+    const qb = this.payoutRepo
+      .createQueryBuilder('p')
+      .where('p.status = :status', { status: PayoutStatus.PENDING })
       // Oldest first: the admin queue is worked front to back.
-      order: { requestedAt: 'ASC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+      .orderBy('p.requestedAt', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+    applyMarketFilter(qb, 'p.regionCode', scope, requested);
+    const [rows, total] = await qb.getManyAndCount();
 
-    const { sum } = await this.payoutRepo
+    // The total has to carry the same predicate, or the queue shows one
+    // market's rows under every market's money.
+    const sumQb = this.payoutRepo
       .createQueryBuilder('p')
       .select('COALESCE(SUM(p.amount), 0)', 'sum')
-      .where('p.status = :status', { status: PayoutStatus.PENDING })
-      .getRawOne();
+      .where('p.status = :status', { status: PayoutStatus.PENDING });
+    applyMarketFilter(sumQb, 'p.regionCode', scope, requested);
+    const { sum } = await sumQb.getRawOne();
 
     return {
       data: rows.map((r) => this.toRecord(r)),
@@ -329,19 +424,18 @@ export class PayoutService {
    * blocks Redis for every other caller while it runs, and one that silently
    * under-counted as records aged out. Aggregated in the database instead.
    */
-  async getPayoutStats() {
-    const rows = await this.payoutRepo
+  async getPayoutStats(scope?: string, requested?: string | null) {
+    const qb = this.payoutRepo
       .createQueryBuilder('p')
       .select('p.status', 'status')
       .addSelect('COUNT(*)', 'count')
       .addSelect('COALESCE(SUM(p.amount), 0)', 'amount')
-      .groupBy('p.status')
-      .getRawMany();
+      .groupBy('p.status');
+    applyMarketFilter(qb, 'p.regionCode', scope, requested);
+    const rows = await qb.getRawMany();
 
-    const countOf = (status: string) =>
-      Number(rows.find((r) => r.status === status)?.count ?? 0);
-    const amountOf = (status: string) =>
-      Number(rows.find((r) => r.status === status)?.amount ?? 0);
+    const countOf = (status: string) => Number(rows.find((r) => r.status === status)?.count ?? 0);
+    const amountOf = (status: string) => Number(rows.find((r) => r.status === status)?.amount ?? 0);
 
     const total = rows.reduce((sum, r) => sum + Number(r.count ?? 0), 0);
     const totalAmount = rows.reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
@@ -379,13 +473,33 @@ export class PayoutService {
    */
   async getOrCreateWallet(sellerId: string) {
     const existing = await this.walletRepo.findOne({ where: { sellerId } });
-    if (existing) return existing;
+    if (existing) {
+      // A wallet created before the market column existed, or by a seller this
+      // service could not resolve at the time. Attributing it on read is what
+      // makes the payout routes and marketplace-service's own seller-wallet
+      // list agree on which market a seller's money is in (AUD2-086).
+      if (!existing.regionCode) {
+        const market = await this.sellerMarket(sellerId);
+        if (market) {
+          existing.regionCode = market;
+          await this.walletRepo.save(existing);
+        }
+      }
+      return existing;
+    }
 
     await this.walletRepo
       .createQueryBuilder()
       .insert()
-      .values({ sellerId, availableBalance: 0, escrowBalance: 0 })
-      .orIgnore()          // ON CONFLICT DO NOTHING — the concurrent winner stands
+      .values({
+        sellerId,
+        availableBalance: 0,
+        escrowBalance: 0,
+        // Stamped from the seller at creation, so a wallet is attributable from
+        // its first row rather than waiting for the next backfill.
+        regionCode: await this.sellerMarket(sellerId),
+      })
+      .orIgnore() // ON CONFLICT DO NOTHING — the concurrent winner stands
       .execute();
 
     const wallet = await this.walletRepo.findOne({ where: { sellerId } });
@@ -445,10 +559,20 @@ export class PayoutService {
     wallet.availableBalance = Number(wallet.availableBalance) + net;
     await this.walletRepo.save(wallet);
 
-    await this.kafka.publish('seller.wallet.credited', { sellerId, amount: net, reason, referenceId });
+    await this.kafka.publish('seller.wallet.credited', {
+      sellerId,
+      amount: net,
+      reason,
+      referenceId,
+    });
     this.logger.log(`Seller ${sellerId} credited ${net} — ${reason}`);
 
-    return { success: true, sellerId, credited: net, availableBalance: Number(wallet.availableBalance) };
+    return {
+      success: true,
+      sellerId,
+      credited: net,
+      availableBalance: Number(wallet.availableBalance),
+    };
   }
 
   // ── Private: Execute Payment ───────────────────────────────────────────────

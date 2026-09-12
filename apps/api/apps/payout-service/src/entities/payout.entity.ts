@@ -60,6 +60,23 @@ export class Payout {
   @Column({ type: 'varchar', nullable: true })
   transactionRef: string | null;
 
+  /**
+   * MARKET COLUMN — ISO-2, the platform's one spelling for "which market this
+   * runs in" (2026-09-12 audit I7 / AUD2-089).
+   *
+   * Stamped from the owning seller when the payout is created, never from the
+   * request: a market a caller supplies is a market a caller chose. NULL means
+   * "not yet attributed", and an unattributed payout stays refused for a
+   * region-locked admin — the behaviour these routes had when they refused
+   * every locked admin outright.
+   *
+   * No `is_global` beside it. Money always belongs to a market, and a payout
+   * that runs "in every market" is not a thing.
+   */
+  @Column({ name: 'region_code', type: 'varchar', length: 2, nullable: true })
+  @Index()
+  regionCode: string | null;
+
   @UpdateDateColumn()
   updatedAt: Date;
 }

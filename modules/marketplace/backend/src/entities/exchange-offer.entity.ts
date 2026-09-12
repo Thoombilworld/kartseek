@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 /**
  * Exchange Offer Entity
@@ -60,9 +66,45 @@ export class ExchangeOffer {
   @Column({ type: 'simple-array', nullable: true })
   applicableBrandIds: string[];
 
-  /** Countries where this exchange is available */
+  /**
+   * LEGACY ENCODING — display metadata, not a boundary.
+   *
+   * This was the only place an exchange offer's market lived, as a simple-array,
+   * while bank offers used a scalar `region_code`, banners a `regions[]` in
+   * Redis and grocery categories a `countries` jsonb: four encodings of one
+   * fact, four bespoke readers, four ways to be wrong (2026-09-12 audit I7 /
+   * AUD2-082). Scope checks read `regionCode`/`isGlobal` below and nothing
+   * reads this array as authorisation.
+   *
+   * Kept rather than dropped because it is the only record of the multi-market
+   * case: an offer that runs in three of nine markets is real, and this plan has
+   * no mandate to model it. A row with more than one entry therefore has a NULL
+   * `region_code` and `is_global = false`, and stays refused for a locked admin
+   * — the same answer it gave before, and visibly an unattributed row rather
+   * than a silently invented single market.
+   */
   @Column({ type: 'simple-array', nullable: true })
   applicableCountries: string[];
+
+  /**
+   * MARKET COLUMN — ISO-2, the platform's one spelling (2026-09-12 audit I7).
+   *
+   * Backfilled from `applicableCountries` where it held exactly one entry; NULL
+   * where it held several or where nobody has attributed the row yet.
+   */
+  @Column({ name: 'region_code', type: 'varchar', length: 2, nullable: true })
+  regionCode: string | null;
+
+  /**
+   * "Runs in every market", said explicitly rather than by absence.
+   *
+   * True where `applicableCountries` was empty or NULL — which is what an
+   * untargeted offer has always meant. Still refused for a locked WRITER: a
+   * global promotion is not a regional admin's to edit. Read it through
+   * `isGlobalMarket(row)`, never as `!row.regionCode`.
+   */
+  @Column({ name: 'is_global', type: 'boolean', default: false })
+  isGlobal: boolean;
 
   /** Exchange icon/image URL */
   @Column({ type: 'varchar', nullable: true })
