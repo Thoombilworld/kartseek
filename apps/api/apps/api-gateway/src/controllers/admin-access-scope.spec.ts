@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AdminAccessController } from './admin-access.controller';
 
@@ -372,5 +374,127 @@ describe('the market lock is validated on the resulting state', () => {
       ctrl.updateStaff(req(qaAdmin), 's-1', { regionCode: 'QA' } as any),
     ).rejects.toThrow('Only a global administrator may change a market lock.');
     expect(userRepo.save).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A granted `admin_role_id` cannot carry a permission the grantor lacks.
+ *
+ * `createStaff` bounded the new account's `users.role` by rank and refused the
+ * `super_admin` row, and nothing at all restricted *which remaining role row* a
+ * locked ADMIN could attach. So a QA regional admin could create a
+ * `FINANCE_MANAGER` in QA holding the seeded `admin` role — a permission set
+ * including `system.health` and `franchise.manage`, neither of which
+ * `regional_admin` holds (R12 re-review, new Important finding).
+ *
+ * The docstring justified leaving it open with "every admin route in the
+ * gateway requires `UserRole.ADMIN` or `UserRole.SUPER_ADMIN` alongside its
+ * `perm:` key, so a SUPPORT_AGENT cannot reach one whatever permission set its
+ * `admin_role_id` carries". That is not true: roughly twenty routes in
+ * `admin-marketplace.controller.ts` read `@Roles(SUPER_ADMIN, ADMIN,
+ * FINANCE_MANAGER, 'perm:…')`. The bound held only by coincidence — the four
+ * keys those routes use are already in `regional_admin` — so it is a rule now.
+ */
+const SEEDED_ADMIN_ROLE = {
+  id: 'r-admin',
+  key: 'admin',
+  permissions: ['orders.view', 'system.health', 'franchise.manage'],
+};
+const SUPPORT_ROLE = { id: 'r-support', key: 'support', permissions: ['support.view'] };
+const WILDCARD_ROLE = { id: 'r-star', key: 'shadow_super', permissions: ['*'] };
+
+/** A caller whose token carries the `regional_admin` permission set. */
+const qaRegionalAdmin = {
+  ...qaAdmin,
+  adminPermissions: ['staff.manage', 'staff.view', 'orders.view', 'support.view'],
+};
+
+function buildWithRole(role: any, staff: any = undefined) {
+  const b = staff ? build(staff) : build();
+  b.roleRepo.findOne = vi.fn(async () => role) as any;
+  return b;
+}
+
+describe('a role grant is capped by the granting admin own permissions', () => {
+  it('refuses a locked ADMIN attaching the seeded admin role to a new account', async () => {
+    const { ctrl, userRepo } = buildWithRole(SEEDED_ADMIN_ROLE);
+    await expect(
+      ctrl.createStaff(req(qaRegionalAdmin), {
+        ...newStaff,
+        role: 'FINANCE_MANAGER',
+        adminRoleId: SEEDED_ADMIN_ROLE.id,
+      } as any),
+    ).rejects.toThrow(ForbiddenException);
+    expect(userRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('names the permissions the caller does not hold', async () => {
+    const { ctrl } = buildWithRole(SEEDED_ADMIN_ROLE);
+    await expect(
+      ctrl.createStaff(req(qaRegionalAdmin), {
+        ...newStaff,
+        adminRoleId: SEEDED_ADMIN_ROLE.id,
+      } as any),
+    ).rejects.toThrow(/system\.health/);
+  });
+
+  it('allows a role whose permissions are a subset of the caller own', async () => {
+    const { ctrl, userRepo } = buildWithRole(SUPPORT_ROLE);
+    await expect(
+      ctrl.createStaff(req(qaRegionalAdmin), {
+        ...newStaff,
+        adminRoleId: SUPPORT_ROLE.id,
+      } as any),
+    ).resolves.toBeDefined();
+    expect(userRepo.save).toHaveBeenCalled();
+  });
+
+  it('exempts a SUPER_ADMIN — they hold every key by definition', async () => {
+    const { ctrl, userRepo } = buildWithRole(SEEDED_ADMIN_ROLE);
+    await expect(
+      ctrl.createStaff(req(superAdmin), { ...newStaff, adminRoleId: SEEDED_ADMIN_ROLE.id } as any),
+    ).resolves.toBeDefined();
+    expect(userRepo.save).toHaveBeenCalled();
+  });
+
+  it('refuses a wildcard role to anyone but a SUPER_ADMIN, whatever the caller holds', async () => {
+    // A caller signed in with `*` holds every key, so the subset test would
+    // pass it. Minting a second account with `*` is still SUPER_ADMIN's act.
+    const { ctrl, userRepo } = buildWithRole(WILDCARD_ROLE);
+    await expect(
+      ctrl.createStaff(req({ ...qaAdmin, adminPermissions: ['*'] }), {
+        ...newStaff,
+        adminRoleId: WILDCARD_ROLE.id,
+      } as any),
+    ).rejects.toThrow(/wildcard|super/i);
+    expect(userRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller whose token carries no permissions at all', async () => {
+    // Fail closed, the same way the gateway RolesGuard treats a missing
+    // `adminPermissions` claim: holding none means granting none.
+    const { ctrl } = buildWithRole(SUPPORT_ROLE);
+    await expect(
+      ctrl.createStaff(req(qaAdmin), { ...newStaff, adminRoleId: SUPPORT_ROLE.id } as any),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('still lets a SUPER_ADMIN re-assign a role on PATCH', async () => {
+    // `updateStaff` refuses `adminRoleId` for every non-SUPER_ADMIN caller
+    // already, so the cap can only ever be reached there by a SUPER_ADMIN —
+    // who is exempt. Asserted so the assertion's placement is not mistaken for
+    // a regression when it never fires.
+    const { ctrl, userRepo } = buildWithRole(SEEDED_ADMIN_ROLE, qaStaff('SUPPORT_AGENT'));
+    await expect(
+      ctrl.updateStaff(req(superAdmin), 's-1', { adminRoleId: SEEDED_ADMIN_ROLE.id } as any),
+    ).resolves.toBeDefined();
+    expect(userRepo.save).toHaveBeenCalled();
+  });
+
+  it('the docstring no longer claims an admin role is required on every admin route', () => {
+    const src = fs.readFileSync(path.join(__dirname, 'admin-access.controller.ts'), 'utf8');
+    expect(src).not.toContain('so a SUPPORT_AGENT cannot reach one whatever permission set');
+    // And it names why the rank cap alone was not the answer.
+    expect(src).toContain('FINANCE_MANAGER');
   });
 });

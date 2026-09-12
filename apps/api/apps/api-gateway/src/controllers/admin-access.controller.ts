@@ -254,6 +254,66 @@ export class AdminAccessController {
     );
   }
 
+  /**
+   * A granted `admin_role_id` may not carry a permission the grantor lacks.
+   *
+   * `assertMayAssignRole` below caps the new account's `users.role` by RANK,
+   * and `role.key === 'super_admin'` is refused outright — but nothing bounded
+   * which of the remaining role ROWS could be attached. A QA regional admin
+   * could therefore create a `FINANCE_MANAGER` in QA holding the seeded `admin`
+   * role, a permission set including `system.health` and `franchise.manage`,
+   * neither of which `regional_admin` holds (R12 re-review).
+   *
+   * The reason the rank cap is not the whole answer: roughly twenty routes in
+   * `admin-marketplace.controller.ts` read `@Roles(SUPER_ADMIN, ADMIN,
+   * FINANCE_MANAGER, 'perm:…')` (`:1121`, `:1326`, `:2538` among them), so the
+   * granted role's keys really are reachable by a `FINANCE_MANAGER` account.
+   * It was not a live escalation only because the four keys those routes use —
+   * `orders.view`, `orders.refund`, `finance.view`, `finance.payouts` — happen
+   * to be in `regional_admin` already. A bound that holds by coincidence stops
+   * holding when the next role row is seeded, so it is a rule here instead.
+   *
+   * SUPER_ADMIN is exempt: they sign with `'*'` and hold every key by
+   * definition. A caller with no `adminPermissions` claim holds none and may
+   * grant none — fail closed, the way the gateway's own `RolesGuard` treats a
+   * missing claim rather than skipping the check. Unreachable in practice,
+   * because both routes require `perm:staff.manage` to get this far.
+   */
+  private assertMayAssignAdminRole(
+    req: any,
+    role: { key?: string; name?: string; permissions?: string[] | null },
+  ): void {
+    const wanted = Array.isArray(role?.permissions) ? role.permissions : [];
+    // The wildcard first, and regardless of what the caller holds: a caller
+    // signed in with `'*'` would pass the subset test below, and minting a
+    // second account that holds everything stays a SUPER_ADMIN's act.
+    if (wanted.includes(ALL_PERMISSIONS)) {
+      if (this.callerRole(req) === 'SUPER_ADMIN') return;
+      this.logger.warn(
+        `[staff-permission-denied] user=${this.actorId(req)} role=${this.callerRole(req)} ` +
+          `grant=${role?.key ?? 'unknown'} (wildcard)`,
+      );
+      throw new ForbiddenException(
+        'Only a SUPER_ADMIN may assign a role holding the wildcard permission.',
+      );
+    }
+    if (this.callerRole(req) === 'SUPER_ADMIN') return;
+    const granted: string[] = Array.isArray(req?.user?.adminPermissions)
+      ? req.user.adminPermissions
+      : [];
+    if (granted.includes(ALL_PERMISSIONS)) return;
+    const excess = wanted.filter((key) => !granted.includes(key));
+    if (!excess.length) return;
+    this.logger.warn(
+      `[staff-permission-denied] user=${this.actorId(req)} role=${this.callerRole(req)} ` +
+        `grant=${role?.key ?? 'unknown'} excess=${excess.join(',')}`,
+    );
+    throw new ForbiddenException(
+      `You may only assign a role whose permissions you hold yourself; ` +
+        `this one adds ${excess.join(', ')}.`,
+    );
+  }
+
   /** A role may only be granted downwards: SUPER_ADMIN is a SUPER_ADMIN's to give. */
   private assertMayAssignRole(req: any, role: unknown): void {
     const caller = this.callerRole(req);
@@ -555,11 +615,16 @@ export class AdminAccessController {
       throw new ForbiddenException('Only a global administrator may change a market lock.');
     }
     // Rank, not the DTO's enum: `ASSIGNABLE_STAFF_ROLES` admits `ADMIN`, which
-    // a regional admin must not grant. The created account's own `users.role`
-    // is the ceiling on everything it can reach — every admin route in the
-    // gateway requires `UserRole.ADMIN` or `UserRole.SUPER_ADMIN` alongside its
-    // `perm:` key, so a SUPPORT_AGENT cannot reach one whatever permission set
-    // its `admin_role_id` carries.
+    // a regional admin must not grant.
+    //
+    // The rank cap is the ceiling on the account's `users.role`; it is NOT a
+    // ceiling on the permission set its `admin_role_id` carries. This comment
+    // used to claim it was, on the grounds that every admin route requires
+    // `UserRole.ADMIN`/`SUPER_ADMIN` beside its `perm:` key — and about twenty
+    // routes in `admin-marketplace.controller.ts` also admit
+    // `UserRole.FINANCE_MANAGER`, so a granted role's keys really are
+    // reachable. `assertMayAssignAdminRole` is the second cap, applied to the
+    // role row below once it has been loaded.
     this.assertMayAssignRole(req, dto.role);
     const email = dto.email.toLowerCase().trim();
     if (await this.userRepo.findOne({ where: { email } })) {
@@ -572,6 +637,7 @@ export class AdminAccessController {
         'SUPER_ADMIN accounts are created by an operator, not through the console.',
       );
     }
+    this.assertMayAssignAdminRole(req, role);
     // A locked caller's new account is forced into their own market with the
     // lock on; a global caller still says both explicitly. Either way the
     // resulting pair is validated, not the request (`assertLockState`).
@@ -706,6 +772,13 @@ export class AdminAccessController {
       if (role.key === 'super_admin') {
         throw new ForbiddenException('The super_admin role is not assignable from the console.');
       }
+      // The same permission cap as `createStaff`. Only a SUPER_ADMIN reaches
+      // this line today — `dto.adminRoleId` is refused for every other caller
+      // eleven lines above — and they are exempt, so it never fires here. It is
+      // written anyway: the two writes must not be able to disagree about what
+      // a role grant costs, and the refusal above is one review away from being
+      // relaxed.
+      this.assertMayAssignAdminRole(req, role);
     }
     const nextMarket =
       dto.regionCode !== undefined ? (dto.regionCode?.toUpperCase() ?? null) : user.regionCode;
