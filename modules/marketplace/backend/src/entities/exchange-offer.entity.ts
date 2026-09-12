@@ -12,7 +12,7 @@ import {
  * Represents a product exchange/trade-in offer (e.g., "Exchange your old phone and get up to ₹15,000 off").
  * Managed centrally by Super Admin and displayed on eligible product pages.
  */
-@Entity('exchange_offers')
+@Entity({ name: 'exchange_offers', schema: 'marketplace' })
 export class ExchangeOffer {
   @PrimaryGeneratedColumn('uuid')
   id: string;

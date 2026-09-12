@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
@@ -9,7 +18,7 @@ import { Product } from './product.entity';
  *   Amazon: "Customer Questions & Answers" — anyone can ask, seller/community answers
  *   Flipkart: "Questions & Answers" section with voting
  */
-@Entity('product_questions')
+@Entity({ name: 'product_questions', schema: 'marketplace' })
 @Index(['productId', 'createdAt'])
 @Index(['customerId'])
 export class ProductQuestion {
@@ -48,7 +57,7 @@ export class ProductQuestion {
 /**
  * ProductAnswer — Answers to product questions, from sellers, customers, or admins.
  */
-@Entity('product_answers')
+@Entity({ name: 'product_answers', schema: 'marketplace' })
 @Index(['questionId', 'createdAt'])
 export class ProductAnswer {
   @PrimaryGeneratedColumn('uuid')

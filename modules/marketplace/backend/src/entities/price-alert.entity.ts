@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
@@ -20,7 +28,7 @@ import { Product } from './product.entity';
  * a repeating notification every time the price sweep runs — the difference
  * between a useful alert and a shopper turning off notifications.
  */
-@Entity('price_alerts')
+@Entity({ name: 'price_alerts', schema: 'marketplace' })
 // The sweep reads "every active alert for this product" when a price changes.
 @Index(['productId', 'isActive'])
 // The wishlist page reads a customer's own alerts.

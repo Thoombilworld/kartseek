@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
@@ -15,7 +24,7 @@ import { Seller } from './seller.entity';
  * two of their own accounts apart. `UQ_seller_bank_accounts_default` is a
  * partial unique index, so a seller can only ever have one default.
  */
-@Entity('seller_bank_accounts')
+@Entity({ name: 'seller_bank_accounts', schema: 'marketplace' })
 @Index(['sellerId'])
 export class SellerBankAccount {
   @PrimaryGeneratedColumn('uuid')

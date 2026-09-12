@@ -25,7 +25,7 @@ import { Seller } from './seller.entity';
  * seller who issued it. Same collision class as the product slug that
  * `addProduct` already de-conflicts; it had simply not been carried through.
  */
-@Entity('product_listings')
+@Entity({ name: 'product_listings', schema: 'marketplace' })
 @Index(['product', 'seller'], { unique: true })
 @Index(['seller', 'sellerSku'], { unique: true })
 // The moderation queue reads this.

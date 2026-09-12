@@ -48,7 +48,6 @@ function collectEntityFiles(): string[] {
 }
 
 describe('Marketplace Module Isolation (Regression)', () => {
-
   // ── Test 1: No cross-service imports ────────────────────────────────────────
   describe('Cross-service import boundary', () => {
     const tsFiles = collectTsFiles(MARKETPLACE_SRC);
@@ -86,9 +85,7 @@ describe('Marketplace Module Isolation (Regression)', () => {
       }
 
       if (violations.length > 0) {
-        const report = violations
-          .map((v) => `  ${v.file}:${v.line} → ${v.text}`)
-          .join('\n');
+        const report = violations.map((v) => `  ${v.file}:${v.line} → ${v.text}`).join('\n');
         throw new Error(
           `Cross-service import violations detected!\n` +
             `Marketplace must not import from sibling services:\n${report}`,
@@ -128,43 +125,51 @@ describe('Marketplace Module Isolation (Regression)', () => {
   });
 
   // ── Test 3: Dedicated DB config ─────────────────────────────────────────────
+  //
+  // These five reads used to be written out inside the TypeORM `useFactory`, and
+  // this block asserted the module source contained them. IN3 moved them into
+  // `src/db-config.ts`, which `data-source.ts` calls as well — the runner and the
+  // service resolving separately is how they came to disagree about which
+  // database they meant. So the env names are asserted where they now live, and
+  // the module is asserted to delegate rather than to have its own copy.
   describe('Dedicated database configuration', () => {
     let moduleSource: string;
+    let resolverSource: string;
 
     beforeAll(() => {
       moduleSource = fs.readFileSync(
         path.join(MARKETPLACE_SRC, 'marketplace-service.module.ts'),
         'utf-8',
       );
+      resolverSource = fs.readFileSync(path.join(MARKETPLACE_SRC, 'db-config.ts'), 'utf-8');
     });
 
-    it('should read MARKETPLACE_DB_HOST env var', () => {
-      expect(moduleSource).toContain("'MARKETPLACE_DB_HOST'");
+    it.each([
+      'MARKETPLACE_DB_HOST',
+      'MARKETPLACE_DB_PORT',
+      'MARKETPLACE_DB_NAME',
+      'MARKETPLACE_DB_USER',
+      'MARKETPLACE_DB_PASSWORD',
+    ])('resolves %s', (name) => {
+      expect(resolverSource).toContain(`'${name}'`);
     });
 
-    it('should read MARKETPLACE_DB_PORT env var', () => {
-      expect(moduleSource).toContain("'MARKETPLACE_DB_PORT'");
+    it('falls back to the shared DB_* variables', () => {
+      // `first('MARKETPLACE_DB_HOST', 'DB_HOST')` — dedicated wins, shared answers.
+      expect(resolverSource).toMatch(/MARKETPLACE_DB_HOST'[^)]*'DB_HOST'/);
     });
 
-    it('should read MARKETPLACE_DB_NAME env var', () => {
-      expect(moduleSource).toContain("'MARKETPLACE_DB_NAME'");
-    });
-
-    it('should read MARKETPLACE_DB_USER env var', () => {
-      expect(moduleSource).toContain("'MARKETPLACE_DB_USER'");
-    });
-
-    it('should read MARKETPLACE_DB_PASSWORD env var', () => {
-      expect(moduleSource).toContain("'MARKETPLACE_DB_PASSWORD'");
+    it('leaves the module with no database resolution of its own', () => {
+      expect(moduleSource).toContain('resolveMarketplaceDbConfig(');
+      expect(moduleSource).not.toContain("cfg.get<string>('MARKETPLACE_DB_HOST')");
     });
 
     it('should always enforce schema: marketplace', () => {
-      expect(moduleSource).toContain("schema: 'marketplace'");
-    });
-
-    it('should fall back to DB_HOST when MARKETPLACE_DB_HOST is not set', () => {
-      // The pattern should be: cfg.get('MARKETPLACE_DB_HOST') || cfg.get('DB_HOST', ...)
-      expect(moduleSource).toMatch(/MARKETPLACE_DB_HOST.*\|\|.*DB_HOST/);
+      // Named once, in the resolver, and used by the service connection. Each
+      // entity also carries `schema: 'marketplace'` of its own, because the
+      // migration runner declares no connection-level schema — see db-config.ts.
+      expect(resolverSource).toContain("MARKETPLACE_DB_SCHEMA = 'marketplace'");
+      expect(moduleSource).toContain('schema: MARKETPLACE_DB_SCHEMA');
     });
   });
 });

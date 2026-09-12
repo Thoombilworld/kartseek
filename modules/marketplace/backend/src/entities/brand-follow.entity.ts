@@ -1,8 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Brand } from './brand.entity';
 
-@Entity('brand_follows')
+@Entity({ name: 'brand_follows', schema: 'marketplace' })
 @Index(['userId', 'brandId'], { unique: true })
 export class BrandFollow {
   @PrimaryGeneratedColumn('uuid')

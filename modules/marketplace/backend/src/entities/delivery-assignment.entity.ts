@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { MarketplaceOrder } from './marketplace-order.entity';
 
@@ -15,7 +24,7 @@ import { MarketplaceOrder } from './marketplace-order.entity';
  *   Flipkart: Ekart assignment with real-time tracking
  *   Amazon: Flex/DSP driver assignment with geofencing
  */
-@Entity('delivery_assignments')
+@Entity({ name: 'delivery_assignments', schema: 'marketplace' })
 @Index(['orderId'])
 @Index(['partnerId', 'status'])
 @Index(['status', 'createdAt'])
@@ -30,7 +39,12 @@ export class DeliveryAssignment {
   @JoinColumn({ name: 'order_id' })
   order: Relation<MarketplaceOrder>;
 
-  @Column({ type: 'varchar', nullable: true, name: 'return_request_id', comment: 'Linked return request for reverse pickups' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    name: 'return_request_id',
+    comment: 'Linked return request for reverse pickups',
+  })
   returnRequestId: string | null;
 
   @Column({ name: 'partner_id', comment: 'Delivery partner/driver user ID' })
@@ -44,7 +58,18 @@ export class DeliveryAssignment {
 
   @Column({
     type: 'enum',
-    enum: ['PENDING', 'OFFERED', 'ACCEPTED', 'REJECTED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'RETURNED', 'CANCELLED'],
+    enum: [
+      'PENDING',
+      'OFFERED',
+      'ACCEPTED',
+      'REJECTED',
+      'PICKED_UP',
+      'IN_TRANSIT',
+      'DELIVERED',
+      'FAILED',
+      'RETURNED',
+      'CANCELLED',
+    ],
     default: 'PENDING',
   })
   status: string;
@@ -78,16 +103,34 @@ export class DeliveryAssignment {
     contactPhone: string;
   };
 
-  @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true, comment: 'Estimated distance in km' })
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 2,
+    nullable: true,
+    comment: 'Estimated distance in km',
+  })
   distanceKm: number | null;
 
   @Column({ type: 'int', nullable: true, comment: 'Estimated delivery time in minutes' })
   estimatedMinutes: number | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Delivery fee charged to customer' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Delivery fee charged to customer',
+  })
   deliveryFee: number | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Commission/earnings for delivery partner' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Commission/earnings for delivery partner',
+  })
   partnerEarnings: number | null;
 
   /**
@@ -102,7 +145,12 @@ export class DeliveryAssignment {
    *
    * Read it deliberately, with `addSelect`, only where it is being checked.
    */
-  @Column({ type: 'varchar', nullable: true, select: false, comment: 'OTP for delivery verification' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    select: false,
+    comment: 'OTP for delivery verification',
+  })
   deliveryOtp: string | null;
 
   @Column({ default: false, comment: 'Whether OTP was verified at delivery' })
@@ -130,7 +178,13 @@ export class DeliveryAssignment {
     timestamp: string;
   };
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'COD amount to be collected' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'COD amount to be collected',
+  })
   codAmount: number | null;
 
   @Column({ default: false, comment: 'Whether COD was collected' })

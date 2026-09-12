@@ -1,6 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
-@Entity('brands')
+@Entity({ name: 'brands', schema: 'marketplace' })
 export class Brand {
   @PrimaryGeneratedColumn('uuid')
   id: string;

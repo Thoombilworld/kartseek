@@ -9,6 +9,17 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * booting the service with auto-sync on and hoping; that is off by default in
  * every environment now (`src/marketplace-service.module.ts`), and this is the schema.
  *
+ * ── It starts from nothing ─────────────────────────────────────────────────
+ *
+ * The first two statements are `CREATE SCHEMA IF NOT EXISTS "marketplace"` and
+ * `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`, because a dedicated module
+ * database arrives with neither and every primary key below defaults to
+ * `uuid_generate_v4()`. Nothing else in a deploy creates them: dev
+ * `synchronize` used to create the schema, and IN3 turned that off. This works
+ * only because the ledger lives in `public.marketplace_migrations` rather than inside
+ * this schema — TypeORM builds the ledger before the first `up()` runs, so a
+ * ledger in `marketplace` would need the schema that this line creates.
+ *
  * ── Why every statement in up() is guarded ──────────────────────────────────
  *
  * The dev and staging databases already hold these tables — `synchronize` built
@@ -21,6 +32,15 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * its COMMENTs included, so a column that has drifted since cannot fail the
  * run. On an empty database every guard is a no-op and this builds the schema.
  *
+ * ── Two indexes `migration:generate` could not write ───────────────────────
+ *
+ * `IDX_products_fts` and `IDX_products_name_trgm` are appended to up() by hand
+ * at the end. Both are expression indexes, which have no entity annotation for
+ * `migration:generate` to emit, and `CatalogService.searchProducts` runs
+ * exactly their two predicates — the tsvector match and the `name ILIKE`
+ * fallback. Without them a module-only deploy searches the catalogue by
+ * sequential scan: no error, no warning, just a slow page.
+ *
  * ── down() ─────────────────────────────────────────────────────────────────
  *
  * The generated reverse: it DROPs every table up() creates. That is the honest
@@ -31,6 +51,16 @@ export class InitialMarketplaceSchema1786498000000 implements MigrationInterface
   name = 'InitialMarketplaceSchema1786498000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // The schema itself, and it has to be first. A dedicated module
+    // database is created empty and nothing else in the deploy creates
+    // this schema — dev `synchronize` used to, and IN3 turned that off.
+    // The ledger is deliberately `public.marketplace_migrations` (see
+    // data-source.ts), so TypeORM does not need this schema to exist
+    // before this line runs.
+    await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "marketplace"`);
+    // Every table below defaults its primary key to uuid_generate_v4().
+    // A plain postgres image does not ship this enabled.
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "marketplace"."categories" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" character varying NOT NULL, "slug" character varying NOT NULL, "translations" jsonb, "icon" character varying, "image" character varying, "sort_order" integer NOT NULL DEFAULT '0', "is_active" boolean NOT NULL DEFAULT true, "seo_title" character varying, "seo_description" character varying, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "parent_id" uuid, CONSTRAINT "UQ_420d9f679d41281f282f5bc7d09" UNIQUE ("slug"), CONSTRAINT "PK_24dbc6126a28ff948da33e97d3b" PRIMARY KEY ("id")); COMMENT ON COLUMN "marketplace"."categories"."translations" IS 'Localized translations for category name and SEO metadata'`,
     );
@@ -537,9 +567,29 @@ END $guard$`);
   ALTER TABLE "marketplace"."categories_closure" ADD CONSTRAINT "FK_51fff5114cc41723e8ca36cf227" FOREIGN KEY ("id_descendant") REFERENCES "marketplace"."categories"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $guard$`);
+    // ── Search indexes, hand-written ────────────────────────────────
+    //
+    // `migration:generate` cannot express an expression index, so
+    // neither of these has an entity annotation behind it and neither
+    // would ever be generated. `CatalogService.searchProducts` runs
+    // exactly these two predicates — the tsvector match and the
+    // `name ILIKE` fallback — so without them a module-only deploy
+    // searches the catalogue by sequential scan: no error, no warning,
+    // just a slow page, forever. The expression must stay character-for-
+    // character identical to the query or the planner will not use it.
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_products_fts" ON marketplace.products USING GIN (to_tsvector('english', COALESCE(name, '') || ' ' || COALESCE(short_description, '')))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_products_name_trgm" ON marketplace.products USING GIN (name gin_trgm_ops)`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    // The hand-written search indexes first — nothing else references them.
+    await queryRunner.query(`DROP INDEX IF EXISTS marketplace."IDX_products_name_trgm"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS marketplace."IDX_products_fts"`);
     await queryRunner.query(
       `ALTER TABLE "marketplace"."categories_closure" DROP CONSTRAINT "FK_51fff5114cc41723e8ca36cf227"`,
     );
@@ -761,5 +811,13 @@ END $guard$`);
     await queryRunner.query(`DROP TABLE "marketplace"."brands"`);
     await queryRunner.query(`DROP INDEX "marketplace"."IDX_88cea2dc9c31951d06437879b4"`);
     await queryRunner.query(`DROP TABLE "marketplace"."categories"`);
+    // The schema last, and only if nothing is left in it. RESTRICT
+    // raises dependent_objects_still_exist when it still holds objects
+    // this migration did not create — exactly the case where dropping it
+    // would take somebody else's tables with it.
+    await queryRunner.query(`DO $guard$ BEGIN
+  DROP SCHEMA IF EXISTS "marketplace" RESTRICT;
+EXCEPTION WHEN dependent_objects_still_exist THEN NULL;
+END $guard$`);
   }
 }

@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Brand } from './brand.entity';
 
@@ -6,7 +14,7 @@ import { Brand } from './brand.entity';
  * Brand updates — announcements, new product launches, offers, etc.
  * Created by sellers/admins; surfaced to users who follow the brand.
  */
-@Entity('brand_updates')
+@Entity({ name: 'brand_updates', schema: 'marketplace' })
 @Index(['brandId', 'createdAt'])
 export class BrandUpdate {
   @PrimaryGeneratedColumn('uuid')

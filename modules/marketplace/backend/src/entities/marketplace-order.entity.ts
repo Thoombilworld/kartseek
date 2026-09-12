@@ -1,9 +1,18 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 import { Seller } from './seller.entity';
 
-@Entity('marketplace_orders')
+@Entity({ name: 'marketplace_orders', schema: 'marketplace' })
 @Index(['sellerId', 'status'])
 @Index(['customerId', 'createdAt'])
 export class MarketplaceOrder {
@@ -55,7 +64,19 @@ export class MarketplaceOrder {
 
   @Column({
     type: 'enum',
-    enum: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED', 'RETURN_REQUESTED', 'RETURNED', 'REFUNDED'],
+    enum: [
+      'PENDING',
+      'CONFIRMED',
+      'PREPARING',
+      'READY',
+      'SHIPPED',
+      'OUT_FOR_DELIVERY',
+      'DELIVERED',
+      'CANCELLED',
+      'RETURN_REQUESTED',
+      'RETURNED',
+      'REFUNDED',
+    ],
     default: 'PENDING',
   })
   status: string;

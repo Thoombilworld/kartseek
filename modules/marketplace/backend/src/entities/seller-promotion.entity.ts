@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
@@ -11,7 +20,7 @@ import { Seller } from './seller.entity';
  * with `getPromotions()` answering `[]` — so a discount a seller thought they
  * had launched simply did not exist.
  */
-@Entity('seller_promotions')
+@Entity({ name: 'seller_promotions', schema: 'marketplace' })
 @Index(['sellerId', 'status'])
 export class SellerPromotion {
   @PrimaryGeneratedColumn('uuid')

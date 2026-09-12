@@ -1,4 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Category } from './category.entity';
 import { Brand } from './brand.entity';
@@ -22,7 +32,7 @@ import { ProductListing } from './product-listing.entity';
  * tsvector, and a pg_trgm index for the ILIKE fallback) cannot be expressed as
  * decorators and live in the migration alone.
  */
-@Entity('products')
+@Entity({ name: 'products', schema: 'marketplace' })
 // Both predicates appear on every storefront read.
 @Index(['is_active', 'approval_status'])
 // Curated featured rail.
@@ -55,7 +65,12 @@ export class Product {
   @Column({ type: 'text', nullable: true })
   long_description: string | null;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Stores localized translations for dynamic fields like name and descriptions. Format: { "ar": { "name": "تفاحة", "short_description": "..." } }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment:
+      'Stores localized translations for dynamic fields like name and descriptions. Format: { "ar": { "name": "تفاحة", "short_description": "..." } }',
+  })
   translations: Record<string, any>;
 
   @ManyToOne(() => Brand)
@@ -129,7 +144,7 @@ export class Product {
   @Column({ default: true })
   isPanIndia: boolean; // If false, the product is restricted to availablePincodes
 
-  @Column("simple-array", { nullable: true })
+  @Column('simple-array', { nullable: true })
   availablePincodes: string[]; // Hyper-local inventory mapping
 
   /**

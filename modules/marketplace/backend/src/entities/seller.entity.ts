@@ -1,6 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
-@Entity('sellers')
+@Entity({ name: 'sellers', schema: 'marketplace' })
 @Index(['verificationStatus'])
 @Index(['regionCode'])
 export class Seller {
@@ -34,14 +41,26 @@ export class Seller {
   bannerUrl: string | null;
 
   // ── Tax & Legal ─────────────────────────────────────────────────────────────
-  @Column({ type: 'varchar', nullable: true, comment: 'GST registration number (India) or equivalent VAT ID' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'GST registration number (India) or equivalent VAT ID',
+  })
   gstNumber: string | null;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'PAN card number (India) or equivalent tax ID' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'PAN card number (India) or equivalent tax ID',
+  })
   panNumber: string | null;
 
   // ── Banking Details (for payouts) ───────────────────────────────────────────
-  @Column({ type: 'varchar', nullable: true, comment: 'Encrypted bank account number for payout settlement' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Encrypted bank account number for payout settlement',
+  })
   bankAccountNumber: string | null;
 
   @Column({ type: 'varchar', nullable: true, comment: 'IFSC code (India) or SWIFT/sort code' })
@@ -51,7 +70,11 @@ export class Seller {
   bankAccountName: string | null;
 
   // ── Address ─────────────────────────────────────────────────────────────────
-  @Column({ type: 'jsonb', nullable: true, comment: 'Business address: { line1, line2, city, state, postalCode, country }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Business address: { line1, line2, city, state, postalCode, country }',
+  })
   address: {
     line1: string;
     line2?: string;
@@ -62,12 +85,16 @@ export class Seller {
   };
 
   // ── KYC Verification ────────────────────────────────────────────────────────
-  @Column({ type: 'jsonb', nullable: true, comment: 'Array of uploaded KYC documents: [{ type, url, uploadedAt, status }]' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Array of uploaded KYC documents: [{ type, url, uploadedAt, status }]',
+  })
   kycDocuments: Array<{
-    type: string;       // e.g. 'TRADE_LICENSE', 'ID_PROOF', 'ADDRESS_PROOF'
+    type: string; // e.g. 'TRADE_LICENSE', 'ID_PROOF', 'ADDRESS_PROOF'
     url: string;
     uploadedAt: string;
-    status: string;     // 'PENDING', 'APPROVED', 'REJECTED'
+    status: string; // 'PENDING', 'APPROVED', 'REJECTED'
   }>;
 
   @Column({ default: 'PENDING', comment: 'Overall KYC status: PENDING, VERIFIED, REJECTED' })
@@ -93,11 +120,21 @@ export class Seller {
   totalOrders: number;
 
   // ── Commission & Financials ─────────────────────────────────────────────────
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, comment: 'Seller-specific commission override. Null = use category/global default.' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    comment: 'Seller-specific commission override. Null = use category/global default.',
+  })
   commissionRate: number | null;
 
   // ── Admin Tracking ──────────────────────────────────────────────────────────
-  @Column({ type: 'varchar', nullable: true, comment: 'Admin user ID who approved/rejected this seller' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Admin user ID who approved/rejected this seller',
+  })
   approvedBy: string | null;
 
   @Column({ type: 'timestamp', nullable: true })

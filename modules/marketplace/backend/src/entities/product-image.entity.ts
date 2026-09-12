@@ -1,8 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
-@Entity('product_images')
+@Entity({ name: 'product_images', schema: 'marketplace' })
 export class ProductImage {
   @PrimaryGeneratedColumn('uuid')
   id: string;

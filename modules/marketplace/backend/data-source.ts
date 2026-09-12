@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { resolveMarketplaceDbConfig, MARKETPLACE_MIGRATIONS_TABLE } from './src/db-config';
 import { Product } from './src/entities/product.entity';
 import { Seller } from './src/entities/seller.entity';
 import { Category } from './src/entities/category.entity';
@@ -85,19 +86,29 @@ import { PriceAlert } from './src/entities/price-alert.entity';
  * procedure in `docs/guides/database-migrations.md` greps the generated SQL
  * for DROP before the file is kept. `apps/api/test/module-data-sources.spec.ts`
  * holds the rest of the shape.
+ *
+ * ── The schema, and where the ledger lives ──────────────────────────────────
+ *
+ * This DataSource deliberately declares **no `schema`**. TypeORM builds the
+ * migration ledger inside `options.schema` and does it *before* the first
+ * migration's `up()` runs, so with `schema: 'marketplace'` a fresh dedicated database
+ * died on `CREATE TABLE "marketplace"."migrations"` — schema does not exist — and no
+ * `CREATE SCHEMA` inside a migration could ever run early enough to help. The
+ * ledger is `public.marketplace_migrations` (see `src/db-config.ts`), and
+ * `migrations/*-InitialMarketplaceSchema.ts` creates the schema as its first
+ * statement. Each entity names `schema: 'marketplace'` itself, so `migration:generate`
+ * still diffs the right schema.
+ *
+ * Connection details come from `resolveMarketplaceDbConfig` — the same function
+ * `src/marketplace-service.module.ts` calls, so the runner and the service cannot
+ * resolve to different databases. `MARKETPLACE_DB_*` wins, `DB_*` answers next.
  */
 export const MarketplaceDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.MARKETPLACE_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.MARKETPLACE_DB_PORT || process.env.DB_PORT || 5432),
-  username: process.env.MARKETPLACE_DB_USER || process.env.DB_USER || 'postgres',
-  password:
-    process.env.MARKETPLACE_DB_PASSWORD ||
-    process.env.DB_PASSWORD ||
-    process.env.DB_PASS ||
-    'kartseek123',
-  database: process.env.MARKETPLACE_DB_NAME || process.env.DB_NAME || 'kartseek_marketplace',
-  schema: 'marketplace',
+  // One resolver, shared with the service — see src/db-config.ts.
+  ...resolveMarketplaceDbConfig((key) => process.env[key]),
+  // No `schema` here on purpose: TypeORM would build the ledger inside it,
+  // before the first migration could create it. The entities name it instead.
   entities: [
     Product,
     Seller,
@@ -138,7 +149,7 @@ export const MarketplaceDataSource = new DataSource({
     'migrations/1786498000000-InitialMarketplaceSchema.ts',
     'migrations/1786502300000-OfferMarket.ts',
   ],
-  migrationsTableName: 'migrations',
+  migrationsTableName: MARKETPLACE_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.
   migrationsTransactionMode: 'each',

@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
@@ -30,7 +39,7 @@ export type ProductReportReason =
 
 export type ProductReportStatus = 'PENDING' | 'REVIEWING' | 'ACTIONED' | 'DISMISSED';
 
-@Entity('product_reports')
+@Entity({ name: 'product_reports', schema: 'marketplace' })
 // The admin queue reads pending-first, oldest-first.
 @Index(['status', 'createdAt'])
 // "How many open reports does this listing have" — shown beside the product in

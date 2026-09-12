@@ -4,9 +4,16 @@ import { Transport, type MicroserviceOptions } from '@nestjs/microservices';
 import { MarketplaceServiceModule } from './marketplace-service.module';
 import { createGrpcMicroserviceOptions } from '@app/grpc';
 import { InternalServiceGuard } from '@app/security';
+import { validateDatabaseConfig } from '@app/database';
 import { HttpSurfaceGuard } from './transport/http-surface.guard';
 
 async function bootstrap() {
+  // Fail fast on DB_SYNCHRONIZE=true, in every environment. The other six
+  // vertical backends have always done this and marketplace did not, so the
+  // "auto-sync is refused" rule the .env.example states was true for six
+  // services and not for this one. The schema comes from `migrations/` (IN3);
+  // there is no environment in which auto-sync is the intended answer.
+  validateDatabaseConfig();
   const app = await NestFactory.create(MarketplaceServiceModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   // NOTE: exceptions from TCP/gRPC handlers are shaped by RpcAwareExceptionsFilter,

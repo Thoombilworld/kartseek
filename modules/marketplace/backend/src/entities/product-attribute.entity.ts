@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Category } from './category.entity';
 
@@ -12,7 +21,7 @@ export interface AttributeOption {
   hex?: string;
 }
 
-@Entity('product_attributes')
+@Entity({ name: 'product_attributes', schema: 'marketplace' })
 // Every read is "the attributes of this category", and the seller portal and the
 // storefront both issue it on each product form and each detail page.
 @Index(['categoryId', 'isActive'])
@@ -30,7 +39,11 @@ export class ProductAttribute {
   @Column()
   slug: string;
 
-  @Column({ type: 'varchar', default: 'TEXT', comment: 'TEXT | NUMBER | SELECT | MULTI_SELECT | BOOLEAN | COLOR' })
+  @Column({
+    type: 'varchar',
+    default: 'TEXT',
+    comment: 'TEXT | NUMBER | SELECT | MULTI_SELECT | BOOLEAN | COLOR',
+  })
   type: string;
 
   /**
@@ -73,7 +86,11 @@ export class ProductAttribute {
   @Column({ default: 0 })
   sortOrder: number;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Category this attribute belongs to (null = global)' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Category this attribute belongs to (null = global)',
+  })
   categoryId: string | null;
 
   @ManyToOne(() => Category, { nullable: true, onDelete: 'SET NULL' })

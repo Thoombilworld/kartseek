@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 export enum GiftCardStatus {
   ACTIVE = 'ACTIVE',
@@ -7,7 +14,7 @@ export enum GiftCardStatus {
   DISABLED = 'DISABLED',
 }
 
-@Entity('gift_cards')
+@Entity({ name: 'gift_cards', schema: 'marketplace' })
 export class GiftCard {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -49,7 +56,11 @@ export class GiftCard {
   @Column({ type: 'timestamp', nullable: true })
   redeemedAt: Date | null;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Redemption history: [{orderId, amount, date}]' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Redemption history: [{orderId, amount, date}]',
+  })
   redemptionHistory: Array<{ orderId: string; amount: number; date: string }>;
 
   @CreateDateColumn()

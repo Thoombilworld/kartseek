@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { MarketplaceOrder } from './marketplace-order.entity';
 import { Seller } from './seller.entity';
@@ -13,7 +22,7 @@ import { Seller } from './seller.entity';
  *   Amazon: Return → Refund in 3-5 days
  *   Flipkart: Return → QC → Refund/Replace
  */
-@Entity('return_requests')
+@Entity({ name: 'return_requests', schema: 'marketplace' })
 @Index(['orderId', 'status'])
 @Index(['customerId', 'createdAt'])
 @Index(['sellerId', 'status'])
@@ -56,7 +65,17 @@ export class ReturnRequest {
 
   @Column({
     type: 'enum',
-    enum: ['WRONG_ITEM', 'DEFECTIVE', 'DAMAGED_IN_TRANSIT', 'NOT_AS_DESCRIBED', 'SIZE_FIT_ISSUE', 'QUALITY_ISSUE', 'LATE_DELIVERY', 'CHANGED_MIND', 'OTHER'],
+    enum: [
+      'WRONG_ITEM',
+      'DEFECTIVE',
+      'DAMAGED_IN_TRANSIT',
+      'NOT_AS_DESCRIBED',
+      'SIZE_FIT_ISSUE',
+      'QUALITY_ISSUE',
+      'LATE_DELIVERY',
+      'CHANGED_MIND',
+      'OTHER',
+    ],
     comment: 'Standardized return reason',
   })
   reason: string;
@@ -66,7 +85,20 @@ export class ReturnRequest {
 
   @Column({
     type: 'enum',
-    enum: ['REQUESTED', 'APPROVED', 'REJECTED', 'PICKUP_ASSIGNED', 'PICKED_UP', 'RECEIVED', 'QC_PASSED', 'QC_FAILED', 'REFUNDED', 'REPLACEMENT_SHIPPED', 'CLOSED', 'CANCELLED'],
+    enum: [
+      'REQUESTED',
+      'APPROVED',
+      'REJECTED',
+      'PICKUP_ASSIGNED',
+      'PICKED_UP',
+      'RECEIVED',
+      'QC_PASSED',
+      'QC_FAILED',
+      'REFUNDED',
+      'REPLACEMENT_SHIPPED',
+      'CLOSED',
+      'CANCELLED',
+    ],
     default: 'REQUESTED',
   })
   status: string;
@@ -99,7 +131,11 @@ export class ReturnRequest {
     phone: string;
   };
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Assigned delivery partner ID for reverse pickup' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Assigned delivery partner ID for reverse pickup',
+  })
   pickupPartnerId: string | null;
 
   @Column({ type: 'timestamp', nullable: true, comment: 'When the pickup was scheduled' })

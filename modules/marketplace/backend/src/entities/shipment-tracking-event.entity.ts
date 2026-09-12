@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { MarketplaceOrder } from './marketplace-order.entity';
 
@@ -12,7 +20,7 @@ import { MarketplaceOrder } from './marketplace-order.entity';
  *   Amazon: 15+ granular tracking states (Label Created → Out for Delivery → Delivered)
  *   Flipkart: Integrated carrier tracking via Ekart/3PL
  */
-@Entity('shipment_tracking_events')
+@Entity({ name: 'shipment_tracking_events', schema: 'marketplace' })
 @Index(['orderId', 'timestamp'])
 @Index(['trackingId'])
 export class ShipmentTrackingEvent {
@@ -29,7 +37,11 @@ export class ShipmentTrackingEvent {
   @Column({ comment: 'AWB / tracking number from courier' })
   trackingId: string;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Courier/logistics partner name (Delhivery, Ekart, etc.)' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Courier/logistics partner name (Delhivery, Ekart, etc.)',
+  })
   courierName: string | null;
 
   @Column({
@@ -71,7 +83,11 @@ export class ShipmentTrackingEvent {
   @Column({ type: 'varchar', nullable: true, comment: 'Courier-side event code for debugging' })
   courierEventCode: string | null;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Delivery partner who performed this action' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Delivery partner who performed this action',
+  })
   deliveryPartnerId: string | null;
 
   @Column('simple-array', { nullable: true, comment: 'Photo proof URLs (POD)' })

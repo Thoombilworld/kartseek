@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
@@ -10,7 +19,7 @@ import { Seller } from './seller.entity';
  * payout, be given a reference number, and have nothing recorded for anyone to
  * act on or for them to follow up with.
  */
-@Entity('seller_support_tickets')
+@Entity({ name: 'seller_support_tickets', schema: 'marketplace' })
 @Index(['sellerId', 'status'])
 export class SellerSupportTicket {
   @PrimaryGeneratedColumn('uuid')

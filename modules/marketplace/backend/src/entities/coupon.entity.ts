@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
@@ -16,7 +25,7 @@ import { Seller } from './seller.entity';
  *   Amazon: Coupon clipping with category targeting
  *   Flipkart: Bank offer + seller coupon stacking
  */
-@Entity('coupons')
+@Entity({ name: 'coupons', schema: 'marketplace' })
 @Index(['code'], { unique: true })
 @Index(['sellerId', 'isActive'])
 @Index(['validFrom', 'validUntil'])
@@ -40,13 +49,30 @@ export class Coupon {
   })
   discountType: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Discount value (% or flat amount)' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    comment: 'Discount value (% or flat amount)',
+  })
   discountValue: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Max discount cap for percentage coupons' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Max discount cap for percentage coupons',
+  })
   maxDiscount: number | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Minimum order value to apply' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Minimum order value to apply',
+  })
   minOrderValue: number;
 
   @Column({ type: 'int', default: -1, comment: 'Total redemption limit (-1 = unlimited)' })
@@ -73,7 +99,12 @@ export class Coupon {
   @Column({ default: false, comment: 'Only valid for first-time customers' })
   firstOrderOnly: boolean;
 
-  @Column({ type: 'varchar', nullable: true, name: 'seller_id', comment: 'NULL = platform-wide coupon' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    name: 'seller_id',
+    comment: 'NULL = platform-wide coupon',
+  })
   sellerId: string | null;
 
   @ManyToOne(() => Seller, { nullable: true })
@@ -86,7 +117,10 @@ export class Coupon {
   @Column('simple-array', { nullable: true, comment: 'Restrict to specific category IDs' })
   applicableCategoryIds: string[];
 
-  @Column('simple-array', { nullable: true, comment: 'Restrict to specific payment methods (UPI, CARD, etc.)' })
+  @Column('simple-array', {
+    nullable: true,
+    comment: 'Restrict to specific payment methods (UPI, CARD, etc.)',
+  })
   applicablePaymentMethods: string[];
 
   @Column({ type: 'varchar', nullable: true, comment: 'Bank name for bank-specific offers' })
@@ -108,7 +142,7 @@ export class Coupon {
 /**
  * CouponUsage — Tracks individual coupon redemptions for audit and limit enforcement.
  */
-@Entity('coupon_usages')
+@Entity({ name: 'coupon_usages', schema: 'marketplace' })
 @Index(['couponId', 'customerId'])
 @Index(['orderId'], { unique: true })
 export class CouponUsage {

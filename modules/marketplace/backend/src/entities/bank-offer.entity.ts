@@ -12,7 +12,7 @@ import {
  * Represents a bank/card partnership offer (e.g., "10% Instant Discount with HDFC Credit Card").
  * Managed centrally by Super Admin and displayed on product pages + checkout.
  */
-@Entity('bank_offers')
+@Entity({ name: 'bank_offers', schema: 'marketplace' })
 export class BankOffer {
   @PrimaryGeneratedColumn('uuid')
   id: string;

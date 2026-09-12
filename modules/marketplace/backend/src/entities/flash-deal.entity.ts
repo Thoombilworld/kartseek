@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 import { Seller } from './seller.entity';
@@ -24,7 +33,7 @@ import { Seller } from './seller.entity';
  */
 export type FlashDealStatus = 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELLED';
 
-@Entity('flash_deals')
+@Entity({ name: 'flash_deals', schema: 'marketplace' })
 @Index(['status', 'windowStart', 'windowEnd'])
 @Index(['regionCode', 'status'])
 export class FlashDeal {
@@ -56,10 +65,20 @@ export class FlashDeal {
   @Column({ type: 'timestamp', name: 'window_end', comment: 'Deal closes' })
   windowEnd: Date;
 
-  @Column({ type: 'int', name: 'min_discount_percent', default: 0, comment: 'Floor a nomination must meet to be eligible' })
+  @Column({
+    type: 'int',
+    name: 'min_discount_percent',
+    default: 0,
+    comment: 'Floor a nomination must meet to be eligible',
+  })
   minDiscountPercent: number;
 
-  @Column({ type: 'int', name: 'stock_limit', default: 0, comment: 'Units released across the campaign (0 = uncapped)' })
+  @Column({
+    type: 'int',
+    name: 'stock_limit',
+    default: 0,
+    comment: 'Units released across the campaign (0 = uncapped)',
+  })
   stockLimit: number;
 
   @Column({ type: 'int', name: 'units_sold', default: 0 })
@@ -103,7 +122,7 @@ export class FlashDeal {
  */
 export type NominationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
 
-@Entity('flash_deal_nominations')
+@Entity({ name: 'flash_deal_nominations', schema: 'marketplace' })
 @Index(['dealId', 'status'])
 @Index(['sellerId', 'status'])
 @Index(['dealId', 'sellerId', 'productId'], { unique: true })
@@ -137,7 +156,8 @@ export class FlashDealNomination {
     precision: 10,
     scale: 2,
     name: 'deal_price',
-    comment: 'Price the shopper pays while the campaign runs — the reason a flash deal is not just a popular product',
+    comment:
+      'Price the shopper pays while the campaign runs — the reason a flash deal is not just a popular product',
   })
   dealPrice: number;
 
@@ -157,7 +177,12 @@ export class FlashDealNomination {
   @Column({ type: 'text', nullable: true, name: 'seller_note' })
   sellerNote: string | null;
 
-  @Column({ type: 'text', nullable: true, name: 'decision_reason', comment: 'Why an admin approved or rejected' })
+  @Column({
+    type: 'text',
+    nullable: true,
+    name: 'decision_reason',
+    comment: 'Why an admin approved or rejected',
+  })
   decisionReason: string | null;
 
   @Column({ type: 'timestamp', nullable: true, name: 'decided_at' })

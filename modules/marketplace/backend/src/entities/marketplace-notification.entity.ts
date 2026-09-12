@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 export enum NotificationType {
   ORDER_UPDATE = 'ORDER_UPDATE',
@@ -11,7 +18,7 @@ export enum NotificationType {
   SYSTEM = 'SYSTEM',
 }
 
-@Entity('marketplace_notifications')
+@Entity({ name: 'marketplace_notifications', schema: 'marketplace' })
 export class MarketplaceNotification {
   @PrimaryGeneratedColumn('uuid')
   id: string;

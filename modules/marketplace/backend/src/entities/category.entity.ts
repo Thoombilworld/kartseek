@@ -1,7 +1,18 @@
-import { Entity, PrimaryGeneratedColumn, Column, Tree, TreeChildren, TreeParent, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  Tree,
+  TreeChildren,
+  TreeParent,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
-@Entity('categories')
-@Tree("closure-table")
+@Entity({ name: 'categories', schema: 'marketplace' })
+@Tree('closure-table')
 // Tree descent and the roots lookup (`parent IS NULL`) both filter on this.
 @Index(['parent'])
 export class Category {
@@ -14,7 +25,11 @@ export class Category {
   @Column({ unique: true })
   slug: string;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Localized translations for category name and SEO metadata' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Localized translations for category name and SEO metadata',
+  })
   translations: Record<string, any> | null;
 
   @Column({ type: 'varchar', nullable: true })

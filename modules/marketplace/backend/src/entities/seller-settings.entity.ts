@@ -1,8 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
-@Entity('seller_settings')
+@Entity({ name: 'seller_settings', schema: 'marketplace' })
 export class SellerSettings {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -39,7 +47,13 @@ export class SellerSettings {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   minimumOrder: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, comment: 'Free delivery above this amount' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    comment: 'Free delivery above this amount',
+  })
   freeDeliveryThreshold: number;
 
   @Column({ type: 'jsonb', nullable: true })
@@ -61,9 +75,21 @@ export class SellerSettings {
 
   // ── Payment & Tax ─────────────────────────────────────────────
   @Column({ type: 'jsonb', nullable: true })
-  bankDetails: { accountName: string; bankName: string; accountNumber: string; ifscCode?: string; swiftCode?: string };
+  bankDetails: {
+    accountName: string;
+    bankName: string;
+    accountNumber: string;
+    ifscCode?: string;
+    swiftCode?: string;
+  };
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 10, comment: 'Platform commission %' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 10,
+    comment: 'Platform commission %',
+  })
   commissionRate: number;
 
   @Column({ type: 'varchar', nullable: true, comment: 'GST/VAT number' })
@@ -71,7 +97,13 @@ export class SellerSettings {
 
   // ── Notification Preferences ──────────────────────────────────
   @Column({ type: 'jsonb', nullable: true })
-  notifications: { email: boolean; sms: boolean; push: boolean; orderAlerts: boolean; lowStockAlerts: boolean };
+  notifications: {
+    email: boolean;
+    sms: boolean;
+    push: boolean;
+    orderAlerts: boolean;
+    lowStockAlerts: boolean;
+  };
 
   // ── Security ──────────────────────────────────────────────────
   @Column({ default: false })

@@ -1,8 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
-@Entity('reviews')
+@Entity({ name: 'reviews', schema: 'marketplace' })
 @Index(['productId', 'customerId'], { unique: true, where: '"deleted_at" IS NULL' })
 // Review lists and the product rating aggregate both filter on status; without
 // this the product page scanned the whole reviews table.

@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Seller } from './seller.entity';
 
@@ -9,7 +18,7 @@ import { Seller } from './seller.entity';
  * against a `getStaff()` hard-coded to `[]` — an invite flow that recorded
  * nothing and listed nothing.
  */
-@Entity('seller_staff')
+@Entity({ name: 'seller_staff', schema: 'marketplace' })
 @Index(['sellerId', 'status'])
 export class SellerStaff {
   @PrimaryGeneratedColumn('uuid')

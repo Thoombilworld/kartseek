@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Product } from './product.entity';
 
@@ -12,7 +21,7 @@ import { Product } from './product.entity';
  *   Amazon: Parent ASIN → Child ASINs (size/color matrix)
  *   Flipkart: Product → Variant (color×size grid with independent pricing)
  */
-@Entity('product_variants')
+@Entity({ name: 'product_variants', schema: 'marketplace' })
 @Index(['productId'])
 // Scoped to the parent product, not global. A variant SKU is the seller's own
 // code for one size/colour of one of their products; making it unique across the
@@ -39,19 +48,42 @@ export class ProductVariant {
   @Column({ type: 'varchar', nullable: true, comment: 'Barcode (EAN/UPC) for this variant' })
   barcode: string | null;
 
-  @Column({ type: 'jsonb', comment: 'Attribute key-value pairs, e.g. { "color": "Midnight Blue", "size": "256GB" }' })
+  @Column({
+    type: 'jsonb',
+    comment: 'Attribute key-value pairs, e.g. { "color": "Midnight Blue", "size": "256GB" }',
+  })
   attributes: Record<string, string>;
 
-  @Column({ type: 'varchar', nullable: true, comment: 'Human-readable variant name, e.g. "Midnight Blue - 256GB"' })
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Human-readable variant name, e.g. "Midnight Blue - 256GB"',
+  })
   variantName: string | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Maximum Retail Price for this variant' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    comment: 'Maximum Retail Price for this variant',
+  })
   mrp: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, comment: 'Selling price (after seller discount)' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    comment: 'Selling price (after seller discount)',
+  })
   sellingPrice: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Cost price for margin calculation' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Cost price for margin calculation',
+  })
   costPrice: number | null;
 
   @Column({ type: 'int', default: 0, comment: 'Available stock quantity' })
@@ -63,7 +95,11 @@ export class ProductVariant {
   @Column({ type: 'decimal', precision: 6, scale: 3, nullable: true, comment: 'Weight in kg' })
   weightKg: number | null;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Package dimensions in cm: { length, width, height }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Package dimensions in cm: { length, width, height }',
+  })
   dimensions: {
     length: number;
     width: number;
