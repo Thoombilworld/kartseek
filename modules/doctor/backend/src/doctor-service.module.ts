@@ -39,7 +39,7 @@ const ENTITIES = [
   IntakeForm,
 ];
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
-import { databaseCredentials } from '@app/database';
+import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
 
 const envSchema = buildEnvSchema({
   DOCTOR_TCP_PORT: Joi.number().default(4007),
@@ -91,7 +91,23 @@ const envSchema = buildEnvSchema({
         // DB_SYNCHRONIZE, which is explicitly false, so these tables were never
         // created and every query failed with "relation ... does not exist".
         // Production still uses migrations - see migrations/1786500000000.
-        synchronize: cfg.get('NODE_ENV', 'development') !== 'production',
+        // Keyed on DB_SYNCHRONIZE so `validateDatabaseConfig()` and this factory
+        // read the same value, and wrapped so a boot with auto-sync on under
+        // NODE_ENV=production fails here rather than rewriting the schema
+        // (AUD2-070).
+        //
+        // The default is OFF in every environment, development included. This
+        // module's schema comes from `migrations/` and nothing else (IN3): the
+        // previous `NODE_ENV !== 'production'` meant annotating an existing
+        // column made dev auto-sync DROP and recreate it, which emptied the
+        // column three times during the regional plan. Set DB_SYNCHRONIZE=true
+        // deliberately, for an afternoon of entity iteration, and never against
+        // a database whose rows matter.
+        synchronize: assertSynchronizeAllowed(
+          cfg.get('DB_SYNCHRONIZE', 'false') === 'true',
+          cfg.get('NODE_ENV', 'development'),
+          'doctor-service',
+        ),
       }),
     }),
 
