@@ -286,3 +286,79 @@ describe('AdminMarketplaceController — notifications', () => {
     expect(client.send).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The admin coupon writes.
+ *
+ * These three routes are new: the console read coupons through this controller
+ * and wrote them through the seller route on `MarketplaceGatewayController`.
+ * Two things have to travel with each write, and the first was easy to miss —
+ * marketplace-service checks *ownership* (`assertOwns`, which fails closed on a
+ * missing actor) before it checks the *market*, so a payload carrying only
+ * `scope` is refused for every admin, global ones included.
+ */
+describe('AdminMarketplaceController — coupon writes', () => {
+  const body = {
+    code: 'QASUMMER25',
+    discountType: 'PERCENTAGE',
+    discountValue: 15,
+    validFrom: '2026-09-01T00:00:00.000Z',
+    validUntil: '2026-12-01T00:00:00.000Z',
+  } as any;
+
+  it('forces a locked admin’s coupon into their own market and identifies them', async () => {
+    const { ctrl, client } = build(() => ({ id: 'c-1' }));
+    await ctrl.createCoupon(req(qaAdmin), { ...body });
+    expect(client.send).toHaveBeenCalledWith(
+      { cmd: MARKETPLACE_PATTERNS.CREATE_COUPON },
+      expect.objectContaining({
+        code: 'QASUMMER25',
+        regionCode: 'QA',
+        scope: 'QA',
+        _actor: { ownerId: 'u-qa', role: 'ADMIN', regionCode: 'QA' },
+      }),
+    );
+  });
+
+  it('leaves a global admin unscoped, and market-agnostic when they name no market', async () => {
+    const { ctrl, client } = build(() => ({ id: 'c-1' }));
+    await ctrl.createCoupon(req(globalAdmin), { ...body });
+    expect(client.send.mock.calls[0][1]).toMatchObject({ regionCode: null, scope: undefined });
+    expect(client.send.mock.calls[0][1]._actor).toMatchObject({ ownerId: 'u-g' });
+  });
+
+  it('refuses a locked admin who issues a coupon for another market', async () => {
+    const { ctrl, client } = build(() => ({ id: 'c-1' }));
+    await expect(ctrl.createCoupon(req(qaAdmin), { ...body, regionCode: 'IN' })).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(client.send).not.toHaveBeenCalled();
+  });
+
+  it('sends the actor and the scope on an edit — the console sends only isActive', async () => {
+    const { ctrl, client } = build(() => ({ success: true }));
+    await ctrl.updateCoupon(req(qaAdmin), 'c-1', { isActive: false } as any);
+    expect(client.send).toHaveBeenCalledWith(
+      { cmd: MARKETPLACE_PATTERNS.UPDATE_COUPON },
+      expect.objectContaining({
+        id: 'c-1',
+        dto: { isActive: false, regionCode: 'QA' },
+        scope: 'QA',
+        _actor: expect.objectContaining({ ownerId: 'u-qa' }),
+      }),
+    );
+  });
+
+  it('sends the actor and the scope on a delete', async () => {
+    const { ctrl, client } = build(() => ({ success: true }));
+    await ctrl.deleteCoupon(req(qaAdmin), 'c-1');
+    expect(client.send).toHaveBeenCalledWith(
+      { cmd: MARKETPLACE_PATTERNS.DELETE_COUPON },
+      expect.objectContaining({
+        id: 'c-1',
+        scope: 'QA',
+        _actor: expect.objectContaining({ ownerId: 'u-qa' }),
+      }),
+    );
+  });
+});

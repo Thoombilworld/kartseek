@@ -47,6 +47,7 @@ import {
 import { UserRole, rpcCatch } from '@app/common';
 import { User } from '../entities/user.entity';
 import { MARKETPLACE_PATTERNS } from '../contracts';
+import { AdminCouponDto, AdminCouponUpdateDto } from '../dto/admin-marketplace.dto';
 import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagination.pipe';
 
 /**
@@ -123,6 +124,24 @@ export class AdminMarketplaceController {
    */
   private actorId(req: any): string {
     return req?.user?.id ?? req?.user?.userId ?? req?.user?.sub ?? 'unknown';
+  }
+
+  /**
+   * The caller's identity for marketplace-service's own object-level checks.
+   *
+   * `MarketplaceFulfillmentService.assertOwns` asks "does this caller own the
+   * row, or is it an admin?" and fails closed when it is handed no actor at
+   * all — so an admin route that forwards only `scope` is refused by the
+   * *ownership* check before the market check is ever reached. It travels under
+   * the reserved `_actor` key, and every field comes from the verified token.
+   */
+  private actor(req: any): { ownerId?: string; role?: string; regionCode?: string } {
+    const { region } = marketScopeOf(req);
+    return {
+      ownerId: req?.user?.id ?? req?.user?.userId ?? req?.user?.sub,
+      role: req?.user?.role,
+      ...(region ? { regionCode: region } : {}),
+    };
   }
 
   /**
@@ -3021,6 +3040,59 @@ export class AdminMarketplaceController {
       publicOnly: false,
       region: resolveMarket(req, country, 'that market'),
       regionStrict: scope.locked,
+    });
+  }
+
+  /**
+   * Admin coupon writes.
+   *
+   * The console's coupon page read through this controller and wrote through
+   * `POST /marketplace/coupons` — the seller route, gated `SELLER, ADMIN,
+   * SUPER_ADMIN`. That route is scoped now (Task R2 step 6), but a promotions
+   * screen whose reads and writes sit on two different controllers with two
+   * different guard stacks is a hole waiting to be reopened. These three are the
+   * admin path, and `perm:promotions.manage` is the key the console's role grid
+   * already grants.
+   */
+  @Post('coupons')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:promotions.manage')
+  @ApiOperation({ summary: 'Create a platform coupon in one market' })
+  async createCoupon(@Req() req: any, @Body() dto: AdminCouponDto) {
+    const { scope, market } = this.scopeOf(req, dto.regionCode, 'that coupon');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.CREATE_COUPON, {
+      ...dto,
+      regionCode: market ?? null,
+      _actor: this.actor(req),
+      scope,
+    });
+  }
+
+  @Put('coupons/:id')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:promotions.manage')
+  @ApiOperation({ summary: 'Update a platform coupon' })
+  async updateCoupon(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AdminCouponUpdateDto,
+  ) {
+    const { scope, market } = this.scopeOf(req, dto.regionCode, 'that coupon');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.UPDATE_COUPON, {
+      id,
+      dto: { ...dto, ...(market ? { regionCode: market } : {}) },
+      _actor: this.actor(req),
+      scope,
+    });
+  }
+
+  @Delete('coupons/:id')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:promotions.manage')
+  @ApiOperation({ summary: 'Delete a platform coupon' })
+  async deleteCoupon(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const { scope } = this.scopeOf(req, undefined, 'that coupon');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.DELETE_COUPON, {
+      id,
+      _actor: this.actor(req),
+      scope,
     });
   }
 
