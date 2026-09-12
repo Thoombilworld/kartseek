@@ -1,8 +1,13 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
-@Entity('family_members')
+@Entity({ name: 'family_members', schema: 'doctor' })
 export class FamilyMember {
   @PrimaryGeneratedColumn('uuid')
   id: string;

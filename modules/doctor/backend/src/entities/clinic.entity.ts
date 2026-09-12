@@ -1,6 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
-@Entity('clinics')
+@Entity({ name: 'clinics', schema: 'doctor' })
 export class Clinic {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -58,7 +65,11 @@ export class Clinic {
   @Column('simple-json', { nullable: true })
   images: string[];
 
-  @Column({ type: 'enum', enum: ['pending', 'active', 'suspended', 'blocked', 'rejected'], default: 'pending' })
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'active', 'suspended', 'blocked', 'rejected'],
+    default: 'pending',
+  })
   @Index()
   status: 'pending' | 'active' | 'suspended' | 'blocked' | 'rejected';
 

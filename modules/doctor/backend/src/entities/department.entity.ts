@@ -1,8 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Hospital } from './hospital.entity';
 
-@Entity('departments')
+@Entity({ name: 'departments', schema: 'doctor' })
 export class Department {
   @PrimaryGeneratedColumn('uuid')
   id: string;

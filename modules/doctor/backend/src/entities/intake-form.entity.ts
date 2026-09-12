@@ -1,8 +1,13 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
-@Entity('intake_forms')
+@Entity({ name: 'intake_forms', schema: 'doctor' })
 export class IntakeForm {
   @PrimaryGeneratedColumn('uuid')
   id: string;

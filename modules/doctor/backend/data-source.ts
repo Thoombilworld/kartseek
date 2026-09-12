@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { resolveDoctorDbConfig, DOCTOR_MIGRATIONS_TABLE } from './src/db-config';
 import { Doctor } from './src/entities/doctor.entity';
 import { Appointment } from './src/entities/appointment.entity';
 import { DoctorAvailability } from './src/entities/doctor-availability.entity';
@@ -57,16 +58,29 @@ import { IntakeForm } from './src/entities/intake-form.entity';
  * these scripts from this directory**. Run them from the repository root and
  * `DOCTOR_DB_*` is unset, `DB_*` answers instead, and the migration lands in
  * the shared database's `doctor` schema.
+ *
+ * ── The schema, and where the ledger lives ──────────────────────────────────
+ *
+ * This DataSource deliberately declares **no `schema`**. TypeORM builds the
+ * migration ledger inside `options.schema` and does it *before* the first
+ * migration's `up()` runs, so with `schema: 'doctor'` a fresh dedicated database
+ * died on `CREATE TABLE "doctor"."migrations"` — schema does not exist — and no
+ * `CREATE SCHEMA` inside a migration could ever run early enough to help. The
+ * ledger is `public.doctor_migrations` (see `src/db-config.ts`), and
+ * `migrations/*-InitialDoctorSchema.ts` creates the schema as its first
+ * statement. Each entity names `schema: 'doctor'` itself, so `migration:generate`
+ * still diffs the right schema.
+ *
+ * Connection details come from `resolveDoctorDbConfig` — the same function
+ * `src/doctor-service.module.ts` calls, so the runner and the service cannot
+ * resolve to different databases. `DOCTOR_DB_*` wins, `DB_*` answers next.
  */
 export const DoctorDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.DOCTOR_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.DOCTOR_DB_PORT || process.env.DB_PORT || 5437),
-  username: process.env.DOCTOR_DB_USER || process.env.DB_USER || 'doctor_user',
-  password:
-    process.env.DOCTOR_DB_PASSWORD || process.env.DB_PASSWORD || process.env.DB_PASS || 'postgres',
-  database: process.env.DOCTOR_DB_NAME || process.env.DB_NAME || 'kartseek_doctor',
-  schema: 'doctor',
+  // One resolver, shared with the service — see src/db-config.ts.
+  ...resolveDoctorDbConfig((key) => process.env[key]),
+  // No `schema` here on purpose: TypeORM would build the ledger inside it,
+  // before the first migration could create it. The entities name it instead.
   entities: [
     Doctor,
     Appointment,
@@ -83,7 +97,7 @@ export const DoctorDataSource = new DataSource({
     IntakeForm,
   ],
   migrations: ['migrations/1786498400000-InitialDoctorSchema.ts'],
-  migrationsTableName: 'migrations',
+  migrationsTableName: DOCTOR_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.
   migrationsTransactionMode: 'each',

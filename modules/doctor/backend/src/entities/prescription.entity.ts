@@ -1,13 +1,20 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn,
-  ManyToOne, JoinColumn, OneToMany, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+  Index,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Appointment } from './appointment.entity';
 import { Doctor } from './doctor.entity';
 import { PrescriptionItem } from './prescription-item.entity';
 
-@Entity('doctor_prescriptions')
+@Entity({ name: 'doctor_prescriptions', schema: 'doctor' })
 export class Prescription {
   @PrimaryGeneratedColumn('uuid')
   id: string;

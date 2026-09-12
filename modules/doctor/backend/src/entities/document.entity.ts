@@ -1,6 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
-@Entity('documents')
+@Entity({ name: 'documents', schema: 'doctor' })
 export class Document {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -13,7 +20,19 @@ export class Document {
   @Index()
   ownerType: 'doctor' | 'hospital' | 'clinic';
 
-  @Column({ type: 'enum', enum: ['medical_license', 'registration_certificate', 'id_proof', 'degree_certificate', 'establishment_license', 'insurance', 'tax_certificate', 'other'] })
+  @Column({
+    type: 'enum',
+    enum: [
+      'medical_license',
+      'registration_certificate',
+      'id_proof',
+      'degree_certificate',
+      'establishment_license',
+      'insurance',
+      'tax_certificate',
+      'other',
+    ],
+  })
   documentType: string;
 
   @Column({ length: 200 })
@@ -28,7 +47,11 @@ export class Document {
   @Column({ type: 'int', nullable: true })
   fileSizeBytes: number | null;
 
-  @Column({ type: 'enum', enum: ['pending', 'verified', 'rejected', 'expired'], default: 'pending' })
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'verified', 'rejected', 'expired'],
+    default: 'pending',
+  })
   @Index()
   status: 'pending' | 'verified' | 'rejected' | 'expired';
 

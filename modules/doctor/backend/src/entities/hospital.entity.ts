@@ -1,6 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+  OneToMany,
+} from 'typeorm';
 
-@Entity('hospitals')
+@Entity({ name: 'hospitals', schema: 'doctor' })
 export class Hospital {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -58,7 +66,11 @@ export class Hospital {
   @Column({ type: 'int', default: 0 })
   doctorCount: number;
 
-  @Column({ type: 'enum', enum: ['pending', 'active', 'suspended', 'blocked', 'rejected'], default: 'pending' })
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'active', 'suspended', 'blocked', 'rejected'],
+    default: 'pending',
+  })
   @Index()
   status: 'pending' | 'active' | 'suspended' | 'blocked' | 'rejected';
 
@@ -77,7 +89,20 @@ export class Hospital {
   @Column({ type: 'varchar', length: 100, nullable: true })
   registrationNo: string | null;
 
-  @Column({ type: 'enum', enum: ['multi-speciality', 'super-speciality', 'general', 'eye', 'dental', 'maternity', 'children', 'other'], default: 'general' })
+  @Column({
+    type: 'enum',
+    enum: [
+      'multi-speciality',
+      'super-speciality',
+      'general',
+      'eye',
+      'dental',
+      'maternity',
+      'children',
+      'other',
+    ],
+    default: 'general',
+  })
   hospitalType: string;
 
   @Column({ type: 'int', nullable: true })
