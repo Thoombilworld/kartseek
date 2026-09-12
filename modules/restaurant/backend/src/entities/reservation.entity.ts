@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 
@@ -12,7 +21,7 @@ export enum ReservationStatus {
   CANCELLED = 'CANCELLED',
 }
 
-@Entity('reservations')
+@Entity({ name: 'reservations', schema: 'restaurant' })
 export class Reservation {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -56,7 +65,12 @@ export class Reservation {
   @Column({ type: 'varchar', nullable: true })
   tableId: string | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, comment: 'e.g. indoor, outdoor, rooftop, private' })
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+    comment: 'e.g. indoor, outdoor, rooftop, private',
+  })
   seatingPreference: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true, comment: 'e.g. Birthday, Anniversary' })

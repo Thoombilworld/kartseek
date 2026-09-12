@@ -25,7 +25,7 @@ export enum RestaurantStatus {
   CLOSED = 'CLOSED',
 }
 
-@Entity('restaurants')
+@Entity({ name: 'restaurants', schema: 'restaurant' })
 export class Restaurant {
   @PrimaryGeneratedColumn('uuid')
   id: string;

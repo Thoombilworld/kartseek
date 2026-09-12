@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 
@@ -10,7 +19,7 @@ export enum TableStatus {
   BLOCKED = 'BLOCKED',
 }
 
-@Entity('restaurant_tables')
+@Entity({ name: 'restaurant_tables', schema: 'restaurant' })
 export class RestaurantTable {
   @PrimaryGeneratedColumn('uuid')
   id: string;

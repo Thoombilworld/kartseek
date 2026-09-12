@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 
@@ -14,8 +23,8 @@ export enum RestaurantOrderStatus {
   DRIVER_ARRIVED = 'DRIVER_ARRIVED',
   OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY',
   DELIVERED = 'DELIVERED',
-  CUSTOMER_PICKED_UP = 'CUSTOMER_PICKED_UP',     // Takeaway
-  SERVED = 'SERVED',                               // Dine-in
+  CUSTOMER_PICKED_UP = 'CUSTOMER_PICKED_UP', // Takeaway
+  SERVED = 'SERVED', // Dine-in
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
@@ -45,25 +54,42 @@ export enum RestaurantPaymentStatus {
 // ── Status Transitions ────────────────────────────────────────────────────────
 
 export const ORDER_STATUS_TRANSITIONS: Record<RestaurantOrderStatus, RestaurantOrderStatus[]> = {
-  [RestaurantOrderStatus.PLACED]:              [RestaurantOrderStatus.RESTAURANT_ACCEPTED, RestaurantOrderStatus.RESTAURANT_REJECTED, RestaurantOrderStatus.CANCELLED],
-  [RestaurantOrderStatus.RESTAURANT_ACCEPTED]: [RestaurantOrderStatus.PREPARING, RestaurantOrderStatus.CANCELLED],
+  [RestaurantOrderStatus.PLACED]: [
+    RestaurantOrderStatus.RESTAURANT_ACCEPTED,
+    RestaurantOrderStatus.RESTAURANT_REJECTED,
+    RestaurantOrderStatus.CANCELLED,
+  ],
+  [RestaurantOrderStatus.RESTAURANT_ACCEPTED]: [
+    RestaurantOrderStatus.PREPARING,
+    RestaurantOrderStatus.CANCELLED,
+  ],
   [RestaurantOrderStatus.RESTAURANT_REJECTED]: [],
-  [RestaurantOrderStatus.PREPARING]:           [RestaurantOrderStatus.READY_FOR_PICKUP, RestaurantOrderStatus.CANCELLED],
-  [RestaurantOrderStatus.READY_FOR_PICKUP]:    [RestaurantOrderStatus.DRIVER_ASSIGNED, RestaurantOrderStatus.CUSTOMER_PICKED_UP, RestaurantOrderStatus.SERVED],
-  [RestaurantOrderStatus.DRIVER_ASSIGNED]:     [RestaurantOrderStatus.DRIVER_ARRIVED],
-  [RestaurantOrderStatus.DRIVER_ARRIVED]:      [RestaurantOrderStatus.OUT_FOR_DELIVERY],
-  [RestaurantOrderStatus.OUT_FOR_DELIVERY]:    [RestaurantOrderStatus.DELIVERED],
-  [RestaurantOrderStatus.DELIVERED]:           [RestaurantOrderStatus.COMPLETED, RestaurantOrderStatus.REFUNDED],
-  [RestaurantOrderStatus.CUSTOMER_PICKED_UP]:  [RestaurantOrderStatus.COMPLETED],
-  [RestaurantOrderStatus.SERVED]:              [RestaurantOrderStatus.COMPLETED],
-  [RestaurantOrderStatus.COMPLETED]:           [RestaurantOrderStatus.REFUNDED],
-  [RestaurantOrderStatus.CANCELLED]:           [RestaurantOrderStatus.REFUNDED],
-  [RestaurantOrderStatus.REFUNDED]:            [],
+  [RestaurantOrderStatus.PREPARING]: [
+    RestaurantOrderStatus.READY_FOR_PICKUP,
+    RestaurantOrderStatus.CANCELLED,
+  ],
+  [RestaurantOrderStatus.READY_FOR_PICKUP]: [
+    RestaurantOrderStatus.DRIVER_ASSIGNED,
+    RestaurantOrderStatus.CUSTOMER_PICKED_UP,
+    RestaurantOrderStatus.SERVED,
+  ],
+  [RestaurantOrderStatus.DRIVER_ASSIGNED]: [RestaurantOrderStatus.DRIVER_ARRIVED],
+  [RestaurantOrderStatus.DRIVER_ARRIVED]: [RestaurantOrderStatus.OUT_FOR_DELIVERY],
+  [RestaurantOrderStatus.OUT_FOR_DELIVERY]: [RestaurantOrderStatus.DELIVERED],
+  [RestaurantOrderStatus.DELIVERED]: [
+    RestaurantOrderStatus.COMPLETED,
+    RestaurantOrderStatus.REFUNDED,
+  ],
+  [RestaurantOrderStatus.CUSTOMER_PICKED_UP]: [RestaurantOrderStatus.COMPLETED],
+  [RestaurantOrderStatus.SERVED]: [RestaurantOrderStatus.COMPLETED],
+  [RestaurantOrderStatus.COMPLETED]: [RestaurantOrderStatus.REFUNDED],
+  [RestaurantOrderStatus.CANCELLED]: [RestaurantOrderStatus.REFUNDED],
+  [RestaurantOrderStatus.REFUNDED]: [],
 };
 
 // ── Entity ────────────────────────────────────────────────────────────────────
 
-@Entity('restaurant_orders')
+@Entity({ name: 'restaurant_orders', schema: 'restaurant' })
 export class RestaurantOrder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -169,7 +195,12 @@ export class RestaurantOrder {
     endTime: string;
   } | null;
 
-  @Column({ type: 'varchar', length: 6, nullable: true, comment: 'OTP for delivery/pickup confirmation' })
+  @Column({
+    type: 'varchar',
+    length: 6,
+    nullable: true,
+    comment: 'OTP for delivery/pickup confirmation',
+  })
   deliveryOtp: string | null;
 
   // ── Takeaway Details ────────────────────────────────────────────────────────
@@ -222,7 +253,12 @@ export class RestaurantOrder {
   @Column({ type: 'timestamptz', nullable: true })
   estimatedDeliveryAt: Date | null;
 
-  @Column({ type: 'varchar', length: 36, nullable: true, comment: 'Idempotency key to prevent duplicate orders' })
+  @Column({
+    type: 'varchar',
+    length: 36,
+    nullable: true,
+    comment: 'Idempotency key to prevent duplicate orders',
+  })
   idempotencyKey: string | null;
 
   @CreateDateColumn()

@@ -1,9 +1,19 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 import { MenuItem } from './menu-item.entity';
 
-@Entity('menu_categories')
+@Entity({ name: 'menu_categories', schema: 'restaurant' })
 export class MenuCategory {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -34,7 +44,11 @@ export class MenuCategory {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Time-based visibility { startTime, endTime }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Time-based visibility { startTime, endTime }',
+  })
   availableHours: { startTime: string; endTime: string } | null;
 
   @OneToMany(() => MenuItem, (item) => item.category)

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { resolveRestaurantDbConfig, RESTAURANT_MIGRATIONS_TABLE } from './src/db-config';
 import {
   Restaurant,
   MenuCategory,
@@ -61,19 +62,29 @@ import {
  * procedure in `docs/guides/database-migrations.md` greps the generated SQL
  * for DROP before the file is kept. `apps/api/test/module-data-sources.spec.ts`
  * holds the rest of the shape.
+ *
+ * ── The schema, and where the ledger lives ──────────────────────────────────
+ *
+ * This DataSource deliberately declares **no `schema`**. TypeORM builds the
+ * migration ledger inside `options.schema` and does it *before* the first
+ * migration's `up()` runs, so with `schema: 'restaurant'` a fresh dedicated database
+ * died on `CREATE TABLE "restaurant"."migrations"` — schema does not exist — and no
+ * `CREATE SCHEMA` inside a migration could ever run early enough to help. The
+ * ledger is `public.restaurant_migrations` (see `src/db-config.ts`), and
+ * `migrations/*-InitialRestaurantSchema.ts` creates the schema as its first
+ * statement. Each entity names `schema: 'restaurant'` itself, so `migration:generate`
+ * still diffs the right schema.
+ *
+ * Connection details come from `resolveRestaurantDbConfig` — the same function
+ * `src/restaurant-service.module.ts` calls, so the runner and the service cannot
+ * resolve to different databases. `RESTAURANT_DB_*` wins, `DB_*` answers next.
  */
 export const RestaurantDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.RESTAURANT_DB_HOST || process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.RESTAURANT_DB_PORT || process.env.DB_PORT || 5435),
-  username: process.env.RESTAURANT_DB_USER || process.env.DB_USER || 'restaurant_user',
-  password:
-    process.env.RESTAURANT_DB_PASSWORD ||
-    process.env.DB_PASSWORD ||
-    process.env.DB_PASS ||
-    'postgres',
-  database: process.env.RESTAURANT_DB_NAME || process.env.DB_NAME || 'kartseek_restaurant',
-  schema: 'restaurant',
+  // One resolver, shared with the service — see src/db-config.ts.
+  ...resolveRestaurantDbConfig((key) => process.env[key]),
+  // No `schema` here on purpose: TypeORM would build the ledger inside it,
+  // before the first migration could create it. The entities name it instead.
   entities: [
     Restaurant,
     MenuCategory,
@@ -89,7 +100,7 @@ export const RestaurantDataSource = new DataSource({
     'migrations/1786498200000-InitialRestaurantSchema.ts',
     'migrations/1786502400000-DropDeadMarketColumns.ts',
   ],
-  migrationsTableName: 'migrations',
+  migrationsTableName: RESTAURANT_MIGRATIONS_TABLE,
   migrationsTransactionMode: 'each',
   synchronize: false,
   logging: ['error', 'migration', 'schema'],

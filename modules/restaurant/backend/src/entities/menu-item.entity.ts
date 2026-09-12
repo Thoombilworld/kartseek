@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { MenuCategory } from './menu-category.entity';
 
@@ -19,7 +28,7 @@ export enum FoodType {
   OTHER = 'OTHER',
 }
 
-@Entity('menu_items')
+@Entity({ name: 'menu_items', schema: 'restaurant' })
 export class MenuItem {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -48,10 +57,22 @@ export class MenuItem {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   price: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, comment: 'Original price before discount' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Original price before discount',
+  })
   originalPrice: number | null;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, comment: 'Tax percentage on this item' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 0,
+    comment: 'Tax percentage on this item',
+  })
   taxPercent: number;
 
   // ── Food Info ───────────────────────────────────────────────────────────────

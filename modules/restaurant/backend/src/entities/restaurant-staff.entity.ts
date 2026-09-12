@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Restaurant } from './restaurant.entity';
 
@@ -12,7 +21,7 @@ export enum StaffRole {
   DELIVERY_COORDINATOR = 'DELIVERY_COORDINATOR',
 }
 
-@Entity('restaurant_staff')
+@Entity({ name: 'restaurant_staff', schema: 'restaurant' })
 export class RestaurantStaff {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -41,7 +50,11 @@ export class RestaurantStaff {
   @Column({ type: 'enum', enum: StaffRole, default: StaffRole.KITCHEN_STAFF })
   role: StaffRole;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Granular permissions e.g. { canManageMenu, canAcceptOrders, canViewReports }' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Granular permissions e.g. { canManageMenu, canAcceptOrders, canViewReports }',
+  })
   permissions: Record<string, boolean>;
 
   @Column({ default: true })
