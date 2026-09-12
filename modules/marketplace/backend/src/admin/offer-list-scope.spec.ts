@@ -145,6 +145,23 @@ describe('a partial offer update leaves the market alone', () => {
     expect(update.mock.calls[0][1]).toMatchObject({ regionCode: 'QA', isGlobal: false });
   });
 
+  it('a locked admin cannot rename their own offer into another market (R2-3)', async () => {
+    // `if (named) this.assertInMarket(named, lock, what)` is the line that stops
+    // a QA admin moving their offer to IN. The row assert before it only proves
+    // the offer IS theirs; this proves they cannot send it elsewhere.
+    const { svc, update } = writable(qaOffer);
+    await expect((svc as any).updateBankOffer('o-1', { regionCode: 'IN' }, 'QA')).rejects.toThrow(
+      'This bank offer belongs to IN, not to the QA market.',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('but may restate their own market, which is a no-op', async () => {
+    const { svc, update } = writable(qaOffer);
+    await (svc as any).updateBankOffer('o-1', { regionCode: 'qa' }, 'QA');
+    expect(update.mock.calls[0][1]).toMatchObject({ regionCode: 'QA', isGlobal: false });
+  });
+
   it('a create still stamps both columns, so a new row is never unattributed by omission', async () => {
     const saved = { id: 'o-new' };
     const repo = {

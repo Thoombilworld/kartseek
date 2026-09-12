@@ -15,6 +15,7 @@ import { DeliveryAssignment } from '../entities/delivery-assignment.entity';
 import { ProductReport } from '../entities/product-report.entity';
 import { PriceAlert } from '../entities/price-alert.entity';
 import { ProductListing } from '../entities/product-listing.entity';
+import { ForbiddenException } from '@nestjs/common';
 
 /**
  * Coupons per market.
@@ -160,6 +161,40 @@ describe('MarketplaceFulfillmentService — coupons per market', () => {
         expect(res.valid).toBe(true);
         expect(res.discount).toBe(20);
       }
+    });
+  });
+
+  /**
+   * An unreadable lock must not fall through to the global path.
+   *
+   * `couponMarketFor` opened with `const lock = normaliseMarket(scope); if
+   * (lock) { … return lock; }`, so a lock such as `ZZ` skipped the branch and
+   * reached `if (wanted) return wanted` — the coupon was then scoped to
+   * whatever the CALLER asked for, chosen by an admin who was supposed to be
+   * confined to one market (R2-1).
+   */
+  describe('an unreadable lock refuses instead of taking the global path', () => {
+    const dto = () => ({ code: `C${Math.random().toString(36).slice(2, 7)}`, discountValue: 5 });
+
+    it('refuses ZZ, QAT and NOT-A-COUNTRY when issuing a coupon', async () => {
+      for (const bad of ['ZZ', 'QAT', 'NOT-A-COUNTRY']) {
+        await expect(service.createCoupon(dto(), undefined, bad)).rejects.toThrow(
+          ForbiddenException,
+        );
+      }
+    });
+
+    it('issues into the lock for a readable one, whatever the body named', async () => {
+      // Same market named in the body: accepted, and stamped from the lock.
+      await service.createCoupon({ ...dto(), regionCode: 'QA' }, undefined, 'QA');
+      const created = repos.Coupon.create.mock.calls.at(-1)![0];
+      expect(created).toMatchObject({ regionCode: 'QA' });
+    });
+
+    it('refuses a locked admin naming another market', async () => {
+      await expect(
+        service.createCoupon({ ...dto(), regionCode: 'IN' }, undefined, 'QA'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

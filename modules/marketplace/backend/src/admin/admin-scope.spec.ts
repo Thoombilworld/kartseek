@@ -145,6 +145,20 @@ describe('MarketplaceAdminService admin queues respect scope', () => {
     );
   });
 
+  /**
+   * A `where`-object market assignment drops the KEY for an unreadable market,
+   * and a `findAndCount` with no market key returns every market. Found by
+   * `scope-helper-uniqueness.spec.ts`'s where-object test, which exists because
+   * the bare-equality scan cannot see this shape (R11 fix round 3 / R2-1).
+   */
+  it('refuses an unreadable market on the pending-seller queue', async () => {
+    for (const bad of ['ZZ', 'QAT', 'NOT-A-COUNTRY']) {
+      const { svc, sellerRepo } = admin();
+      await expect(svc.getPendingSellers(bad)).rejects.toThrow(ForbiddenException);
+      expect(sellerRepo.findAndCount).not.toHaveBeenCalled();
+    }
+  });
+
   it('refuses to block a seller from another market and writes nothing', async () => {
     const { svc, sellerRepo, kafka } = admin();
     await expect(svc.blockSeller('s-1', 'admin-qa', 'QA')).rejects.toThrow(ForbiddenException);

@@ -229,6 +229,29 @@ describe('delivery assignments respect the assignment market', () => {
       expect.objectContaining({ where: { status: 'PENDING', regionCode: 'QA' } }),
     );
   });
+
+  /**
+   * This list predicates through a `findAndCount` `where` OBJECT, so
+   * `if (market) where.regionCode = market` drops the KEY for a market it
+   * cannot read — and a `where` with no market key returns every market's
+   * assignments, including the courier phone numbers and live GPS on them. The
+   * gateway sends the caller's resolved market in `region`, which for a
+   * region-locked admin IS their lock (R2-1).
+   */
+  it('refuses an unreadable market rather than listing every market', async () => {
+    for (const bad of ['ZZ', 'QAT', 'NOT-A-COUNTRY']) {
+      const { svc, deliveryAssignmentRepo } = logistics();
+      await expect(svc.getDeliveryAssignments({ region: bad })).rejects.toThrow(ForbiddenException);
+      expect(deliveryAssignmentRepo.findAndCount).not.toHaveBeenCalled();
+    }
+  });
+
+  it('lists every market only when no market is given at all', async () => {
+    const { svc, deliveryAssignmentRepo } = logistics();
+    await svc.getDeliveryAssignments({});
+    const arg = deliveryAssignmentRepo.findAndCount.mock.calls[0][0] as any;
+    expect('regionCode' in arg.where).toBe(false);
+  });
 });
 
 describe('product reports respect the reported seller market', () => {

@@ -10,6 +10,7 @@ import {
   marketPredicate,
   normaliseMarket,
   refuseUnattributable as refuseUnattributableShared,
+  requireMarket,
 } from '@app/common';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
@@ -623,7 +624,12 @@ export class MarketplaceAdminService {
 
   async getPendingSellers(scope?: string) {
     const where: Record<string, unknown> = { verificationStatus: 'PENDING' };
-    if (scope) where.regionCode = scope.toUpperCase();
+    // `requireMarket`: a truthiness gate on a `where`-object assignment DROPS
+    // the key for a market it cannot read, and a `findAndCount` with no market
+    // key returns every market. Same class as the five R2-1 sites, found by the
+    // uniqueness spec's new where-object test rather than by review.
+    const market = requireMarket(scope, 'pending sellers', this.logger);
+    if (market) where.regionCode = market;
     const [data, total] = await this.sellerRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },

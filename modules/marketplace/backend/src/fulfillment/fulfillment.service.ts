@@ -7,7 +7,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike, In, MoreThanOrEqual } from 'typeorm';
-import { applyMarketFilter, assertInMarket, normaliseMarket, requireId } from '@app/common';
+import {
+  applyMarketFilter,
+  assertInMarket,
+  normaliseMarket,
+  requireId,
+  requireMarket,
+} from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { Product } from '../entities/product.entity';
@@ -142,7 +148,13 @@ export class MarketplaceFulfillmentService {
     requested?: string | null,
     scope?: string,
   ): Promise<string | null> {
-    const lock = normaliseMarket(scope);
+    // `requireMarket`, not `normaliseMarket`. The gate was `if (lock)`, so a
+    // lock this platform cannot read fell through to the GLOBAL path below and
+    // returned the caller's own `requested` market unchecked — a coupon scoped
+    // by whatever the caller asked for, to an admin confined to one market
+    // (R2-1). Present-but-unreadable is a refusal; a genuinely absent scope is
+    // the documented global path that follows.
+    const lock = requireMarket(scope, 'coupon', this.logger);
     const wanted = normaliseMarket(requested ?? undefined) ?? null;
     if (lock) {
       if (wanted && wanted !== lock) {
@@ -1482,7 +1494,18 @@ export class MarketplaceFulfillmentService {
     if (filters.partnerId) where.partnerId = filters.partnerId;
     if (filters.orderId) where.orderId = filters.orderId;
     if (filters.status) where.status = filters.status;
-    const market = normaliseMarket(filters.region);
+    // `requireMarket`: the gateway sends the caller's resolved market in
+    // `region`, which for a region-locked admin IS their lock, and
+    // `normaliseMarket` alone dropped the predicate for one it could not read —
+    // every market's delivery assignments, to an admin confined to one (R2-1).
+    //
+    // market-boundary-exempt: predicated through a `findAndCount` `where`
+    // OBJECT rather than a query builder, so the uniqueness spec's
+    // bare-equality test cannot see this line. Its companion test for `where`
+    // object assignments does, and requires exactly the `requireMarket` call
+    // above — a builder here would mean rewriting a working paginated read to
+    // satisfy a grep.
+    const market = requireMarket(filters.region, 'delivery assignments', this.logger);
     if (market) where.regionCode = market;
     const [data, total] = await this.deliveryAssignmentRepo.findAndCount({
       where,
