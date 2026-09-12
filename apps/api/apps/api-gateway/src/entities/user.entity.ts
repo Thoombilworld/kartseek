@@ -101,6 +101,21 @@ export class User {
   @Column({ type: 'varchar', default: 'active' })
   status: string;
 
+  /**
+   * Why the account was last suspended, and when — written by the moderation
+   * action in admin-service and cleared again when the ban is lifted, so
+   * "never banned" and "ban lifted" read the same. The account's own state is
+   * `status` (`suspended`); these two are the record behind it.
+   *
+   * `type` is explicit on both: a `string | null` / `Date | null` property with
+   * no explicit type reflects as `Object` and the gateway refuses to boot.
+   */
+  @Column({ name: 'banned_reason', type: 'text', nullable: true })
+  bannedReason: string | null;
+
+  @Column({ name: 'banned_at', type: 'timestamptz', nullable: true })
+  bannedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

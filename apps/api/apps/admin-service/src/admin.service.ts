@@ -404,12 +404,32 @@ export class AdminService {
   }
 
   // ── Ban User ───────────────────────────────────────────────────────────────
+  /**
+   * Suspend an account, with the reason and the moment on the row.
+   *
+   * `banned_reason` had no column to land in until
+   * `1786502000000-UserBanColumns`, so this UPDATE failed with 42703 on every
+   * ban ever attempted and the endpoint answered 500 — the market check in
+   * front of it was the only part that worked. `banned_at` is written with it:
+   * a reason without a moment is not a record an appeal or an audit can use.
+   *
+   * The status is `suspended`, from the platform's own `AppStatus` vocabulary,
+   * not the `'BANNED'` this wrote before. Nothing in the platform reads
+   * `'BANNED'`, and the matching `'ACTIVE'` on unban left the account uncounted
+   * by every `status = 'active'` filter — the dashboard's own included — so an
+   * unbanned user came back invisible instead of active.
+   *
+   * One timestamp is used for the row, the Redis marker and the Kafka event, so
+   * the record and the events cannot disagree about when it happened.
+   */
   async banUser(userId: string, reason: string, adminId: string, scope?: string) {
     if (scope) assertInMarket(await this.userMarket(userId), scope, 'user', this.logger);
+    const bannedAt = new Date().toISOString();
     await this.applyUserStatus(
       userId,
-      `UPDATE users SET status = 'BANNED', banned_reason = $1 WHERE id = $2 RETURNING id`,
-      [reason, userId],
+      `UPDATE users SET status = 'suspended', banned_reason = $1, banned_at = $2
+        WHERE id = $3 RETURNING id`,
+      [reason, bannedAt, userId],
     );
 
     // Redis marker
@@ -419,7 +439,7 @@ export class AdminService {
         userId,
         reason,
         adminId,
-        bannedAt: new Date().toISOString(),
+        bannedAt,
       },
       86400 * 365,
     );
@@ -428,18 +448,20 @@ export class AdminService {
       userId,
       reason,
       adminId,
-      bannedAt: new Date().toISOString(),
+      bannedAt,
     });
-    this.logger.warn(`User BANNED: ${userId} by admin ${adminId} — ${reason}`);
-    return { success: true, userId, status: 'BANNED' };
+    this.logger.warn(`User suspended: ${userId} by admin ${adminId} — ${reason}`);
+    return { success: true, userId, status: 'suspended' };
   }
 
   // ── Unban User ─────────────────────────────────────────────────────────────
+  /** Lift a ban: the account is active again and the record behind it is cleared. */
   async unbanUser(userId: string, adminId: string, scope?: string) {
     if (scope) assertInMarket(await this.userMarket(userId), scope, 'user', this.logger);
     await this.applyUserStatus(
       userId,
-      `UPDATE users SET status = 'ACTIVE', banned_reason = NULL WHERE id = $1 RETURNING id`,
+      `UPDATE users SET status = 'active', banned_reason = NULL, banned_at = NULL
+        WHERE id = $1 RETURNING id`,
       [userId],
     );
 
@@ -449,7 +471,7 @@ export class AdminService {
       adminId,
       unbannedAt: new Date().toISOString(),
     });
-    return { success: true, userId, status: 'ACTIVE' };
+    return { success: true, userId, status: 'active' };
   }
 
   // ── KYC Management ─────────────────────────────────────────────────────────
@@ -725,13 +747,19 @@ export class AdminService {
    * The old unsegmented keys are left where they are, unread, and expire with
    * their existing one-year TTL.
    *
-   * `kind` is `revenue` or `orders` — the platform produces no others — but is
-   * typed as a string because the one caller is this service's own
-   * `POST /counter/increment`, which reads it out of a request body. `amount`
-   * is summed as a float: revenue is not an integer and `parseInt` used to
-   * truncate it.
+   * Private, and the two kinds are the type: the counters are written by this
+   * service when it processes the event being counted, never by a request body
+   * naming its own counter and its own market. The HTTP endpoint that did
+   * exactly that is gone — see the note at the foot of `admin.controller.ts`.
+   *
+   * `amount` is summed as a float: revenue is not an integer and `parseInt`
+   * used to truncate it.
    */
-  async incrementCounter(kind: string, amount = 1, market?: string): Promise<void> {
+  private async incrementCounter(
+    kind: 'revenue' | 'orders',
+    amount = 1,
+    market?: string,
+  ): Promise<void> {
     const bucket = marketPredicate(market) ?? 'GLOBAL';
     const dateKey = new Date().toISOString().slice(0, 10);
     const key = `admin:counter:${kind}:${bucket}:${dateKey}`;

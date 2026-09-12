@@ -51,7 +51,7 @@ import { DataSource } from 'typeorm';
  * a shadow table there.
  *
  * ═══════════════════════════════════════════════════════════════════════════
- * CLASSIFICATION — why these six files and no others
+ * CLASSIFICATION — why these seven files and no others
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Every migration's `up()` was read and assigned to exactly one DataSource.
@@ -99,6 +99,11 @@ import { DataSource } from 'typeorm';
  *       `public.user_region_backfill_1786501900000`, is created and dropped by
  *       the migration itself.
  *
+ *   1786502000000-UserBanColumns
+ *       `users.banned_reason` / `users.banned_at` — the record behind a
+ *       moderation ban, which the UPDATE in admin-service had always written to
+ *       and which had never existed.
+ *
  * Deliberately **not** here, though each mentions `users` somewhere:
  *
  *   1719468000000-InitialMarketplaceSchema
@@ -128,7 +133,7 @@ import { DataSource } from 'typeorm';
  * Nothing in `migrations/` creates `public.users` in *this* database. It was
  * built by `synchronize` before the databases were split, and the main database
  * is the one that does not synchronize. A genuinely empty main database needs
- * that table before any of the six below can alter it.
+ * that table before any of the seven below can alter it.
  */
 export const MainDataSource = new DataSource({
   type: 'postgres',
@@ -146,6 +151,7 @@ export const MainDataSource = new DataSource({
     'migrations/1786501700000-OrderMarket.ts',
     'migrations/1786501800000-AdminRoles.ts',
     'migrations/1786501900000-UserMarketBackfill.ts',
+    'migrations/1786502000000-UserBanColumns.ts',
   ],
   migrationsTableName: 'migrations',
   // One transaction per migration, matching the marketplace DataSource: a

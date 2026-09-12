@@ -227,10 +227,13 @@ export class AdminController {
   ) {
     return this.svc.addAuditLog(entry);
   }
-  @Post('counter/increment') incrementCounter(
-    @Body('counter') counter: string,
-    @Body('value') value = 1,
-  ) {
-    return this.svc.incrementCounter(counter, value);
-  }
+  // `POST /admin/counter/increment` is gone. It was the only caller of
+  // `AdminService.incrementCounter`, it took the counter name and the amount
+  // straight out of an unauthenticated request body on this service's own HTTP
+  // port, and nothing in the platform ever called it — no gateway route, no
+  // client. It also had no market to pass, so every figure it wrote landed in
+  // the `GLOBAL` bucket. A dashboard counter is written by the service that
+  // processes the event it counts; `incrementCounter` is private for that
+  // reason now, and its market parameter is not something a request body gets
+  // to choose.
 }

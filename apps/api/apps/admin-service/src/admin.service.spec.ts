@@ -75,17 +75,21 @@ describe('AdminService', () => {
   });
 
   describe('banUser / unbanUser', () => {
+    // `suspended` / `active`, not `BANNED` / `ACTIVE`: the uppercase pair was
+    // in no vocabulary the platform reads (`AppStatus` is lowercase), so an
+    // unbanned account came back as 'ACTIVE' and was counted by nothing —
+    // including the dashboard's own `status = 'active'` filter.
     it('should ban user and publish event', async () => {
       const result = await service.banUser('USER-001', 'Fraud', 'ADMIN-001');
       expect(result.success).toBe(true);
-      expect(result.status).toBe('BANNED');
+      expect(result.status).toBe('suspended');
       expect(kafka.publish).toHaveBeenCalledWith('admin.user.banned', expect.any(Object));
     });
 
     it('should unban user', async () => {
       const result = await service.unbanUser('USER-001', 'ADMIN-001');
       expect(result.success).toBe(true);
-      expect(result.status).toBe('ACTIVE');
+      expect(result.status).toBe('active');
     });
 
     // The cases above run with SKIP_DB, where a Redis-only ban is the designed

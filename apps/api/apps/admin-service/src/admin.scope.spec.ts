@@ -67,10 +67,19 @@ function makeService(
       u_region_code: overrides.userRegion ?? null,
     }),
   };
-  const em: any = { createQueryBuilder: () => qb, query: vi.fn(async () => [{ id: 'user-1' }]) };
+  // Every `em.query` the service issues, so a spec can assert what a moderation
+  // action actually wrote — and that a refused one wrote nothing.
+  const queries: { sql: string; params: unknown[] }[] = [];
+  const em: any = {
+    createQueryBuilder: () => qb,
+    query: vi.fn(async (sql: string, params: unknown[] = []) => {
+      queries.push({ sql, params });
+      return [{ id: 'user-1' }];
+    }),
+  };
   // Constructor order as of 2026-09-11: (redis, kafka, layoutRepo, em).
   const svc = new AdminService(redis as any, kafka as any, {} as any, overrides.dbDown ? null : em);
-  return { svc, where, selects, kafka, store };
+  return { svc, where, selects, kafka, store, queries };
 }
 
 describe('AdminService market scope', () => {
@@ -269,5 +278,62 @@ describe('AdminService reads a table it has no entity metadata for', () => {
     // and `u_region_code` is undefined — which reads as "no market" and fails
     // closed on every ban a locked admin attempts.
     expect(selects).toContain('u.region_code AS u_region_code');
+  });
+});
+
+/**
+ * A ban is a record, not just a flag.
+ *
+ * `banned_reason` did not exist on `public.users`, so the UPDATE behind every
+ * ban failed with 42703 and `applyUserStatus` turned that into a 500: no ban
+ * had ever persisted, for any administrator, scoped or global. The column pair
+ * arrives with `1786502000000-UserBanColumns`; these specs are what say the
+ * moderation action writes the reason and the moment, clears them again on an
+ * unban, and writes nothing at all when the market check refuses it.
+ *
+ * The status strings are the platform's own vocabulary (`AppStatus`), not the
+ * 'BANNED'/'ACTIVE' this code used to write: nothing in the platform reads
+ * those, and an unban that set 'ACTIVE' left the account uncounted by every
+ * `status = 'active'` filter, the dashboard's own included.
+ */
+describe('AdminService records a ban', () => {
+  const updateOf = (queries: { sql: string; params: unknown[] }[]) =>
+    queries.find((q) => /UPDATE users/i.test(q.sql));
+
+  it('writes the reason and the moment for a user in the caller’s own market', async () => {
+    const { svc, queries } = makeService({ userRegion: 'QA' });
+    const res = await svc.banUser('user-1', 'fraud', 'admin-qa', 'QA');
+
+    const update = updateOf(queries);
+    expect(update).toBeDefined();
+    expect(update!.sql).toMatch(/banned_reason = \$/);
+    expect(update!.sql).toMatch(/banned_at = \$/);
+    expect(update!.sql).toMatch(/status = 'suspended'/);
+    // reason, the timestamp, then the id — one timestamp for the row, the
+    // Redis marker and the Kafka event, so the record and the event agree.
+    expect(update!.params[0]).toBe('fraud');
+    expect(String(update!.params[1])).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(update!.params[2]).toBe('user-1');
+    expect(res.status).toBe('suspended');
+  });
+
+  it('clears both on an unban', async () => {
+    const { svc, queries } = makeService({ userRegion: 'QA' });
+    const res = await svc.unbanUser('user-1', 'admin-qa', 'QA');
+
+    const update = updateOf(queries);
+    expect(update!.sql).toMatch(/banned_reason = NULL/);
+    expect(update!.sql).toMatch(/banned_at = NULL/);
+    expect(update!.sql).toMatch(/status = 'active'/);
+    expect(res.status).toBe('active');
+  });
+
+  it('writes nothing at all when the market check refuses the ban', async () => {
+    const { svc, queries, kafka } = makeService({ userRegion: 'IN' });
+    await expect(svc.banUser('user-1', 'fraud', 'admin-qa', 'QA')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(queries.some((q) => /UPDATE users/i.test(q.sql))).toBe(false);
+    expect(kafka.publish).not.toHaveBeenCalled();
   });
 });
