@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import { DoctorService } from '../doctor.service';
-import { DoctorController } from '../doctor.controller';
 
 // `:__market` is the one parameter name `applyMarketFilter` binds, platform-wide
 // (`libs/common/src/market/market-scope.ts`). It is deliberately not `:country`,
@@ -10,10 +9,19 @@ import { DoctorController } from '../doctor.controller';
 
 /**
  * A region-locked administrator carries their market as `scope` on every admin
- * message. Clinics carry a `regionCode`, so the clinic list narrows to it.
- * Doctors carry no market column at all — a doctor row cannot be attributed to
- * a market yet — so that list refuses a scoped caller rather than answering
- * with every market's practitioners.
+ * message. Clinics carry a `regionCode`, so the STOREFRONT clinic list narrows
+ * to it — that read is what this file still covers.
+ *
+ * The ADMIN reads moved out in M6: `admin.doctor.clinics`, `.doctors` and
+ * `.specialties` used to be `@MessagePattern`s bolted onto `DoctorController`,
+ * and they now live in `src/admin/admin.controller.ts` with the twelve that had
+ * no handler at all. Their scope tests moved with them
+ * (`src/admin/admin-scope.spec.ts`).
+ *
+ * `DoctorController.tcpAdminGetDoctors` and its two tests are gone rather than
+ * rewritten: the method refused every scoped caller because `doctors` had no
+ * market column, and M6 gave the table `region_code`. A test asserting that the
+ * directory refuses a regional administrator would now be pinning the bug.
  */
 
 function service() {
@@ -50,37 +58,16 @@ describe('DoctorService.getClinics narrows to the caller market', () => {
   });
 });
 
-describe('DoctorController.tcpAdminGetDoctors fails closed — doctors have no market', () => {
-  function controller() {
-    const svc = { getDoctors: vi.fn(async () => ({ data: [], total: 0 })) };
-    const ctrl = Object.create(DoctorController.prototype) as DoctorController;
-    Object.assign(ctrl, { svc });
-    return { ctrl, svc };
-  }
-
-  // The handler is synchronous and throws directly rather than returning a
-  // rejected promise, so the call must be wrapped for `.toThrow` to catch it.
-  it('refuses a scoped request without ever reading the doctor table', () => {
-    const { ctrl, svc } = controller();
-    expect(() => ctrl.tcpAdminGetDoctors({ scope: 'QA' } as any)).toThrow(ForbiddenException);
-    expect(svc.getDoctors).not.toHaveBeenCalled();
-  });
-
-  it('lets a global admin (no scope) list every doctor', async () => {
-    const { ctrl, svc } = controller();
-    await expect(ctrl.tcpAdminGetDoctors({} as any)).resolves.toMatchObject({ total: 0 });
-    expect(svc.getDoctors).toHaveBeenCalled();
-  });
-});
-
 /**
  * R12 leftover (a): the three SUPER_ADMIN-only status writes on the public
  * `DoctorController` (`PUT /doctor/hospitals/:hospitalId/status`,
  * `.../clinics/:clinicId/status`, `.../doctors/:doctorId/status`) used to
  * carry no scope call at all. `hospitals` has no market column, so a scoped
  * caller is refused outright; `clinics.regionCode` exists, so a clinic status
- * write asserts it; a doctor has no market of its own and is resolved through
- * the clinic it is attached to.
+ * write asserts it; a doctor is judged on `doctors.region_code` (M6) and, where
+ * that copy is still NULL, on the clinic it is attached to — so the four tests
+ * below pass unchanged through the column's arrival, which is the point of
+ * keeping the fallback.
  */
 function svcFor(overrides: Record<string, unknown>) {
   const svc = Object.create(DoctorService.prototype) as DoctorService;
@@ -141,7 +128,7 @@ describe('DoctorService status writes resolve the caller market', () => {
     });
   });
 
-  describe('updateDoctorStatus — resolved through the attached clinic', () => {
+  describe('updateDoctorStatus — own market first, the clinic as fallback', () => {
     it("allows a caller locked to the market of the doctor's own clinic", async () => {
       const doctorRepo = {
         findOne: vi.fn(async () => ({ id: 'd-1', status: 'active', clinicId: 'c-1' })),

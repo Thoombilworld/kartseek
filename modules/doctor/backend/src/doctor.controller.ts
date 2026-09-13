@@ -5,9 +5,7 @@ import { FranchiseViewService } from './franchise/franchise-view.service';
 import {
   type DtoMessage,
   type EmptyMessage,
-  type PaginatedMessage,
   RpcAwareExceptionsFilter,
-  refuseUnattributable,
   requireId,
 } from '@app/common';
 import {
@@ -511,54 +509,26 @@ export class DoctorController {
     return this.franchiseView.updateClinicStatus(d.franchiseId, d.clinicId, d.status);
   }
 
-  // ── Admin console commands ────────────────────────────────────────────────
-  // The gateway's admin-* controllers address this service with dot-notation
-  // commands and none had a handler, so every admin screen for this module got
-  // "no matching message handler" — an empty 200 while the gateway fallbacks
-  // were in place, a 503 once they were removed. The implementations already
-  // existed; only the patterns were missing.
-
-  // `scope` is the caller's market when the gateway resolved one for a
-  // region-locked administrator, and undefined for a global one.
-
-  @MessagePattern({ cmd: 'admin.doctor.clinics' })
-  tcpAdminGetClinics(
-    @Payload()
-    d: PaginatedMessage & {
-      city?: string;
-      specialty?: string;
-      scope?: string;
-      countryCode?: string;
-    },
-  ) {
-    return this.svc.getClinics(
-      d?.city,
-      d?.specialty,
-      d?.page ?? 1,
-      d?.limit ?? 20,
-      d?.scope ?? d?.countryCode,
-    );
-  }
-
-  /**
-   * `Doctor` carries no market column — a practitioner is reachable only
-   * through the clinic or hospital they happen to be attached to, and many
-   * rows have neither. There is no predicate to apply, so a scoped caller is
-   * refused rather than shown every market's practitioners.
-   */
-  @MessagePattern({ cmd: 'admin.doctor.doctors' })
-  tcpAdminGetDoctors(@Payload() d: PaginatedMessage & { specialty?: string; scope?: string }) {
-    refuseUnattributable(
-      d?.scope,
-      'doctor',
-      this.logger,
-      'Doctors cannot be attributed to a market yet.',
-    );
-    return this.svc.getDoctors(d?.specialty, d?.page ?? 1, d?.limit ?? 20);
-  }
-
-  @MessagePattern({ cmd: 'admin.doctor.specialties' })
-  tcpAdminGetSpecialties(@Payload() d: EmptyMessage) {
-    return this.svc.getSpecialties();
-  }
+  // ── Admin console commands live in src/admin/ ───────────────────────
+  //
+  // Three `admin.doctor.*` patterns used to sit here, bolted onto the bottom of
+  // the storefront controller: `clinics`, `doctors` and `specialties`. M6 moved
+  // them to `admin/admin.controller.ts` alongside the twelve that had no handler
+  // at all, so this module has ONE admin surface rather than an admin section
+  // inside its patient-facing one.
+  //
+  // Two of the three changed behaviour in the move, and the reasons are recorded
+  // where the new handlers are:
+  //
+  //   * `admin.doctor.clinics` no longer delegates to `getClinics` below, which
+  //     hard-codes `status = 'active'` — right for a patient browsing clinics,
+  //     useless for the console screen that has to show the PENDING queue.
+  //   * `admin.doctor.doctors` no longer calls `refuseUnattributable`. That
+  //     refusal was correct while `doctors` had no market column: a scoped caller
+  //     could not be served a directory nobody could attribute, so every regional
+  //     administrator was denied their own market's practitioners. AUD2-119's
+  //     ruling gave the table `region_code`, denormalised from the clinic and
+  //     backfilled once (`migrations/1786502800000-DoctorAdminSurfaces.ts`), so
+  //     the list filters instead — and a practitioner who still has no market is
+  //     absent from a scoped list rather than the whole list being refused.
 }

@@ -6,6 +6,8 @@ import { RedisModule } from '@app/redis';
 import { KafkaModule } from '@app/kafka';
 import { DoctorController } from './doctor.controller';
 import { DoctorService } from './doctor.service';
+import { DoctorAdminController } from './admin/admin.controller';
+import { DoctorAdminService } from './admin/admin.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
 
 // ── Entities ─────────────────────────────────────────────────────────────────
@@ -22,6 +24,7 @@ import { Prescription } from './entities/prescription.entity';
 import { PrescriptionItem } from './entities/prescription-item.entity';
 import { FamilyMember } from './entities/family-member.entity';
 import { IntakeForm } from './entities/intake-form.entity';
+import { DoctorMarketSettings } from './entities/doctor-market-settings.entity';
 
 const ENTITIES = [
   Doctor,
@@ -37,6 +40,7 @@ const ENTITIES = [
   PrescriptionItem,
   FamilyMember,
   IntakeForm,
+  DoctorMarketSettings,
 ];
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
@@ -131,7 +135,7 @@ const envSchema = buildEnvSchema({
     RedisModule,
     KafkaModule.forService('doctor-service'),
   ],
-  controllers: [DoctorController],
-  providers: [DoctorService, FranchiseViewService],
+  controllers: [DoctorController, DoctorAdminController],
+  providers: [DoctorService, FranchiseViewService, DoctorAdminService],
 })
 export class DoctorServiceModule {}

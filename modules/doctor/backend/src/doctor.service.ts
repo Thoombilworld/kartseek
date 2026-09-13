@@ -360,25 +360,33 @@ export class DoctorService {
 
   // ── Admin / Provider Methods ──────────────────────────────────────────────
   /**
-   * `doctors` carries no market column of its own (see `tcpAdminGetDoctors`'s
-   * own note) — resolve one through the clinic the practitioner is attached
-   * to, the same relation `getDoctorsByClinic` reads. A doctor attached only
-   * to a hospital (which itself carries no market yet, below) or to neither
-   * cannot be attributed, so a locked caller is refused rather than shown a
-   * check against nothing.
+   * The practitioner's own market first, the clinic as the fallback.
+   *
+   * `doctors.region_code` exists as of M6 — denormalised from the clinic and
+   * backfilled once — so the market is on the row and no join is needed. The
+   * clinic lookup is KEPT as a fallback for the rows the backfill could not
+   * reach: a practitioner attached to a clinic AFTER the migration ran has a
+   * NULL copy until something re-stamps it, and refusing them on a stale NULL
+   * would reintroduce exactly the "correct and unusable" behaviour the column
+   * was added to remove. The value found that way is written back with the
+   * status, so each row heals once.
+   *
+   * A doctor attached only to a hospital (which carries no market column at all)
+   * or to neither cannot be attributed, so a locked caller is refused rather
+   * than shown a check against nothing.
    */
   async updateDoctorStatus(doctorId: string, status: string, scope?: string) {
     const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
     if (!doctor) throw new NotFoundException(`Doctor ${doctorId} not found`);
-    if (scope) {
-      const clinic = doctor.clinicId
-        ? await this.clinicRepo.findOne({ where: { id: doctor.clinicId } })
-        : null;
-      if (clinic) {
-        assertInMarket(clinic.regionCode, scope, 'doctor', this.logger);
-      } else {
-        refuseUnattributable(scope, 'doctor', this.logger);
-      }
+
+    if (!doctor.regionCode && doctor.clinicId) {
+      const clinic = await this.clinicRepo.findOne({ where: { id: doctor.clinicId } });
+      if (clinic?.regionCode) doctor.regionCode = clinic.regionCode;
+    }
+    if (doctor.regionCode) {
+      assertInMarket(doctor.regionCode, scope, 'doctor', this.logger);
+    } else {
+      refuseUnattributable(scope, 'doctor', this.logger);
     }
 
     doctor.status = status as any;
