@@ -16,8 +16,8 @@ after (running services day to day, testing, and troubleshooting).
   newer resolves the workspace the same way.
 - **Docker Desktop** with Compose **v2.24 or newer** (`docker compose version`),
   for Postgres, Redis, Kafka, MongoDB, and Elasticsearch. 2.24 is a hard floor,
-  not a preference: `infra/docker/compose.services.yml` uses the `env_file:
-[{ path, required }]` long syntax, which 2.20–2.23 reject outright at
+  not a preference: `infra/docker/compose.services.yml` uses the long
+  `env_file` syntax (`{ path, required }`), which 2.20–2.23 reject outright at
   `docker compose config`.
 - **Git.**
 - **Mobile only** — Flutter 3.44 with Dart 3.12, for the three apps under
@@ -49,30 +49,55 @@ installs the commit hooks described in [`conventions.md`](conventions.md#commits
 
 ## Environment
 
-Two files come before anything else:
+One command comes before anything else — before `npm run infra:up`, and before
+`npm run dev`:
 
 ```bash
-npm run env:init                          # root .env, with every secret generated
-cp apps/api/.env.example apps/api/.env    # then set DB_PASSWORD, see below
+npm run env:init
 ```
+
+It writes **both** files a developer needs, each from its own `.env.example`:
+the root `.env`, which is the only one `docker compose` reads, and
+`apps/api/.env`, which is what the host dev fleet reads. Nothing else needs
+editing by hand.
 
 **Do not `cp .env.example .env`.** Every secret in that file is deliberately
 empty, so a straight copy produces a `.env` that Compose refuses — which is the
 point. It used to ship a literal placeholder password for `POSTGRES_PASSWORD`
 and thirteen more like it, and because `${VAR:?…}` only fires on a value that is
 unset or empty — never on a placeholder — the documented first run brought the
-whole stack up on a password published in tracked source (AUD2-022).
+whole stack up on a password published in tracked source (AUD2-022). The same
+now goes for `apps/api/.env.example`: its `JWT_SECRET` and `ENCRYPTION_KEY` are
+empty, and `JWT_SECRET` is `.min(16).required()` in **every** environment, so a
+plain copy gives you a gateway that throws `Config validation error` at boot.
 
-`npm run env:init` (`scripts/env/generate-secrets.mjs`) copies the example and
-fills each empty secret with 24 random bytes as hex. It **refuses to overwrite
-an existing `.env`** — Postgres bakes its superuser password into the data
-directory at first init, so silently rotating that file would leave a running
-stack unable to authenticate against its own volumes. To start over, delete or
-rename `.env` yourself and run it again.
+`npm run env:init` (`scripts/env/generate-secrets.mjs`) fills each empty secret
+with random bytes as hex — 32 of them for `ENCRYPTION_KEY`, which must be
+exactly 64 hex characters. For `apps/api/.env` it does one thing more: the
+datastore passwords (`DB_PASSWORD`, `REDIS_PASSWORD` and the eight
+`<MODULE>_DB_PASSWORD`) are **copied from the root `.env`**, not generated,
+because both files talk to the same Postgres and the same Redis. That copy used
+to be a manual step on this page — "the one value you copy by hand" — and a
+skipped one is a `WRONGPASS` or a failed authentication at the first query, with
+nothing naming the two files.
 
-Then open `apps/api/.env` and set `DB_PASSWORD` to the `POSTGRES_PASSWORD` that
-`env:init` generated in the root `.env`. Those two files must agree and nothing
-checks that they do — this is the one value you copy by hand.
+### Re-running it
+
+`env:init` is **re-runnable**, and you should re-run it whenever you pull a
+change that adds a key to either `.env.example`. On a file that already exists
+it:
+
+- fills a key that is present with an **empty** value,
+- appends a key the example declares and the file lacks, in a labelled block,
+- and **never rewrites a value that is already set** — Postgres bakes its
+  superuser password into the data directory at first init, so rotating that
+  value would leave a running stack unable to authenticate against its own
+  volumes.
+
+Filling an empty value is safe for the same reason: `${VAR:?…}` refuses to start
+on unset-or-empty, so nothing can already be running on a secret that is not
+there. Values are never printed — the script reports key **names** only. If you
+do want new secrets, delete or rename the file deliberately and run it again.
 
 Each of the eight module backends (`modules/<vertical>/backend/`) also ships
 its own `.env.example`. Those now point at the **shared** Postgres — port

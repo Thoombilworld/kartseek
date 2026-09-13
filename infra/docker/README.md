@@ -380,12 +380,21 @@ missing or empty and never rewrites one that is set.
 A module service connects **as its own Postgres role** — `grocery_user` and
 friends, created by `init-roles.sh` (see above) — against the shared
 `kartseek_db`. A service whose registry entry says `database: null` gets
-`DB_HOST` and `DB_PORT` but no name, role or password: it opens no connection,
-and the superuser credential has no business being in its environment.
+`DB_HOST` and `DB_PORT`, and `DB_NAME`, `DB_USER` and `DB_PASSWORD` explicitly
+**blank**: it opens no connection, the superuser credential has no business
+being in its environment, and leaving the keys out entirely would only hand
+them back to `apps/api/.env` through `env_file`.
 `DB_SSL` is `false` everywhere: the images run `NODE_ENV=production`, which
 turns SSL on by default, and this Postgres speaks plaintext on a private
 network. `DEV_AUTH_BYPASS` is pinned `false` rather than left to the
 `NODE_ENV` gate in `jwt-auth.guard.ts`.
+
+> **`docker compose config` prints every resolved secret in plaintext** — the
+> Postgres and Redis passwords, `JWT_SECRET`, `ENCRYPTION_KEY`, and the
+> credential inside `MONGO_URI` and `ELASTICSEARCH_NODE`. It is the right tool
+> for checking what a container will receive, and its output must never be
+> pasted into an issue, a pull request or a chat. Pipe it through `grep` for the
+> one key you are checking, or read the generated YAML instead.
 
 The console and the zones read **no** `.env` at all. Nothing in the root
 `.env` is theirs, `NEXT_PUBLIC_*` are inlined at build time, and keeping it out

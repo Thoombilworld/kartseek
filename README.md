@@ -48,10 +48,16 @@ zones, three Flutter apps, and the infrastructure to run them.
 git clone <url> && cd KARTSEEKAPP
 nvm use            # or: nvm use 26.5.0 (nvm-windows)
 npm ci
-cp .env.example .env && cp apps/api/.env.example apps/api/.env
+npm run env:init   # writes .env AND apps/api/.env, with every secret generated
 npm run infra:up
 npm run dev
 ```
+
+Do not copy the `.env.example` files by hand: every secret in them is
+deliberately empty, and `JWT_SECRET` is required in every environment, so a
+plain copy gives you a Compose stack that refuses to start and a gateway that
+throws at boot. `env:init` is re-runnable and never rewrites a value you have
+already set.
 
 Open http://localhost:3000. The API answers at
 http://localhost:3001/api/v1/health and documents itself at
