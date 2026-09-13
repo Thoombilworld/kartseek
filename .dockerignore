@@ -42,7 +42,8 @@ coverage
 # Tooling no image touches. apps/web, modules/*/frontend and packages/ used to
 # be excluded here and are not any more: nextjs.Dockerfile builds from them.
 # The backend images still only COPY the paths they name, so the cost is upload
-# size, not layer size.
+# size, not layer size — and the heavy parts of those trees (`node_modules`,
+# `.next`) are already excluded above, so what this actually adds is source.
 apps/mcp-server
 docs
 # Cross-service test assets (Postman, smoke) are never part of an image.
@@ -58,3 +59,14 @@ skills
 npm-debug.log*
 .vscode
 .idea
+.turbo
+**/.turbo
+.build-logs
+
+# Docker Desktop's own WSL data directory, which lives in this repository root
+# on at least one developer machine: 36 GB of virtual disk, gitignored but never
+# excluded here, so `docker build` was uploading Docker's own storage into the
+# build context — 7 GB and climbing before the transfer was cut short. It is
+# matched by name rather than by location because nothing else in this tree is
+# ever called that.
+DockerDesktopWSL
