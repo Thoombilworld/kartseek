@@ -98,11 +98,16 @@ log_success "ConfigMap deployed"
 # No value is ever echoed: they go into a 0600 temp file, into
 # `kubectl create secret`, and the file is removed on exit.
 
+# `''` or `""`, because a template key written the other way would otherwise be
+# invisible here and silently never filled, while still passing k8s.test.mjs's
+# no-secret-literal check — which accepts both. One rule, in both places.
+EMPTY='\(\x27\x27\|""\)'
 secret_template_keys() {
-  sed -n '/^stringData:/,/^---/p' ./config.yaml | sed -n "s/^  \([A-Z0-9_]*\): ''.*$/\1/p"
+  sed -n '/^stringData:/,/^---/p' ./config.yaml | sed -n "s/^  \([A-Z0-9_]*\): $EMPTY.*\$/\1/p"
 }
 secret_optional_keys() {
-  sed -n '/^stringData:/,/^---/p' ./config.yaml | sed -n "s/^  \([A-Z0-9_]*\): '' # optional$/\1/p"
+  sed -n '/^stringData:/,/^---/p' ./config.yaml |
+    sed -n "s/^  \([A-Z0-9_]*\): $EMPTY # optional\$/\1/p"
 }
 
 # The first non-empty `KEY=value` across the sources, in order.
@@ -166,18 +171,52 @@ if [ -n "$missing_required" ]; then
   SECRETS_ENV_FILE at a file of KEY=value lines. Refusing to deploy a cluster
   onto blank credentials."
   fi
-  log_warning "Left to the existing Secret (absent from the env files):$missing_required"
+  log_warning "Kept from the existing Secret (absent from the env files):$missing_required"
 fi
 
-log_info "Creating kartseek-secrets — $built of $TOTAL_KEYS template keys..."
-kubectl create secret generic kartseek-secrets \
-  --from-env-file="$SECRET_TMP" --namespace=$NAMESPACE \
-  --dry-run=client -o yaml | kubectl apply -f -
+# ── Create, or MERGE. Never `apply`. ───────────────────────────────────────
+#
+# `kubectl apply` prunes: a key that was in the resource's
+# last-applied-configuration and is absent from the new one is DELETED. Since
+# this script is the one documented way to fill the Secret, a previous run of it
+# is exactly what puts keys in last-applied — so a second run with a narrower
+# source (a shorter SECRETS_ENV_FILE, or apps/api/.env gone) would have removed
+# the very credentials the warning above promises to keep, and the pods would
+# lose them. `create` on the first run and a merge `patch` afterwards cannot do
+# that: a merge patch adds and overwrites the keys it names and leaves the rest
+# alone.
+if kubectl get secret kartseek-secrets --namespace=$NAMESPACE --ignore-not-found -o name | grep -q .; then
+  # `stringData`, not `data`: the API server base64s it on write, so nothing
+  # here has to. It is write-only — reading the Secret back shows `data` — which
+  # is why this is a patch body and not a comparison.
+  #
+  # The values are double-quoted YAML scalars, so a backslash or a quote in a
+  # generated password has to be escaped. Two substitutions, in that order.
+  SECRET_PATCH="$(mktemp)"
+  chmod 600 "$SECRET_PATCH"
+  trap 'rm -f "$SECRET_TMP" "$SECRET_PATCH"' EXIT
+  {
+    echo 'stringData:'
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      printf '  %s: "%s"\n' "${line%%=*}" \
+        "$(printf '%s' "${line#*=}" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+    done < "$SECRET_TMP"
+  } > "$SECRET_PATCH"
+  log_info "Patching kartseek-secrets — $built of $TOTAL_KEYS template keys, the rest kept..."
+  kubectl patch secret kartseek-secrets --namespace=$NAMESPACE \
+    --type merge --patch-file "$SECRET_PATCH"
+  rm -f "$SECRET_PATCH"
+else
+  log_info "Creating kartseek-secrets — $built of $TOTAL_KEYS template keys..."
+  kubectl create secret generic kartseek-secrets \
+    --from-env-file="$SECRET_TMP" --namespace=$NAMESPACE
+fi
 rm -f "$SECRET_TMP"
 if [ -n "$absent_optional" ]; then
   log_warning "Optional integration keys absent:$absent_optional"
 fi
-log_success "Secret applied ($built of $TOTAL_KEYS keys)"
+log_success "Secret written ($built of $TOTAL_KEYS keys)"
 
 if [ "$ENVIRONMENT" = "production" ]; then
   # Everything blank has already been refused above; this is the reminder that a

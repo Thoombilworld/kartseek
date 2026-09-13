@@ -407,6 +407,92 @@ test('allow-web-tier admits exactly the ports the registry gives the web tier', 
   assert.deepEqual(allowed, declared);
 });
 
+// ── deploy.sh's Secret step ─────────────────────────────────────────────────
+// The names live in config.yaml and the script reads them with sed; these three
+// tests are what keep the two from drifting, and what keeps `kubectl apply` out
+// of a Secret this script only ever partly builds.
+
+/** config.yaml's Secret document, as { name: 'optional' | 'required' }. */
+const secretTemplate = () => {
+  const doc = YAML.parseAllDocuments(read('infra/k8s/config.yaml'))
+    .map((d) => d.toJS())
+    .find((d) => d?.kind === 'Secret' && d.metadata.name === 'kartseek-secrets');
+  const optional = new Set(
+    [...read('infra/k8s/config.yaml').matchAll(/^ {2}([A-Z0-9_]+): *(?:''|"") # optional$/gm)].map(
+      (m) => m[1],
+    ),
+  );
+  return Object.fromEntries(
+    Object.keys(doc.stringData).map((k) => [k, optional.has(k) ? 'optional' : 'required']),
+  );
+};
+
+test('the required Secret names are the platform’s own, and pinned', () => {
+  // Nothing else asserts this split, so adding `# optional` to POSTGRES_PASSWORD
+  // would quietly downgrade a platform credential with every suite still green.
+  const template = secretTemplate();
+  const required = Object.keys(template)
+    .filter((k) => template[k] === 'required')
+    .sort();
+  assert.deepEqual(required, [
+    'DOCTOR_DB_PASSWORD',
+    'ELASTIC_PASSWORD',
+    'ENCRYPTION_KEY',
+    'FRANCHISE_DB_PASSWORD',
+    'GROCERY_DB_PASSWORD',
+    'HOTEL_DB_PASSWORD',
+    'JWT_SECRET',
+    'MARKETPLACE_DB_PASSWORD',
+    'MONGO_ROOT_PASSWORD',
+    'PHARMACY_DB_PASSWORD',
+    'POSTGRES_PASSWORD',
+    'REDIS_PASSWORD',
+    'RESTAURANT_DB_PASSWORD',
+    'TAXI_DB_PASSWORD',
+  ]);
+  assert.equal(Object.keys(template).length, 28);
+});
+
+test('the empty shape is one rule, and deploy.sh reads the same one', () => {
+  // A key written `KEY: ""` passes the no-secret-literal test below and used to
+  // be invisible to deploy.sh's sed, so it would silently never be filled.
+  const deploy = read('infra/k8s/deploy.sh');
+  const rule = /^EMPTY=.*$/m.exec(deploy);
+  assert.ok(rule, 'deploy.sh no longer defines the EMPTY shape it matches on');
+  for (const shape of ['\\x27\\x27', '""'])
+    assert.ok(rule[0].includes(shape), `deploy.sh's EMPTY rule misses ${shape}: ${rule[0]}`);
+  // And every value in the template is one of those two shapes.
+  const secretBlock = read('infra/k8s/config.yaml').split('stringData:')[1].split('\n---')[0];
+  for (const line of secretBlock.split('\n')) {
+    const m = /^ {2}([A-Z0-9_]+): *(\S*)/.exec(line);
+    if (m) assert.match(m[2], /^(''|"")$/, `${m[1]} is not written as an empty scalar`);
+  }
+});
+
+test('deploy.sh never applies a partial Secret', () => {
+  // `kubectl apply` PRUNES a key that was in last-applied and is absent now —
+  // and this script is the one documented way to fill the Secret, so its own
+  // previous run is what puts keys there. A second run with a narrower source
+  // would have deleted the credentials the warning claims to keep.
+  const deploy = read('infra/k8s/deploy.sh');
+  const step5 = deploy.split('# ── Step 5: The Secret')[1].split('# ── Step 6:')[0];
+  // Code, not prose: the comment beside the fix names `kubectl apply` in order
+  // to explain why it is not used.
+  const code = step5
+    .split('\n')
+    .filter((l) => !/^\s*#/.test(l))
+    .join('\n');
+  assert.ok(
+    !/kubectl apply/.test(code),
+    'the Secret step reaches kubectl apply, which prunes keys it did not build',
+  );
+  assert.match(code, /kubectl get secret kartseek-secrets .*--ignore-not-found/);
+  assert.match(code, /kubectl create secret generic kartseek-secrets/);
+  assert.match(step5, /kubectl patch secret kartseek-secrets[\s\S]*--type merge --patch-file/);
+  // The warning has to be true: it is only printed on the path that keeps them.
+  assert.match(step5, /Kept from the existing Secret/);
+});
+
 test('every command documented in infra/k8s keeps its line continuations', () => {
   // `kubectl create secret generic kartseek-secrets #     --from-env-file=…`:
   // a multi-line command in a YAML comment lost its backslashes in an edit, and
