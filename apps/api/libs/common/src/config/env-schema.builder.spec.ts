@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import { buildEnvSchema, devOnlyStoreSwitch, STORE_EMULATOR_SWITCHES } from './env-schema.builder';
 
 /**
@@ -54,5 +56,66 @@ describe('store-emulator switches', () => {
       buildEnvSchema({ SKIP_REDIS: schema }).validate(rest);
     expect(object({ NODE_ENV: 'production', SKIP_REDIS: 'true' }).error).toBeDefined();
     expect(object({ NODE_ENV: 'test', SKIP_REDIS: 'true' }).error).toBeUndefined();
+  });
+});
+
+/**
+ * One name for the broker list, everywhere.
+ *
+ * The shared base declared `KAFKA_BROKER` while every reader on the platform —
+ * `kafka.module.ts`, `kafka-consumer.service.ts`, three `main.ts` bootstraps,
+ * the gateway's readiness probe, both `.env` files and all 26 service blocks in
+ * `infra/docker/compose.services.yml` — uses `KAFKA_BROKERS`. A schema that
+ * declares and DEFAULTS an unused name is worse than one that omits it: the
+ * default is handed out in environments where the real brokers are somewhere
+ * else entirely, so the wrong name answers plausibly instead of failing.
+ *
+ * Checked against the source tree rather than asserted, because the thing that
+ * must stay true is that there is one spelling — not that this file says so.
+ */
+describe('the Kafka broker list has one name', () => {
+  const validate = (env: Record<string, string>) => buildEnvSchema().validate(env);
+
+  it('declares the plural name the code reads', () => {
+    expect(validate({}).value.KAFKA_BROKERS).toBe('localhost:9092');
+  });
+
+  it('no longer declares the singular one', () => {
+    expect(validate({}).value.KAFKA_BROKER).toBeUndefined();
+  });
+
+  it('carries a configured value through', () => {
+    expect(validate({ KAFKA_BROKERS: 'kafka:29092' }).value.KAFKA_BROKERS).toBe('kafka:29092');
+  });
+
+  it('is spelled the same way in every source file that reads it', () => {
+    const apiRoot = path.join(__dirname, '..', '..', '..', '..');
+    const offenders: string[] = [];
+
+    /** Comments stripped: the rename is EXPLAINED in prose in two places, and a
+     * check that forbade naming the old spelling would delete the only record
+     * of why it went. What must not survive is code that reads the old name. */
+    const code = (src: string) =>
+      src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+          walk(full);
+          continue;
+        }
+        // Spec files are excluded: this one has to name the old spelling to
+        // assert it is gone.
+        if (!entry.name.endsWith('.ts') || entry.name.endsWith('.spec.ts')) continue;
+        // `KAFKA_BROKER` not followed by an S.
+        if (/KAFKA_BROKER(?!S)/.test(code(fs.readFileSync(full, 'utf8')))) {
+          offenders.push(path.relative(apiRoot, full).replace(/\\/g, '/'));
+        }
+      }
+    };
+    for (const root of ['apps', 'libs']) walk(path.join(apiRoot, root));
+    expect(offenders).toEqual([]);
   });
 });

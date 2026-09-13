@@ -76,7 +76,21 @@ const BASE_SCHEMA = {
   DB_RETRY_DELAY_MS: Joi.number().integer().min(0).optional(),
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().default(6379),
-  KAFKA_BROKER: Joi.string().default('localhost:9092'),
+  /**
+   * `KAFKA_BROKERS`, plural — the name every reader on the platform uses.
+   *
+   * This schema declared `KAFKA_BROKER`, and nothing anywhere sets or reads it:
+   * `kafka.module.ts`, `kafka-consumer.service.ts`, three service `main.ts`
+   * bootstraps, the gateway's readiness probe and both `.env` files all say
+   * `KAFKA_BROKERS`, as does every one of the 26 service blocks in
+   * `infra/docker/compose.services.yml`. So the shared base validated a
+   * variable that did not exist and gave it a default, which is worse than not
+   * declaring it: `cfg.get('KAFKA_BROKER')` returned `localhost:9092` in a
+   * container whose brokers are `kafka:29092`, and the first caller to reach
+   * for the singular name would have got a plausible, wrong answer with no
+   * error anywhere. The real name is now the declared one.
+   */
+  KAFKA_BROKERS: Joi.string().default('localhost:9092'),
   // Refused as `true` in production — see STORE_EMULATOR_SWITCHES. Declared in
   // the BASE so every service that calls `buildEnvSchema()` gets the guard,
   // not just the ones that happened to list the flag.
