@@ -26,6 +26,10 @@ export * from './config';
 
 // ─── Staff market scope (backend half) ───────────────────────────────────────
 export * from './market/market-scope';
+// The HTTP half, which reads the request rather than a record. It was declared
+// in `apps/api-gateway/src/guards`, where `libs/gdpr` had to reach up into the
+// application to import it (dispatch addendum item 5).
+export * from './market/http-market-scope';
 
 // ─── Admin permission vocabulary & seeded roles ──────────────────────────────
 export * from './admin/permissions';

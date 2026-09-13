@@ -3,7 +3,28 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const CONTROLLERS = path.join(__dirname, '..', 'controllers');
-const GUARD = path.join(__dirname, 'market-scope.ts');
+/**
+ * The HTTP half of the market-scope rule — `marketScopeOf`, `resolveMarket`,
+ * `resolveScope`, `assertRecordInScope`, `refuseLockedAdmin`.
+ *
+ * It was declared in `apps/api-gateway/src/guards/market-scope.ts`, which is
+ * where `libs/gdpr` had to reach up into the application to import it
+ * (dispatch addendum item 5). It now sits beside the record half it was always
+ * paired with, and the gateway file is an alias. What this spec checks is
+ * unchanged: exactly one declaration, wherever it lives.
+ */
+const GUARD = path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  'libs',
+  'common',
+  'src',
+  'market',
+  'http-market-scope.ts',
+);
 const COMMON = path.join(__dirname, '..', '..', '..', '..', 'libs', 'common', 'src', 'market');
 /** apps/api/apps/api-gateway/src/guards -> the repo root. */
 const REPO = path.join(__dirname, '..', '..', '..', '..', '..', '..');
@@ -68,7 +89,7 @@ describe('there is one implementation of scopeOf', () => {
     expect(n).toBeGreaterThanOrEqual(12);
   });
 
-  it('resolveScope is declared exactly once, in the gateway guard', () => {
+  it('resolveScope is declared exactly once, in libs/common', () => {
     const declarations = sources().filter((f) =>
       /export function resolveScope\(/.test(fs.readFileSync(f, 'utf8')),
     );

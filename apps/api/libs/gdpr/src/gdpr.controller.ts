@@ -17,32 +17,40 @@ import { type Request } from 'express';
 import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
 import { UserRole } from '@app/common';
 import { GdprService, type ConsentType } from './gdpr.service';
+// These four used to be imported from `apps/api-gateway/src` by relative path.
+//
 // `libs/gdpr` is mounted by `api-gateway.module.ts`, so it runs inside the
-// gateway process, but it is a shared library and these four are the
-// gateway APP's own files — not a `@app/*` package. Reaching them by
-// relative path reuses the one canonical implementation instead of a second
-// copy (`scope-helper-uniqueness.spec.ts` proves `resolveScope` has exactly
-// one declaration, in that file) rather than reimplementing the lock check
-// and the denial copy here.
+// gateway process — but it is a LIBRARY, and a library reaching up into an
+// application is a dependency the module graph cannot express: it built only
+// because both sit in one tsconfig, and it inverted the direction every other
+// import in this repository points (dispatch addendum item 5).
 //
-// `RolesGuard` and `Roles` come from here for a stronger reason than reuse:
-// they have to be the SAME pair. The gateway's guard requires the role **and**
-// every `perm:` key; `@app/guards`'s runs one flat `some()` over the whole
-// argument list, so under it a `'perm:system.settings'` entry matched nobody
-// and enforced nothing — an inert key on three routes that handle personal
-// data, while this file's own comment said the opposite (review I2/I3). The
-// role half (`SUPER_ADMIN` alone) was doing all the work. With the
-// permission-aware guard bound below, the key is real: a SUPER_ADMIN signs in
-// carrying `'*'`, and any future non-SUPER_ADMIN entry in these lists is
-// narrowed by the key instead of silently widened by it.
+// All four moved into libraries, and the gateway's own files are now aliases of
+// them, so there is still exactly one implementation of each — which was the
+// reason for the relative paths in the first place:
 //
-// `GdprModule` imports `SecurityModule` so this guard's `JwtService` resolves
-// in that module's injector — `@app/guards`'s took only a `Reflector`, which
-// is why the swap is a two-file change.
-import { refuseLockedAdmin } from '../../../apps/api-gateway/src/guards/market-scope';
-import { GlobalEntity } from '../../../apps/api-gateway/src/decorators/global-entity.decorator';
-import { Roles } from '../../../apps/api-gateway/src/decorators/roles.decorator';
-import { RolesGuard } from '../../../apps/api-gateway/src/guards/roles.guard';
+//   `RolesGuard`/`Roles`  →  @app/guards / @app/decorators. These have to be
+//     the SAME pair, and there used to be two. The one that survived requires
+//     the role **and** every `perm:` key; the weak duplicate ran one flat
+//     `some()` over the whole argument list, so a `'perm:system.settings'`
+//     entry matched nobody and enforced nothing — an inert key on three routes
+//     that handle personal data, while this file's own comment said the
+//     opposite (review I2/I3). The role half (`SUPER_ADMIN` alone) was doing
+//     all the work. With the permission-aware guard bound below, the key is
+//     real: a SUPER_ADMIN signs in carrying `'*'`, and any future
+//     non-SUPER_ADMIN entry in these lists is narrowed by the key instead of
+//     silently widened by it.
+//   `refuseLockedAdmin`   →  @app/common, beside the record half of the same
+//     rule (`normaliseMarket`, `assertInMarket`). `scope-helper-uniqueness.spec.ts`
+//     still proves `resolveScope` has exactly one declaration.
+//   `GlobalEntity`        →  @app/decorators.
+//
+// `GdprModule` imports `SecurityModule` so the guard's `JwtService` resolves in
+// that module's injector; the guard now treats it as optional, so a module
+// without a `JwtModule` binds the same guard without failing at boot.
+import { refuseLockedAdmin } from '@app/common';
+import { GlobalEntity, Roles } from '@app/decorators';
+import { RolesGuard } from '@app/guards';
 
 /**
  * Roles that may act on any data subject's records: the people who handle

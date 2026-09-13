@@ -1,12 +1,15 @@
-import { SetMetadata } from '@nestjs/common';
-
-export const GLOBAL_ENTITY_KEY = 'admin:global-entity';
-
 /**
- * Marks an admin route as deliberately market-free — catalogue taxonomy, static
- * pages, platform health. The market-scope regression spec allows only routes
- * that either resolve a market or carry this marker with a reason a reviewer
- * can read. A locked admin may still only READ a global entity; writes must
- * refuse `marketScopeOf(req).locked` themselves.
+ * `GlobalEntity` lives in `@app/decorators` now.
+ *
+ * It was declared here, in the application, and `libs/gdpr` — a LIBRARY — had
+ * to import it by relative path (`../../../apps/api-gateway/src/decorators/...`)
+ * to mark its three platform-wide routes. A library reaching up into an
+ * application is a dependency the module graph cannot express: it builds only
+ * because both happen to sit in one tsconfig, and it inverts the direction
+ * everything else in this repository points (dispatch addendum item 5).
+ *
+ * This file stays as the gateway's import path so the fourteen controllers that
+ * name it, and the source-scanning regression specs that read those controllers,
+ * keep working unchanged. There is one implementation, and it is in the library.
  */
-export const GlobalEntity = (reason: string) => SetMetadata(GLOBAL_ENTITY_KEY, reason);
+export { GlobalEntity, GLOBAL_ENTITY_KEY } from '@app/decorators';

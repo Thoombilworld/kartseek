@@ -1,105 +1,19 @@
-import {
-  Injectable,
-  type CanActivate,
-  type ExecutionContext,
-  ForbiddenException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { JwtService } from '@nestjs/jwt';
-import { ROLES_KEY } from '../decorators/roles.decorator';
-import { hasPermission } from '@app/common';
-
 /**
- * Enhanced RolesGuard with permission validation.
+ * `RolesGuard` lives in `@app/guards` now.
  *
- * Supports two modes:
- * 1. **Role-based**: @Roles('SUPER_ADMIN', 'ADMIN') — checks user.role
- * 2. **Permission-based**: @Roles('perm:orders.manage') — checks user.adminPermissions
- *    Prefix any permission key with 'perm:' to use permission-based validation.
+ * This file held the platform's only real implementation — role AND every
+ * `perm:` key — while `libs/guards` held a weaker one that read the same
+ * metadata key and reached a different verdict. `libs/gdpr`, a LIBRARY, had to
+ * import this guard by relative path (`../../../apps/api-gateway/src/guards/...`)
+ * to get the right behaviour on its three personal-data routes: a library
+ * reaching up into an application, which is a dependency the module graph
+ * cannot express and the opposite of the direction everything else points
+ * (dispatch addendum item 5).
+ *
+ * The implementation moved into `libs/guards`, replacing the weak duplicate, so
+ * there is exactly one of them and both an application and a library can name
+ * it. This file stays as the gateway's import path: thirty-four controllers
+ * bind it from here, and several source-scanning regression specs read those
+ * controllers.
  */
-@Injectable()
-export class RolesGuard implements CanActivate {
-  constructor(
-    private reflector: Reflector,
-    private jwtService: JwtService,
-  ) {}
-
-  canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-
-    if (!requiredRoles) {
-      return true; // No roles required, access granted
-    }
-
-    const request = context.switchToHttp().getRequest();
-    let user = request.user;
-
-    // If JwtAuthGuard hasn't run, decode the JWT from the Authorization header
-    if (!user || !user.role) {
-      const authHeader = request.headers?.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const token = authHeader.substring(7);
-          user = this.jwtService.verify(token);
-          request.user = user; // Attach for downstream use
-        } catch {
-          // Token invalid or expired — fall through to forbidden
-        }
-      }
-    }
-
-    if (!user || !user.role) {
-      throw new ForbiddenException('You do not have permission to access this resource.');
-    }
-
-    // Separate role requirements from permission requirements
-    const roleRequirements = requiredRoles.filter((r) => !r.startsWith('perm:'));
-    const permRequirements = requiredRoles
-      .filter((r) => r.startsWith('perm:'))
-      .map((r) => r.slice(5));
-
-    // Check role-based access
-    if (roleRequirements.length > 0) {
-      const userRoleUpper = user.role.toUpperCase();
-      const hasRole = roleRequirements.some((role) => role.toUpperCase() === userRoleUpper);
-      if (!hasRole) {
-        throw new ForbiddenException(
-          'Insufficient permissions. Your role cannot perform this action.',
-        );
-      }
-    }
-
-    // Check permission-based access (if any perm: prefixed values).
-    //
-    // A user with no `adminPermissions` holds none of them, so the check must
-    // deny. Guarding the branch on `&& user.adminPermissions` instead meant a
-    // route protected only by `@Roles('perm:…')` skipped validation entirely for
-    // exactly the users least entitled to it. No route uses `perm:` yet, so this
-    // was a trap laid for the first one rather than a live hole.
-    if (permRequirements.length > 0) {
-      // `hasPermission` (`@app/common`) is the shared verdict: it honours the
-      // `'*'` wildcard SUPER_ADMIN signs in with — one wildcard instead of an
-      // enumerated list, so a permission key introduced by a later route does
-      // not have to be back-filled onto the account that grants it — and treats
-      // an absent or non-array claim as holding nothing.
-      //
-      // Shared because the gateway's health board has to reach the same verdict
-      // without being able to use this guard (its routes are `@Public()`, and a
-      // readiness probe that can answer 403 restarts healthy pods). Two copies
-      // of "what does a permission key mean" is one copy too many, and the
-      // board is the surface where the weaker copy would go unnoticed: it
-      // discloses more, it does not deny.
-      const hasPerms = permRequirements.every((perm) => hasPermission(user, perm));
-      if (!hasPerms) {
-        throw new ForbiddenException(
-          `Missing required permissions: ${permRequirements.join(', ')}`,
-        );
-      }
-    }
-
-    return true;
-  }
-}
+export { RolesGuard } from '@app/guards';
