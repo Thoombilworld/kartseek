@@ -278,15 +278,103 @@ The eight module backends now connect as these roles — see
 module onto its own database role", for the per-module procedure and what to
 check after each one.
 
+## `compose.services.yml` — the application tier
+
+**Generated. Do not edit it.** `scripts/registry/compose.mjs` renders all 35
+deployables from [`services.yaml`](../../services.yaml); `npm run
+registry:generate` rewrites it and `npm run registry:check` (which runs on
+every commit) fails when it is stale. Change the registry, not the YAML.
+
+### Start the infrastructure first
+
+```bash
+npm run infra:up        # datastores, nginx — AND kartseek-network, AND the 166 Kafka topics
+npm run stack:up:admin  # the twelve an administrator needs, built and started
+npm run stack:logs      # follow them
+npm run stack:down      # stop the application tier
+```
+
+`infra:up` is not optional and not merely conventional:
+
+- It creates `kartseek-network`. Both files declare `networks.default.name:
+kartseek-network` and Compose merges them, so whichever comes up first
+  creates it — but the datastores have to exist before anything can reach them
+  anyway.
+- It runs `npm run kafka:topics`, which creates the 166 topics. Auto-creation
+  is off (`KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'`), so a consumer that
+  starts before the topics exist crash-loops on "does not host this
+  topic-partition".
+
+### The two profiles
+
+Every entry carries a profile, so a bare `docker compose up -d` still starts
+the infrastructure alone and nothing else.
+
+| Profile | What it is                                                                                                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `admin` | The twelve deployables an administrator needs end to end: the gateway, auth, user, admin, audit-log, notification, order, payment, marketplace, grocery, taxi and the console. |
+| `full`  | All 35.                                                                                                                                                                        |
+
+`npm run stack:up:full` **cannot build the eight web zones yet.** Only
+`apps/web` sets `output: 'standalone'` in its `next.config.mjs`; a zone builds
+and then fails on the standalone `COPY`. Giving the zones that output is Task
+IN11. Until then `full` is the API tier plus the console, with eight failed
+builds at the end — use it knowing that.
+
+### What a container reads
+
+`env_file` gives each service the root `.env` (**required**) plus the
+untracked workspace files, `apps/api/.env` and, for a module service,
+`modules/<module>/backend/.env` (both optional). Those workspace files are
+where the ~120 platform variables live — `JWT_SECRET`, `ENCRYPTION_KEY`, the
+MFA and storage settings, the DDoS limits — and a container without them boots
+into a Joi validation failure naming the first one missing. `npm run env:init`
+writes the root `.env`; the workspace ones are a developer's own, copied from
+each `.env.example`.
+
+The generated `environment:` block then **overrides every address and
+credential in them**, because `environment` beats `env_file` in Compose. That
+is the whole mechanism: `apps/api/.env` says `DB_HOST=127.0.0.1`,
+`KAFKA_BROKERS=localhost:9092` and ten `*_GRPC_URL=localhost:500x`, and inside
+a container localhost is the container. So every service gets, from the
+registry: `postgres`, `redis`, `kafka:29092` (not 9092 — that listener
+advertises itself back as `localhost:9092`), `mongodb`, `elasticsearch`, every
+peer's container name, every port, and `NODE_ENV=production`.
+
+A module service connects **as its own Postgres role** — `grocery_user` and
+friends, created by `init-roles.sh` (see above) — against the shared
+`kartseek_db`. `DB_SSL` is `false` everywhere: the images run
+`NODE_ENV=production`, which turns SSL on by default, and this Postgres speaks
+plaintext on a private network.
+
+The console and the zones read **no** `.env` at all. Nothing in the root
+`.env` is theirs, `NEXT_PUBLIC_*` are inlined at build time, and keeping it out
+means the console image carries no datastore credential.
+
+### Two host bindings, two variables
+
+`DB_BIND` (default `127.0.0.1`) publishes the datastore ports in
+`compose.infra.yml`; `APP_BIND` (default `127.0.0.1`) publishes the
+application ports here. Both default to loopback for the same reason — a
+development gateway may run with `DEV_AUTH_BYPASS=true` — and both take
+`0.0.0.0` in the root `.env` when another machine on the LAN genuinely needs
+to reach the stack. Set them back afterwards.
+
 ## The root `docker-compose.yml`
 
-The root `docker-compose.yml` pulls in `compose.infra.yml` (and only that
-file today) with Compose's `include:`. Its own header comment already names
-what joins it later: `compose.observability.yml` (Prometheus and Grafana,
-under a `monitoring` profile, phase 2) and `compose.services.yml` (one
-service per deployable in the registry, generated, phase 3). See
-[the platform reorganization design](../../docs/superpowers/specs/2026-09-05-platform-reorganization-design.md)
-for both.
+The root `docker-compose.yml` pulls in `compose.infra.yml` and
+`compose.services.yml` with Compose's `include:`.
+
+`compose.services.yml` is included with `project_directory: .` so its relative
+paths — `context: .`, each `env_file` — resolve from the repository root.
+Without it Compose resolves them against the included file's own directory and
+every build context would be `infra/docker/`. `compose.infra.yml` wants the
+default instead: its bind mounts are written `../postgres/…`, relative to
+itself. Neither file is meant to be run on its own with `-f`.
+
+Prometheus and Grafana were planned for phase 2 and do not exist; when they
+land they get their own include line and a `monitoring` profile. See
+[the platform reorganization design](../../docs/superpowers/specs/2026-09-05-platform-reorganization-design.md).
 
 ## `.dockerignore`
 
