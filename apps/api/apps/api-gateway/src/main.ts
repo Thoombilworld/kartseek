@@ -34,6 +34,10 @@ async function bootstrap() {
       // Cap maximum header size to 8KB (mitigates header-flood / slow-read attacks)
       rawBody: true,
     });
+    // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+    // clients close (LeaveGroup) instead of lingering as dead group members
+    // that block the next instance's join for a whole session timeout.
+    app.enableShutdownHooks();
 
     // ── Typed Configuration Service ──────────────────────────────────────────
     const configService = app.get(ConfigService);

@@ -49,7 +49,7 @@ const envSchema = buildEnvSchema({
       }),
     }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('payout-service'),
     TypeOrmModule.forFeature([SellerWallet, Payout]),
   ],
   controllers: [PayoutController],

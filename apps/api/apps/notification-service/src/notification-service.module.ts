@@ -41,7 +41,7 @@ const envSchema = buildEnvSchema({
     HealthModule.register({ service: 'notification-service', database: false, redis: true }),
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('notification-service'),
   ],
   controllers: [NotificationController],
   providers: [NotificationService, PasswordResetConsumer, NotificationEventsConsumer],

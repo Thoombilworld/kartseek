@@ -10,6 +10,10 @@ async function bootstrap() {
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
   const app = await NestFactory.create(RestaurantServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 
@@ -29,6 +33,9 @@ async function bootstrap() {
   await app.startAllMicroservices();
   const httpPort = +(process.env.RESTAURANT_SERVICE_PORT ?? 3019);
   await app.listen(httpPort);
-  Logger.log(`🍽️  Restaurant Service — HTTP :${httpPort} | TCP :${tcpPort} | gRPC :${grpcPort}`, 'Bootstrap');
+  Logger.log(
+    `🍽️  Restaurant Service — HTTP :${httpPort} | TCP :${tcpPort} | gRPC :${grpcPort}`,
+    'Bootstrap',
+  );
 }
 bootstrap();

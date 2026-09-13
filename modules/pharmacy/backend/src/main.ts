@@ -9,6 +9,10 @@ async function bootstrap() {
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
   const app = await NestFactory.create(PharmacyServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 
@@ -28,7 +32,9 @@ async function bootstrap() {
   // these unguarded endpoints are unreachable from outside the host.
   const httpPort = +(process.env.PHARMACY_SERVICE_PORT ?? 3020);
   await app.listen(httpPort, '127.0.0.1');
-  Logger.log(`💊 Pharmacy Service — HTTP 127.0.0.1:${httpPort} (internal) | TCP 0.0.0.0:${tcpPort}`, 'Bootstrap');
+  Logger.log(
+    `💊 Pharmacy Service — HTTP 127.0.0.1:${httpPort} (internal) | TCP 0.0.0.0:${tcpPort}`,
+    'Bootstrap',
+  );
 }
 bootstrap();
-

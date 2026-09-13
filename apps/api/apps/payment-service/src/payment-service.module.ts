@@ -80,7 +80,7 @@ const envSchema = buildEnvSchema({
     }),
     TypeOrmModule.forFeature([Payment, Invoice, PaymentMethodConfig, SettlementRecord]),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('payment-service'),
   ],
   controllers: [PaymentController, WebhookController],
   providers: [

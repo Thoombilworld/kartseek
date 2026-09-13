@@ -127,7 +127,7 @@ const ENTITIES = [
     }),
     TypeOrmModule.forFeature(ENTITIES),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('taxi-service'),
     SecurityModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
   ],

@@ -5,14 +5,16 @@ import { createGrpcMicroserviceOptions } from '@app/grpc';
 
 async function bootstrap() {
   const app = await NestFactory.create(AuthServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 
   // ── gRPC transport ──────────────────────────────────────────────────────────
   const grpcPort = +(process.env.AUTH_GRPC_PORT ?? 5001);
-  app.connectMicroservice(
-    createGrpcMicroserviceOptions('auth', 'auth.proto', grpcPort),
-  );
+  app.connectMicroservice(createGrpcMicroserviceOptions('auth', 'auth.proto', grpcPort));
 
   await app.startAllMicroservices();
   const httpPort = +(process.env.AUTH_SERVICE_PORT ?? 3010);

@@ -13,6 +13,7 @@ import { MarketplaceAnalyticsService } from './analytics/analytics.service';
 import { MarketplaceAdminService } from './admin/admin.service';
 import { MarketplaceFulfillmentService } from './fulfillment/fulfillment.service';
 import { MarketplaceHomeCacheService } from './catalog/home-cache.service';
+import { MarketCoverageCheck } from './catalog/market-coverage.check';
 import { MarketplaceGrpcController } from './transport/grpc.controller';
 import { BrandFollowService } from './brands';
 import { Product } from './entities/product.entity';
@@ -226,7 +227,7 @@ const ENTITIES = [
       },
     }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('marketplace-service'),
     TypeOrmModule.forFeature(ENTITIES),
   ],
   controllers: [
@@ -247,6 +248,10 @@ const ENTITIES = [
     MarketplaceAdminService,
     MarketplaceFulfillmentService,
     MarketplaceHomeCacheService,
+    // Logs the database this process opened and, per active market, whether
+    // any seller can serve it — the incident this answers is "every page
+    // renders, readiness is green, and every market but one is empty".
+    MarketCoverageCheck,
     BrandFollowService,
     FranchiseViewService,
     SellerService,

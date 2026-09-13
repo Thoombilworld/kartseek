@@ -31,7 +31,7 @@ const envSchema = buildEnvSchema({
     HealthModule.register({ service: 'report-service', database: false, redis: true }),
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('report-service'),
   ],
   controllers: [ReportController],
   providers: [ReportService],

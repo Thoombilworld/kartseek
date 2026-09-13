@@ -299,7 +299,7 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
     RedisModule.register({ keyPrefix: 'kartseek:' }),
 
     // Asynchronous Event Bus (Kafka)
-    KafkaModule.register(['ORDER_SERVICE', 'INVENTORY_SERVICE', 'NOTIFICATION_SERVICE']),
+    KafkaModule.forService('api-gateway'),
 
     // ── Synchronous RPC (gRPC) — all services with .proto definitions ────────
     GrpcClientModule.register([

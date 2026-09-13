@@ -135,27 +135,55 @@ imports these constants — no `.publish()` call and no `@EventPattern` uses
 them. Treat `KAFKA_TOPICS` as the only real event catalogue; `domain-events.ts`
 is dead code describing a naming scheme the platform does not run.
 
-## Consumer groups: one per service, not one per platform
+## Identity is declared; producers join no group
 
 [`apps/api/libs/kafka/src/kafka.module.ts`](../../apps/api/libs/kafka/src/kafka.module.ts)
-builds every consumer's `groupId` as `` `${KAFKA_GROUP_ID}-${service}` ``,
-where `service` comes from `serviceIdentity()` — resolved, in order, from an
-explicit `SERVICE_NAME` env var, the `npm_lifecycle_event` script name
-(`start:marketplace` → `marketplace`), the `modules/<name>` segment of the
-working directory (for the eight extracted module backends, which append
-`-service`), or the last `apps/<name>` segment of the bundled entry point.
-This exists because every service in the monorepo loads the same root
-`.env.`, and a single shared `KAFKA_GROUP_ID` used to put all 19 services in
-one Kafka consumer group. That caused two problems this scoping fixes: a
-rebalance storm on every service start/stop/reload (`the group is
-rebalancing, so a rejoin is needed` on every member), and reply misrouting —
-members of one consumer group share a topic's partitions, so a
-request/reply-over-Kafka response meant for one service could be handed to a
-different member instead, which holds no matching correlation id and drops it
-silently. `kafka.module.ts`'s own comments describe both symptoms in detail —
-read them before changing `serviceIdentity()`.
+is registered by every service as `KafkaModule.forService('<name>')`, where
+the name is the service's `name` in `services.yaml` (`marketplace-service`,
+`api-gateway` …). An explicit `SERVICE_NAME` environment variable overrides
+it — that is how one image can run under another name — and a blank name
+throws at boot. There is deliberately **no fallback**.
 
-### Three consumers with their own explicit group, outside `KafkaModule`
+The previous version _derived_ the identity from how the process happened to
+be started: the npm lifecycle event, then the working directory, then
+`require.main.filename`, then a shared `'app'`. Two of those never worked in
+the shapes the platform actually runs — `require.main` is undefined inside an
+rspack bundle, which is every `dist/main.js` this repository builds, and the
+smoke harness and the container images start processes with no npm
+lifecycle — so every core service in those runs fell through to `'app'` and
+joined one group, `kartseek-consumers-app-client`, identifying as
+`kartseek-gateway-app-client`. That reproduced the original incident (the
+rebalance storm on every start/stop/reload, and reply misrouting between
+members sharing one group's partitions) under a new name.
+
+Every `ClientKafka` the factory builds is **producer-only**
+(`producerOnlyMode: true`). Nothing on the platform uses Kafka request/reply
+— every `.send()` goes to a TCP `ClientProxy`, and Kafka carries
+fire-and-forget domain events only — so the consumer Nest would otherwise
+create per client subscribed to nothing and existed only to join a group.
+Twenty-odd groups with one idle member each, every one rebalancing on every
+restart, and every ungraceful restart (hot reload, `taskkill /F`) leaving a
+dead member behind that blocked the next join for the rest of its session
+timeout: 12.7 s and 20.2 s measured on the broker on 2026-09-13. With no
+consumer there is no membership and nothing to wait for. `app.enableShutdownHooks()`
+is on in every `main.ts`, so a signal the process can catch closes the
+producer cleanly; `KafkaProducerService.health()` answers a bounded
+`describeCluster()` probe for readiness checks.
+
+`KAFKA_CLIENT_ID` is no longer read by the library (clients are named
+`kartseek-<name>`; Nest appends `-client`). `KAFKA_GROUP_ID` is only the
+prefix of the gateway's WebSocket-bridge group below.
+
+### The four real consumers
+
+- **`api-gateway`**'s Kafka → WebSocket bridge (`KafkaConsumerService`),
+  group `kartseek-consumers-event-bridge-<hostname>-<pid>` — one group **per
+  instance**, on purpose: the bridge feeds socket rooms held by that process
+  alone, so every replica must receive every event; a group shared between
+  replicas would split the partitions between them and each replica would
+  miss the events for half of its own sockets. Empty groups left behind by
+  restarts are garbage-collected by the broker after
+  `offsets.retention.minutes`.
 
 Three services do not go through the shared factory at all and set a literal
 `groupId` in their own bootstrap instead:

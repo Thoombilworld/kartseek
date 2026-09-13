@@ -30,7 +30,7 @@ const envSchema = buildEnvSchema({
       // next.
     }),
     RedisModule.register({ keyPrefix: 'kartseek:loyalty:' }),
-    KafkaModule.register(['LOYALTY_SERVICE']),
+    KafkaModule.forService('loyalty-service'),
   ],
   controllers: [LoyaltyController],
   providers: [LoyaltyService],

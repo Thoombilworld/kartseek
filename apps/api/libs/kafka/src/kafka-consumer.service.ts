@@ -1,9 +1,14 @@
 import {
-  Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy,
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+  type OnModuleDestroy,
 } from '@nestjs/common';
 import { Inject, Optional } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { Kafka, type Consumer } from 'kafkajs';
+import { hostname } from 'node:os';
+import { KAFKA_CLIENT, KAFKA_SERVICE_IDENTITY } from './kafka.tokens';
 
 export interface KafkaEventHandler {
   topic: string;
@@ -35,8 +40,33 @@ export class KafkaConsumerService implements OnApplicationBootstrap, OnModuleDes
   private consumer?: Consumer;
 
   constructor(
-    @Inject('KAFKA_CLIENT') @Optional() private readonly client: ClientKafka,
+    @Inject(KAFKA_CLIENT) @Optional() private readonly client: ClientKafka,
+    @Inject(KAFKA_SERVICE_IDENTITY) @Optional() private readonly service?: string,
   ) {}
+
+  /**
+   * The group this instance's bridge consumes in.
+   *
+   * One group PER INSTANCE, on purpose. This consumer feeds WebSocket rooms
+   * held by this process alone, so every gateway replica must receive every
+   * event: a group shared between replicas would split the partitions between
+   * them and each replica would miss the events for half of its own sockets.
+   * A per-instance group also means a hot-reloaded or killed predecessor never
+   * blocks this instance's join — the 13–20 s waits measured on the broker were
+   * the coordinator waiting out a dead member of a *shared* group. Empty groups
+   * are garbage-collected by the broker after `offsets.retention.minutes`.
+   *
+   * `KAFKA_GROUP_ID` remains the prefix, so an operator can still find every
+   * bridge group with one `--list` filter.
+   */
+  static bridgeGroupId(
+    prefix = process.env.KAFKA_GROUP_ID ?? 'kartseek-consumers',
+    host = hostname(),
+    pid = process.pid,
+  ): string {
+    const safeHost = host.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+    return `${prefix}-event-bridge-${safeHost}-${pid}`;
+  }
 
   /**
    * Start consuming AFTER every module's `onModuleInit` has run.
@@ -96,11 +126,11 @@ export class KafkaConsumerService implements OnApplicationBootstrap, OnModuleDes
    */
   private async startConsumer(topics: string[]): Promise<void> {
     const brokers = (process.env.KAFKA_BROKERS ?? 'localhost:9092').split(',');
-    const group = `${process.env.KAFKA_GROUP_ID ?? 'kartseek-consumers'}-event-bridge`;
+    const group = KafkaConsumerService.bridgeGroupId();
 
     try {
       const kafka = new Kafka({
-        clientId: `${process.env.KAFKA_CLIENT_ID ?? 'kartseek'}-event-bridge`,
+        clientId: `kartseek-${this.service ?? 'unnamed'}-event-bridge`,
         brokers,
       });
 
@@ -122,7 +152,9 @@ export class KafkaConsumerService implements OnApplicationBootstrap, OnModuleDes
         );
       }
       if (!present.length) {
-        this.logger.warn('None of the registered topics exist on the broker — consumer not started.');
+        this.logger.warn(
+          'None of the registered topics exist on the broker — consumer not started.',
+        );
         return;
       }
 
@@ -190,10 +222,7 @@ export class KafkaConsumerService implements OnApplicationBootstrap, OnModuleDes
       try {
         await handler(payload);
       } catch (err: any) {
-        this.logger.error(
-          `Handler error for topic "${topic}": ${err?.message}`,
-          err?.stack,
-        );
+        this.logger.error(`Handler error for topic "${topic}": ${err?.message}`, err?.stack);
         // Publish to DLQ
         await this.publishToDLQ(topic, payload, err);
       }

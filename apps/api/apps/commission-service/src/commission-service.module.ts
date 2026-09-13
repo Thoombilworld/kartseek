@@ -31,7 +31,7 @@ const envSchema = buildEnvSchema({
     HealthModule.register({ service: 'commission-service', database: false, redis: true }),
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('commission-service'),
   ],
   controllers: [CommissionController],
   providers: [CommissionService],

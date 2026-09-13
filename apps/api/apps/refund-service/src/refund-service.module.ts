@@ -31,7 +31,7 @@ const envSchema = buildEnvSchema({
     HealthModule.register({ service: 'refund-service', database: false, redis: true }),
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('refund-service'),
   ],
   controllers: [RefundController],
   providers: [RefundService],

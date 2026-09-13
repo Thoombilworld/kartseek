@@ -10,14 +10,16 @@ async function bootstrap() {
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
   const app = await NestFactory.create(PaymentServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 
   // ── gRPC transport ──────────────────────────────────────────────────────────
   const grpcPort = +(process.env.PAYMENT_GRPC_PORT ?? 5003);
-  app.connectMicroservice(
-    createGrpcMicroserviceOptions('payment', 'payment.proto', grpcPort),
-  );
+  app.connectMicroservice(createGrpcMicroserviceOptions('payment', 'payment.proto', grpcPort));
 
   // ── TCP transport (for API Gateway ClientProxy) ─────────────────────────────
   const tcpPort = +(process.env.PAYMENT_TCP_PORT ?? 4026);
@@ -32,7 +34,9 @@ async function bootstrap() {
   await app.startAllMicroservices();
   const httpPort = +(process.env.PAYMENT_SERVICE_PORT ?? 3025);
   await app.listen(httpPort);
-  Logger.log(`💳 Payment Service — HTTP :${httpPort} | gRPC :${grpcPort} | TCP :${tcpPort}`, 'Bootstrap');
+  Logger.log(
+    `💳 Payment Service — HTTP :${httpPort} | gRPC :${grpcPort} | TCP :${tcpPort}`,
+    'Bootstrap',
+  );
 }
 bootstrap();
-

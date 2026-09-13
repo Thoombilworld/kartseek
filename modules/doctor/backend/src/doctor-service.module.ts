@@ -129,7 +129,7 @@ const envSchema = buildEnvSchema({
     TypeOrmModule.forFeature(ENTITIES),
 
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('doctor-service'),
   ],
   controllers: [DoctorController],
   providers: [DoctorService, FranchiseViewService],

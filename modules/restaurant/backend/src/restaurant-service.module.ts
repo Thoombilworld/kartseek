@@ -120,7 +120,7 @@ const envSchema = buildEnvSchema({
     }),
     TypeOrmModule.forFeature(ENTITIES),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('restaurant-service'),
   ],
   controllers: [RestaurantController],
   providers: [RestaurantService, FranchiseViewService],

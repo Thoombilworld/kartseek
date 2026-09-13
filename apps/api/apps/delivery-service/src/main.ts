@@ -9,14 +9,16 @@ async function bootstrap() {
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
   const app = await NestFactory.create(DeliveryServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 
   // ── gRPC transport ──────────────────────────────────────────────────────────
   const grpcPort = +(process.env.DELIVERY_GRPC_PORT ?? 5008);
-  app.connectMicroservice(
-    createGrpcMicroserviceOptions('delivery', 'delivery.proto', grpcPort),
-  );
+  app.connectMicroservice(createGrpcMicroserviceOptions('delivery', 'delivery.proto', grpcPort));
 
   await app.startAllMicroservices();
   const httpPort = +(process.env.DELIVERY_SERVICE_PORT ?? 3022);

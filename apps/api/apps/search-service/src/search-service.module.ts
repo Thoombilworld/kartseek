@@ -37,7 +37,7 @@ const envSchema = buildEnvSchema({
     }),
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('search-service'),
   ],
   controllers: [SearchController],
   providers: [SearchService],

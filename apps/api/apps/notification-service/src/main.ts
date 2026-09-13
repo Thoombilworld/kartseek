@@ -5,6 +5,10 @@ import { createGrpcMicroserviceOptions } from '@app/grpc';
 
 async function bootstrap() {
   const app = await NestFactory.create(NotificationServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 

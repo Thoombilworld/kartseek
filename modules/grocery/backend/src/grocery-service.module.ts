@@ -131,7 +131,7 @@ const envSchema = buildEnvSchema({
     TypeOrmModule.forFeature(GROCERY_ENTITIES),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('grocery-service'),
   ],
   // The gRPC controller is separate from the HTTP/TCP one so the transports
   // cannot quietly share request handling; both delegate to the same services.

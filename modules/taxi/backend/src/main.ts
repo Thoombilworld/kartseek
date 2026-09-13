@@ -14,6 +14,10 @@ async function bootstrap() {
   // TaxiService could never be constructed and the process died on boot — the
   // same stub-shadows-the-real-module defect admin-service had. The stub is gone.
   const app = await NestFactory.create(TaxiServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 
@@ -26,13 +30,14 @@ async function bootstrap() {
 
   // ── gRPC transport ──────────────────────────────────────────────────────────
   const grpcPort = +(process.env.TAXI_GRPC_PORT ?? 5007);
-  app.connectMicroservice(
-    createGrpcMicroserviceOptions('taxi', 'taxi.proto', grpcPort),
-  );
+  app.connectMicroservice(createGrpcMicroserviceOptions('taxi', 'taxi.proto', grpcPort));
 
   await app.startAllMicroservices();
   const httpPort = +(process.env.TAXI_SERVICE_PORT ?? 3021);
   await app.listen(httpPort);
-  Logger.log(`🚖 Taxi Service — HTTP :${httpPort} | TCP :${tcpPort} | gRPC :${grpcPort}`, 'Bootstrap');
+  Logger.log(
+    `🚖 Taxi Service — HTTP :${httpPort} | TCP :${tcpPort} | gRPC :${grpcPort}`,
+    'Bootstrap',
+  );
 }
 bootstrap();

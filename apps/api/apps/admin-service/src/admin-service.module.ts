@@ -74,7 +74,7 @@ const envSchema = buildEnvSchema({
       },
     ]),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('admin-service'),
   ],
   controllers: [AdminController],
   providers: [AdminService],

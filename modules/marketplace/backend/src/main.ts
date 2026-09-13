@@ -15,6 +15,10 @@ async function bootstrap() {
   // there is no environment in which auto-sync is the intended answer.
   validateDatabaseConfig();
   const app = await NestFactory.create(MarketplaceServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   // NOTE: exceptions from TCP/gRPC handlers are shaped by RpcAwareExceptionsFilter,
   // bound with @UseFilters on each controller that owns message handlers. It cannot

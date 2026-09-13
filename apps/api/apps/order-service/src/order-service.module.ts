@@ -56,7 +56,7 @@ const envSchema = buildEnvSchema({
     }),
     TypeOrmModule.forFeature([Order]),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('order-service'),
   ],
   controllers: [OrderController],
   providers: [OrderService],

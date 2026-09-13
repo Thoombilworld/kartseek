@@ -40,8 +40,7 @@ const envSchema = buildEnvSchema({
       // next.
     }),
     RedisModule.register({ keyPrefix: 'kartseek:franchise:' }),
-    KafkaModule,
-
+    KafkaModule.forService('franchise-service'),
     // franchise-service owns exactly one table: `franchises`.
     // It reaches every other module's data through that module's own service,
     // which is why extracting it needed no cross-database access — the TCP

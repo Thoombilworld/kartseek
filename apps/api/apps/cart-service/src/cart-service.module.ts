@@ -31,7 +31,7 @@ const envSchema = buildEnvSchema({
     HealthModule.register({ service: 'cart-service', database: false, redis: true }),
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('cart-service'),
   ],
   controllers: [CartController],
   providers: [CartService],

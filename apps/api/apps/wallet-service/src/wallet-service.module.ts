@@ -37,7 +37,7 @@ const envSchema = buildEnvSchema({
     DatabaseModule.registerPostgres([WalletTransaction], 'wallet'),
     TypeOrmModule.forFeature([WalletTransaction]),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('wallet-service'),
   ],
   controllers: [WalletController],
   providers: [WalletService],

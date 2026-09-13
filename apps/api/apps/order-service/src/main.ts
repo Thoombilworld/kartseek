@@ -10,14 +10,16 @@ async function bootstrap() {
   // instance, so auto-schema-sync would ALTER tables owned by other services.
   validateDatabaseConfig();
   const app = await NestFactory.create(OrderServiceModule);
+  // Run onModuleDestroy/onApplicationShutdown on SIGTERM/SIGINT so Kafka
+  // clients close (LeaveGroup) instead of lingering as dead group members
+  // that block the next instance's join for a whole session timeout.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors();
 
   // ── gRPC transport ──────────────────────────────────────────────────────────
   const grpcPort = +(process.env.ORDER_GRPC_PORT ?? 5002);
-  app.connectMicroservice(
-    createGrpcMicroserviceOptions('order', 'order.proto', grpcPort),
-  );
+  app.connectMicroservice(createGrpcMicroserviceOptions('order', 'order.proto', grpcPort));
 
   // ── TCP transport (for gateway ClientProxy.send() calls) ────────────────────
   // Without this the `@MessagePattern` handlers in OrderController were dead
@@ -35,6 +37,9 @@ async function bootstrap() {
   await app.startAllMicroservices();
   const httpPort = +(process.env.ORDER_SERVICE_PORT ?? 3014);
   await app.listen(httpPort);
-  Logger.log(`📦 Order Service — HTTP :${httpPort} | gRPC :${grpcPort} | TCP :${tcpPort}`, 'Bootstrap');
+  Logger.log(
+    `📦 Order Service — HTTP :${httpPort} | gRPC :${grpcPort} | TCP :${tcpPort}`,
+    'Bootstrap',
+  );
 }
 bootstrap();

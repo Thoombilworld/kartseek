@@ -95,7 +95,7 @@ export function resolveAuditUri(cfg: ConfigService): string {
     }),
     MongooseModule.forFeature([{ name: AuditLog.name, schema: AuditLogSchema }]),
     RedisModule,
-    KafkaModule,
+    KafkaModule.forService('audit-log-service'),
   ],
   controllers: [AuditLogController],
   providers: [AuditLogService],
