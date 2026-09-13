@@ -12,6 +12,8 @@ export const KINDS = ['gateway', 'core-service', 'module-service', 'web-shell', 
 export const NEST_KINDS = ['gateway', 'core-service', 'module-service'];
 export const WEB_KINDS = ['web-shell', 'web-zone'];
 export const INFRA = ['postgres', 'redis', 'kafka', 'mongodb', 'elasticsearch'];
+/** Compose profiles a service entry may opt into; `full` holds every deployable. */
+export const PROFILES = ['admin', 'full'];
 const PORT_KEYS = ['http', 'tcp', 'grpc'];
 
 export class RegistryError extends Error {
@@ -96,6 +98,16 @@ export function validateShape(doc) {
       if (s.kafka !== undefined && !isStr(s.kafka?.groupId))
         bad(`${id}: kafka.groupId must be a string when kafka is present`);
       if ('basePath' in s) bad(`${id}: basePath is only for web-zone`);
+    }
+
+    // Optional, and on any kind — the console is in the `admin` profile too, so
+    // this cannot live inside the nest branch above. `full` is every deployable
+    // and is added by the compose renderer, so writing it here is redundant
+    // rather than wrong; anything else is a typo that would silently shrink a
+    // profile, which is why the list is closed.
+    if ('profiles' in (s ?? {})) {
+      if (!Array.isArray(s.profiles) || s.profiles.some((p) => !PROFILES.includes(p)))
+        bad(`${id}: profiles may contain only ${PROFILES.map((p) => `'${p}'`).join(' and ')}`);
     }
 
     if (s?.kind === 'web-zone' && !(isStr(s.basePath) && s.basePath.startsWith('/')))

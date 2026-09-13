@@ -55,8 +55,25 @@ test('a zone must have a basePath and a shell must not', () => {
   );
 });
 
+test('profiles is optional, allowed on any kind, and closed to admin and full', () => {
+  assert.deepEqual(validateShape({ version: 1, services: [{ ...nest, profiles: ['admin'] }] }), []);
+  // The console is a web-shell and is in the admin profile, so this may not be
+  // a nest-only field.
+  const shell = { ...zone, kind: 'web-shell', name: 'web', profiles: ['admin', 'full'] };
+  delete shell.basePath; // present-but-undefined still counts as declared
+  assert.deepEqual(validateShape({ version: 1, services: [shell] }), []);
+  for (const profiles of [['monitoring'], 'admin', ['admin', 'Admin']])
+    assert.ok(
+      validateShape({ version: 1, services: [{ ...nest, profiles }] }).some((p) =>
+        p.includes('profiles'),
+      ),
+      `${JSON.stringify(profiles)} should be rejected`,
+    );
+});
+
 test('the real registry loads and splits into 26 nest and 9 web entries', () => {
   const reg = loadRegistry();
   assert.equal(nestEntries(reg).length, 26);
   assert.equal(webEntries(reg).length, 9);
+  assert.equal(reg.services.filter((s) => (s.profiles ?? []).includes('admin')).length, 12);
 });
