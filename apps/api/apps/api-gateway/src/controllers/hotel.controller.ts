@@ -26,6 +26,7 @@ import { JwtAuthGuard } from '@app/security';
 import { Public } from '../decorators/public.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { SellerModule, SellerModuleGuard } from '../guards/seller-module.guard';
 import { resolveScope } from '../guards/market-scope';
 
 /**
@@ -43,10 +44,51 @@ import { resolveScope } from '../guards/market-scope';
  * `RolesGuard` is bound at the class alongside `JwtAuthGuard` because the three
  * `/hotels/admin/*` routes below need it. The guard returns `true` for a route
  * that declares no `@Roles` (`roles.guard.ts:32-34`), so binding it changes
- * nothing for the storefront, booking and owner routes — and without it a
- * per-route `@Roles` on this controller would be metadata nothing reads, which
- * is the failure mode the whole-branch review found on `payment.controller.ts`
- * in reverse.
+ * nothing for the storefront and booking routes — and without it a per-route
+ * `@Roles` on this controller would be metadata nothing reads, which is the
+ * failure mode the whole-branch review found on `payment.controller.ts` in
+ * reverse.
+ *
+ * ── THE OWNER SURFACE (M5 round 1b) ────────────────────────────────────────
+ *
+ * That same "returns true when no `@Roles` is declared" is why the ten
+ * operational `/hotels/owner/*` routes below were reachable by ANY authenticated
+ * caller — a customer could create a hotel listing, read another owner's payouts
+ * queue, rewrite room pricing or mark a booking a no-show. It went unseen
+ * because `admin-market-scope.regression.spec.ts` only collects routes that name
+ * an admin role or carry an `admin` path segment, and these carry neither.
+ *
+ * M5's fix round 1 made it load-bearing rather than merely wrong: with a market
+ * that has `autoApproveHotels` on, `POST owner/hotels` now creates a property in
+ * `ACTIVE` and publishes `hotel.approved` — so an unguarded route could put a
+ * live, bookable hotel into a market with no decision by anyone.
+ *
+ * Each of those ten now carries the platform's established partner shape, the
+ * same one `restaurant.controller.ts:559-562` uses for its menu-item routes:
+ *
+ *     @UseGuards(RolesGuard, SellerModuleGuard)
+ *     @Roles(UserRole.SELLER)
+ *     @SellerModule('hotel')
+ *
+ * `UserRole.SELLER` because a hotel owner IS one: there is no `HOTEL_SELLER`
+ * role, and `role.enum.ts:66-68` records that "marketplace, hotel and taxi
+ * sellers all carry the plain `seller` role", with the portal named by
+ * `users.seller_type`. That makes `@Roles(SELLER)` alone insufficient — every
+ * seller of every module holds it — so `@SellerModule('hotel')` is the second
+ * half, and a grocery seller reaching this API is refused by `sellerType` (the
+ * exact cross-module hole `SellerModuleGuard` was written for).
+ *
+ * ADMIN/SUPER_ADMIN are deliberately NOT in that `@Roles`. Naming them would put
+ * ten owner routes into `admin-market-scope.regression.spec.ts`'s collection,
+ * which then requires a resolved market on each — and these are owner-scoped,
+ * not market-scoped. Administrators act on hotels through `/admin/hotel/*`,
+ * which is scoped and permission-gated; the same ruling restaurant's partner
+ * routes already follow.
+ *
+ * `POST owner/register` is the ONE exception and stays authenticated-only, for
+ * the reason `PublicSellersController` gives for `POST /sellers/register`: it is
+ * how an account BECOMES a hotel owner, so requiring the seller role would make
+ * it impossible ever to obtain.
  */
 @ApiTags('🏨 Hotels')
 @ApiBearerAuth('JWT')
@@ -200,6 +242,13 @@ export class HotelController {
 
   // ── Owner Portal ──────────────────────────────────────────────────────
 
+  /**
+   * Authenticated, but NOT role-gated — the one `/hotels/owner/*` route that is
+   * not, and the same ruling `POST /sellers/register` follows: this is how an
+   * account becomes a hotel owner, so requiring `UserRole.SELLER` would make the
+   * role impossible to obtain. Everything it can do is create a
+   * `PENDING_VERIFICATION` owner record awaiting an administrator.
+   */
   @Post('owner/register')
   @ApiOperation({ summary: 'Register as a hotel owner' })
   registerOwner(@Body() dto: any) {
@@ -207,24 +256,36 @@ export class HotelController {
   }
 
   @Post('owner/hotels')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: create a new hotel listing' })
   createHotel(@Body() dto: any) {
     return this.send('create_hotel', dto);
   }
 
   @Put('owner/hotels/:id')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: update hotel details' })
   updateHotel(@Param('id') hotelId: string, @Body() dto: any) {
     return this.send('update_hotel', { hotelId, ...dto });
   }
 
   @Get('owner/dashboard')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: get hotel owner dashboard' })
   getOwnerDashboard(@Query('ownerId') ownerId: string) {
     return this.send('get_owner_dashboard', { ownerId });
   }
 
   @Get('owner/bookings')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: get bookings for owned hotels' })
   getOwnerBookings(
     @Query('ownerId') ownerId: string,
@@ -235,24 +296,36 @@ export class HotelController {
   }
 
   @Put('owner/rooms/:id/pricing')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: update room pricing' })
   updatePricing(@Param('id') roomId: string, @Body() dto: any) {
     return this.send('update_room_pricing', { roomId, ...dto });
   }
 
   @Put('owner/hotels/:id/bulk-pricing')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: bulk update pricing across rooms' })
   bulkUpdatePricing(@Param('id') hotelId: string, @Body() dto: any) {
     return this.send('bulk_update_pricing', { hotelId, ...dto });
   }
 
   @Put('owner/bookings/:id/no-show')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: mark a booking as no-show' })
   markNoShow(@Param('id') bookingId: string) {
     return this.send('mark_no_show', { bookingId });
   }
 
   @Get('owner/payouts')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: view payout history' })
   getOwnerPayouts(
     @Query('ownerId') ownerId: string,
@@ -263,12 +336,18 @@ export class HotelController {
   }
 
   @Get('owner/reviews')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: get reviews for owned hotels' })
   getOwnerReviews(@Query('ownerId') ownerId: string) {
     return this.send('get_owner_reviews', { ownerId });
   }
 
   @Post('owner/reviews/:id/reply')
+  @UseGuards(RolesGuard, SellerModuleGuard)
+  @Roles(UserRole.SELLER)
+  @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: reply to a guest review' })
   replyToReview(@Param('id') reviewId: string, @Body('reply') reply: string) {
     return this.send('reply_to_review', { reviewId, reply });
