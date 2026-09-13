@@ -154,7 +154,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         }
       } catch (e) {
         if (e instanceof UnauthorizedException) throw e;
-        this.logger.warn(`Token revocation check failed: ${(e as Error).message}`);
+        this.refuseIfUnverifiable(e, 'token');
       }
     }
 
@@ -168,11 +168,56 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
           }
         } catch (e) {
           if (e instanceof UnauthorizedException) throw e;
-          // Redis errors should not block auth — log and continue
-          this.logger.warn(`Revocation check failed: ${(e as Error).message}`);
+          this.refuseIfUnverifiable(e, 'user');
         }
       }
     }
+  }
+
+  /**
+   * A revocation check that could not run.
+   *
+   * Both checks used to log and continue, which means the answer to "has this
+   * session been revoked?" was NO whenever the store that holds the answer was
+   * unreachable. Logout, password reset and administrative deactivation all
+   * work by writing `revoked-tokens:<jti>` / `revoked-users:<id>`, so a Redis
+   * outage silently restored every session revoked in the preceding fifteen
+   * minutes — including the one just taken from a dismissed administrator, who
+   * would find their token working again for as long as the outage lasted. A
+   * cache failure is not permission (dispatch addendum item 2).
+   *
+   * In production this now denies: `RedisService` throws `RedisUnavailableError`
+   * for an unready client or a failed command, the shared HTTP filter maps that
+   * to 503 `REDIS_UNAVAILABLE`, and the caller is told to retry rather than
+   * being admitted. 503 and not 401 because the session may well be valid — the
+   * platform cannot currently tell, and saying so is honest where "your session
+   * ended" would not be.
+   *
+   * Outside production nothing changes: there is an in-memory emulator, so
+   * `get()` answers instead of throwing and local work is unaffected. That
+   * asymmetry is deliberate — it is the same one `RedisService` itself draws,
+   * and it keeps a developer with no Redis running from being locked out of
+   * their own gateway.
+   *
+   * The DDoS middleware deliberately makes the opposite choice, and the reason
+   * is the direction of the failure: rate limiting off means unlimited requests
+   * reach a platform that is already struggling, which is bad; revocation off
+   * means a revoked credential works, which is worse and is not recoverable by
+   * waiting.
+   */
+  private refuseIfUnverifiable(e: unknown, which: 'token' | 'user'): void {
+    const message = (e as Error)?.message ?? String(e);
+    // Rethrown as-is: a store outage is a `RedisUnavailableError`, which the
+    // shared filter turns into 503 `REDIS_UNAVAILABLE`; anything else is a bug
+    // in this path and becomes a 500. Both are denials, which is the point —
+    // the one outcome ruled out is admitting a session nobody could check.
+    if (process.env.NODE_ENV === 'production') {
+      this.logger.error(
+        `${which} revocation check could not run — refusing the request: ${message}`,
+      );
+      throw e;
+    }
+    this.logger.warn(`${which} revocation check failed (allowed, not production): ${message}`);
   }
 
   handleRequest(err: any, user: any, info: any) {
