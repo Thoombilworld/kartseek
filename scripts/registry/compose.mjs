@@ -110,11 +110,16 @@ const moduleDir = (s) => s.path.split('/')[1];
  * ELASTICSEARCH_NODE that both name localhost — so a service that did not
  * declare the dependency kept the developer's own machine as the address, and
  * from inside a container that is the container.
+ *
+ * ADDRESSES ONLY. `DB_NAME`, `DB_USER` and `DB_PASSWORD` are not here: a
+ * service whose registry entry says `database: null` opens no connection, and
+ * handing it the Postgres superuser password would put that secret in nine
+ * containers for nothing (review finding 5, and addendum item 6). Knowing
+ * *where* Postgres is costs nothing; knowing how to sign in to it does.
  */
 const INFRA_ENV = [
   ['DB_HOST', 'postgres'],
   ['DB_PORT', "'5432'"],
-  ['DB_NAME', '${POSTGRES_DB:-kartseek_db}'],
   ['REDIS_HOST', 'redis'],
   ['REDIS_PORT', "'6379'"],
   ['REDIS_PASSWORD', '${REDIS_PASSWORD}'],
@@ -127,6 +132,37 @@ const INFRA_ENV = [
   // out into an Authorization header, because fetch() rejects a URL carrying
   // credentials.
   ['ELASTICSEARCH_NODE', 'http://elastic:${ELASTIC_PASSWORD}@elasticsearch:9200'],
+];
+
+/**
+ * The two platform secrets the containers may not inherit from a workspace
+ * `.env`, because `NODE_ENV=production` arms the gateway's own Joi gates
+ * against exactly the values a developer keeps there.
+ *
+ * `env.validation.ts:101-113` rejects any `JWT_SECRET` containing `dev`,
+ * `test`, `change`, `example` or `placeholder` when NODE_ENV is production —
+ * and `apps/api/.env` holds `kartseek_dev_secret_change_in_production`, which
+ * matches twice. `:119-122` makes `ENCRYPTION_KEY` (64 hex characters)
+ * required in production, and it is absent from `apps/api/.env.example`
+ * altogether. So `npm run stack:up:admin` threw at boot before anything
+ * listened, and no amount of reading the generated YAML would show it.
+ *
+ * `${VAR:?message}` rather than a default: Compose refuses to start and names
+ * the variable, which is the same fail-loud contract compose.infra.yml's
+ * datastore passwords use (AUD2-022). `npm run env:init` fills both into the
+ * root .env — including into a root .env that already exists.
+ *
+ * Every nest service gets them, not only the gateway: `@app/security`'s JWT
+ * strategy and the field-level encryption in `@app/common` are imported all
+ * over the platform, and a secret that differs between two services is a
+ * token one of them cannot verify.
+ */
+const SECRET_ENV = [
+  ['JWT_SECRET', '${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}'],
+  [
+    'ENCRYPTION_KEY',
+    '${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}',
+  ],
 ];
 
 export function profilesOf(s) {
@@ -205,14 +241,19 @@ function moduleDatabaseEnv(reg) {
  * takes the prefix. With the prefixed set alone, whichever resolver took the
  * unprefixed path would connect as the superuser from apps/api/.env instead.
  *
- * A service with no database of its own still gets the owner credential: it
- * opens no connection, and leaving the variables to apps/api/.env would only
- * put a different copy of the same secret in the container.
+ * A service whose registry entry says `database: null` gets NOTHING here — not
+ * a name, not a user, not a password. It opens no Postgres connection, and the
+ * first version of this handed nine such containers the superuser password for
+ * no purpose (review finding 5; addendum item 6 said so in the first place).
+ * The addresses in INFRA_ENV are what keep apps/api/.env from leaving
+ * `DB_HOST=127.0.0.1` in place, and they carry no secret.
  */
 function credentialEnv(s) {
   const p = s.database?.envPrefix;
-  if (!p || p === 'DB')
+  if (!p) return [];
+  if (p === 'DB')
     return [
+      ['DB_NAME', '${POSTGRES_DB:-kartseek_db}'],
       ['DB_USER', '${POSTGRES_USER:-postgres}'],
       ['DB_PASSWORD', '${POSTGRES_PASSWORD}'],
     ];
@@ -220,6 +261,7 @@ function credentialEnv(s) {
   return [
     [`${p}_USER`, role],
     [`${p}_PASSWORD`, `\${${p}_PASSWORD}`],
+    ['DB_NAME', '${POSTGRES_DB:-kartseek_db}'],
     ['DB_USER', role],
     ['DB_PASSWORD', `\${${p}_PASSWORD}`],
   ];
@@ -285,9 +327,14 @@ export function envGroups(s, reg) {
     const groups = [
       ['The image already sets this; nothing here may put it back.', [['NODE_ENV', 'production']]],
       [
-        'Server-side fetches go straight to the gateway container. The browser' +
-          '\n      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.',
-        [['API_URL', 'http://api-gateway:3001/api/v1']],
+        'Server-side fetches go straight to the gateway container, and so do the' +
+          '\n      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back' +
+          '\n      # to the loopback address there, which inside this container is this' +
+          '\n      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.',
+        [
+          ['API_URL', 'http://api-gateway:3001/api/v1'],
+          ['API_GATEWAY_ORIGIN', 'http://api-gateway:3001'],
+        ],
       ],
     ];
     if (s.kind === 'web-shell') {
@@ -304,9 +351,18 @@ export function envGroups(s, reg) {
   const groups = [
     [
       'The image sets this too, but apps/api/.env says development and env_file' +
-        '\n      # wins over the image. Production here also switches DEV_AUTH_BYPASS off' +
-        '\n      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.',
-      [['NODE_ENV', 'production']],
+        '\n      # wins over the image. Production here also makes the gateway bind 0.0.0.0.' +
+        '\n      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in' +
+        '\n      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.',
+      [
+        ['NODE_ENV', 'production'],
+        ['DEV_AUTH_BYPASS', "'false'"],
+      ],
+    ],
+    [
+      'Platform secrets, from the ROOT .env — never from a workspace .env, whose' +
+        '\n      # dev values are exactly what NODE_ENV=production refuses.',
+      SECRET_ENV,
     ],
   ];
 

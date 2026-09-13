@@ -164,6 +164,41 @@ test('a module service connects as its own role, against the shared database', (
   assert.equal((out.match(/DB_SSL: 'false'/g) ?? []).length, 3, 'every nest service, web neither');
 });
 
+test('a service with database: null gets the address but no credential', () => {
+  // search-service is `database: null`: it opens no Postgres connection, so
+  // handing it DB_NAME/DB_USER/DB_PASSWORD would put the superuser password in
+  // a container for nothing (addendum item 6).
+  const only = renderComposeServices({ services: [search] });
+  assert.match(only, /DB_HOST: postgres/, 'the address still overrides apps/api/.env');
+  assert.match(only, /DB_PORT: '5432'/);
+  assert.ok(!/DB_USER:/.test(only), 'no role');
+  assert.ok(!/DB_PASSWORD:/.test(only), 'no password');
+  assert.ok(!/^\s+DB_NAME:/m.test(only), 'no database name');
+  // And the ones that DO own a database still get all three.
+  const withDb = renderComposeServices({ services: [gateway] });
+  assert.match(withDb, /DB_NAME: \$\{POSTGRES_DB:-kartseek_db\}/);
+  assert.match(withDb, /DB_PASSWORD: \$\{POSTGRES_PASSWORD\}/);
+});
+
+test('the two platform secrets come from the root .env, and refuse to default', () => {
+  const out = renderComposeServices(reg);
+  // NODE_ENV=production arms env.validation.ts's weak-secret refusal, and
+  // apps/api/.env's JWT_SECRET matches two of its five patterns. `:?` so
+  // Compose names the variable instead of the gateway throwing at boot.
+  assert.match(out, /JWT_SECRET: \$\{JWT_SECRET:\?[^}]*env:init\}/);
+  assert.match(out, /ENCRYPTION_KEY: \$\{ENCRYPTION_KEY:\?[^}]*env:init\}/);
+  // Every nest service, so a token signed by one verifies in the next.
+  assert.equal((out.match(/JWT_SECRET: /g) ?? []).length, 3);
+  // The console signs nothing and decrypts nothing.
+  const onlyWeb = renderComposeServices({ services: [web] });
+  assert.ok(!/JWT_SECRET|ENCRYPTION_KEY/.test(onlyWeb), 'not in the console image');
+});
+
+test('DEV_AUTH_BYPASS is pinned off rather than left to a second gate', () => {
+  const out = renderComposeServices(reg);
+  assert.equal((out.match(/DEV_AUTH_BYPASS: 'false'/g) ?? []).length, 3);
+});
+
 test('env_file is the root .env plus the untracked workspace files', () => {
   assert.deepEqual(envFilesFor(gateway), [
     ['.env', true],
@@ -174,7 +209,8 @@ test('env_file is the root .env plus the untracked workspace files', () => {
     ['apps/api/.env', false],
     ['modules/grocery/backend/.env', false],
   ]);
-  assert.deepEqual(envFilesFor(web), []);
+  assert.deepEqual(envFilesFor(web), [], 'the console carries no datastore credential');
+  assert.deepEqual(envFilesFor(zone), [], 'and neither does a zone');
   const out = renderComposeServices(reg);
   assert.match(out, /- path: modules\/grocery\/backend\/\.env\n\s*required: false/);
   assert.match(out, /- path: \.env\n\s*required: true/);
@@ -186,6 +222,9 @@ test('a Next image gets all three URL build args and its workspace', () => {
   assert.match(out, /NEXT_PUBLIC_API_URL: \$\{COMPOSE_API_URL:-http:\/\/nginx\/api\/v1\}/);
   assert.match(out, /NEXT_PUBLIC_WS_URL: \$\{COMPOSE_WS_URL:-ws:\/\/nginx\}/);
   assert.match(out, /API_URL: http:\/\/api-gateway:3001\/api\/v1/);
+  // next.config.mjs rewrites /api/* to API_GATEWAY_ORIGIN, which defaults to
+  // http://localhost:3001 — inside the container, the container itself.
+  assert.match(out, /API_GATEWAY_ORIGIN: http:\/\/api-gateway:3001$/m);
   // The shell rewrites each vertical path to its zone container.
   assert.match(out, /HOTEL_ZONE_ORIGIN: http:\/\/hotel-frontend:3007/);
 });

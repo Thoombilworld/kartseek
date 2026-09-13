@@ -30,16 +30,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -74,6 +79,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -218,16 +224,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -262,6 +273,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -405,16 +417,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -449,8 +466,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: audit-log-consumers
@@ -593,16 +608,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -637,8 +657,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -776,16 +794,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -820,8 +843,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -961,16 +982,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -1005,8 +1031,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1146,16 +1170,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -1190,8 +1219,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1331,16 +1358,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -1375,6 +1407,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -1516,16 +1549,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -1560,8 +1598,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1701,16 +1737,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -1745,8 +1786,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: notification-password-reset
@@ -1888,16 +1927,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -1932,6 +1976,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -2076,16 +2121,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -2120,6 +2170,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -2264,16 +2315,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -2308,6 +2364,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -2451,16 +2508,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -2495,8 +2557,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -2636,16 +2696,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -2680,8 +2745,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -2821,16 +2884,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -2865,8 +2933,6 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: search-indexer
@@ -3010,16 +3076,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -3054,6 +3125,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -3195,16 +3267,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -3239,6 +3316,7 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSL: 'false'
@@ -3384,16 +3462,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -3430,6 +3513,7 @@ services:
       # private network.
       DOCTOR_DB_USER: ${DOCTOR_DB_USER:-doctor_user}
       DOCTOR_DB_PASSWORD: ${DOCTOR_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${DOCTOR_DB_USER:-doctor_user}
       DB_PASSWORD: ${DOCTOR_DB_PASSWORD}
       DB_SSL: 'false'
@@ -3575,16 +3659,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -3621,6 +3710,7 @@ services:
       # private network.
       FRANCHISE_DB_USER: ${FRANCHISE_DB_USER:-franchise_user}
       FRANCHISE_DB_PASSWORD: ${FRANCHISE_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${FRANCHISE_DB_USER:-franchise_user}
       DB_PASSWORD: ${FRANCHISE_DB_PASSWORD}
       DB_SSL: 'false'
@@ -3766,16 +3856,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -3812,6 +3907,7 @@ services:
       # private network.
       GROCERY_DB_USER: ${GROCERY_DB_USER:-grocery_user}
       GROCERY_DB_PASSWORD: ${GROCERY_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${GROCERY_DB_USER:-grocery_user}
       DB_PASSWORD: ${GROCERY_DB_PASSWORD}
       DB_SSL: 'false'
@@ -3958,16 +4054,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -4004,6 +4105,7 @@ services:
       # private network.
       HOTEL_DB_USER: ${HOTEL_DB_USER:-hotel_user}
       HOTEL_DB_PASSWORD: ${HOTEL_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${HOTEL_DB_USER:-hotel_user}
       DB_PASSWORD: ${HOTEL_DB_PASSWORD}
       DB_SSL: 'false'
@@ -4149,16 +4251,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -4195,6 +4302,7 @@ services:
       # private network.
       MARKETPLACE_DB_USER: ${MARKETPLACE_DB_USER:-marketplace_user}
       MARKETPLACE_DB_PASSWORD: ${MARKETPLACE_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${MARKETPLACE_DB_USER:-marketplace_user}
       DB_PASSWORD: ${MARKETPLACE_DB_PASSWORD}
       DB_SSL: 'false'
@@ -4341,16 +4449,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -4387,6 +4500,7 @@ services:
       # private network.
       PHARMACY_DB_USER: ${PHARMACY_DB_USER:-pharmacy_user}
       PHARMACY_DB_PASSWORD: ${PHARMACY_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${PHARMACY_DB_USER:-pharmacy_user}
       DB_PASSWORD: ${PHARMACY_DB_PASSWORD}
       DB_SSL: 'false'
@@ -4532,16 +4646,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -4578,6 +4697,7 @@ services:
       # private network.
       RESTAURANT_DB_USER: ${RESTAURANT_DB_USER:-restaurant_user}
       RESTAURANT_DB_PASSWORD: ${RESTAURANT_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${RESTAURANT_DB_USER:-restaurant_user}
       DB_PASSWORD: ${RESTAURANT_DB_PASSWORD}
       DB_SSL: 'false'
@@ -4724,16 +4844,21 @@ services:
         required: false
     environment:
       # The image sets this too, but apps/api/.env says development and env_file
-      # wins over the image. Production here also switches DEV_AUTH_BYPASS off
-      # (it is gated on NODE_ENV) and makes the gateway bind 0.0.0.0.
+      # wins over the image. Production here also makes the gateway bind 0.0.0.0.
+      # DEV_AUTH_BYPASS is pinned rather than left to the NODE_ENV gate in
+      # jwt-auth.guard.ts: one gate is not where an anonymous SUPER_ADMIN belongs.
       NODE_ENV: production
+      DEV_AUTH_BYPASS: 'false'
+      # Platform secrets, from the ROOT .env — never from a workspace .env, whose
+      # dev values are exactly what NODE_ENV=production refuses.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
       # at the developer’s own machine.
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -4770,6 +4895,7 @@ services:
       # private network.
       TAXI_DB_USER: ${TAXI_DB_USER:-taxi_user}
       TAXI_DB_PASSWORD: ${TAXI_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-kartseek_db}
       DB_USER: ${TAXI_DB_USER:-taxi_user}
       DB_PASSWORD: ${TAXI_DB_PASSWORD}
       DB_SSL: 'false'
@@ -4913,9 +5039,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
       # Where the shell rewrites each vertical path (next.config.mjs).
       MARKETPLACE_ZONE_ORIGIN: http://marketplace-frontend:3002
       GROCERY_ZONE_ORIGIN: http://grocery-frontend:3003
@@ -4952,9 +5081,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3002:3002'
     healthcheck:
@@ -4982,9 +5114,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3003:3003'
     healthcheck:
@@ -5012,9 +5147,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3004:3004'
     healthcheck:
@@ -5042,9 +5180,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3005:3005'
     healthcheck:
@@ -5072,9 +5213,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3006:3006'
     healthcheck:
@@ -5102,9 +5246,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3007:3007'
     healthcheck:
@@ -5132,9 +5279,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3008:3008'
     healthcheck:
@@ -5162,9 +5312,12 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container. The browser
-      # uses the build-time NEXT_PUBLIC_API_URL above, which goes through nginx.
+      # Server-side fetches go straight to the gateway container, and so do the
+      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
+      # to the loopback address there, which inside this container is this
+      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
       API_URL: http://api-gateway:3001/api/v1
+      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3009:3009'
     healthcheck:
