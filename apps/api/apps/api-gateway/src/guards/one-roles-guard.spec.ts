@@ -137,3 +137,36 @@ describe('no library reaches up into an application', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * The module backends bind the same guard, and it is now the permission-aware
+ * one — so what makes that a no-op for them has to be checked, not assumed.
+ *
+ * `modules/marketplace/backend` binds `RolesGuard` from `@app/guards`. That used
+ * to be the weak duplicate — one flat `some()` over the whole argument list,
+ * under which a `perm:` key matched nobody and enforced nothing — and it is now
+ * the implementation above. The verdict for that module's routes is unchanged
+ * ONLY because every `@Roles(...)` under `modules/` is a plain role list: the
+ * role half of the guard is the same case-insensitive `some()` it always was.
+ *
+ * The day someone adds `@Roles(UserRole.ADMIN, 'perm:orders.manage')` to a
+ * module route, that key starts narrowing — and it will be checked against an
+ * `adminPermissions` claim in an injector that registers no permission source,
+ * so it will deny everyone. This is the tripwire for that day, and it is the
+ * note the module's owner was handed (review M10): adding the first `perm:` key
+ * under `modules/` means wiring the claim through that module's login path
+ * first.
+ */
+describe('no module route carries a permission key yet', () => {
+  it('finds no `perm:` in any module backend', () => {
+    const offenders = walk(path.join(REPO, 'modules'))
+      .filter((f) => !f.endsWith('.spec.ts'))
+      .filter((f) => /@Roles\([^)]*['"]perm:/s.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.relative(REPO, f).replace(/\\/g, '/'));
+
+    // Not "never do this" — it is a fine thing to do. It just cannot be done
+    // silently: the claim has to reach the request first, or the key denies
+    // everyone rather than narrowing anyone.
+    expect(offenders).toEqual([]);
+  });
+});

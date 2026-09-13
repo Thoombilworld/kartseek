@@ -146,6 +146,13 @@ export const envValidationSchema = Joi.object({
   // reference refuses that pairing at boot, where it is still legible, and
   // `StorageService`'s constructor refuses it again for the services that do
   // not run this schema.
+  //
+  // Two references cover all three cloud providers, and there is deliberately
+  // no `R2_BUCKET`: the `r2` provider carries its own endpoint and credentials
+  // (`R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) but writes to
+  // `this.bucket` — which `storage.service.ts:89` resolves from
+  // `S3_BUCKET || GCS_BUCKET`. So `r2` is guarded by the `S3_BUCKET` reference
+  // below; adding an `R2_BUCKET` ref would guard a variable nothing reads.
   STORAGE_PRIVATE_BUCKET: Joi.string()
     .allow('')
     .when('STORAGE_PROVIDER', {

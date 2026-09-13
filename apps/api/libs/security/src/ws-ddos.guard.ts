@@ -10,9 +10,20 @@ import { RedisService } from '@app/redis';
  * the HTTP and WebSocket halves of the rate limiter cannot disagree about which
  * hop is ours.
  */
-const WS_TRUSTED_PROXIES: Set<string> = new Set(
-  (process.env.DDOS_TRUSTED_PROXIES || '127.0.0.1,::1').split(',').map((p) => p.trim()),
-);
+const wsTrustedProxies = (): Set<string> =>
+  new Set((process.env.DDOS_TRUSTED_PROXIES || '127.0.0.1,::1').split(',').map((p) => p.trim()));
+
+/**
+ * Does this look like an address at all?
+ *
+ * The same sanity check `DdosProtectionMiddleware.looksLikeIp` applies to a
+ * forwarded value. Without it a trusted proxy forwarding a junk string — a
+ * hostname, an empty segment, an injected header from a misconfigured hop —
+ * becomes the ban key, so `ws:banned:<junk>` bans nobody and the real client
+ * carries on. Falling back to the peer address is always a real address.
+ */
+const looksLikeIp = (ip: string): boolean =>
+  /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip) || /^[0-9a-fA-F:]{3,45}$/.test(ip);
 
 /**
  * WebSocket DDoS Guard — Complete abuse prevention for all Socket.IO namespaces.
@@ -324,12 +335,16 @@ export class WsDdosGuard implements CanActivate {
    */
   private getSocketIp(client: Socket): string {
     const peer = client.handshake.address || 'unknown';
-    if (!WS_TRUSTED_PROXIES.has(peer)) return peer;
+    // Read per call, not once at import: the middleware reads the same variable
+    // per instance, and a module-level `const` fixes the answer at the moment
+    // this file is first imported — before a test can stub the environment, and
+    // before a process that loads its `.env` late has one.
+    if (!wsTrustedProxies().has(peer)) return peer;
 
     const forwarded = client.handshake.headers['x-forwarded-for'];
     if (forwarded) {
       const ip = (typeof forwarded === 'string' ? forwarded : forwarded[0]).split(',')[0].trim();
-      if (ip) return ip;
+      if (ip && looksLikeIp(ip)) return ip;
     }
     return peer;
   }

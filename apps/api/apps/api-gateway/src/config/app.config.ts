@@ -82,7 +82,19 @@ export const redisConfig = registerAs('redis', () => ({
  * stops being unused.
  */
 export const jwtConfig = registerAs('jwt', () => ({
-  secret: resolveJwtSecret(),
+  /**
+   * A getter, so the resolver runs when someone READS the secret.
+   *
+   * `registerAs` factories run while `ConfigModule` loads, so calling
+   * `resolveJwtSecret()` in the object literal made an unused namespace able to
+   * stop the whole process (review M9). The guard is still there for the first
+   * caller — it just fires when there is a caller, which is the only moment at
+   * which refusing is useful. Every real signer and verifier calls the resolver
+   * directly and fails fast on its own account.
+   */
+  get secret() {
+    return resolveJwtSecret();
+  },
   expiresIn: parseInt(process.env.JWT_EXPIRES_IN || '900', 10),
 }));
 

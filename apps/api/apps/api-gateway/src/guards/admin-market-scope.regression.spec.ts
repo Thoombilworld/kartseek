@@ -795,7 +795,12 @@ describe('admin market scope regression', () => {
     // The floor is deliberately close to the real number: a collector that
     // silently stops seeing a controller drops ~100 routes at a time and must
     // fail here rather than pass with fewer things to check.
-    expect(routes.length).toBeGreaterThan(500);
+    // 585 is what the collector sees today, so that is the floor. `> 500` let
+    // the census lose eighty routes without anyone noticing, which defeats the
+    // point of a tripwire whose comment quotes the real number (review M8).
+    // Raise it when the number genuinely grows; never lower it to make a run
+    // pass.
+    expect(routes.length).toBeGreaterThanOrEqual(585);
     expect(files.size).toBeGreaterThanOrEqual(22);
     // The blind spot by name, so it cannot come back unnoticed. The four files
     // whose routes this plan's successors may delete outright — taxi, doctor,

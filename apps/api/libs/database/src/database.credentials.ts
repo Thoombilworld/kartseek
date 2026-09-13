@@ -80,7 +80,9 @@ export function databaseCredentials(cfg: ConfigService, options: DatabaseCredent
   const password =
     (prefixedKey ? read(prefixedKey) : undefined) ?? read('DB_PASSWORD') ?? read('DB_PASS');
   if (!password) {
-    const named = prefixedKey ? `${prefixedKey} or DB_PASSWORD` : 'DB_PASSWORD';
+    // Every name that was tried, so the message cannot send someone to set a
+    // variable they have already set under one of the other spellings.
+    const named = prefixedKey ? `${prefixedKey}, DB_PASSWORD or DB_PASS` : 'DB_PASSWORD or DB_PASS';
     throw new Error(
       `${named} is not set. Copy .env.example to .env in this workspace (or ` +
         'apps/api/.env for the shared platform database) and set it. There is no ' +

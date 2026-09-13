@@ -274,7 +274,13 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ── Figures another module owns ───────────────────────────────────── */}
+      {/* ── Counters admin-service reports separately ─────────────────────────
+          Not "figures another module owns" any more: `pendingKyc` is
+          admin-service's OWN approval queue, counted from the rows
+          (`countPendingKyc`), and `admin.service.ts` says so explicitly. Only
+          `sellers` and `drivers` live in another module's database, and each
+          carries its own `unavailable` reason for the branch below — which is
+          what this tile renders from, rather than from the heading. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {(
           [

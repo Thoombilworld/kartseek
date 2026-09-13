@@ -56,9 +56,12 @@ describe('databaseCredentials', () => {
       databaseCredentials(cfg({ DB_PASSWORD: 'shared' }), { envPrefix: 'MARKETPLACE_DB' }).password,
     ).toBe('shared');
 
-    // Neither: refuse, naming both.
+    // Neither: refuse, naming every spelling that was tried. `DB_PASS` is
+    // among them because the resolver reads it (the eight module resolvers
+    // always accepted it), and a message that omits a variable the code reads
+    // sends someone to set one they have already set.
     expect(() => databaseCredentials(cfg({}), { envPrefix: 'MARKETPLACE_DB' })).toThrow(
-      /MARKETPLACE_DB_PASSWORD or DB_PASSWORD/,
+      /MARKETPLACE_DB_PASSWORD, DB_PASSWORD or DB_PASS/,
     );
     // An empty prefixed value falls through rather than counting as set.
     expect(
@@ -77,9 +80,11 @@ describe('databaseCredentials', () => {
     // An empty value is a missing value; `DB_PASSWORD=` in a .env must not
     // read as "connect with no password".
     expect(() => databaseCredentials(cfg({ DB_PASSWORD: '' }))).toThrow(/DB_PASSWORD/);
-    // Without a prefix the message names DB_PASSWORD and nothing else — the
-    // gateway and the core services must not be told about a module variable.
-    expect(() => databaseCredentials(cfg({}))).toThrow(/^DB_PASSWORD is not set\./);
+    // Without a prefix the message names the shared spellings and no module
+    // variable — the gateway and the core services must not be told to set
+    // MARKETPLACE_DB_PASSWORD.
+    expect(() => databaseCredentials(cfg({}))).toThrow(/^DB_PASSWORD or DB_PASS is not set\./);
+    expect(() => databaseCredentials(cfg({}))).not.toThrow(/MARKETPLACE/);
   });
 
   it('encrypts in production and leaves local plaintext', () => {

@@ -7,7 +7,12 @@ import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 const envSchema = buildEnvSchema({
   AUTH_GRPC_PORT: Joi.number().default(5001),
   AUTH_SERVICE_PORT: Joi.number().default(3010),
-  JWT_SECRET: Joi.string().required(),
+  // 32, the same floor the gateway's schema applies and the same one
+  // `resolveJwtSecret()` enforces at the point of use. Bare `.required()` let a
+  // 20-character secret pass auth-service's boot validation and then be refused
+  // by the resolver — which reads as "auth is broken" rather than "the secret is
+  // too short", and this is the process that MINTS the tokens.
+  JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.number().default(900),
 });
 

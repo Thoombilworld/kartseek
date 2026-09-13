@@ -44,3 +44,39 @@ describe('WsDdosGuard.getSocketIp', () => {
     expect(ipOf({ handshake: { headers: {} } })).toBe('unknown');
   });
 });
+
+/**
+ * A forwarded value that is not an address at all.
+ *
+ * `DdosProtectionMiddleware.extractClientIp` sanity-checks the header with
+ * `looksLikeIp` before trusting it; this guard did not (review M2). A trusted
+ * hop forwarding a hostname, an empty segment or an injected value would become
+ * the ban key — `ws:banned:<junk>` bans nobody, and the flooder keeps its real
+ * address unbanned. The peer is always a real address, so it is the fallback.
+ */
+describe('WsDdosGuard.getSocketIp rejects a junk forwarded value', () => {
+  it('falls back to the peer when the header is not an address', () => {
+    expect(ipOf(socket('127.0.0.1', 'not-an-address'))).toBe('127.0.0.1');
+    expect(ipOf(socket('127.0.0.1', 'evil.example.com'))).toBe('127.0.0.1');
+  });
+
+  it('still accepts a real IPv4 or IPv6 value from a trusted hop', () => {
+    expect(ipOf(socket('127.0.0.1', '203.0.113.9'))).toBe('203.0.113.9');
+    expect(ipOf(socket('127.0.0.1', '2001:db8::1'))).toBe('2001:db8::1');
+  });
+
+  it('reads the trusted-proxy list per call, not once at import', () => {
+    // A module-level `const` fixes the answer when this file is first imported,
+    // which is before any test can stub the environment — and before a process
+    // that loads its `.env` late has one.
+    const previous = process.env.DDOS_TRUSTED_PROXIES;
+    process.env.DDOS_TRUSTED_PROXIES = '10.9.9.9';
+    try {
+      expect(ipOf(socket('10.9.9.9', '203.0.113.9'))).toBe('203.0.113.9');
+      expect(ipOf(socket('127.0.0.1', '203.0.113.9'))).toBe('127.0.0.1');
+    } finally {
+      if (previous === undefined) delete process.env.DDOS_TRUSTED_PROXIES;
+      else process.env.DDOS_TRUSTED_PROXIES = previous;
+    }
+  });
+});
