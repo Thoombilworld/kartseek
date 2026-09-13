@@ -47,20 +47,25 @@ export const appConfig = registerAs('app', () => ({
   hpkp: {
     primaryPin: process.env.HPKP_PRIMARY_PIN,
     backupPin: process.env.HPKP_BACKUP_PIN,
-    reportUri: process.env.HPKP_REPORT_URI || 'https://api.kartseek.com/api/v1/security/hpkp-report',
+    reportUri:
+      process.env.HPKP_REPORT_URI || 'https://api.kartseek.com/api/v1/security/hpkp-report',
   },
 }));
 
-export const databaseConfig = registerAs('database', () => ({
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  user: process.env.DB_USER || 'postgres',
-  // The development fallback lives in `databaseCredentials()`; keeping a copy
-  // here put the real password back into tracked source.
-  password: process.env.DB_PASSWORD || process.env.DB_PASS || '',
-  name: process.env.DB_NAME || 'kartseek_db',
-  mongoUri: process.env.MONGO_URI,
-}));
+/**
+ * The `database` namespace is gone, deliberately.
+ *
+ * It registered a second copy of the connection — host, port, user and
+ * `password: … || ''` — that nothing ever read: `ConfigService.get('database.…')`
+ * has no callers anywhere in `apps/` or `modules/`, and the gateway connects
+ * through `DatabaseModule.registerPostgres()`, which takes everything from
+ * `databaseCredentials()` in `@app/database`.
+ *
+ * It is deleted rather than corrected because a second place that resolves a
+ * database password reads like a credential path whether or not it is one, and
+ * its `|| ''` was the opposite of the rule the real helper now enforces: an
+ * empty password is a refusal, not a connection with none.
+ */
 
 export const redisConfig = registerAs('redis', () => ({
   host: process.env.REDIS_HOST || '127.0.0.1',

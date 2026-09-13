@@ -28,6 +28,46 @@ describe('databaseCredentials', () => {
     expect(typeof c.extra.max).toBe('number');
   });
 
+  it('takes a module prefix first, and refuses only when neither is set', () => {
+    // The eight module services do not use DB_PASSWORD: each resolves
+    // <MODULE>_DB_* through its own db-config.ts, and their .env.example files
+    // declare only <MODULE>_DB_PASSWORD. Spreading this helper without a prefix
+    // made them refuse to boot on a variable they never read — invisible in
+    // this repository, where the module ConfigModule falls back to
+    // apps/api/.env, and fatal for a module lifted out of it.
+    const prefixed = databaseCredentials(cfg({ MARKETPLACE_DB_PASSWORD: 'module-secret' }), {
+      envPrefix: 'MARKETPLACE_DB',
+    });
+    expect(prefixed.password).toBe('module-secret');
+
+    // The prefix wins over the shared variable — the same order the module
+    // resolvers use, so the two cannot disagree about which database is reached.
+    expect(
+      databaseCredentials(
+        cfg({ MARKETPLACE_DB_PASSWORD: 'module-secret', DB_PASSWORD: 'shared' }),
+        {
+          envPrefix: 'MARKETPLACE_DB',
+        },
+      ).password,
+    ).toBe('module-secret');
+
+    // The shared one still answers when the module has none of its own.
+    expect(
+      databaseCredentials(cfg({ DB_PASSWORD: 'shared' }), { envPrefix: 'MARKETPLACE_DB' }).password,
+    ).toBe('shared');
+
+    // Neither: refuse, naming both.
+    expect(() => databaseCredentials(cfg({}), { envPrefix: 'MARKETPLACE_DB' })).toThrow(
+      /MARKETPLACE_DB_PASSWORD or DB_PASSWORD/,
+    );
+    // An empty prefixed value falls through rather than counting as set.
+    expect(
+      databaseCredentials(cfg({ MARKETPLACE_DB_PASSWORD: '', DB_PASSWORD: 'shared' }), {
+        envPrefix: 'MARKETPLACE_DB',
+      }).password,
+    ).toBe('shared');
+  });
+
   it('refuses to start without DB_PASSWORD instead of using a literal', () => {
     expect(() => databaseCredentials(cfg({}))).toThrow(/DB_PASSWORD/);
     // Refused in development too, not only in production — the literal it
@@ -37,6 +77,9 @@ describe('databaseCredentials', () => {
     // An empty value is a missing value; `DB_PASSWORD=` in a .env must not
     // read as "connect with no password".
     expect(() => databaseCredentials(cfg({ DB_PASSWORD: '' }))).toThrow(/DB_PASSWORD/);
+    // Without a prefix the message names DB_PASSWORD and nothing else — the
+    // gateway and the core services must not be told about a module variable.
+    expect(() => databaseCredentials(cfg({}))).toThrow(/^DB_PASSWORD is not set\./);
   });
 
   it('encrypts in production and leaves local plaintext', () => {
@@ -91,10 +134,13 @@ describe('databaseCredentials', () => {
     );
     expect(c).toMatchObject({
       host: 'db.internal',
-      port: '6543',
+      // A number, not the '6543' the environment hands over — node-postgres
+      // does not coerce it and a string port fails to connect on some drivers.
+      port: 6543,
       username: 'gateway_user',
       password: 'secret',
       database: 'kartseek_main',
     });
+    expect(typeof c.port).toBe('number');
   });
 });

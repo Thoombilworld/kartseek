@@ -6,14 +6,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule } from '@nestjs/config';
-import {
-  envValidationSchema,
-  appConfig,
-  databaseConfig,
-  redisConfig,
-  jwtConfig,
-  kafkaConfig,
-} from './config';
+import { envValidationSchema, appConfig, redisConfig, jwtConfig, kafkaConfig } from './config';
 import { KafkaModule } from '@app/kafka';
 import { GrpcClientModule } from '@app/grpc';
 import { RedisModule } from '@app/redis';
@@ -176,7 +169,7 @@ const svcHost = (name: string): string => process.env[`${name}_SERVICE_HOST`] ??
       // works as the schema — what changes is that a bad .env reports its
       // first problem rather than all of them, so fixing one may reveal the
       // next.
-      load: [appConfig, databaseConfig, redisConfig, jwtConfig, kafkaConfig],
+      load: [appConfig, redisConfig, jwtConfig, kafkaConfig],
     }),
 
     // ── Database (skipped when SKIP_DB=true) ────────────────────────────────

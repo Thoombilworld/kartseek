@@ -226,6 +226,17 @@ describe.each(RUNNERS)(
       expect(source).toContain(`resolve${pascal}DbConfig(`);
       // The old shape, which is what drifted.
       expect(source).not.toContain(`cfg.get<string>('${module.toUpperCase()}_DB_HOST')`);
+
+      // …and it spreads the shared helper with THIS module's prefix. Spreading
+      // it without one made the factory refuse to boot on `DB_PASSWORD`, which
+      // no module .env.example declares and no module reads — invisible in this
+      // repository, where the module ConfigModule falls back to apps/api/.env,
+      // and fatal for a module lifted out of it into an image of its own. A
+      // prefix belonging to a *different* module would be worse than none: it
+      // would resolve a password for a database this service does not use.
+      expect(source).toContain(
+        `databaseCredentials(cfg, { envPrefix: '${module.toUpperCase()}_DB' })`,
+      );
     });
 
     it('prefers the module-specific variables, then the shared ones', () => {

@@ -1,2 +1,2 @@
 export { envValidationSchema } from './env.validation';
-export { appConfig, databaseConfig, redisConfig, jwtConfig, kafkaConfig } from './app.config';
+export { appConfig, redisConfig, jwtConfig, kafkaConfig } from './app.config';

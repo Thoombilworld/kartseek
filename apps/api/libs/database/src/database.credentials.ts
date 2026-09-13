@@ -18,7 +18,22 @@ import type { ConfigService } from '@nestjs/config';
  * misconfigured staging box reach a database it was never meant to.
  *
  * So there is no built-in password any more, in any environment. A missing
- * `DB_PASSWORD` is a startup failure.
+ * password is a startup failure.
+ *
+ * ── The module prefix ───────────────────────────────────────────────────────
+ *
+ * `envPrefix` exists because the eight module services do not use `DB_PASSWORD`.
+ * Each resolves `<MODULE>_DB_*` first through its own `db-config.ts`, and their
+ * `.env.example` files declare only `<MODULE>_DB_PASSWORD`. When the factories
+ * began spreading this helper (AUD2-023, so that marketplace stopped running
+ * plaintext under `DB_SSL=true`), they inherited a refusal on a variable they
+ * never read: a module lifted out of this repository — a container of its own,
+ * which is the stated direction — would not boot, and the message would name
+ * the wrong variable. In-repo it was masked only because the module
+ * `ConfigModule` falls back to `apps/api/.env`.
+ *
+ * With a prefix, the order is the same one the module resolvers use —
+ * `<PREFIX>_PASSWORD`, then `DB_PASSWORD` — and the refusal names both.
  *
  * ── The pool (AUD2-033) ─────────────────────────────────────────────────────
  *
@@ -32,16 +47,36 @@ import type { ConfigService } from '@nestjs/config';
  * default in production, where the database is reached over a network the
  * process does not control. `DB_SSL` overrides either way.
  */
-export function databaseCredentials(cfg: ConfigService) {
+export interface DatabaseCredentialsOptions {
+  /**
+   * A module's variable prefix, e.g. `MARKETPLACE_DB`. `<PREFIX>_PASSWORD` is
+   * then tried before `DB_PASSWORD`, and the refusal names both. Omitted, only
+   * `DB_PASSWORD` is read — which is what the gateway and the core services do.
+   */
+  envPrefix?: string;
+}
+
+export function databaseCredentials(cfg: ConfigService, options: DatabaseCredentialsOptions = {}) {
   const nodeEnv = cfg.get<string>('NODE_ENV', 'development');
   const isProduction = nodeEnv === 'production';
 
-  const password = cfg.get<string>('DB_PASSWORD');
+  // An empty string is a missing value: `DB_PASSWORD=` in a .env must not read
+  // as "connect with no password".
+  const read = (key: string): string | undefined => {
+    const value = cfg.get<string>(key);
+    return value === undefined || value === null || String(value) === ''
+      ? undefined
+      : String(value);
+  };
+
+  const prefixedKey = options.envPrefix ? `${options.envPrefix}_PASSWORD` : undefined;
+  const password = (prefixedKey ? read(prefixedKey) : undefined) ?? read('DB_PASSWORD');
   if (!password) {
+    const named = prefixedKey ? `${prefixedKey} or DB_PASSWORD` : 'DB_PASSWORD';
     throw new Error(
-      'DB_PASSWORD is not set. Copy apps/api/.env.example to apps/api/.env (and ' +
-        '.env.example to .env at the repository root for Compose) and set it. ' +
-        'There is no built-in default password in any environment.',
+      `${named} is not set. Copy .env.example to .env in this workspace (or ` +
+        'apps/api/.env for the shared platform database) and set it. There is no ' +
+        'built-in default password in any environment.',
     );
   }
 
@@ -51,7 +86,10 @@ export function databaseCredentials(cfg: ConfigService) {
 
   return {
     host: cfg.get<string>('DB_HOST', 'localhost'),
-    port: cfg.get<number>('DB_PORT', 5432),
+    // `Number()` for the same reason the pool numbers below carry it: a service
+    // whose schema does not declare DB_PORT gets the raw string from the
+    // environment, and the five new numbers were coerced while this one was not.
+    port: Number(cfg.get<number>('DB_PORT', 5432)),
     username: cfg.get<string>('DB_USER', 'postgres'),
     password,
     database: cfg.get<string>('DB_NAME', 'kartseek_db'),

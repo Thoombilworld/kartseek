@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AppDataSource } from './data-source';
@@ -129,5 +129,61 @@ describe('the two DataSources point at different databases', () => {
     expect((AppDataSource.options as Record<string, unknown>).migrationsTableName).toBe(
       'migrations',
     );
+  });
+});
+
+describe('the migration CLI refuses a missing password', () => {
+  /**
+   * The paths the brief named first, and the two with the least cover: nothing
+   * imports them except the TypeORM CLI, so a regression here shows up as a
+   * migration run against whatever database a built-in default happened to
+   * open. Both resolve their password at module scope, so the assertion is on
+   * the import itself.
+   *
+   * Three things have to be undone for the test to mean anything:
+   * `vitest-setup.ts` sets `DB_PASSWORD` process-wide so these imports survive
+   * on a machine with no `apps/api/.env`; both files open with
+   * `import 'dotenv/config'`, which would put the variable straight back from
+   * that file; and the module registry has already evaluated them once, at the
+   * top of this spec.
+   */
+  const KEYS = ['DB_PASSWORD', 'DB_PASS', 'MARKETPLACE_DB_PASSWORD'] as const;
+
+  async function importError(load: () => Promise<unknown>): Promise<Error | null> {
+    const saved = KEYS.map((k) => [k, process.env[k]] as const);
+    for (const k of KEYS) delete process.env[k];
+    vi.resetModules();
+    vi.doMock('dotenv/config', () => ({}));
+    try {
+      await load();
+      return null;
+    } catch (e) {
+      return e as Error;
+    } finally {
+      vi.doUnmock('dotenv/config');
+      vi.resetModules();
+      for (const [k, v] of saved) if (v !== undefined) process.env[k] = v;
+    }
+  }
+
+  it('data-source.main.ts throws instead of using a built-in default', async () => {
+    const err = await importError(() => import('./data-source.main'));
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toMatch(/DB_PASSWORD is not set/);
+    expect(err?.message).toMatch(/will not use a built-in default/);
+  });
+
+  it('data-source.ts throws instead of using a built-in default', async () => {
+    const err = await importError(() => import('./data-source'));
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toMatch(/MARKETPLACE_DB_PASSWORD or DB_PASSWORD is not set/);
+  });
+
+  it('imports cleanly once the password is back', async () => {
+    // Anti-vacuity: the two above must fail on the password, not on the mock,
+    // the reset, or an unrelated import error.
+    vi.resetModules();
+    await expect(import('./data-source.main')).resolves.toBeDefined();
+    await expect(import('./data-source')).resolves.toBeDefined();
   });
 });
