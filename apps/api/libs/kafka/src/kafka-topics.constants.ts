@@ -440,6 +440,14 @@ export const PUBLISHED_TOPICS = {
   QA_MODERATED: 'qa.moderated',
   QA_QUESTION_CREATED: 'qa.question-created',
   // ── restaurant ──
+  // The two admin decisions M4 gave a handler. Approving a menu item and closing
+  // a complaint each change something a restaurant owner or a customer is
+  // waiting on, and neither had anywhere to announce it — the menu moderation
+  // queue and the complaints queue did not exist at all before M4. Here rather
+  // than in KAFKA_TOPICS because nothing consumes them yet: this half of the
+  // registry is the producer-only names, and the provisioner creates both.
+  RESTAURANT_COMPLAINT_RESOLVED: 'restaurant.complaint.resolved',
+  RESTAURANT_MENU_ITEM_APPROVED: 'restaurant.menu_item.approved',
   RESTAURANT_ORDER_CANCELLED: 'restaurant.order.cancelled',
   RESTAURANT_ORDER_PLACED: 'restaurant.order.placed',
   RESTAURANT_ORDER_STATUS_CHANGED: 'restaurant.order.status_changed',

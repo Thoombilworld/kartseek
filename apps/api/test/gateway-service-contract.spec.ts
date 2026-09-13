@@ -108,90 +108,125 @@ const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   // at a franchise- or geo-scoped method, which would have returned a confident
   // empty list instead of admitting the command is not built.
   //
-  // ── Why this section GREW on 2026-09-13, when the list may only shrink ─────
+  // These are the entries this list has always held. It may only SHRINK:
+  // commands that become implemented leave, and nothing is ever added here. The
+  // 31 orphans that M3's widened extractor made visible are NOT here — they are
+  // in `NEWLY_VISIBLE_ORPHANS` below, which is a different list with a different
+  // rule and a named owner per group (M3 review, Important 3).
   //
-  // It grew by 31 entries that were always orphans and had simply never been
-  // visible. `readSentCommands`'s pattern for the `this.send('<cmd>', …)` form
-  // matched `[a-z0-9_.]+` — no capital letters — so every camelCase command in
-  // the six admin controllers was invisible to this gate: `storeDetail`,
-  // `approveProduct`, `verifyLicense`, `updateSettings`, `createCategory`,
-  // `approveDriver` and 42 others were neither checked for a handler nor listed
-  // here. The gate read as coverage over routes it could not see, which its own
-  // docstring calls worse than no gate at all.
-  //
-  // The character class is `[A-Za-z0-9_.]+` as of M3, so the extractor sees all
-  // 611 sent commands rather than 564. The 31 additions below are what that
-  // revealed in doctor, hotel, restaurant and taxi — each one a route the
-  // console can call today and get a 503 from — and they leave this list as
-  // M4-M7 implement them. The rule stands: nothing may be added for a NEW
-  // orphan; these are old ones, finally in view.
+  // The eleven `admin.pharmacy.*` entries that stood here are gone: M3 gave all
+  // nineteen of that module's commands a `@MessagePattern`. The seven
+  // `admin.restaurant.*` entries are gone for the same reason: M4 gave all
+  // seventeen of this one's a handler in
+  // `modules/restaurant/backend/src/admin/admin.controller.ts`.
+  // `keeps the unimplemented baseline honest` below is what would have failed
+  // had either set been left.
   'admin.doctor.appointments',
-  'admin.doctor.approveClinic',
-  'admin.doctor.clinicDetail',
-  'admin.doctor.createSpecialty',
   'admin.doctor.dashboard',
-  'admin.doctor.doctorDetail',
   'admin.doctor.prescriptions',
   'admin.doctor.reports',
   'admin.doctor.settings',
-  'admin.doctor.suspendDoctor',
-  'admin.doctor.updateSettings',
-  'admin.doctor.verifyDoctor',
   'admin.hotel.amenities',
-  'admin.hotel.bookingDetail',
   'admin.hotel.bookings',
-  'admin.hotel.createAmenity',
   'admin.hotel.dashboard',
   'admin.hotel.get',
   'admin.hotel.list',
-  'admin.hotel.moderateReview',
   'admin.hotel.pricing',
   'admin.hotel.reports',
   'admin.hotel.reviews',
   'admin.hotel.rooms',
   'admin.hotel.settings',
-  'admin.hotel.updatePricing',
-  'admin.hotel.updateSettings',
-  // The eleven `admin.pharmacy.*` entries that stood here are gone: M3 gave all
-  // nineteen of this module's commands a `@MessagePattern` in
-  // `modules/pharmacy/backend/src/admin/admin.controller.ts`, and the six
-  // camelCase ones the widened extractor now also sees are handled by the same
-  // controller. `keeps the unimplemented baseline honest` below is what would
-  // have failed had they been left.
-  'admin.restaurant.analytics',
-  'admin.restaurant.approveMenu',
-  'admin.restaurant.commissions',
-  'admin.restaurant.complaints',
-  'admin.restaurant.createCuisine',
-  'admin.restaurant.createZone',
-  'admin.restaurant.dashboard',
-  'admin.restaurant.get',
-  'admin.restaurant.menuApprovals',
-  'admin.restaurant.orders',
-  'admin.restaurant.resolveComplaint',
-  'admin.restaurant.updateCommissions',
-  'admin.restaurant.zones',
-  'admin.taxi.approveDriver',
-  'admin.taxi.approvePayout',
-  'admin.taxi.approveVendor',
   'admin.taxi.complaints',
   'admin.taxi.compliance',
-  'admin.taxi.createRoute',
   'admin.taxi.dashboard',
-  'admin.taxi.driverDetail',
   'admin.taxi.fleet',
-  'admin.taxi.pendingApprovals',
   'admin.taxi.pricing',
-  'admin.taxi.resolveComplaint',
-  'admin.taxi.rideDetail',
   'admin.taxi.rides',
   'admin.taxi.routes',
   'admin.taxi.settings',
+]);
+
+/**
+ * Orphans that were ALWAYS orphans and had simply never been visible.
+ *
+ * ── Why they are not in `UNIMPLEMENTED_COMMANDS` ────────────────────────────
+ *
+ * That list is a shrink-only snapshot with no owner: nothing may be added to it,
+ * ever, because an addition is indistinguishable from someone quietly excusing a
+ * newly broken route. M3 added 31 entries to it anyway — legitimately, because
+ * they were old orphans the gate had been blind to — and in doing so made the
+ * one rule that list has unenforceable by inspection. Separating them restores
+ * it: `UNIMPLEMENTED_COMMANDS` above is once again a list that only ever
+ * shrinks, and this one is a finite, owned backlog that empties.
+ *
+ * ── What made them invisible ────────────────────────────────────────────────
+ *
+ * `readSentCommands`'s pattern for the `this.send('<cmd>', …)` form matched
+ * `[a-z0-9_.]+` — no capital letters — so every camelCase command in the six
+ * admin controllers was outside this gate entirely: `storeDetail`,
+ * `approveProduct`, `verifyLicense`, `updateSettings`, `createCategory`,
+ * `approveDriver` and 41 others were neither checked for a handler nor listed
+ * anywhere. The gate read as coverage over 47 calls it could not see, which its
+ * own docstring calls worse than no gate at all. The class is `[A-Za-z0-9_.]+`
+ * as of M3, so the extractor sees all 611 sent commands rather than 564.
+ *
+ * ── The rule for this list ──────────────────────────────────────────────────
+ *
+ * Every entry has a named owner and a task that removes it. It may only shrink,
+ * like the list above, and — unlike that one — it is finished when it is empty.
+ * Nothing may EVER be added here either: a new orphan is a new broken route.
+ */
+const NEWLY_VISIBLE_ORPHANS: ReadonlySet<string> = new Set([
+  // ── doctor → M6 ───────────────────────────────────────────────────────────
+  'admin.doctor.approveClinic',
+  'admin.doctor.clinicDetail',
+  'admin.doctor.createSpecialty',
+  'admin.doctor.doctorDetail',
+  'admin.doctor.suspendDoctor',
+  'admin.doctor.updateSettings',
+  'admin.doctor.verifyDoctor',
+
+  // ── hotel → M5 ────────────────────────────────────────────────────────────
+  'admin.hotel.bookingDetail',
+  'admin.hotel.createAmenity',
+  'admin.hotel.moderateReview',
+  'admin.hotel.updatePricing',
+  'admin.hotel.updateSettings',
+
+  // ── restaurant → M4: EMPTY, and an `it` below keeps it that way ───────────
+  //
+  // All six of this module's newly visible commands — `approveMenu`,
+  // `createCuisine`, `createZone`, `menuApprovals`, `resolveComplaint`,
+  // `updateCommissions` — now have a `@MessagePattern` in
+  // `modules/restaurant/backend/src/admin/admin.controller.ts`, together with
+  // the seven that were visible all along. Seventeen commands, seventeen
+  // handlers, nothing deliberately left unhandled.
+
+  // ── taxi → M7 ─────────────────────────────────────────────────────────────
+  'admin.taxi.approveDriver',
+  'admin.taxi.approvePayout',
+  'admin.taxi.approveVendor',
+  'admin.taxi.createRoute',
+  'admin.taxi.driverDetail',
+  'admin.taxi.pendingApprovals',
+  'admin.taxi.resolveComplaint',
+  'admin.taxi.rideDetail',
   'admin.taxi.suspendVendor',
   'admin.taxi.updatePricing',
   'admin.taxi.updateSettings',
   'admin.taxi.updateSurge',
   'admin.taxi.vendorDetail',
+]);
+
+/**
+ * The two baselines together — what the orphan check forgives.
+ *
+ * Unioned at the point of use rather than merged into one constant, so each list
+ * keeps its own rule and its own `it`.
+ */
+const KNOWN_ORPHANS: ReadonlySet<string> = new Set([
+  ...UNIMPLEMENTED_COMMANDS,
+  ...NEWLY_VISIBLE_ORPHANS,
 ]);
 
 // Removed 2026-09-01: implemented in the extracted module backends, and only
@@ -405,7 +440,7 @@ describe('gateway ↔ service contract', () => {
   it('sends no command that a service does not implement', () => {
     const orphans = [...sent.entries()]
       .filter(([cmd]) => !handled.has(cmd))
-      .filter(([cmd]) => !UNIMPLEMENTED_COMMANDS.has(cmd))
+      .filter(([cmd]) => !KNOWN_ORPHANS.has(cmd))
       .map(([cmd, file]) => `${cmd}  (sent by ${file})`);
 
     expect(orphans).toEqual([]);
@@ -413,10 +448,24 @@ describe('gateway ↔ service contract', () => {
 
   it('keeps the unimplemented baseline honest', () => {
     // A command that has since been implemented must leave the list, otherwise
-    // the baseline slowly stops describing reality.
-    const staleEntries = [...UNIMPLEMENTED_COMMANDS].filter((cmd) => handled.has(cmd));
+    // the baseline slowly stops describing reality. Both lists, one rule: each
+    // may only shrink, and an entry that is now handled is the failure.
+    const staleEntries = [...KNOWN_ORPHANS].filter((cmd) => handled.has(cmd));
 
     expect(staleEntries).toEqual([]);
+  });
+
+  it('has no restaurant command left in either baseline', () => {
+    // M4 gave all seventeen `admin.restaurant.*` commands a `@MessagePattern`.
+    // This is the assertion that keeps that true: a restaurant command
+    // reappearing in either list would mean a handler was removed and excused
+    // rather than replaced. M5-M7 add the same line for their own module as
+    // they empty their group of `NEWLY_VISIBLE_ORPHANS`.
+    const restaurantEntries = [...KNOWN_ORPHANS].filter((cmd) =>
+      cmd.startsWith('admin.restaurant.'),
+    );
+
+    expect(restaurantEntries).toEqual([]);
   });
 
   it('declares literal routes before parameterised siblings', () => {
