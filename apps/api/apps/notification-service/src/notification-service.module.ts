@@ -28,9 +28,14 @@ const envSchema = buildEnvSchema({
   NOTIFICATION_GRPC_PORT: Joi.number().port().default(5004),
 });
 
-// Note this is the module `main.ts` bootstraps — the similarly named
-// `NotificationModule` in notification.module.ts is imported by nothing and has
-// no effect at runtime.
+// This is the module `main.ts` bootstraps, and now the only one in this service.
+//
+// A second, similarly named `NotificationModule` used to sit beside it in
+// notification.module.ts, imported by nothing and with no effect at runtime —
+// one of eight such siblings across these services. Each opened its own eager
+// `TypeOrmModule.forRootAsync`, so reading one gave a confident and entirely
+// wrong picture of what the service connects to; two reviews were misled by
+// exactly that. All eight are deleted (dispatch addendum item 12).
 @Module({
   imports: [
     HealthModule.register({ service: 'notification-service', database: false, redis: true }),
