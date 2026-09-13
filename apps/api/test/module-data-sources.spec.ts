@@ -342,6 +342,47 @@ describe('migration timestamps across all nine databases', () => {
     expect(collisions).toEqual([]);
   });
 
+  /**
+   * `<timestamp>-<PascalCaseWhatItDoes>.ts`, in all nine folders.
+   *
+   * The timestamp half is checked above because TypeORM orders by it. The name
+   * half matters for a different reason: it is what a reviewer reads in
+   * `migration:show` output and what a runbook names, and it is the only
+   * description a migration has. `1786502400000-fix.ts` and
+   * `1786502400000-update_stuff.ts` both run perfectly well and tell nobody
+   * anything.
+   *
+   * The class inside must match the file, because TypeORM reports the CLASS
+   * name in the ledger and in `migration:show` — a file and class that disagree
+   * make a ledger row unsearchable in the repository (dispatch addendum item 7).
+   */
+  it('names every migration <timestamp>-<PascalCase>.ts', () => {
+    const wrong = allMigrationFiles()
+      .map((f) => path.basename(f.where))
+      .filter((name) => !/^\d{13}-[A-Z][A-Za-z0-9]*\.ts$/.test(name));
+    expect(wrong).toEqual([]);
+  });
+
+  it('gives each migration a class named after its file', () => {
+    const dirs = [
+      path.join(REPO_ROOT, 'apps', 'api', 'migrations'),
+      ...RUNNERS.map((r) => migrationsDir(r.module)),
+    ];
+    const mismatched: string[] = [];
+    for (const dir of dirs) {
+      for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+        const [timestamp, rest] = [file.split('-')[0], file.split('-').slice(1).join('-')];
+        const expected = `${rest.replace(/\.ts$/, '')}${timestamp}`;
+        const src = fs.readFileSync(path.join(dir, file), 'utf8');
+        if (!new RegExp(`export class ${expected}\\b`).test(src)) {
+          const found = /export class (\w+)/.exec(src)?.[1] ?? '(none)';
+          mismatched.push(`${file}: expected ${expected}, found ${found}`);
+        }
+      }
+    }
+    expect(mismatched).toEqual([]);
+  });
+
   it('has not grown the grandfathered collision', () => {
     const shared = allMigrationFiles().filter((f) => f.timestamp === GRANDFATHERED_COLLISION);
     expect(shared.map((f) => f.where).sort()).toEqual([

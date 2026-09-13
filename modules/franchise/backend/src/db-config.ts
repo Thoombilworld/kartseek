@@ -35,6 +35,22 @@ export const FRANCHISE_DB_SCHEMA = 'franchise';
  * and the ledger lands in `public`, where a per-module name keeps the eight
  * apart if they ever share one database — `public.migrations` there is the
  * platform's own ledger.
+ *
+ * ── The search_path assumption, stated ──────────────────────────────────────
+ *
+ * The name below is UNQUALIFIED, and it has to be: TypeORM treats
+ * `migrationsTableName` as an identifier, not as a path, so `'public.x'` would
+ * create a table literally named `public.x` inside whatever schema the
+ * connection defaults to — the same bug with a stranger name.
+ *
+ * So "the ledger lands in `public`" is an assumption about the CONNECTION, not
+ * a fact about this string: with no `schema` on the DataSource, TypeORM writes
+ * to the first entry of the role's `search_path`, which is Postgres's default
+ * `"$user", public` and resolves to `public` because no schema named after the
+ * role exists. An `ALTER ROLE <m>_user SET search_path = <m>` would silently
+ * move the ledger back into the module schema and reintroduce the failure this
+ * comment describes — so if that is ever done, `migrationsTableName` is not the
+ * knob to reach for (IN3 review N3).
  */
 export const FRANCHISE_MIGRATIONS_TABLE = 'franchise_migrations';
 

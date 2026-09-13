@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "type-check": "tsc --noEmit -p tsconfig.json && npm run check:type-imports",
     "check:type-imports": "node ../../../scripts/check-type-imports.js .",
-    "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
+    "lint": "eslint \"{src,migrations}/**/*.ts\" data-source.ts --max-warnings 0",
     "test:integration": "vitest run --config vitest.integration.mts",
     "clean": "rimraf dist",
     "migration:show": "typeorm-ts-node-commonjs -d data-source.ts migration:show",
