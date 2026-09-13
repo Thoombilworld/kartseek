@@ -38,6 +38,13 @@ export function normaliseStatusFilter(value: unknown): string | undefined {
  * query and the service DTO that validates the RPC payload read one list. A
  * second copy in the gateway is how a status comes to be accepted at the edge
  * and rejected one hop later.
+ *
+ * It is still a copy, though — of `OrderStatus` in
+ * `apps/order-service/src/entities/order.entity.ts`, which is what the column
+ * is declared as and therefore what Postgres will accept. The same spec pins it
+ * member-for-member, as it does the other three. Re-exporting the constant into
+ * order-service's DTO removed the *second list*, not the fact that this one
+ * restates an enum it cannot import.
  */
 export const ADMIN_ORDER_STATUSES = [
   'PENDING',
@@ -57,9 +64,11 @@ export type AdminOrderStatus = (typeof ADMIN_ORDER_STATUSES)[number];
  * `marketplace.return_requests.status`.
  *
  * A copy of an enum that is declared on the entity, in another package the
- * gateway cannot import — `admin-marketplace.query.spec.ts` reads that entity's
- * source and fails when the two lists drift, which is the only thing that keeps
- * a copy honest.
+ * gateway cannot import — `apps/api-gateway/src/dto/admin-orders.dto.spec.ts`
+ * reads that entity's source and fails when the two lists drift, which is the
+ * only thing that keeps a copy honest. (This named a file that has never
+ * existed, `admin-marketplace.query.spec.ts`, which is a worse kind of comment
+ * than none: it says a guard exists and tells you where not to look for it.)
  */
 export const ADMIN_RETURN_STATUSES = [
   'REQUESTED',

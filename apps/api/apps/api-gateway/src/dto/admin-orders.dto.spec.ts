@@ -143,10 +143,26 @@ function members(block: string): string[] {
 }
 
 describe("the gateway's copy of each status vocabulary matches its owner", () => {
-  it('orders come from the shared constant, so there is no copy to drift', () => {
+  it('orders come from the shared constant, so there is no second list', () => {
     const dto = source('apps/api/apps/order-service/src/dto/admin-order.dto.ts');
     expect(dto).toContain("from '@app/common'");
     expect(ADMIN_ORDER_STATUSES).toContain('DELIVERED');
+  });
+
+  it("orders match order-service's OrderStatus, member for member", () => {
+    // The test above proves the gateway and order-service read ONE list. It
+    // does not prove that list is the one the column accepts — and that is the
+    // drift that costs a filter: `order.orders.status` is declared as the
+    // entity's `OrderStatus`, so a member here that is not a member there is
+    // an invalid-input error from Postgres, and a member there that is missing
+    // here is a state the console can never filter on. The other three
+    // vocabularies have had this check since M1; orders did not, which left the
+    // one vocabulary the orders list actually queries as the unpinned one.
+    const entity = source('apps/api/apps/order-service/src/entities/order.entity.ts');
+    const block = entity.slice(entity.indexOf('export enum OrderStatus'));
+    const declared = members(block.slice(0, block.indexOf('}')));
+    expect(declared.length).toBeGreaterThan(5);
+    expect([...ADMIN_ORDER_STATUSES]).toEqual(declared);
   });
 
   it('returns match marketplace.return_requests.status', () => {

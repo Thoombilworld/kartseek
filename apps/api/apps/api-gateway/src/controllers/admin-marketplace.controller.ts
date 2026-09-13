@@ -914,14 +914,13 @@ export class AdminMarketplaceController {
     return await this.sendToMarketplace(MARKETPLACE_PATTERNS.ADMIN_GET_BRANDS, {});
   }
 
-  @Get('brand-center')
-  @GlobalEntity('catalogue taxonomy is shared by every market')
-  @ApiOperation({ summary: 'Brand center overview' })
-  async getBrandCenter() {
-    // Still a stub — marketplace-service has no brand-centre read. Left as one
-    // rather than given an implementation it does not have.
-    return { data: [] as unknown[], total: 0 };
-  }
+  // Removed 2026-09-12 (M2): `GET brand-center` answered `{ data: [], total: 0 }`
+  // from a handler that asked nothing — a second name for `GET brands` with no
+  // read behind it. The console's Brand Center page already reads `getBrands()`
+  // (apps/web/src/app/admin/marketplace/brand-center/page.tsx:34); the only
+  // caller of this route was `adminMarketplaceApi.getBrandCenter`, which no page
+  // ever called. If the brand-centre screen wants approval counts, they belong
+  // on `admin_get_brands`, not on a second route over the same rows.
 
   // marketplace-service has held `admin_update_brand` all along; no route ever
   // reached it, so the admin client's `PUT /admin/marketplace/brands/:id` was a
@@ -994,16 +993,17 @@ export class AdminMarketplaceController {
   }
 
   // ── Campaigns ──────────────────────────────────────────────────────────────
-  @Get('campaigns')
-  @ApiOperation({ summary: 'List marketing campaigns' })
-  @ApiQuery({ name: 'country', required: false })
-  async getCampaigns(@Req() req: any, @Query('country') country?: string) {
-    // Still a stub — marketplace-service has no campaign list. The scope call
-    // stays and its refusal is the point: a locked admin naming another market
-    // is refused here rather than handed an empty list that looks like an answer.
-    this.scopeOf(req, country, 'those campaigns');
-    return { data: [] as unknown[], total: 0 };
-  }
+  // Removed 2026-09-12 (M2): `GET campaigns` returned `{ data: [], total: 0 }`.
+  // There is no campaigns table and no `admin_get_campaigns` anywhere behind the
+  // gateway, so the Campaigns screen
+  // (apps/web/src/app/admin/marketplace/campaigns/page.tsx:732) showed every
+  // market an empty campaign list it could not distinguish from "we run none".
+  // It is a 404 now, which the page can tell apart. The scope call this handler
+  // made was worth keeping and is the only thing lost: a locked admin naming
+  // another market was refused. A 404 refuses everyone, which is stricter.
+  //
+  // The campaign *writes* below are real: `admin_update_campaign` is implemented
+  // in marketplace-service, so approve/reject/pause/resume stay.
 
   // Same shape as the brand route above: `admin_update_campaign` is implemented
   // in marketplace-service and had no caller. Create and delete remain absent
@@ -1564,14 +1564,15 @@ export class AdminMarketplaceController {
   }
 
   // ── Reports / Audit ────────────────────────────────────────────────────────
-  @Get('reports')
-  @ApiOperation({ summary: 'Get marketplace reports' })
-  @ApiQuery({ name: 'country', required: false })
-  async getReports(@Req() req: any, @Query('country') country?: string) {
-    // Still a stub — there is no report generator behind this. Left as one.
-    this.scopeOf(req, country, 'that report');
-    return { data: [] as unknown[], total: 0 };
-  }
+  // Removed 2026-09-12 (M2): `GET reports` returned `{ data: [], total: 0 }`.
+  // There is no report generator behind the gateway — no handler, no table, no
+  // job — and the Reports screen
+  // (apps/web/src/app/admin/marketplace/reports/page.tsx:191) rendered that
+  // emptiness as "no reports for this market". The seven report sub-pages
+  // beneath it (revenue, traffic, conversion, fraud, categories, ab-tests,
+  // seller-rankings) never called it at all. The reads that *are* real and
+  // report-shaped stay under their own names: `seller-health`,
+  // `listing-quality`, `inventory`, and the analytics proxies further down.
 
   // `GET audit-logs` used to sit here, answering `{ data: [], total: 0 }` from a
   // stub that was never wired to anything. It is gone rather than filled in:
@@ -2925,31 +2926,16 @@ export class AdminMarketplaceController {
     };
   }
 
-  @Get('loyalty/analytics')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
-  @ApiOperation({ summary: 'Get loyalty program analytics' })
-  @ApiQuery({ name: 'country', required: false })
-  async getLoyaltyAnalytics(@Req() req: any, @Query('country') country?: string) {
-    // Every number below is a literal. It is left as one — inventing a read
-    // would be worse — but it is at least no longer served to a locked admin
-    // as though it were their market's.
-    this.scopeOf(req, country, 'that report');
-    refuseLockedAdmin(
-      req,
-      'loyalty analytics',
-      'This report cannot be attributed to a market yet.',
-    );
-    return {
-      totalPointsInCirculation: 285000,
-      totalPointsAwarded: 420000,
-      totalPointsRedeemed: 110000,
-      totalPointsReversed: 25000,
-      tierDistribution: { Bronze: 4200, Silver: 2100, Gold: 680, Platinum: 120 },
-      avgPointsPerUser: 40,
-      redemptionRate: '26.2%',
-      topRedeemers: [] as unknown[],
-    };
-  }
+  // Removed 2026-09-12 (M2): `GET loyalty/analytics` was the worst of the
+  // thirteen, because it did not answer "none" — it answered *numbers*.
+  // 285,000 points in circulation, a 26.2% redemption rate, 4,200 Bronze
+  // members: every figure a literal, none of them read from loyalty-service,
+  // all of them plausible enough to be quoted in a meeting. They are, letter
+  // for letter, the `ANALYTICS` mock in the console's own Loyalty page
+  // (apps/web/src/app/admin/loyalty/page.tsx:28) — which renders that mock
+  // directly and never called this route, so removing it costs no screen
+  // anything. `perm:finance.view` is kept in use by seventeen other routes.
+  // A real version reads loyalty-service; nothing here can stand in for it.
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ██ PHASE 2 — Admin Analytics (Gateway Proxies)
@@ -3279,26 +3265,34 @@ export class AdminMarketplaceController {
     });
   }
 
-  // The nine reads below are still stubs: nothing behind the gateway implements
-  // them, and giving them an invented implementation is the failure mode this
-  // whole pass exists to remove. What each one gains is the scope call — a
-  // locked admin asking for another market is refused rather than handed an
-  // empty list that reads as an answer about that market.
-  @Get('gift-cards')
-  @ApiOperation({ summary: 'List platform gift cards' })
-  @ApiQuery({ name: 'country', required: false })
-  async getAdminGiftCards(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those gift cards');
-    return { data: [] as unknown[], total: 0, message: 'Gift card management' };
-  }
-
-  @Get('banners')
-  @ApiOperation({ summary: 'List all homepage banners' })
-  @ApiQuery({ name: 'country', required: false })
-  async getAllBanners(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those banners');
-    return { data: [] as unknown[], total: 0, message: 'Banner management' };
-  }
+  // ── Removed 2026-09-12 (M2): the nine reads that returned a caption ─────────
+  //
+  // `gift-cards`, `banners`, `logistics`, `delivery-partners`, `delivery-zones`,
+  // `shipping-rates`, `gst-invoicing`, `abandoned-carts` and `ip-violations` sat
+  // here, each answering `{ data: [], total: 0, message: '<Feature> management' }`
+  // from a handler that called nothing. There is no gift-card ledger, no
+  // logistics or delivery-partner domain, no marketplace zone or rate-card
+  // table, no GST invoice register, no cart-recovery job and no IP-violation
+  // register anywhere behind this gateway — so every one of them told an
+  // administrator, in their own market's name, that they had none of these.
+  // Forever, and without an error to explain it.
+  //
+  // A route that cannot answer is worse than a missing route: the console can
+  // tell "none" from "never built" only if the second one 404s. Since M2 they
+  // do. Not one of the nine had an API caller — each screen either renders a
+  // local fixture (`delivery-partners`' MOCK_PARTNERS, `shipping-rates`' none at
+  // all) or borrows an unrelated real list to have something to show
+  // (`gift-cards`, `logistics`, `gst-invoicing` and `abandoned-carts` all call
+  // `getOrders()`; `ip-violations` calls `getProducts()`), so removal breaks no
+  // fetch that worked. Their pages are listed for the console plan in
+  // .superpowers/sdd/2026-09-12-module-backends-plan/task-2-report.md, to render
+  // "not built" rather than an empty table.
+  //
+  // The flat `GET banners` went with them: the banner *writes* below are real,
+  // but the list the Banners screen reads is the typed
+  // `GET banners/:type` home-feed route further up, which this one shadowed in
+  // name only. `delivery-zones` belongs to whichever module owns zones —
+  // `GET /admin/grocery/delivery-zones` is the one that exists and answers.
 
   // Banner create/update/delete were the clearest case of a finished service
   // with no way in: `admin_create_banner`, `admin_update_banner` and
@@ -3384,37 +3378,8 @@ export class AdminMarketplaceController {
     });
   }
 
-  @Get('logistics')
-  @ApiOperation({ summary: 'Logistics partner management' })
-  @ApiQuery({ name: 'country', required: false })
-  async getLogistics(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those partners');
-    return { data: [] as unknown[], total: 0, message: 'Logistics integrations' };
-  }
-
-  @Get('delivery-partners')
-  @ApiOperation({ summary: 'Delivery partner management' })
-  @ApiQuery({ name: 'country', required: false })
-  async getDeliveryPartners(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those partners');
-    return { data: [] as unknown[], total: 0, message: 'Delivery partner list' };
-  }
-
-  @Get('delivery-zones')
-  @ApiOperation({ summary: 'Delivery zone configuration' })
-  @ApiQuery({ name: 'country', required: false })
-  async getDeliveryZones(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those zones');
-    return { data: [] as unknown[], total: 0, message: 'Zone configuration' };
-  }
-
-  @Get('shipping-rates')
-  @ApiOperation({ summary: 'Shipping rate cards' })
-  @ApiQuery({ name: 'country', required: false })
-  async getShippingRates(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those rates');
-    return { data: [] as unknown[], total: 0, message: 'Rate card management' };
-  }
+  // `logistics`, `delivery-partners`, `delivery-zones` and `shipping-rates` sat
+  // here; see the removal note above the banner writes.
 
   /**
    * The admin payments list.
@@ -3449,34 +3414,9 @@ export class AdminMarketplaceController {
     return await this.getHsnCodes(search);
   }
 
-  @Get('gst-invoicing')
-  @ApiOperation({ summary: 'GST invoicing management' })
-  async getGstInvoicing(@Req() req: any) {
-    // GST is India's tax regime: this surface is IN's, whoever opens it.
-    this.scopeOf(req, 'IN', 'that configuration');
-    return { data: [] as unknown[], total: 0, message: 'GST invoice management' };
-  }
-
-  @Get('abandoned-carts')
-  @ApiOperation({ summary: 'Abandoned cart recovery management' })
-  @ApiQuery({ name: 'country', required: false })
-  async getAbandonedCarts(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those carts');
-    return {
-      data: [] as unknown[],
-      total: 0,
-      recoveryRate: 0,
-      message: 'Cart recovery management',
-    };
-  }
-
-  @Get('ip-violations')
-  @ApiOperation({ summary: 'IP/counterfeit violation reports' })
-  @ApiQuery({ name: 'country', required: false })
-  async getIpViolations(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those reports');
-    return { data: [] as unknown[], total: 0, message: 'IP violation management' };
-  }
+  // `gst-invoicing`, `abandoned-carts` and `ip-violations` sat here; see the
+  // removal note above the banner writes. `abandoned-carts` also reported
+  // `recoveryRate: 0`, which is a claim about a campaign nobody is running.
 
   @Get('system-health')
   @GlobalEntity('platform health is the same fleet in every market')

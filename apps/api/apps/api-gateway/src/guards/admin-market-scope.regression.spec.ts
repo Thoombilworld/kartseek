@@ -793,7 +793,7 @@ describe('admin market scope regression', () => {
   const files = new Set(routes.map((r) => r.file));
 
   it('scans every controller and finds the admin routes in all of them', () => {
-    // **585 routes across 27 files on 2026-09-12**, after the final fix wave.
+    // **574 routes across 27 files on 2026-09-12**, after M2.
     //
     // It was 571 across 25 when the collector selected on roles alone: 365 in
     // the 13 files the filename filter before it admitted, 206 in the 12 it did
@@ -803,21 +803,32 @@ describe('admin market scope regression', () => {
     // — and the two new files are `hotel.controller.ts` and
     // `geo-security.controller.ts`, which contributed nothing before because
     // every admin route in them was undeclared. Four `/hotels/admin/*` were
-    // deleted in favour of their scoped twins, so the arithmetic is
-    // 571 + 3 + 6 + 5 + 4(deleted, never counted) = 585.
+    // deleted in favour of their scoped twins, so the arithmetic to the figure
+    // that stood here was 571 + 3 + 6 + 5 + 4(deleted, never counted) = 585.
     //
-    // All 585 declare an admin role: `byPath` is 0, which is the point of the
+    // Then the floor stopped tracking the census. M1 added two orders routes
+    // (`GET orders/:orderNumber` and the payments read that replaced a literal)
+    // without raising it, so the collector saw **587** while the comment said
+    // 585 — the slack a floor is not supposed to have. M2 deleted the thirteen
+    // `admin/marketplace` reads that returned `{ data: [], total: 0 }` with a
+    // caption: brand-center, campaigns, reports, loyalty/analytics, gift-cards,
+    // banners (the flat GET only — the writes and `banners/:type` stay),
+    // logistics, delivery-partners, delivery-zones, shipping-rates,
+    // gst-invoicing, abandoned-carts and ip-violations. 587 − 13 = **574**,
+    // measured, not assumed.
+    //
+    // All 574 declare an admin role: `byPath` is 0, which is the point of the
     // path arm — it is a tripwire, not a population.
     //
     // The floor is deliberately close to the real number: a collector that
     // silently stops seeing a controller drops ~100 routes at a time and must
     // fail here rather than pass with fewer things to check.
-    // 585 is what the collector sees today, so that is the floor. `> 500` let
+    // 574 is what the collector sees today, so that is the floor. `> 500` let
     // the census lose eighty routes without anyone noticing, which defeats the
     // point of a tripwire whose comment quotes the real number (review M8).
-    // Raise it when the number genuinely grows; never lower it to make a run
-    // pass.
-    expect(routes.length).toBeGreaterThanOrEqual(585);
+    // Raise it when the number genuinely grows. Lower it only alongside the
+    // deletion that removed the routes, naming them — never to make a run pass.
+    expect(routes.length).toBeGreaterThanOrEqual(574);
     expect(files.size).toBeGreaterThanOrEqual(22);
     // The blind spot by name, so it cannot come back unnoticed. The four files
     // whose routes this plan's successors may delete outright — taxi, doctor,
