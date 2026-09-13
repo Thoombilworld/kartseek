@@ -102,7 +102,29 @@ npm run verify:schema-drift -- --json            # for a dashboard or a CI gate
 
 Exit 0 means every entity's columns exist, with the nullability and type the
 entity declares. Exit 1 lists what is missing, extra or differently shaped —
-one line per finding, naming `<schema>.<table>.<column>`.
+one line per finding, naming `<schema>.<table>.<column>`. Exit 2 means the
+checker itself failed (a bad `--module`, a connection or privilege error), which
+is not the same claim as "the database agrees".
+
+What "type" covers, precisely:
+
+- the base type, through a canonical map, so `varchar` ≡ `character varying` and
+  `decimal` ≡ `numeric` are not reported; an array is compared on its element
+  type;
+- **precision, scale and length, but only where the entity declares one.**
+  `@Column({ type: 'decimal', precision: 10, scale: 2 })` against a
+  `numeric(5,2)` column is drift and is reported with both numbers; a plain
+  `@Column({ type: 'numeric' })` is asking for whatever the database has and is
+  left alone. Neither type name carries the modifier, which is why this needs
+  `numeric_precision` / `numeric_scale` / `character_maximum_length` from
+  `information_schema` rather than a string comparison;
+- **enum labels**, read from `pg_enum`. `information_schema` calls every enum
+  `USER-DEFINED`, so without the labels an entity enum would agree with any
+  user-defined type in the database — a different enum, a domain, a PostGIS
+  type. A value the entity gained and the type does not have fails at INSERT,
+  not at boot, the first time that value is written.
+
+Not compared: indexes, foreign keys, defaults, unique constraints, collations.
 
 **Run it whenever a migration has been applied to a database that already
 existed**, and after any deploy that adds or changes an `@Column`.
