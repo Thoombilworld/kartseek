@@ -493,6 +493,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: audit-log-consumers
@@ -693,6 +696,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -888,6 +894,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1085,6 +1094,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1282,6 +1294,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1679,6 +1694,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1876,6 +1894,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: notification-password-reset
@@ -2683,6 +2704,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -2880,6 +2904,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -3077,6 +3104,9 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
+      DB_NAME: ''
+      DB_USER: ''
+      DB_PASSWORD: ''
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: search-indexer

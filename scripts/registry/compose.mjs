@@ -250,7 +250,18 @@ function moduleDatabaseEnv(reg) {
  */
 function credentialEnv(s) {
   const p = s.database?.envPrefix;
-  if (!p) return [];
+  // Blank, not absent. Omitting the key hands it straight back to `env_file`,
+  // which is the mechanism this generator exists to defeat: apps/api/.env
+  // declares DB_USER=postgres with the superuser password, so a service that
+  // opens no connection was still carrying it (review finding 14). An empty
+  // value reads as "not set" to databaseCredentials(), which then refuses by
+  // name rather than connecting as the superuser.
+  if (!p)
+    return [
+      ['DB_NAME', "''"],
+      ['DB_USER', "''"],
+      ['DB_PASSWORD', "''"],
+    ];
   if (p === 'DB')
     return [
       ['DB_NAME', '${POSTGRES_DB:-kartseek_db}'],

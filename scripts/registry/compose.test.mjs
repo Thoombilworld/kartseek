@@ -171,9 +171,15 @@ test('a service with database: null gets the address but no credential', () => {
   const only = renderComposeServices({ services: [search] });
   assert.match(only, /DB_HOST: postgres/, 'the address still overrides apps/api/.env');
   assert.match(only, /DB_PORT: '5432'/);
-  assert.ok(!/DB_USER:/.test(only), 'no role');
-  assert.ok(!/DB_PASSWORD:/.test(only), 'no password');
-  assert.ok(!/^\s+DB_NAME:/m.test(only), 'no database name');
+  // BLANK, not absent: omitting them hands the keys back to env_file, and
+  // apps/api/.env declares DB_USER=postgres with the superuser password. The
+  // first attempt at this finding only dropped them from the YAML, which left
+  // the credential in the resolved container (review finding 14).
+  assert.match(only, /^\s+DB_NAME: ''$/m);
+  assert.match(only, /^\s+DB_USER: ''$/m);
+  assert.match(only, /^\s+DB_PASSWORD: ''$/m);
+  assert.ok(!/DB_USER: \$\{/.test(only), 'no role interpolation');
+  assert.ok(!/DB_PASSWORD: \$\{/.test(only), 'no password interpolation');
   // And the ones that DO own a database still get all three.
   const withDb = renderComposeServices({ services: [gateway] });
   assert.match(withDb, /DB_NAME: \$\{POSTGRES_DB:-kartseek_db\}/);
