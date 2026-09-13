@@ -192,12 +192,15 @@ const en: TranslationKeys = {
     phonePlaceholder: '{{code}} XXXX XXXX',
 
     forgotPasswordTitle: 'Forgot password',
-    forgotPasswordSubtitle: 'Enter the email address associated with your account and we will send you a link to reset your password.',
+    forgotPasswordSubtitle:
+      'Enter the email address associated with your account and we will send you a link to reset your password.',
     resetHeadline: 'Reset your password',
-    resetHeadlineBody: 'No worries — we will email you a secure link to get back into your account.',
+    resetHeadlineBody:
+      'No worries — we will email you a secure link to get back into your account.',
     sendResetLink: 'Send reset link',
     resetLinkSent: 'Check your email',
-    resetLinkSentBody: 'If an account exists for {{email}}, we have sent a link to reset your password. It can be used once and expires in 30 minutes.',
+    resetLinkSentBody:
+      'If an account exists for {{email}}, we have sent a link to reset your password. It can be used once and expires in 30 minutes.',
     notInInbox: 'Not in your inbox? Check the spam folder, or',
     tryDifferentAddress: 'try a different address',
     featSingleUseLink: 'Single-use link, valid for 30 minutes',
@@ -208,7 +211,8 @@ const en: TranslationKeys = {
     newPassword: 'New Password',
     updatePassword: 'Reset password',
     passwordUpdated: 'Password reset',
-    passwordUpdatedBody: 'Your password has been reset. You can now sign in with your new password.',
+    passwordUpdatedBody:
+      'Your password has been reset. You can now sign in with your new password.',
     creatingPasswordFor: 'Creating a new password for {{email}}',
     createNewPasswordHeadline: 'Create a new password',
     createNewPasswordBody: 'Choose a strong password to keep your account secure.',
@@ -237,16 +241,19 @@ const en: TranslationKeys = {
     errEnterEmail: 'Please enter your email address.',
     errInvalidEmail: 'Please enter a valid email address.',
     errResetLinkFailed: 'We could not send the reset link. Please try again in a moment.',
-    errPasswordRule: 'Password must be 8–128 characters and include an uppercase letter, a lowercase letter, a digit and a special character (@$!%*?&^#).',
+    errPasswordRule:
+      'Password must be 8–128 characters and include an uppercase letter, a lowercase letter, a digit and a special character (@$!%*?&^#).',
     errPasswordMismatch: 'The two passwords do not match.',
     errMustAgreeTerms: 'You must agree to the Terms & Conditions.',
     errCheckEmailPassword: 'Please check your email and password.',
     errCheckDetails: 'Please check the details you entered.',
     errEmailExists: 'An account with this email already exists. Try signing in instead.',
     errSignInUnreachable: 'We could not reach the sign-in service. Please try again in a moment.',
-    errSignInUnreachableNetwork: 'We could not reach the sign-in service. Check your connection and try again.',
+    errSignInUnreachableNetwork:
+      'We could not reach the sign-in service. Check your connection and try again.',
     errSignUpUnreachable: 'We could not reach the sign-up service. Please try again in a moment.',
-    errSignUpUnreachableNetwork: 'We could not reach the sign-up service. Check your connection and try again.',
+    errSignUpUnreachableNetwork:
+      'We could not reach the sign-up service. Check your connection and try again.',
     errSignInFailed: 'Sign-in failed. Please try again.',
     errSignUpFailed: 'Sign-up failed. Please try again.',
     errResetFailed: 'We could not reset your password. Please request a new link.',
@@ -280,7 +287,8 @@ const en: TranslationKeys = {
     todaysDeals: "Today's Deals",
     allBrands: 'All Brands',
     lightningFast: 'Lightning Fast',
-    orderDescription: 'Order fresh fruits, vegetables, meat, and daily essentials from your favorite local stores.',
+    orderDescription:
+      'Order fresh fruits, vegetables, meat, and daily essentials from your favorite local stores.',
     mostPopular: 'Most Popular',
     risingFast: 'Rising Fast',
     fastestDelivery: 'Fastest Delivery',
@@ -459,7 +467,8 @@ const en: TranslationKeys = {
     regions: 'Regions',
     createCampaign: 'Create Campaign',
     contentPromotions: 'Content & Promotions',
-    contentDescription: 'Manage banners, push notifications, promotional campaigns, and featured listings across all modules.',
+    contentDescription:
+      'Manage banners, push notifications, promotional campaigns, and featured listings across all modules.',
     banners: 'Banners',
     pushNotifications: 'Push Notifications',
     commissionManagement: 'Commission Management',
@@ -497,7 +506,8 @@ const en: TranslationKeys = {
 
   footer: {
     about: 'About',
-    aboutDescription: 'Your all-in-one super app for shopping, food, health & rides across Africa, Asia & the Middle East.',
+    aboutDescription:
+      'Your all-in-one super app for shopping, food, health & rides across Africa, Asia & the Middle East.',
     shopAndOrder: 'Shop & Order',
     services: 'Services',
     partnerWithUs: 'Partner With Us',

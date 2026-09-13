@@ -192,12 +192,14 @@ const ar: TranslationKeys = {
     phonePlaceholder: '{{code}} XXXX XXXX',
 
     forgotPasswordTitle: 'نسيت كلمة المرور',
-    forgotPasswordSubtitle: 'أدخل البريد الإلكتروني المرتبط بحسابك وسنرسل لك رابطاً لإعادة تعيين كلمة المرور.',
+    forgotPasswordSubtitle:
+      'أدخل البريد الإلكتروني المرتبط بحسابك وسنرسل لك رابطاً لإعادة تعيين كلمة المرور.',
     resetHeadline: 'إعادة تعيين كلمة المرور',
     resetHeadlineBody: 'لا تقلق — سنرسل لك رابطاً آمناً للعودة إلى حسابك.',
     sendResetLink: 'إرسال رابط إعادة التعيين',
     resetLinkSent: 'تحقق من بريدك الإلكتروني',
-    resetLinkSentBody: 'إذا كان هناك حساب مرتبط بـ {{email}}، فقد أرسلنا رابطاً لإعادة تعيين كلمة المرور. يُستخدم مرة واحدة وينتهي خلال ٣٠ دقيقة.',
+    resetLinkSentBody:
+      'إذا كان هناك حساب مرتبط بـ {{email}}، فقد أرسلنا رابطاً لإعادة تعيين كلمة المرور. يُستخدم مرة واحدة وينتهي خلال ٣٠ دقيقة.',
     notInInbox: 'لم تجده في بريدك؟ تحقق من مجلد الرسائل غير المرغوب فيها، أو',
     tryDifferentAddress: 'جرّب بريداً آخر',
     featSingleUseLink: 'رابط لمرة واحدة، صالح لمدة ٣٠ دقيقة',
@@ -208,7 +210,8 @@ const ar: TranslationKeys = {
     newPassword: 'كلمة المرور الجديدة',
     updatePassword: 'إعادة تعيين كلمة المرور',
     passwordUpdated: 'تمت إعادة تعيين كلمة المرور',
-    passwordUpdatedBody: 'تمت إعادة تعيين كلمة المرور. يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.',
+    passwordUpdatedBody:
+      'تمت إعادة تعيين كلمة المرور. يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.',
     creatingPasswordFor: 'إنشاء كلمة مرور جديدة لـ {{email}}',
     createNewPasswordHeadline: 'أنشئ كلمة مرور جديدة',
     createNewPasswordBody: 'اختر كلمة مرور قوية للحفاظ على أمان حسابك.',
@@ -237,16 +240,19 @@ const ar: TranslationKeys = {
     errEnterEmail: 'يرجى إدخال بريدك الإلكتروني.',
     errInvalidEmail: 'يرجى إدخال بريد إلكتروني صالح.',
     errResetLinkFailed: 'تعذّر إرسال رابط إعادة التعيين. يرجى المحاولة بعد قليل.',
-    errPasswordRule: 'يجب أن تتكون كلمة المرور من ٨ إلى ١٢٨ حرفاً وتتضمن حرفاً كبيراً وحرفاً صغيراً ورقماً ورمزاً خاصاً (@$!%*?&^#).',
+    errPasswordRule:
+      'يجب أن تتكون كلمة المرور من ٨ إلى ١٢٨ حرفاً وتتضمن حرفاً كبيراً وحرفاً صغيراً ورقماً ورمزاً خاصاً (@$!%*?&^#).',
     errPasswordMismatch: 'كلمتا المرور غير متطابقتين.',
     errMustAgreeTerms: 'يجب الموافقة على الشروط والأحكام.',
     errCheckEmailPassword: 'يرجى التحقق من بريدك الإلكتروني وكلمة المرور.',
     errCheckDetails: 'يرجى التحقق من البيانات التي أدخلتها.',
     errEmailExists: 'يوجد حساب بهذا البريد الإلكتروني بالفعل. جرّب تسجيل الدخول بدلاً من ذلك.',
     errSignInUnreachable: 'تعذّر الوصول إلى خدمة تسجيل الدخول. يرجى المحاولة بعد قليل.',
-    errSignInUnreachableNetwork: 'تعذّر الوصول إلى خدمة تسجيل الدخول. تحقق من اتصالك وحاول مرة أخرى.',
+    errSignInUnreachableNetwork:
+      'تعذّر الوصول إلى خدمة تسجيل الدخول. تحقق من اتصالك وحاول مرة أخرى.',
     errSignUpUnreachable: 'تعذّر الوصول إلى خدمة إنشاء الحساب. يرجى المحاولة بعد قليل.',
-    errSignUpUnreachableNetwork: 'تعذّر الوصول إلى خدمة إنشاء الحساب. تحقق من اتصالك وحاول مرة أخرى.',
+    errSignUpUnreachableNetwork:
+      'تعذّر الوصول إلى خدمة إنشاء الحساب. تحقق من اتصالك وحاول مرة أخرى.',
     errSignInFailed: 'فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.',
     errSignUpFailed: 'فشل إنشاء الحساب. يرجى المحاولة مرة أخرى.',
     errResetFailed: 'تعذّر إعادة تعيين كلمة المرور. يرجى طلب رابط جديد.',
@@ -280,7 +286,8 @@ const ar: TranslationKeys = {
     todaysDeals: 'عروض اليوم',
     allBrands: 'جميع العلامات التجارية',
     lightningFast: 'سريع كالبرق',
-    orderDescription: 'اطلب الفواكه والخضروات واللحوم والمستلزمات اليومية من متاجرك المحلية المفضلة.',
+    orderDescription:
+      'اطلب الفواكه والخضروات واللحوم والمستلزمات اليومية من متاجرك المحلية المفضلة.',
     mostPopular: 'الأكثر شعبية',
     risingFast: 'يرتفع بسرعة',
     fastestDelivery: 'أسرع توصيل',
@@ -459,7 +466,8 @@ const ar: TranslationKeys = {
     regions: 'المناطق',
     createCampaign: 'إنشاء حملة',
     contentPromotions: 'المحتوى والعروض',
-    contentDescription: 'إدارة اللافتات والإشعارات والحملات الترويجية والقوائم المميزة عبر جميع الوحدات.',
+    contentDescription:
+      'إدارة اللافتات والإشعارات والحملات الترويجية والقوائم المميزة عبر جميع الوحدات.',
     banners: 'اللافتات',
     pushNotifications: 'الإشعارات الفورية',
     commissionManagement: 'إدارة العمولات',
