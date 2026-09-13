@@ -1,11 +1,19 @@
-# Build context for the API images is the repository ROOT, not apps/api:
+# Build context for every image is the repository ROOT, not the workspace:
 #
 #   docker build -f infra/docker/api-gateway.Dockerfile .
 #
 # The repository has one lockfile, at the root, and installs through npm
-# workspaces, so an image can only run `npm ci` from here. Keep the upload
-# small: the backend images need apps/api, the module backends and every
-# workspace's package.json — nothing else.
+# workspaces, so an image can only run `npm ci` from here.
+#
+# One file serves all FOUR Dockerfiles in infra/docker — api-gateway,
+# core-service, module-service and nextjs — so it is the union of what they
+# need, not the intersection. The backend images take apps/api, the module
+# backends and every workspace's package.json; nextjs.Dockerfile additionally
+# takes apps/web, modules/*/frontend and packages/, because a Next workspace
+# imports from packages/shared-core and the shell imports from the module
+# zones. Excluding those three (as this file did while no image built a Next
+# app) turned the Next build into a missing-module failure, so anything added
+# here has to be weighed against that image too.
 
 # The image runs `npm ci` itself; a host node_modules is dead weight and risks
 # baking host-built native modules into the image.
@@ -31,15 +39,11 @@ dist
 coverage
 **/coverage
 
-# Frontends and tooling the backend images never touch. Their package.json
-# files stay in: npm ci reconciles every workspace against the root lock and
-# needs each workspace directory to exist.
-apps/web/**
-!apps/web/package.json
-modules/*/frontend/**
-!modules/*/frontend/package.json
+# Tooling no image touches. apps/web, modules/*/frontend and packages/ used to
+# be excluded here and are not any more: nextjs.Dockerfile builds from them.
+# The backend images still only COPY the paths they name, so the cost is upload
+# size, not layer size.
 apps/mcp-server
-packages
 docs
 # Cross-service test assets (Postman, smoke) are never part of an image.
 tests

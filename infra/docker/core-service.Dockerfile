@@ -2,7 +2,18 @@
 #
 # Generic image for any apps/api service. Build from the repository ROOT:
 #
-#   docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service -t kartseek/order-service:2.0.0 .
+#   docker build -f infra/docker/core-service.Dockerfile \
+#     --build-arg APP=order-service --build-arg PORT=3014 \
+#     -t kartseek/order-service:2.0.0 .
+#
+# PORT has no default on purpose. It is not the port the service binds — every
+# core service reads its own `<SVC>_SERVICE_PORT` and none of them reads `PORT`
+# — it is the port the HEALTHCHECK probes, and it has to be told. The check used
+# to fall back to 3000, so every image built here reported `unhealthy` for ever
+# no matter how well the service was running, and an orchestrator that restarts
+# on a failed check never let one stay up (AUD2-020). A build that forgets the
+# argument now fails at `EXPOSE`, which is louder than an image that never goes
+# healthy. The registry-driven generator in `scripts/stack` always passes it.
 #
 # Root context because the repository has one lockfile, at the root, and
 # installs through npm workspaces; apps/api has no lockfile of its own, and the
@@ -47,8 +58,17 @@ RUN npm ci --workspace=apps/api --include-workspace-root --omit=dev \
 
 FROM node:26-alpine
 ARG APP
+ARG PORT
+ARG HEALTH_PATH=/health
 ENV APP_NAME=${APP}
 ENV NODE_ENV=production
+
+# Where the HEALTHCHECK looks, baked at build time from the service registry.
+# The runtime still reads `<SVC>_SERVICE_PORT` for what it binds; these two only
+# tell the check where to knock, so a TCP-only service can be given a different
+# HEALTH_PATH (or have the check overridden) without touching the app.
+ENV HEALTHCHECK_PORT=${PORT}
+ENV HEALTHCHECK_PATH=${HEALTH_PATH}
 
 # Repository layout preserved so module resolution matches a developer
 # machine: apps/api/node_modules first, then /repo/node_modules.
@@ -60,11 +80,15 @@ COPY --from=builder   --chown=node:node /repo/apps/api/package.json ./package.js
 COPY --from=builder   --chown=node:node /repo/apps/api/proto ./proto
 USER node
 
-# Each service reads its own *_SERVICE_PORT; set PORT to match it so the
-# health check probes the right one. Only HTTP services answer /health —
-# for a TCP-only service, override the check. 127.0.0.1 rather than
-# localhost: the listeners are IPv4, and localhost may resolve to ::1 first.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
-  CMD node -e "require('http').get('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+# Only HTTP services answer /health — for a TCP-only service, override the
+# check. 127.0.0.1 rather than localhost: the listeners are IPv4, and localhost
+# may resolve to ::1 first, which busybox wget does not fall back from.
+#
+# The start period is 20s because IN1's /health touches the database and the
+# broker: on a cold stack the first probe can land before Postgres accepts
+# connections, and three quick failures would mark a healthy service dead.
+EXPOSE ${PORT}
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${HEALTHCHECK_PORT}${HEALTHCHECK_PATH}" >/dev/null || exit 1
 
 CMD ["node", "dist/main.js"]

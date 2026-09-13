@@ -148,3 +148,9 @@ var/
 
 apps/api/apps/**/*.js.map
 modules/*/backend/src/**/*.js.map
+
+# ── Added 2026-09-13, image build logs ────────────────────────────────────────
+# `docker build` output from the infra/docker Dockerfiles, written here so the
+# builds can run detached rather than holding a terminal for ten minutes. Kept
+# on disk because a failed layer's message is worth re-reading; never committed.
+.build-logs/
