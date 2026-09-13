@@ -291,13 +291,17 @@ export class SellerController {
     }
   }
 
-  @Get('products/:id')
+  @Get('products/:productId')
   @ApiOperation({ summary: 'One of my products, with everything the edit form pre-fills' })
-  async getProduct(@Req() req: any, @Param('id') id: string) {
-    // Scoped to the caller's own seller: `get_seller_product` looks the row up
-    // by (id, seller) and answers 404 for anyone else's product. Returns the
-    // category objects, images, the seller's own offer and the typed attribute
-    // values in the public row shape.
+  async getProduct(@Req() req: any, @Param('productId') id: string) {
+    // `:productId`, not `:id`: SellerOwnershipGuard reads a `:id` param as a
+    // SELLER id, looks it up in `sellers`, misses, and answers 403 "You do not
+    // have access to this seller account" to the very seller who owns the
+    // product. With no seller param the guard defers to the handler, and the
+    // handler is scoped to the caller's own seller: `get_seller_product` looks
+    // the row up by (id, seller) and answers 404 for anyone else's product.
+    // Returns the category objects, images, the seller's own offer and the
+    // typed attribute values in the public row shape.
     const sellerId = await this.resolveSellerId(req);
     try {
       return await firstValueFrom(
@@ -310,9 +314,11 @@ export class SellerController {
     }
   }
 
-  @Put('products/:id')
+  @Put('products/:productId')
   @ApiOperation({ summary: 'Update product details' })
-  async updateProduct(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+  async updateProduct(@Req() req: any, @Param('productId') id: string, @Body() body: any) {
+    // `:productId` for the same reason as the GET above: as `:id` the ownership
+    // guard treated the product id as a seller id and refused the owner.
     // Scoped to the caller's own seller: `update_seller_product` verifies the
     // product belongs to that seller before writing.
     const sellerId = await this.resolveSellerId(req);
@@ -337,10 +343,14 @@ export class SellerController {
     }
   }
 
-  @Patch('products/:id/stock')
+  @Patch('products/:productId/stock')
   @ApiOperation({ summary: 'Update product stock' })
   @ApiBody({ schema: { properties: { stock: { type: 'number', example: 50 } } } })
-  async updateStock(@Req() req: any, @Param('id') id: string, @Body() body: { stock: number }) {
+  async updateStock(
+    @Req() req: any,
+    @Param('productId') id: string,
+    @Body() body: { stock: number },
+  ) {
     // This wrote nothing. It published `inventory.updated` — which nothing
     // consumes — and returned `{ success: true, stock }`, so the portal showed
     // the new figure, the database kept the old one, and the seller oversold

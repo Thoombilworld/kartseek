@@ -366,17 +366,22 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
     owner: 'MODULES M1/CONSOLE',
     why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
   },
+  // The product routes take `:productId` since 2026-09-13: as `:id` the
+  // ownership guard read the product id as a seller id, missed, and refused
+  // the owning seller (403) along with everyone else. With no seller param
+  // the guard defers to the handler, which resolves the seller from the JWT
+  // and loads the row by (id, seller_id); the market follows that seller's.
   {
     verb: 'PUT',
-    path: '/seller/products/:id',
-    owner: 'MODULES M1/CONSOLE',
-    why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
+    path: '/seller/products/:productId',
+    owner: 'PDP (kartseekapp-1a) / MODULES M1/CONSOLE',
+    why: 'owner-scoped in the handler (JWT seller + (id, seller_id) lookup); no market predicate for a locked admin',
   },
   {
     verb: 'PATCH',
-    path: '/seller/products/:id/stock',
-    owner: 'MODULES M1/CONSOLE',
-    why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
+    path: '/seller/products/:productId/stock',
+    owner: 'PDP (kartseekapp-1a) / MODULES M1/CONSOLE',
+    why: 'owner-scoped in the handler (JWT seller + (id, seller_id) lookup); no market predicate for a locked admin',
   },
   {
     verb: 'PATCH',
@@ -391,9 +396,9 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
   // refused before the lookup. The market follows the owning seller's.
   {
     verb: 'GET',
-    path: '/seller/products/:id',
+    path: '/seller/products/:productId',
     owner: 'PDP (kartseekapp-1a) / MODULES M1/CONSOLE',
-    why: 'owner-scoped by construction; guard fails closed (denies locked admins) like PUT /seller/products/:id',
+    why: 'owner-scoped in the handler (JWT seller + (id, seller_id) lookup); no market predicate for a locked admin',
   },
 ];
 
@@ -409,7 +414,7 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
  */
 const EXCEPTION_CENSUS: readonly string[] = [
   'GET /doctor/admin/appointments',
-  'GET /seller/products/:id',
+  'GET /seller/products/:productId',
   'GET /taxi/admin/audit-logs',
   'GET /taxi/admin/dashboard',
   'GET /taxi/admin/disputes',
@@ -418,13 +423,13 @@ const EXCEPTION_CENSUS: readonly string[] = [
   'GET /taxi/admin/sos',
   'GET /taxi/admin/vendors',
   'PATCH /seller/listings/:id',
-  'PATCH /seller/products/:id/stock',
+  'PATCH /seller/products/:productId/stock',
   'POST /taxi/admin/drivers/:id/approve',
   'POST /taxi/admin/fare-rules',
   'POST /taxi/admin/vendors/:id/approve',
   'POST /taxi/admin/vendors/:id/reject',
   'PUT /seller/orders/:id/status',
-  'PUT /seller/products/:id',
+  'PUT /seller/products/:productId',
 ];
 
 /**
@@ -1007,9 +1012,9 @@ describe('admin market scope regression', () => {
     const bound = routes.filter((r) => r.file === 'seller.controller.ts' && !r.scoped && !r.global);
     expect(bound.filter((r) => !r.guardScoped).map((r) => `${r.verb} ${r.path}`)).toEqual([
       'PUT /seller/orders/:id/status',
-      'GET /seller/products/:id',
-      'PUT /seller/products/:id',
-      'PATCH /seller/products/:id/stock',
+      'GET /seller/products/:productId',
+      'PUT /seller/products/:productId',
+      'PATCH /seller/products/:productId/stock',
       'PATCH /seller/listings/:id',
     ]);
   });
