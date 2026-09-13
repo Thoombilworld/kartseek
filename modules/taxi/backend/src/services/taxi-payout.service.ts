@@ -1,8 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
-import { applyMarketFilter, assertInMarket } from '@app/common';
+import { applyMarketFilter, assertInMarket, assertRecordMarket, requireUuid } from '@app/common';
 import { TaxiPayoutRecordEntity } from '../entities/taxi-payout-record.entity';
 import { TaxiCountryConfigEntity } from '../entities/taxi-country-config.entity';
 import { TaxiVendorEntity } from '../entities/taxi-vendor.entity';
@@ -203,9 +203,82 @@ export class TaxiPayoutService {
   // ─── Approval & Processing ────────────────────────────────────────────────
 
   /**
-   * Approve a batch of payouts.
+   * Approve ONE payout, and report what the decision actually changed.
+   *
+   * `admin.taxi.approvePayout` (M7) is a per-record decision — `POST
+   * /admin/taxi/payouts/:id/approve` — and the batch method below could not
+   * serve it honestly. That one is an `UPDATE … WHERE status = 'pending'` which
+   * returns a COUNT: asked to approve a payout that was already settled it
+   * reports `0` and no error, which the console renders as a successful
+   * approval of money that was never moved. Asked to approve a payout belonging
+   * to another market it used to do so silently.
+   *
+   * So this one loads the row first. Three outcomes, each distinguishable:
+   *
+   *   • no such id            → 404
+   *   • not the caller's market → 403, backend copy, `[region-scope-denied]`
+   *   • not pending           → 400 naming the state it is actually in
+   *
+   * and only then are `status`, `approvedBy` and `approvedAt` written — the
+   * three columns `TaxiPayoutRecordEntity` declares for exactly this decision.
+   * The saved row is returned rather than a count, so the caller can see the
+   * amount, the recipient and the actor it recorded.
    */
-  async approvePayoutBatch(payoutIds: string[], adminId: string): Promise<number> {
+  async approvePayout(
+    payoutId: string,
+    adminId: string,
+    scope?: string,
+  ): Promise<TaxiPayoutRecordEntity> {
+    const payout = await this.payoutRepo.findOne({
+      where: { id: requireUuid(payoutId, 'payout') },
+    });
+    assertRecordMarket(payout, 'countryCode', scope, 'payout', this.logger);
+
+    if (payout.status !== 'pending') {
+      throw new BadRequestException(
+        `Payout ${payout.id} is ${payout.status}, not pending: only a pending payout can be approved.`,
+      );
+    }
+
+    payout.status = 'approved';
+    payout.approvedBy = adminId;
+    payout.approvedAt = new Date();
+
+    const saved = await this.payoutRepo.save(payout);
+
+    await this.kafka.publish('taxi.payout.approved', {
+      payoutId: saved.id,
+      recipientType: saved.recipientType,
+      recipientId: saved.recipientId,
+      amount: saved.netPayout,
+      currency: saved.currency,
+      countryCode: saved.countryCode,
+      approvedBy: adminId,
+    });
+
+    this.logger.log(
+      `✅ Payout ${saved.id} (${saved.netPayout} ${saved.currency}) approved by ${adminId}`,
+    );
+    return saved;
+  }
+
+  /**
+   * Approve a batch of payouts.
+   *
+   * Every row is loaded and asserted BEFORE anything is written, the same
+   * whole-batch rule `processPayouts` below applies: a batch that mixes a
+   * QA-scoped admin's own payouts with one belonging to India is refused whole
+   * rather than partially approved up to the offending row.
+   */
+  async approvePayoutBatch(payoutIds: string[], adminId: string, scope?: string): Promise<number> {
+    const ids = (payoutIds ?? []).map((id) => requireUuid(id, 'payout'));
+    if (ids.length === 0) return 0;
+
+    const rows = await this.payoutRepo.find({ where: { id: In(ids) } });
+    for (const row of rows) {
+      assertInMarket(row.countryCode, scope, 'payout', this.logger);
+    }
+
     const result = await this.payoutRepo
       .createQueryBuilder()
       .update()
@@ -214,14 +287,14 @@ export class TaxiPayoutService {
         approvedBy: adminId,
         approvedAt: new Date(),
       })
-      .where('id IN (:...ids)', { ids: payoutIds })
+      .where('id IN (:...ids)', { ids })
       .andWhere('status = :status', { status: 'pending' })
       .execute();
 
     const count = result.affected || 0;
 
     await this.kafka.publish('taxi.payout.batch.approved', {
-      payoutIds,
+      payoutIds: ids,
       approvedBy: adminId,
       count,
     });

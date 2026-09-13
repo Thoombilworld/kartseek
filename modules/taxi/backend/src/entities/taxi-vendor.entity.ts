@@ -75,6 +75,21 @@ export class TaxiVendorEntity {
   @Column({ type: 'varchar', nullable: true })
   suspensionReason: string | null;
 
+  /**
+   * Who suspended this vendor, and when — the mirror of `approvedBy`/`approvedAt`.
+   *
+   * Added by `migrations/1786503400000-TaxiAdminApprovals.ts` (M7). Until then
+   * `suspendVendor` took an `adminId`, wrote a log line with it and stored only
+   * the reason, so a fleet could be taken off the road with a record of WHY and
+   * none of WHO. `admin.taxi.suspendVendor` is one of the seven decisions M7
+   * gave a handler, and a decision whose actor is discarded is not auditable.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  suspendedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
+
   @Column({ default: 50 })
   maxDrivers: number;
 

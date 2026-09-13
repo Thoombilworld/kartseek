@@ -90,7 +90,10 @@ export const TaxiDataSource = new DataSource({
     TaxiDisciplinaryActionEntity,
     TaxiRideEntity,
   ],
-  migrations: ['migrations/1786498600000-InitialTaxiSchema.ts'],
+  migrations: [
+    'migrations/1786498600000-InitialTaxiSchema.ts',
+    'migrations/1786503400000-TaxiAdminApprovals.ts',
+  ],
   migrationsTableName: TAXI_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.
