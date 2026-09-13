@@ -296,11 +296,28 @@ services:
       - isolated
 
   # ── Redis ──────────────────────────────────────────────────────────────────
+  #
+  # `--maxmemory-policy volatile-lru`, NOT `allkeys-lru`. This store is not a
+  # pure cache: several keys are written with no expiry at all and are the only
+  # copy of what they hold —
+  #
+  #   admin:counter:pending_kyc          admin-service, the KYC queue depth
+  #   notifications:unread:<userId>       reset to 0 by notifications.gateway.ts
+  #   ride:waiting:<rideId>               taxi driver-dispatch, a ride IN FLIGHT
+  #
+  # Under `allkeys-lru` Redis evicts by recency across EVERY key once it reaches
+  # `--maxmemory`, so the least recently touched of those three disappears with
+  # no error anywhere: a ride in dispatch simply stops existing. `volatile-lru`
+  # restricts eviction to keys that carry a TTL — sessions, MFA challenges, rate
+  # limit buckets, the home cache — which are all re-derivable. If the store
+  # ever fills with nothing but non-expiring keys the write fails loudly with
+  # OOM, which is the right way round: an error a developer sees beats state
+  # that vanishes. Found by `npm run stack:validate` (Task IN7).
   redis:
     image: redis:8.8.0-alpine
     container_name: kartseek-redis
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD in the root .env} --maxmemory 256mb --maxmemory-policy allkeys-lru --rename-command FLUSHDB "" --rename-command FLUSHALL "" --rename-command DEBUG ""
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD in the root .env} --maxmemory 256mb --maxmemory-policy volatile-lru --rename-command FLUSHDB "" --rename-command FLUSHALL "" --rename-command DEBUG ""
     ports:
       - '${DB_BIND:-127.0.0.1}:6379:6379'
     volumes:
