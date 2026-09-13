@@ -6,8 +6,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import { applyMarketFilter, assertInMarket, normaliseMarket, requireMarket } from '@app/common';
+import { ILike, In, Repository } from 'typeorm';
+import {
+  applyMarketFilter,
+  assertInMarket,
+  marketPredicate,
+  normaliseMarket,
+  requireMarket,
+} from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
 import { Order } from './entities/order.entity';
@@ -391,6 +397,80 @@ export class OrderService {
       take,
     });
     return { data: rows.map((r) => this.toWire(r)), total, page: Number(page) || 1, limit: take };
+  }
+
+  /**
+   * The admin order list — the read nine console pages have been waiting for.
+   *
+   * `GET /admin/marketplace/orders` answered `{ data: [], total: 0 }` inline for
+   * as long as it existed, so "no orders" and "this route was never built" were
+   * the same screen. Orders carry `region_code` (recorded at placement), so the
+   * market is a column predicate here and needs no join.
+   *
+   * The lock wins over the request: a QA-locked admin asking for IN was already
+   * refused at the gateway, and `marketPredicate` makes a second attempt by any
+   * other path harmless — including a call that reaches this service over TCP
+   * without passing the gateway at all.
+   */
+  async listOrdersForAdmin(q: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+    region?: string;
+    scope?: string;
+  }) {
+    const take = Math.min(Math.max(Number(q.limit) || 20, 1), 100);
+    const page = Math.max(Number(q.page) || 1, 1);
+    // `requireMarket` around the REQUESTED slot, not just `marketPredicate`
+    // around both. `marketPredicate` refuses an unreadable LOCK and quietly
+    // ignores an unreadable `?country=` — and "ignored" on an admin filter
+    // means no predicate at all, so a global admin's typo widens their own
+    // list to every market and reads as an answer. Refused instead.
+    const market = marketPredicate(
+      q.scope,
+      requireMarket(q.region, 'those orders', this.logger),
+      this.logger,
+    );
+
+    const where: Record<string, unknown> = {};
+    if (market) where.regionCode = market;
+    if (q.status) where.status = String(q.status).toUpperCase() as OrderStatus;
+    // One search box over the two identifiers an admin actually has to hand.
+    // Each alternative restates `where` — TypeORM ORs the array, and a leg that
+    // dropped the market predicate would return that customer's orders in every
+    // market the moment anyone typed in the search box.
+    const criteria = q.search
+      ? [
+          { ...where, orderNumber: ILike(`%${q.search}%`) },
+          { ...where, customerId: ILike(`%${q.search}%`) },
+        ]
+      : where;
+
+    const [rows, total] = await this.orderRepo.findAndCount({
+      where: criteria as any,
+      order: { placedAt: 'DESC' },
+      skip: (page - 1) * take,
+      take,
+    });
+    return { data: rows.map((r) => this.toWire(r)), total, page, limit: take };
+  }
+
+  /**
+   * One order for an admin, refused when it is not theirs to read.
+   *
+   * Goes to the table, not the cache: `getOrderById` answers from Redis when it
+   * can, and that copy is the customer-facing projection — an admin reading a
+   * stale status is how a decision gets taken on the wrong state.
+   *
+   * 404 before 403, as everywhere else: a missing order number is missing in
+   * every market, so this cannot be used to discover that one exists elsewhere.
+   */
+  async getOrderForAdmin(orderNumber: string, scope?: string) {
+    const row = await this.orderRepo.findOne({ where: { orderNumber } });
+    if (!row) throw new NotFoundException(`Order ${orderNumber} not found`);
+    assertInMarket(row.regionCode, scope, 'order', this.logger);
+    return this.toWire(row);
   }
 
   async cancelOrder(orderId: string, reason: string, cancelledBy: string) {

@@ -1,4 +1,4 @@
-import { Controller, UseFilters } from '@nestjs/common';
+import { Controller, UseFilters, UsePipes, ValidationPipe } from '@nestjs/common';
 import { MessagePattern, Payload, EventPattern } from '@nestjs/microservices';
 import {
   PaymentOrchestratorService,
@@ -10,6 +10,7 @@ import { InvoiceService } from './services/invoice.service';
 import { RealTimeBillingService } from './services/realtime-billing.service';
 import { PaymentModule as PaymentModuleEnum } from './entities/payment.entity';
 import { RpcAwareExceptionsFilter } from '@app/common';
+import { AdminListPaymentsDto } from './dto/admin-payment.dto';
 
 /**
  * PaymentController — TCP message handler for the centralized payment microservice.
@@ -66,6 +67,20 @@ export class PaymentController {
   @MessagePattern({ cmd: 'get_payment_by_order' })
   getPaymentByOrder(@Payload() data: { orderId: string }) {
     return this.orchestrator.getPaymentByOrder(data.orderId);
+  }
+
+  /**
+   * The admin payments list — the read `GET /admin/marketplace/payments`
+   * answered with a literal empty page for as long as it existed.
+   *
+   * The pipe is bound on the handler rather than the class: every other pattern
+   * here takes a loose payload, and a class-level `whitelist: true` would be a
+   * behaviour change on all of them.
+   */
+  @MessagePattern({ cmd: 'admin_list_payments' })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  adminListPayments(@Payload() data: AdminListPaymentsDto) {
+    return this.orchestrator.listPaymentsForAdmin(data ?? {});
   }
 
   @MessagePattern({ cmd: 'get_customer_payments' })

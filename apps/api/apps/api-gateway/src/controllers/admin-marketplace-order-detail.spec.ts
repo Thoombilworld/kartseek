@@ -3,21 +3,24 @@ import { ForbiddenException } from '@nestjs/common';
 import { AdminMarketplaceController } from './admin-marketplace.controller';
 
 /**
- * `GET /admin/marketplace/orders/:id` reads the order, and says so or 404s.
+ * `GET /admin/marketplace/orders/:orderNumber` reads the order, and says so or
+ * 404s.
  *
  * What it used to do (whole-branch review, finding A-5): return
  * `{ data: { id, status: 'PENDING' } }` for **any** id — including one that
  * does not exist, and including one in another market — under a comment reading
  * "deliberately not 'improved': inventing a status for an order nobody read is
- * how this surface used to lie", and then inventing `PENDING`. Meanwhile
- * `order-service` has implemented `get_order_by_id` the whole time
- * (`apps/order-service/src/order.controller.ts:69`).
+ * how this surface used to lie", and then inventing `PENDING`.
  *
- * The handler now forwards to it with the caller's market, and
- * `OrderService.getOrderByIdForRequester` asserts `orders.region_code` against
- * that scope — so a locked admin reading another market's order gets 403 and a
- * missing id gets 404, instead of a plausible sentence about an order nobody
- * looked at.
+ * It forwards to order-service with the caller's market, and
+ * `OrderService.getOrderForAdmin` asserts `orders.region_code` against that
+ * scope — so a locked admin reading another market's order gets 403 and a
+ * missing number gets 404, instead of a plausible sentence about an order
+ * nobody looked at.
+ *
+ * The command is `admin_get_order`, not the customer-facing `get_order_by_id`
+ * this route first reached for: that one answers from the Redis projection when
+ * it can, and an admin deciding on a cached status decides on the wrong one.
  */
 const qaAdmin = { id: 'u-qa', role: 'ADMIN', regionCode: 'QA', regionLocked: true };
 const globalAdmin = { id: 'u-g', role: 'SUPER_ADMIN' };
@@ -43,8 +46,8 @@ describe('the admin order detail reads the order', () => {
     const { ctrl, order } = build();
     const res = await (ctrl as any).getOrderById(req(globalAdmin), 'KS-1');
     expect(order.mock.calls).toHaveLength(1);
-    expect(order.mock.calls[0][0]).toMatchObject({ cmd: 'get_order_by_id' });
-    expect(order.mock.calls[0][1]).toMatchObject({ orderId: 'KS-1' });
+    expect(order.mock.calls[0][0]).toMatchObject({ cmd: 'admin_get_order' });
+    expect(order.mock.calls[0][1]).toMatchObject({ orderNumber: 'KS-1' });
     expect(res).toMatchObject({ data: { id: 'KS-1', status: 'DELIVERED' } });
   });
 

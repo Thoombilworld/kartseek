@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { marketPredicate, normaliseMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
@@ -26,6 +27,16 @@ export enum RefundReason {
 export interface RefundRequest {
   id: string;
   orderId: string;
+  /**
+   * The market the refunded order was placed in.
+   *
+   * Without it the pending queue was the whole platform's, which is why the
+   * gateway blunt-refused every region-locked admin rather than show one market
+   * another's refunds under its own heading. Stamped from the order at request
+   * time; on a refund written before this field existed it is absent, and an
+   * unattributable refund is not a scoped admin's to see.
+   */
+  regionCode?: string | null;
   userId: string;
   amount: number;
   reason: RefundReason | string;
@@ -64,6 +75,8 @@ export class RefundService {
     reason: RefundReason | string;
     description?: string;
     items?: { itemId: string; quantity: number; amount: number }[];
+    /** The refunded order's market, resolved by the caller. */
+    regionCode?: string | null;
   }) {
     // Check for duplicate refund request
     const existingRefunds = await this.getRefundsByOrder(dto.orderId);
@@ -85,6 +98,12 @@ export class RefundService {
     const refund: RefundRequest = {
       id: refundId,
       orderId: dto.orderId,
+      // Normalised on the way in, so the queue filter below is a plain
+      // comparison and 'in', 'IN' and 'IN-MH' are not three markets in the
+      // store. `null` when the caller resolved none: an unattributed refund is
+      // an honest absence, and inventing a market here would put one market's
+      // refund in another market's queue for good.
+      regionCode: normaliseMarket(dto.regionCode ?? undefined) ?? null,
       userId: dto.userId,
       amount: isPartial
         ? dto.items!.reduce((sum, item) => sum + item.amount * item.quantity, 0)
@@ -246,7 +265,19 @@ export class RefundService {
   }
 
   // ── Get Pending Refunds (Admin) ────────────────────────────────────────────
-  async getPendingRefunds(page = 1, limit = 20) {
+  /**
+   * The admin refund queue, narrowed to the caller's market.
+   *
+   * `scope` is the gateway's lock, taken from the signed token. It is resolved
+   * before the scan so an unreadable lock is refused rather than dropped —
+   * dropping it would add no filter at all and hand a confined admin every
+   * market's refunds, which is the exact failure the closed route avoided.
+   *
+   * The filter sits inside the scan, before pagination: filtering a page after
+   * slicing it returns a short page that reads as "this market has nothing".
+   */
+  async getPendingRefunds(page = 1, limit = 20, scope?: string) {
+    const market = marketPredicate(scope, undefined, this.logger);
     const allKeys = await this.redis.scanKeys('refund:RFD-*');
     const pending: RefundRequest[] = [];
 
@@ -261,6 +292,9 @@ export class RefundService {
           await this.expireRefund(refund.id);
           continue;
         }
+        // A refund with no market belongs to no market: invisible to a scoped
+        // admin, still there for a global one.
+        if (market && normaliseMarket(refund.regionCode ?? undefined) !== market) continue;
         pending.push(refund);
       }
     }

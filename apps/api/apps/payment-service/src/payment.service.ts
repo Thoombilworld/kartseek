@@ -3,7 +3,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
-import { applyMarketFilter, assertInMarket, normaliseMarket, requireMarket } from '@app/common';
+import {
+  applyMarketFilter,
+  assertInMarket,
+  marketPredicate,
+  normaliseMarket,
+  requireMarket,
+} from '@app/common';
 import * as crypto from 'crypto';
 import { Payment, PaymentStatus, PaymentModule, PaymentGateway } from './entities/payment.entity';
 import { GatewayAdapterFactory } from './adapters/gateway-adapter.factory';
@@ -446,6 +452,49 @@ export class PaymentOrchestratorService {
       take: limit,
     });
     return { data, total, page, limit, hasMore: total > page * limit };
+  }
+
+  /**
+   * The admin payments list.
+   *
+   * `GET /admin/marketplace/payments` was a literal empty page with the message
+   * "Payment gateway config" on it, while this service held every payment with
+   * a `country_code` on the row — and `/payments/admin/*` meanwhile read them
+   * with no scope at all (audit V8).
+   *
+   * `marketPredicate` resolves the lock ahead of the request, so a locked
+   * caller reaching this handler over TCP is narrowed here even though the
+   * gateway already refused them a foreign `?country=`.
+   */
+  async listPaymentsForAdmin(q: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    module?: string;
+    region?: string;
+    scope?: string;
+  }) {
+    const take = Math.min(Math.max(Number(q.limit) || 20, 1), 100);
+    const page = Math.max(Number(q.page) || 1, 1);
+    // The requested market is refused rather than ignored when it cannot be
+    // read: an admin filter that silently widens on a typo is the same class
+    // of wrong as a boundary that silently disappears.
+    const market = marketPredicate(
+      q.scope,
+      requireMarket(q.region, 'those payments', this.logger),
+      this.logger,
+    );
+    const where: Record<string, unknown> = {};
+    if (market) where.countryCode = market;
+    if (q.status) where.status = q.status;
+    if (q.module) where.module = q.module;
+    const [data, total] = await this.paymentRepo.findAndCount({
+      where: where as any,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * take,
+      take,
+    });
+    return { data, total, page, limit: take };
   }
 
   async getAvailablePaymentMethods(countryCode: string, module?: string) {

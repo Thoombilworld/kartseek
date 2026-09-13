@@ -95,6 +95,10 @@ export class AdminMarketplaceController {
     // both answered with the outcome they were named after and asked nobody.
     @Inject('ORDER_SERVICE_TCP') private readonly orderClient: ClientProxy,
     @Inject('REFUND_SERVICE') private readonly refundClient: ClientProxy,
+    // `GET /admin/marketplace/payments` returned an empty page captioned
+    // "Payment gateway config" while payment-service held every payment with a
+    // `country_code` on it. It had no client to ask; now it has.
+    @Inject('PAYMENT_SERVICE') private readonly paymentClient: ClientProxy,
   ) {}
 
   /** Forward to a named service, preserving the failure rather than inventing a result. */
@@ -1059,44 +1063,78 @@ export class AdminMarketplaceController {
   }
 
   // ── Orders / Returns / Refunds ─────────────────────────────────────────────
+  /**
+   * The admin order list.
+   *
+   * Returned `{ data: [], total: 0 }` inline for as long as it existed, under a
+   * comment saying order-service had no admin list pattern to call — so the
+   * nine console pages that read this route have shown "no orders" since they
+   * were written, and there was no way to tell that from a market that has
+   * genuinely sold nothing. order-service has one now (`admin_list_orders`),
+   * and `order.orders` carries `region_code`, so the market is a predicate
+   * there rather than a refusal here.
+   */
   @Get('orders')
-  @ApiOperation({ summary: 'List all marketplace orders (admin view)' })
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
+  @ApiOperation({ summary: 'List marketplace orders (admin view)' })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'country', required: false })
   async getOrders(
     @Req() req: any,
     @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
     @Query('country') country?: string,
   ) {
-    // Still a stub — order-service has no admin list pattern. The scope call
-    // refuses a locked admin reaching for another market rather than handing
-    // them an empty page that reads as an answer.
-    this.scopeOf(req, country, 'those orders');
-    return { data: [] as unknown[], total: 0, page: Number(page), limit: 20, hasMore: false };
+    const { scope, market } = this.scopeOf(req, country, 'those orders');
+    return this.sendTo(this.orderClient, 'Order service', 'admin_list_orders', {
+      page: +page,
+      limit: +limit,
+      status,
+      search,
+      region: market,
+      scope,
+    });
   }
 
-  @Get('orders/:id')
-  @ApiOperation({ summary: 'Get order details by ID' })
+  /**
+   * One order, refused when it is not the caller's market.
+   *
+   * This used to `return { data: { id, status: 'PENDING' } }` for any id — one
+   * that does not exist included — under a comment saying that inventing a
+   * status for an order nobody read is how this surface used to lie, and then
+   * inventing `PENDING` (whole-branch review, finding A-5).
+   *
+   * It reads the order now. `admin_get_order` rather than the customer-facing
+   * `get_order_by_id`: that one answers from Redis when it can, and an admin
+   * taking a decision on a cached status takes it on the wrong one. The service
+   * asserts the row's own `region_code` against the scope sent here, so a
+   * locked admin reading another market's order is refused by the ROW, a
+   * missing number is a 404, and an unreachable order-service is a 503 rather
+   * than a plausible status.
+   *
+   * The parameter is the order NUMBER, which is what the console shows and what
+   * order-service looks orders up by (`project_customer_order_identifiers`).
+   *
+   * No `refuseLockedAdmin`: unlike the order WRITES below, a read is
+   * attributable — `orders.region_code` exists and the revenue path already
+   * predicates on it.
+   */
+  @Get('orders/:orderNumber')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
+  @ApiOperation({ summary: "One order, refused when it is not the caller's market" })
   @ApiQuery({ name: 'country', required: false })
-  async getOrderById(@Req() req: any, @Param('id') id: string, @Query('country') country?: string) {
-    // This used to `return { data: { id, status: 'PENDING' } }` for any id —
-    // one that does not exist included — under a comment saying that inventing
-    // a status for an order nobody read is how this surface used to lie, and
-    // then inventing `PENDING` (whole-branch review, finding A-5).
-    //
-    // `order-service` has implemented `get_order_by_id` all along
-    // (`apps/order-service/src/order.controller.ts:69`), and
-    // `getOrderByIdForRequester` now asserts the order's own `region_code`
-    // against the scope forwarded here — so a locked admin reading another
-    // market's order is refused by the ROW, a missing id is a 404, and an
-    // unreachable order-service is a 503 rather than a plausible status.
-    //
-    // No `refuseLockedAdmin`: unlike the order WRITES below, a read is
-    // attributable — `orders.region_code` exists and the revenue path already
-    // predicates on it (`order.service.ts:449`).
+  async getOrderById(
+    @Req() req: any,
+    @Param('orderNumber') orderNumber: string,
+    @Query('country') country?: string,
+  ) {
     const { scope } = this.scopeOf(req, country, 'that order');
     return {
-      data: await this.sendTo(this.orderClient, 'Order service', 'get_order_by_id', {
-        orderId: id,
+      data: await this.sendTo(this.orderClient, 'Order service', 'admin_get_order', {
+        orderNumber,
         scope,
       }),
     };
@@ -1136,14 +1174,35 @@ export class AdminMarketplaceController {
     });
   }
 
+  /**
+   * The admin returns queue.
+   *
+   * Was `{ data: [], total: 0 }` under a comment reading "no admin returns list
+   * exists to call" — while `get_returns` has served the customer and seller
+   * views of the same table the whole time. What it lacked was a market: the
+   * list did not filter on `return_requests.region_code`, though the decision
+   * path beside it already asserted the column. It takes `scope` now.
+   */
   @Get('returns')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
   @ApiOperation({ summary: 'List return requests' })
+  @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'country', required: false })
-  async getReturns(@Req() req: any, @Query('country') country?: string) {
-    // Still a stub — no admin returns list exists to call. Left as one.
-    this.scopeOf(req, country, 'those returns');
-    return { data: [] as unknown[], total: 0 };
+  async getReturns(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'those returns');
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_RETURNS, {
+      page: +page,
+      limit: +limit,
+      status,
+      region: market,
+      scope,
+    });
   }
 
   @Post('returns/:id/approve')
@@ -1183,17 +1242,12 @@ export class AdminMarketplaceController {
     @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
     @Query('country') country?: string,
   ) {
-    // Returned an empty list inline, so the refunds queue was always empty and
-    // an admin had no way to tell that from "nothing is pending".
-    //
-    // Refunds have no table. `RefundServiceModule` imports `RedisModule` and
-    // no `TypeOrmModule` at all, so a refund is a Redis key with a 30-day TTL —
-    // there is no row to carry a market and nothing to predicate on. The
-    // blocker is a DATASTORE, not a column: R11 added `region_code` to the
-    // money tables that exist and could not add one here. Showing the whole
-    // platform's queue to a QA admin under a QA heading is the leak, so this
-    // stays refused until refunds are persisted.
-    refuseLockedAdmin(req, 'the refund queue');
+    // Open to a regional admin now: a refund carries `regionCode` on the stored
+    // record and `get_pending_refunds` filters the queue on it, so this no
+    // longer has to refuse a locked caller outright to avoid showing them the
+    // whole platform's queue under their own market's heading. Refunds are
+    // still Redis-only — the field is on the JSON this service writes, which is
+    // why this needed no migration.
     const { scope, market } = this.scopeOf(req, country, 'those refunds');
     return this.sendTo(this.refundClient, 'Refund service', 'get_pending_refunds', {
       page: +page,
@@ -3367,12 +3421,37 @@ export class AdminMarketplaceController {
     return { data: [] as unknown[], total: 0, message: 'Rate card management' };
   }
 
+  /**
+   * The admin payments list.
+   *
+   * Answered `{ data: [], total: 0, message: 'Payment gateway config' }` — an
+   * empty page with a caption, which reads on screen as a configuration surface
+   * nobody has filled in rather than as a list that was never wired. Meanwhile
+   * payment-service holds every payment on the platform, each with the market
+   * on the row (`payments.countryCode` — payment is one of the four modules
+   * that predate `region_code`).
+   */
   @Get('payments')
-  @ApiOperation({ summary: 'Payment gateway management' })
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
+  @ApiOperation({ summary: 'List marketplace payments (admin view)' })
+  @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'country', required: false })
-  async getPayments(@Req() req: any, @Query('country') country?: string) {
-    this.scopeOf(req, country, 'those payment methods');
-    return { data: [] as unknown[], total: 0, message: 'Payment gateway config' };
+  async getPayments(
+    @Req() req: any,
+    @Query('page', ParsePagePipe) page = 1,
+    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
+    @Query('status') status?: string,
+    @Query('country') country?: string,
+  ) {
+    const { scope, market } = this.scopeOf(req, country, 'those payments');
+    return this.sendTo(this.paymentClient, 'Payment service', 'admin_list_payments', {
+      page: +page,
+      limit: +limit,
+      status,
+      module: 'marketplace',
+      region: market,
+      scope,
+    });
   }
 
   @Get('hsn-tax-master')

@@ -40,6 +40,7 @@ function build(sendImpl: (cmd: any, payload: any) => any) {
     loyalty as any, // loyalty
     noop as any, // order
     noop as any, // refund
+    noop as any, // payment
   );
   return { ctrl, client, wallet, loyalty, redis };
 }

@@ -1,7 +1,19 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseFilters } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  Query,
+  UseFilters,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RpcAwareExceptionsFilter } from '@app/common';
 import { OrderService, OrderStatus } from './order.service';
+import { AdminGetOrderDto, AdminListOrdersDto } from './dto/admin-order.dto';
 
 // Bound on the controller because that is the only binding that reaches TCP
 // handlers — an APP_FILTER provider silently does not. Without it every
@@ -9,6 +21,11 @@ import { OrderService, OrderStatus } from './order.service';
 // generic failure, so the IDOR guard's ForbiddenException surfaced as 503
 // "service unavailable" rather than 403, and a missing order as 503 not 404.
 @UseFilters(RpcAwareExceptionsFilter)
+// The admin payloads below are class-validator DTOs, and a TCP handler gets no
+// pipe from the gateway's global one — that lives in another process. Bound
+// here so `page`, `limit` and `status` are validated and transformed on the
+// wire rather than coerced by hand inside the service.
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 @Controller('orders')
 export class OrderController {
   constructor(private readonly svc: OrderService) {}
@@ -105,6 +122,21 @@ export class OrderController {
   @MessagePattern({ cmd: 'update_order_status' })
   msgUpdateStatus(@Payload() data: any) {
     return this.svc.updateOrderStatus(data.orderId, data.status, data.updatedBy);
+  }
+
+  // ─── Admin reads ─────────────────────────────────────────────────────────
+  // Added because the gateway had no order pattern to call at all: its admin
+  // list returned a literal empty page and its detail route read through the
+  // customer cache. `scope` is the caller's market, written by the gateway from
+  // the signed token and never from a request body.
+  @MessagePattern({ cmd: 'admin_list_orders' })
+  msgAdminListOrders(@Payload() d: AdminListOrdersDto) {
+    return this.svc.listOrdersForAdmin(d ?? {});
+  }
+
+  @MessagePattern({ cmd: 'admin_get_order' })
+  msgAdminGetOrder(@Payload() d: AdminGetOrderDto) {
+    return this.svc.getOrderForAdmin(d?.orderNumber, d?.scope);
   }
 
   /**
