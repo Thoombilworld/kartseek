@@ -294,7 +294,7 @@ export class RefundService {
   async getPendingRefunds(page = 1, limit = 20, scope?: string, region?: string, status?: string) {
     const market = marketPredicate(
       scope,
-      requireMarket(region, 'those refunds', this.logger),
+      requireMarket(region, 'refund queue', this.logger),
       this.logger,
     );
     const wanted = status

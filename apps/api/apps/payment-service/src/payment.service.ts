@@ -481,7 +481,7 @@ export class PaymentOrchestratorService {
     // of wrong as a boundary that silently disappears.
     const market = marketPredicate(
       q.scope,
-      requireMarket(q.region, 'those payments', this.logger),
+      requireMarket(q.region, 'payment list', this.logger),
       this.logger,
     );
     const where: Record<string, unknown> = {};

@@ -430,7 +430,7 @@ export class OrderService {
     // list to every market and reads as an answer. Refused instead.
     const market = marketPredicate(
       q.scope,
-      requireMarket(q.region, 'those orders', this.logger),
+      requireMarket(q.region, 'order list', this.logger),
       this.logger,
     );
 
