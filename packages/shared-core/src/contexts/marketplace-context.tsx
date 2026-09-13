@@ -1,8 +1,29 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { CATEGORIES as INIT_CATEGORIES, HERO_BANNERS as INIT_HERO_BANNERS, CAMPAIGN_BANNERS as INIT_CAMPAIGN_BANNERS, COUNTRY_BANNERS as INIT_COUNTRY_BANNERS, FLASH_DEALS as INIT_FLASH_DEALS, DEALS_OF_DAY as INIT_DEALS_OF_DAY, NEW_ARRIVALS as INIT_NEW_ARRIVALS, BEST_SELLERS as INIT_BEST_SELLERS, TRENDING_PRODUCTS as INIT_TRENDING, RECOMMENDED as INIT_RECOMMENDED, SPONSORED_PRODUCTS as INIT_SPONSORED, TRUST_BADGES as INIT_TRUST_BADGES, MARKETPLACE_FAQ as INIT_FAQ } from '@/lib/demo-data/marketplace-home';
-import type { HomeCategory, HomeProduct, CampaignBanner, CountryBanner } from '@/lib/marketplace/types';
+import {
+  CATEGORIES as INIT_CATEGORIES,
+  HERO_BANNERS as INIT_HERO_BANNERS,
+  CAMPAIGN_BANNERS as INIT_CAMPAIGN_BANNERS,
+  COUNTRY_BANNERS as INIT_COUNTRY_BANNERS,
+  FLASH_DEALS as INIT_FLASH_DEALS,
+  DEALS_OF_DAY as INIT_DEALS_OF_DAY,
+  NEW_ARRIVALS as INIT_NEW_ARRIVALS,
+  BEST_SELLERS as INIT_BEST_SELLERS,
+  TRENDING_PRODUCTS as INIT_TRENDING,
+  RECOMMENDED as INIT_RECOMMENDED,
+  SPONSORED_PRODUCTS as INIT_SPONSORED,
+} from '@/lib/demo-data/marketplace-home';
+import {
+  TRUST_BADGES as INIT_TRUST_BADGES,
+  MARKETPLACE_FAQ as INIT_FAQ,
+} from '@/lib/marketplace/home-content';
+import type {
+  HomeCategory,
+  HomeProduct,
+  CampaignBanner,
+  CountryBanner,
+} from '@/lib/marketplace/types';
 
 // ─── Extended Types ──────────────────────────────────────────────────────────
 
@@ -82,21 +103,28 @@ export interface MarketplaceSEOPage {
 
 const hydrateHeroBanners = (): HeroBanner[] =>
   INIT_HERO_BANNERS.map((b, i) => ({
-    ...b, status: 'active' as const, sortOrder: i + 1, countries: ['India', 'UAE', 'UK', 'SA', 'QA'],
+    ...b,
+    status: 'active' as const,
+    sortOrder: i + 1,
+    countries: ['India', 'UAE', 'UK', 'SA', 'QA'],
   }));
 
 const hydrateCampaignBanners = (): ExtendedCampaignBanner[] =>
   INIT_CAMPAIGN_BANNERS.map((b, i) => ({
-    ...b, status: 'active' as const, sortOrder: i + 1,
+    ...b,
+    status: 'active' as const,
+    sortOrder: i + 1,
   }));
 
 const hydrateCountryBanners = (): ExtendedCountryBanner[] =>
   INIT_COUNTRY_BANNERS.map((b, i) => ({
-    ...b, status: 'active' as const, sortOrder: i + 1,
+    ...b,
+    status: 'active' as const,
+    sortOrder: i + 1,
   }));
 
 const hydrateCategories = (): ExtendedCategory[] =>
-  INIT_CATEGORIES.map(c => ({
+  INIT_CATEGORIES.map((c) => ({
     ...c,
     slug: c.id,
     status: 'active' as const,
@@ -109,19 +137,63 @@ const hydrateCategories = (): ExtendedCategory[] =>
   }));
 
 const hydrateFeaturedSections = (): FeaturedSection[] => [
-  { key: 'flash-deals', label: 'Flash Deals', products: [...INIT_FLASH_DEALS], maxItems: 10, isScheduled: true, startDate: '2026-06-17', endDate: '2026-06-18' },
-  { key: 'deals-of-day', label: 'Deals of the Day', products: [...INIT_DEALS_OF_DAY], maxItems: 10, isScheduled: true },
-  { key: 'new-arrivals', label: 'New Arrivals', products: [...INIT_NEW_ARRIVALS], maxItems: 10, isScheduled: false },
-  { key: 'best-sellers', label: 'Best Sellers', products: [...INIT_BEST_SELLERS], maxItems: 10, isScheduled: false },
-  { key: 'trending', label: 'Trending Now', products: [...INIT_TRENDING], maxItems: 10, isScheduled: false },
-  { key: 'recommended', label: 'Recommended', products: [...INIT_RECOMMENDED], maxItems: 10, isScheduled: false },
-  { key: 'sponsored', label: 'Sponsored Products', products: [...INIT_SPONSORED], maxItems: 10, isScheduled: false },
+  {
+    key: 'flash-deals',
+    label: 'Flash Deals',
+    products: [...INIT_FLASH_DEALS],
+    maxItems: 10,
+    isScheduled: true,
+    startDate: '2026-06-17',
+    endDate: '2026-06-18',
+  },
+  {
+    key: 'deals-of-day',
+    label: 'Deals of the Day',
+    products: [...INIT_DEALS_OF_DAY],
+    maxItems: 10,
+    isScheduled: true,
+  },
+  {
+    key: 'new-arrivals',
+    label: 'New Arrivals',
+    products: [...INIT_NEW_ARRIVALS],
+    maxItems: 10,
+    isScheduled: false,
+  },
+  {
+    key: 'best-sellers',
+    label: 'Best Sellers',
+    products: [...INIT_BEST_SELLERS],
+    maxItems: 10,
+    isScheduled: false,
+  },
+  {
+    key: 'trending',
+    label: 'Trending Now',
+    products: [...INIT_TRENDING],
+    maxItems: 10,
+    isScheduled: false,
+  },
+  {
+    key: 'recommended',
+    label: 'Recommended',
+    products: [...INIT_RECOMMENDED],
+    maxItems: 10,
+    isScheduled: false,
+  },
+  {
+    key: 'sponsored',
+    label: 'Sponsored Products',
+    products: [...INIT_SPONSORED],
+    maxItems: 10,
+    isScheduled: false,
+  },
 ];
 
 const hydrateSubcategories = (): SubcategoryItem[] => {
   const items: SubcategoryItem[] = [];
   let counter = 0;
-  INIT_CATEGORIES.forEach(cat => {
+  INIT_CATEGORIES.forEach((cat) => {
     cat.subcategories.forEach((sub, i) => {
       // Deterministic product count to avoid server/client hydration mismatch
       const seed = (counter * 2654435761) >>> 0; // Knuth multiplicative hash
@@ -130,7 +202,10 @@ const hydrateSubcategories = (): SubcategoryItem[] => {
       items.push({
         id: `${cat.id}-sub-${i}`,
         name: sub,
-        slug: sub.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, ''),
+        slug: sub
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/-+$/, ''),
         parentCategoryId: cat.id,
         status: 'active',
         sortOrder: i + 1,
@@ -143,12 +218,42 @@ const hydrateSubcategories = (): SubcategoryItem[] => {
 
 const hydrateSEOPages = (): MarketplaceSEOPage[] => {
   const pages: MarketplaceSEOPage[] = [
-    { id: 'seo-home', page: 'Marketplace Home', slug: '/marketplace', metaTitle: 'KARTSEEK Marketplace – Shop Electronics, Fashion & More', metaDescription: 'Shop the best products from verified sellers. Free delivery, easy returns, secure payments.', schemaType: 'WebSite' },
-    { id: 'seo-sellers', page: 'All Sellers', slug: '/marketplace/sellers', metaTitle: 'Official Seller Stores – Verified Sellers | KARTSEEK', metaDescription: 'Browse official stores from verified sellers on KARTSEEK marketplace.', schemaType: 'ItemList' },
-    { id: 'seo-offers', page: 'Offers & Deals', slug: '/marketplace/offers', metaTitle: 'Best Offers & Deals – Up to 70% Off | KARTSEEK', metaDescription: 'Discover the hottest deals and discounts across all categories on KARTSEEK.', schemaType: 'OfferCatalog' },
-    { id: 'seo-search', page: 'Search Results', slug: '/marketplace/search', metaTitle: 'Search Results | KARTSEEK Marketplace', metaDescription: 'Find exactly what you need from millions of products on KARTSEEK.', schemaType: 'SearchResultsPage' },
+    {
+      id: 'seo-home',
+      page: 'Marketplace Home',
+      slug: '/marketplace',
+      metaTitle: 'KARTSEEK Marketplace – Shop Electronics, Fashion & More',
+      metaDescription:
+        'Shop the best products from verified sellers. Free delivery, easy returns, secure payments.',
+      schemaType: 'WebSite',
+    },
+    {
+      id: 'seo-sellers',
+      page: 'All Sellers',
+      slug: '/marketplace/sellers',
+      metaTitle: 'Official Seller Stores – Verified Sellers | KARTSEEK',
+      metaDescription: 'Browse official stores from verified sellers on KARTSEEK marketplace.',
+      schemaType: 'ItemList',
+    },
+    {
+      id: 'seo-offers',
+      page: 'Offers & Deals',
+      slug: '/marketplace/offers',
+      metaTitle: 'Best Offers & Deals – Up to 70% Off | KARTSEEK',
+      metaDescription:
+        'Discover the hottest deals and discounts across all categories on KARTSEEK.',
+      schemaType: 'OfferCatalog',
+    },
+    {
+      id: 'seo-search',
+      page: 'Search Results',
+      slug: '/marketplace/search',
+      metaTitle: 'Search Results | KARTSEEK Marketplace',
+      metaDescription: 'Find exactly what you need from millions of products on KARTSEEK.',
+      schemaType: 'SearchResultsPage',
+    },
   ];
-  INIT_CATEGORIES.forEach(cat => {
+  INIT_CATEGORIES.forEach((cat) => {
     pages.push({
       id: `seo-cat-${cat.id}`,
       page: `Category: ${cat.label}`,
@@ -203,63 +308,85 @@ const MarketplaceContext = createContext<MarketplaceContextValue | null>(null);
 
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [heroBanners, setHeroBanners] = useState<HeroBanner[]>(hydrateHeroBanners);
-  const [campaignBanners, setCampaignBanners] = useState<ExtendedCampaignBanner[]>(hydrateCampaignBanners);
-  const [countryBanners, setCountryBanners] = useState<ExtendedCountryBanner[]>(hydrateCountryBanners);
+  const [campaignBanners, setCampaignBanners] =
+    useState<ExtendedCampaignBanner[]>(hydrateCampaignBanners);
+  const [countryBanners, setCountryBanners] =
+    useState<ExtendedCountryBanner[]>(hydrateCountryBanners);
   const [categories, setCategories] = useState<ExtendedCategory[]>(hydrateCategories);
   const [subcategories, setSubcategories] = useState<SubcategoryItem[]>(hydrateSubcategories);
-  const [featuredSections, setFeaturedSections] = useState<FeaturedSection[]>(hydrateFeaturedSections);
+  const [featuredSections, setFeaturedSections] =
+    useState<FeaturedSection[]>(hydrateFeaturedSections);
   const [seoPages, setSeoPages] = useState<MarketplaceSEOPage[]>(hydrateSEOPages);
 
   // Banner mutations
   const addHeroBanner = useCallback((b: Omit<HeroBanner, 'id'>) => {
-    setHeroBanners(prev => [...prev, { ...b, id: `banner-${Date.now()}` }]);
+    setHeroBanners((prev) => [...prev, { ...b, id: `banner-${Date.now()}` }]);
   }, []);
   const updateHeroBanner = useCallback((id: string, data: Partial<HeroBanner>) => {
-    setHeroBanners(prev => prev.map(b => b.id === id ? { ...b, ...data } : b));
+    setHeroBanners((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
   }, []);
   const deleteHeroBanner = useCallback((id: string) => {
-    setHeroBanners(prev => prev.filter(b => b.id !== id));
+    setHeroBanners((prev) => prev.filter((b) => b.id !== id));
   }, []);
 
   // Category mutations
   const addCategory = useCallback((c: Omit<ExtendedCategory, 'id'>) => {
-    setCategories(prev => [...prev, { ...c, id: c.slug || `cat-${Date.now()}` }]);
+    setCategories((prev) => [...prev, { ...c, id: c.slug || `cat-${Date.now()}` }]);
   }, []);
   const updateCategory = useCallback((id: string, data: Partial<ExtendedCategory>) => {
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
   }, []);
 
   // Subcategory mutations
   const addSubcategory = useCallback((s: Omit<SubcategoryItem, 'id'>) => {
-    setSubcategories(prev => [...prev, { ...s, id: `sub-${Date.now()}` }]);
+    setSubcategories((prev) => [...prev, { ...s, id: `sub-${Date.now()}` }]);
   }, []);
   const updateSubcategory = useCallback((id: string, data: Partial<SubcategoryItem>) => {
-    setSubcategories(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+    setSubcategories((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
   }, []);
   const deleteSubcategory = useCallback((id: string) => {
-    setSubcategories(prev => prev.filter(s => s.id !== id));
+    setSubcategories((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
   // Featured sections
   const updateFeaturedSection = useCallback((key: string, data: Partial<FeaturedSection>) => {
-    setFeaturedSections(prev => prev.map(s => s.key === key ? { ...s, ...data } : s));
+    setFeaturedSections((prev) => prev.map((s) => (s.key === key ? { ...s, ...data } : s)));
   }, []);
 
   // SEO
   const updateSEOPage = useCallback((id: string, data: Partial<MarketplaceSEOPage>) => {
-    setSeoPages(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+    setSeoPages((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
   }, []);
 
   return (
-    <MarketplaceContext.Provider value={{
-      heroBanners, campaignBanners, countryBanners,
-      setHeroBanners, setCampaignBanners, setCountryBanners,
-      addHeroBanner, updateHeroBanner, deleteHeroBanner,
-      categories, setCategories, updateCategory, addCategory,
-      subcategories, setSubcategories, addSubcategory, updateSubcategory, deleteSubcategory,
-      featuredSections, setFeaturedSections, updateFeaturedSection,
-      seoPages, setSeoPages, updateSEOPage,
-    }}>
+    <MarketplaceContext.Provider
+      value={{
+        heroBanners,
+        campaignBanners,
+        countryBanners,
+        setHeroBanners,
+        setCampaignBanners,
+        setCountryBanners,
+        addHeroBanner,
+        updateHeroBanner,
+        deleteHeroBanner,
+        categories,
+        setCategories,
+        updateCategory,
+        addCategory,
+        subcategories,
+        setSubcategories,
+        addSubcategory,
+        updateSubcategory,
+        deleteSubcategory,
+        featuredSections,
+        setFeaturedSections,
+        updateFeaturedSection,
+        seoPages,
+        setSeoPages,
+        updateSEOPage,
+      }}
+    >
       {children}
     </MarketplaceContext.Provider>
   );

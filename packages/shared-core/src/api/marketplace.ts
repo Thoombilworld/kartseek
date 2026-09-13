@@ -6,11 +6,14 @@ export async function getMarketplaceHome(country?: string) {
 }
 
 // ── Categories ──────────────────────────────────────────────────────────────
+// `/marketplace/categories` is the one category route. `/category-list` was a
+// second spelling of the same TCP command that the gateway had to carry so this
+// file could keep using a *web route* name for an API path; it is gone.
 export async function getCategories() {
-  return api.get<any>('/marketplace/category-list');
+  return api.get<any>('/marketplace/categories');
 }
 export async function getCategoryById(id: string) {
-  return api.get<any>(`/marketplace/category-list/${id}`);
+  return api.get<any>(`/marketplace/categories/${encodeURIComponent(id)}`);
 }
 export async function getSubcategoryById(id: string) {
   return api.get<any>(`/marketplace/subcategories/${id}`);
@@ -351,6 +354,13 @@ export interface ExchangeOffer {
   fulfillmentMode: string;
   expiresAt: string;
   isFeatured: boolean;
+}
+
+/** Bank and card offers for the active market (`bank_offers`). */
+export async function getBankOffers(
+  params?: Record<string, string | number | boolean | undefined>,
+) {
+  return api.get<any>('/marketplace/offers/bank', params);
 }
 
 export async function getExchangeOffers(targetCategory?: string) {

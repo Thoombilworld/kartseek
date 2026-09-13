@@ -196,14 +196,28 @@ export class MarketplaceGatewayController {
     return {};
   }
 
-  /** Helper: send a TCP message to marketplace-service with timeout + error handling */
-  private async sendToMarketplace<T = any>(cmd: string, payload: any = {}): Promise<T> {
+  /**
+   * Helper: send a TCP message to marketplace-service with timeout + error handling.
+   *
+   * `req`, when given, forwards the request's correlation id as `_requestId` on
+   * object payloads. marketplace-service lifts it into its request context and
+   * prints it as `reqId=` on every cache and query line, so one browser request
+   * can be followed from this gateway's HTTP log to the exact cache key and
+   * product ids that answered it. Passed on the catalogue reads, which are the
+   * ones a data-consistency question is ever about.
+   */
+  private async sendToMarketplace<T = any>(cmd: string, payload: any = {}, req?: any): Promise<T> {
+    const isObject = payload && typeof payload === 'object' && !Array.isArray(payload);
     // Attach the internal service credential to object payloads when configured.
     const secret = process.env.INTERNAL_SERVICE_SECRET;
-    const body =
-      secret && payload && typeof payload === 'object' && !Array.isArray(payload)
-        ? { ...payload, _internalSecret: secret }
-        : (payload ?? {});
+    const requestId: string | undefined = req?.requestId ?? req?.headers?.['x-request-id'];
+    const body = isObject
+      ? {
+          ...payload,
+          ...(secret ? { _internalSecret: secret } : {}),
+          ...(typeof requestId === 'string' && requestId ? { _requestId: requestId } : {}),
+        }
+      : (payload ?? {});
     try {
       return await lastValueFrom(
         this.marketplaceClient.send<T>({ cmd }, body).pipe(
@@ -267,42 +281,42 @@ export class MarketplaceGatewayController {
     // at this country, and product sections that rank its sellers first. The
     // downstream cache is keyed on it, so this is also what keeps one market's
     // home page from being served to another.
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_HOME, {
-      country: this.region(req, country),
-    });
+    return this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.GET_HOME,
+      { country: this.region(req, country) },
+      req,
+    );
   }
 
   // ── Categories ─────────────────────────────────────────────────────────────
+  //
+  // One route per read, served over TCP. Two things used to be true here and
+  // both produced a second, different answer for the same category:
+  //
+  //   • `/categories` preferred the gRPC `GetCategories`, whose proto message
+  //     carries no `parent`, `isSubcategory` or `subcategories` — so the same
+  //     list came back in a lossy shape from this route and in the full shape
+  //     from `/category-list`, depending on which one a client happened to call;
+  //   • `/category-list` and `/category-list/:slug` were aliases the storefront
+  //     used because a *web route* had leaked into the API path. Two spellings
+  //     of one command is one too many, so the aliases are gone and the
+  //     storefront calls the routes below.
 
   @Get('categories')
-  @ApiOperation({ summary: 'List all product categories' })
-  async getCategories() {
-    const viaGrpc = await this.catalogGrpc.getCategories();
-    if (viaGrpc) return viaGrpc;
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CATEGORIES);
-  }
-
-  @Get('categories/:id')
-  @ApiOperation({ summary: 'Get category by ID' })
-  @ApiParam({ name: 'id', example: 'CAT-001', description: 'Category ID' })
-  @ApiNotFoundResponse({ description: 'Category not found' })
-  async getCategoryById(@Param('id') id: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CATEGORY_BY_ID, id);
-  }
-
-  // Aliases: frontend uses /category-list and /category-list/:slug
-  @Get('category-list')
-  // categories change rarely
+  // The tree changes when an admin edits it, and that path invalidates.
   @PublicCache(600)
-  @ApiOperation({ summary: 'List categories (alias)' })
-  async getCategoryList() {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CATEGORIES);
+  @ApiOperation({ summary: 'List all product categories, with each row’s place in the tree' })
+  async getCategories(@Req() req: any) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CATEGORIES, {}, req);
   }
 
-  @Get('category-list/:slug')
-  @ApiOperation({ summary: 'Get category by slug (alias)' })
-  async getCategoryBySlug(@Param('slug') slug: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CATEGORY_BY_ID, slug);
+  @Get('categories/:idOrSlug')
+  @PublicCache(600)
+  @ApiOperation({ summary: 'Get a category by uuid or slug, with its parent and subcategories' })
+  @ApiParam({ name: 'idOrSlug', example: 'mobiles-tablets', description: 'Category uuid or slug' })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  async getCategoryById(@Req() req: any, @Param('idOrSlug') idOrSlug: string) {
+    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_CATEGORY_BY_ID, { id: idOrSlug }, req);
   }
 
   /**
@@ -362,10 +376,11 @@ export class MarketplaceGatewayController {
   ) {
     // The market decides which offers and SKUs the detail carries. Server
     // components cannot send the region header, so they pass ?country=.
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCT_BY_ID, {
-      id,
-      country: this.region(req, country),
-    });
+    return this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.GET_PRODUCT_BY_ID,
+      { id, country: this.region(req, country) },
+      req,
+    );
   }
 
   @Get('products')
@@ -407,18 +422,22 @@ export class MarketplaceGatewayController {
     // `country` falls back to the region the middleware resolved, so a listing
     // request that does not name a market is still scoped to the caller's.
     const resolvedCountry = this.region(req, country);
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_PRODUCTS, {
-      page: +page,
-      limit: +limit,
-      ...(resolvedCountry ? { country: resolvedCountry } : {}),
-      ...(category ? { category } : {}),
-      ...(subcategory ? { subcategory } : {}),
-      ...(brand ? { brand } : {}),
-      ...(seller ? { seller } : {}),
-      ...(minPrice ? { minPrice: +minPrice } : {}),
-      ...(maxPrice ? { maxPrice: +maxPrice } : {}),
-      ...(sort ? { sort } : {}),
-    });
+    return this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.GET_PRODUCTS,
+      {
+        page: +page,
+        limit: +limit,
+        ...(resolvedCountry ? { country: resolvedCountry } : {}),
+        ...(category ? { category } : {}),
+        ...(subcategory ? { subcategory } : {}),
+        ...(brand ? { brand } : {}),
+        ...(seller ? { seller } : {}),
+        ...(minPrice ? { minPrice: +minPrice } : {}),
+        ...(maxPrice ? { maxPrice: +maxPrice } : {}),
+        ...(sort ? { sort } : {}),
+      },
+      req,
+    );
   }
 
   @Get('search')
@@ -444,7 +463,11 @@ export class MarketplaceGatewayController {
       const viaGrpc = await this.catalogGrpc.searchProducts(query, page, limit);
       if (viaGrpc) return viaGrpc;
     }
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.SEARCH, { query, page, limit, country });
+    return this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.SEARCH,
+      { query, page, limit, country },
+      req,
+    );
   }
 
   // ── Cart (authenticated; identity comes from the JWT, never the client) ─────

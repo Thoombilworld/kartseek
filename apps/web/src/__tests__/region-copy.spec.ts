@@ -7,7 +7,7 @@ import {
   getLocationSearchPlaceholder,
   hasPostalCode,
 } from '@/lib/localization';
-import { TRUST_BADGES } from '@/lib/demo-data/marketplace-home';
+import { TRUST_BADGES } from '@/lib/marketplace/home-content';
 import { GROCERY_FAQ } from '@/lib/demo-data/grocery-home';
 import { forRegion } from '@/lib/marketplace/pricing';
 
@@ -40,7 +40,9 @@ describe('market-specific copy', () => {
 
     it('never repeats a country, which is how the pharmacy copy read', () => {
       // The original said "India, India, Qatar, UAE, …".
-      const names = formatActiveCountryList().split(/,\s*|\s+and\s+/).filter(Boolean);
+      const names = formatActiveCountryList()
+        .split(/,\s*|\s+and\s+/)
+        .filter(Boolean);
       expect(new Set(names).size).toBe(names.length);
     });
 
@@ -89,15 +91,17 @@ describe('market-specific copy', () => {
   describe('grocery FAQ', () => {
     it('answers the payment question exactly once per market', () => {
       for (const code of ACTIVE_COUNTRY_CODES) {
-        const answers = forRegion(GROCERY_FAQ, code).filter((f) =>
-          f.q === 'What payment methods are accepted?',
+        const answers = forRegion(GROCERY_FAQ, code).filter(
+          (f) => f.q === 'What payment methods are accepted?',
         );
         expect(answers).toHaveLength(1);
       }
     });
 
     it('does not quote Indian payment rails to the home market', () => {
-      const text = forRegion(GROCERY_FAQ, DEFAULT_COUNTRY).map((f) => f.a).join(' ');
+      const text = forRegion(GROCERY_FAQ, DEFAULT_COUNTRY)
+        .map((f) => f.a)
+        .join(' ');
       for (const term of ['UPI', 'PhonePe', 'Paytm', 'net banking', '₹']) {
         expect(text).not.toContain(term);
       }

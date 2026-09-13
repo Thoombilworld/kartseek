@@ -31,9 +31,9 @@ function cacheControl(method: string): string | undefined {
   // Nest stores headers as an array of { name, value } or as a keyed object
   // depending on version; normalise both.
   if (Array.isArray(headers)) {
-    return (headers as any[]).find(h => String(h?.name).toLowerCase() === 'cache-control')?.value;
+    return (headers as any[]).find((h) => String(h?.name).toLowerCase() === 'cache-control')?.value;
   }
-  const key = Object.keys(headers).find(k => k.toLowerCase() === 'cache-control');
+  const key = Object.keys(headers).find((k) => k.toLowerCase() === 'cache-control');
   return key ? (headers as any)[key] : undefined;
 }
 
@@ -42,7 +42,8 @@ describe('catalogue cache policy', () => {
   const PUBLIC_HANDLERS = [
     'getMarketplaceHome',
     'getProducts',
-    'getCategoryList',
+    'getCategories',
+    'getCategoryById',
     'getProductById',
     'getFlashDeals',
     'getDealsOfTheDay',
