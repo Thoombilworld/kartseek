@@ -1,13 +1,23 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # KARTSEEK — Local Infrastructure Stack
 #
-# ⚠️  SECURITY: Use environment variables for all credentials
-# Create a .env file in the root (not in version control) with:
-#   POSTGRES_PASSWORD=<strong-password>
-#   MARKETPLACE_DB_PASSWORD=<strong-password>
-#   REDIS_PASSWORD=<strong-password>
-#   MONGO_ROOT_PASSWORD=<strong-password>
-#   PGADMIN_PASSWORD=<strong-password>
+# ⚠️  SECURITY: every credential below is a REQUIRED variable — `${VAR:?…}`,
+# never `${VAR:-a_default}`. Compose refuses to start, naming the variable, if
+# the root `.env` is missing or incomplete. That is deliberate: the defaults
+# used to be the literal `change_me_in_development`, published in tracked
+# source, so a deploy that forgot its env file came up *successfully* with a
+# password anyone reading this repository already knew (AUD2-022). Failing to
+# start is the louder failure, and the only one that cannot be missed.
+#
+# Copy `.env.example` to `.env` at the repository ROOT — the only file Compose
+# reads — and fill in every variable it lists.
+#
+# Host binding: the datastore ports below publish on ${DB_BIND}, which defaults
+# to 127.0.0.1. These are the ports behind a development gateway that may run
+# with DEV_AUTH_BYPASS=true, and an unauthenticated Postgres or Redis on a café
+# network is a whole-platform compromise. Set DB_BIND=0.0.0.0 in the root .env
+# only for a deliberate reason (another machine on the LAN needs the database),
+# and set it back afterwards.
 #
 # Usage:
 #   npm run infra:up     → start all services in background
@@ -41,7 +51,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the root .env}
       POSTGRES_DB: ${POSTGRES_DB:-kartseek_db}
       # Read by 20-roles.sh, which creates one login role per module schema so a
       # service need not connect as the superuser (AUD2-073). The same eight
@@ -50,31 +60,31 @@ services:
       # script exits non-zero, naming the variable, if one is unset: there is no
       # default password.
       MARKETPLACE_DB_USER: ${MARKETPLACE_DB_USER:-marketplace_user}
-      MARKETPLACE_DB_PASSWORD: ${MARKETPLACE_DB_PASSWORD:-}
+      MARKETPLACE_DB_PASSWORD: ${MARKETPLACE_DB_PASSWORD:?set MARKETPLACE_DB_PASSWORD in the root .env}
       MARKETPLACE_DB_NAME: ${MARKETPLACE_DB_NAME:-kartseek_marketplace}
       GROCERY_DB_USER: ${GROCERY_DB_USER:-grocery_user}
-      GROCERY_DB_PASSWORD: ${GROCERY_DB_PASSWORD:-}
+      GROCERY_DB_PASSWORD: ${GROCERY_DB_PASSWORD:?set GROCERY_DB_PASSWORD in the root .env}
       GROCERY_DB_NAME: ${GROCERY_DB_NAME:-kartseek_grocery}
       RESTAURANT_DB_USER: ${RESTAURANT_DB_USER:-restaurant_user}
-      RESTAURANT_DB_PASSWORD: ${RESTAURANT_DB_PASSWORD:-}
+      RESTAURANT_DB_PASSWORD: ${RESTAURANT_DB_PASSWORD:?set RESTAURANT_DB_PASSWORD in the root .env}
       RESTAURANT_DB_NAME: ${RESTAURANT_DB_NAME:-kartseek_restaurant}
       PHARMACY_DB_USER: ${PHARMACY_DB_USER:-pharmacy_user}
-      PHARMACY_DB_PASSWORD: ${PHARMACY_DB_PASSWORD:-}
+      PHARMACY_DB_PASSWORD: ${PHARMACY_DB_PASSWORD:?set PHARMACY_DB_PASSWORD in the root .env}
       PHARMACY_DB_NAME: ${PHARMACY_DB_NAME:-kartseek_pharmacy}
       DOCTOR_DB_USER: ${DOCTOR_DB_USER:-doctor_user}
-      DOCTOR_DB_PASSWORD: ${DOCTOR_DB_PASSWORD:-}
+      DOCTOR_DB_PASSWORD: ${DOCTOR_DB_PASSWORD:?set DOCTOR_DB_PASSWORD in the root .env}
       DOCTOR_DB_NAME: ${DOCTOR_DB_NAME:-kartseek_doctor}
       HOTEL_DB_USER: ${HOTEL_DB_USER:-hotel_user}
-      HOTEL_DB_PASSWORD: ${HOTEL_DB_PASSWORD:-}
+      HOTEL_DB_PASSWORD: ${HOTEL_DB_PASSWORD:?set HOTEL_DB_PASSWORD in the root .env}
       HOTEL_DB_NAME: ${HOTEL_DB_NAME:-kartseek_hotel}
       TAXI_DB_USER: ${TAXI_DB_USER:-taxi_user}
-      TAXI_DB_PASSWORD: ${TAXI_DB_PASSWORD:-}
+      TAXI_DB_PASSWORD: ${TAXI_DB_PASSWORD:?set TAXI_DB_PASSWORD in the root .env}
       TAXI_DB_NAME: ${TAXI_DB_NAME:-kartseek_taxi}
       FRANCHISE_DB_USER: ${FRANCHISE_DB_USER:-franchise_user}
-      FRANCHISE_DB_PASSWORD: ${FRANCHISE_DB_PASSWORD:-}
+      FRANCHISE_DB_PASSWORD: ${FRANCHISE_DB_PASSWORD:?set FRANCHISE_DB_PASSWORD in the root .env}
       FRANCHISE_DB_NAME: ${FRANCHISE_DB_NAME:-kartseek_franchise}
     ports:
-      - '5432:5432'
+      - '${DB_BIND:-127.0.0.1}:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -97,10 +107,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${MARKETPLACE_DB_USER:-marketplace_user}
-      POSTGRES_PASSWORD: ${MARKETPLACE_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${MARKETPLACE_DB_PASSWORD:?set MARKETPLACE_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${MARKETPLACE_DB_NAME:-kartseek_marketplace}
     ports:
-      - '5433:5432'
+      - '${DB_BIND:-127.0.0.1}:5433:5432'
     volumes:
       - postgres_marketplace_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -124,10 +134,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${GROCERY_DB_USER:-grocery_user}
-      POSTGRES_PASSWORD: ${GROCERY_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${GROCERY_DB_PASSWORD:?set GROCERY_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${GROCERY_DB_NAME:-kartseek_grocery}
     ports:
-      - '5434:5432'
+      - '${DB_BIND:-127.0.0.1}:5434:5432'
     volumes:
       - postgres_grocery_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -148,10 +158,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${RESTAURANT_DB_USER:-restaurant_user}
-      POSTGRES_PASSWORD: ${RESTAURANT_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${RESTAURANT_DB_PASSWORD:?set RESTAURANT_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${RESTAURANT_DB_NAME:-kartseek_restaurant}
     ports:
-      - '5435:5432'
+      - '${DB_BIND:-127.0.0.1}:5435:5432'
     volumes:
       - postgres_restaurant_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -172,10 +182,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PHARMACY_DB_USER:-pharmacy_user}
-      POSTGRES_PASSWORD: ${PHARMACY_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${PHARMACY_DB_PASSWORD:?set PHARMACY_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${PHARMACY_DB_NAME:-kartseek_pharmacy}
     ports:
-      - '5436:5432'
+      - '${DB_BIND:-127.0.0.1}:5436:5432'
     volumes:
       - postgres_pharmacy_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -196,10 +206,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DOCTOR_DB_USER:-doctor_user}
-      POSTGRES_PASSWORD: ${DOCTOR_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${DOCTOR_DB_PASSWORD:?set DOCTOR_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${DOCTOR_DB_NAME:-kartseek_doctor}
     ports:
-      - '5437:5432'
+      - '${DB_BIND:-127.0.0.1}:5437:5432'
     volumes:
       - postgres_doctor_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -220,10 +230,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${HOTEL_DB_USER:-hotel_user}
-      POSTGRES_PASSWORD: ${HOTEL_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${HOTEL_DB_PASSWORD:?set HOTEL_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${HOTEL_DB_NAME:-kartseek_hotel}
     ports:
-      - '5438:5432'
+      - '${DB_BIND:-127.0.0.1}:5438:5432'
     volumes:
       - postgres_hotel_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -244,10 +254,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${TAXI_DB_USER:-taxi_user}
-      POSTGRES_PASSWORD: ${TAXI_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${TAXI_DB_PASSWORD:?set TAXI_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${TAXI_DB_NAME:-kartseek_taxi}
     ports:
-      - '5439:5432'
+      - '${DB_BIND:-127.0.0.1}:5439:5432'
     volumes:
       - postgres_taxi_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -268,10 +278,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${FRANCHISE_DB_USER:-franchise_user}
-      POSTGRES_PASSWORD: ${FRANCHISE_DB_PASSWORD:-change_me_in_development}
+      POSTGRES_PASSWORD: ${FRANCHISE_DB_PASSWORD:?set FRANCHISE_DB_PASSWORD in the root .env}
       POSTGRES_DB: ${FRANCHISE_DB_NAME:-kartseek_franchise}
     ports:
-      - '5440:5432'
+      - '${DB_BIND:-127.0.0.1}:5440:5432'
     volumes:
       - postgres_franchise_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
@@ -288,13 +298,14 @@ services:
     image: redis:8.8.0-alpine
     container_name: kartseek-redis
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:-change_me_in_development} --maxmemory 256mb --maxmemory-policy allkeys-lru --rename-command FLUSHDB "" --rename-command FLUSHALL "" --rename-command DEBUG ""
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD in the root .env} --maxmemory 256mb --maxmemory-policy allkeys-lru --rename-command FLUSHDB "" --rename-command FLUSHALL "" --rename-command DEBUG ""
     ports:
-      - '6379:6379'
+      - '${DB_BIND:-127.0.0.1}:6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-change_me_in_development}', 'ping']
+      test:
+        ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:?set REDIS_PASSWORD in the root .env}', 'ping']
       interval: 10s
       timeout: 3s
       retries: 5
@@ -305,8 +316,8 @@ services:
     container_name: kartseek-kafka
     restart: unless-stopped
     ports:
-      - '9092:9092'
-      - '9101:9101'
+      - '${DB_BIND:-127.0.0.1}:9092:9092'
+      - '${DB_BIND:-127.0.0.1}:9101:9101'
     environment:
       # KRaft settings
       KAFKA_NODE_ID: 1
@@ -344,8 +355,14 @@ services:
     image: provectuslabs/kafka-ui:latest
     container_name: kartseek-kafka-ui
     restart: unless-stopped
+    # `service_healthy`, not the bare name, to match kibana below. Without it
+    # Compose starts this the moment the Kafka *container* exists, which is
+    # roughly thirty seconds before the broker accepts a connection: the UI
+    # comes up showing an offline cluster and stays that way until someone
+    # reloads it, so the stack looks broken when it is merely early.
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     ports:
       - '8080:8080'
     environment:
@@ -358,10 +375,10 @@ services:
     container_name: kartseek-mongo
     restart: unless-stopped
     ports:
-      - '27017:27017'
+      - '${DB_BIND:-127.0.0.1}:27017:27017'
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change_me_in_development}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the root .env}
       MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-kartseek_catalog}
     volumes:
       - mongo_data:/data/db
@@ -377,12 +394,13 @@ services:
     container_name: kartseek-pgadmin
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - '5050:80'
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@kartseek.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-change_me_in_development}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?set PGADMIN_PASSWORD in the root .env}
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     profiles:
@@ -394,7 +412,8 @@ services:
     container_name: kartseek-redis-insight
     restart: unless-stopped
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     ports:
       - '5540:5540'
     profiles:
@@ -407,18 +426,36 @@ services:
     restart: unless-stopped
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
+      # Authentication ON. It was off, which meant anyone who could reach 9200
+      # could read, rewrite or DELETE every index — and the search index is a
+      # denormalised copy of the catalogue, so that is a read of the whole
+      # product corpus and a way to poison every search result the storefront
+      # renders (AUD2-075). Loopback binding above is not a substitute: it does
+      # nothing against anything already running on the machine.
+      - xpack.security.enabled=true
+      # Enrollment tokens are for joining nodes and auto-configuring Kibana in a
+      # TLS cluster; this is a single node on a private network, so off.
       - xpack.security.enrollment.enabled=false
+      # Bootstraps the built-in `elastic` superuser, once, when the security
+      # index is first created. Changing it later does NOT rotate the password —
+      # use the _security/user API, or recreate the volume.
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:?set ELASTIC_PASSWORD in the root .env}
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
       - cluster.name=kartseek-search
       - node.name=kartseek-es-01
     ports:
-      - '9200:9200'
+      - '${DB_BIND:-127.0.0.1}:9200:9200'
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
+      # Credentials on the check too: without them this now gets 401 and the
+      # container would be `unhealthy` for ever, which is the failure mode
+      # AUD2-020 is about on the other side of the stack.
       test:
-        ['CMD-SHELL', 'curl -fsSL http://localhost:9200/_cluster/health | grep -qE "green|yellow"']
+        [
+          'CMD-SHELL',
+          'curl -fsSL -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health | grep -qE "green|yellow"',
+        ]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -439,6 +476,24 @@ services:
       - '5601:5601'
     environment:
       ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      # Elasticsearch now requires authentication, so Kibana needs an account.
+      # It cannot be `elastic`: Kibana refuses that name at config validation
+      # ("a superuser account that cannot write to system indices that Kibana
+      # needs to function") and will not start. `kibana_system` is the built-in
+      # role for this, and unlike `elastic` it has no bootstrap environment
+      # variable — its password is set once, through the API, after the cluster
+      # is up:
+      #
+      #   docker compose exec elasticsearch \
+      #     curl -sS -u elastic:"$ELASTIC_PASSWORD" -X POST \
+      #     -H 'Content-Type: application/json' \
+      #     http://localhost:9200/_security/user/kibana_system/_password \
+      #     -d "{\"password\":\"$KIBANA_SYSTEM_PASSWORD\"}"
+      #
+      # Until that runs, Kibana logs 401s against a healthy cluster. Kibana is
+      # in the `tools` profile and nothing on the platform depends on it.
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:?set KIBANA_SYSTEM_PASSWORD in the root .env}
     profiles:
       - tools
 
