@@ -18,10 +18,16 @@ KUBECONFIG=${KUBECONFIG:-~/.kube/config}
 # `dev` is what infra/docker builds locally.
 KARTSEEK_TAG=${KARTSEEK_TAG:-dev}
 
-# Where the credentials come from. config.yaml's Secret is a list of NAMES with
-# empty values, on purpose — see its header. Point this at a file of KEY=value
-# lines (the root .env filtered down to its secrets) and the Secret is created
-# from it; leave it unset and an existing kartseek-secrets is left alone.
+# Where the credential VALUES come from. The NAMES come from config.yaml's
+# Secret document, which is a list of names with empty values on purpose (see
+# its header). Unset, this script reads the repository-root `.env` and
+# `apps/api/.env`; set it to read one file of KEY=value lines instead.
+#
+# This script is the only documented way to fill kartseek-secrets. A
+# copy-pasteable `kubectl create secret` used to live in config.yaml's header,
+# lost its line continuations in an edit, and when pasted created an EMPTY
+# Secret that the next deploy found and left alone — a cluster on blank
+# credentials. A script cannot be half-pasted, and this one counts what it built.
 SECRETS_ENV_FILE=${SECRETS_ENV_FILE:-}
 
 # Applies a manifest with the image tag substituted.
@@ -77,42 +83,107 @@ awk '/^---$/ { d++ } d < 2 { print }' ./config.yaml | kubectl apply -f - --names
 log_success "ConfigMap deployed"
 
 # ── Step 5: The Secret ────────────────────────────────────────────────────
-# From SECRETS_ENV_FILE when given; otherwise whatever is already in the
-# cluster. The name template in config.yaml is applied only when there is no
-# Secret at all, so that a first deploy fails loudly on an empty JWT_SECRET
-# (the gateway's Joi schema refuses it under NODE_ENV=production) rather than
-# on a missing Secret, which reads as a mounting problem.
+#
+# The NAMES come from config.yaml's own Secret document; the VALUES from the
+# developer's env files (or SECRETS_ENV_FILE). A name marked `# optional` there
+# is a third-party integration and may be absent — it is named and skipped.
+# Anything else is the platform's own credential and its absence STOPS the
+# deploy unless the cluster's existing Secret already carries it.
+#
+# That count is the whole point. The previous version accepted any existing
+# Secret untouched, so an EMPTY kartseek-secrets — which is what the mangled
+# `kubectl create secret` in config.yaml's header produced when pasted — meant a
+# dev cluster came up with every credential blank and nothing said so.
+#
+# No value is ever echoed: they go into a 0600 temp file, into
+# `kubectl create secret`, and the file is removed on exit.
+
+secret_template_keys() {
+  sed -n '/^stringData:/,/^---/p' ./config.yaml | sed -n "s/^  \([A-Z0-9_]*\): ''.*$/\1/p"
+}
+secret_optional_keys() {
+  sed -n '/^stringData:/,/^---/p' ./config.yaml | sed -n "s/^  \([A-Z0-9_]*\): '' # optional$/\1/p"
+}
+
+# The first non-empty `KEY=value` across the sources, in order.
+secret_value_of() {
+  local key="$1" file value
+  for file in "${SECRET_SOURCES[@]}"; do
+    [ -f "$file" ] || continue
+    value="$(sed -n "s/^${key}=//p" "$file" | head -1)"
+    if [ -n "$value" ]; then printf '%s' "$value"; return 0; fi
+  done
+  return 1
+}
+
 if [ -n "$SECRETS_ENV_FILE" ]; then
-  log_info "Creating kartseek-secrets from $SECRETS_ENV_FILE..."
-  kubectl create secret generic kartseek-secrets \
-    --from-env-file="$SECRETS_ENV_FILE" --namespace=$NAMESPACE \
-    --dry-run=client -o yaml | kubectl apply -f -
-  log_success "Secret created"
-elif kubectl get secret kartseek-secrets --namespace=$NAMESPACE &> /dev/null; then
-  log_info "kartseek-secrets already exists — left untouched"
+  SECRET_SOURCES=("$SECRETS_ENV_FILE")
 else
-  log_warning "No SECRETS_ENV_FILE and no kartseek-secrets in the cluster."
-  log_warning "Applying the empty name template from config.yaml; every pod that"
-  log_warning "needs a credential will refuse to start until it is filled:"
-  log_warning "  grep -E '^[A-Z0-9_]+(PASSWORD|SECRET|KEY)=' .env > secrets.env"
-  log_warning "  SECRETS_ENV_FILE=secrets.env ./infra/k8s/deploy.sh $ENVIRONMENT"
-  awk '/^---$/ { d++ } d == 2 { print }' ./config.yaml | kubectl apply -f - --namespace=$NAMESPACE
+  # The repository root, then the API workspace: the platform's own credentials
+  # live in the first (npm run env:init writes it) and the integration keys, when
+  # anyone has them, in the second.
+  SECRET_SOURCES=("../../.env" "../../apps/api/.env")
 fi
 
-# ── Step 5b: Preflight — refuse to ship an unfilled credential ────────────
-# The gateway's own Joi schema rejects a JWT_SECRET containing change/example/
-# dev/test/placeholder when NODE_ENV=production, and requires a 64-hex
-# ENCRYPTION_KEY. Catching that here costs a second; missing it costs a
-# CrashLoopBackOff that looks like a networking problem.
-if [ "$ENVIRONMENT" = "production" ]; then
-  log_info "Preflighting secrets..."
-  for key in JWT_SECRET ENCRYPTION_KEY POSTGRES_PASSWORD; do
+SECRET_TMP="$(mktemp)"
+chmod 600 "$SECRET_TMP"
+trap 'rm -f "$SECRET_TMP"' EXIT
+
+OPTIONAL_KEYS=" $(secret_optional_keys | tr '\n' ' ') "
+TOTAL_KEYS=$(secret_template_keys | grep -c .)
+built=0
+missing_required=""
+absent_optional=""
+
+while read -r key; do
+  [ -n "$key" ] || continue
+  if value="$(secret_value_of "$key")"; then
+    printf '%s=%s\n' "$key" "$value" >> "$SECRET_TMP"
+    built=$((built + 1))
+  elif [ "${OPTIONAL_KEYS#* $key }" != "$OPTIONAL_KEYS" ]; then
+    absent_optional="$absent_optional $key"
+  else
+    missing_required="$missing_required $key"
+  fi
+done <<EOF
+$(secret_template_keys)
+EOF
+
+if [ -n "$missing_required" ]; then
+  # One more place to look: a Secret an external store has already filled is
+  # better than anything this script can build, so check the cluster before
+  # refusing — and refuse on whatever is in neither.
+  still_missing=""
+  for key in $missing_required; do
     value="$(kubectl get secret kartseek-secrets --namespace=$NAMESPACE \
       -o "jsonpath={.data.$key}" 2>/dev/null || true)"
-    [ -n "$value" ] || log_error "kartseek-secrets.$key is empty. Fill the Secret
-  (SECRETS_ENV_FILE=..., or the External Secrets Operator) before deploying to production."
+    [ -n "$value" ] || still_missing="$still_missing $key"
   done
-  log_success "Credentials are present"
+  if [ -n "$still_missing" ]; then
+    log_error "kartseek-secrets would be short of:$still_missing
+  They are in neither ${SECRET_SOURCES[*]} nor the cluster's existing Secret.
+  Run 'npm run env:init' to write the repository-root .env, or point
+  SECRETS_ENV_FILE at a file of KEY=value lines. Refusing to deploy a cluster
+  onto blank credentials."
+  fi
+  log_warning "Left to the existing Secret (absent from the env files):$missing_required"
+fi
+
+log_info "Creating kartseek-secrets — $built of $TOTAL_KEYS template keys..."
+kubectl create secret generic kartseek-secrets \
+  --from-env-file="$SECRET_TMP" --namespace=$NAMESPACE \
+  --dry-run=client -o yaml | kubectl apply -f -
+rm -f "$SECRET_TMP"
+if [ -n "$absent_optional" ]; then
+  log_warning "Optional integration keys absent:$absent_optional"
+fi
+log_success "Secret applied ($built of $TOTAL_KEYS keys)"
+
+if [ "$ENVIRONMENT" = "production" ]; then
+  # Everything blank has already been refused above; this is the reminder that a
+  # production cluster should not be taking its credentials from a developer's
+  # .env at all.
+  log_info "production: prefer an ExternalSecret over this script's env files."
 fi
 
 # ── Step 6: Apply RBAC, Network Policies, LimitRange and Quota ────────────
@@ -126,8 +197,17 @@ log_success "RBAC and Network Policies configured"
 # This step did not exist. Without it the `fast-ssd` StorageClass every
 # volumeClaimTemplate names is absent, so all database PVCs sit Pending and no
 # database ever starts.
+#
+# Non-fatal. `storage.yaml` is the AWS EBS set, and a laptop cluster carries the
+# same four names from `storage-local-dev.yaml` — a StorageClass's provisioner is
+# immutable, so this apply is REJECTED there, and under `set -e` that took the
+# whole deploy down while the classes it needed already existed.
 log_info "Deploying StorageClasses..."
-kubectl apply -f ./storage.yaml
+if ! kubectl apply -f ./storage.yaml 2> /dev/null; then
+  log_warning "storage.yaml was rejected — the cluster already has same-named classes."
+  log_warning "Expected on Docker Desktop / kind, where storage-local-dev.yaml supplies"
+  log_warning "fast-ssd, standard, high-performance and archive. Continuing."
+fi
 log_success "StorageClasses deployed"
 
 # ── Step 8: Deploy Databases ──────────────────────────────────────────────
@@ -160,13 +240,57 @@ log_success "Databases deployed"
 # microservices.yaml is gone: it held hand-written copies of auth/order/payment
 # that the generated file now covers, and two definitions of one Deployment in
 # one directory is a `kubectl apply` where the last file read wins.
+# A Deployment whose image is not in the local Docker daemon is SKIPPED, by
+# name. No `kartseek/*` image is published anywhere, and the eight zone images
+# cannot even be built yet — only apps/web sets `output: 'standalone'` (Task
+# IN11) — so applying all 34 unconditionally left pods in ErrImagePull while
+# `kubectl wait` sat for its full timeout with nothing to read. This skips them;
+# it never builds anything.
 log_info "Deploying Microservices (tag: $KARTSEEK_TAG)..."
-apply_manifest ./microservices-generated.yaml
+MANIFEST_TMP="$(mktemp)"
+sed "s|\${KARTSEEK_TAG}|${KARTSEEK_TAG}|g" ./microservices-generated.yaml > "$MANIFEST_TMP"
+
+if command -v docker > /dev/null 2>&1 && docker image ls > /dev/null 2>&1; then
+  wanted="$(sed -n 's/^ *image: \(kartseek\/[^ ]*\)$/\1/p' "$MANIFEST_TMP" | sort -u)"
+  have="$(docker image ls --format '{{.Repository}}:{{.Tag}}' | sort -u)"
+  absent="$(comm -23 <(printf '%s\n' "$wanted") <(printf '%s\n' "$have") | tr '\n' ' ')"
+  if [ -n "$(printf '%s' "$absent" | tr -d ' ')" ]; then
+    for image in $absent; do
+      log_warning "skipping the Deployment for $image — no such image in the local daemon"
+    done
+    FILTERED_TMP="$(mktemp)"
+    # Document-at-a-time: drop a Deployment whose image is in the skip list, keep
+    # its Service (DNS costs nothing and the name stays resolvable).
+    awk -v skip="$absent" '
+      function flush(  i) {
+        if (doc == "") return
+        if (index(doc, "kind: Deployment\n") > 0)
+          for (i = 1; i <= n; i++)
+            if (index(doc, "image: " a[i] "\n") > 0) { doc = ""; return }
+        printf "%s", doc
+      }
+      BEGIN { n = split(skip, a, " ") }
+      /^---$/ { flush(); doc = "---\n"; next }
+      { doc = doc $0 "\n" }
+      END { flush() }
+    ' "$MANIFEST_TMP" > "$FILTERED_TMP"
+    mv "$FILTERED_TMP" "$MANIFEST_TMP"
+  fi
+else
+  log_warning "docker is not answering — applying every Deployment, including any"
+  log_warning "whose image has not been built (those pods report ErrImagePull)."
+fi
+
+kubectl apply -f "$MANIFEST_TMP" --namespace=$NAMESPACE
 kubectl apply -f ./marketplace-hpa.yaml --namespace=$NAMESPACE
-log_info "Waiting for all microservice deployments..."
-kubectl wait --for=condition=Available deployment --all \
-  --namespace=$NAMESPACE --timeout=10m || \
-  log_warning "Some deployments are not Available — see 'kubectl get pods -n $NAMESPACE'"
+
+# Only what was actually applied, so a skipped zone does not cost ten minutes.
+log_info "Waiting for the deployments that were applied..."
+for deployment in $(awk '/^kind: Deployment$/ { d = 1; next } d && /^  name: / { print $2; d = 0 }' "$MANIFEST_TMP"); do
+  kubectl rollout status deployment/"$deployment" --namespace=$NAMESPACE --timeout=5m || \
+    log_warning "$deployment is not Available — 'kubectl describe deployment/$deployment -n $NAMESPACE'"
+done
+rm -f "$MANIFEST_TMP"
 log_success "Microservices deployed"
 
 # ── Step 10: Deploy API Gateway ───────────────────────────────────────────
