@@ -207,7 +207,20 @@ export class AdminRestaurantAnalyticsQueryDto extends AdminRestaurantMarketQuery
   period?: string = '30d';
 }
 
-/** Suspending a restaurant. The reason reaches the restaurant owner, so it is required. */
+/**
+ * Suspending a restaurant. The reason reaches the restaurant owner, so it is
+ * required.
+ *
+ * **This is a contract TIGHTENING, stated plainly.** The route previously took
+ * an inline `{ reason?: string }` and discarded it; `reason` is now mandatory
+ * and 3-500 characters, so a suspension with no reason — or with `{}` — is a
+ * 400 where it used to be a 200. That is deliberate: a restaurant taken offline
+ * with nobody able to say why is a support ticket nobody can close, and the
+ * value was being thrown away in any case. No live caller exists (the console
+ * client for this module is still missing), so the cost is zero today; it is
+ * recorded here rather than only in a report because the next person to read
+ * this route needs to know the 400 is intended (M4 review M2).
+ */
 export class SuspendRestaurantDto {
   @ApiProperty({ example: 'Repeated hygiene complaints', minLength: 3, maxLength: 500 })
   @IsString()

@@ -55,6 +55,31 @@ import {
  * `libs/common/src/admin/permissions.ts` and is held by both the `admin` and
  * `regional_admin` system roles, so this is a second gate on WHICH
  * administrator, not a change to which of them can reach the module at all.
+ *
+ * ── LIST SHAPE: one shape for all six list routes ───────────────────────────
+ *
+ * Every list read here returns restaurant-service's `{ data, total, page, limit }`
+ * **unwrapped**. The global `TransformInterceptor` puts that under `data`, so a
+ * client finds the rows at `json.data.data` and the count at `json.data.total`
+ * — the same place as every other admin list on this branch (M1's marketplace
+ * orders/returns/refunds, M3's pharmacy stores/products/orders/settlements,
+ * which carries the same note at `admin-pharmacy.controller.ts:141-145`).
+ *
+ * A second `{ data: … }` here buries the rows one level deeper than the
+ * console's other screens read. `GET /commissions` and `GET /zones` had one —
+ * both were made paged lists by M4 and both wrapped — so the console would have
+ * read `json.data.data` on four restaurant screens and `json.data.data.data` on
+ * two. That is the envelope trap this platform has already paid for once, and
+ * the console client for this module does not exist yet, so this is the
+ * cheapest it will ever be to settle (M4 review I1).
+ *
+ * The rule is pinned by `every list route answers with data + total` in the
+ * spec, which walks the routes rather than naming them, so a list route added
+ * later cannot regress it.
+ *
+ * SINGLE-OBJECT reads and every decision keep their `{ data: … }`: they carry
+ * no `total`, nothing pages them, and unwrapping them would put a bare entity
+ * where the console expects an object it can extend.
  */
 @ApiTags('👑 Admin — Restaurant')
 @ApiBearerAuth('JWT')
@@ -259,14 +284,13 @@ export class AdminRestaurantController {
   @ApiOperation({ summary: 'Get restaurant commission rates' })
   async getCommissions(@Req() req: any, @Query() query: AdminRestaurantQueryDto) {
     const { scope, market } = this.scopeOf(req, query.countryCode, 'those commission rates');
-    return {
-      data: await this.send('admin.restaurant.commissions', {
-        page: query.page,
-        limit: query.limit,
-        countryCode: market,
-        scope,
-      }),
-    };
+    // Returned unwrapped — see LIST SHAPE on the class.
+    return await this.send('admin.restaurant.commissions', {
+      page: query.page,
+      limit: query.limit,
+      countryCode: market,
+      scope,
+    });
   }
 
   /**
@@ -347,14 +371,13 @@ export class AdminRestaurantController {
   @ApiOperation({ summary: 'Get delivery zones' })
   async getZones(@Req() req: any, @Query() query: AdminRestaurantQueryDto) {
     const { scope, market } = this.scopeOf(req, query.countryCode, 'those delivery zones');
-    return {
-      data: await this.send('admin.restaurant.zones', {
-        page: query.page,
-        limit: query.limit,
-        countryCode: market,
-        scope,
-      }),
-    };
+    // Returned unwrapped — see LIST SHAPE on the class.
+    return await this.send('admin.restaurant.zones', {
+      page: query.page,
+      limit: query.limit,
+      countryCode: market,
+      scope,
+    });
   }
 
   @Post('zones')
