@@ -88,6 +88,39 @@ export class StorageService {
     this.provider = process.env.STORAGE_PROVIDER || 'local';
     this.bucket = process.env.S3_BUCKET || process.env.GCS_BUCKET || 'kartseek-uploads';
     this.cdnDomain = process.env.CDN_DOMAIN || 'cdn.kartseek.com';
+    this.refuseSharedBucket();
+  }
+
+  /**
+   * RF-4 — the private bucket may not BE the public bucket.
+   *
+   * `STORAGE_PRIVATE_BUCKET` was required and had no fallback, which stops the
+   * private seam quietly writing to `this.bucket`. It does not stop an operator
+   * setting both variables to the same string, and that mistake is invisible:
+   * every upload succeeds, every signed URL works, the KYC route reports the
+   * document filed — and the identity documents are in the CDN-fronted bucket,
+   * which is precisely the disclosure RF-1 found. Nothing downstream can detect
+   * it, because by then there is one bucket and both seams agree about it.
+   *
+   * So it is refused where it is still visible: at construction, which for a
+   * `@Injectable()` provider means the process does not start. A boot failure
+   * naming the two variables is the cheapest possible version of this problem.
+   *
+   * Only for the cloud providers. `local` keeps files on disk and reads neither
+   * variable, so a leftover pair of equal bucket names in a developer's `.env`
+   * is not a reason to refuse to start.
+   */
+  private refuseSharedBucket(): void {
+    if (!['s3', 'gcs', 'r2'].includes(this.provider)) return;
+    const priv = (process.env.STORAGE_PRIVATE_BUCKET || '').trim();
+    if (priv && priv === this.bucket.trim()) {
+      throw new StorageMisconfiguredError(
+        `STORAGE_PRIVATE_BUCKET is "${priv}", which is the public bucket (S3_BUCKET/GCS_BUCKET). ` +
+          `The public bucket is CDN-fronted, so every KYC document, payout statement and ` +
+          `signed contract would be readable by anyone who can guess a key. Set ` +
+          `STORAGE_PRIVATE_BUCKET to a separate, non-public bucket.`,
+      );
+    }
   }
 
   /**
@@ -250,6 +283,15 @@ export class StorageService {
    */
   private privateBucket(): string {
     const bucket = (process.env.STORAGE_PRIVATE_BUCKET || '').trim();
+    // Checked again here, and not only at construction: `process.env` is read
+    // at call time throughout this file, so a value that changes after boot
+    // (a test, a reloaded config) must not be able to walk past the boot guard.
+    if (bucket && bucket === this.bucket.trim()) {
+      throw new StorageMisconfiguredError(
+        `STORAGE_PRIVATE_BUCKET is "${bucket}", which is the CDN-fronted public bucket. ` +
+          `Refusing to write a confidential document there (RF-4).`,
+      );
+    }
     if (!bucket) {
       throw new StorageMisconfiguredError(
         `STORAGE_PRIVATE_BUCKET is not set, so provider "${this.provider}" has no private ` +

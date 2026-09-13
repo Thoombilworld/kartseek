@@ -139,11 +139,26 @@ export const envValidationSchema = Joi.object({
   STORAGE_PROVIDER: Joi.string().valid('s3', 'gcs', 'r2', 'local').default('local'),
   CDN_DOMAIN: Joi.string().default('cdn.kartseek.com'),
   STORAGE_LOCAL_DIR: Joi.string().allow('').optional(),
+  // RF-4: and it may not BE the public one. Requiring the variable stops the
+  // private seam falling back to `S3_BUCKET`; it does not stop an operator
+  // setting both to the same string, which is invisible afterwards — every
+  // upload succeeds and the identity documents are on the CDN. `invalid` with a
+  // reference refuses that pairing at boot, where it is still legible, and
+  // `StorageService`'s constructor refuses it again for the services that do
+  // not run this schema.
   STORAGE_PRIVATE_BUCKET: Joi.string()
     .allow('')
     .when('STORAGE_PROVIDER', {
       is: Joi.valid('s3', 'gcs', 'r2'),
-      then: Joi.string().min(1).required(),
+      then: Joi.string()
+        .min(1)
+        .required()
+        .invalid(Joi.ref('S3_BUCKET'), Joi.ref('GCS_BUCKET'))
+        .messages({
+          'any.invalid':
+            'STORAGE_PRIVATE_BUCKET must not be the public bucket (S3_BUCKET/GCS_BUCKET): the ' +
+            'public bucket is CDN-fronted, so KYC documents would be readable by anyone.',
+        }),
       otherwise: Joi.optional(),
     })
     .description('Private bucket for confidential documents — never the CDN-fronted one'),

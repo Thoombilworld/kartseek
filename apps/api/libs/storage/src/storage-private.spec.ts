@@ -129,6 +129,89 @@ describe('storePrivate returns a key and never a URL', () => {
   });
 });
 
+/**
+ * RF-4 — the private bucket may not be the public bucket.
+ *
+ * Requiring `STORAGE_PRIVATE_BUCKET` closed the fallback: the private seam can
+ * no longer drift into `S3_BUCKET` by omission. It left the other way in open —
+ * setting both variables to the same string — and that one is undetectable
+ * after the fact. Every upload succeeds, every signed URL resolves, the KYC
+ * route tells the applicant their identity document is filed, and the document
+ * is sitting in the CDN-fronted bucket. There is no later check that could
+ * notice, because by then there is one bucket and both seams agree about it.
+ *
+ * It is therefore refused at construction, which for an `@Injectable()` means
+ * the process does not start.
+ */
+describe('the private bucket is never the public bucket', () => {
+  const cloudEnv = (priv: string, pub = 'kartseek-uploads') => {
+    process.env.STORAGE_PROVIDER = 's3';
+    process.env.S3_BUCKET = pub;
+    process.env.STORAGE_PRIVATE_BUCKET = priv;
+  };
+
+  afterEach(() => {
+    delete process.env.S3_BUCKET;
+    delete process.env.GCS_BUCKET;
+  });
+
+  it('refuses to start when the two are the same bucket', () => {
+    cloudEnv('kartseek-uploads');
+    expect(() => new StorageService()).toThrow(StorageMisconfiguredError);
+    expect(() => new StorageService()).toThrow(/which is the public bucket/);
+  });
+
+  it('names both variables, so the fix is obvious from the boot log', () => {
+    cloudEnv('kartseek-uploads');
+    const err = (() => {
+      try {
+        new StorageService();
+      } catch (e) {
+        return e as Error;
+      }
+    })()!;
+    expect(err.message).toContain('STORAGE_PRIVATE_BUCKET');
+    expect(err.message).toContain('S3_BUCKET');
+  });
+
+  it('catches the same collision through GCS_BUCKET', () => {
+    process.env.STORAGE_PROVIDER = 'gcs';
+    process.env.GCS_BUCKET = 'kartseek-uploads';
+    process.env.STORAGE_PRIVATE_BUCKET = 'kartseek-uploads';
+    expect(() => new StorageService()).toThrow(StorageMisconfiguredError);
+  });
+
+  it('ignores surrounding whitespace, which would otherwise slip past', () => {
+    cloudEnv('  kartseek-uploads  ');
+    expect(() => new StorageService()).toThrow(StorageMisconfiguredError);
+  });
+
+  it('starts normally when they are two different buckets', () => {
+    cloudEnv('kartseek-private');
+    expect(() => new StorageService()).not.toThrow();
+  });
+
+  it('leaves the local provider alone, which reads neither variable', () => {
+    // A developer with leftover bucket names in their `.env` is not a reason to
+    // refuse to boot a process that keeps files on disk.
+    process.env.STORAGE_PROVIDER = 'local';
+    process.env.S3_BUCKET = 'kartseek-uploads';
+    process.env.STORAGE_PRIVATE_BUCKET = 'kartseek-uploads';
+    expect(() => new StorageService()).not.toThrow();
+  });
+
+  it('refuses the write too, not only the boot', async () => {
+    // `process.env` is read at call time throughout the service, so a value
+    // that changes after construction must not walk past the boot guard.
+    cloudEnv('kartseek-private');
+    const svc = new StorageService();
+    process.env.STORAGE_PRIVATE_BUCKET = 'kartseek-uploads';
+    await expect(svc.storePrivate('kyc', 'u-1/abc.pdf', body, 'application/pdf')).rejects.toThrow(
+      /CDN-fronted public bucket/,
+    );
+  });
+});
+
 describe('a write failure propagates, and no provider fabricates a URL', () => {
   /**
    * A real filesystem failure rather than a mocked one: the private root is
