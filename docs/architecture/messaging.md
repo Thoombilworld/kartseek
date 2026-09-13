@@ -301,3 +301,32 @@ intent and current wiring disagree here.
 - [Database migrations guide](../guides/database-migrations.md) and
   [running services guide](../guides/running-services.md) for how to bring
   Kafka up locally and what `SKIP_KAFKA` does.
+
+## Topics are declared, never auto-created
+
+The broker runs with `KAFKA_AUTO_CREATE_TOPICS_ENABLE=false`, and
+`npm run kafka:topics` (`apps/api/scripts/create-kafka-topics.js`) creates
+exactly the names declared in `apps/api/libs/kafka/src/kafka-topics.constants.ts`
+— `KAFKA_TOPICS` for events a consumer subscribes to by constant, and
+`PUBLISHED_TOPICS` for names services publish by literal string. A name in
+neither is a topic that does not exist: kafkajs fails the producer's metadata
+lookup with `This server does not host this topic-partition`
+(UNKNOWN_TOPIC_OR_PARTITION — it reads like a partition or leader fault and is
+not one), retries, gives up, and the event is dropped.
+
+On 2026-09-13 that was 163 names across fifteen backends, including
+`listing.approved`, `listing.rejected`, `review.created` and
+`seller.product.updated`. Two things keep it from recurring:
+
+- `kafka-topics.registry.spec.ts` scans every backend's `kafka.publish('…')` /
+  `kafkaProducer.emit('…')` and fails on an undeclared literal, naming the
+  file. Declare the topic, then run the provisioner.
+- `KafkaProducerService.publish()` logs "Published" only once the emit
+  completes and an ERROR with the topic and the broker's reason when it does
+  not; it stays fire-and-forget so request handlers never wait on Kafka.
+
+Several published names are the same event under two vocabularies
+(`order.placed` beside `marketplace.order.placed`, `review.created` beside
+`product.review.created`, `qa.question-created` beside
+`marketplace.qa.question_posted`). Both are declared so nothing is lost;
+consolidating each event onto one name in `KAFKA_TOPICS` is the follow-up.
