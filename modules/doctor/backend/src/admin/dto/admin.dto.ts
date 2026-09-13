@@ -75,7 +75,16 @@ export interface AdminDoctorListMsg extends AdminListMsg {
   readonly specialty?: string;
 }
 
-/** A read or decision addressed at one record. */
+/**
+ * A read or decision addressed at one record — a clinic detail, a clinic
+ * approval, a practitioner detail.
+ *
+ * There is deliberately no `AdminApproveClinicMsg` alias beside it: it was one
+ * declared and never used, because `msgApproveClinic` types its payload as this
+ * interface directly. A name that only a docstring reaches is a name that goes
+ * stale (M6 review M-9). `id` is the PATH parameter and never a body field — a
+ * body carrying one used to retarget a decision at a record in another market.
+ */
 export interface AdminIdMsg extends AdminScopedMsg {
   readonly id?: string;
 }
@@ -84,9 +93,6 @@ export interface AdminIdMsg extends AdminScopedMsg {
 export interface AdminAppointmentListMsg extends AdminListMsg {
   readonly date?: string;
 }
-
-/** Approving one clinic. `id` is the path parameter and never a body field. */
-export type AdminApproveClinicMsg = AdminIdMsg;
 
 /**
  * The verification decision on one practitioner.

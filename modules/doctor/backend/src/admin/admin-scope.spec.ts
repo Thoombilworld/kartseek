@@ -313,9 +313,138 @@ describe('clinics', () => {
       doctor: { createQueryBuilder: () => update },
     });
     const out = await svc.approveClinic({ id: UUID, scope: 'QA', actorId: 'admin-1' });
-    expect(out).toMatchObject({ success: true, status: 'active', practitionersAttributed: 3 });
+    expect(out).toMatchObject({
+      success: true,
+      status: 'active',
+      alreadyApproved: false,
+      practitionersAttributed: 3,
+    });
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ approvedBy: 'admin-1' }));
     expect(kafka.publish).toHaveBeenCalledWith('doctor.clinic.approved', expect.anything());
+  });
+
+  /**
+   * The re-stamp path, and why it may not refuse (M6 review, Important 1).
+   *
+   * This used to throw `BadRequestException` on an already-active clinic, which
+   * closed the module's only bulk re-attribution against exactly the clinics
+   * that need it: every clinic on the live databases is `active` while its
+   * `region_code` is still NULL, so the sequence M11 performs — seed
+   * `clinics.region_code`, then attribute the practitioners hanging off them —
+   * had no route through this handler at all.
+   */
+  it('re-attributes an ALREADY-ACTIVE clinic instead of refusing it', async () => {
+    const save = vi.fn(async (c: any) => c);
+    const execute = vi.fn(async () => ({ affected: 4 }));
+    const update: any = {
+      update: () => update,
+      set: () => update,
+      where: () => update,
+      andWhere: () => update,
+      execute,
+    };
+    const { svc, kafka } = service({
+      clinic: {
+        findOne: vi.fn(async () => ({
+          id: UUID,
+          name: 'C',
+          status: 'active',
+          regionCode: 'QA',
+          approvedBy: 'the-original-approver',
+          approvedAt: new Date('2026-01-01'),
+        })),
+        save,
+      },
+      doctor: { createQueryBuilder: () => update },
+    });
+
+    const out = await svc.approveClinic({ id: UUID, scope: 'QA', actorId: 'admin-2' });
+
+    expect(out).toMatchObject({
+      success: true,
+      status: 'active',
+      alreadyApproved: true,
+      practitionersAttributed: 4,
+    });
+    expect(execute).toHaveBeenCalled();
+    expect(kafka.publish).toHaveBeenCalledWith(
+      'doctor.clinic.approved',
+      expect.objectContaining({ alreadyApproved: true, practitionersAttributed: 4 }),
+    );
+  });
+
+  it('does not overwrite who first approved the clinic when it re-attributes', async () => {
+    // `approvedBy`/`approvedAt` are the only record of who let this clinic
+    // trade, and there is no history table. A re-attribution is not a second
+    // approval.
+    const save = vi.fn(async (c: any) => c);
+    const update: any = {
+      update: () => update,
+      set: () => update,
+      where: () => update,
+      andWhere: () => update,
+      execute: vi.fn(async () => ({ affected: 0 })),
+    };
+    const row = {
+      id: UUID,
+      name: 'C',
+      status: 'active',
+      regionCode: 'QA',
+      approvedBy: 'the-original-approver',
+      approvedAt: new Date('2026-01-01'),
+    };
+    const { svc } = service({
+      clinic: { findOne: vi.fn(async () => row), save },
+      doctor: { createQueryBuilder: () => update },
+    });
+
+    await svc.approveClinic({ id: UUID, scope: 'QA', actorId: 'admin-2' });
+
+    expect(save).not.toHaveBeenCalled();
+    expect(row.approvedBy).toBe('the-original-approver');
+  });
+
+  it('still refuses an already-active clinic in another market', async () => {
+    // Idempotence is not a relaxation of the boundary: the market check runs
+    // first, and a QA administrator may not re-attribute an IN clinic.
+    const update: any = {
+      update: () => update,
+      set: () => update,
+      where: () => update,
+      andWhere: () => update,
+      execute: vi.fn(async () => ({ affected: 0 })),
+    };
+    const { svc } = service({
+      clinic: {
+        findOne: vi.fn(async () => ({ id: UUID, name: 'C', status: 'active', regionCode: 'IN' })),
+      },
+      doctor: { createQueryBuilder: () => update },
+    });
+
+    await expect(svc.approveClinic({ id: UUID, scope: 'QA' })).rejects.toThrow(ForbiddenException);
+    expect(update.execute).not.toHaveBeenCalled();
+  });
+
+  it('attributes nobody when the clinic itself has no market', async () => {
+    const update: any = {
+      update: () => update,
+      set: () => update,
+      where: () => update,
+      andWhere: () => update,
+      execute: vi.fn(async () => ({ affected: 9 })),
+    };
+    const { svc } = service({
+      clinic: {
+        findOne: vi.fn(async () => ({ id: UUID, name: 'C', status: 'active', regionCode: null })),
+        save: vi.fn(async (c: any) => c),
+      },
+      doctor: { createQueryBuilder: () => update },
+    });
+
+    const out = await svc.approveClinic({ id: UUID });
+
+    expect(out).toMatchObject({ practitionersAttributed: 0, market: null });
+    expect(update.execute).not.toHaveBeenCalled();
   });
 
   it('reports an unknown clinic as 404', async () => {

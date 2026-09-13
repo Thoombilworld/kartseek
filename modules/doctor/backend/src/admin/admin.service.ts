@@ -387,24 +387,67 @@ export class DoctorAdminService {
   }
 
   /**
-   * Approve one clinic, and record who did it.
+   * Approve one clinic, and record who did it — and re-attribute its
+   * practitioners whether or not there was anything left to approve.
    *
    * Approving a clinic re-stamps its practitioners: until the clinic is live its
    * doctors may never have been attributed at all, and the market they belong to
    * is the clinic's. The count is returned so the console can say what the
    * decision actually changed.
+   *
+   * ── Why an already-active clinic is a 200 and not a 400 (M6 review, I-1) ───
+   *
+   * This opened with `if (clinic.status === 'active') throw new
+   * BadRequestException(…)`, which is the obvious guard and was the wrong one:
+   * it closed the module's ONLY bulk re-stamp against exactly the clinics that
+   * need it. Every clinic on the live databases is already `active` while its
+   * `region_code` is still NULL, so the sequence M11 has to perform — seed
+   * `clinics.region_code`, then attribute the practitioners hanging off them —
+   * had no route through this handler at all.
+   *
+   * So an already-approved clinic is no longer an error: the approval is a
+   * no-op and the RE-ATTRIBUTION still runs. `alreadyApproved: true` says which
+   * happened, so a console can word its confirmation honestly rather than
+   * claiming a decision was taken.
+   *
+   * **`approvedBy`/`approvedAt` are left alone in that case.** They are the only
+   * record of who first let this clinic trade and there is no history table; a
+   * re-attribution is not a second approval and must not overwrite the first
+   * one's author.
+   *
+   * ── Why this rather than a new `admin.doctor.reattributeClinic` command ────
+   *
+   * The smaller change by a wide margin, and the better-shaped one. A new
+   * command needs a backend `@MessagePattern`, a gateway route, a DTO, a
+   * permission key, a row in the contract spec's command census and an entry in
+   * both orphan baselines — six surfaces, in two workspaces, two of which are
+   * shared census files this round treats as foreign. Against that it would buy
+   * a second name for something an administrator would reach for under the name
+   * "approve this clinic" anyway: the fix here is to stop refusing work the
+   * handler already does correctly, not to build a second door to it.
+   *
+   * The bulk path is still not the whole answer, and is not meant to be — it
+   * reaches one clinic at a time. `npm run backfill:markets`
+   * (`src/admin/market-backfill.ts`) is the re-runnable task that sweeps every
+   * clinic on a database at once.
    */
   async approveClinic(d: AdminIdMsg) {
     const clinic = await this.clinicInMarket(d.id ?? '', d.scope, 'clinic');
-    if (clinic.status === 'active') {
-      throw new BadRequestException(`Clinic "${clinic.name}" is already approved`);
+    const alreadyApproved = clinic.status === 'active';
+
+    if (!alreadyApproved) {
+      clinic.status = 'active';
+      clinic.approvedBy = d.actorId ?? null;
+      clinic.approvedAt = new Date();
     }
+    const saved = alreadyApproved ? clinic : await this.clinicRepo.save(clinic);
 
-    clinic.status = 'active';
-    clinic.approvedBy = d.actorId ?? null;
-    clinic.approvedAt = new Date();
-    const saved = await this.clinicRepo.save(clinic);
-
+    // `IS DISTINCT FROM` rather than `IS NULL`: this is the clinic's OWN
+    // practitioners and the clinic's market is the answer for all of them, so a
+    // row carrying a stale market from a previous clinic is corrected here too.
+    // The whole-database sweep (`backfill-markets.ts`) is deliberately narrower
+    // — NULL only — because it has no such statement to make about a row it did
+    // not load through a specific clinic.
     const stamped = clinic.regionCode
       ? await this.doctorRepo
           .createQueryBuilder()
@@ -419,6 +462,8 @@ export class DoctorAdminService {
       id: saved.id,
       name: saved.name,
       market: saved.regionCode ?? null,
+      alreadyApproved,
+      practitionersAttributed: stamped.affected ?? 0,
       actorId: d.actorId ?? null,
     });
 
@@ -427,6 +472,7 @@ export class DoctorAdminService {
       id: saved.id,
       status: saved.status,
       market: saved.regionCode ?? null,
+      alreadyApproved,
       practitionersAttributed: stamped.affected ?? 0,
     };
   }
@@ -663,7 +709,17 @@ export class DoctorAdminService {
       ...s,
       doctorCount: usage.get(s.name.trim().toLowerCase()) ?? 0,
     }));
-    return { data, total: data.length };
+    return {
+      data,
+      total: data.length,
+      // `doctorCount` is EVERY market's, because the catalogue is global and
+      // this read is not scoped. Saying so in the PAYLOAD rather than only in
+      // this method's docstring: a QA administrator reading "Cardiology: 14" on
+      // a screen that is otherwise their own market's reads a platform number as
+      // theirs. Same marker, same reasoning and same spelling as hotel's global
+      // amenity catalogue (M5 review Minor 4, applied here as M6 review M-2).
+      countScope: 'platform',
+    };
   }
 
   /**
@@ -752,17 +808,25 @@ export class DoctorAdminService {
     // Walked from the APPOINTMENT side so the join is the module's own relation
     // (`a.doctor`) rather than a table name typed by hand — a raw table name
     // here would miss the `doctor` schema every entity declares.
+    //
+    // `doctor.regionCode`, the PROPERTY path, not the `doctor.region_code`
+    // column spelling this originally carried. TypeORM rewrites a property path
+    // it recognises and leaves an unrecognised `alias.x` untouched, so the column
+    // spelling worked only by coincidence — and renaming the column on the
+    // entity would have broken this one query silently while every other clause
+    // in this file, all of which use the property path, kept working
+    // (M6 review M-3; the inverse of `project_typeorm_orderby_property_names`).
     const topQb = this.appointmentRepo
       .createQueryBuilder('a')
       .innerJoin('a.doctor', 'doctor')
       .select('doctor.id', 'id')
       .addSelect('doctor.name', 'name')
-      .addSelect('doctor.region_code', 'market')
+      .addSelect('doctor.regionCode', 'market')
       .addSelect('COUNT(a.id)::int', 'appointments')
       .where('a.createdAt >= :since', { since })
       .groupBy('doctor.id')
       .addGroupBy('doctor.name')
-      .addGroupBy('doctor.region_code')
+      .addGroupBy('doctor.regionCode')
       .orderBy('COUNT(a.id)', 'DESC')
       .addOrderBy('doctor.id', 'ASC')
       .limit(10);
