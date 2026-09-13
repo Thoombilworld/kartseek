@@ -33,9 +33,34 @@ export interface ElasticsearchEndpoint {
 
 const DEFAULT_NODE = 'http://localhost:9200';
 
+/**
+ * Why the local default is a production failure.
+ *
+ * It is the right answer for a developer running one service on their own
+ * machine. In a container it is a lie with no symptom: localhost is the
+ * container, every request is refused, and search falls back to Redis for ever
+ * while reporting a cluster that was never addressed. The manifests deployed
+ * search-service with no Elasticsearch anywhere in them (AUD2-029), so this was
+ * the live configuration rather than a hypothetical — and the fallback is good
+ * enough that nobody would have noticed.
+ *
+ * So in production it throws, naming the variable, at construction. Degrading
+ * to Redis stays the behaviour for a cluster that is configured and down; it is
+ * not the behaviour for one that was never configured at all.
+ */
+function refuseLocalDefault(env: NodeJS.ProcessEnv, reason: string): void {
+  if (env.NODE_ENV !== 'production') return;
+  throw new Error(
+    `ELASTICSEARCH_NODE ${reason}. Refusing to start in production rather than falling back ` +
+      `to ${DEFAULT_NODE}, which inside a container is the container. infra/k8s/config.yaml ` +
+      'and the generated Deployment assemble it from ELASTICSEARCH_HOST and the Secret.',
+  );
+}
+
 export function resolveElasticsearchEndpoint(
   env: NodeJS.ProcessEnv = process.env,
 ): ElasticsearchEndpoint {
+  if (!env.ELASTICSEARCH_NODE?.trim()) refuseLocalDefault(env, 'is not set');
   const raw = env.ELASTICSEARCH_NODE?.trim() || DEFAULT_NODE;
 
   let url: URL;
@@ -44,7 +69,9 @@ export function resolveElasticsearchEndpoint(
   } catch {
     // An unparseable value is a configuration error, but throwing here would
     // take the whole service down at construction. Fall back to the local
-    // default and let the connection check report the cluster as unavailable.
+    // default and let the connection check report the cluster as unavailable —
+    // outside production, where that fallback is the failure itself.
+    refuseLocalDefault(env, `is not a URL (${JSON.stringify(raw)})`);
     return { origin: DEFAULT_NODE, authHeaders: {} };
   }
 

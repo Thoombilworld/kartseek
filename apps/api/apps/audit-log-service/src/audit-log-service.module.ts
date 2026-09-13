@@ -37,7 +37,22 @@ export function resolveAuditUri(cfg: ConfigService): string {
   if (explicit) return explicit;
 
   const platform = cfg.get<string>('MONGO_URI');
-  if (!platform) return `mongodb://localhost:27017/${AUDIT_DB}`;
+  if (!platform) {
+    // The localhost fallback is for a developer running one service on their
+    // own machine. In a container it is a lie with no symptom: localhost is the
+    // container, the connection is refused, and the audit trail — the record of
+    // who did what to the platform — silently has nowhere to go. The manifests
+    // deployed audit-log-service with no Mongo anywhere in them (AUD2-028), so
+    // this was the live configuration, not a hypothetical.
+    if (cfg.get<string>('NODE_ENV') === 'production')
+      throw new Error(
+        'MONGO_URI is not set. The audit trail has no datastore; refusing to start in ' +
+          'production rather than writing to a localhost Mongo that, in a pod, is the pod. ' +
+          'Set MONGO_URI (or MONGO_AUDIT_URI) — infra/k8s/config.yaml and the generated ' +
+          'Deployment assemble it from MONGO_HOST and the Secret.',
+      );
+    return `mongodb://localhost:27017/${AUDIT_DB}`;
+  }
 
   try {
     const url = new URL(platform);

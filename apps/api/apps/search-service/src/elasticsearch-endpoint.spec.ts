@@ -118,4 +118,31 @@ describe('resolveElasticsearchEndpoint', () => {
     } as NodeJS.ProcessEnv);
     expect(origin).toBe('http://localhost:9200');
   });
+
+  // In a container the local default is a lie with no symptom: localhost is the
+  // container, and search degrades to its Redis fallback for ever while
+  // reporting a cluster that was never addressed (AUD2-029).
+  it('refuses the local default in production when the variable is unset', () => {
+    expect(() =>
+      resolveElasticsearchEndpoint({ NODE_ENV: 'production' } as NodeJS.ProcessEnv),
+    ).toThrow(/ELASTICSEARCH_NODE is not set/);
+  });
+
+  it('refuses the local default in production when the value is unparseable', () => {
+    expect(() =>
+      resolveElasticsearchEndpoint({
+        NODE_ENV: 'production',
+        ELASTICSEARCH_NODE: 'not a url',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/is not a URL/);
+  });
+
+  it('is unchanged in production once the node is configured', () => {
+    const { origin, authHeaders } = resolveElasticsearchEndpoint({
+      NODE_ENV: 'production',
+      ELASTICSEARCH_NODE: 'http://elastic:s3cret@elasticsearch.kartseek.svc.cluster.local:9200',
+    } as NodeJS.ProcessEnv);
+    expect(origin).toBe('http://elasticsearch.kartseek.svc.cluster.local:9200');
+    expect(authHeaders.Authorization).toBeDefined();
+  });
 });
