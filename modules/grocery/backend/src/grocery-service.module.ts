@@ -115,27 +115,12 @@ const envSchema = buildEnvSchema({
           'grocery-service',
         ),
         /*
-         * An explicit pool, because the default is a platform-wide ceiling.
-         *
-         * node-postgres opens up to 10 connections per process when no size is
-         * given. This platform runs 25 services against one Postgres whose
-         * `max_connections` is 100, so the defaults alone reserve 250 — two and
-         * a half times what the database will grant. Nothing fails in
-         * development, where only a handful of services are up; under real load
-         * the services that start last simply cannot acquire a connection.
-         *
-         * Five per service fits 25 services into 125 with the ceiling raised
-         * modestly, and is ample for a service whose reads are Redis-cached.
-         * Raising this is a decision about the *database*, not this service, so
-         * it reads from the environment rather than being fixed here.
+         * The pool used to be spelled out here — this was the only service that
+         * bounded it at all, and every other DB app took node-postgres's
+         * default of ten. It has moved into `databaseCredentials()` above, so
+         * the bound applies to all of them and `DB_POOL_SIZE` moves one policy
+         * rather than this service alone (AUD2-033).
          */
-        extra: {
-          max: cfg.get<number>('DB_POOL_SIZE', 5),
-          // Do not let a stalled checkout wait forever for a connection; failing
-          // fast surfaces exhaustion as an error instead of a hung request.
-          connectionTimeoutMillis: cfg.get<number>('DB_POOL_TIMEOUT_MS', 10_000),
-          idleTimeoutMillis: 30_000,
-        },
       }),
     }),
     TypeOrmModule.forFeature(GROCERY_ENTITIES),
