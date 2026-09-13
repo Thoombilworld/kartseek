@@ -20,11 +20,19 @@
  *   - a PONG that came from the in-process Redis emulator;
  *   - a readiness board that simply omits a dependency: the registry says what
  *     each service owns, and a key that is missing from the board is reported
- *     as UNCHECKED, never as a pass.
+ *     as UNCHECKED, never as a pass;
+ *   - an answer on `127.0.0.1:<port>` that nothing ties to the container the row
+ *     is named after. Every published port must be FREE before `up` (a host dev
+ *     fleet on 3001 would otherwise answer every probe in this file), and every
+ *     host probe is cross-checked against the same route run INSIDE the
+ *     container.
  *
  * Every check below either runs a query, reads a body, reads a log, or says in
  * the table that it did not. A row can be `~ skipped` with a reason; it can
  * never be a silent pass.
+ *
+ * The application tier is removed in a `finally`, so a throw anywhere after
+ * `up` cannot leave twelve containers behind for the next run to inherit.
  *
  * ── What it does NOT check, and why ─────────────────────────────────────────
  *
@@ -51,6 +59,14 @@ import { downArgs } from './down.mjs';
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Host addressing baked into an image. The 9092 listener advertises
+ * `localhost:9092`, so a container that bootstraps there is answered with
+ * metadata naming its own loopback — `kafka:29092` is the only right answer
+ * inside the network (IN6 scope addition 1).
+ */
+const HOST_ADDRESSING = /(?:localhost|127\.0\.0\.1|::1):9092/;
+
+/**
  * A line that means this process will not serve, whatever else the log says.
  *
  * `Unable to connect to the database` is deliberately NOT here: TypeORM logs it
@@ -66,11 +82,7 @@ const FATAL = [
   /Config validation error/,
   /ValidationError:.*is required/,
   /password authentication failed/,
-  // Host addressing baked into an image. The 9092 listener advertises
-  // `localhost:9092`, so a container that bootstraps there is answered with
-  // metadata naming its own loopback — `kafka:29092` is the only right answer
-  // inside the network (IN6 scope addition 1).
-  /(?:localhost|127\.0\.0\.1|::1):9092/,
+  HOST_ADDRESSING,
 ];
 
 /**
@@ -84,7 +96,9 @@ const ERROR = [
   /Unhandled(?:PromiseRejection)?/,
   /Unable to connect to the database/,
   /permission denied for/,
-  /(?:relation|column|table|type|function) "[^"]+" does not exist/,
+  // Postgres quotes the identifier; TypeORM's own message does not
+  // (`column Product.mrp does not exist`), so both spellings are matched.
+  /(?:relation|column|table|type|function) (?:"[^"]+"|[A-Za-z_][\w.$]*) does not exist/,
   /RedisUnavailableError|REDIS_UNAVAILABLE/,
 ];
 
@@ -94,8 +108,24 @@ const ERROR = [
  */
 const NOISE = [/RouterExplorer/, /InstanceLoader/, /NestFactory/, /ThrottlerGuard/, /\b40[34]\b/];
 
+/**
+ * The three variables whose *value* is legitimately a loopback address.
+ *
+ * IN6's hand-off: `APP_BIND`, `DB_BIND` and `NGINX_BIND` reach all 26 Nest
+ * containers from `apps/api/.env` and are harmless — they name the HOST side of
+ * a port publish, where loopback is the safe default. A container that prints
+ * its own environment at boot would otherwise be reported as host addressing
+ * leaked into an image, which is the opposite of what those variables mean.
+ */
+const BIND_VARS = /\b(?:APP_BIND|DB_BIND|NGINX_BIND)\b/;
+
 export function classifyLogLine(line) {
-  if (FATAL.some((r) => r.test(line))) return 'fatal';
+  for (const r of FATAL) {
+    if (!r.test(line)) continue;
+    // The host-addressing rule is the only FATAL entry a BIND variable can trip.
+    if (r === HOST_ADDRESSING && BIND_VARS.test(line)) continue;
+    return 'fatal';
+  }
   if (NOISE.some((r) => r.test(line))) return null;
   if (ERROR.some((r) => r.test(line))) return 'error';
   return null;
@@ -245,11 +275,203 @@ const stateOf = (v) => (typeof v === 'string' ? v : (v?.status ?? null));
  * whose board is the most detailed — and called it a failure while the stack
  * was fine.
  */
-export function readinessBody(json) {
+export function unwrapEnvelope(json, key) {
   if (!json || typeof json !== 'object') return null;
-  if (json.checks) return json;
-  if (json.data && typeof json.data === 'object' && json.data.checks) return json.data;
+  if (json[key] !== undefined) return json;
+  if (json.data && typeof json.data === 'object' && json.data[key] !== undefined) return json.data;
   return null;
+}
+
+export const readinessBody = (json) => unwrapEnvelope(json, 'checks');
+/** The liveness board, which every deployable answers with `service` on it. */
+export const livenessBody = (json) => unwrapEnvelope(json, 'service');
+
+/**
+ * Every port the selected profile publishes on the host, from the registry.
+ *
+ * The renderer publishes every entry in `ports` (`http`, `tcp`, `grpc`) as
+ * `${APP_BIND:-127.0.0.1}:<p>:<p>`, so this is the exact set that must be free
+ * before `docker compose up` can bind them.
+ */
+export function publishedPorts(entries) {
+  const rows = [];
+  for (const s of entries)
+    for (const p of Object.values(s.ports ?? {})) rows.push({ port: p, service: s.name });
+  return rows.sort((a, b) => a.port - b.port);
+}
+
+/**
+ * Which of `ports` already has a listener, and the PID that owns it.
+ *
+ * Parses Windows `netstat -ano` (and the same columns from `netstat -tlnp` on
+ * Linux, whose LISTEN lines carry `pid/name` in the last field). Only LISTENING
+ * rows count; a TIME_WAIT on the same port does not stop a bind.
+ *
+ * This exists because of the failure the review found: with a host dev fleet on
+ * 3001 and 3000, `compose up` cannot publish those ports, and every later probe
+ * to `127.0.0.1:3001` answers — from the HOST gateway. Individual rows would
+ * then attribute host evidence to containers that do not exist.
+ */
+export function busyPorts(netstatText, ports) {
+  const wanted = new Map(ports.map((p) => [Number(p.port ?? p), p.service ?? null]));
+  const found = new Map();
+  for (const line of String(netstatText ?? '').split(/\r?\n/)) {
+    if (!/\bLISTEN(?:ING)?\b/.test(line)) continue;
+    const cols = line.trim().split(/\s+/);
+    // The LOCAL address is the first column that ends in `:<port>`, on either
+    // platform: Windows puts it at index 1, `netstat -tlnp` at index 3 behind
+    // the queue counters. A fixed index reads "LISTEN" on Linux and finds
+    // nothing. The foreign address always follows it and is `0.0.0.0:0` or
+    // `0.0.0.0:*`, so taking the first match cannot pick the wrong one.
+    const local = cols.find((c) => /:\d+$/.test(c));
+    if (!local) continue;
+    const port = Number(/:(\d+)$/.exec(local)[1]);
+    if (!wanted.has(port) || found.has(port)) continue;
+    const last = cols[cols.length - 1];
+    const pid = /^\d+$/.test(last) ? last : (/^(\d+)\//.exec(last)?.[1] ?? 'unknown');
+    found.set(port, { port, pid, address: local, service: wanted.get(port) });
+  }
+  return [...found.values()].sort((a, b) => a.port - b.port);
+}
+
+/**
+ * Is the process answering on the host port the one inside the container?
+ *
+ * The review's finding: nothing tied a `127.0.0.1:<port>` answer to the
+ * container the row was named after. So every host probe is now paired with
+ * `docker exec <container> wget -qO- http://127.0.0.1:<port><health.live>` and
+ * the two bodies compared.
+ *
+ * The ruling's preferred discriminators are `pid` then `startedAt` then the
+ * container hostname. **This platform's liveness board carries none of them**,
+ * and adding one is an application change to a deliberately anonymous route
+ * (`health.types.ts` reasons explicitly about what an unauthenticated caller may
+ * see — AUD2-072), so it is not this task's to make. The fallback used instead
+ * is stronger than a hostname would be, not weaker:
+ *
+ *   • `service`, `nodeVersion` and `environment` must match between the two
+ *     bodies — `environment` alone separates a container (`production`, pinned
+ *     by the renderer) from a host dev fleet (`development`), which is the exact
+ *     misattribution the finding describes;
+ *   • the host body's `uptime` must be consistent with the CONTAINER's own
+ *     `State.StartedAt`. A process cannot have been running longer than the
+ *     container that holds it, and a host fleet started at any other time fails
+ *     this outright.
+ *
+ * A row that cannot be evaluated at all is `unverifiable` and FAILS. It never
+ * passes by default.
+ */
+export function sameProcess(
+  hostBody,
+  containerBody,
+  { containerAgeSeconds, bootGrace = 180 } = {},
+) {
+  if (!hostBody) return { ok: false, basis: 'unverifiable', detail: 'no body from the host port' };
+  if (!containerBody)
+    return { ok: false, basis: 'unverifiable', detail: 'no body from inside the container' };
+  for (const field of ['pid', 'startedAt', 'hostname']) {
+    if (hostBody[field] === undefined || containerBody[field] === undefined) continue;
+    return {
+      ok: String(hostBody[field]) === String(containerBody[field]),
+      basis: field,
+      detail: `host ${field}=${hostBody[field]} container ${field}=${containerBody[field]}`,
+    };
+  }
+  const mismatched = ['service', 'nodeVersion', 'environment'].filter(
+    (f) => String(hostBody[f] ?? '') !== String(containerBody[f] ?? ''),
+  );
+  if (mismatched.length)
+    return {
+      ok: false,
+      basis: 'identity fields',
+      detail: mismatched
+        .map((f) => `${f}: host "${hostBody[f] ?? ''}" vs container "${containerBody[f] ?? ''}"`)
+        .join('; '),
+    };
+  const uptime = Number(hostBody.uptime);
+  if (!Number.isFinite(uptime) || !Number.isFinite(Number(containerAgeSeconds)))
+    return {
+      ok: false,
+      basis: 'unverifiable',
+      detail: 'the board carries no uptime and no pid/startedAt/hostname to compare',
+    };
+  const age = Number(containerAgeSeconds);
+  const slack = age - uptime;
+  return {
+    ok: slack >= -5 && slack <= bootGrace,
+    basis: 'uptime vs container age',
+    detail: `uptime ${uptime}s against a container ${age}s old`,
+  };
+}
+
+/**
+ * `CONFIG GET <name>` answers two lines — the name, then the value. Accepts
+ * only a value in `allowed`, so a policy nobody thought of (`allkeys-lfu`,
+ * `allkeys-random`) fails instead of slipping past a one-string blacklist.
+ */
+export function redisConfigVerdict(name, raw, allowed) {
+  const lines = String(raw ?? '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const at = lines.indexOf(name);
+  const value = at >= 0 ? (lines[at + 1] ?? '') : '';
+  return { ok: allowed.includes(value), value, detail: value || 'no value returned' };
+}
+
+/**
+ * What Compose said it did with each image, read from the `up` log rather than
+ * inferred from the flag. `skipBuild ? 'reused' : 'built'` printed "built" for
+ * twelve images on a run that rebuilt one.
+ */
+export function imageVerdicts(logText) {
+  const out = new Map();
+  const re = /Image\s+kartseek\/([a-z0-9-]+):\S+\s+(\w+)/g;
+  let m;
+  while ((m = re.exec(String(logText ?? '')))) out.set(m[1], m[2].toLowerCase());
+  return out;
+}
+
+/**
+ * Run the whole stack sequence and tear the application tier down afterwards,
+ * on every path — a returned exit code, a thrown exception, anything.
+ *
+ * The review's finding 1: the teardown sat at the end of a linear `main()`, so
+ * any throw after `up` left twelve containers running and the next run inherited
+ * them.
+ *
+ * A teardown failure is reported and can FAIL a run that otherwise passed, but
+ * it can never overwrite a 1 or a 2 with a 0 — "reported, never masks".
+ */
+export async function withTeardown({ phases, teardown, keep = false }) {
+  const outcome = {
+    runCode: 2,
+    code: 2,
+    error: null,
+    teardown: { ran: false, ok: null, detail: '' },
+  };
+  try {
+    outcome.runCode = await phases();
+  } catch (err) {
+    outcome.error = err;
+    outcome.runCode = 2;
+  } finally {
+    if (keep) {
+      outcome.teardown.detail = '--keep was given';
+    } else {
+      outcome.teardown.ran = true;
+      try {
+        const r = await teardown();
+        outcome.teardown.ok = r?.ok !== false;
+        outcome.teardown.detail = r?.detail ?? '';
+      } catch (err) {
+        outcome.teardown.ok = false;
+        outcome.teardown.detail = err?.message ?? String(err);
+      }
+    }
+  }
+  outcome.code = outcome.runCode !== 0 ? outcome.runCode : outcome.teardown.ok === false ? 1 : 0;
+  return outcome;
 }
 
 /**
@@ -314,6 +536,8 @@ export function driftCensus(parsed) {
       `${findings} finding(s), ${unreachable} unreachable`,
     findings,
     unreachable,
+    /** `<role>@<host>:<port>/<database>`, one per module — who it actually asked. */
+    targets: reports.map((r) => String(r.target ?? '')),
   };
 }
 
@@ -353,6 +577,17 @@ function tryDocker(args, opts = {}) {
     const out = `${err.stdout ?? ''}${err.stderr ?? ''}`.trim();
     return { ok: false, out: out || err.message };
   }
+}
+
+/** A shell one-liner whose output we want and whose exit status we do not. */
+function shOut(command) {
+  const r = spawnSync(command, {
+    cwd: root,
+    encoding: 'utf8',
+    shell: true,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  return `${r.stdout ?? ''}${r.stderr ?? ''}`;
 }
 
 /** `npm run …`. Needs a shell on Windows: npm is a .cmd, which spawn refuses. */
@@ -532,11 +767,18 @@ async function main() {
    */
   const ok = (name, cond, failDetail = '', passDetail = '') =>
     results.push({ name, ok: !!cond, detail: cond ? passDetail : failDetail });
-  const skip = (name, reason) => results.push({ name, ok: false, skipped: true, detail: reason });
+  /**
+   * `ok: null`, not `false`. `summarise()` already tells the three apart, but a
+   * `--json` consumer filtering on `ok === false` counted the nine honest skips
+   * as nine failures.
+   */
+  const skip = (name, reason) => results.push({ name, ok: null, skipped: true, detail: reason });
   const fatal = (message) => {
     console.error(`✗ ${message}`);
     process.exit(2);
   };
+  /** Progress goes to stderr under `--json`, so `… --json | jq` is parseable. */
+  const say = (message) => (json ? console.error(message) : console.log(message));
 
   // ── 0. Setup. Nothing here is a check; all of it is exit 2. ───────────────
   const version = tryDocker(['compose', 'version']);
@@ -567,11 +809,11 @@ async function main() {
   );
   const nest = inProfile.filter((s) => NEST_KINDS.includes(s.kind));
 
-  console.log(
+  say(
     `validate: ${profile} profile — ${inProfile.length} application containers, ` +
       `${version.out.trim()}`,
   );
-  console.log(
+  say(
     'validate: the gateway is probed on 127.0.0.1:3001 and the console on 127.0.0.1:3000, ' +
       'NOT through nginx — infra/nginx/nginx.conf still upstreams host.docker.internal (IN11).',
   );
@@ -580,404 +822,589 @@ async function main() {
   if (!config.ok) fatal(`docker compose config failed:\n${config.out.slice(0, 2000)}`);
   ok('compose configuration resolves', true, '', `${profile} profile`);
 
-  // ── 1. Order of operations: infra first, because it makes the topics ──────
-  const logDir = path.join(root, '.build-logs');
-  fs.mkdirSync(logDir, { recursive: true });
-  const upLog = path.join(logDir, `stack-up-${profile}.log`);
-  fs.writeFileSync(upLog, `# ${new Date().toISOString()} validate --profile ${profile}\n`);
+  // ── 0b. Nothing of ours may already hold a published port ─────────────────
+  //
+  // Remove any application tier left by a previous run FIRST (this only ever
+  // names the 35 registry services — `down.mjs` refuses an infra name), then
+  // check the ports. Anything still listening after that is foreign: a host dev
+  // fleet, most often. It is not killed and it is not worked around — the run
+  // stops, because `compose up` could not have bound the port and every later
+  // probe to `127.0.0.1:<port>` would have been answered by that process while
+  // the row said the name of a container.
+  say('validate: removing any application tier left from a previous run…');
+  tryDocker(downArgs(reg));
+  const wantPorts = publishedPorts(inProfile);
+  let busy = [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const netstat = process.platform === 'win32' ? shOut('netstat -ano') : shOut('netstat -tlnp');
+    busy = busyPorts(netstat, wantPorts);
+    if (!busy.length) break;
+    // docker-proxy can hold a port for a moment after `rm`; a real foreign
+    // listener will still be there on the third look.
+    await sleep(2000);
+  }
+  if (busy.length)
+    fatal(
+      `${busy.length} of the ${wantPorts.length} port(s) this profile publishes are already in ` +
+        `use, so compose could not bind them and every probe would answer from the wrong ` +
+        `process:\n` +
+        busy.map((b) => `    ${b.address} (${b.service}) held by PID ${b.pid}`).join('\n') +
+        `\n  Stop that process yourself — this script will not kill it. On Windows: ` +
+        `tasklist /FI "PID eq ${busy[0].pid}".`,
+    );
+  ok(
+    'every published port of the profile is free on the host',
+    true,
+    '',
+    `${wantPorts.length} port(s)`,
+  );
 
-  console.log('validate: infra:up (creates kartseek-network and the 166 Kafka topics)…');
-  const infra = npm(['run', 'infra:up']);
-  fs.appendFileSync(upLog, `\n$ npm run infra:up\n${infra.out}\n`);
-  ok('infra:up succeeded', infra.status === 0, infra.status === 0 ? '' : `exit ${infra.status}`);
-  if (/Recreated|Recreate/.test(infra.out))
-    console.log(
-      'validate: compose recreated one or more datastores (the config-files label changed in ' +
-        '316367c). Volumes and the topics survive; waiting for health again.',
+  const logDir = path.join(root, '.build-logs');
+  const upLog = path.join(logDir, `stack-up-${profile}.log`);
+  const boards = new Map();
+  const state = new Map();
+  const roleOf = new Map();
+  const logVerdict = new Map();
+  let images = new Map();
+  let census = { ok: false, line: 'verify:schema-drift did not run', findings: 0 };
+  let nameOf = (s) => containerName(s.name);
+
+  /**
+   * Everything from `infra:up` to the log scan. Returns the exit code the run
+   * itself earned; `withTeardown` removes the application tier afterwards on
+   * every path, including a throw.
+   */
+  const phases = async () => {
+    // ── 1. Order of operations: infra first, because it makes the topics ──────
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.writeFileSync(upLog, `# ${new Date().toISOString()} validate --profile ${profile}\n`);
+
+    say('validate: infra:up (creates kartseek-network and the 166 Kafka topics)…');
+    const infra = npm(['run', 'infra:up']);
+    fs.appendFileSync(upLog, `\n$ npm run infra:up\n${infra.out}\n`);
+    ok('infra:up succeeded', infra.status === 0, infra.status === 0 ? '' : `exit ${infra.status}`);
+    if (/Recreated|Recreate/.test(infra.out))
+      say(
+        'validate: compose recreated one or more datastores (the config-files label changed in ' +
+          '316367c). Volumes and the topics survive; waiting for health again.',
+      );
+
+    const infraNames = ['postgres', 'redis', 'kafka', 'mongo', 'elasticsearch'].map(
+      (n) => `kartseek-${n}`,
+    );
+    const infraDeadline = Date.now() + 5 * 60 * 1000;
+    let infraPending = infraNames.filter((n) => healthOf(n) !== 'healthy');
+    while (infraPending.length && Date.now() < infraDeadline) {
+      await sleep(3000);
+      infraPending = infraPending.filter((n) => healthOf(n) !== 'healthy');
+    }
+    ok(
+      'the five datastores are healthy',
+      infraPending.length === 0,
+      infraPending.length ? `still not healthy: ${infraPending.join(', ')}` : '',
     );
 
-  const infraNames = ['postgres', 'redis', 'kafka', 'mongo', 'elasticsearch'].map(
-    (n) => `kartseek-${n}`,
-  );
-  const infraDeadline = Date.now() + 5 * 60 * 1000;
-  let infraPending = infraNames.filter((n) => healthOf(n) !== 'healthy');
-  while (infraPending.length && Date.now() < infraDeadline) {
-    await sleep(3000);
-    infraPending = infraPending.filter((n) => healthOf(n) !== 'healthy');
-  }
-  ok(
-    'the five datastores are healthy',
-    infraPending.length === 0,
-    infraPending.length ? `still not healthy: ${infraPending.join(', ')}` : '',
-  );
+    const topics = tryDocker([
+      'exec',
+      'kartseek-kafka',
+      '/opt/kafka/bin/kafka-topics.sh',
+      '--bootstrap-server',
+      'localhost:9092',
+      '--list',
+    ]);
+    const topicCount = topics.ok ? topics.out.split(/\r?\n/).filter(Boolean).length : 0;
+    ok(
+      'kafka lists its topics',
+      topicCount > 100,
+      `${topicCount} topic(s)`,
+      `${topicCount} topic(s)`,
+    );
 
-  const topics = tryDocker([
-    'exec',
-    'kartseek-kafka',
-    '/opt/kafka/bin/kafka-topics.sh',
-    '--bootstrap-server',
-    'localhost:9092',
-    '--list',
-  ]);
-  const topicCount = topics.ok ? topics.out.split(/\r?\n/).filter(Boolean).length : 0;
-  ok(
-    'kafka lists its topics',
-    topicCount > 100,
-    `${topicCount} topic(s)`,
-    `${topicCount} topic(s)`,
-  );
+    // ── 2. The application tier ───────────────────────────────────────────────
+    say(
+      `validate: ${skipBuild ? 'starting' : 'building and starting'} the ${profile} profile — ` +
+        `output goes to ${path.relative(root, upLog)}`,
+    );
+    const upStarted = Date.now();
+    const upArgs = ['compose', '--profile', profile, 'up', '-d'];
+    if (!skipBuild) upArgs.push('--build');
+    const fd = fs.openSync(upLog, 'a');
+    let upStatus = 0;
+    try {
+      execFileSync('docker', upArgs, {
+        cwd: root,
+        stdio: ['ignore', fd, fd],
+        timeout: BUILD_TIMEOUT_MS,
+      });
+    } catch (err) {
+      upStatus = err.status ?? 1;
+    } finally {
+      fs.closeSync(fd);
+    }
+    const upSeconds = Math.round((Date.now() - upStarted) / 1000);
+    ok(
+      `compose up finished (${upSeconds}s)`,
+      upStatus === 0,
+      upStatus === 0 ? '' : `exit ${upStatus} — see ${path.relative(root, upLog)}`,
+    );
+    images = imageVerdicts(fs.readFileSync(upLog, 'utf8'));
+    // A failed `up` ENDS the run. Carrying on meant probing 127.0.0.1:<port> with
+    // no container behind it and attributing whatever answered to a service name.
+    if (upStatus !== 0) {
+      say(`validate: compose up failed — stopping here. See ${path.relative(root, upLog)}.`);
+      return summarise(results).code || 1;
+    }
 
-  // ── 2. The application tier ───────────────────────────────────────────────
-  console.log(
-    `validate: ${skipBuild ? 'starting' : 'building and starting'} the ${profile} profile — ` +
-      `output goes to ${path.relative(root, upLog)}`,
-  );
-  const upStarted = Date.now();
-  const upArgs = ['compose', '--profile', profile, 'up', '-d'];
-  if (!skipBuild) upArgs.push('--build');
-  const fd = fs.openSync(upLog, 'a');
-  let upStatus = 0;
-  try {
-    execFileSync('docker', upArgs, {
-      cwd: root,
-      stdio: ['ignore', fd, fd],
-      timeout: BUILD_TIMEOUT_MS,
-    });
-  } catch (err) {
-    upStatus = err.status ?? 1;
-  } finally {
-    fs.closeSync(fd);
-  }
-  const upSeconds = Math.round((Date.now() - upStarted) / 1000);
-  ok(
-    `compose up finished (${upSeconds}s)`,
-    upStatus === 0,
-    upStatus === 0 ? '' : `exit ${upStatus} — see ${path.relative(root, upLog)}`,
-  );
-
-  // ── 3. Every container reaches healthy ────────────────────────────────────
-  const ps = composePs();
-  const nameOf = (s) => ps.find((p) => p.Service === s.name)?.Name ?? containerName(s.name);
-  const state = new Map();
-  const pending = new Set(inProfile.map((s) => s.name));
-  const healthDeadline = Date.now() + HEALTH_DEADLINE_MS;
-  while (pending.size && Date.now() < healthDeadline) {
+    // ── 3. Every container reaches healthy ────────────────────────────────────
+    const ps = composePs();
+    nameOf = (s) => ps.find((p) => p.Service === s.name)?.Name ?? containerName(s.name);
+    const pending = new Set(inProfile.map((s) => s.name));
+    const healthDeadline = Date.now() + HEALTH_DEADLINE_MS;
+    while (pending.size && Date.now() < healthDeadline) {
+      for (const s of inProfile) {
+        if (!pending.has(s.name)) continue;
+        const h = healthOf(nameOf(s));
+        if (h === 'healthy') {
+          state.set(s.name, 'healthy');
+          pending.delete(s.name);
+        } else if (h === 'exited' || h === 'dead' || h === 'absent') {
+          state.set(s.name, h);
+          pending.delete(s.name);
+        }
+      }
+      if (pending.size) await sleep(4000);
+    }
+    for (const n of pending) state.set(n, healthOf(nameOf({ name: n })));
     for (const s of inProfile) {
-      if (!pending.has(s.name)) continue;
-      const h = healthOf(nameOf(s));
-      if (h === 'healthy') {
-        state.set(s.name, 'healthy');
-        pending.delete(s.name);
-      } else if (h === 'exited' || h === 'dead' || h === 'absent') {
-        state.set(s.name, h);
-        pending.delete(s.name);
+      const h = state.get(s.name) ?? 'unknown';
+      ok(`container ${s.name} healthy`, h === 'healthy', h === 'healthy' ? '' : h);
+    }
+
+    // ── 3b. The listener on the host port IS the container ────────────────────
+    //
+    // Everything after this point probes 127.0.0.1. Nothing so far ties what
+    // answers there to the container the row is named after, and the port
+    // pre-flight only proves nothing held the port BEFORE `up`. So each service's
+    // liveness route is fetched twice — once from the host, once from inside its
+    // own container — and the two bodies compared. `sameProcess` explains what it
+    // compares and why; a row it cannot evaluate fails as `unverifiable`.
+    for (const s of nest) {
+      const route = s.health?.live;
+      if (!route) {
+        skip(
+          `${s.name} is the listener on :${s.ports.http}`,
+          'the registry gives it no live route',
+        );
+        continue;
+      }
+      const hostProbe = await get(`http://127.0.0.1:${s.ports.http}${route}`);
+      const inside = tryDocker([
+        'exec',
+        nameOf(s),
+        'wget',
+        '-qO-',
+        `http://127.0.0.1:${s.ports.http}${route}`,
+      ]);
+      let insideBody = null;
+      try {
+        insideBody = livenessBody(JSON.parse(inside.out.trim()));
+      } catch {
+        /* left null — sameProcess fails the row as unverifiable */
+      }
+      const startedAt = tryDocker(['inspect', '-f', '{{.State.StartedAt}}', nameOf(s)]);
+      const ageSeconds = startedAt.ok
+        ? Math.round((Date.now() - Date.parse(startedAt.out.trim())) / 1000)
+        : NaN;
+      const verdict = sameProcess(livenessBody(hostProbe.json), insideBody, {
+        containerAgeSeconds: ageSeconds,
+      });
+      ok(
+        `${s.name} is the listener on :${s.ports.http}`,
+        verdict.ok,
+        `${verdict.basis} — ${verdict.detail}; host ${JSON.stringify(hostProbe.json ?? hostProbe.text).slice(0, 120)} vs container ${inside.out.trim().slice(0, 120)}`,
+        `${verdict.basis} — ${verdict.detail}`,
+      );
+    }
+
+    // ── 4. A staff token, so the gateway returns the full board ───────────────
+    const superadmin = await staffLogin(
+      'superadmin@kartseek.com',
+      'AdminPass123!',
+      env.REDIS_PASSWORD ?? '',
+    );
+    ok(
+      'superadmin signed in through the container (login → mfa/verify)',
+      !!superadmin.token,
+      superadmin.error ?? `role=${superadmin.user?.role ?? '?'}`,
+    );
+    const auth = superadmin.token ? { Authorization: `Bearer ${superadmin.token}` } : {};
+
+    // ── 4b. The bypass is off, measured rather than assumed ───────────────────
+    //
+    // It holds by construction — the renderer pins DEV_AUTH_BYPASS: 'false' and
+    // NODE_ENV: production, and jwt-auth.guard.ts needs both — but "by
+    // construction" is the kind of claim this validator exists not to make. If it
+    // were on, an anonymous request would be SUPER_ADMIN and the whole regional
+    // proof below would be meaningless.
+    const gatewayEntry = inProfile.find((s) => s.kind === 'gateway');
+    if (gatewayEntry) {
+      const bypass = tryDocker(['exec', nameOf(gatewayEntry), 'printenv', 'DEV_AUTH_BYPASS']);
+      ok(
+        'DEV_AUTH_BYPASS is off inside the gateway container',
+        bypass.ok && bypass.out.trim() === 'false',
+        `printenv says "${bypass.out.trim()}"`,
+        'false',
+      );
+      const anon = await get(`${GATEWAY}${'/admin/marketplace/sellers?limit=1'}`);
+      ok(
+        'an anonymous staff route is refused, not served',
+        anon.status === 401 || anon.status === 403,
+        `HTTP ${anon.status} — an anonymous caller reached a staff route`,
+        `HTTP ${anon.status}`,
+      );
+    }
+
+    // ── 5. Each service's own readiness board, against the registry ───────────
+    for (const s of nest) {
+      const route = s.health?.ready;
+      if (!route) {
+        skip(`${s.name} readiness`, 'the registry gives this service no ready route');
+        continue;
+      }
+      const r = await get(`http://127.0.0.1:${s.ports.http}${route}`, { headers: auth });
+      boards.set(s.name, r);
+      const verdict = boardVerdict(s, r.json);
+      ok(
+        `${s.name} ${route}`,
+        r.status === 200 && verdict.ok,
+        verdict.ok && r.status === 200 ? '' : `HTTP ${r.status} ${verdict.detail}`.trim(),
+      );
+      if (verdict.unchecked.length)
+        skip(
+          `${s.name} ${verdict.unchecked.join('/')} dependency`,
+          `declared in services.yaml, not on this service's readiness board`,
+        );
+    }
+
+    // ── 6. The role each service is actually holding, from pg_stat_activity ───
+    //
+    // The board says a query ran; it does not say WHO ran it. A module service
+    // that quietly fell back to the superuser — `databaseCredentials()` reads
+    // DB_USER unprefixed, so one missing variable does exactly that — answers
+    // `database: up` and looks identical above.
+    //
+    // Timing is the whole trick. node-postgres closes an idle client after ten
+    // seconds (`idleTimeoutMillis`, TypeORM does not raise it), so a minute after
+    // boot `pg_stat_activity` holds nothing at all and a first attempt at this
+    // check reported "no open connection" for all eight. So every readiness route
+    // is fired FIRST, in parallel, and the catalogue read immediately after: each
+    // SELECT 1 leaves its connection in the pool, idle, inside that window.
+    const addrOf = new Map();
+    for (const s of nest) {
+      const ipOut = tryDocker([
+        'inspect',
+        '-f',
+        '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}',
+        nameOf(s),
+      ]);
+      addrOf.set(s.name, ipOut.ok ? ipOut.out.trim().split(/\s+/).filter(Boolean) : []);
+    }
+    await Promise.all(
+      nest
+        .filter((s) => s.database && s.health?.ready)
+        .map((s) => get(`http://127.0.0.1:${s.ports.http}${s.health.ready}`, { headers: auth })),
+    );
+    const roleRows = tryDocker([
+      'exec',
+      'kartseek-postgres',
+      'psql',
+      '-U',
+      env.POSTGRES_USER || 'postgres',
+      '-d',
+      env.POSTGRES_DB || 'kartseek_db',
+      '-At',
+      '-F',
+      '|',
+      '-c',
+      // `host()`, not `client_addr::text`: the cast keeps the netmask, so the rows
+      // read `172.18.0.24/32` and never matched what `docker inspect` reports.
+      `select host(client_addr), usename, count(*) from pg_stat_activity ` +
+        `where datname = current_database() and client_addr is not null group by 1,2`,
+    ]);
+    const byAddr = new Map();
+    if (roleRows.ok)
+      for (const line of roleRows.out.split(/\r?\n/).filter(Boolean)) {
+        const [addr, role] = line.split('|');
+        if (!byAddr.has(addr)) byAddr.set(addr, new Set());
+        byAddr.get(addr).add(role);
+      }
+    ok(
+      'pg_stat_activity names the connections',
+      roleRows.ok && byAddr.size > 0,
+      roleRows.ok ? 'readable, but no client connection was open' : roleRows.out.slice(0, 160),
+      `${byAddr.size} client address(es)`,
+    );
+    for (const s of nest) {
+      const want = expectedRole(s, env);
+      if (!want) {
+        roleOf.set(s.name, 'n/a');
+        continue;
+      }
+      const ips = addrOf.get(s.name) ?? [];
+      const held = new Set();
+      for (const ip of ips) for (const r of byAddr.get(ip) ?? []) held.add(r);
+      roleOf.set(s.name, held.size ? [...held].join(',') : 'no connection');
+      ok(
+        `${s.name} connects as ${want}`,
+        held.size > 0 && [...held].every((r) => r === want),
+        held.size === 0
+          ? `nothing open from ${ips.join(',') || 'an unknown address'} right after SELECT 1`
+          : `holding ${[...held].join(', ')}`,
+        `from ${ips.join(',')}`,
+      );
+    }
+
+    // ── 7. The gateway's aggregate, which only staff see in full ──────────────
+    // The anonymous board is one word per dependency (AUD2-072). These three
+    // checks read fields that exist ONLY on the staff branch, so they are also
+    // the proof that the token above is being honoured rather than ignored.
+    const gwBoard = readinessBody(boards.get('api-gateway')?.json);
+    ok(
+      'gateway readiness is ready, not degraded',
+      gwBoard?.status === 'ready',
+      JSON.stringify(gwBoard?.checks ?? {}).slice(0, 240),
+      JSON.stringify(gwBoard?.checks ?? {}).slice(0, 160),
+    );
+    const gwRedis = gwBoard?.checks?.redis;
+    ok(
+      'the gateway is on the real Redis, not the in-process emulator',
+      gwRedis &&
+        typeof gwRedis === 'object' &&
+        gwRedis.emulated !== true &&
+        gwRedis.status === 'up',
+      typeof gwRedis === 'object'
+        ? (gwRedis?.detail ?? gwRedis?.reason ?? 'not up')
+        : 'the anonymous board cannot answer this — the staff token did not take',
+      'emulated=false',
+    );
+    const gwPg = gwBoard?.checks?.postgresql;
+    ok(
+      'the gateway ran SELECT 1 as a named role on a named database',
+      typeof gwPg === 'object' && /SELECT 1 on \S+ as \S+/.test(String(gwPg?.detail ?? '')),
+      typeof gwPg === 'object' ? String(gwPg?.detail ?? 'no detail') : 'no detail on the board',
+      String(gwPg?.detail ?? ''),
+    );
+
+    // ── 8. Redis and Kafka, from inside the network ───────────────────────────
+    const redisPing = tryDocker([
+      'exec',
+      'kartseek-redis',
+      'redis-cli',
+      '-a',
+      env.REDIS_PASSWORD ?? '',
+      '--no-auth-warning',
+      'ping',
+    ]);
+    ok(
+      'redis answers PING',
+      redisPing.ok && redisPing.out.trim() === 'PONG',
+      redisPing.out.trim() || 'no answer',
+    );
+    // Read the LIVE value and accept only a policy from an allow-list. The first
+    // version was `!/allkeys-lru/`, which `allkeys-lfu` and `allkeys-random` — both
+    // of which evict TTL-less keys just as happily — walked straight past.
+    const redisConfig = (name) =>
+      tryDocker([
+        'exec',
+        'kartseek-redis',
+        'redis-cli',
+        '-a',
+        env.REDIS_PASSWORD ?? '',
+        '--no-auth-warning',
+        'config',
+        'get',
+        name,
+      ]);
+    const policy = redisConfigVerdict('maxmemory-policy', redisConfig('maxmemory-policy').out, [
+      'volatile-lru',
+      'volatile-ttl',
+      'noeviction',
+    ]);
+    ok(
+      'redis does not evict keys that have no expiry',
+      policy.ok,
+      `maxmemory-policy is "${policy.value}" — loyalty balances, the KYC counter and a ride in ` +
+        `dispatch carry no TTL, so only volatile-lru / volatile-ttl / noeviction are safe`,
+      policy.value,
+    );
+    const aof = redisConfigVerdict('appendonly', redisConfig('appendonly').out, ['yes']);
+    ok(
+      'redis persists writes with an append-only file',
+      aof.ok,
+      `appendonly is "${aof.value}" — --save 60 1 alone loses up to a minute of the very keys ` +
+        `the eviction policy protects (AUD2-031)`,
+      aof.value,
+    );
+
+    // ── 9. The console, through its own container ─────────────────────────────
+    const web = inProfile.find((s) => s.kind === 'web-shell');
+    if (web) {
+      const login = await get(`http://127.0.0.1:${web.ports.http}/admin/login`, { timeout: 30000 });
+      ok('console GET /admin/login is 200', login.status === 200, `HTTP ${login.status}`);
+      // Next answers 200 for notFound(); assert the page is the page.
+      ok(
+        'the console rendered the sign-in form',
+        /name="email"|type="password"/i.test(login.text),
+        `${login.text.length} bytes and no password field`,
+      );
+    }
+    skip(
+      'the nginx edge',
+      'infra/nginx/nginx.conf upstreams host.docker.internal:3001/:3000 — a browser through ' +
+        'nginx reaches the HOST fleet, not these containers. IN11 owns it; probed directly instead.',
+    );
+
+    // ── 10. The ledgers: migrations, then real schema drift ───────────────────
+    const show = npm(['run', '--silent', 'migration:show:main'], {
+      cwd: path.join(root, 'apps/api'),
+    });
+    ok(
+      'the main migration ledger is level',
+      show.status === 0 && !show.out.includes('[ ]'),
+      show.status === 0
+        ? show.out
+            .split(/\r?\n/)
+            .filter((l) => l.includes('[ ]'))
+            .join(' ')
+            .slice(0, 200)
+        : `exit ${show.status}`,
+    );
+
+    const drift = npm(['run', '--silent', 'verify:schema-drift', '--', '--json'], {
+      cwd: path.join(root, 'apps/api'),
+    });
+    let census = { ok: false, line: 'verify:schema-drift produced no JSON', findings: 0 };
+    const braceAt = drift.out.indexOf('{');
+    if (braceAt >= 0) {
+      try {
+        census = driftCensus(JSON.parse(drift.out.slice(braceAt)));
+      } catch {
+        /* left as the failure above */
       }
     }
-    if (pending.size) await sleep(4000);
-  }
-  for (const n of pending) state.set(n, healthOf(nameOf({ name: n })));
-  for (const s of inProfile) {
-    const h = state.get(s.name) ?? 'unknown';
-    ok(`container ${s.name} healthy`, h === 'healthy', h === 'healthy' ? '' : h);
-  }
-
-  // ── 4. A staff token, so the gateway returns the full board ───────────────
-  const superadmin = await staffLogin(
-    'superadmin@kartseek.com',
-    'AdminPass123!',
-    env.REDIS_PASSWORD ?? '',
-  );
-  ok(
-    'superadmin signed in through the container (login → mfa/verify)',
-    !!superadmin.token,
-    superadmin.error ?? `role=${superadmin.user?.role ?? '?'}`,
-  );
-  const auth = superadmin.token ? { Authorization: `Bearer ${superadmin.token}` } : {};
-
-  // ── 5. Each service's own readiness board, against the registry ───────────
-  const boards = new Map();
-  for (const s of nest) {
-    const route = s.health?.ready;
-    if (!route) {
-      skip(`${s.name} readiness`, 'the registry gives this service no ready route');
-      continue;
-    }
-    const r = await get(`http://127.0.0.1:${s.ports.http}${route}`, { headers: auth });
-    boards.set(s.name, r);
-    const verdict = boardVerdict(s, r.json);
+    ok('no schema drift in the module databases', census.ok, census.line, census.line);
+    // The drift check runs on the HOST, against whatever answers on 5432, and the
+    // memory's two-Postgres-on-one-port trap applies. Tie its evidence to this
+    // run's container: every module's target must be the address `kartseek-postgres`
+    // publishes, and that publish must exist.
+    const pgPublish = tryDocker(['port', 'kartseek-postgres', '5432/tcp']);
+    const pgHostPort = (pgPublish.ok ? pgPublish.out.trim().split(/\r?\n/)[0] : '') || '';
+    const targets = census.targets ?? [];
+    const wrongTarget = targets.filter((t) => !t.endsWith(`@${pgHostPort}/${env.POSTGRES_DB}`));
     ok(
-      `${s.name} ${route}`,
-      r.status === 200 && verdict.ok,
-      verdict.ok && r.status === 200 ? '' : `HTTP ${r.status} ${verdict.detail}`.trim(),
+      'the drift census was read from this run’s Postgres container',
+      !!pgHostPort && targets.length > 0 && wrongTarget.length === 0,
+      !pgHostPort
+        ? 'kartseek-postgres publishes no host port for 5432'
+        : `${wrongTarget.length || 'no'} module target(s) do not name ${pgHostPort}/${env.POSTGRES_DB}: ${wrongTarget.slice(0, 2).join(', ')}`,
+      `${targets.length} module(s) against ${pgHostPort}/${env.POSTGRES_DB}`,
     );
-    if (verdict.unchecked.length)
-      skip(
-        `${s.name} ${verdict.unchecked.join('/')} dependency`,
-        `declared in services.yaml, not on this service's readiness board`,
+    say(`validate: schema drift census — ${census.line}`);
+
+    // ── 11. The regional lock, proved through the containers ──────────────────
+    const india = await staffLogin(
+      'india-admin@kartseek.com',
+      'AdminPass123!',
+      env.REDIS_PASSWORD ?? '',
+    );
+    const qatar = await staffLogin(
+      'qa-admin@kartseek.com',
+      'AdminPass123!',
+      env.REDIS_PASSWORD ?? '',
+    );
+    ok('india-admin (IN, locked) signed in', !!india.token, india.error ?? '');
+    ok('qa-admin (QA, locked) signed in', !!qatar.token, qatar.error ?? '');
+    const SELLERS = '/admin/marketplace/sellers?limit=1';
+    const call = (token, q) =>
+      get(`${GATEWAY}${SELLERS}${q}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (india.token && qatar.token && superadmin.token) {
+      const own = await call(india.token, '');
+      ok('IN admin reads its own market', own.status === 200, `HTTP ${own.status}`);
+      const ownQa = await call(qatar.token, '');
+      ok('QA admin reads its own market', ownQa.status === 200, `HTTP ${ownQa.status}`);
+      const cross = await call(india.token, '&country=QA');
+      const copy = String(cross.json?.message ?? cross.text ?? '');
+      ok(
+        'IN admin is refused QA with the gateway’s denial copy',
+        // The whole sentence, object clause included. `restricted to the IN market`
+        // alone also matches the copy `assertRecordInScope` builds for a single
+        // record, which is a different refusal from this list-scope one.
+        cross.status === 403 &&
+          /restricted to the IN market; those sellers belongs to QA/.test(copy),
+        `HTTP ${cross.status} ${copy.slice(0, 140)}`,
+        copy.slice(0, 120),
       );
-  }
-
-  // ── 6. The role each service is actually holding, from pg_stat_activity ───
-  //
-  // The board says a query ran; it does not say WHO ran it. A module service
-  // that quietly fell back to the superuser — `databaseCredentials()` reads
-  // DB_USER unprefixed, so one missing variable does exactly that — answers
-  // `database: up` and looks identical above.
-  //
-  // Timing is the whole trick. node-postgres closes an idle client after ten
-  // seconds (`idleTimeoutMillis`, TypeORM does not raise it), so a minute after
-  // boot `pg_stat_activity` holds nothing at all and a first attempt at this
-  // check reported "no open connection" for all eight. So every readiness route
-  // is fired FIRST, in parallel, and the catalogue read immediately after: each
-  // SELECT 1 leaves its connection in the pool, idle, inside that window.
-  const addrOf = new Map();
-  for (const s of nest) {
-    const ipOut = tryDocker([
-      'inspect',
-      '-f',
-      '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}',
-      nameOf(s),
-    ]);
-    addrOf.set(s.name, ipOut.ok ? ipOut.out.trim().split(/\s+/).filter(Boolean) : []);
-  }
-  await Promise.all(
-    nest
-      .filter((s) => s.database && s.health?.ready)
-      .map((s) => get(`http://127.0.0.1:${s.ports.http}${s.health.ready}`, { headers: auth })),
-  );
-  const roleRows = tryDocker([
-    'exec',
-    'kartseek-postgres',
-    'psql',
-    '-U',
-    env.POSTGRES_USER || 'postgres',
-    '-d',
-    env.POSTGRES_DB || 'kartseek_db',
-    '-At',
-    '-F',
-    '|',
-    '-c',
-    // `host()`, not `client_addr::text`: the cast keeps the netmask, so the rows
-    // read `172.18.0.24/32` and never matched what `docker inspect` reports.
-    `select host(client_addr), usename, count(*) from pg_stat_activity ` +
-      `where datname = current_database() and client_addr is not null group by 1,2`,
-  ]);
-  const byAddr = new Map();
-  if (roleRows.ok)
-    for (const line of roleRows.out.split(/\r?\n/).filter(Boolean)) {
-      const [addr, role] = line.split('|');
-      if (!byAddr.has(addr)) byAddr.set(addr, new Set());
-      byAddr.get(addr).add(role);
+      const superIn = await call(superadmin.token, '&country=IN');
+      const superQa = await call(superadmin.token, '&country=QA');
+      ok(
+        'superadmin reads both markets',
+        superIn.status === 200 && superQa.status === 200,
+        `IN ${superIn.status} / QA ${superQa.status}`,
+      );
+    } else {
+      skip('the regional proof', 'one of the three staff sign-ins did not produce a token');
     }
-  ok(
-    'pg_stat_activity names the connections',
-    roleRows.ok && byAddr.size > 0,
-    roleRows.ok ? 'readable, but no client connection was open' : roleRows.out.slice(0, 160),
-    `${byAddr.size} client address(es)`,
-  );
-  const roleOf = new Map();
-  for (const s of nest) {
-    const want = expectedRole(s, env);
-    if (!want) {
-      roleOf.set(s.name, 'n/a');
-      continue;
+
+    // ── 12. The logs, per container, so a bad line has an owner ───────────────
+    for (const s of inProfile) {
+      const r = tryDocker(['logs', '--tail', '400', nameOf(s)]);
+      const bad = r.out
+        .split(/\r?\n/)
+        .map((l) => [l, classifyLogLine(l)])
+        .filter(([, c]) => c);
+      const worst = bad.some(([, c]) => c === 'fatal')
+        ? 'fatal'
+        : bad.length
+          ? `${bad.length} error`
+          : 'clean';
+      logVerdict.set(s.name, worst);
+      ok(
+        `${s.name} log has no fatal or error line`,
+        bad.length === 0,
+        bad
+          .slice(0, 2)
+          .map(([l]) => l.trim().slice(0, 150))
+          .join(' | '),
+      );
     }
-    const ips = addrOf.get(s.name) ?? [];
-    const held = new Set();
-    for (const ip of ips) for (const r of byAddr.get(ip) ?? []) held.add(r);
-    roleOf.set(s.name, held.size ? [...held].join(',') : 'no connection');
-    ok(
-      `${s.name} connects as ${want}`,
-      held.size > 0 && [...held].every((r) => r === want),
-      held.size === 0
-        ? `nothing open from ${ips.join(',') || 'an unknown address'} right after SELECT 1`
-        : `holding ${[...held].join(', ')}`,
-      `from ${ips.join(',')}`,
-    );
-  }
 
-  // ── 7. The gateway's aggregate, which only staff see in full ──────────────
-  // The anonymous board is one word per dependency (AUD2-072). These three
-  // checks read fields that exist ONLY on the staff branch, so they are also
-  // the proof that the token above is being honoured rather than ignored.
-  const gwBoard = readinessBody(boards.get('api-gateway')?.json);
-  ok(
-    'gateway readiness is ready, not degraded',
-    gwBoard?.status === 'ready',
-    JSON.stringify(gwBoard?.checks ?? {}).slice(0, 240),
-    JSON.stringify(gwBoard?.checks ?? {}).slice(0, 160),
-  );
-  const gwRedis = gwBoard?.checks?.redis;
-  ok(
-    'the gateway is on the real Redis, not the in-process emulator',
-    gwRedis && typeof gwRedis === 'object' && gwRedis.emulated !== true && gwRedis.status === 'up',
-    typeof gwRedis === 'object'
-      ? (gwRedis?.detail ?? gwRedis?.reason ?? 'not up')
-      : 'the anonymous board cannot answer this — the staff token did not take',
-    'emulated=false',
-  );
-  const gwPg = gwBoard?.checks?.postgresql;
-  ok(
-    'the gateway ran SELECT 1 as a named role on a named database',
-    typeof gwPg === 'object' && /SELECT 1 on \S+ as \S+/.test(String(gwPg?.detail ?? '')),
-    typeof gwPg === 'object' ? String(gwPg?.detail ?? 'no detail') : 'no detail on the board',
-    String(gwPg?.detail ?? ''),
-  );
+    return summarise(results).code;
+  };
 
-  // ── 8. Redis and Kafka, from inside the network ───────────────────────────
-  const redisPing = tryDocker([
-    'exec',
-    'kartseek-redis',
-    'redis-cli',
-    '-a',
-    env.REDIS_PASSWORD ?? '',
-    '--no-auth-warning',
-    'ping',
-  ]);
-  ok(
-    'redis answers PING',
-    redisPing.ok && redisPing.out.trim() === 'PONG',
-    redisPing.out.trim() || 'no answer',
-  );
-  const policy = tryDocker([
-    'exec',
-    'kartseek-redis',
-    'redis-cli',
-    '-a',
-    env.REDIS_PASSWORD ?? '',
-    '--no-auth-warning',
-    'config',
-    'get',
-    'maxmemory-policy',
-  ]);
-  ok(
-    'redis does not evict keys that have no expiry',
-    policy.ok && !/allkeys-lru/.test(policy.out),
-    'allkeys-lru would evict loyalty balances, carts and MFA challenges',
-  );
-
-  // ── 9. The console, through its own container ─────────────────────────────
-  const web = inProfile.find((s) => s.kind === 'web-shell');
-  if (web) {
-    const login = await get(`http://127.0.0.1:${web.ports.http}/admin/login`, { timeout: 30000 });
-    ok('console GET /admin/login is 200', login.status === 200, `HTTP ${login.status}`);
-    // Next answers 200 for notFound(); assert the page is the page.
-    ok(
-      'the console rendered the sign-in form',
-      /name="email"|type="password"/i.test(login.text),
-      `${login.text.length} bytes and no password field`,
-    );
-  }
-  skip(
-    'the nginx edge',
-    'infra/nginx/nginx.conf upstreams host.docker.internal:3001/:3000 — a browser through ' +
-      'nginx reaches the HOST fleet, not these containers. IN11 owns it; probed directly instead.',
-  );
-
-  // ── 10. The ledgers: migrations, then real schema drift ───────────────────
-  const show = npm(['run', '--silent', 'migration:show:main'], {
-    cwd: path.join(root, 'apps/api'),
+  // ── 13. Teardown — the application tier only, on EVERY path ───────────────
+  const outcome = await withTeardown({
+    phases,
+    keep,
+    teardown: () => {
+      say('validate: removing the application tier; the datastores stay up.');
+      const down = tryDocker(downArgs(reg));
+      const left = composePs().filter((p) => p.State === 'running').length;
+      if (down.ok) say(`validate: ${left} container(s) still running (the infrastructure tier).`);
+      return {
+        ok: down.ok,
+        detail: down.ok ? `${left} infrastructure container(s) left up` : down.out.slice(0, 200),
+      };
+    },
   });
-  ok(
-    'the main migration ledger is level',
-    show.status === 0 && !show.out.includes('[ ]'),
-    show.status === 0
-      ? show.out
-          .split(/\r?\n/)
-          .filter((l) => l.includes('[ ]'))
-          .join(' ')
-          .slice(0, 200)
-      : `exit ${show.status}`,
-  );
-
-  const drift = npm(['run', '--silent', 'verify:schema-drift', '--', '--json'], {
-    cwd: path.join(root, 'apps/api'),
-  });
-  let census = { ok: false, line: 'verify:schema-drift produced no JSON', findings: 0 };
-  const braceAt = drift.out.indexOf('{');
-  if (braceAt >= 0) {
-    try {
-      census = driftCensus(JSON.parse(drift.out.slice(braceAt)));
-    } catch {
-      /* left as the failure above */
-    }
-  }
-  ok('no schema drift in the module databases', census.ok, census.line, census.line);
-  console.log(`validate: schema drift census — ${census.line}`);
-
-  // ── 11. The regional lock, proved through the containers ──────────────────
-  const india = await staffLogin(
-    'india-admin@kartseek.com',
-    'AdminPass123!',
-    env.REDIS_PASSWORD ?? '',
-  );
-  const qatar = await staffLogin(
-    'qa-admin@kartseek.com',
-    'AdminPass123!',
-    env.REDIS_PASSWORD ?? '',
-  );
-  ok('india-admin (IN, locked) signed in', !!india.token, india.error ?? '');
-  ok('qa-admin (QA, locked) signed in', !!qatar.token, qatar.error ?? '');
-  const SELLERS = '/admin/marketplace/sellers?limit=1';
-  const call = (token, q) =>
-    get(`${GATEWAY}${SELLERS}${q}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (india.token && qatar.token && superadmin.token) {
-    const own = await call(india.token, '');
-    ok('IN admin reads its own market', own.status === 200, `HTTP ${own.status}`);
-    const ownQa = await call(qatar.token, '');
-    ok('QA admin reads its own market', ownQa.status === 200, `HTTP ${ownQa.status}`);
-    const cross = await call(india.token, '&country=QA');
-    const copy = String(cross.json?.message ?? cross.text ?? '');
+  if (outcome.error) console.error(outcome.error);
+  if (keep) skip('teardown', '--keep was given; run `npm run stack:down` when you are finished');
+  else
     ok(
-      'IN admin is refused QA with the gateway’s denial copy',
-      cross.status === 403 && /restricted to the IN market/.test(copy),
-      `HTTP ${cross.status} ${copy.slice(0, 140)}`,
+      'teardown left the infrastructure running',
+      outcome.teardown.ok,
+      outcome.teardown.detail,
+      outcome.teardown.detail,
     );
-    const superIn = await call(superadmin.token, '&country=IN');
-    const superQa = await call(superadmin.token, '&country=QA');
-    ok(
-      'superadmin reads both markets',
-      superIn.status === 200 && superQa.status === 200,
-      `IN ${superIn.status} / QA ${superQa.status}`,
-    );
-  } else {
-    skip('the regional proof', 'one of the three staff sign-ins did not produce a token');
-  }
-
-  // ── 12. The logs, per container, so a bad line has an owner ───────────────
-  const logVerdict = new Map();
-  for (const s of inProfile) {
-    const r = tryDocker(['logs', '--tail', '400', nameOf(s)]);
-    const bad = r.out
-      .split(/\r?\n/)
-      .map((l) => [l, classifyLogLine(l)])
-      .filter(([, c]) => c);
-    const worst = bad.some(([, c]) => c === 'fatal')
-      ? 'fatal'
-      : bad.length
-        ? `${bad.length} error`
-        : 'clean';
-    logVerdict.set(s.name, worst);
-    ok(
-      `${s.name} log has no fatal or error line`,
-      bad.length === 0,
-      bad
-        .slice(0, 2)
-        .map(([l]) => l.trim().slice(0, 150))
-        .join(' | '),
-    );
-  }
-
-  // ── 13. Teardown — the application tier only ──────────────────────────────
-  if (!keep) {
-    console.log('validate: removing the application tier; the datastores stay up.');
-    const down = tryDocker(downArgs(reg));
-    ok('teardown left the infrastructure running', down.ok, down.ok ? '' : down.out.slice(0, 200));
-    const left = composePs().filter((p) => p.State === 'running').length;
-    console.log(`validate: ${left} container(s) still running (the infrastructure tier).`);
-  } else {
-    skip('teardown', '--keep was given; run `npm run stack:down` when you are finished');
-  }
 
   // ── 14. The table ─────────────────────────────────────────────────────────
   const table = [
@@ -993,7 +1420,10 @@ async function main() {
         : s.kind === 'web-shell'
           ? 'n/a'
           : '—';
-      const image = state.get(s.name) === 'absent' ? 'failed' : skipBuild ? 'reused' : 'built';
+      // Measured from the `up` log, not inferred from the flag. `--skip-build`
+      // runs no build step at all, so there is nothing to measure and the
+      // column says so rather than claiming "reused".
+      const image = images.get(s.name) ?? (skipBuild ? 'no build' : '—');
       return [
         s.name.padEnd(20),
         image.padEnd(9),
@@ -1005,10 +1435,25 @@ async function main() {
     }),
   ].join('\n');
 
-  const { code, report, failed, skipped, passed, total } = summarise(results);
+  const { report, failed, skipped, passed, total } = summarise(results);
   const wall = Math.round((Date.now() - started) / 1000);
   if (json) {
-    console.log(JSON.stringify({ profile, wallSeconds: wall, census, results }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          profile,
+          wallSeconds: wall,
+          exitCode: outcome.code,
+          census,
+          results: results.map((r) => ({
+            ...r,
+            status: r.skipped ? 'skipped' : r.ok ? 'pass' : 'fail',
+          })),
+        },
+        null,
+        2,
+      ),
+    );
   } else {
     console.log(table);
     console.log(`\n${report}`);
@@ -1018,7 +1463,9 @@ async function main() {
     );
     console.log(`schema drift: ${census.line}`);
   }
-  process.exit(code);
+  // `outcome.code`, not `summarise(results).code`: a run that threw exits 2 even
+  // though the rows it managed to record may all have passed.
+  process.exit(outcome.code);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

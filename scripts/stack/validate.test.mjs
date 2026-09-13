@@ -2,16 +2,23 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   boardVerdict,
+  busyPorts,
   classifyLogLine,
   composeVersionAtLeast,
   driftCensus,
   expectedBoardKeys,
   expectedRole,
+  imageVerdicts,
+  livenessBody,
   missingEnvKeys,
   parseArgs,
+  publishedPorts,
   readinessBody,
+  redisConfigVerdict,
   requiredComposeVars,
+  sameProcess,
   summarise,
+  withTeardown,
 } from './validate.mjs';
 
 // ── classifyLogLine ─────────────────────────────────────────────────────────
@@ -55,6 +62,26 @@ test('classifyLogLine catches the container-specific faults IN6 left behind', ()
   );
   assert.equal(classifyLogLine('error: column "mrp" does not exist'), 'error');
   assert.equal(classifyLogLine('RedisUnavailableError: no connection to redis'), 'error');
+});
+
+test('classifyLogLine reads TypeORM’s unquoted identifier too', () => {
+  // Postgres quotes it, TypeORM does not, and the unquoted spelling was
+  // previously caught only incidentally by \bERROR\b.
+  assert.equal(classifyLogLine('column Product.mrp does not exist'), 'error');
+  assert.equal(classifyLogLine('relation marketplace.sellers does not exist'), 'error');
+});
+
+test('classifyLogLine does not call a BIND variable host addressing', () => {
+  // IN6's hand-off: APP_BIND/DB_BIND/NGINX_BIND reach all 26 containers and
+  // their values are loopback ON PURPOSE — they name the host side of a port
+  // publish. A container echoing its own environment must not read as a fault.
+  assert.equal(classifyLogLine('APP_BIND=127.0.0.1 DB_BIND=127.0.0.1 KAFKA=kafka:29092'), null);
+  assert.equal(classifyLogLine('[Bootstrap] NGINX_BIND=127.0.0.1:9092 published'), null);
+  // …but a real bootstrap against the host listener still is one.
+  assert.equal(
+    classifyLogLine('KafkaJSConnectionError: connect to localhost:9092 refused'),
+    'fatal',
+  );
 });
 
 test('classifyLogLine does not cry wolf over the lines every healthy boot prints', () => {
@@ -295,16 +322,250 @@ test('expectedRole is the module role for a module and the platform owner otherw
 
 // ── the drift census line ───────────────────────────────────────────────────
 
-test('driftCensus counts tables and findings, and never hides an unreachable module', () => {
+// ── teardown runs whatever happens ──────────────────────────────────────────
+
+test('withTeardown removes the application tier on every path, including a throw', async () => {
+  const calls = [];
+  const teardown = () => {
+    calls.push('down');
+    return { ok: true, detail: '18 left up' };
+  };
+
+  const green = await withTeardown({ phases: async () => 0, teardown });
+  assert.equal(green.code, 0);
+  assert.equal(green.teardown.ran, true);
+
+  const red = await withTeardown({ phases: async () => 1, teardown });
+  assert.equal(red.code, 1);
+  assert.equal(red.teardown.ran, true);
+
+  // The finding: `up` throws, and the twelve containers used to stay running.
+  const boom = new Error('docker inspect hung');
+  const thrown = await withTeardown({
+    phases: async () => {
+      throw boom;
+    },
+    teardown,
+  });
+  assert.equal(thrown.code, 2, 'a thrown run is a setup failure');
+  assert.equal(thrown.error, boom);
+  assert.equal(thrown.teardown.ran, true, 'and it is still torn down');
+
+  assert.deepEqual(calls, ['down', 'down', 'down']);
+});
+
+test('withTeardown reports a teardown failure but never masks the run’s verdict', async () => {
+  const failing = () => {
+    throw new Error('no such container');
+  };
+  // A green run whose teardown failed is not green — containers were left behind.
+  const afterPass = await withTeardown({ phases: async () => 0, teardown: failing });
+  assert.equal(afterPass.runCode, 0);
+  assert.equal(afterPass.code, 1);
+  assert.equal(afterPass.teardown.ok, false);
+  assert.match(afterPass.teardown.detail, /no such container/);
+  // …and it can never turn a 1 or a 2 into anything softer.
+  assert.equal((await withTeardown({ phases: async () => 1, teardown: failing })).code, 1);
   assert.equal(
-    driftCensus({
-      reports: [
-        { module: 'grocery', tables: 14, findings: [] },
-        { module: 'taxi', tables: 9, findings: [] },
-      ],
-    }).line,
-    '2 module(s), 23 table(s), 0 finding(s), 0 unreachable',
+    (
+      await withTeardown({
+        phases: async () => {
+          throw new Error('x');
+        },
+        teardown: failing,
+      })
+    ).code,
+    2,
   );
+});
+
+test('withTeardown leaves the containers alone under --keep', async () => {
+  let called = false;
+  const out = await withTeardown({
+    phases: async () => 0,
+    teardown: () => {
+      called = true;
+    },
+    keep: true,
+  });
+  assert.equal(called, false);
+  assert.equal(out.code, 0);
+  assert.equal(out.teardown.ran, false);
+});
+
+// ── nothing else may hold a published port ──────────────────────────────────
+
+test('publishedPorts takes every port the registry declares, not just http', () => {
+  // The renderer publishes each of http/tcp/grpc, so each must be free before
+  // `up` can bind it.
+  const entries = [
+    { name: 'grocery-service', ports: { http: 3018, tcp: 4008, grpc: 5010 } },
+    { name: 'web', ports: { http: 3000 } },
+  ];
+  assert.deepEqual(publishedPorts(entries), [
+    { port: 3000, service: 'web' },
+    { port: 3018, service: 'grocery-service' },
+    { port: 4008, service: 'grocery-service' },
+    { port: 5010, service: 'grocery-service' },
+  ]);
+});
+
+test('busyPorts finds the listener and its PID in netstat output', () => {
+  const netstat = [
+    'Active Connections',
+    '  Proto  Local Address          Foreign Address        State           PID',
+    '  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       968',
+    '  TCP    127.0.0.1:3001         0.0.0.0:0              LISTENING       24680',
+    '  TCP    127.0.0.1:3018         0.0.0.0:0              TIME_WAIT       0',
+    '  TCP    [::]:3000              [::]:0                 LISTENING       13579',
+  ].join('\n');
+  const busy = busyPorts(netstat, [
+    { port: 3000, service: 'web' },
+    { port: 3001, service: 'api-gateway' },
+    { port: 3018, service: 'grocery-service' },
+  ]);
+  assert.deepEqual(busy, [
+    { port: 3000, pid: '13579', address: '[::]:3000', service: 'web' },
+    { port: 3001, pid: '24680', address: '127.0.0.1:3001', service: 'api-gateway' },
+  ]);
+  // A TIME_WAIT does not stop a bind, so 3018 is not reported.
+  assert.ok(!busy.some((b) => b.port === 3018));
+  assert.deepEqual(busyPorts(netstat, [{ port: 9999, service: 'x' }]), []);
+});
+
+test('busyPorts reads the Linux pid/name column too', () => {
+  // `netstat -tlnp` puts the local address at index 3, behind two queue
+  // counters; a fixed column index reads "0" there and finds nothing at all.
+  const linux = [
+    'Proto Recv-Q Send-Q Local Address     Foreign Address    State   PID/Program name',
+    'tcp        0      0 127.0.0.1:3001    0.0.0.0:*          LISTEN  1234/node',
+  ].join('\n');
+  assert.deepEqual(busyPorts(linux, [{ port: 3001, service: 'api-gateway' }]), [
+    { port: 3001, pid: '1234', address: '127.0.0.1:3001', service: 'api-gateway' },
+  ]);
+});
+
+// ── the listener on the host port is the container ──────────────────────────
+
+const CONTAINER = {
+  status: 'ok',
+  service: 'grocery-service',
+  uptime: 40,
+  nodeVersion: 'v26.8.2',
+  environment: 'production',
+};
+
+test('sameProcess prefers pid, then startedAt, then hostname when a board carries one', () => {
+  assert.deepEqual(sameProcess({ ...CONTAINER, pid: 7 }, { ...CONTAINER, pid: 7 }).basis, 'pid');
+  assert.equal(sameProcess({ ...CONTAINER, pid: 7 }, { ...CONTAINER, pid: 9 }).ok, false);
+  const started = '2026-09-13T04:00:00.000Z';
+  const byStart = sameProcess(
+    { ...CONTAINER, startedAt: started },
+    { ...CONTAINER, startedAt: started },
+  );
+  assert.equal(byStart.basis, 'startedAt');
+  assert.equal(byStart.ok, true);
+  const byHost = sameProcess({ ...CONTAINER, hostname: 'abc' }, { ...CONTAINER, hostname: 'def' });
+  assert.equal(byHost.basis, 'hostname');
+  assert.equal(byHost.ok, false);
+});
+
+test('sameProcess catches the host dev fleet answering on the container’s port', () => {
+  // The exact misattribution the review describes: `npm run dev:all` holds 3001,
+  // compose could not bind it, and the host gateway answers every probe.
+  const hostFleet = {
+    status: 'ok',
+    service: 'grocery-service',
+    uptime: 10800,
+    nodeVersion: 'v26.8.2',
+    environment: 'development',
+  };
+  const v = sameProcess(hostFleet, CONTAINER, { containerAgeSeconds: 45 });
+  assert.equal(v.ok, false);
+  assert.match(v.detail, /environment/);
+  // Even with a matching environment, three hours of uptime cannot come out of a
+  // container 45 seconds old.
+  const olderStillProduction = { ...hostFleet, environment: 'production' };
+  const w = sameProcess(olderStillProduction, CONTAINER, { containerAgeSeconds: 45 });
+  assert.equal(w.ok, false);
+  assert.equal(w.basis, 'uptime vs container age');
+});
+
+test('sameProcess accepts the container itself, boot time included', () => {
+  const v = sameProcess({ ...CONTAINER, uptime: 40 }, CONTAINER, { containerAgeSeconds: 55 });
+  assert.equal(v.ok, true, 'fifteen seconds of Nest boot is inside the grace');
+  assert.equal(sameProcess(CONTAINER, CONTAINER, { containerAgeSeconds: 41 }).ok, true);
+});
+
+test('sameProcess never passes a row it could not evaluate', () => {
+  assert.equal(sameProcess(null, CONTAINER, { containerAgeSeconds: 40 }).ok, false);
+  assert.equal(sameProcess(CONTAINER, null, { containerAgeSeconds: 40 }).ok, false);
+  assert.equal(sameProcess(CONTAINER, CONTAINER, {}).basis, 'unverifiable');
+  assert.equal(sameProcess(CONTAINER, CONTAINER, {}).ok, false);
+});
+
+test('livenessBody unwraps the gateway envelope the same way readinessBody does', () => {
+  assert.deepEqual(livenessBody({ success: true, data: CONTAINER }), CONTAINER);
+  assert.deepEqual(livenessBody(CONTAINER), CONTAINER);
+  assert.equal(livenessBody({ success: true, data: { nothing: 1 } }), null);
+});
+
+// ── redis, by allow-list rather than by blacklist ───────────────────────────
+
+test('redisConfigVerdict accepts only a policy on the list', () => {
+  const raw = (v) => `maxmemory-policy\n${v}\n`;
+  const allowed = ['volatile-lru', 'volatile-ttl', 'noeviction'];
+  assert.equal(redisConfigVerdict('maxmemory-policy', raw('volatile-lru'), allowed).ok, true);
+  assert.equal(redisConfigVerdict('maxmemory-policy', raw('noeviction'), allowed).ok, true);
+  // The gap the old `!/allkeys-lru/` left wide open: both of these evict a
+  // TTL-less loyalty balance exactly as allkeys-lru does.
+  assert.equal(redisConfigVerdict('maxmemory-policy', raw('allkeys-lfu'), allowed).ok, false);
+  assert.equal(redisConfigVerdict('maxmemory-policy', raw('allkeys-random'), allowed).ok, false);
+  assert.equal(redisConfigVerdict('maxmemory-policy', raw('allkeys-lru'), allowed).ok, false);
+  assert.equal(
+    redisConfigVerdict('maxmemory-policy', raw('allkeys-lfu'), allowed).value,
+    'allkeys-lfu',
+  );
+  // No answer at all is not a pass.
+  assert.equal(redisConfigVerdict('maxmemory-policy', '', allowed).ok, false);
+  assert.equal(redisConfigVerdict('appendonly', 'appendonly\nyes\n', ['yes']).ok, true);
+  assert.equal(redisConfigVerdict('appendonly', 'appendonly\nno\n', ['yes']).ok, false);
+});
+
+// ── the image column is measured, not inferred ──────────────────────────────
+
+test('imageVerdicts reads what compose said it did with each image', () => {
+  const log = [
+    ' Image kartseek/api-gateway:dev  Built ',
+    ' Image kartseek/web:dev  Reused ',
+    ' Container kartseek-web  Started ',
+  ].join('\n');
+  const out = imageVerdicts(log);
+  assert.equal(out.get('api-gateway'), 'built');
+  assert.equal(out.get('web'), 'reused');
+  assert.equal(out.get('taxi-service'), undefined, 'unmeasured stays unmeasured');
+  assert.equal(imageVerdicts('').size, 0);
+});
+
+test('driftCensus counts tables and findings, and never hides an unreachable module', () => {
+  const good = driftCensus({
+    reports: [
+      {
+        module: 'grocery',
+        tables: 14,
+        findings: [],
+        target: 'grocery_user@127.0.0.1:5432/kartseek_db',
+      },
+      { module: 'taxi', tables: 9, findings: [], target: 'taxi_user@127.0.0.1:5432/kartseek_db' },
+    ],
+  });
+  assert.equal(good.line, '2 module(s), 23 table(s), 0 finding(s), 0 unreachable');
+  // The targets are carried so the run can tie the census to its own Postgres
+  // container rather than to whatever answered on 5432.
+  assert.deepEqual(good.targets, [
+    'grocery_user@127.0.0.1:5432/kartseek_db',
+    'taxi_user@127.0.0.1:5432/kartseek_db',
+  ]);
   const bad = driftCensus({
     reports: [
       { module: 'grocery', tables: 14, findings: [{ kind: 'missing-column' }] },
