@@ -122,15 +122,22 @@ export const INFRA_ENDPOINT = {
  * Services whose HTTP listener is bound to loopback inside the container, where
  * the kubelet cannot reach it.
  *
- * `modules/pharmacy/backend/src/main.ts` calls `app.listen(port, '127.0.0.1')`
- * with no environment override — deliberate, because that surface is
- * unguarded — so an httpGet probe against it fails for ever. Its TCP transport
- * binds 0.0.0.0 and is what the gateway actually consumes, so that is what is
- * probed. This is a weaker check than the other 24 get, and the fix is in the
- * service: give it the `MARKETPLACE_HTTP_HOST` treatment (bind wide, and let
- * HttpSurfaceGuard keep /health the only route) and delete the name from here.
+ * **Empty, and meant to stay that way.** It held `pharmacy-service`, whose
+ * `main.ts` called `app.listen(port, '127.0.0.1')` with no environment
+ * override, so an httpGet probe could never reach it and all three of its
+ * probes fell back to `tcpSocket: 4010` — a check that passes while Postgres is
+ * gone and every route answers 503, which is the AUD2-002 defect this file
+ * exists to remove. The fix named here is the one that landed: pharmacy now
+ * reads `PHARMACY_HTTP_HOST` (the `MARKETPLACE_HTTP_HOST` convention, emitted
+ * as `0.0.0.0` by both renderers) and a `HttpSurfaceGuard` of its own keeps
+ * `/health` and `/health/ready` the only routes that answer.
+ *
+ * The machinery stays because the next service to hard-code a bind address
+ * should be declared here rather than silently probed on a port — but adding a
+ * name is choosing a weaker check, and the real fix is always the two lines in
+ * that service's `main.ts`.
  */
-export const LOOPBACK_HTTP = new Set(['pharmacy-service']);
+export const LOOPBACK_HTTP = new Set([]);
 
 /**
  * The uid each image actually runs as. `runAsUser` that disagrees with the
@@ -214,9 +221,11 @@ const indent = (n, lines) => lines.map((l) => (l === '' ? l : ' '.repeat(n) + l)
 /**
  * The ports a Service publishes.
  *
- * pharmacy-service's HTTP listener is on loopback, so a Service port aimed at
- * it is a black hole that resolves, connects and answers nothing — publish only
- * the transports that are actually bound wide.
+ * A `LOOPBACK_HTTP` service's HTTP listener is on loopback, so a Service port
+ * aimed at it is a black hole that resolves, connects and answers nothing —
+ * publish only the transports that are actually bound wide. The set is empty
+ * today (pharmacy-service was its one member until it learned
+ * `PHARMACY_HTTP_HOST`), so every service publishes every port it declares.
  */
 export function servicePorts(s) {
   const entries = Object.entries(s.ports).filter(

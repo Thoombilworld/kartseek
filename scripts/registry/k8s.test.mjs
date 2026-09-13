@@ -138,19 +138,31 @@ test('a Nest entry is probed on the health routes the registry declares', () => 
   }
 });
 
-test('the one service that binds HTTP to loopback is probed on its TCP port', () => {
-  assert.deepEqual([...LOOPBACK_HTTP], ['pharmacy-service']);
+test('no service is probed on a port instead of on its readiness route', () => {
+  // pharmacy-service was the one exception: `app.listen(port, '127.0.0.1')`
+  // with no override, so httpGet could never reach it and all three probes fell
+  // back to `tcpSocket: 4010` — which passes while Postgres is gone and every
+  // route answers 503, the AUD2-002 defect. It now reads PHARMACY_HTTP_HOST
+  // (emitted as 0.0.0.0 below) and closes the rest of its HTTP surface with a
+  // guard, so the exception list is empty.
+  assert.deepEqual([...LOOPBACK_HTTP], []);
   const c = containerOf(find(fixture, 'Deployment', 'pharmacy-service'));
-  for (const p of ['livenessProbe', 'readinessProbe', 'startupProbe']) {
-    assert.equal(c[p].httpGet, undefined);
-    assert.deepEqual(c[p].tcpSocket, { port: 4010 });
-  }
-  // And its Service publishes only what is reachable: an http port would
-  // resolve, connect and answer nothing.
+  assert.deepEqual(c.livenessProbe.httpGet, { path: '/health', port: 'http' });
+  assert.deepEqual(c.readinessProbe.httpGet, { path: '/health/ready', port: 'http' });
+  assert.deepEqual(c.startupProbe.httpGet, { path: '/health', port: 'http' });
+  for (const p of ['livenessProbe', 'readinessProbe', 'startupProbe'])
+    assert.equal(c[p].tcpSocket, undefined, p);
+  // The bind address that makes the probe reachable, in the pod's own env.
+  assert.equal(envOf(find(fixture, 'Deployment', 'pharmacy-service')).PHARMACY_HTTP_HOST.value, '0.0.0.0'); // prettier-ignore
+  // And its Service publishes the http port again — it is no longer a black
+  // hole that resolves, connects and answers nothing.
   assert.deepEqual(
     servicePorts(pharmacy).filter((l) => l.startsWith('- name:')),
-    ['- name: tcp'],
+    ['- name: http', '- name: tcp'],
   );
+  // Anti-vacuity: the whole manifest set is free of tcpSocket now, so a future
+  // addition to LOOPBACK_HTTP is a visible choice rather than a quiet one.
+  assert.ok(!/tcpSocket/.test(renderMicroservices(fixture)), 'every probe is an httpGet');
 });
 
 test('a web entry is probed on a page it must be able to render', () => {

@@ -3985,6 +3985,10 @@ spec:
   selector:
     app: pharmacy-service
   ports:
+    - name: http
+      protocol: TCP
+      port: 3020
+      targetPort: 3020
     - name: tcp
       protocol: TCP
       port: 4010
@@ -4116,25 +4120,24 @@ spec:
             - name: tcp
               containerPort: 4010
               protocol: TCP
-          # This service binds its HTTP listener to 127.0.0.1 (see LOOPBACK_HTTP in
-          # scripts/registry/k8s.mjs), which the kubelet cannot reach — so all three
-          # probes fall back to the TCP transport, which does bind 0.0.0.0. A port
-          # being open is a weaker claim than /health/ready; it is what is available.
           livenessProbe:
-            tcpSocket:
-              port: 4010
+            httpGet:
+              path: /health
+              port: http
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            tcpSocket:
-              port: 4010
+            httpGet:
+              path: /health/ready
+              port: http
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           startupProbe:
-            tcpSocket:
-              port: 4010
+            httpGet:
+              path: /health
+              port: http
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 30
