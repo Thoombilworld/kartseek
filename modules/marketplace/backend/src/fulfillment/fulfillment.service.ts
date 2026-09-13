@@ -10,6 +10,7 @@ import { Repository, DataSource, ILike, In, MoreThanOrEqual } from 'typeorm';
 import {
   applyMarketFilter,
   assertInMarket,
+  marketPredicate,
   normaliseMarket,
   requireId,
   requireMarket,
@@ -264,6 +265,10 @@ export class MarketplaceFulfillmentService {
     status?: string;
     page?: number;
     limit?: number;
+    /** What a global admin asked to filter on. */
+    region?: string;
+    /** The caller's lock, written by the gateway from the signed token. */
+    scope?: string;
   }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -271,6 +276,18 @@ export class MarketplaceFulfillmentService {
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.sellerId) where.sellerId = filters.sellerId;
     if (filters.status) where.status = filters.status;
+    // `return_requests.region_code` is on the row, and the decision path already
+    // asserts it (`updateReturnStatus` below). The list did not, so the admin
+    // returns queue was every market's under one market's heading.
+    // The requested market is refused rather than ignored when it cannot be
+    // read — see `requireMarket`: an unreadable filter that drops the
+    // predicate returns every market's returns under one market's heading.
+    const market = marketPredicate(
+      filters.scope,
+      requireMarket(filters.region, 'those returns', this.logger),
+      this.logger,
+    );
+    if (market) where.regionCode = market;
     const [data, total] = await this.returnRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },

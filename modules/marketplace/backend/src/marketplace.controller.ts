@@ -2210,9 +2210,24 @@ export class MarketplaceController {
     return this.fulfillment.createReturnRequest(data);
   }
 
+  /**
+   * Three callers share this one list: the customer's own returns, a seller's,
+   * and the admin queue. Named explicitly rather than forwarded whole so the
+   * market travelling with it is visible at the boundary — `scope` is the
+   * gateway's lock and `region` is what a global admin asked to filter on, and
+   * a payload spread would have hidden which of the two a field arrived in.
+   */
   @MessagePattern({ cmd: 'get_returns' })
   tcpGetReturns(@Payload() data: any) {
-    return this.fulfillment.getReturnRequests(data);
+    return this.fulfillment.getReturnRequests({
+      customerId: data?.customerId,
+      sellerId: data?.sellerId,
+      status: data?.status,
+      page: data?.page,
+      limit: data?.limit,
+      region: data?.region,
+      scope: data?.scope,
+    });
   }
 
   @MessagePattern({ cmd: 'get_return_by_id' })
