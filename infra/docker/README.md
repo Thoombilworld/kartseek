@@ -145,6 +145,62 @@ consequences worth knowing before you start the stack:
   applies while the security index is being created; afterwards use
   `_security/user`, or recreate the `elasticsearch_data` volume.
 
+### Redis keeps state, so it persists and it does not evict blindly (AUD2-031)
+
+Redis on this platform is not a pure cache. Four keys are written with **no
+expiry at all** and are the only copy of what they hold:
+
+| Key                             | Written by                                   |
+| ------------------------------- | -------------------------------------------- |
+| `loyalty:<userId>`              | `loyalty.service.ts:50` — a points balance   |
+| `admin:counter:pending_kyc`     | `admin.service.ts` — the KYC queue depth     |
+| `notifications:unread:<userId>` | `notifications.gateway.ts:176`               |
+| `ride:waiting:<rideId>`         | `driver-dispatch.service.ts:169` — in flight |
+
+Two settings follow from that, and `npm run stack:validate` asserts both live
+(`CONFIG GET maxmemory-policy`, `CONFIG GET appendonly`) so an edit to the
+`command:` line cannot quietly undo either:
+
+- **`--maxmemory-policy volatile-lru`.** `allkeys-*` evicts by recency or
+  frequency across _every_ key once `--maxmemory` (256 MB) is reached, so the
+  least recently touched of the four above disappears with no error anywhere.
+  `volatile-lru` evicts only keys that carry a TTL — sessions, MFA challenges,
+  rate-limit buckets, the home cache — all of which are re-derivable.
+- **`--appendonly yes --appendfsync everysec`.** `--save 60 1` alone is an RDB
+  snapshot at most once a minute, so an unclean stop loses up to a minute of
+  exactly the keys the policy change was made to protect. The AOF lives on the
+  same `redis_data` volume and is replayed ahead of the RDB on start.
+  `everysec` trades one second of exposure for throughput.
+
+**Turning the AOF on costs you the current dataset, once.** When Redis starts
+with `appendonly yes` it loads the **AOF**, not the RDB — so on the first start
+after this change the (empty) `appendonlydir` is authoritative and the existing
+`dump.rdb` is ignored. Measured here rather than assumed: a TTL-less key written
+before the switch was gone afterwards, while `/data/dump.rdb` was still on the
+volume at its full size; a key written _after_ the switch survives a
+`docker compose up -d --force-recreate redis` intact. Locally that costs a cache
+and some sessions and nothing else. On anything holding state you care about,
+enable it at runtime instead so Redis builds the AOF from memory:
+
+```bash
+docker compose exec redis redis-cli -a "$REDIS_PASSWORD" --no-auth-warning \
+  config set appendonly yes          # BGREWRITEAOF runs automatically
+```
+
+and only then change the `command:` line, so the next restart has an AOF to load.
+
+**The OOM this buys, and why it is the right failure.** Once the store is full
+of keys that all lack a TTL, `volatile-lru` has nothing it may evict and a write
+returns `OOM command not allowed when used memory > 'maxmemory'`. Under
+`NODE_ENV=production` — which every container runs —
+`RedisService.assertEmulatorAllowed` (`apps/api/libs/redis/src/redis.service.ts:128-140`)
+turns that into a `RedisUnavailableError`, which the shared filter maps to a
+**503**. Outside production it falls back to the in-process Map instead. So the
+full-store case is a loud error a developer sees, not silently invented state —
+which is the whole point of preferring it to silent eviction. If you hit it,
+raise `--maxmemory` or move the balance to Postgres (the loyalty half of that is
+IN10's money workstream); do not put `allkeys-lru` back.
+
 ### Per-module database roles
 
 Two init scripts are mounted into the shared `postgres` service, and the

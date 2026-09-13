@@ -304,11 +304,19 @@ failure exits non-zero and points you at that service's log under
 
 ```bash
 npm run stack:validate                    # the twelve of the admin profile
-npm run stack:validate -- --profile full  # all 35
+npm run stack:validate -- --profile full  # all 35 — see the caveat below
 npm run stack:validate -- --skip-build    # reuse the images already built
 npm run stack:validate -- --keep          # leave the containers up afterwards
 npm run stack:validate -- --json          # the results array instead of the table
 ```
+
+**`--profile full` cannot succeed yet, and it is the expensive way to find
+that out.** Only `apps/web` sets `output: 'standalone'` in its
+`next.config.mjs`; each of the eight web zones builds and then fails on the
+standalone `COPY`, so the run ends in eight failed image builds after burning
+the build time for all of them. Giving the zones that output is Task IN11.
+Until then `full` means the API tier plus the console, and `admin` is the
+profile to use.
 
 It does the whole sequence itself, so you do not have to run `stack:up:admin`
 first: `npm run infra:up` (that is what creates the 166 Kafka topics), then
