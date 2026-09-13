@@ -60,6 +60,7 @@
     "docs:check-links": "node scripts/docs/check-links.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "smoke": "node tests/smoke/boot-all.mjs",
+    "smoke:test": "node --test tests/smoke/boot-all.test.mjs",
     "postinstall": "node -e \"let p; try { p = require.resolve('patch-package/package.json') } catch { process.exit(0) } require('child_process').execFileSync(process.execPath, [require('path').join(p, '..', 'index.js')], { stdio: 'inherit' })\""
   },
   "devDependencies": {
