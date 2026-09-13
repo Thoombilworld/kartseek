@@ -6,20 +6,100 @@ import { useSeller } from '@/lib/contexts/seller-context';
 import { sellerApi, type SellerProduct } from '@/lib/modules/seller-api';
 import { useSellerList } from '@/lib/hooks/use-seller-data';
 import { SellerDataState } from '@/components/seller/marketplace/data-state';
-import { Package, Search, Plus, Upload, Edit, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Package,
+  Search,
+  Plus,
+  Upload,
+  Edit,
+  Trash2,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { useSellerMoney } from '@/lib/hooks/use-seller-money';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
+import { productStateOf } from './[id]/page';
+
 const STATUS_CFG: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700',
+  inactive: 'bg-slate-100 text-slate-600',
   draft: 'bg-slate-100 text-slate-500',
   pending: 'bg-amber-50 text-amber-700',
+  correction: 'bg-amber-50 text-amber-800',
   rejected: 'bg-red-50 text-red-700',
   suspended: 'bg-red-50 text-red-700',
+  deleted: 'bg-slate-100 text-slate-400',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Live',
+  inactive: 'Not on sale',
+  draft: 'Draft',
+  pending: 'Awaiting review',
+  correction: 'Correction requested',
+  rejected: 'Rejected',
+  suspended: 'Suspended',
+  deleted: 'Deleted',
 };
 
 const PAGE_SIZES = [10, 25, 50] as const;
 
+/** A table row, whatever shape the catalogue row arrived in. */
+interface ProductRow {
+  id: string;
+  name: string;
+  sku: string;
+  categoryName: string;
+  price: number | null;
+  mrp: number | null;
+  stock: number | null;
+  status: keyof typeof STATUS_CFG;
+  statusLabel: string;
+}
+
+/**
+ * The seller list endpoint returns catalogue rows (`status: 'ACTIVE'`,
+ * `approval_status`, `is_active`, and — when the read includes it — the
+ * seller's own `listing`). The page used to read `p.status === 'active'`,
+ * `p.sku`, `p.price` and `p.stock` off those rows: the status filters never
+ * matched a single product, every price was NaN, and typing in the search box
+ * crashed on `p.sku.toLowerCase()`.
+ */
+function toRow(p: any): ProductRow {
+  const state = productStateOf(p);
+  const listing = p?.listing ?? (Array.isArray(p?.listings) ? p.listings[0] : null) ?? null;
+  const numOrNull = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const key =
+    (
+      {
+        APPROVED: 'active',
+        INACTIVE: 'inactive',
+        DRAFT: 'draft',
+        PENDING: 'pending',
+        CORRECTION_REQUESTED: 'correction',
+        REJECTED: 'rejected',
+        SUSPENDED: 'suspended',
+        DELETED: 'deleted',
+      } as Record<string, keyof typeof STATUS_CFG>
+    )[state.key] ?? 'pending';
+  return {
+    id: String(p?.id ?? ''),
+    name: String(p?.name ?? p?.title ?? ''),
+    sku: String(listing?.sellerSku ?? p?.sku ?? p?.sellerSku ?? ''),
+    categoryName: String(p?.category?.name ?? p?.categoryName ?? ''),
+    price: numOrNull(listing?.sellingPrice ?? p?.sellingPrice ?? p?.price),
+    mrp: numOrNull(listing?.mrp ?? p?.mrp),
+    stock: numOrNull(listing?.stockQuantity ?? p?.stockQuantity ?? p?.stock),
+    status: key,
+    statusLabel: STATUS_LABEL[key],
+  };
+}
 
 export default function ProductsPage() {
   const { format: formatMoney } = useSellerMoney();
@@ -34,15 +114,20 @@ export default function ProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const productsRes = useSellerList<SellerProduct>(
-    (sellerId) => sellerApi.getProducts(sellerId),
+  const productsRes = useSellerList<SellerProduct>((sellerId) => sellerApi.getProducts(sellerId));
+  const products = useMemo<ProductRow[]>(
+    () => productsRes.rows.map(toRow).filter((r) => r.id),
+    [productsRes.rows],
   );
-  const products = productsRes.rows;
 
-  const filtered = useMemo(() => products.filter(p =>
-    (statusFilter === 'all' || p.status === statusFilter) &&
-    (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()))
-  ), [products, statusFilter, search]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter(
+      (p) =>
+        (statusFilter === 'all' || p.status === statusFilter) &&
+        (!q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)),
+    );
+  }, [products, statusFilter, search]);
 
   // Pagination
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -52,7 +137,9 @@ export default function ProductsPage() {
   );
 
   // Reset to page 1 when filters change
-  React.useEffect(() => { setPage(1); }, [search, statusFilter, pageSize]);
+  React.useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, pageSize]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget || !seller.sellerId) return;
@@ -71,20 +158,41 @@ export default function ProductsPage() {
   }, [deleteTarget, seller.sellerId, productsRes]);
 
   // Summary stats from loaded data
-  const stats = useMemo(() => ({
-    total: products.length,
-    active: products.filter(p => p.status === 'active').length,
-    outOfStock: products.filter(p => p.stock === 0).length,
-    pending: products.filter(p => p.status === 'pending').length,
-  }), [products]);
+  const stats = useMemo(
+    () => ({
+      total: products.length,
+      active: products.filter((p) => p.status === 'active').length,
+      outOfStock: products.filter((p) => p.stock === 0).length,
+      pending: products.filter((p) => p.status === 'pending' || p.status === 'correction').length,
+    }),
+    [products],
+  );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-black text-slate-900 flex items-center gap-2"><Package className="w-7 h-7 text-blue-600" />Manage Products</h1><p className="text-sm text-slate-500 mt-1">View and manage your product catalog</p></div>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+            <Package className="w-7 h-7 text-blue-600" />
+            Manage Products
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">View and manage your product catalog</p>
+        </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/seller/marketplace/products/bulk-upload" className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50"><Upload className="w-4 h-4" />Bulk Upload</Link>
-          <Link href="/seller/marketplace/products/add" className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm"><Plus className="w-4 h-4" />Add Product</Link>
+          <Link
+            href="/seller/marketplace/products/bulk-upload"
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50"
+          >
+            <Upload className="w-4 h-4" />
+            Bulk Upload
+          </Link>
+          <Link
+            href="/seller/marketplace/products/add"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Product
+          </Link>
         </div>
       </div>
 
@@ -98,22 +206,56 @@ export default function ProductsPage() {
         emptyTitle="No products yet"
         emptyDescription="Add your first product to start selling on KARTSEEK."
         emptyAction={
-          <Link href="/seller/marketplace/products/add" className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700">
-            <Plus className="w-4 h-4" />Add First Product
+          <Link
+            href="/seller/marketplace/products/add"
+            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add First Product
           </Link>
         }
       >
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[{ l: 'Total Products', v: stats.total, c: 'text-slate-900' }, { l: 'Active', v: stats.active, c: 'text-emerald-600' }, { l: 'Out of Stock', v: stats.outOfStock, c: 'text-red-600' }, { l: 'Pending Approval', v: stats.pending, c: 'text-amber-600' }].map(k => (
-            <div key={k.l} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><p className="text-xs text-slate-500">{k.l}</p><p className={`text-2xl font-black mt-1 ${k.c}`}>{k.v}</p></div>
+          {[
+            { l: 'Total Products', v: stats.total, c: 'text-slate-900' },
+            { l: 'Active', v: stats.active, c: 'text-emerald-600' },
+            { l: 'Out of Stock', v: stats.outOfStock, c: 'text-red-600' },
+            { l: 'Pending Approval', v: stats.pending, c: 'text-amber-600' },
+          ].map((k) => (
+            <div key={k.l} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+              <p className="text-xs text-slate-500">{k.l}</p>
+              <p className={`text-2xl font-black mt-1 ${k.c}`}>{k.v}</p>
+            </div>
           ))}
         </div>
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1"><Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or SKU..." className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-          <div className="flex flex-wrap gap-1.5">{['all', 'active', 'draft', 'pending', 'rejected'].map(s => (<button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-2 text-xs font-bold rounded-lg border capitalize transition-colors ${statusFilter === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>{s}</button>))}</div>
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or SKU..."
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
+            {(
+              ['all', 'active', 'pending', 'correction', 'draft', 'rejected', 'inactive'] as const
+            ).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                aria-pressed={statusFilter === s}
+                className={`px-3 py-2 text-xs font-bold rounded-lg border transition-colors ${statusFilter === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+              >
+                {s === 'all' ? 'All' : STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Product Table */}
@@ -127,25 +269,54 @@ export default function ProductsPage() {
                   <th className="px-4 py-3 text-left font-semibold text-slate-500">SKU</th>
                   <th className="px-4 py-3 text-right font-semibold text-slate-500">Price</th>
                   <th className="px-4 py-3 text-right font-semibold text-slate-500">Stock</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-500">Sold</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-500">Status</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-500">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {pagedProducts.map(p => (
+                {pagedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-3.5">
-                      <div><p className="font-medium text-slate-800 truncate max-w-[250px]">{p.name}</p><p className="text-[10px] text-slate-400">{p.categoryName}{p.hsn ? ` · HSN: ${p.hsn}` : ''}</p></div>
+                      <div>
+                        <Link
+                          href={`/seller/marketplace/products/${p.id}`}
+                          className="font-medium text-slate-800 hover:text-blue-600 truncate max-w-[250px] block"
+                        >
+                          {p.name}
+                        </Link>
+                        <p className="text-[10px] text-slate-400">{p.categoryName}</p>
+                      </div>
                     </td>
-                    <td className="px-4 py-3.5 font-mono text-xs text-slate-500">{p.sku}</td>
-                    <td className="px-4 py-3.5 text-right"><p className="font-bold text-slate-900">{fmt(p.price)}</p><p className="text-[10px] text-slate-400 line-through">{fmt(p.mrp)}</p></td>
-                    <td className={`px-4 py-3.5 text-right font-bold ${p.stock === 0 ? 'text-red-600' : p.stock < 20 ? 'text-amber-600' : 'text-slate-700'}`}>{p.stock}</td>
-                    <td className="px-4 py-3.5 text-right text-slate-600">{p.sold}</td>
-                    <td className="px-4 py-3.5"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-md capitalize ${STATUS_CFG[p.status]}`}>{p.status}</span></td>
+                    <td className="px-4 py-3.5 font-mono text-xs text-slate-500">{p.sku || '—'}</td>
+                    <td className="px-4 py-3.5 text-right">
+                      <p className="font-bold text-slate-900">
+                        {p.price !== null ? fmt(p.price) : '—'}
+                      </p>
+                      {p.mrp !== null && p.price !== null && p.mrp > p.price && (
+                        <p className="text-[10px] text-slate-400 line-through">{fmt(p.mrp)}</p>
+                      )}
+                    </td>
+                    <td
+                      className={`px-4 py-3.5 text-right font-bold ${p.stock === 0 ? 'text-red-600' : p.stock !== null && p.stock < 20 ? 'text-amber-600' : 'text-slate-700'}`}
+                    >
+                      {p.stock ?? '—'}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-md whitespace-nowrap ${STATUS_CFG[p.status]}`}
+                      >
+                        {p.statusLabel}
+                      </span>
+                    </td>
                     <td className="px-4 py-3.5">
                       <div className="flex gap-1">
-                        <Link href={`/seller/marketplace/products/${p.id}/edit`} className="p-1.5 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600"><Edit className="w-4 h-4" /></Link>
+                        <Link
+                          href={`/seller/marketplace/products/${p.id}/edit`}
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+                          aria-label={`Edit ${p.name}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Link>
                         <button
                           type="button"
                           onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
@@ -172,7 +343,10 @@ export default function ProductsPage() {
               <p className="text-xs text-slate-500 mt-1">Try a different search term or filter</p>
               <button
                 type="button"
-                onClick={() => { setSearch(''); setStatusFilter('all'); }}
+                onClick={() => {
+                  setSearch('');
+                  setStatusFilter('all');
+                }}
                 className="mt-3 text-xs font-bold text-blue-600 hover:underline"
               >
                 Clear filters
@@ -185,23 +359,26 @@ export default function ProductsPage() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span>
-                  Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}
+                  Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)}{' '}
+                  of {filtered.length}
                 </span>
                 <select
                   value={pageSize}
-                  onChange={e => setPageSize(Number(e.target.value))}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
                   className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                   aria-label="Rows per page"
                 >
-                  {PAGE_SIZES.map(s => (
-                    <option key={s} value={s}>{s} per page</option>
+                  {PAGE_SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s} per page
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                   className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Previous page"
@@ -213,7 +390,7 @@ export default function ProductsPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
                   className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Next page"
@@ -228,8 +405,15 @@ export default function ProductsPage() {
 
       {/* Delete Confirmation Dialog */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={() => !deleting && setDeleteTarget(null)}><DismissOnEscape onDismiss={() => !deleting && setDeleteTarget(null)} />
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4"
+          onClick={() => !deleting && setDeleteTarget(null)}
+        >
+          <DismissOnEscape onDismiss={() => !deleting && setDeleteTarget(null)} />
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-500" />
