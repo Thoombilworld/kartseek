@@ -2,6 +2,8 @@ export * from './security.module';
 export * from './jwt.strategy';
 export * from './jwt-auth.guard';
 export * from './ddos-protection.middleware';
+export * from './client-ip.util';
+export * from './client-ip.util';
 export * from './ws-ddos.guard';
 export * from './ddos-monitor.service';
 export * from './pci-security.service';

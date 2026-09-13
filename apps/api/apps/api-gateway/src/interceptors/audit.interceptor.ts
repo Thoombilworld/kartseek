@@ -8,6 +8,15 @@ import {
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { marketScopeOf } from '../guards/market-scope';
+import { clientIp } from '@app/security';
+
+/**
+ * Re-exported so this interceptor's own IP spec, and every gateway file that
+ * used to hand-roll an extractor, name one symbol. The implementation lives in
+ * `@app/security` because `libs/region`'s middleware needs it too and a library
+ * may not reach into `apps/api-gateway/src` (dispatch addendum item 5).
+ */
+export { clientIp };
 
 /** Anything that can carry an event to the audit topic. */
 export interface AuditSink {
@@ -20,8 +29,9 @@ export const AUDIT_TOPIC = 'audit.log';
 /**
  * AuditInterceptor — structured audit logging with request correlation.
  *
- * Captures request id, authenticated identity, method/URL, client IP (honouring
- * X-Forwarded-For), user agent and outcome.
+ * Captures request id, authenticated identity, method/URL, client IP (from
+ * Express under `trust proxy`, never from a header — see `clientIp`), user
+ * agent and outcome.
  *
  * State-changing requests are additionally published to the `audit.log` Kafka
  * topic, where `audit-log-service` writes them to the immutable `audit_logs`
@@ -56,7 +66,7 @@ export class AuditInterceptor implements NestInterceptor {
     const user = req.user ? req.user.id || req.user.sub : 'Anonymous';
     const method = req.method;
     const url = req.url;
-    const ip = this.extractClientIp(req);
+    const ip = clientIp(req);
     const userAgent = req.headers['user-agent']?.substring(0, 100) || 'unknown';
 
     const now = Date.now();
@@ -219,19 +229,5 @@ export class AuditInterceptor implements NestInterceptor {
     );
     if (idAt > 0) return { entityType: parts[idAt - 1], entityId: parts[idAt] };
     return { entityType: parts[parts.length - 1] };
-  }
-
-  /**
-   * Extract the true client IP, accounting for reverse proxies.
-   * Priority: X-Forwarded-For → X-Real-IP → req.ip → socket address
-   */
-  private extractClientIp(req: any): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      // X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2
-      // The first entry is the original client IP
-      return forwarded.split(',')[0].trim();
-    }
-    return req.headers['x-real-ip'] || req.ip || req.socket?.remoteAddress || 'unknown';
   }
 }

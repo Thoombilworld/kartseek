@@ -17,7 +17,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ClientProxy } from '@nestjs/microservices';
 import { catchError, lastValueFrom, timeout } from 'rxjs';
-import { JwtAuthGuard } from '@app/security';
+import { JwtAuthGuard, clientIp } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole, rpcCatch } from '@app/common';
@@ -95,13 +95,6 @@ export class AdminAuditController {
     return resolveScope(req, requested, 'that audit trail');
   }
 
-  /** The first address in `X-Forwarded-For`, which is the client's. */
-  private clientIp(req: any): string | undefined {
-    const forwarded = req?.headers?.['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
-    return req?.ip;
-  }
-
   @Get()
   @ApiOperation({
     summary: "Administrative actions, newest first, confined to the caller's market",
@@ -165,7 +158,7 @@ export class AdminAuditController {
       actorId: req.user?.id ?? req.user?.userId ?? req.user?.sub,
       actorEmail: req.user?.email,
       actorRole: req.user?.role,
-      actorIp: this.clientIp(req),
+      actorIp: clientIp(req),
       entityType: dto.entityType,
       entityId: dto.entityId,
       reason: dto.reason,

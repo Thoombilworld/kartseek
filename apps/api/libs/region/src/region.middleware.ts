@@ -4,6 +4,10 @@ import { RegionService } from './region.service';
 import { REGION_HEADER } from './region.decorator';
 import { type SupportedCountryCode } from './region.types';
 import { isActiveRegion, DEFAULT_REGION } from './region.config';
+// The deep path, not the `@app/security` barrel: that barrel is `SecurityModule`
+// and every guard, service and middleware it provides, and this library is
+// mounted by all eight module backends. A pure function needs none of it.
+import { clientIp } from '@app/security/client-ip.util';
 
 // Extend Express Request with region data
 declare global {
@@ -58,12 +62,17 @@ export class RegionMiddleware implements NestMiddleware {
       return next();
     }
 
-    // 3. IP geolocation
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-      || req.socket?.remoteAddress
-      || '127.0.0.1';
+    // 3. IP geolocation.
+    //
+    // `clientIp` (`@app/security`) rather than the raw header: Express has
+    // already walked `X-Forwarded-For` across exactly `trust proxy` hops and
+    // stopped at the first address nothing vouched for. Reading the leftmost
+    // entry instead took whichever address the caller had typed there, which is
+    // the AUD2-125 defect in its quietest form — this middleware runs on every
+    // request that did not send `X-Region-Code`.
+    const ip = clientIp(req) || '127.0.0.1';
 
-    const result = await this.regionService.detectRegionFromIp(clientIp);
+    const result = await this.regionService.detectRegionFromIp(ip);
     req.regionCode = result.countryCode;
     req.regionDetectedVia = result.detectedVia;
 

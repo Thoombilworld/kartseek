@@ -1,12 +1,18 @@
-import {
-  Injectable,
-  type CanActivate,
-  type ExecutionContext,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, type CanActivate, type ExecutionContext, Logger } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
 import { RedisService } from '@app/redis';
+
+/**
+ * The peers whose `X-Forwarded-For` a socket handshake may believe.
+ *
+ * The same list `DdosProtectionMiddleware` reads, from the same variable, so
+ * the HTTP and WebSocket halves of the rate limiter cannot disagree about which
+ * hop is ours.
+ */
+const WS_TRUSTED_PROXIES: Set<string> = new Set(
+  (process.env.DDOS_TRUSTED_PROXIES || '127.0.0.1,::1').split(',').map((p) => p.trim()),
+);
 
 /**
  * WebSocket DDoS Guard — Complete abuse prevention for all Socket.IO namespaces.
@@ -42,13 +48,13 @@ import { RedisService } from '@app/redis';
 export class WsDdosGuard implements CanActivate {
   private readonly logger = new Logger('WS-DDoS-Guard');
 
-  private readonly MAX_CONNECTIONS_PER_IP  = +( process.env.WS_MAX_CONNECTIONS_PER_IP  || 10);
-  private readonly MAX_CONN_RATE_PER_MIN   = +( process.env.WS_MAX_CONN_RATE_PER_MIN   || 8);
-  private readonly MAX_MESSAGES_PER_SECOND = +( process.env.WS_MAX_MESSAGES_PER_SECOND || 15);
-  private readonly MAX_IDENTICAL_PER_2S    = +( process.env.WS_MAX_IDENTICAL_PER_2S    || 5);
-  private readonly MAX_MESSAGE_SIZE        = +( process.env.WS_MAX_MESSAGE_SIZE        || 65_536); // 64KB
-  private readonly WS_BAN_DURATION         = +( process.env.WS_BAN_DURATION            || 600);   // 10min
-  private readonly WS_STRIKE_THRESHOLD     = +( process.env.WS_STRIKE_THRESHOLD        || 3);
+  private readonly MAX_CONNECTIONS_PER_IP = +(process.env.WS_MAX_CONNECTIONS_PER_IP || 10);
+  private readonly MAX_CONN_RATE_PER_MIN = +(process.env.WS_MAX_CONN_RATE_PER_MIN || 8);
+  private readonly MAX_MESSAGES_PER_SECOND = +(process.env.WS_MAX_MESSAGES_PER_SECOND || 15);
+  private readonly MAX_IDENTICAL_PER_2S = +(process.env.WS_MAX_IDENTICAL_PER_2S || 5);
+  private readonly MAX_MESSAGE_SIZE = +(process.env.WS_MAX_MESSAGE_SIZE || 65_536); // 64KB
+  private readonly WS_BAN_DURATION = +(process.env.WS_BAN_DURATION || 600); // 10min
+  private readonly WS_STRIKE_THRESHOLD = +(process.env.WS_STRIKE_THRESHOLD || 3);
 
   constructor(private readonly redis: RedisService) {}
 
@@ -84,7 +90,9 @@ export class WsDdosGuard implements CanActivate {
     if (msgCount === 1) await this.redis.expire(msgKey, 2);
 
     if (msgCount > effectiveMsgMax) {
-      this.logger.warn(`⚡ WS message flood: ${clientIp} [${client.id}] ${msgCount}/s (max=${effectiveMsgMax})`);
+      this.logger.warn(
+        `⚡ WS message flood: ${clientIp} [${client.id}] ${msgCount}/s (max=${effectiveMsgMax})`,
+      );
       await this.recordWsStrike(clientIp, client, 'message_flood');
       throw new WsException({
         code: 'MSG_RATE_LIMIT',
@@ -99,7 +107,9 @@ export class WsDdosGuard implements CanActivate {
       if (eventCount === 1) await this.redis.expire(eventKey, 3);
 
       if (eventCount > this.MAX_IDENTICAL_PER_2S) {
-        this.logger.warn(`🔁 Event flood: ${clientIp} [${client.id}] event="${event}" ${eventCount}x in 2s`);
+        this.logger.warn(
+          `🔁 Event flood: ${clientIp} [${client.id}] event="${event}" ${eventCount}x in 2s`,
+        );
         await this.recordWsStrike(clientIp, client, `event_flood:${event}`);
         throw new WsException({
           code: 'EVENT_FLOOD',
@@ -112,7 +122,9 @@ export class WsDdosGuard implements CanActivate {
     if (data !== undefined && data !== null) {
       const payloadSize = this.measurePayload(data);
       if (payloadSize > this.MAX_MESSAGE_SIZE) {
-        this.logger.warn(`📦 WS oversized payload: ${clientIp} [${client.id}] ${payloadSize} bytes`);
+        this.logger.warn(
+          `📦 WS oversized payload: ${clientIp} [${client.id}] ${payloadSize} bytes`,
+        );
         await this.recordWsStrike(clientIp, client, 'oversized_payload');
         throw new WsException({
           code: 'PAYLOAD_TOO_LARGE',
@@ -137,7 +149,10 @@ export class WsDdosGuard implements CanActivate {
     const isBanned = await this.redis.get(`ws:banned:${clientIp}`);
     if (isBanned) {
       this.logger.warn(`🚫 Banned IP attempted WS connection: ${clientIp}`);
-      client.emit('error', { code: 'WS_BANNED', message: 'Connection blocked due to prior abuse.' });
+      client.emit('error', {
+        code: 'WS_BANNED',
+        message: 'Connection blocked due to prior abuse.',
+      });
       client.disconnect(true);
       return false;
     }
@@ -148,9 +163,14 @@ export class WsDdosGuard implements CanActivate {
     if (connCount === 1) await this.redis.expire(connKey, 300);
 
     if (connCount > this.MAX_CONNECTIONS_PER_IP) {
-      this.logger.warn(`🔌 Too many WS connections from ${clientIp}: ${connCount}/${this.MAX_CONNECTIONS_PER_IP}`);
+      this.logger.warn(
+        `🔌 Too many WS connections from ${clientIp}: ${connCount}/${this.MAX_CONNECTIONS_PER_IP}`,
+      );
       await this.recordWsStrike(clientIp, client, 'too_many_connections');
-      client.emit('error', { code: 'TOO_MANY_CONNECTIONS', message: 'Maximum concurrent connections reached for your IP.' });
+      client.emit('error', {
+        code: 'TOO_MANY_CONNECTIONS',
+        message: 'Maximum concurrent connections reached for your IP.',
+      });
       client.disconnect(true);
       // Decrement since this connection is being rejected
       await this.redis.decr(connKey);
@@ -165,7 +185,10 @@ export class WsDdosGuard implements CanActivate {
     if (connRate > this.MAX_CONN_RATE_PER_MIN) {
       this.logger.warn(`🌀 WS connection storm: ${clientIp} opened ${connRate} sockets/min`);
       await this.recordWsStrike(clientIp, client, 'connection_storm');
-      client.emit('error', { code: 'CONNECTION_STORM', message: 'Too many connections opened rapidly. Please wait before reconnecting.' });
+      client.emit('error', {
+        code: 'CONNECTION_STORM',
+        message: 'Too many connections opened rapidly. Please wait before reconnecting.',
+      });
       client.disconnect(true);
       await this.redis.decr(connKey);
       return false;
@@ -176,8 +199,13 @@ export class WsDdosGuard implements CanActivate {
     if (attackMode === 'elevated') {
       // During attack, only allow 50% of connections per IP
       if (connCount > Math.floor(this.MAX_CONNECTIONS_PER_IP * 0.5)) {
-        this.logger.warn(`🛡️ Attack mode: rejecting connection from ${clientIp} (${connCount} active)`);
-        client.emit('error', { code: 'SERVICE_DEGRADED', message: 'Service is currently under high load. Please try again shortly.' });
+        this.logger.warn(
+          `🛡️ Attack mode: rejecting connection from ${clientIp} (${connCount} active)`,
+        );
+        client.emit('error', {
+          code: 'SERVICE_DEGRADED',
+          message: 'Service is currently under high load. Please try again shortly.',
+        });
         client.disconnect(true);
         await this.redis.decr(connKey);
         return false;
@@ -187,7 +215,9 @@ export class WsDdosGuard implements CanActivate {
     // Store socket → IP mapping for cleanup
     await this.redis.hset('ws:socket:ip', client.id, clientIp);
 
-    this.logger.log(`✅ WS connection accepted: ${clientIp} [${client.id}] (${connCount}/${this.MAX_CONNECTIONS_PER_IP} concurrent)`);
+    this.logger.log(
+      `✅ WS connection accepted: ${clientIp} [${client.id}] (${connCount}/${this.MAX_CONNECTIONS_PER_IP} concurrent)`,
+    );
     return true;
   }
 
@@ -211,12 +241,16 @@ export class WsDdosGuard implements CanActivate {
 
   /** Force-ban a WS IP immediately (callable from admin controller). */
   async banIpFromWebSocket(ip: string, durationSeconds: number, reason: string): Promise<void> {
-    await this.redis.set(`ws:banned:${ip}`, JSON.stringify({
-      reason,
-      bannedAt: new Date().toISOString(),
-      duration: durationSeconds,
-      manual: true,
-    }), durationSeconds);
+    await this.redis.set(
+      `ws:banned:${ip}`,
+      JSON.stringify({
+        reason,
+        bannedAt: new Date().toISOString(),
+        duration: durationSeconds,
+        manual: true,
+      }),
+      durationSeconds,
+    );
     this.logger.warn(`🔒 Manual WS ban: ${ip} for ${Math.round(durationSeconds / 60)} min`);
   }
 
@@ -241,15 +275,21 @@ export class WsDdosGuard implements CanActivate {
       const multipliers = [1, 3, 6, 18]; // 10min → 30min → 1h → 3h
       const banDuration = this.WS_BAN_DURATION * multipliers[multiplierIndex];
 
-      await this.redis.set(`ws:banned:${ip}`, JSON.stringify({
-        reason,
-        strikes,
-        bannedAt: new Date().toISOString(),
-        duration: banDuration,
-        banLevel: multiplierIndex + 1,
-      }), banDuration);
+      await this.redis.set(
+        `ws:banned:${ip}`,
+        JSON.stringify({
+          reason,
+          strikes,
+          bannedAt: new Date().toISOString(),
+          duration: banDuration,
+          banLevel: multiplierIndex + 1,
+        }),
+        banDuration,
+      );
 
-      this.logger.error(`🚨 WS IP BANNED: ${ip} for ${Math.round(banDuration / 60)}min (level ${multiplierIndex + 1}, reason: ${reason})`);
+      this.logger.error(
+        `🚨 WS IP BANNED: ${ip} for ${Math.round(banDuration / 60)}min (level ${multiplierIndex + 1}, reason: ${reason})`,
+      );
 
       client.emit('error', {
         code: 'WS_BANNED',
@@ -261,19 +301,37 @@ export class WsDdosGuard implements CanActivate {
     }
   }
 
+  /**
+   * The address a WebSocket ban is keyed on.
+   *
+   * Express's `trust proxy` does not reach here — socket.io resolves
+   * `handshake.address` from the raw upgrade request — so this is the one place
+   * that still has to decide for itself, and it decides the way
+   * `DdosProtectionMiddleware.extractClientIp` does: `X-Forwarded-For` counts
+   * only when the peer that sent it is a proxy we run.
+   *
+   * It used to take the leftmost forwarded entry unconditionally, which made
+   * every ban here worthless — `ws:banned:<ip>`, `ws:strikes:<ip>` and the
+   * connection counter were all keyed on a string the banned client picks, so
+   * evading a flood ban was one header away, and a flooder could equally pin
+   * the ban on somebody else's address.
+   */
   private getSocketIp(client: Socket): string {
+    const peer = client.handshake.address || 'unknown';
+    if (!WS_TRUSTED_PROXIES.has(peer)) return peer;
+
     const forwarded = client.handshake.headers['x-forwarded-for'];
     if (forwarded) {
       const ip = (typeof forwarded === 'string' ? forwarded : forwarded[0]).split(',')[0].trim();
       if (ip) return ip;
     }
-    return client.handshake.address || 'unknown';
+    return peer;
   }
 
   private extractEventName(context: ExecutionContext): string | null {
     try {
       // NestJS stores the event name in the handler metadata
-      return Reflect.getMetadata('message', context.getHandler()) as string || null;
+      return (Reflect.getMetadata('message', context.getHandler()) as string) || null;
     } catch {
       return null;
     }
@@ -288,6 +346,10 @@ export class WsDdosGuard implements CanActivate {
   }
 
   private safeJsonParse(raw: string): Record<string, any> | null {
-    try { return JSON.parse(raw); } catch { return null; }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
 }

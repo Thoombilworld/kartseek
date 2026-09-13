@@ -134,10 +134,17 @@ describe('AdminAuditController', () => {
     expect(payload().country).toBe('AE');
   });
 
-  it('prefers the forwarded client address over the socket address', async () => {
+  /**
+   * This case used to assert the opposite — that the forwarded header won over
+   * the address Express resolved — which is precisely AUD2-125: `actorIp` on a
+   * row of the immutable audit collection was the caller's to write. The row
+   * now records the address `trust proxy` arrived at, and a header that
+   * disagrees changes nothing.
+   */
+  it('records the address Express resolved, not the one the caller forwarded', async () => {
     await ctrl.record(req(globalAdmin, { 'x-forwarded-for': '203.0.113.7, 10.1.1.1' }), {
       action: 'note',
     });
-    expect(payload().actorIp).toBe('203.0.113.7');
+    expect(payload().actorIp).toBe('10.0.0.9');
   });
 });

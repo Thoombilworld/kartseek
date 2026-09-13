@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RedisService } from '@app/redis';
-import { JwtAuthGuard } from '@app/security';
+import { JwtAuthGuard, clientIp } from '@app/security';
 import { EntityManager } from 'typeorm';
 import { UserRole } from '@app/common';
 import { RolesGuard } from '../guards/roles.guard';
@@ -112,7 +112,7 @@ export class GeoSecurityController {
   @Get('check')
   @ApiOperation({ summary: 'Check IP geolocation and VPN/proxy status' })
   async checkGeo(@Req() req: any): Promise<GeoCheckResult> {
-    const ip = this.extractIp(req);
+    const ip = clientIp(req);
     const cacheKey = `geo:check:${ip}`;
 
     // Check Redis cache first (cache for 5 minutes)
@@ -215,7 +215,7 @@ export class GeoSecurityController {
   @Post('verify-location')
   @ApiOperation({ summary: 'Compare GPS location with IP geolocation' })
   async verifyLocation(@Req() req: any, @Body() dto: LocationVerifyRequest) {
-    const ip = this.extractIp(req);
+    const ip = clientIp(req);
     const geoData = await this.lookupIp(ip);
 
     // Calculate distance between IP location and GPS location
@@ -527,16 +527,6 @@ export class GeoSecurityController {
     },
   ];
 
-  private extractIp(req: any): string {
-    return (
-      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-      req.headers['x-real-ip'] ||
-      req.headers['cf-connecting-ip'] || // Cloudflare
-      req.connection?.remoteAddress ||
-      '0.0.0.0'
-    );
-  }
-
   private async isWhitelisted(ip: string): Promise<boolean> {
     const cached = await this.redis.get(`geo:wl:${ip}`);
     if (cached === '1') return true;
@@ -643,7 +633,14 @@ export class GeoSecurityController {
         isDatacenter = true;
     }
 
-    // Check headers for proxy indicators
+    // Check headers for proxy indicators.
+    //
+    // The one header read left in this file, and it is not an identity: the
+    // question here is "does this request look like it came through a chain of
+    // proxies", which is a property of the header itself. Nothing below is used
+    // as an address — the address comes from `clientIp(req)`, which never reads
+    // a header at all (AUD2-125). `audit.interceptor.ip.spec.ts` pins both
+    // halves so the extractor cannot come back under cover of this heuristic.
     const proxyHeaders = ['x-forwarded-for', 'via', 'x-proxy-id', 'proxy-connection'];
     const multipleForwards = (req.headers['x-forwarded-for'] || '').split(',').length > 2;
     if (multipleForwards) isProxy = true;

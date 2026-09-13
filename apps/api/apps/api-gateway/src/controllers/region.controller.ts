@@ -12,7 +12,7 @@ import { ApiTags, ApiOperation, ApiOkResponse, ApiQuery, ApiParam } from '@nestj
 import { type Request } from 'express';
 import { RegionService, Region, BypassRegion } from '@app/region';
 import { IndiaPinCodeService } from '@app/region/india-pincode.service';
-import { JwtAuthGuard } from '@app/security';
+import { JwtAuthGuard, clientIp } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalEntity } from '../decorators/global-entity.decorator';
@@ -60,13 +60,17 @@ export class RegionController {
       return result;
     }
 
-    // Use IP
-    const clientIp =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-      req.socket?.remoteAddress ||
-      '127.0.0.1';
+    // Use IP.
+    //
+    // `clientIp` and not the raw `X-Forwarded-For`: under `trust proxy` Express
+    // has already resolved the one address in that list the caller cannot
+    // choose. The header was never a credential here — `X-Region-Code` is read
+    // ahead of it by design — but a detector that believes a header is a
+    // detector that reports whatever it is told, and this answer decides which
+    // market's catalogue, currency and legal copy a visitor is served.
+    const ip = clientIp(req) || '127.0.0.1';
 
-    const result = await this.regionService.detectRegionFromIp(clientIp);
+    const result = await this.regionService.detectRegionFromIp(ip);
     this.logger.log(`🌐 Region detected via IP: ${result.region.flag} ${result.region.name}`);
     return result;
   }

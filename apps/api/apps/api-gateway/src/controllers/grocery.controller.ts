@@ -23,7 +23,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { rpcCatch, UserRole } from '@app/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { lastValueFrom, timeout, catchError } from 'rxjs';
-import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner } from '@app/security';
+import { JwtAuthGuard, ResourceOwnershipGuard, ResourceOwner, clientIp } from '@app/security';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { requestRegion, type RequestWithRegion } from '../services/request-region';
@@ -107,10 +107,7 @@ export class GroceryController {
     return {
       actorId: this.callerId(req),
       actorRole: req?.user?.role,
-      actorIp:
-        (req?.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim() ||
-        req?.ip ||
-        req?.socket?.remoteAddress,
+      actorIp: clientIp(req),
     };
   }
 
