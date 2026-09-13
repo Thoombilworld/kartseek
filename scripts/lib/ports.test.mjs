@@ -2,10 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import {
+  PROBE_HOSTS,
+  canNameOwners,
+  listenerPidsFrom,
   namePortOwners,
+  parseAddressesOnly,
   parseColumnarOwners,
   parseLsofOwners,
   portsInUse,
+  probeHosts,
   probePort,
   shResult,
 } from './ports.mjs';
@@ -174,6 +179,54 @@ test('parseLsofOwners takes the PID from the second column', () => {
   const owners = parseLsofOwners(text, [3000, 3001]);
   assert.equal(owners.get(3001), '1234');
   assert.equal(owners.get(3000), '5678');
+});
+
+// ── one address is not enough ───────────────────────────────────────────────
+
+test('a 0.0.0.0-only listener is reported, not called free', async () => {
+  // The silent pass this default exists to remove: on Windows a bind to
+  // 127.0.0.1 succeeds alongside a listener on 0.0.0.0, so a loopback-only
+  // sweep calls an occupied TCP or gRPC port free and the caller then watches
+  // its children die of EADDRINUSE.
+  const s = await listen('0.0.0.0');
+  try {
+    const rows = await portsInUse([{ port: s.port, service: 'marketplace-service', kind: 'tcp' }]);
+    assert.equal(rows.length, 1, 'a wildcard listener must be found');
+    assert.equal(rows[0].reason, 'EADDRINUSE');
+    assert.equal(rows[0].kind, 'tcp', 'the transport that wanted it is carried through');
+    assert.notEqual(rows[0].host, undefined, 'the row names the address that refused');
+
+    // And the proof that the single-address probe really did miss it.
+    assert.deepEqual(await portsInUse([s.port], { hosts: ['127.0.0.1'] }), []);
+  } finally {
+    await s.close();
+  }
+});
+
+test('a named host is probed first and widens the sweep instead of narrowing it', () => {
+  assert.deepEqual(probeHosts(), PROBE_HOSTS);
+  assert.deepEqual(probeHosts({ host: '0.0.0.0' }), ['0.0.0.0', '127.0.0.1', '::']);
+  assert.deepEqual(probeHosts({ hosts: ['::1'] }), ['::1'], 'an explicit list wins outright');
+});
+
+test('listenerPidsFrom returns every pid on the port, where namePortOwners takes one', () => {
+  const netstat = [
+    '  TCP    127.0.0.1:3012         0.0.0.0:0              LISTENING       37472',
+    '  TCP    [::]:3012              [::]:0                 LISTENING       991',
+  ].join('\r\n');
+  assert.deepEqual(listenerPidsFrom(netstat, 3012), [37472, 991]);
+  assert.equal(parseColumnarOwners(netstat, [3012]).get(3012), '37472');
+  // macOS's netstat fallback has no PID column, so it names nobody rather than
+  // handing back a byte counter as a process id.
+  assert.deepEqual(listenerPidsFrom(netstat, 3012, { format: 'addresses' }), []);
+  assert.equal(parseAddressesOnly(netstat, [3012]).get(3012), null);
+});
+
+test('canNameOwners says when this machine has no tool to ask', () => {
+  const missing = () => ({ code: null, stdout: '', stderr: '', error: 'ENOENT' });
+  assert.equal(canNameOwners({ platform: 'linux', run: missing }), false);
+  const present = () => ({ code: 0, stdout: 'LISTEN 0 511 127.0.0.1:3001 0.0.0.0:*', stderr: '' });
+  assert.equal(canNameOwners({ platform: 'linux', run: present }), true);
 });
 
 // ── the shell helper keeps the exit status ──────────────────────────────────
