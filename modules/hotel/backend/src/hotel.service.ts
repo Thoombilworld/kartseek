@@ -499,7 +499,27 @@ export class HotelService {
     const saved = await this.reviewRepo.save(review);
     const savedReviewId = (saved as any).id;
 
-    // Recalculate hotel average rating
+    await this.recomputeHotelRating(hotelId);
+    await this.kafka.publish('hotel.review.submitted', { id: savedReviewId, hotelId });
+
+    return { success: true, review: saved };
+  }
+
+  /**
+   * The property's rating and review count, over the reviews still ON SHOW.
+   *
+   * Extracted from `submitReview`, which is where it has always lived, because
+   * moderation needs the same sum: hiding an abusive review has to take its
+   * stars out of `hotels.rating` and its row out of `hotels.reviewCount`, or the
+   * review disappears from the page while still dragging the property's score
+   * down. A second copy of this computation is how two code paths come to
+   * disagree about what a hotel is rated, so `HotelAdminService.moderateReview`
+   * calls THIS one.
+   *
+   * `isVisible = true` is the filter in both cases — the aggregate is what a
+   * guest can actually read.
+   */
+  async recomputeHotelRating(hotelId: string): Promise<{ rating: number; reviewCount: number }> {
     const { avg, count } = await this.reviewRepo
       .createQueryBuilder('r')
       .select('AVG(r.rating)', 'avg')
@@ -507,14 +527,11 @@ export class HotelService {
       .where('r.hotelId = :hotelId AND r.isVisible = true', { hotelId })
       .getRawOne();
 
-    await this.hotelRepo.update(hotelId, {
-      rating: parseFloat(avg) || 0,
-      reviewCount: parseInt(count) || 0,
-    });
+    const reviewCount = parseInt(count) || 0;
+    const rating = reviewCount === 0 ? 0 : Math.round((parseFloat(avg) || 0) * 10) / 10;
+    await this.hotelRepo.update(hotelId, { rating, reviewCount });
     await this.redis.del(`hotel:detail:${hotelId}`);
-    await this.kafka.publish('hotel.review.submitted', { id: savedReviewId, hotelId });
-
-    return { success: true, review: saved };
+    return { rating, reviewCount };
   }
 
   // ── Admin ─────────────────────────────────────────────────────────────────
@@ -544,18 +561,30 @@ export class HotelService {
     return { data, total, page, limit };
   }
 
-  async approveHotel(id: string, scope?: string) {
+  /**
+   * `actorId` is the administrator who took the decision, from the gateway's
+   * verified token — never from a request body. It was being sent and discarded:
+   * the only trace an approval left was a status change, which is what a cron
+   * job would leave behind too.
+   */
+  async approveHotel(id: string, scope?: string, actorId?: string) {
     const hotel = await this.hotelRepo.findOne({ where: { id } });
     if (!hotel) throw new NotFoundException(`Hotel ${id} not found`);
     assertInMarket(hotel.countryCode, scope, 'hotel', this.logger);
 
     hotel.status = 'ACTIVE' as any;
     hotel.isAcceptingBookings = true;
+    hotel.approvedBy = actorId ?? null;
+    hotel.approvedAt = new Date();
     await this.hotelRepo.save(hotel);
     await this.redis.del(`hotel:detail:${id}`);
-    await this.kafka.publish('hotel.approved', { id });
+    await this.kafka.publish('hotel.approved', {
+      id,
+      market: hotel.countryCode,
+      approvedBy: actorId ?? null,
+    });
 
-    return { success: true, hotelId: id, status: 'ACTIVE' };
+    return { success: true, hotelId: id, status: 'ACTIVE', approvedBy: actorId ?? null };
   }
 
   /**
@@ -564,7 +593,7 @@ export class HotelService {
    * by id alone cannot be. A suspension of a hotel that does not exist now says
    * so instead of reporting success.
    */
-  async suspendHotel(id: string, reason?: string, scope?: string) {
+  async suspendHotel(id: string, reason?: string, scope?: string, actorId?: string) {
     const hotel = await this.hotelRepo.findOne({
       where: { id },
       select: { id: true, countryCode: true },
@@ -572,9 +601,30 @@ export class HotelService {
     if (!hotel) throw new NotFoundException(`Hotel ${id} not found`);
     assertInMarket(hotel.countryCode, scope, 'hotel', this.logger);
 
-    await this.hotelRepo.update(id, { status: 'SUSPENDED' as any, isAcceptingBookings: false });
+    // The reason used to be RETURNED and not stored, so a property went offline
+    // in a market with nothing on the row to say why or who did it — the caller
+    // saw its own words echoed back and nobody else ever could.
+    await this.hotelRepo.update(id, {
+      status: 'SUSPENDED' as any,
+      isAcceptingBookings: false,
+      suspensionReason: reason ?? null,
+      suspendedBy: actorId ?? null,
+      suspendedAt: new Date(),
+    });
     await this.redis.del(`hotel:detail:${id}`);
-    return { success: true, hotelId: id, status: 'SUSPENDED', reason };
+    await this.kafka.publish('hotel.suspended', {
+      id,
+      market: hotel.countryCode,
+      reason: reason ?? null,
+      suspendedBy: actorId ?? null,
+    });
+    return {
+      success: true,
+      hotelId: id,
+      status: 'SUSPENDED',
+      reason,
+      suspendedBy: actorId ?? null,
+    };
   }
 
   async blockHotel(id: string) {

@@ -9,6 +9,7 @@ import { HotelController } from './hotel.controller';
 import { HotelService } from './hotel.service';
 import { HotelOwnerController } from './owner/owner.controller';
 import { HotelAdminController } from './admin/admin.controller';
+import { HotelAdminService } from './admin/admin.service';
 import { HotelWebhookController } from './webhooks/webhook.controller';
 
 // ── Entities ──────────────────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ import { HotelGuest } from './entities/hotel-guest.entity';
 import { HotelPayout } from './entities/hotel-payout.entity';
 import { HotelStaff } from './entities/hotel-staff.entity';
 import { HotelSeasonalPricing } from './entities/hotel-seasonal-pricing.entity';
+import { HotelAmenity } from './entities/hotel-amenity.entity';
+import { HotelMarketSettings } from './entities/hotel-market-settings.entity';
 
 const ENTITIES = [
   Hotel,
@@ -32,6 +35,8 @@ const ENTITIES = [
   HotelPayout,
   HotelStaff,
   HotelSeasonalPricing,
+  HotelAmenity,
+  HotelMarketSettings,
 ];
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
@@ -128,6 +133,6 @@ const envSchema = buildEnvSchema({
     HotelAdminController,
     HotelWebhookController,
   ],
-  providers: [HotelService],
+  providers: [HotelService, HotelAdminService],
 })
 export class HotelServiceModule {}

@@ -10,6 +10,8 @@ import { HotelGuest } from './src/entities/hotel-guest.entity';
 import { HotelPayout } from './src/entities/hotel-payout.entity';
 import { HotelStaff } from './src/entities/hotel-staff.entity';
 import { HotelSeasonalPricing } from './src/entities/hotel-seasonal-pricing.entity';
+import { HotelAmenity } from './src/entities/hotel-amenity.entity';
+import { HotelMarketSettings } from './src/entities/hotel-market-settings.entity';
 
 /**
  * The TypeORM CLI's DataSource for the **hotel module's own** database.
@@ -93,10 +95,13 @@ export const HotelDataSource = new DataSource({
     HotelPayout,
     HotelStaff,
     HotelSeasonalPricing,
+    HotelAmenity,
+    HotelMarketSettings,
   ],
   migrations: [
     'migrations/1786498500000-InitialHotelSchema.ts',
     'migrations/1786502400000-DropDeadMarketColumns.ts',
+    'migrations/1786503300000-HotelAdminSurfaces.ts',
   ],
   migrationsTableName: HOTEL_MIGRATIONS_TABLE,
   migrationsTransactionMode: 'each',

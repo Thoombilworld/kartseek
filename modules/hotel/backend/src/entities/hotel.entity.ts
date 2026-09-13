@@ -281,6 +281,33 @@ export class Hotel {
   @Column({ type: 'text', nullable: true })
   rejectionReason: string | null;
 
+  /**
+   * WHO took the approval and suspension decisions, and when.
+   *
+   * The gateway has always sent the acting administrator with both commands and
+   * this module has always discarded it: `approveHotel` wrote a status,
+   * `suspendHotel` wrote a status and returned the reason it had been given
+   * WITHOUT STORING IT. So a property could go offline in a market with no
+   * record of who took it off or why — the decision existed only as a status
+   * change, which is the same information a cron job would leave behind.
+   *
+   * Written from the verified token (`actorId`), never from a request body.
+   */
+  @Column({ type: 'varchar', nullable: true, comment: 'Administrator who approved this hotel' })
+  approvedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  approvedAt: Date | null;
+
+  @Column({ type: 'varchar', nullable: true, comment: 'Administrator who suspended this hotel' })
+  suspendedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
+
+  @Column({ type: 'text', nullable: true, comment: 'Why this hotel was suspended' })
+  suspensionReason: string | null;
+
   @Column({ default: false })
   isFeatured: boolean;
 

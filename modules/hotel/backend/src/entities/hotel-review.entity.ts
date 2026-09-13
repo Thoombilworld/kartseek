@@ -113,6 +113,30 @@ export class HotelReview {
   @Column({ default: true })
   isVisible: boolean;
 
+  /**
+   * Who moderated this review, and why.
+   *
+   * `isFlagged`/`isVisible` recorded the OUTCOME of a moderation decision and
+   * nothing about the decision itself, so a review that had been hidden was
+   * indistinguishable from one that had never been looked at, and no operator
+   * could say who hid it. `admin_hotel_moderate_review` writes all three, from
+   * the verified token — `flagReason` stays what it has always been, the reason
+   * a review was FLAGGED, which is not the same sentence as the reason an
+   * administrator acted on it.
+   */
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'The administrator who last moderated this review',
+  })
+  moderatedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  moderatedAt: Date | null;
+
+  @Column({ type: 'text', nullable: true, comment: 'Why the administrator approved or removed it' })
+  moderationReason: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }
