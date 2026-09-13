@@ -11,7 +11,7 @@ import { Repository, Like, In, Between, MoreThanOrEqual, LessThanOrEqual, ILike 
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
-import { Hotel } from './entities/hotel.entity';
+import { AWAITING_DECISION, Hotel, HotelStatus } from './entities/hotel.entity';
 import { HotelRoom } from './entities/hotel-room.entity';
 import { HotelBooking } from './entities/hotel-booking.entity';
 import { HotelReview } from './entities/hotel-review.entity';
@@ -20,6 +20,7 @@ import { HotelGuest } from './entities/hotel-guest.entity';
 import { HotelPayout } from './entities/hotel-payout.entity';
 import { HotelStaff } from './entities/hotel-staff.entity';
 import { HotelSeasonalPricing } from './entities/hotel-seasonal-pricing.entity';
+import { HotelMarketSettings } from './entities/hotel-market-settings.entity';
 
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { ModifyBookingDto } from './dto/modify-booking.dto';
@@ -33,6 +34,14 @@ import {
   WebhookRefundDto,
   PaymentWebhookStatus,
 } from './dto/webhook-payment.dto';
+
+/**
+ * The actor stamped on a property a MARKET's standing rule approved, rather than
+ * a person. Suffixed with that market (`system:auto-approve:IN`) so an audit of
+ * `hotels.approvedBy` can tell which market's setting took the decision, and
+ * tell it apart from a uuid.
+ */
+export const SYSTEM_AUTO_APPROVE = 'system:auto-approve';
 
 @Injectable()
 export class HotelService {
@@ -49,6 +58,8 @@ export class HotelService {
     @InjectRepository(HotelStaff) private readonly staffRepo: Repository<HotelStaff>,
     @InjectRepository(HotelSeasonalPricing)
     private readonly seasonalRepo: Repository<HotelSeasonalPricing>,
+    @InjectRepository(HotelMarketSettings)
+    private readonly settingsRepo: Repository<HotelMarketSettings>,
     private readonly redis: RedisService,
     private readonly kafka: KafkaProducerService,
   ) {}
@@ -664,6 +675,9 @@ export class HotelService {
     const activeHotels = await this.hotelRepo.count({
       where: { ...hotelWhere, isAcceptingBookings: true },
     });
+    const pendingApprovals = await this.hotelRepo.count({
+      where: { ...hotelWhere, status: In(AWAITING_DECISION as HotelStatus[]) },
+    });
 
     const bookingQb = this.bookingRepo.createQueryBuilder('b');
     applyMarketFilter(bookingQb, 'b.hotelCountryCode', m);
@@ -704,7 +718,13 @@ export class HotelService {
       market: m ?? null,
       totalHotels,
       activeHotels,
-      pendingApprovals: totalHotels - activeHotels,
+      // ONE definition of the approvals queue, shared with
+      // `HotelAdminService.getReports` through `AWAITING_DECISION` (M5 review,
+      // Minor 3). This used to be `totalHotels - activeHotels`, where "active"
+      // is `isAcceptingBookings` -- so the moment one property was SUSPENDED the
+      // dashboard called it "pending approval" while the reports screen beside
+      // it did not.
+      pendingApprovals,
       totalBookings,
       cancelledBookings,
       cancelRate:
@@ -803,17 +823,132 @@ export class HotelService {
     return { success: true, owner: saved };
   }
 
+  /**
+   * The configuration row for one market — the ONE read of it in this module.
+   *
+   * `HotelAdminService.settingsRow` delegates here rather than keeping a second
+   * copy, because "what is this market configured as" now has two callers: the
+   * admin console's Pricing and Settings screens, and the registration path
+   * below, which is the first thing on the platform to ACT on the answer.
+   *
+   * The clause is written by `applyMarketFilter`, like every other market
+   * predicate on the platform; `market` is already ISO-2 by the time it arrives.
+   */
+  async marketSettings(market: string): Promise<HotelMarketSettings | null> {
+    const qb = this.settingsRepo.createQueryBuilder('s');
+    applyMarketFilter(qb, 's.countryCode', market);
+    return qb.getOne();
+  }
+
+  /**
+   * Register a property — and apply the market's own configuration to it.
+   *
+   * -- `autoApproveHotels`, enforced here (M5 review, Important 1) ------------
+   *
+   * This is the consumer that setting was missing. When the property's market
+   * says new hotels go live without a human decision, the hotel is created in
+   * exactly the state `approveHotel` would have put it in -- `ACTIVE` and
+   * accepting bookings -- and `hotel.approved` is published under the SAME topic
+   * name a manual approval uses, so nothing downstream has to learn a second
+   * spelling for one event. Otherwise it is `PENDING_APPROVAL` and not
+   * accepting, exactly as before.
+   *
+   * `ACTIVE`, not the unused `HotelStatus.APPROVED`: "approved" in this module
+   * means whatever `approveHotel` writes, and an auto-approved property landing
+   * in a state the manual path never produces would be a second lifecycle.
+   *
+   * The actor is recorded as the SYSTEM together with the market whose setting
+   * decided it -- `system:auto-approve:IN` -- so an audit of `hotels.approvedBy`
+   * can tell a person's decision from a market's standing rule.
+   *
+   * -- `defaultCommissionRate`, enforced here ---------------------------------
+   *
+   * A property registering with no negotiated rate takes its market's default
+   * in place of the column's platform-wide 15. `CreateHotelDto` carries no rate
+   * field, so today that is every registration; an unconfigured market keeps the
+   * column default.
+   *
+   * -- Three columns this used to leave unset --------------------------------
+   *
+   * `countryCode`, `slug` and the coordinates are NOT NULL on `hotels` and none
+   * of them was written: the DTO calls the market `country`, so the spread put a
+   * key TypeORM discards and left the column empty, and `slug` had no source at
+   * all. The insert could only ever have failed. Fixed here because the market
+   * is exactly what this method now has to read to do its job.
+   */
   async createHotel(ownerId: string, dto: CreateHotelDto) {
+    const market = requireMarket(dto?.country, 'hotel', this.logger);
+    if (!market) {
+      throw new BadRequestException('A hotel needs a country this platform operates in.');
+    }
+
+    const settings = await this.marketSettings(market);
+    const autoApprove = settings?.autoApproveHotels === true;
+    const defaultCommission =
+      settings?.defaultCommissionRate == null ? undefined : Number(settings.defaultCommissionRate);
+
+    // `country` and `policies` are DTO shapes with no column of their own; the
+    // old spread handed both to TypeORM, which silently discarded them.
+    const { country: _country, location, policies, ...rest } = dto;
+    void _country;
+
     const hotel = this.hotelRepo.create({
-      ...dto,
+      ...rest,
       ownerId,
-      status: 'PENDING_APPROVAL',
-      isAcceptingBookings: false,
-      latitude: dto.location?.lat,
-      longitude: dto.location?.lng,
+      countryCode: market,
+      slug: await this.uniqueHotelSlug(dto.name),
+      latitude: location?.lat ?? 0,
+      longitude: location?.lng ?? 0,
+      landmark: location?.landmark ?? null,
+      checkInTime: policies?.checkIn ?? '14:00',
+      checkOutTime: policies?.checkOut ?? '12:00',
+      status: autoApprove ? HotelStatus.ACTIVE : HotelStatus.PENDING_APPROVAL,
+      isAcceptingBookings: autoApprove,
+      approvedBy: autoApprove ? SYSTEM_AUTO_APPROVE + ':' + market : null,
+      approvedAt: autoApprove ? new Date() : null,
+      ...(defaultCommission === undefined ? {} : { commissionRate: defaultCommission }),
     } as any);
-    const saved = await this.hotelRepo.save(hotel);
-    return { success: true, hotel: saved };
+
+    const saved = (await this.hotelRepo.save(hotel)) as unknown as Hotel;
+
+    if (autoApprove) {
+      // The SAME topic a manual approval publishes -- an auto-approval is an
+      // approval, and a second spelling of one event is how two consumers come
+      // to disagree about whether a property is live.
+      await this.kafka.publish('hotel.approved', {
+        id: saved.id,
+        market,
+        approvedBy: saved.approvedBy,
+      });
+    }
+
+    return {
+      success: true,
+      hotel: saved,
+      market,
+      autoApproved: autoApprove,
+      commissionRate: Number(saved.commissionRate),
+    };
+  }
+
+  /**
+   * A slug nothing else holds. `hotels.slug` is UNIQUE and NOT NULL and the
+   * create DTO has no slug field, so one has to be derived -- with a suffix when
+   * the name is already taken, rather than a 500 from the index.
+   */
+  private async uniqueHotelSlug(name: string): Promise<string> {
+    const base =
+      String(name ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 100) || 'hotel';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const slug = attempt === 0 ? base : base + '-' + Math.random().toString(36).slice(2, 7);
+      if (!(await this.hotelRepo.findOne({ where: { slug }, select: { id: true } }))) return slug;
+    }
+    return base + '-' + Date.now().toString(36);
   }
 
   async updateHotel(id: string, dto: Partial<CreateHotelDto>) {

@@ -26,6 +26,32 @@ import {
  * control over one column, not a second setting. Recorded here so the next
  * person to add `cancellationWindow` to the settings DTO reads this first.
  *
+ * ── WHAT ACTUALLY READS THIS ROW (M5 review, Important 1) ───────────────────
+ *
+ * Two of the seven keys are enforced; five are recorded and enforced by nothing
+ * yet. That is not a detail for a report — every field name here is an EFFECT
+ * name, and an administrator who sets a cleaning fee will believe bookings in
+ * their market now carry one.
+ *
+ *   autoApproveHotels            ENFORCED — `HotelService.createHotel` puts a
+ *                                newly registered property straight into ACTIVE
+ *                                when its market says so, and publishes
+ *                                `hotel.approved` like any other approval.
+ *   defaultCommissionRate        ENFORCED — `HotelService.createHotel` stamps it
+ *                                on a property registering with no negotiated
+ *                                rate, in place of the column default.
+ *   platformFeePercent           recorded, not enforced by any hotel workflow
+ *   serviceTaxPercent            yet. Nothing in booking, pricing or checkout
+ *   cleaningFee                  reads them; `HotelService.createBooking`
+ *   freeCancellationWindowHours  computes a total from the room and the hotel's
+ *   maxRoomsPerHotel             own `taxRate`, and `addRoom` caps nothing.
+ *
+ * `SETTINGS_ENFORCEMENT` in `admin/admin.service.ts` is that table in code, and
+ * it rides on every settings READ and WRITE payload as `enforcement`, so the
+ * console can grey out or label what does not act yet. A spec pins the map, so
+ * wiring a consumer means deliberately flipping its entry rather than leaving a
+ * screen quietly lying about what it does.
+ *
  * ── The market ──────────────────────────────────────────────────────────────
  *
  * `countryCode`, ISO-2, NOT NULL and UNIQUE: a settings row belongs to exactly

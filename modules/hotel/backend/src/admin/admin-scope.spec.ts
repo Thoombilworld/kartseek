@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { HotelAdminService } from './admin.service';
+import {
+  HotelAdminService,
+  SETTINGS_ENFORCEMENT,
+  SETTINGS_ENFORCEMENT_NOTE,
+} from './admin.service';
 
 /**
  * The twelve commands M5 added, and the market boundary each of them keeps.
@@ -20,14 +24,15 @@ import { HotelAdminService } from './admin.service';
  */
 
 /** A query builder that records every clause it is given and answers nothing. */
-function builder(rows: unknown[] = [], raw: Record<string, unknown> = {}) {
+function builder(rows: unknown[] = [], raw: Record<string, unknown> = {}, total?: number) {
   const clauses: string[] = [];
   const params: Record<string, unknown> = {};
   const qb: any = {
     clauses,
     params,
-    innerJoin: () => qb,
-    leftJoin: () => qb,
+    joins: [] as string[],
+    innerJoin: (r: string) => (qb.joins.push('inner:' + r), qb),
+    leftJoin: (r: string) => (qb.joins.push('left:' + r), qb),
     addSelect: () => qb,
     select: () => qb,
     where: (w: string, p?: object) => (clauses.push(w), Object.assign(params, p ?? {}), qb),
@@ -40,7 +45,7 @@ function builder(rows: unknown[] = [], raw: Record<string, unknown> = {}) {
     take: (n: number) => ((qb.taken = n), qb),
     limit: () => qb,
     getMany: async () => rows,
-    getManyAndCount: async () => [rows, rows.length],
+    getManyAndCount: async () => [rows, total ?? rows.length],
     getOne: async () => rows[0] ?? null,
     getCount: async () => rows.length,
     getRawOne: async () => raw,
@@ -54,12 +59,19 @@ interface Harness {
   booking?: Record<string, unknown> | null;
   review?: Record<string, unknown> | null;
   settings?: Record<string, unknown> | null;
+  seasonalRules?: unknown[];
+  seasonalRuleTotal?: number;
 }
 
 function admin(h: Harness = {}) {
   const builders: Record<string, any[]> = {};
-  const make = (key: string, rows: unknown[] = [], raw: Record<string, unknown> = {}) => {
-    const qb = builder(rows, raw);
+  const make = (
+    key: string,
+    rows: unknown[] = [],
+    raw: Record<string, unknown> = {},
+    total?: number,
+  ) => {
+    const qb = builder(rows, raw, total);
     (builders[key] ??= []).push(qb);
     return qb;
   };
@@ -80,7 +92,9 @@ function admin(h: Harness = {}) {
     save: vi.fn(async (r: any) => r),
     createQueryBuilder: () => make('review'),
   };
-  const pricingRepo = { createQueryBuilder: () => make('pricing') };
+  const pricingRepo = {
+    createQueryBuilder: () => make('pricing', h.seasonalRules ?? [], {}, h.seasonalRuleTotal),
+  };
   const amenityRepo = {
     find: vi.fn(async () => []),
     findOne: vi.fn(async () => null),
@@ -89,6 +103,7 @@ function admin(h: Harness = {}) {
   };
   const settingsRepo = {
     create: vi.fn((x: any) => ({ ...x })),
+    merge: vi.fn((into: any, from: any) => Object.assign(into, from)),
     save: vi.fn(async (x: any) => ({ id: 'settings-1', ...x })),
     createQueryBuilder: () => make('settings', h.settings ? [h.settings] : []),
   };
@@ -96,7 +111,18 @@ function admin(h: Harness = {}) {
   // `HotelService.recomputeHotelRating` is the ONE implementation of the
   // property aggregate — `submitReview` takes the same sum — so moderation
   // calls it rather than keeping a second copy. The spy proves the call.
-  const svc = { recomputeHotelRating: vi.fn(async () => ({ rating: 4.5, reviewCount: 3 })) };
+  // `HotelService` owns BOTH of these: the property aggregate (one sum,
+  // shared with `submitReview`) and the market configuration read (one row,
+  // shared with the registration path that now acts on it). The admin service
+  // keeps a copy of neither.
+  const svc = {
+    recomputeHotelRating: vi.fn(async () => ({ rating: 4.5, reviewCount: 3 })),
+    marketSettings: vi.fn(async (market: string) => {
+      const qb = make('settings', h.settings ? [h.settings] : []);
+      qb.andWhere('s.countryCode = :__market', { __market: market });
+      return h.settings ?? null;
+    }),
+  };
 
   const admin = Object.create(HotelAdminService.prototype) as HotelAdminService;
   Object.assign(admin, {
@@ -180,11 +206,31 @@ describe('the hotel admin lists join the property and filter its market', () => 
     );
   });
 
-  it('clamps the page size instead of letting a caller ask for every row', async () => {
+  it('refuses an over-large page rather than quietly shortening it', async () => {
+    // The gateway DTO caps `limit` at 100 with a 400 whose docstring says
+    // capping is the ruling BECAUSE clamping hides rows. The service used to
+    // clamp, so the two halves of one module stated opposite policies for a
+    // direct TCP caller (M5 review, Minor 12).
     const h = admin();
-    await h.svc.listBookings({ scope: 'QA', limit: 5000, page: 0 });
-    expect(h.builders.booking[0].taken).toBe(100);
+    await expect(h.svc.listBookings({ scope: 'QA', limit: 5000 })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('still coerces the lower bound — there is no page before the first', async () => {
+    const h = admin();
+    await h.svc.listBookings({ scope: 'QA', page: 0, limit: 20 });
+    expect(h.builders.booking[0].taken).toBe(20);
     expect(h.builders.booking[0].skipped).toBe(0);
+  });
+
+  it('reaches a booking through a LEFT join so an orphan is findable globally', async () => {
+    // `hotel_bookings.hotel` is `onDelete: SET NULL`, and `getBookingDetail`
+    // deliberately serves an orphan to a GLOBAL caller — an inner join meant the
+    // only list that could have given that caller the id excluded it (Minor 2).
+    const h = admin();
+    await h.svc.listBookings({});
+    expect(h.builders.booking[0].joins).toContain('left:booking.hotel');
   });
 
   it("refuses a rooms list narrowed to another market's hotel", async () => {
@@ -331,6 +377,15 @@ describe('the amenity catalogue is global, and only a global admin writes it', (
     expect(h.kafka.publish).not.toHaveBeenCalled();
   });
 
+  it('says in the payload that its counts are platform-wide', async () => {
+    // The catalogue being global is correct; a per-amenity count that is every
+    // market's, on a screen a QA administrator reads as theirs, is the failure
+    // `getReports` exists to avoid (M5 review, Minor 4).
+    const h = admin();
+    const out = await h.svc.listAmenities();
+    expect(out.countScope).toBe('platform');
+  });
+
   it('records the creating administrator', async () => {
     const h = admin();
     await h.svc.createAmenity({ name: 'Airport shuttle', actorId: 'su-1' });
@@ -422,6 +477,18 @@ describe('the pricing read narrows both halves to the market', () => {
     expect(h.paramsOf('pricing').__market).toBe('IN');
   });
 
+  it('counts every seasonal rule in the market, not the length of the page', async () => {
+    // `.take(200)` then `seasonalRules.length` told a market with 500 rules it
+    // had 200, with nothing in the payload saying the list had been cut
+    // (M5 review, Minor 1).
+    const h = admin({ seasonalRules: [{ id: 'rule-1' }], seasonalRuleTotal: 500 });
+    const out = await h.svc.getPricing({ scope: 'IN' });
+    expect(out.seasonalRuleCount).toBe(500);
+    expect(out.seasonalRules).toHaveLength(1);
+    expect(out.seasonalRulesTruncated).toBe(true);
+    expect(out.seasonalRuleLimit).toBe(200);
+  });
+
   it('filters the market settings on their own column', async () => {
     const h = admin();
     await h.svc.getPricing({ scope: 'IN' });
@@ -471,5 +538,81 @@ describe('the hotel report answers a scoped admin with their own market', () => 
     await expect(h.svc.getReports({ scope: 'QA', period: '3y' })).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+});
+
+// ── What the settings actually DO (M5 review, Important 1) ───────────────────
+
+describe('the settings payload says which keys are enforced', () => {
+  /**
+   * The map is the contract, and it is pinned key by key ON PURPOSE.
+   *
+   * `hotel_market_settings` was stored, scoped and reported back as
+   * `configured: true` while nothing on the platform read one of its keys, and
+   * every field name is an EFFECT name. Two act now — both in
+   * `HotelService.createHotel` — and five do not. Asserting the exact map means
+   * wiring a consumer, or removing one, has to flip an entry here deliberately;
+   * a screen cannot start claiming an effect the platform does not have, and a
+   * key that gains one cannot stay silently marked `false`.
+   */
+  it('enforces exactly autoApproveHotels and defaultCommissionRate, and nothing else', () => {
+    expect(SETTINGS_ENFORCEMENT).toEqual({
+      autoApproveHotels: true,
+      defaultCommissionRate: true,
+      platformFeePercent: false,
+      serviceTaxPercent: false,
+      cleaningFee: false,
+      freeCancellationWindowHours: false,
+      maxRoomsPerHotel: false,
+    });
+  });
+
+  it('covers every key the settings payload carries — no key is unaccounted for', async () => {
+    const h = admin();
+    const out = await h.svc.getSettings({ scope: 'QA' });
+    const declared = Object.keys(SETTINGS_ENFORCEMENT);
+    const bookkeeping = [
+      'countryCode',
+      'configured',
+      'updatedBy',
+      'updatedAt',
+      'enforcement',
+      'enforcementNote',
+    ];
+    const carried = Object.keys(out.settings ?? {}).filter((k) => !bookkeeping.includes(k));
+    expect(carried.sort()).toEqual(declared.sort());
+  });
+
+  it('rides on the settings READ', async () => {
+    const h = admin();
+    const out = await h.svc.getSettings({ scope: 'QA' });
+    expect(out.settings?.enforcement).toEqual(SETTINGS_ENFORCEMENT);
+    expect(out.settings?.enforcementNote).toBe(SETTINGS_ENFORCEMENT_NOTE);
+  });
+
+  it('rides on the pricing READ', async () => {
+    const h = admin();
+    const out = await h.svc.getPricing({ scope: 'QA' });
+    expect(out.base?.enforcement).toEqual(SETTINGS_ENFORCEMENT);
+  });
+
+  it('rides on both WRITE responses', async () => {
+    const pricing = await admin().svc.updatePricing({
+      countryCode: 'QA',
+      cleaningFee: 1,
+      scope: 'QA',
+    });
+    const settings = await admin().svc.updateSettings({
+      countryCode: 'QA',
+      maxRoomsPerHotel: 10,
+      scope: 'QA',
+    });
+    expect(pricing.enforcement).toEqual(SETTINGS_ENFORCEMENT);
+    expect(settings.enforcement).toEqual(SETTINGS_ENFORCEMENT);
+    expect(settings.enforcementNote).toBe(SETTINGS_ENFORCEMENT_NOTE);
+  });
+
+  it('names the unenforced keys in a sentence a console can show', () => {
+    expect(SETTINGS_ENFORCEMENT_NOTE).toMatch(/not enforced/i);
   });
 });

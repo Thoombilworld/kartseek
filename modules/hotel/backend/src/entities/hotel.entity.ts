@@ -25,6 +25,20 @@ export enum HotelStatus {
   CLOSED = 'CLOSED',
 }
 
+/**
+ * The states that put a property in the approvals queue — ONE definition.
+ *
+ * There were two. `HotelAdminService.getReports` counted this set while
+ * `HotelService.getAdminAnalytics` computed `totalHotels - activeHotels`, where
+ * "active" means `isAcceptingBookings`. They agree only while no property is
+ * suspended: suspend one and the dashboard calls it "pending approval" while the
+ * reports screen beside it does not (M5 review, Minor 3). Both read this now.
+ */
+export const AWAITING_DECISION: readonly HotelStatus[] = [
+  HotelStatus.PENDING_KYC,
+  HotelStatus.PENDING_APPROVAL,
+];
+
 export enum HotelType {
   HOTEL = 'HOTEL',
   RESORT = 'RESORT',

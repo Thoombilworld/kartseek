@@ -14,7 +14,7 @@ import {
 import { KafkaProducerService } from '@app/kafka';
 import { HotelService } from '../hotel.service';
 
-import { Hotel, HotelStatus } from '../entities/hotel.entity';
+import { AWAITING_DECISION, Hotel } from '../entities/hotel.entity';
 import { HotelRoom } from '../entities/hotel-room.entity';
 import { HotelBooking } from '../entities/hotel-booking.entity';
 import { HotelReview } from '../entities/hotel-review.entity';
@@ -34,8 +34,54 @@ import type {
 /** The booking states in which money has actually been earned. */
 const EARNED_BOOKING_STATES = ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'COMPLETED'];
 
-/** The hotel states that put a property in the approvals queue. */
-const AWAITING_DECISION = [HotelStatus.PENDING_KYC, HotelStatus.PENDING_APPROVAL];
+/**
+ * WHICH market settings actually DO something, as data rather than as prose.
+ *
+ * `hotel_market_settings` was written, scoped and reported back as
+ * `configured: true` while nothing on the platform read a single one of its
+ * keys — and every field name here is an EFFECT name, so an administrator who
+ * turned auto-approve on would reasonably believe new properties in their market
+ * now go live without a decision (M5 review, Important 1).
+ *
+ * Two keys are enforced as of this round, both in `HotelService.createHotel`:
+ * `autoApproveHotels` puts a newly registered property straight into ACTIVE and
+ * publishes the ordinary `hotel.approved`, and `defaultCommissionRate` stamps
+ * the market's rate on a property registering without a negotiated one.
+ *
+ * The other five are RECORDED AND ENFORCED BY NOTHING YET. They are not
+ * removed — the console has screens for them and the values are real stored
+ * configuration — but this map rides on every settings READ and WRITE payload
+ * as `enforcement`, so a screen can label or disable what does not act, and a
+ * spec pins the map so wiring a consumer means deliberately flipping its entry
+ * rather than leaving the screen quietly lying. The keys are the payload's own
+ * field names so a console can index straight into it.
+ */
+export const SETTINGS_ENFORCEMENT = {
+  /** `HotelService.createHotel` — ACTIVE on registration, `hotel.approved` published. */
+  autoApproveHotels: true,
+  /** `HotelService.createHotel` — the initial `hotels.commissionRate`. */
+  defaultCommissionRate: true,
+  /** Recorded, not enforced by any hotel workflow yet — no booking total reads it. */
+  platformFeePercent: false,
+  /** Recorded, not enforced by any hotel workflow yet — `createBooking` uses the hotel's own taxRate. */
+  serviceTaxPercent: false,
+  /** Recorded, not enforced by any hotel workflow yet — no booking total reads it. */
+  cleaningFee: false,
+  /** Recorded, not enforced by any hotel workflow yet — `calculateRefund` does not read it. */
+  freeCancellationWindowHours: false,
+  /** Recorded, not enforced by any hotel workflow yet — `addRoom` caps nothing. */
+  maxRoomsPerHotel: false,
+} as const;
+
+/** The one sentence a console needs beside a `false` above. */
+export const SETTINGS_ENFORCEMENT_NOTE =
+  'Keys marked false are recorded, not enforced by any hotel workflow yet.';
+
+/** How many seasonal rules one pricing read returns — see `getPricing`. */
+const SEASONAL_RULE_PAGE = 200;
+
+/** The most rows one admin list will return, matching `AdminHotelQueryDto.limit`. */
+const MAX_PAGE_SIZE = 100;
 
 /** The periods the reports screen offers, in days. */
 const PERIOD_DAYS: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
@@ -47,6 +93,16 @@ type ReviewFilter = (typeof REVIEW_FILTERS)[number];
 /** What an administrator may do to a review. */
 const REVIEW_ACTIONS = ['approve', 'remove'] as const;
 type ReviewAction = (typeof REVIEW_ACTIONS)[number];
+
+/**
+ * Postgres's unique-violation code, recognised once.
+ *
+ * TypeORM surfaces the driver error with `code` on it; anything else is a real
+ * failure and is rethrown untouched, so this never swallows a bug.
+ */
+const isUniqueViolation = (err: unknown): boolean =>
+  (err as { code?: string; driverError?: { code?: string } })?.code === '23505' ||
+  (err as { driverError?: { code?: string } })?.driverError?.code === '23505';
 
 const numeric = (v: unknown): number => {
   const n = Number(v);
@@ -145,9 +201,26 @@ export class HotelAdminService {
     return marketPredicate(scope, requireMarket(requested, what, this.logger), this.logger);
   }
 
-  /** Page controls, clamped: a page is a page and a limit is at most 100 rows. */
+  /**
+   * Page controls — CAPPED, not clamped, which is the same policy the gateway
+   * DTO states.
+   *
+   * This used to clamp a limit of 5000 down to 100 while
+   * `AdminHotelQueryDto.limit` answered the same request with a 400 whose
+   * docstring says capping is the ruling *because* clamping hides rows. Two
+   * halves of one module stating opposite policies; the DTO's is the platform's,
+   * so a direct TCP caller now gets the same refusal an HTTP one does rather
+   * than a quietly shortened page (M5 review, Minor 12).
+   *
+   * The LOWER bound is still coerced: `page=0` means the first page, and there
+   * is no page before it to refuse anyone.
+   */
   private page(q: { page?: number; limit?: number }, fallbackLimit = 20) {
-    const limit = Math.min(Math.max(Number(q.limit) || fallbackLimit, 1), 100);
+    const requested = Number(q.limit) || fallbackLimit;
+    if (requested > MAX_PAGE_SIZE) {
+      throw new BadRequestException(`limit must not be greater than ${MAX_PAGE_SIZE}`);
+    }
+    const limit = Math.max(requested, 1);
     const page = Math.max(Number(q.page) || 1, 1);
     return { page, limit, skip: (page - 1) * limit };
   }
@@ -230,7 +303,13 @@ export class HotelAdminService {
     const market = this.market(q.scope, q.region ?? q.countryCode, 'those bookings');
     const { page, limit, skip } = this.page(q);
 
-    const qb = this.bookingRepo.createQueryBuilder('booking').innerJoin('booking.hotel', 'hotel');
+    // `leftJoin`, not `innerJoin`. `hotel_bookings.hotel` is `onDelete: SET NULL`,
+    // so an orphaned booking is possible and `getBookingDetail` deliberately
+    // serves one to a GLOBAL caller — while an inner join meant the only list
+    // that could have given that caller the id excluded it (M5 review, Minor 2).
+    // The market predicate is unchanged and still excludes orphans for a SCOPED
+    // caller, because NULL never equals a market.
+    const qb = this.bookingRepo.createQueryBuilder('booking').leftJoin('booking.hotel', 'hotel');
     this.selectHotel(qb);
     applyMarketFilter(qb, 'hotel.countryCode', market);
     if (q.status) qb.andWhere('booking.status = :status', { status: q.status });
@@ -330,7 +409,17 @@ export class HotelAdminService {
     }
 
     data.sort((a, b) => a.name.localeCompare(b.name));
-    return { data, total: data.length, catalogued: catalogue.length };
+    return {
+      data,
+      total: data.length,
+      catalogued: catalogue.length,
+      // `hotelCount` is EVERY market's, because the catalogue is global and this
+      // read is not scoped. Saying so in the payload rather than only in this
+      // method's docstring: a QA administrator reading "Airport Shuttle: 2"
+      // otherwise reads a platform number as their own, which is the failure
+      // `getReports` exists to avoid (M5 review, Minor 4).
+      countScope: 'platform',
+    };
   }
 
   /**
@@ -358,16 +447,29 @@ export class HotelAdminService {
     const existing = await this.amenityRepo.findOne({ where: { slug } });
     if (existing) throw new BadRequestException(`Amenity "${existing.name}" already exists`);
 
-    const saved = await this.amenityRepo.save(
-      this.amenityRepo.create({
-        name,
-        slug,
-        icon: d.icon ?? null,
-        category: d.category ?? null,
-        isActive: d.isActive ?? true,
-        createdBy: d.actorId ?? null,
-      }),
-    );
+    // The check above answers the common case with a 400 naming the amenity. The
+    // catch answers the race: two administrators cataloguing "Sauna" at once
+    // both pass the check and the UNIQUE index rejects the loser with a 23505,
+    // which reached the caller as a 500 carrying Postgres's own text (M5 review,
+    // Minor 5). Same outcome, same copy, whichever path gets there.
+    let saved: HotelAmenity;
+    try {
+      saved = await this.amenityRepo.save(
+        this.amenityRepo.create({
+          name,
+          slug,
+          icon: d.icon ?? null,
+          category: d.category ?? null,
+          isActive: d.isActive ?? true,
+          createdBy: d.actorId ?? null,
+        }),
+      );
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new BadRequestException(`Amenity "${name}" already exists`);
+      }
+      throw err;
+    }
 
     await this.kafka.publish('hotel.amenity.created', {
       id: saved.id,
@@ -380,11 +482,16 @@ export class HotelAdminService {
 
   // ── Market settings — the row behind Pricing AND Settings ──────────────────
 
-  /** The configuration row for one market, or null when nothing has been set. */
+  /**
+   * The configuration row for one market.
+   *
+   * Delegated to `HotelService.marketSettings` rather than kept here: since this
+   * round the REGISTRATION path reads the same row to decide whether a new
+   * property goes live, and two implementations of "what is this market
+   * configured as" is how the console and the workflow come to disagree.
+   */
   private async settingsRow(market: string): Promise<HotelMarketSettings | null> {
-    const qb = this.settingsRepo.createQueryBuilder('s');
-    applyMarketFilter(qb, 's.countryCode', market);
-    return qb.getOne();
+    return this.svc.marketSettings(market);
   }
 
   /**
@@ -408,6 +515,12 @@ export class HotelAdminService {
       defaultCommissionRate: row ? money(row.defaultCommissionRate) : 15,
       updatedBy: row?.updatedBy ?? null,
       updatedAt: row?.updatedAt ?? null,
+      // Which of these keys actually DOES anything. Carried on every settings
+      // read and on both write responses so a console can label or disable what
+      // is recorded and not yet enforced, instead of presenting seven fields
+      // that all look like effects (M5 review, Important 1).
+      enforcement: { ...SETTINGS_ENFORCEMENT },
+      enforcementNote: SETTINGS_ENFORCEMENT_NOTE,
     };
   }
 
@@ -473,19 +586,26 @@ export class HotelAdminService {
       .innerJoin('rule.hotel', 'hotel')
       .addSelect(['hotel.id', 'hotel.name', 'hotel.countryCode']);
     applyMarketFilter(rulesQb, 'hotel.countryCode', market);
-    const seasonalRules = await rulesQb
+    // `getManyAndCount`, so `seasonalRuleCount` is every rule in the market
+    // rather than the length of the page. It used to be `seasonalRules.length`
+    // after a `.take(200)`, which told a market with 500 rules it had 200 and
+    // put nothing in the payload to say the list had been cut (M5 review,
+    // Minor 1).
+    const [seasonalRules, seasonalRuleCount] = await rulesQb
       .orderBy('rule.priority', 'DESC')
       .addOrderBy('rule.startDate', 'ASC')
       .addOrderBy('rule.id', 'ASC')
-      .take(200)
-      .getMany();
+      .take(SEASONAL_RULE_PAGE)
+      .getManyAndCount();
 
     return {
       market: market ?? null,
       base: market ? this.settingsView(market, await this.settingsRow(market)) : null,
       markets: await this.settingsForScope(market),
       seasonalRules,
-      seasonalRuleCount: seasonalRules.length,
+      seasonalRuleCount,
+      seasonalRuleLimit: SEASONAL_RULE_PAGE,
+      seasonalRulesTruncated: seasonalRuleCount > seasonalRules.length,
     };
   }
 
@@ -517,7 +637,7 @@ export class HotelAdminService {
     }
 
     row.updatedBy = d.actorId ?? null;
-    const saved = await this.settingsRepo.save(row);
+    const saved = await this.saveSettings(row, market, d.scope, what);
     await this.publishSettingsChange('pricing', saved, changed, d.actorId);
     return this.settingsView(saved.countryCode, saved);
   }
@@ -557,9 +677,38 @@ export class HotelAdminService {
     }
 
     row.updatedBy = d.actorId ?? null;
-    const saved = await this.settingsRepo.save(row);
+    const saved = await this.saveSettings(row, market, d.scope, what);
     await this.publishSettingsChange('settings', saved, changed, d.actorId);
     return this.settingsView(saved.countryCode, saved);
+  }
+
+  /**
+   * Save the market's row, and survive the race the check-then-insert leaves.
+   *
+   * `settingsToWrite` loads or creates; two administrators configuring the same
+   * market at once both take the "create" branch and the UNIQUE index rejects
+   * the loser with a 23505, which reached the caller as a 500 (M5 review,
+   * Minor 5). The retry re-reads the row the winner inserted and re-applies the
+   * caller's own changes onto it — a merge, which is what the single-threaded
+   * path does anyway — rather than failing a write the administrator was
+   * entitled to make.
+   */
+  private async saveSettings(
+    row: HotelMarketSettings,
+    market: string,
+    scope: string | undefined,
+    what: string,
+  ): Promise<HotelMarketSettings> {
+    try {
+      return await this.settingsRepo.save(row);
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      const winner = await this.settingsRow(market);
+      if (!winner) throw err;
+      assertInMarket(winner.countryCode, scope, what, this.logger);
+      const { id: _id, createdAt: _createdAt, ...mine } = row;
+      return this.settingsRepo.save(this.settingsRepo.merge(winner, mine));
+    }
   }
 
   /**
@@ -636,16 +785,20 @@ export class HotelAdminService {
     applyMarketFilter(pendingQb, 'hotel.countryCode', market);
     const pendingApprovals = await pendingQb.getCount();
 
+    // `leftJoin` on the counters, for the same reason as `listBookings`: an
+    // orphaned booking is real and a PLATFORM total that silently drops it would
+    // disagree with the dashboard's, which counts it through the nullable
+    // snapshot. The market predicate still excludes orphans for a scoped caller.
     const windowQb = this.bookingRepo
       .createQueryBuilder('booking')
-      .innerJoin('booking.hotel', 'hotel')
+      .leftJoin('booking.hotel', 'hotel')
       .where('booking.createdAt >= :since', { since });
     applyMarketFilter(windowQb, 'hotel.countryCode', market);
     const totalBookings = await windowQb.getCount();
 
     const cancelledQb = this.bookingRepo
       .createQueryBuilder('booking')
-      .innerJoin('booking.hotel', 'hotel')
+      .leftJoin('booking.hotel', 'hotel')
       .where('booking.createdAt >= :since', { since })
       .andWhere('booking.status = :cancelled', { cancelled: 'CANCELLED' });
     applyMarketFilter(cancelledQb, 'hotel.countryCode', market);
@@ -653,7 +806,7 @@ export class HotelAdminService {
 
     const revenueQb = this.bookingRepo
       .createQueryBuilder('booking')
-      .innerJoin('booking.hotel', 'hotel')
+      .leftJoin('booking.hotel', 'hotel')
       .select('COALESCE(SUM(booking.grandTotal), 0)', 'gross')
       .addSelect('COALESCE(AVG(booking.grandTotal), 0)', 'average')
       .where('booking.createdAt >= :since', { since })
@@ -690,6 +843,8 @@ export class HotelAdminService {
       hidden: string;
     }>();
 
+    // `innerJoin` here on purpose, unlike the counters above: this is a ranking
+    // OF HOTELS, and a booking whose property is gone has no row to rank.
     const topQb = this.bookingRepo
       .createQueryBuilder('booking')
       .innerJoin('booking.hotel', 'hotel')

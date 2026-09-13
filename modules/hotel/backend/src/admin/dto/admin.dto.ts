@@ -108,6 +108,25 @@ export interface AdminModerateReviewMsg extends AdminIdMsg {
 }
 
 /**
+ * WHAT A MARKET'S SETTINGS ACTUALLY DO, stated where the payload is declared.
+ *
+ * Two of the seven keys below are enforced — `autoApproveHotels` and
+ * `defaultCommissionRate`, both by `HotelService.createHotel`. The other five
+ * (`platformFeePercent`, `serviceTaxPercent`, `cleaningFee`,
+ * `freeCancellationWindowHours`, `maxRoomsPerHotel`) are **recorded, not
+ * enforced by any hotel workflow yet**: nothing in booking, pricing or checkout
+ * reads them. They are real stored configuration and the console has screens for
+ * them, so they are not removed — but every one of those names is an EFFECT
+ * name, and an administrator setting a cleaning fee would otherwise reasonably
+ * believe bookings in their market now carry one (M5 review, Important 1).
+ *
+ * Both READ payloads and both WRITE responses carry `SETTINGS_ENFORCEMENT` as
+ * `enforcement`, a per-key `true`/`false` map a console can index straight into,
+ * plus `enforcementNote`. `admin-scope.spec.ts` pins the map, so wiring a
+ * consumer means flipping its entry deliberately.
+ */
+
+/**
  * The pricing half of a market's settings row.
  *
  * `countryCode` is the market the gateway RESOLVED for this caller — the lock
