@@ -91,6 +91,46 @@ schema is not a correctness risk, and dropping one needs a migration with a
 real `down()`, not a runbook note. `\dn` in `kartseek_db` will show them; this
 is why.
 
+### Schema drift — when the ledger is green and the column is not there
+
+```bash
+cd apps/api
+npm run verify:schema-drift                      # all eight module databases
+npm run verify:schema-drift -- --module marketplace
+npm run verify:schema-drift -- --json            # for a dashboard or a CI gate
+```
+
+Exit 0 means every entity's columns exist, with the nullability and type the
+entity declares. Exit 1 lists what is missing, extra or differently shaped —
+one line per finding, naming `<schema>.<table>.<column>`.
+
+**Run it whenever a migration has been applied to a database that already
+existed**, and after any deploy that adds or changes an `@Column`.
+`migration:show` cannot answer this question. Every module's initial migration
+is deliberately idempotent — `CREATE TABLE IF NOT EXISTS`, so it could be
+recorded against the databases `synchronize` had already built — and against an
+existing table that statement does _nothing_, after which the runner records
+the migration as applied. A column the entity gained in the meantime is then
+missing forever, behind a green ledger.
+
+That is not a hypothetical. `ProductListing.mrp` was added to the entity on
+2026-09-06, dev auto-sync never applied it, the initial migration declared it,
+`CREATE TABLE IF NOT EXISTS` skipped the table, `migration:show` read `[X]`, and
+`GET /api/v1/marketplace/products` answered **500 to every caller, superuser
+included** — invisible for days because the Redis cache in front of it kept
+serving the last good response. `1786502700000-ProductListingMrp` is the fix and
+`verify:schema-drift` is what would have caught it the same day.
+
+**When it reports something, write a migration.** From the module's directory,
+`npm run migration:generate -- migrations/AddWhatever` against a scratch
+database, or hand-write one — `docs/guides/database-migrations.md` has both
+procedures and the timestamp allocation table. Never an `ALTER` typed into
+psql: it fixes the database in front of you and no other, and the next
+environment fails the same way with no record of why. The checker itself only
+ever reads — it queries `information_schema.columns` and compares against the
+entity metadata TypeORM builds in memory; it holds no schema builder and cannot
+write.
+
 ---
 
 ## Incident Response
