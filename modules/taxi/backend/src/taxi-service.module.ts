@@ -6,6 +6,8 @@ import { RedisModule } from '@app/redis';
 import { SecurityModule } from '@app/security';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TaxiController } from './taxi.controller';
+import { TaxiAdminController } from './admin/admin.controller';
+import { TaxiAdminService } from './admin/admin.service';
 import { TaxiService } from './taxi.service';
 import { RideMatchingService } from './services/ride-matching.service';
 import { FareCalculationService } from './services/fare-calculation.service';
@@ -131,8 +133,15 @@ const ENTITIES = [
     SecurityModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
   ],
-  controllers: [TaxiController],
+  // TaxiAdminController is the second controller on purpose: the seven
+  // `admin.taxi.*` commands M7 owns live in `src/admin/`, beside their own
+  // service and DTOs, rather than being bolted onto the bottom of the
+  // storefront controller — the shape M3–M6 settled on for the other five
+  // verticals. The sixteen admin commands that already had a handler stay on
+  // `TaxiController` until the taxi plan moves them.
+  controllers: [TaxiController, TaxiAdminController],
   providers: [
+    TaxiAdminService,
     TaxiService,
     RideMatchingService,
     FareCalculationService,
@@ -144,6 +153,7 @@ const ENTITIES = [
     ComplaintManagementService,
   ],
   exports: [
+    TaxiAdminService,
     TaxiService,
     RideMatchingService,
     FareCalculationService,

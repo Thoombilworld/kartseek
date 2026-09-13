@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KafkaProducerService } from '@app/kafka';
-import { applyMarketFilter, assertInMarket } from '@app/common';
+import { applyMarketFilter, assertRecordMarket, assertInMarket, requireUuid } from '@app/common';
 import { TaxiDriverEntity } from '../entities/taxi-driver.entity';
 import { TaxiDocumentEntity } from '../entities/taxi-document.entity';
 import { TaxiVendorEntity } from '../entities/taxi-vendor.entity';
@@ -353,11 +353,24 @@ export class DriverOnboardingService {
   // ─── Admin Approval ───────────────────────────────────────────────────────
 
   /**
-   * Approve a driver — sets status to 'active'.
+   * Approve a driver — sets status to 'active' — in the caller's own market.
+   *
+   * `scope` is the market lock the gateway resolved from the signed token. It is
+   * asserted against the driver's own `countryCode` BEFORE anything is written,
+   * so a refused approval leaves the row and the event stream untouched. The
+   * driver's market is the driver's own column, never the vendor's: an
+   * independent driver has no vendor at all, and `taxi_drivers.countryCode` is
+   * NOT NULL, so there is nothing to fall back to and nothing to widen.
    */
-  async approveDriver(driverId: string, adminId: string): Promise<TaxiDriverEntity> {
-    const driver = await this.driverRepo.findOne({ where: { id: driverId } });
-    if (!driver) throw new NotFoundException(`Driver ${driverId} not found`);
+  async approveDriver(
+    driverId: string,
+    adminId: string,
+    scope?: string,
+  ): Promise<TaxiDriverEntity> {
+    const driver = await this.driverRepo.findOne({
+      where: { id: requireUuid(driverId, 'driver') },
+    });
+    assertRecordMarket(driver, 'countryCode', scope, 'driver', this.logger);
 
     driver.status = 'active';
     driver.approvedBy = adminId;
@@ -370,6 +383,7 @@ export class DriverOnboardingService {
       driverId: saved.id,
       name: saved.fullName,
       vendorId: saved.vendorId,
+      countryCode: saved.countryCode,
       approvedBy: adminId,
     });
 
@@ -460,19 +474,21 @@ export class DriverOnboardingService {
   /**
    * Get a single driver by ID.
    */
-  async getDriverById(driverId: string): Promise<TaxiDriverEntity> {
+  async getDriverById(driverId: string, scope?: string): Promise<TaxiDriverEntity> {
     const driver = await this.driverRepo.findOne({
-      where: { id: driverId },
+      where: { id: requireUuid(driverId, 'driver') },
       relations: { vendor: true },
     });
-    if (!driver) throw new NotFoundException(`Driver ${driverId} not found`);
+    // 404 for a id that is not here, 403 for one that is not the caller's —
+    // kept apart, so a typo is never reported as a permission problem.
+    assertRecordMarket(driver, 'countryCode', scope, 'driver', this.logger);
 
     // Documents are polymorphic — one table serving both vendors and drivers,
     // keyed by { ownerType, ownerId } — so they cannot be loaded through a
     // relation. See TaxiDocumentEntity for why the two foreign keys that used
     // to express this could never be created.
     driver.documents = await this.documentRepo.find({
-      where: { ownerType: 'driver', ownerId: driverId },
+      where: { ownerType: 'driver', ownerId: driver.id },
     });
     return driver;
   }

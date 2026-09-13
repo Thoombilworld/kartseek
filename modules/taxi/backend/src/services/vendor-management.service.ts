@@ -1,4 +1,4 @@
-import { applyMarketFilter } from '@app/common';
+import { applyMarketFilter, assertRecordMarket, requireUuid } from '@app/common';
 import {
   Injectable,
   Logger,
@@ -78,10 +78,18 @@ export class VendorManagementService {
   // ─── Approval Workflow ─────────────────────────────────────────────────────
 
   /**
-   * Approve a pending vendor. Validates that required documents are present.
+   * Approve a pending vendor, in the caller's own market.
+   *
+   * `scope` is asserted against the vendor's `countryCode` by `getVendorOrFail`
+   * BEFORE anything is written, so a refused decision leaves the row and the
+   * event stream untouched — `admin-scope.spec.ts` asserts exactly that.
    */
-  async approveVendor(vendorId: string, adminId: string): Promise<TaxiVendorEntity> {
-    const vendor = await this.getVendorOrFail(vendorId);
+  async approveVendor(
+    vendorId: string,
+    adminId: string,
+    scope?: string,
+  ): Promise<TaxiVendorEntity> {
+    const vendor = await this.getVendorOrFail(vendorId, scope);
 
     if (vendor.status === 'active') {
       throw new BadRequestException('Vendor is already active');
@@ -97,6 +105,7 @@ export class VendorManagementService {
     await this.kafka.publish('taxi.vendor.approved', {
       vendorId: saved.id,
       name: saved.name,
+      countryCode: saved.countryCode,
       approvedBy: adminId,
     });
 
@@ -107,8 +116,13 @@ export class VendorManagementService {
   /**
    * Reject a pending vendor application.
    */
-  async rejectVendor(vendorId: string, adminId: string, reason: string): Promise<TaxiVendorEntity> {
-    const vendor = await this.getVendorOrFail(vendorId);
+  async rejectVendor(
+    vendorId: string,
+    adminId: string,
+    reason: string,
+    scope?: string,
+  ): Promise<TaxiVendorEntity> {
+    const vendor = await this.getVendorOrFail(vendorId, scope);
 
     vendor.status = 'rejected';
     vendor.suspensionReason = reason;
@@ -126,23 +140,34 @@ export class VendorManagementService {
 
   /**
    * Suspend an active vendor. Their drivers will be prevented from going online.
+   *
+   * The actor is RECORDED, not merely logged. `adminId` used to reach this
+   * method, appear in one log line and be discarded, so a fleet went off the
+   * road with a record of why and none of who; `suspendedBy`/`suspendedAt` are
+   * this task's one piece of new storage
+   * (`migrations/1786503400000-TaxiAdminApprovals.ts`).
    */
   async suspendVendor(
     vendorId: string,
     adminId: string,
     reason: string,
+    scope?: string,
   ): Promise<TaxiVendorEntity> {
-    const vendor = await this.getVendorOrFail(vendorId);
+    const vendor = await this.getVendorOrFail(vendorId, scope);
 
     vendor.status = 'suspended';
     vendor.suspensionReason = reason;
+    vendor.suspendedBy = adminId;
+    vendor.suspendedAt = new Date();
 
     const saved = await this.vendorRepo.save(vendor);
 
     await this.kafka.publish('taxi.vendor.suspended', {
       vendorId: saved.id,
+      countryCode: saved.countryCode,
       reason,
-      driverCount: await this.driverRepo.count({ where: { vendorId } }),
+      suspendedBy: adminId,
+      driverCount: await this.driverRepo.count({ where: { vendorId: saved.id } }),
     });
 
     this.logger.log(`⚠️ Vendor "${saved.name}" suspended: ${reason}`);
@@ -152,11 +177,18 @@ export class VendorManagementService {
   /**
    * Block a vendor permanently. All associated drivers are also blocked.
    */
-  async blockVendor(vendorId: string, adminId: string, reason: string): Promise<TaxiVendorEntity> {
-    const vendor = await this.getVendorOrFail(vendorId);
+  async blockVendor(
+    vendorId: string,
+    adminId: string,
+    reason: string,
+    scope?: string,
+  ): Promise<TaxiVendorEntity> {
+    const vendor = await this.getVendorOrFail(vendorId, scope);
 
     vendor.status = 'blocked';
     vendor.suspensionReason = reason;
+    vendor.suspendedBy = adminId;
+    vendor.suspendedAt = new Date();
 
     const saved = await this.vendorRepo.save(vendor);
 
@@ -165,7 +197,7 @@ export class VendorManagementService {
       .createQueryBuilder()
       .update()
       .set({ status: 'blocked', suspensionReason: `Vendor blocked: ${reason}` })
-      .where('vendorId = :vendorId', { vendorId })
+      .where('vendorId = :vendorId', { vendorId: saved.id })
       .execute();
 
     await this.kafka.publish('taxi.vendor.blocked', {
@@ -180,8 +212,12 @@ export class VendorManagementService {
   /**
    * Reactivate a suspended or blocked vendor.
    */
-  async reactivateVendor(vendorId: string, adminId: string): Promise<TaxiVendorEntity> {
-    const vendor = await this.getVendorOrFail(vendorId);
+  async reactivateVendor(
+    vendorId: string,
+    adminId: string,
+    scope?: string,
+  ): Promise<TaxiVendorEntity> {
+    const vendor = await this.getVendorOrFail(vendorId, scope);
 
     if (vendor.status === 'active') {
       throw new BadRequestException('Vendor is already active');
@@ -189,6 +225,8 @@ export class VendorManagementService {
 
     vendor.status = 'active';
     vendor.suspensionReason = null;
+    vendor.suspendedBy = null;
+    vendor.suspendedAt = null;
 
     const saved = await this.vendorRepo.save(vendor);
 
@@ -237,14 +275,17 @@ export class VendorManagementService {
   /**
    * Get a single vendor by ID with relations loaded.
    */
-  async getVendorById(vendorId: string): Promise<TaxiVendorEntity> {
-    return this.getVendorOrFail(vendorId);
+  async getVendorById(vendorId: string, scope?: string): Promise<TaxiVendorEntity> {
+    return this.getVendorOrFail(vendorId, scope);
   }
 
   /**
    * Aggregated dashboard stats for a vendor.
    */
-  async getVendorDashboard(vendorId: string): Promise<{
+  async getVendorDashboard(
+    vendorId: string,
+    scope?: string,
+  ): Promise<{
     vendor: TaxiVendorEntity;
     stats: {
       totalDrivers: number;
@@ -256,9 +297,10 @@ export class VendorManagementService {
       pendingDocuments: number;
     };
   }> {
-    const vendor = await this.getVendorOrFail(vendorId);
+    const vendor = await this.getVendorOrFail(vendorId, scope);
+    const id = vendor.id;
 
-    const totalDrivers = await this.driverRepo.count({ where: { vendorId } });
+    const totalDrivers = await this.driverRepo.count({ where: { vendorId: id } });
     const activeDrivers = await this.driverRepo.count({
       where: { vendorId, status: 'active' },
     });
@@ -313,15 +355,16 @@ export class VendorManagementService {
       vehicleColor?: string;
       licenseNumber?: string;
     },
+    scope?: string,
   ): Promise<TaxiDriverEntity> {
-    const vendor = await this.getVendorOrFail(vendorId);
+    const vendor = await this.getVendorOrFail(vendorId, scope);
 
     if (vendor.status !== 'active') {
       throw new BadRequestException('Cannot add drivers to a non-active vendor');
     }
 
     // Check fleet capacity
-    const currentCount = await this.driverRepo.count({ where: { vendorId } });
+    const currentCount = await this.driverRepo.count({ where: { vendorId: vendor.id } });
     if (currentCount >= vendor.maxDrivers) {
       throw new BadRequestException(
         `Vendor has reached maximum fleet capacity (${vendor.maxDrivers} drivers)`,
@@ -331,7 +374,7 @@ export class VendorManagementService {
     const driver = this.driverRepo.create({
       ...dto,
       countryCode: vendor.countryCode,
-      vendorId,
+      vendorId: vendor.id,
       status: 'pending',
     });
 
@@ -339,8 +382,9 @@ export class VendorManagementService {
 
     await this.kafka.publish('taxi.driver.registered', {
       driverId: saved.id,
-      vendorId,
+      vendorId: vendor.id,
       vendorName: vendor.name,
+      countryCode: saved.countryCode,
       name: saved.fullName,
     });
 
@@ -351,9 +395,13 @@ export class VendorManagementService {
   /**
    * Remove a driver from a vendor's fleet.
    */
-  async removeDriverFromVendor(vendorId: string, driverId: string): Promise<void> {
+  async removeDriverFromVendor(vendorId: string, driverId: string, scope?: string): Promise<void> {
+    // Load the vendor first so the caller's market is asserted before the
+    // driver is touched — otherwise a locked admin could unseat a driver from
+    // another market's fleet by naming both ids.
+    const vendor = await this.getVendorOrFail(vendorId, scope);
     const driver = await this.driverRepo.findOne({
-      where: { id: driverId, vendorId },
+      where: { id: requireUuid(driverId, 'driver'), vendorId: vendor.id },
     });
 
     if (!driver) {
@@ -371,19 +419,45 @@ export class VendorManagementService {
 
   // ─── Private Helpers ──────────────────────────────────────────────────────
 
-  private async getVendorOrFail(vendorId: string): Promise<TaxiVendorEntity> {
+  /**
+   * The vendor a read or decision addresses, and the refusal when it is not the
+   * caller's.
+   *
+   * ── `scope`, and why it is threaded through every caller ────────────────────
+   *
+   * `scope` is the caller's market lock, written only by the gateway and only
+   * from the signed token (`{ scope, actorId, … }` — the plan's handler
+   * contract). `undefined` means a genuinely global administrator and asserts
+   * nothing; anything else must match the vendor's own `countryCode` or the
+   * decision is refused with the platform's fixed backend copy and the
+   * `[region-scope-denied]` log prefix.
+   *
+   * It is asserted HERE rather than in the admin service so that every path into
+   * a vendor decision is covered by one check — the TCP handlers M7 added, and
+   * the `/admin/vendors/*` routes on this service's own HTTP port, which are a
+   * second, unscoped admin surface until M8 closes it.
+   *
+   * `assertRecordMarket` keeps "no such id" (404) and "not your market" (403)
+   * apart: asserting on a row that was never checked for existence reports a
+   * typo as a permission problem. `requireUuid` turns a malformed id into a 400
+   * rather than letting Postgres answer `invalid input syntax for type uuid`
+   * with a 500 carrying the column's type.
+   */
+  private async getVendorOrFail(vendorId: string, scope?: string): Promise<TaxiVendorEntity> {
+    const id = requireUuid(vendorId, 'vendor');
     const vendor = await this.vendorRepo.findOne({
-      where: { id: vendorId },
+      where: { id },
       relations: { drivers: true },
     });
     if (!vendor) {
-      throw new NotFoundException(`Vendor ${vendorId} not found`);
+      throw new NotFoundException(`Vendor ${id} not found`);
     }
+    assertRecordMarket(vendor, 'countryCode', scope, 'vendor', this.logger);
 
     // Polymorphic, same as on the driver side — loaded by discriminator rather
     // than through a relation.
     vendor.documents = await this.documentRepo.find({
-      where: { ownerType: 'vendor', ownerId: vendorId },
+      where: { ownerType: 'vendor', ownerId: id },
     });
     return vendor;
   }

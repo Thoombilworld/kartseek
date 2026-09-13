@@ -137,14 +137,27 @@ const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   // three moved out of `doctor.controller.ts`, none renamed, because doctor
   // never adopted a second convention. `has no doctor command left in either
   // baseline` below is what would have failed had they been left.
-  'admin.taxi.complaints',
-  'admin.taxi.compliance',
-  'admin.taxi.dashboard',
-  'admin.taxi.fleet',
-  'admin.taxi.pricing',
-  'admin.taxi.rides',
-  'admin.taxi.routes',
-  'admin.taxi.settings',
+  //
+  // The eight `admin.taxi.*` entries below are EIGHT OF THE FOURTEEN the TAXI
+  // plan owns; the other six are in `NEWLY_VISIBLE_ORPHANS`, which is where they
+  // were first recorded and where they stay — an entry does not move between
+  // these two lists, because each list's one rule is "it only ever shrinks" and
+  // a move reads as an addition to whichever list receives it. Together the two
+  // groups are exactly fourteen, and `has no MODULES-owned taxi command left in
+  // either baseline` below is what keeps a MODULES command from joining them.
+  //
+  // M7 gave the other SEVEN taxi commands a `@MessagePattern` in
+  // `modules/taxi/backend/src/admin/admin.controller.ts`, so `approveVendor`,
+  // `suspendVendor`, `vendorDetail`, `approveDriver`, `driverDetail`,
+  // `approvePayout` and `pendingApprovals` have left this baseline entirely.
+  'admin.taxi.complaints', // TAXI plan: rider complaints console
+  'admin.taxi.compliance', // TAXI plan: compliance view
+  'admin.taxi.dashboard', // TAXI plan: operations dashboard
+  'admin.taxi.fleet', // TAXI plan: needs the `vehicles` entity (AUD2-126)
+  'admin.taxi.pricing', // TAXI plan: fare/zone rework (AUD2-018/019)
+  'admin.taxi.rides', // TAXI plan: rides console
+  'admin.taxi.routes', // TAXI plan: fixed routes
+  'admin.taxi.settings', // TAXI plan: module settings
 ]);
 
 /**
@@ -215,20 +228,33 @@ const NEWLY_VISIBLE_ORPHANS: ReadonlySet<string> = new Set([
   // the seven that were visible all along. Seventeen commands, seventeen
   // handlers, nothing deliberately left unhandled.
 
-  // ── taxi → M7 ─────────────────────────────────────────────────────────────
-  'admin.taxi.approveDriver',
-  'admin.taxi.approvePayout',
-  'admin.taxi.approveVendor',
-  'admin.taxi.createRoute',
-  'admin.taxi.driverDetail',
-  'admin.taxi.pendingApprovals',
-  'admin.taxi.resolveComplaint',
-  'admin.taxi.rideDetail',
-  'admin.taxi.suspendVendor',
-  'admin.taxi.updatePricing',
-  'admin.taxi.updateSettings',
-  'admin.taxi.updateSurge',
-  'admin.taxi.vendorDetail',
+  // ── taxi → M7 did its seven; these six are the TAXI plan's ────────────────
+  //
+  // M7 owned SEVEN of this module's thirteen newly visible commands and they are
+  // gone from this list: `approveVendor`, `suspendVendor`, `vendorDetail`,
+  // `approveDriver`, `driverDetail`, `approvePayout` and `pendingApprovals` are
+  // served by `modules/taxi/backend/src/admin/admin.controller.ts`. Their
+  // implementations already existed in `VendorManagementService`,
+  // `DriverOnboardingService` and `TaxiPayoutService` — only the patterns and
+  // the market checks were missing, which is why they were the seven a MODULES
+  // task could finish.
+  //
+  // The six left here, plus the eight in `UNIMPLEMENTED_COMMANDS` above, are the
+  // FOURTEEN operations-console commands the TAXI plan owns. They are not M7's
+  // to implement and not M7's to excuse: each needs an entity this module does
+  // not have (`vehicles`, surge zones — AUD2-126) or the fare/zone rework
+  // (AUD2-018/019). Pointing one at a near-enough method would answer with
+  // another market's fleet, which is worse than a 503 naming the command.
+  //
+  // This group does not empty at M7. It empties when the TAXI plan lands, and
+  // `has no MODULES-owned taxi command left in either baseline` below is what
+  // fails if a MODULES-owned taxi command reappears in the meantime.
+  'admin.taxi.createRoute', // TAXI plan: fixed routes (AUD2-018/019)
+  'admin.taxi.resolveComplaint', // TAXI plan: rider complaints console
+  'admin.taxi.rideDetail', // TAXI plan: rides console
+  'admin.taxi.updatePricing', // TAXI plan: fare/zone rework (AUD2-018/019)
+  'admin.taxi.updateSettings', // TAXI plan: module settings
+  'admin.taxi.updateSurge', // TAXI plan: needs surge zones (AUD2-060/126)
 ]);
 
 /**
@@ -500,6 +526,50 @@ describe('gateway ↔ service contract', () => {
     const doctorEntries = [...KNOWN_ORPHANS].filter((cmd) => cmd.startsWith('admin.doctor.'));
 
     expect(doctorEntries).toEqual([]);
+  });
+
+  it('has no MODULES-owned taxi command left in either baseline', () => {
+    // M7 implemented SEVEN of taxi's thirty-seven admin commands — the vendor,
+    // driver and payout decisions and the two detail reads — and the FOURTEEN
+    // operations-console commands are the TAXI plan's, so they stay. This is the
+    // assertion that keeps the split honest in both directions: one of the seven
+    // reappearing in either list would mean a handler was removed and excused
+    // rather than replaced, and it also fails if the taxi baselines ever hold
+    // anything other than exactly those fourteen.
+    const MODULES_OWNED = [
+      'admin.taxi.approveDriver',
+      'admin.taxi.approvePayout',
+      'admin.taxi.approveVendor',
+      'admin.taxi.driverDetail',
+      'admin.taxi.pendingApprovals',
+      'admin.taxi.suspendVendor',
+      'admin.taxi.vendorDetail',
+    ];
+    const TAXI_PLAN_OWNED = [
+      'admin.taxi.complaints',
+      'admin.taxi.compliance',
+      'admin.taxi.createRoute',
+      'admin.taxi.dashboard',
+      'admin.taxi.fleet',
+      'admin.taxi.pricing',
+      'admin.taxi.resolveComplaint',
+      'admin.taxi.rideDetail',
+      'admin.taxi.rides',
+      'admin.taxi.routes',
+      'admin.taxi.settings',
+      'admin.taxi.updatePricing',
+      'admin.taxi.updateSettings',
+      'admin.taxi.updateSurge',
+    ];
+
+    const excused = [...KNOWN_ORPHANS].filter((cmd) => cmd.startsWith('admin.taxi.')).sort();
+
+    expect(MODULES_OWNED.filter((cmd) => KNOWN_ORPHANS.has(cmd))).toEqual([]);
+    // …and the seven really do have a handler, so this is not vacuous.
+    for (const cmd of MODULES_OWNED) {
+      expect(handled.has(cmd), `${cmd} has no @MessagePattern`).toBe(true);
+    }
+    expect(excused).toEqual([...TAXI_PLAN_OWNED].sort());
   });
 
   it('declares literal routes before parameterised siblings', () => {

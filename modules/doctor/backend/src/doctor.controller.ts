@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseFilters, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query, UseFilters } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DoctorService } from './doctor.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
@@ -23,8 +23,6 @@ import {
 @UseFilters(RpcAwareExceptionsFilter)
 @Controller('doctors')
 export class DoctorController {
-  private readonly logger = new Logger(DoctorController.name);
-
   constructor(
     private readonly svc: DoctorService,
     private readonly franchiseView: FranchiseViewService,

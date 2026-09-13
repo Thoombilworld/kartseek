@@ -514,6 +514,7 @@ export const PUBLISHED_TOPICS = {
   TAXI_DRIVER_ONBOARDING_COMPLETE: 'taxi.driver.onboarding.complete',
   TAXI_DRIVER_REGISTERED: 'taxi.driver.registered',
   TAXI_DRIVER_SUSPENDED: 'taxi.driver.suspended',
+  TAXI_PAYOUT_APPROVED: 'taxi.payout.approved',
   TAXI_PAYOUT_BATCH_APPROVED: 'taxi.payout.batch.approved',
   TAXI_PAYOUT_GENERATED: 'taxi.payout.generated',
   TAXI_PAYOUT_SETTLED: 'taxi.payout.settled',
