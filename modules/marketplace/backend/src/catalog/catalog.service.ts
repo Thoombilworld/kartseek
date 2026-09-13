@@ -31,7 +31,12 @@ import { ProductVariant } from '../entities/product-variant.entity';
 import { ProductAttribute } from '../entities/product-attribute.entity';
 import { FlashDealNomination } from '../entities/flash-deal.entity';
 import { MarketplaceFulfillmentService } from '../fulfillment/fulfillment.service';
-import { PUBLIC_SELLER_FIELDS, INVOICE_SELLER_FIELDS } from '../entities/seller.public-fields';
+import {
+  PUBLIC_SELLER_FIELDS,
+  INVOICE_SELLER_FIELDS,
+  toPublicSeller,
+} from '../entities/seller.public-fields';
+import { AttributeValuesService } from './attribute-values.service';
 import { type ProductFilter } from '../types/marketplace.types';
 import { CatalogCache, CATALOG_TTL, catalogKeys } from './catalog-cache';
 import { currentRequestId } from '../transport/request-context';
@@ -73,6 +78,7 @@ export class CatalogService {
      */
     @Inject(forwardRef(() => MarketplaceFulfillmentService))
     private readonly fulfillment: MarketplaceFulfillmentService,
+    private readonly attributes: AttributeValuesService,
   ) {}
 
   private cacheInstance?: CatalogCache;
@@ -181,9 +187,12 @@ export class CatalogService {
     for (const attr of [...rows].sort((a, b) => depth(b) - depth(a))) {
       bySlug.set(attr.slug, attr);
     }
-    const data = [...bySlug.values()].sort(
-      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
-    );
+    // `type` is a free varchar and one live row spells it `text`; every reader
+    // (the seller form, the variant picker, the validator) compares against the
+    // uppercase names, so it is normalised once here.
+    const data = [...bySlug.values()]
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+      .map((a) => ({ ...a, type: AttributeValuesService.normaliseType(a.type) }));
 
     const result = {
       category: category ? { id: category.id, name: category.name, slug: category.slug } : null,
@@ -341,6 +350,19 @@ export class CatalogService {
 
   /** Object form of {@link liveListing}, for repository `where` clauses. */
   private static readonly LIVE_LISTING = { isActive: true, approvalStatus: 'APPROVED' } as const;
+
+  /**
+   * What "exists" means to a customer: approved by moderation, switched on,
+   * and not a draft, discontinued or deleted row. The list read has always
+   * applied these; the detail read did not, so a rejected, pending or deleted
+   * product stayed reachable by anyone who had (or guessed) its uuid or slug.
+   * Seller and admin reads have their own methods and see everything.
+   */
+  private static readonly PUBLIC_PRODUCT = {
+    is_active: true,
+    approval_status: 'APPROVED',
+    status: 'ACTIVE',
+  } as const;
 
   /**
    * Join condition for a product's listings as ONE market sees them: live, and
@@ -1356,7 +1378,13 @@ export class CatalogService {
     if (!byId && !CatalogService.SLUG_RE.test(idOrSlug)) {
       throw new BadRequestException(`Invalid product ID format: ${idOrSlug}`);
     }
-    const where = byId ? { id: idOrSlug } : { slug: idOrSlug };
+    // A product a customer may not see is, to the customer, a product that does
+    // not exist: the same 404 as a wrong id, so the response never confirms
+    // that a pending or rejected listing is there.
+    const where = {
+      ...(byId ? { id: idOrSlug } : { slug: idOrSlug }),
+      ...CatalogService.PUBLIC_PRODUCT,
+    };
 
     // Keyed by market as well as id: the same product carries a different offer,
     // SKUs and currency per market, and one key served Qatar's detail to India.
@@ -1387,13 +1415,16 @@ export class CatalogService {
     // ₹0 price and no buy box).
     const productId = product.id;
 
-    // Fetch related data in parallel — individual failures don't crash the response
+    // Fetch related data in parallel — individual failures don't crash the response.
+    // Reviews are not inlined any more: the page reads them from
+    // `get_product_reviews` (paged, with the rating histogram), and the inline
+    // copy carried each reviewer's customer id to every visitor.
     let images: any[] = [];
     let listings: any[] = [];
-    let reviews: any[] = [];
     let variants: any[] = [];
+    let attributeRows = new Map<string, ReturnType<typeof AttributeValuesService.toRow>[]>();
     try {
-      [images, listings, reviews, variants] = await Promise.all([
+      [images, listings, variants, attributeRows] = await Promise.all([
         this.imageRepo
           .find({ where: { product: { id: productId } }, order: { sortOrder: 'ASC', id: 'ASC' } })
           .catch((): unknown[] => []),
@@ -1407,16 +1438,10 @@ export class CatalogService {
             order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC', id: 'ASC' },
           })
           .catch((): unknown[] => []),
-        this.reviewRepo
-          .find({
-            where: { productId, status: 'PUBLISHED' },
-            order: { createdAt: 'DESC', id: 'ASC' },
-            take: 10,
-          })
-          .catch((): unknown[] => []),
         this.variantRepo
           .find({ where: { productId, isActive: true }, order: { sellingPrice: 'ASC', id: 'ASC' } })
           .catch((): unknown[] => []),
+        this.attributes.forProducts([productId]).catch(() => new Map()),
       ]);
     } catch {
       this.logger.warn(`Failed to fetch related data for product ${productId}`);
@@ -1426,7 +1451,34 @@ export class CatalogService {
     // buy box first, and only the SKUs that seller sells. Listing every
     // market's offer put a Qatari price on the Indian page and vice versa.
     const market = region ? region.toUpperCase() : undefined;
-    listings = listings.filter((l: any) => CatalogService.sellerMayServe(l?.seller, market));
+    listings = listings
+      .filter((l: any) => CatalogService.sellerMayServe(l?.seller, market))
+      // The relation loaded the whole Seller row — bank account, PAN, GST
+      // number, owner e-mail and phone, KYC documents. A customer sees the
+      // storefront projection and nothing else.
+      .map((l: any) => ({ ...l, seller: toPublicSeller(l?.seller) }));
+    // `sellers.seller_rating` / `total_reviews` / `total_products` are seed
+    // columns nothing writes (an official store showed 4.8 from 1,250 reviews
+    // over an empty reviews table). The "Sold by" card gets the same live
+    // figures the seller directory computes.
+    const sellerIds = [
+      ...new Set(listings.map((l: any) => l?.seller?.id).filter(Boolean) as string[]),
+    ];
+    const stats = await this.sellerStats(sellerIds);
+    listings = listings.map((l: any) => {
+      const s = l?.seller?.id ? stats.get(l.seller.id) : undefined;
+      return s
+        ? {
+            ...l,
+            seller: {
+              ...l.seller,
+              sellerRating: s.rating,
+              totalReviews: s.reviews,
+              totalProducts: s.products,
+            },
+          }
+        : l;
+    });
     const buyBoxSellerId: string | null = (listings[0] as any)?.seller?.id ?? null;
     variants = variants.filter((v: any) => !v?.sellerId || v.sellerId === buyBoxSellerId);
 
@@ -1438,14 +1490,63 @@ export class CatalogService {
     // old way keep working.
     const metadata: any = (product as any).metadata ?? {};
     const derived = CatalogService.variantDimensions(variants);
+    // Product-specific attributes from the typed value table, presented three
+    // ways (flat, grouped for the specification table, highlights). The old
+    // `metadata.specifications` blob is retired: nothing wrote it and nothing
+    // reads it, so it is dropped from the response rather than left as a
+    // second, always-empty source of truth.
+    const { specifications: _retiredSpecifications, ...publicMetadata } = metadata;
+    void _retiredSpecifications;
+    const presented = AttributeValuesService.present(
+      (attributeRows.get(productId) ?? []).filter(
+        (row): row is NonNullable<typeof row> => row !== null,
+      ),
+    );
+    // The public row: moderation state, ownership, the seller's own id, the
+    // India-only serviceability columns, the translation blob and the row
+    // timestamps are the catalogue's business, not the customer's. The GTIN is
+    // only published when it is one (the seller path mints a `KS-…` stand-in
+    // for products that have none, and that is not a barcode).
+    const {
+      seller_id: _sellerId,
+      approval_status: _approvalStatus,
+      is_active: _isActive,
+      status: _status,
+      is_featured: _isFeatured,
+      isPanIndia: _isPanIndia,
+      availablePincodes: _availablePincodes,
+      translations: _translations,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      globalTradeItemNumber,
+      ...publicProduct
+    } = product as any;
+    void [
+      _sellerId,
+      _approvalStatus,
+      _isActive,
+      _status,
+      _isFeatured,
+      _isPanIndia,
+      _availablePincodes,
+      _translations,
+      _createdAt,
+      _updatedAt,
+    ];
+    const gtin = /^\d{8,14}$/.test(String(globalTradeItemNumber ?? ''))
+      ? String(globalTradeItemNumber)
+      : null;
     const result = {
-      ...product,
+      ...publicProduct,
+      gtin,
       images,
       listings,
-      reviews,
       variants,
+      attributes: presented.attributes,
+      specificationGroups: presented.specificationGroups,
+      highlights: presented.highlights,
       metadata: {
-        ...metadata,
+        ...publicMetadata,
         variantDimensions: derived.length ? derived : metadata.variantDimensions,
       },
       reviewCount: product.reviewCount,

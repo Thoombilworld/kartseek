@@ -5,6 +5,7 @@ import { KafkaProducerService } from '@app/kafka';
 import { EncryptionService } from '@app/security';
 import { SellerService } from '../src/seller/seller.service';
 import { CatalogService } from '../src/catalog/catalog.service';
+import { AttributeValuesService } from '../src/catalog/attribute-values.service';
 import { Seller } from '../src/entities/seller.entity';
 import { SellerSettings } from '../src/entities/seller-settings.entity';
 import { SellerKyc } from '../src/entities/seller-kyc.entity';
@@ -119,6 +120,15 @@ describe('SellerService', () => {
         SellerService,
         { provide: RedisService, useValue: mockRedis },
         { provide: KafkaProducerService, useValue: mockKafka },
+        // Attribute values: see src/seller/seller.service.spec.ts.
+        {
+          provide: AttributeValuesService,
+          useValue: {
+            definitionsForCategories: async () => [],
+            replaceForProduct: async () => undefined,
+            forProducts: async () => new Map(),
+          },
+        },
         { provide: getRepositoryToken(Seller), useValue: sellerRepo },
         { provide: getRepositoryToken(SellerSettings), useValue: settingsRepo },
         { provide: getRepositoryToken(SellerKyc), useValue: kycRepo },

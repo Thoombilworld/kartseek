@@ -65,6 +65,7 @@ describe('MarketplaceService', () => {
       getOne: jest.fn().mockResolvedValue(null),
       getCount: jest.fn().mockResolvedValue(0),
       getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      groupBy: jest.fn().mockReturnThis(),
       getRawMany: jest.fn().mockResolvedValue([]),
       getRawOne: jest.fn().mockResolvedValue({ avg: '0', count: '0', sum: '0' }),
     }),
@@ -90,21 +91,30 @@ describe('MarketplaceService', () => {
         MarketplaceService,
         // Catalogue reads live in CatalogService (getHome composes them);
         // stubbed here so these tests stay focused on MarketplaceService.
-        { provide: CatalogService, useValue: {
-          getCategories: jest.fn().mockResolvedValue({ data: [], total: 0 }),
-          getFlashDeals: jest.fn().mockResolvedValue({ data: [], total: 0 }),
-          getDeals: jest.fn().mockResolvedValue({ data: [], total: 0 }),
-          getFeaturedProducts: jest.fn().mockResolvedValue({ data: [], total: 0 }),
-          getVerifiedSellers: jest.fn().mockResolvedValue({ data: [], total: 0 }),
-        } },
-        { provide: MarketplaceFulfillmentService, useValue: {
-          createReturnRequest: jest.fn().mockResolvedValue({ success: true }),
-        } },
-        { provide: MarketplaceHomeCacheService, useValue: {
-          getCountryBanners: jest.fn().mockResolvedValue([]),
-          getBanners: jest.fn().mockResolvedValue([]),
-          invalidateHomeCache: jest.fn().mockResolvedValue(undefined),
-        } },
+        {
+          provide: CatalogService,
+          useValue: {
+            getCategories: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+            getFlashDeals: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+            getDeals: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+            getFeaturedProducts: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+            getVerifiedSellers: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+          },
+        },
+        {
+          provide: MarketplaceFulfillmentService,
+          useValue: {
+            createReturnRequest: jest.fn().mockResolvedValue({ success: true }),
+          },
+        },
+        {
+          provide: MarketplaceHomeCacheService,
+          useValue: {
+            getCountryBanners: jest.fn().mockResolvedValue([]),
+            getBanners: jest.fn().mockResolvedValue([]),
+            invalidateHomeCache: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         { provide: RedisService, useValue: redisMock },
         { provide: KafkaProducerService, useValue: kafkaMock },
         // The service injects a DataSource for its transactional writes. Without
@@ -173,7 +183,10 @@ describe('MarketplaceService', () => {
       reviewRepo.create.mockImplementation((dto: any) => dto);
       reviewRepo.save.mockResolvedValue({ id: 'r1' });
       const result = await service.addProductReview('p1', {
-        customerId: 'u1', customerName: 'John', rating: 5, comment: 'Great!',
+        customerId: 'u1',
+        customerName: 'John',
+        rating: 5,
+        comment: 'Great!',
       });
       expect(result.success).toBe(true);
       expect(kafka.publish).toHaveBeenCalledWith('review.created', expect.any(Object));
@@ -236,7 +249,9 @@ describe('MarketplaceService', () => {
     });
 
     it('answers 404 rather than 403 — confirming the order exists is itself a leak', async () => {
-      await expect(service.getOrderInvoice(ORDER_ID, STRANGER)).rejects.toMatchObject({ status: 404 });
+      await expect(service.getOrderInvoice(ORDER_ID, STRANGER)).rejects.toMatchObject({
+        status: 404,
+      });
     });
 
     it('still serves internal callers that pass no requester', async () => {
@@ -244,5 +259,4 @@ describe('MarketplaceService', () => {
       expect(invoice.orderId).toBe(ORDER_ID);
     });
   });
-
 });

@@ -42,9 +42,51 @@ export class ProductAttribute {
   @Column({
     type: 'varchar',
     default: 'TEXT',
-    comment: 'TEXT | NUMBER | SELECT | MULTI_SELECT | BOOLEAN | COLOR',
+    comment: 'TEXT | NUMBER | SELECT | MULTI_SELECT | BOOLEAN | COLOR | DATE | RANGE',
   })
   type: string;
+
+  /**
+   * Heading the product page files this attribute under ("Display",
+   * "Performance", "Dimensions"). Null means the category's general group.
+   */
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    comment: 'Specification group heading on the product page',
+  })
+  groupName: string | null;
+
+  /**
+   * True when the value is worth surfacing in the product's highlights list
+   * ("A17 Pro chip", "256 GB storage") — the page derives highlights from
+   * these rather than from hand-written copy.
+   */
+  @Column({ default: false, comment: 'Value is surfaced in the product highlights' })
+  isHighlight: boolean;
+
+  /**
+   * Inclusive bounds for NUMBER and RANGE values, in `unit`. A seller cannot
+   * submit a 999 999-inch screen or a −5000 mAh battery: the server checks
+   * these, the form only mirrors them.
+   */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 4,
+    nullable: true,
+    comment: 'Lowest accepted numeric value',
+  })
+  minValue: string | null;
+
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 4,
+    nullable: true,
+    comment: 'Highest accepted numeric value',
+  })
+  maxValue: string | null;
 
   /**
    * Predefined values for SELECT / MULTI_SELECT / COLOR.

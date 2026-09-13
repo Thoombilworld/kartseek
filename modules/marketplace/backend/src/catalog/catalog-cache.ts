@@ -41,7 +41,12 @@ import { currentRequestId } from '../transport/request-context';
  * banners are *content* the seed writes, not a cache. `invalidateListings`
  * still drops the home feed because its product rails are listings.
  */
-export const CATALOG_CACHE_VERSION = 'v2';
+// v3 (2026-09-13): the product detail's shape changed — offers carry the public
+// seller projection instead of the whole row, reviews are no longer inlined,
+// and attributes/specificationGroups/highlights were added. A version bump
+// retires every v2 entry at once; a stale v2 detail would otherwise keep
+// serving the old shape (and the old seller row) until its TTL ran out.
+export const CATALOG_CACHE_VERSION = 'v3';
 
 const NS = `marketplace:${CATALOG_CACHE_VERSION}`;
 

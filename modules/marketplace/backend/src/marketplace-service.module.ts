@@ -35,6 +35,10 @@ import { ProductVariant } from './entities/product-variant.entity';
 import { ProductQuestion, ProductAnswer } from './entities/product-qa.entity';
 import { DeliveryAssignment } from './entities/delivery-assignment.entity';
 import { ProductAttribute } from './entities/product-attribute.entity';
+import { ProductAttributeValue } from './entities/product-attribute-value.entity';
+import { AttributeValuesService } from './catalog/attribute-values.service';
+import { ProductOffersService } from './catalog/product-offers.service';
+import { CatalogController } from './catalog/catalog.controller';
 import { MarketplaceNotification } from './entities/marketplace-notification.entity';
 import { GiftCard } from './entities/gift-card.entity';
 import { BrandFollow } from './entities/brand-follow.entity';
@@ -121,6 +125,7 @@ const ENTITIES = [
   ProductAnswer,
   DeliveryAssignment,
   ProductAttribute,
+  ProductAttributeValue,
   MarketplaceNotification,
   GiftCard,
   BrandFollow,
@@ -238,12 +243,17 @@ const ENTITIES = [
     MarketplaceGrpcController, // gRPC (proto/marketplace.proto)
     SellerController, // HTTP, guarded
     SellerMessagesController, // TCP
+    CatalogController, // TCP: product offers and finance, keyed on (product, market)
   ],
   providers: [
     // MarketplaceService is the single live implementation (all logic inline).
     // BrandFollowService is the only extracted domain service still in use.
     MarketplaceService,
     CatalogService,
+    // Product attribute values: validation against the category schema and
+    // the specification/highlight shapes the product page renders.
+    AttributeValuesService,
+    ProductOffersService,
     MarketplaceAnalyticsService,
     MarketplaceAdminService,
     MarketplaceFulfillmentService,

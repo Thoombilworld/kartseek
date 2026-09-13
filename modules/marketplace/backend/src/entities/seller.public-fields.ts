@@ -47,6 +47,27 @@ export function publicSellerColumns(alias: string): string[] {
 }
 
 /**
+ * The customer-facing projection of a loaded Seller row.
+ *
+ * `relations: ['seller']` loads the whole entity — bank account, PAN, GST
+ * number, owner e-mail and phone, KYC documents, commission rate — and the
+ * product detail response used to pass every column of it to the browser on
+ * each offer. Anything that reads a seller through a relation and answers a
+ * public request goes through here; `publicSellerColumns` is the query-builder
+ * form of the same allowlist.
+ */
+export function toPublicSeller<T extends Record<string, unknown>>(
+  seller: T | null | undefined,
+): Partial<T> | null {
+  if (!seller || typeof seller !== 'object') return null;
+  const out: Partial<T> = {};
+  for (const key of Object.keys(PUBLIC_SELLER_FIELDS) as (keyof T & string)[]) {
+    if (key in seller) out[key] = seller[key];
+  }
+  return out;
+}
+
+/**
  * The Seller columns a **tax invoice** may carry.
  *
  * Deliberately a second, wider list rather than an addition to

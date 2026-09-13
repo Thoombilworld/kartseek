@@ -21,6 +21,7 @@ import { SellerStaff } from '../entities/seller-staff.entity';
 import { SellerPromotion } from '../entities/seller-promotion.entity';
 import { SellerSupportTicket } from '../entities/seller-support-ticket.entity';
 import { CatalogService } from '../catalog/catalog.service';
+import { AttributeValuesService } from '../catalog/attribute-values.service';
 
 describe('SellerService', () => {
   let service: SellerService;
@@ -99,6 +100,17 @@ describe('SellerService', () => {
         SellerService,
         { provide: RedisService, useValue: redisMock },
         { provide: KafkaProducerService, useValue: kafkaMock },
+        // Attribute values: the product write path validates against the
+        // category schema and stores rows through this service. An empty
+        // schema accepts an empty submission, which is what these cases send.
+        {
+          provide: AttributeValuesService,
+          useValue: {
+            definitionsForCategories: async () => [],
+            replaceForProduct: async () => undefined,
+            forProducts: async () => new Map(),
+          },
+        },
         { provide: getRepositoryToken(Seller), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Product), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(ProductListing), useFactory: mockRepoFactory },
@@ -161,6 +173,8 @@ describe('SellerService', () => {
     repoByEntity.set(SellerKyc, kycRepo);
     repoByEntity.set(SellerSettings, module.get(getRepositoryToken(SellerSettings)));
     repoByEntity.set(SellerBankAccount, module.get(getRepositoryToken(SellerBankAccount)));
+    // Product content edits and their attribute values commit together.
+    repoByEntity.set(Product, productRepo);
     settingsRepo = repoByEntity.get(SellerSettings);
     bankRepo = repoByEntity.get(SellerBankAccount);
     listingRepo = module.get(getRepositoryToken(ProductListing));
@@ -692,6 +706,48 @@ describe('SellerService', () => {
       expect(productRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ seller_id: 'seller-1' }),
       );
+    });
+
+    it('sends an approved product back to review when its content changes', async () => {
+      // There is no revision table, so the previously approved content cannot
+      // stay live next to the edit: the product leaves public view until an
+      // admin re-approves it, and the reply says so.
+      productRepo.findOne.mockResolvedValue({
+        id: 'prod-1',
+        seller_id: 'seller-1',
+        name: 'Old name',
+        slug: 'old-name',
+        approval_status: 'APPROVED',
+        is_active: true,
+      });
+
+      const result = await service.updateProduct('seller-1', 'prod-1', { name: 'New name' });
+
+      expect(productRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'New name', approval_status: 'PENDING' }),
+      );
+      expect(result).toMatchObject({ reReview: true, approvalStatus: 'PENDING' });
+      expect(result.message).toMatch(/off sale until an admin re-approves/);
+    });
+
+    it('refuses attribute values that fail the category schema, by field', async () => {
+      // The mocked schema is empty, so any slug is "not an attribute of this
+      // category". Nothing is written when validation fails.
+      await expect(
+        service.updateProduct('seller-1', 'prod-1', {
+          attributes: [{ slug: 'ram', value: 'hello' }],
+        }),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { errors: [{ slug: 'ram', message: expect.stringMatching(/not an attribute/) }] },
+      });
+      expect(productRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('leaves stored attribute values alone when the field is not sent', async () => {
+      const result = await service.updateProduct('seller-1', 'prod-1', { name: 'Renamed' });
+
+      expect(result.updated).toEqual(['name']);
     });
   });
 });

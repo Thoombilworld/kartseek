@@ -18,6 +18,7 @@ import { ShipmentTrackingEvent } from './src/entities/shipment-tracking-event.en
 import { ProductVariant } from './src/entities/product-variant.entity';
 import { ProductQuestion, ProductAnswer } from './src/entities/product-qa.entity';
 import { DeliveryAssignment } from './src/entities/delivery-assignment.entity';
+import { ProductAttributeValue } from './src/entities/product-attribute-value.entity';
 import { ProductAttribute } from './src/entities/product-attribute.entity';
 import { MarketplaceNotification } from './src/entities/marketplace-notification.entity';
 import { GiftCard } from './src/entities/gift-card.entity';
@@ -144,11 +145,13 @@ export const MarketplaceDataSource = new DataSource({
     FlashDealNomination,
     ProductReport,
     PriceAlert,
+    ProductAttributeValue,
   ],
   migrations: [
     'migrations/1786498000000-InitialMarketplaceSchema.ts',
     'migrations/1786502300000-OfferMarket.ts',
     'migrations/1786502700000-ProductListingMrp.ts',
+    'migrations/1786503000000-ProductAttributeValues.ts',
   ],
   migrationsTableName: MARKETPLACE_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and

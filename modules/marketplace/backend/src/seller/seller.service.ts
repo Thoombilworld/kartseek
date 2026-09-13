@@ -15,6 +15,7 @@ import { EncryptionService } from '@app/security';
 import { getRegionConfig, isSupportedRegion, DEFAULT_REGION } from '@app/region';
 import { CatalogService } from '../catalog/catalog.service';
 import { CatalogCache } from '../catalog/catalog-cache';
+import { AttributeValuesService, type AttributeInput } from '../catalog/attribute-values.service';
 import { Seller } from '../entities/seller.entity';
 import { Product } from '../entities/product.entity';
 import { ProductListing } from '../entities/product-listing.entity';
@@ -88,6 +89,7 @@ export class SellerService {
     // storefront quotes and checkout charges. One-directional: CatalogService
     // knows nothing about this class.
     private readonly catalog: CatalogService,
+    private readonly attributeValues: AttributeValuesService,
   ) {}
 
   private catalogCacheInstance?: CatalogCache;
@@ -779,6 +781,15 @@ export class SellerService {
 
     // Built as a single entity — a spread of conditional keys makes TypeScript
     // resolve `create()` to its array overload.
+    // Attributes are validated against the category's schema BEFORE any row
+    // is written, so a refused submission leaves nothing half-created. The
+    // errors are addressed by attribute slug so the form can mark the field.
+    const attributeRows = await this.validateAttributesOrThrow(
+      [dto.subcategoryId, dto.categoryId],
+      dto.attributes,
+      { requireAll: true },
+    );
+
     const product: Product = this.productRepo.create({
       globalTradeItemNumber: gtin,
       name,
@@ -794,9 +805,13 @@ export class SellerService {
       is_active: false,
     });
     if (dto.categoryId) (product as any).category = { id: dto.categoryId };
+    // The leaf category was never stored: the form sends both, and the product
+    // page breadcrumb and the category schema both read `subcategory`.
+    if (dto.subcategoryId) (product as any).subcategory = { id: dto.subcategoryId };
     if (dto.brandId) (product as any).brand = { id: dto.brandId };
 
     const saved = await this.productRepo.save(product);
+    if (attributeRows) await this.attributeValues.replaceForProduct(saved.id, attributeRows);
 
     // The listing is what makes it buyable.
     const sku = requestedSku || `${slug.slice(0, 24)}-${saved.id.slice(0, 6)}`;
@@ -1426,14 +1441,52 @@ export class SellerService {
     return { sellerId, countryCode, data, total, page, limit };
   }
 
+  /**
+   * One of the seller's products, with everything the edit form pre-fills:
+   * the category objects, the images, the seller's own offer, and the typed
+   * attribute values in the same row shape the public page reads.
+   */
   async getProductById(sellerId: string, productId: string) {
     const product = await this.productRepo.findOne({
       where: { id: productId, seller_id: sellerId },
-      relations: ['brand', 'category'],
+      relations: { brand: true, category: true, subcategory: true },
     });
     if (!product)
       throw new NotFoundException(`Product ${productId} not found for seller ${sellerId}`);
-    return product;
+    const [images, listing, attributeRows] = await Promise.all([
+      this.imageRepo.find({
+        where: { product: { id: productId } },
+        order: { sortOrder: 'ASC', id: 'ASC' },
+      }),
+      this.listingRepo.findOne({
+        where: { product: { id: productId }, seller: { id: sellerId } },
+        order: { isBuyBoxWinner: 'DESC', id: 'ASC' },
+      }),
+      this.attributeValues.forProducts([productId]),
+    ]);
+    const attributes = (attributeRows.get(productId) ?? []).filter(
+      (row): row is NonNullable<typeof row> => row !== null,
+    );
+    return {
+      ...product,
+      images,
+      listing: listing
+        ? {
+            id: listing.id,
+            sellingPrice: listing.sellingPrice,
+            mrp: listing.mrp,
+            stockQuantity: listing.stockQuantity,
+            sellerSku: listing.sellerSku,
+            condition: listing.condition,
+            isActive: listing.isActive,
+            approvalStatus: listing.approvalStatus,
+            isBuyBoxWinner: listing.isBuyBoxWinner,
+          }
+        : null,
+      attributes,
+      approvalStatus: product.approval_status,
+      isActive: product.is_active,
+    };
   }
 
   /**
@@ -2031,10 +2084,11 @@ export class SellerService {
     'short_description',
     'long_description',
     'mrp',
-    'weight',
-    'dimensions',
-    'specifications',
-    'highlights',
+    // `specifications` and `highlights` used to sit here. Neither is a column
+    // on Product, so `product.specifications = …` was silently dropped by the
+    // save and the seller's specification table never existed. Specifications
+    // are typed attribute values now (`attributes[]`, validated against the
+    // category schema); highlights are derived from them on the read side.
   ] as const;
 
   /**
@@ -2090,6 +2144,7 @@ export class SellerService {
   async updateProduct(sellerId: string, productId: string, dto: Record<string, unknown>) {
     const product = await this.productRepo.findOne({
       where: { id: productId, seller_id: sellerId },
+      relations: { category: true, subcategory: true },
     });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
 
@@ -2100,10 +2155,47 @@ export class SellerService {
         applied[field] = dto[field];
       }
     }
+    // Aliases the forms send; same allowlist semantics.
+    if (dto?.description !== undefined && dto?.short_description === undefined) {
+      product.short_description = dto.description as string | null;
+      applied.short_description = dto.description;
+    }
+    if (dto?.longDescription !== undefined && dto?.long_description === undefined) {
+      product.long_description = dto.longDescription as string | null;
+      applied.long_description = dto.longDescription;
+    }
+    for (const [key, relation] of [
+      ['categoryId', 'category'],
+      ['subcategoryId', 'subcategory'],
+      ['brandId', 'brand'],
+    ] as const) {
+      if (dto?.[key] !== undefined) {
+        (product as any)[relation] = dto[key] ? { id: dto[key] } : null;
+        applied[key] = dto[key];
+      }
+    }
 
-    const rejected = Object.keys(dto ?? {}).filter(
-      (k) => !(SellerService.SELLER_EDITABLE_PRODUCT_FIELDS as readonly string[]).includes(k),
-    );
+    // Attributes: validated against the (possibly new) category before the
+    // save; an omitted `attributes` leaves the stored values alone, a sent one
+    // replaces them and must satisfy the required set.
+    const categoryIds = [
+      (dto?.subcategoryId as string) ?? (product as any).subcategory?.id,
+      (dto?.categoryId as string) ?? (product as any).category?.id,
+    ];
+    const attributeRows = await this.validateAttributesOrThrow(categoryIds, dto?.attributes, {
+      requireAll: true,
+    });
+
+    const known = new Set<string>([
+      ...SellerService.SELLER_EDITABLE_PRODUCT_FIELDS,
+      'description',
+      'longDescription',
+      'categoryId',
+      'subcategoryId',
+      'brandId',
+      'attributes',
+    ]);
+    const rejected = Object.keys(dto ?? {}).filter((k) => !known.has(k));
     if (rejected.length) {
       // Logged rather than thrown: portals send read-only fields back with the
       // form, and failing the edit for that would be unhelpful. But a seller
@@ -2113,9 +2205,78 @@ export class SellerService {
       );
     }
 
-    await this.productRepo.save(product);
-    await this.kafka.publish('seller.product.updated', { sellerId, productId, ...applied });
-    return { success: true, productId, updated: Object.keys(applied) };
+    // Content that moderation approved is being changed. Without a revision
+    // table the only honest state is "not approved any more": the product
+    // leaves public view until an admin re-approves it. Price and stock never
+    // come through here, so a listing edit does not trigger this.
+    const contentChanged = Object.keys(applied).length > 0 || attributeRows !== null;
+    let reReview = false;
+    if (contentChanged && product.approval_status !== 'PENDING') {
+      product.approval_status = 'PENDING';
+      reReview = true;
+    }
+
+    await this.dataSource.transaction(async (m) => {
+      await m.getRepository(Product).save(product);
+      if (attributeRows) await this.attributeValues.replaceForProduct(productId, attributeRows, m);
+    });
+    if (contentChanged)
+      await this.catalogCache.invalidateProductAndListings(productId, product.slug);
+    await this.invalidateDashboard(sellerId);
+    await this.kafka.publish('seller.product.updated', {
+      sellerId,
+      productId,
+      ...applied,
+      attributesReplaced: attributeRows !== null,
+      reReview,
+    });
+    return {
+      success: true,
+      productId,
+      updated: [...Object.keys(applied), ...(attributeRows ? ['attributes'] : [])],
+      approvalStatus: product.approval_status,
+      reReview,
+      message: reReview
+        ? 'Saved. These changes take the product off sale until an admin re-approves it.'
+        : 'Saved.',
+    };
+  }
+
+  /**
+   * Validate `attributes[]` against the schema of the given categories (leaf
+   * first) and return the rows to store — or `null` when the field was not
+   * sent at all, which an update treats as "leave the values alone".
+   *
+   * Throws the structured 400 the forms read: `{ message, errors: [{ slug,
+   * message }] }`.
+   */
+  private async validateAttributesOrThrow(
+    categoryIds: (string | undefined | null)[],
+    attributes: unknown,
+    options: { requireAll: boolean },
+  ) {
+    if (attributes === undefined || attributes === null) return null;
+    if (!Array.isArray(attributes)) {
+      throw new BadRequestException({
+        message: 'attributes must be a list of { attributeId or slug, value }.',
+        errors: [],
+      });
+    }
+    const definitions = await this.attributeValues.definitionsForCategories(
+      categoryIds.filter((id): id is string => typeof id === 'string' && id.length > 0),
+    );
+    const { rows, errors } = AttributeValuesService.validate(
+      definitions,
+      attributes as AttributeInput[],
+      options,
+    );
+    if (errors.length) {
+      throw new BadRequestException({
+        message: `${errors.length} attribute${errors.length === 1 ? '' : 's'} could not be saved.`,
+        errors,
+      });
+    }
+    return rows;
   }
 
   async deleteProduct(sellerId: string, productId: string) {

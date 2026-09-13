@@ -2,6 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CatalogService } from './catalog.service';
 import { MarketplaceFulfillmentService } from '../fulfillment/fulfillment.service';
+import { AttributeValuesService } from './attribute-values.service';
 import { RedisService } from '@app/redis';
 import { Product } from '../entities/product.entity';
 import { Seller } from '../entities/seller.entity';
@@ -155,6 +156,13 @@ describe('CatalogService', () => {
           useValue: {
             sweepPriceAlerts: jest.fn().mockResolvedValue({ checked: 0, notified: 0, alerts: [] }),
           },
+        },
+        // Attribute values are read through their own service; the detail
+        // read only needs it to answer. The presentation helpers are static
+        // and covered by attribute-values.service.spec.ts.
+        {
+          provide: AttributeValuesService,
+          useValue: { forProducts: jest.fn().mockResolvedValue(new Map()) },
         },
         { provide: getRepositoryToken(Product), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(Seller), useFactory: mockRepoFactory },
@@ -408,9 +416,21 @@ describe('CatalogService', () => {
 
       await service.getProductById(uuid);
 
+      // The public read only sees what a customer may see: a pending, rejected,
+      // switched-off or deleted row answers 404 exactly like a wrong id.
       expect(productRepo.findOne).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: uuid } }),
+        expect.objectContaining({
+          where: { id: uuid, is_active: true, approval_status: 'APPROVED', status: 'ACTIVE' },
+        }),
       );
+    });
+
+    it('answers 404 for a product that exists but is not public', async () => {
+      redis.getJson.mockResolvedValue(null);
+      // The gate is in the WHERE clause, so a rejected row is simply not found.
+      productRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getProductById(uuid)).rejects.toMatchObject({ status: 404 });
     });
 
     it('looks a product up by slug when given a non-UUID', async () => {
@@ -422,7 +442,14 @@ describe('CatalogService', () => {
       const result: any = await service.getProductById('iphone-15-pro');
 
       expect(productRepo.findOne).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { slug: 'iphone-15-pro' } }),
+        expect.objectContaining({
+          where: {
+            slug: 'iphone-15-pro',
+            is_active: true,
+            approval_status: 'APPROVED',
+            status: 'ACTIVE',
+          },
+        }),
       );
       expect(result.id).toBe(uuid);
     });
@@ -433,11 +460,13 @@ describe('CatalogService', () => {
 
       await service.getProductById('iphone-15-pro');
 
-      // Reviews are filtered by productId — passing the slug here returned a
-      // product with no reviews, listings or images (so a ₹0 price, no buy box).
-      expect(reviewRepo.find).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { productId: uuid, status: 'PUBLISHED' } }),
+      // Variants are filtered by productId — passing the slug here returned a
+      // product with no variants, listings or images (so a ₹0 price, no buy
+      // box). Reviews are no longer inlined; the page pages them separately.
+      expect(variantRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { productId: uuid, isActive: true } }),
       );
+      expect(reviewRepo.find).not.toHaveBeenCalled();
     });
 
     it('rejects an id that is neither a UUID nor a plausible slug', async () => {
@@ -605,11 +634,11 @@ describe('CatalogService', () => {
       await service.getFeaturedProducts('QA');
       await service.getFeaturedProducts('IN');
 
-      // The market is the key's own segment (`marketplace:v2:<market>:featured`),
+      // The market is the key's own segment (`marketplace:v3:<market>:featured`),
       // so a wildcard over one market can never reach another's entries.
       const keys = redis.setJson.mock.calls.map((call) => call[0]);
-      expect(keys).toContain('marketplace:v2:QA:featured');
-      expect(keys).toContain('marketplace:v2:IN:featured');
+      expect(keys).toContain('marketplace:v3:QA:featured');
+      expect(keys).toContain('marketplace:v3:IN:featured');
     });
 
     it('includes sellers whose region is not yet backfilled', async () => {

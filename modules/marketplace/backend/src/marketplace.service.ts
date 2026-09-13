@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import {
   assertInMarket,
   requireMarket,
@@ -957,27 +963,48 @@ export class MarketplaceService {
 
   // ── Reviews ───────────────────────────────────────────────────────────────
   async getProductReviews(productId: string, page = 1, limit = 20) {
-    const [reviews, total] = await this.reviewRepo.findAndCount({
+    const [rows, total] = await this.reviewRepo.findAndCount({
       where: { productId, status: 'PUBLISHED' },
-      order: { helpfulCount: 'DESC', createdAt: 'DESC' },
+      order: { helpfulCount: 'DESC', createdAt: 'DESC', id: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
     });
 
-    // Compute aggregate rating
-    const avgResult = await this.reviewRepo
+    // One pass for the aggregate and the histogram the page draws. The
+    // average is over published reviews only, the same set the list shows, so
+    // the two never disagree.
+    const buckets: Array<{ rating: string; count: string }> = await this.reviewRepo
       .createQueryBuilder('r')
-      .select('AVG(r.rating)', 'avg')
+      .select('r.rating', 'rating')
       .addSelect('COUNT(*)', 'count')
       .where('r.productId = :productId', { productId })
       .andWhere('r.status = :status', { status: 'PUBLISHED' })
-      .getRawOne();
+      .groupBy('r.rating')
+      .getRawMany();
+    const ratingDistribution: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let sum = 0;
+    let count = 0;
+    for (const b of buckets) {
+      const rating = Number(b.rating);
+      const n = Number(b.count) || 0;
+      if (rating >= 1 && rating <= 5) ratingDistribution[rating as 1 | 2 | 3 | 4 | 5] = n;
+      sum += rating * n;
+      count += n;
+    }
+
+    // A review is public; the reviewer's account id is not. The display name
+    // is what the customer chose to sign with.
+    const reviews = rows.map(({ customerId: _customerId, ...review }) => {
+      void _customerId;
+      return review;
+    });
 
     return {
       productId,
       reviews,
-      averageRating: parseFloat(avgResult?.avg || '0'),
-      total: parseInt(avgResult?.count || '0', 10),
+      averageRating: count ? Number((sum / count).toFixed(2)) : 0,
+      ratingDistribution,
+      total,
       page,
       limit,
     };
@@ -1015,18 +1042,40 @@ export class MarketplaceService {
     const product = await this.productRepo.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException(`Product ${productId} not found`);
 
+    // The rating column is a smallint with a 1–5 comment and nothing enforcing
+    // it: a 0, a 9 or a 4.5 went straight into the average every customer
+    // sees. Text limits keep a review a review, not a pasted page.
+    const rating = Number(dto?.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new BadRequestException('Rating must be a whole number from 1 to 5.');
+    }
+    if (!dto?.customerId) throw new BadRequestException('A signed-in customer is required.');
+    const title = dto.title == null ? null : String(dto.title).trim().slice(0, 200) || null;
+    const comment = dto.comment == null ? null : String(dto.comment).trim().slice(0, 5000) || null;
+
     const review = this.reviewRepo.create({
       productId,
       customerId: dto.customerId,
       customerName: dto.customerName,
-      rating: dto.rating,
-      title: dto.title,
-      comment: dto.comment,
+      rating,
+      title,
+      comment,
       imageUrls: dto.imageUrls,
       isVerifiedPurchase: dto.isVerifiedPurchase ?? false,
       status: 'PUBLISHED',
     });
-    const saved = await this.reviewRepo.save(review);
+    let saved: Review;
+    try {
+      saved = await this.reviewRepo.save(review);
+    } catch (err: any) {
+      // One review per customer per product is a unique index; the second
+      // attempt is a conflict the customer can act on, not a server fault.
+      // The message says only what this customer already did.
+      if (err?.code === '23505') {
+        throw new ConflictException('You have already reviewed this product.');
+      }
+      throw err;
+    }
 
     // Update product aggregate rating
     const avgResult = await this.reviewRepo
