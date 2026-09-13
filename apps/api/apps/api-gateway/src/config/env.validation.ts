@@ -98,10 +98,14 @@ export const envValidationSchema = Joi.object({
   KAFKA_GROUP_ID: Joi.string().default('kartseek-consumers'),
 
   // ── JWT ──────────────────────────────────────────────────────────────────
+  // 32, not 16: `resolveJwtSecret()` is what every signer and verifier actually
+  // calls, and it refuses anything shorter. At min(16) a 20-character secret
+  // passed validation at boot and was then rejected at the point of use, which
+  // reads as "auth is broken" rather than "the secret is too short".
   JWT_SECRET: Joi.string()
-    .min(16)
+    .min(32)
     .required()
-    .description('JWT signing secret — must be at least 16 characters')
+    .description('JWT signing secret — must be at least 32 characters')
     .custom((value, helpers) => {
       if (process.env.NODE_ENV === 'production') {
         const weakPatterns = ['dev', 'test', 'change', 'example', 'placeholder'];

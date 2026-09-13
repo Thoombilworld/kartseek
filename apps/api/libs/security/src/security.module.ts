@@ -2,7 +2,7 @@ import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtStrategy } from './jwt.strategy';
+import { JwtStrategy, resolveJwtSecret } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { DdosProtectionMiddleware } from './ddos-protection.middleware';
 import { WsDdosGuard } from './ws-ddos.guard';
@@ -40,12 +40,14 @@ import { RedisModule } from '@app/redis';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        const secret = configService.get<string>('JWT_SECRET');
-        if (!secret && process.env.NODE_ENV === 'production') {
-          throw new Error('FATAL: JWT_SECRET environment variable must be set in production');
-        }
+        // One resolver for both halves. This factory and `JwtStrategy` used to
+        // fall back independently — to the same literal, by coincidence rather
+        // than by construction — while `ws-auth.util.ts` fell back to a third
+        // one. `resolveJwtSecret` is what makes "the gateway signs and verifies
+        // with one secret" a fact rather than a hope (AUD2-071).
+        const configured = configService.get<string>('JWT_SECRET');
         return {
-          secret: secret || 'kartseek-dev-secret-NOT-FOR-PRODUCTION',
+          secret: configured && configured.length >= 32 ? configured : resolveJwtSecret(),
           signOptions: { expiresIn: `${configService.get<number>('JWT_EXPIRES_IN', 900)}s` },
         };
       },
@@ -92,9 +94,9 @@ export class SecurityModule implements NestModule {
     // Apply security middleware stack to ALL API routes (order matters)
     consumer
       .apply(
-        RequestIdMiddleware,       // 1. Assign correlation ID
-        InputSanitizerMiddleware,  // 2. Scan & sanitize injection patterns
-        DdosProtectionMiddleware,  // 3. Rate limiting & DDoS protection
+        RequestIdMiddleware, // 1. Assign correlation ID
+        InputSanitizerMiddleware, // 2. Scan & sanitize injection patterns
+        DdosProtectionMiddleware, // 3. Rate limiting & DDoS protection
       )
       .forRoutes('*');
   }

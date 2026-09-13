@@ -3,7 +3,9 @@ import * as jwt from 'jsonwebtoken';
 import { verifyWsToken } from './ws-auth.util';
 import type { Socket } from 'socket.io';
 
-const SECRET = 'ws-spec-secret';
+// At least 32 characters: `resolveJwtSecret()` refuses anything shorter, in
+// every environment, which is the AUD2-071 fix this spec now runs under.
+const SECRET = 'ws-spec-secret-at-least-32-characters-long';
 
 const clientWith = (token: string) =>
   ({ id: 'sock-1', handshake: { auth: { token }, query: {} } }) as unknown as Socket;

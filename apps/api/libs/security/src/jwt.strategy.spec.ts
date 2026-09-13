@@ -10,7 +10,9 @@ import { JwtStrategy } from './jwt.strategy';
  * understood `perm:` requirements for a while, and nothing ever reached it.
  */
 function strategy() {
-  return new JwtStrategy({ get: () => 'test-secret' } as unknown as ConfigService);
+  return new JwtStrategy({
+    get: () => 'test-secret-long-enough-for-the-32-char-floor',
+  } as unknown as ConfigService);
 }
 
 describe('JwtStrategy.validate', () => {

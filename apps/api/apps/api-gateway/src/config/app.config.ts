@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { resolveJwtSecret } from '@app/security';
 
 /**
  * KARTSEEK API Gateway — Typed Application Configuration
@@ -73,8 +74,15 @@ export const redisConfig = registerAs('redis', () => ({
   password: process.env.REDIS_PASSWORD,
 }));
 
+/**
+ * Nothing reads `jwt.secret` — `SecurityModule` and `JwtStrategy` both go
+ * through `resolveJwtSecret()` — but the fourth tracked fallback literal lived
+ * here, ready for the first caller to pick up. It is now the same resolver, so
+ * a namespace that is currently unused cannot reintroduce a second secret if it
+ * stops being unused.
+ */
 export const jwtConfig = registerAs('jwt', () => ({
-  secret: process.env.JWT_SECRET || 'kartseek_dev_secret_change_in_production',
+  secret: resolveJwtSecret(),
   expiresIn: parseInt(process.env.JWT_EXPIRES_IN || '900', 10),
 }));
 

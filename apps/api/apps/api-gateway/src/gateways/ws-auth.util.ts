@@ -14,6 +14,7 @@
 import { type Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import { resolveJwtSecret } from '@app/security';
 
 const logger = new Logger('WsAuth');
 
@@ -32,7 +33,16 @@ export interface WsUser {
  * cannot name its own role, so it can never reach an admin-only room.
  */
 export function verifyWsToken(client: Socket): WsUser | null {
-  const secret = process.env.JWT_SECRET || 'kartseek-dev-secret';
+  // The same resolver the HTTP half uses.
+  //
+  // This read `process.env.JWT_SECRET || 'kartseek-dev-secret'` while
+  // `jwt.strategy.ts` fell back to `kartseek-dev-secret-NOT-FOR-PRODUCTION`, so
+  // on any deployment without JWT_SECRET the two halves of the platform
+  // verified against different keys: every socket rejected a token the REST API
+  // had just accepted. `resolveJwtSecret` throws rather than inventing one, so
+  // the misconfiguration is a startup failure instead of a class of
+  // intermittent auth bugs (AUD2-071).
+  const secret = resolveJwtSecret();
 
   // 1. Try auth.token (Socket.IO v4 preferred pattern)
   let token: string | undefined =
