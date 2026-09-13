@@ -130,10 +130,10 @@ spec:
             # ── The eight module roles ───────────────────────────────────
             # Read by 20-roles.sh below, which creates one login role per module
             # schema so a service need not connect as the superuser (AUD2-073).
-            # The same pairs Compose passes this image. There is no default
-            # password: the script exits non-zero naming the variable, so a pod
-            # whose Secret is incomplete fails loudly on its first start rather
-            # than creating a role anyone could guess the password for.
+            # The same pairs Compose passes this image, and there is no default
+            # for any of them — the script exits non-zero naming the variable, so
+            # a pod whose Secret is incomplete fails loudly on its first start
+            # rather than creating a role anyone could guess the credential for.
             - name: MARKETPLACE_DB_USER
               valueFrom:
                 configMapKeyRef:
