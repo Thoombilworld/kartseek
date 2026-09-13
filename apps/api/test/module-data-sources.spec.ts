@@ -209,10 +209,95 @@ describe.each(RUNNERS)(
       }).toEqual(resolved);
     });
 
-    it('is the same resolver the service module calls', () => {
-      // A source check on purpose: the service module cannot be imported here
-      // without booting the Nest module it declares. What matters is that it
-      // has not gone back to reading the env itself.
+    /**
+     * The service module reaches the SAME database the CLI runner does — run,
+     * not read.
+     *
+     * This was a source-text check ("does the file contain
+     * `resolve<M>DbConfig(`?"), which is a proxy for the thing that matters and
+     * a weak one: a factory can call the resolver and then override `host`
+     * three lines later, and the grep is still happy. The reason given was that
+     * importing the service module would boot Nest — it does not. Importing it
+     * evaluates the decorators and builds the module METADATA; nothing
+     * instantiates a provider until a Nest application is created, which
+     * nothing here does. So the factory can simply be taken off the metadata
+     * and called.
+     *
+     * What is compared is the connection target the factory produces against
+     * the one `data-source.ts` produces, from the same environment (IN3 review
+     * N2).
+     */
+    it('is the same resolver the service module calls', async () => {
+      const mod = await import(
+        `../../../modules/${module}/backend/src/${module}-service.module.ts`
+      );
+      const pascal = module[0].toUpperCase() + module.slice(1);
+      const ServiceModule = mod[`${pascal}ServiceModule`];
+      expect(
+        ServiceModule,
+        `${module}-service.module.ts exports no ${pascal}ServiceModule`,
+      ).toBeDefined();
+
+      // `@Module({ imports: [...] })` is stored as design metadata.
+      //
+      // `TypeOrmModule.forRootAsync(...)` does not carry the factory itself: it
+      // returns `{ module: TypeOrmModule, imports: [TypeOrmCoreModule.forRootAsync(…)] }`,
+      // and the options provider — token `TypeOrmModuleOptions` — is one level
+      // down. Matching on "the first provider with a useFactory" instead finds
+      // `HealthModule`'s HEALTH_CHECK and silently tests the wrong thing, which
+      // is what the token name below is here to prevent.
+      const imports: any[] = Reflect.getMetadata('imports', ServiceModule) ?? [];
+      const provider = imports
+        .flatMap((i: any) => i?.imports ?? [])
+        .flatMap((i: any) => i?.providers ?? [])
+        .find(
+          (p: any) =>
+            typeof p?.useFactory === 'function' && String(p?.provide) === 'TypeOrmModuleOptions',
+        );
+      expect(
+        provider,
+        `${module}: no TypeOrmModule.forRootAsync options factory in the module imports`,
+      ).toBeDefined();
+      // A ConfigService stand-in: `get(key, fallback?)` over the real
+      // environment, which is what the module is handed at runtime.
+      const cfg = {
+        get: (key: string, fallback?: unknown) => process.env[key] ?? fallback,
+      };
+      const options = await provider.useFactory(cfg);
+      const resolved = resolve((key) => process.env[key]);
+
+      expect({
+        host: options.host,
+        port: options.port,
+        username: options.username,
+        password: options.password,
+        database: options.database,
+      }).toEqual(resolved);
+
+      // The schema is the module's own and is not negotiable: the ledger
+      // ruling depends on entities naming it while the connection does not.
+      expect(options.schema).toBe(schema);
+      // 30s, not the 5s default: this is the only case here that imports a
+      // service module, and a module's whole graph — entities, controllers,
+      // services, the eight shared libs — is a few seconds to transform on a
+      // cold cache. It took 3.1s in isolation and timed out at 5s once the
+      // other 109 files were competing for the same worker pool.
+    }, 30_000);
+
+    /**
+     * …and it asks the shared credential helper for THIS module's prefix.
+     *
+     * Kept as a source check, and this one genuinely cannot be behavioural:
+     * `databaseCredentials` resolves a password and the resolver above
+     * overrides it, so a wrong prefix is invisible in the factory's OUTPUT on a
+     * machine where both variables happen to be set — which is every machine in
+     * this repository, because the module ConfigModule falls back to
+     * apps/api/.env. Spreading it without a prefix made the factory refuse to
+     * boot on `DB_PASSWORD`, a variable no module .env.example declares; a
+     * prefix belonging to a DIFFERENT module would be worse, resolving a
+     * password for a database this service does not use.
+     */
+    it('asks the credential helper for its own prefix', () => {
       const file = path.join(
         REPO_ROOT,
         'modules',
@@ -222,21 +307,11 @@ describe.each(RUNNERS)(
         `${module}-service.module.ts`,
       );
       const source = fs.readFileSync(file, 'utf8');
-      const pascal = module[0].toUpperCase() + module.slice(1);
-      expect(source).toContain(`resolve${pascal}DbConfig(`);
-      // The old shape, which is what drifted.
-      expect(source).not.toContain(`cfg.get<string>('${module.toUpperCase()}_DB_HOST')`);
-
-      // …and it spreads the shared helper with THIS module's prefix. Spreading
-      // it without one made the factory refuse to boot on `DB_PASSWORD`, which
-      // no module .env.example declares and no module reads — invisible in this
-      // repository, where the module ConfigModule falls back to apps/api/.env,
-      // and fatal for a module lifted out of it into an image of its own. A
-      // prefix belonging to a *different* module would be worse than none: it
-      // would resolve a password for a database this service does not use.
       expect(source).toContain(
         `databaseCredentials(cfg, { envPrefix: '${module.toUpperCase()}_DB' })`,
       );
+      // The old shape, which is what drifted.
+      expect(source).not.toContain(`cfg.get<string>('${module.toUpperCase()}_DB_HOST')`);
     });
 
     it('prefers the module-specific variables, then the shared ones', () => {
