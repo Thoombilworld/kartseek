@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { ForbiddenException } from '@nestjs/common';
+import { describe, it, expect, vi } from 'vitest';
+import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { of } from 'rxjs';
+import * as fs from 'fs';
+import * as path from 'path';
 import { type Reflector } from '@nestjs/core';
 import { RolesGuard } from '../guards/roles.guard';
 import { SellerModuleGuard, SELLER_MODULE_KEY } from '../guards/seller-module.guard';
@@ -158,5 +161,119 @@ describe('becoming a hotel owner stays possible', () => {
 
   it('is not public — an anonymous caller never reaches the handler', () => {
     expect(Reflect.getMetadata('isPublic', handler('registerOwner'))).toBeFalsy();
+  });
+});
+
+// ── WHICH owner is acting (round 1c) ────────────────────────────────────────
+
+/**
+ * A role says the caller is *a* hotel owner; it never says *which* one.
+ *
+ * These routes took `ownerId` from `?ownerId=` on four reads and from the body
+ * on the writes, so after round 1b gave them a role a hotel owner could still
+ * read any other hotel owner's payouts, bookings and reviews by naming them.
+ * Every one now derives the owner from the verified JWT subject, stamped AFTER
+ * the body spread, and refuses a request that tries to name one.
+ */
+describe('the owner is the token subject, never the request', () => {
+  const build = () => {
+    const client = { send: vi.fn(() => of({ ok: true })) };
+    return { ctrl: new HotelController(client as never), client };
+  };
+
+  const OWNER_A = 'owner-a';
+  const OWNER_B = 'owner-b';
+  const ID = '11111111-1111-4111-8111-111111111111';
+  const reqAs = (id: string, query: object = {}, body: object = {}) => ({
+    user: { id, role: 'seller', sellerType: 'hotel' },
+    query,
+    body,
+    headers: {},
+  });
+
+  /** Every owner route, called the way Nest would call it. */
+  const callers: Array<[string, (c: HotelController, r: any) => unknown]> = [
+    ['registerOwner', (c, r) => c.registerOwner(r, {})],
+    ['createHotel', (c, r) => c.createHotel(r, {})],
+    ['updateHotel', (c, r) => c.updateHotel(r, ID, {})],
+    ['getOwnerDashboard', (c, r) => c.getOwnerDashboard(r)],
+    ['getOwnerBookings', (c, r) => c.getOwnerBookings(r, 1, 20)],
+    ['updatePricing', (c, r) => c.updatePricing(r, ID, {})],
+    ['bulkUpdatePricing', (c, r) => c.bulkUpdatePricing(r, ID, {})],
+    ['markNoShow', (c, r) => c.markNoShow(r, ID)],
+    ['getOwnerPayouts', (c, r) => c.getOwnerPayouts(r, 1, 10)],
+    ['getOwnerReviews', (c, r) => c.getOwnerReviews(r)],
+    ['replyToReview', (c, r) => c.replyToReview(r, ID, 'thanks')],
+  ];
+
+  for (const [name, call] of callers) {
+    it(`${name} forwards the token subject as ownerId`, () => {
+      const { ctrl, client } = build();
+      call(ctrl, reqAs(OWNER_A));
+      expect(client.send.mock.calls[0][1]).toMatchObject({ ownerId: OWNER_A });
+    });
+  }
+
+  it('refuses a query that names another owner, before hotel-service is addressed', () => {
+    const { ctrl, client } = build();
+    expect(() => ctrl.getOwnerPayouts(reqAs(OWNER_A, { ownerId: OWNER_B }), 1, 10)).toThrow(
+      BadRequestException,
+    );
+    expect(client.send).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body that names another owner, before hotel-service is addressed', () => {
+    const { ctrl, client } = build();
+    expect(() =>
+      ctrl.createHotel(reqAs(OWNER_A, {}, { ownerId: OWNER_B }), { ownerId: OWNER_B }),
+    ).toThrow(BadRequestException);
+    expect(client.send).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body naming a userId too — registration is the same hazard', () => {
+    const { ctrl } = build();
+    expect(() =>
+      ctrl.registerOwner(reqAs(OWNER_A, {}, { userId: OWNER_B }), { userId: OWNER_B }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('stamps the subject AFTER the spread, so a body value cannot survive', () => {
+    // Belt and braces: even if the refusal above were removed, the explicit key
+    // after the spread is what actually reaches hotel-service.
+    const { ctrl, client } = build();
+    ctrl.createHotel(reqAs(OWNER_A), { ownerId: OWNER_B, name: 'x' } as never);
+    expect(client.send.mock.calls[0][1]).toMatchObject({ ownerId: OWNER_A, name: 'x' });
+  });
+
+  it('refuses a caller with no subject rather than sending an undefined owner', () => {
+    const { ctrl, client } = build();
+    expect(() => ctrl.getOwnerDashboard({ user: {}, query: {}, body: {}, headers: {} })).toThrow(
+      UnauthorizedException,
+    );
+    expect(client.send).not.toHaveBeenCalled();
+  });
+
+  it("declares no @Query('ownerId') anywhere in the controller", () => {
+    // The four owner reads used to declare it. If one comes back, the per-route
+    // assertions above still pass — the subject is stamped either way — while the
+    // query parameter would be back in the API's contract, inviting the next
+    // caller to use it. So the SOURCE is asserted, not just the behaviour.
+    const source = fs.readFileSync(path.join(__dirname, 'hotel.controller.ts'), 'utf8');
+    expect(source).not.toMatch(/@Query\(\s*['"`]ownerId['"`]/);
+    expect(source).not.toMatch(/@Body\(\s*['"`]ownerId['"`]/);
+  });
+
+  /**
+   * The case the re-review named: `create_hotel` took `ownerId` straight off the
+   * body, so in an auto-approving market a hotel seller could attribute a LIVE
+   * property to another owner.
+   */
+  it('refuses seller A attributing a new hotel to owner B, and sends nothing', () => {
+    const { ctrl, client } = build();
+    const body = { ownerId: OWNER_B, name: 'Someone elses hotel', country: 'IN' };
+    expect(() => ctrl.createHotel(reqAs(OWNER_A, {}, body), body as never)).toThrow(
+      BadRequestException,
+    );
+    expect(client.send).not.toHaveBeenCalled();
   });
 });

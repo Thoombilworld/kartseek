@@ -17,6 +17,7 @@ import {
   Req,
   UnauthorizedException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { UserRole, rpcCatch } from '@app/common';
@@ -89,6 +90,24 @@ import { resolveScope } from '../guards/market-scope';
  * the reason `PublicSellersController` gives for `POST /sellers/register`: it is
  * how an account BECOMES a hotel owner, so requiring the seller role would make
  * it impossible ever to obtain.
+ *
+ * ── WHICH OWNER (M5 round 1c) ──────────────────────────────────────────────
+ *
+ * A role says the caller is *a* hotel owner; it never says *which* one. These
+ * routes took `ownerId` from `?ownerId=` on four reads and from the body on the
+ * writes, so after round 1b a hotel owner could still read any other hotel
+ * owner's payouts, bookings and reviews by naming them — and reprice their
+ * rooms, void their bookings and answer their guests.
+ *
+ * Every one of the eleven now derives the owner from the VERIFIED JWT SUBJECT
+ * (`ownerOf`), stamped after the body spread so a supplied value cannot survive,
+ * and `refuseOwnerOverride` answers a request that carries `ownerId`/`userId` in
+ * its query or body with the `ValidationPipe`'s own 400 rather than silently
+ * substituting a different owner. The backend then does the other half: the
+ * owner LISTS filter on `hotels.ownerId` (fail-closed by construction — another
+ * owner's rows are simply not in the set), and the five by-id writes go through
+ * `HotelService.hotelOwnedBy`, which 404s an unknown id and 403s one belonging
+ * to somebody else.
  */
 @ApiTags('🏨 Hotels')
 @ApiBearerAuth('JWT')
@@ -186,6 +205,46 @@ export class HotelController {
     return { requesterId, requesterRole: req?.user?.role };
   }
 
+  /**
+   * WHICH OWNER is acting: the verified JWT subject, and nothing else.
+   *
+   * `hotels.ownerId` holds the auth-service user id, so this value IS the
+   * ownership boundary for every `/hotels/owner/*` route — the owner lists
+   * filter on it and the by-id writes assert against it
+   * (`HotelService.hotelOwnedBy`).
+   *
+   * It used to come from `?ownerId=` on four reads and from the body on the
+   * writes, so `?ownerId=<somebody else>` was all it took for one hotel owner to
+   * read another's payouts, bookings and reviews. Round 1b gave these routes a
+   * role; a role says the caller is *a* hotel owner, never *which* one.
+   */
+  private ownerOf(req: any): string {
+    const ownerId = req?.user?.id ?? req?.user?.userId ?? req?.user?.sub;
+    if (!ownerId) throw new UnauthorizedException('Authenticated user required');
+    return ownerId;
+  }
+
+  /**
+   * Refuse a request that tries to name the owner itself.
+   *
+   * Stamping the subject after the spread already makes a supplied value
+   * harmless, but harmless and silent is the wrong pair: a client sending
+   * `ownerId` has either a bug or an intention, and answering 200 while quietly
+   * substituting a different owner hides both. The copy is the global
+   * `ValidationPipe`'s own (`forbidNonWhitelisted`), so the two surfaces answer
+   * a retarget attempt the same way whether it arrives in a query or a body.
+   */
+  private refuseOwnerOverride(req: any): void {
+    for (const source of [req?.query, req?.body]) {
+      if (!source || typeof source !== 'object') continue;
+      for (const key of ['ownerId', 'userId']) {
+        if (key in source) {
+          throw new BadRequestException(`property ${key} should not exist`);
+        }
+      }
+    }
+  }
+
   @Get('bookings/:bookingId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
@@ -251,8 +310,12 @@ export class HotelController {
    */
   @Post('owner/register')
   @ApiOperation({ summary: 'Register as a hotel owner' })
-  registerOwner(@Body() dto: any) {
-    return this.send('register_hotel_owner', dto);
+  registerOwner(@Req() req: any, @Body() dto: any) {
+    this.refuseOwnerOverride(req);
+    // After the spread: the applicant is whoever signed in. A registration
+    // surface that takes its own subject from the body is a way to open a
+    // business account in someone else's name.
+    return this.send('register_hotel_owner', { ...dto, ownerId: this.ownerOf(req) });
   }
 
   @Post('owner/hotels')
@@ -260,8 +323,9 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: create a new hotel listing' })
-  createHotel(@Body() dto: any) {
-    return this.send('create_hotel', dto);
+  createHotel(@Req() req: any, @Body() dto: any) {
+    this.refuseOwnerOverride(req);
+    return this.send('create_hotel', { ...dto, ownerId: this.ownerOf(req) });
   }
 
   @Put('owner/hotels/:id')
@@ -269,8 +333,9 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: update hotel details' })
-  updateHotel(@Param('id') hotelId: string, @Body() dto: any) {
-    return this.send('update_hotel', { hotelId, ...dto });
+  updateHotel(@Req() req: any, @Param('id', ParseUUIDPipe) hotelId: string, @Body() dto: any) {
+    this.refuseOwnerOverride(req);
+    return this.send('update_hotel', { ...dto, hotelId, ownerId: this.ownerOf(req) });
   }
 
   @Get('owner/dashboard')
@@ -278,8 +343,9 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: get hotel owner dashboard' })
-  getOwnerDashboard(@Query('ownerId') ownerId: string) {
-    return this.send('get_owner_dashboard', { ownerId });
+  getOwnerDashboard(@Req() req: any) {
+    this.refuseOwnerOverride(req);
+    return this.send('get_owner_dashboard', { ownerId: this.ownerOf(req) });
   }
 
   @Get('owner/bookings')
@@ -288,11 +354,12 @@ export class HotelController {
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: get bookings for owned hotels' })
   getOwnerBookings(
-    @Query('ownerId') ownerId: string,
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    return this.send('get_owner_bookings', { ownerId, page, limit });
+    this.refuseOwnerOverride(req);
+    return this.send('get_owner_bookings', { ownerId: this.ownerOf(req), page, limit });
   }
 
   @Put('owner/rooms/:id/pricing')
@@ -300,8 +367,9 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: update room pricing' })
-  updatePricing(@Param('id') roomId: string, @Body() dto: any) {
-    return this.send('update_room_pricing', { roomId, ...dto });
+  updatePricing(@Req() req: any, @Param('id', ParseUUIDPipe) roomId: string, @Body() dto: any) {
+    this.refuseOwnerOverride(req);
+    return this.send('update_room_pricing', { ...dto, roomId, ownerId: this.ownerOf(req) });
   }
 
   @Put('owner/hotels/:id/bulk-pricing')
@@ -309,8 +377,13 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: bulk update pricing across rooms' })
-  bulkUpdatePricing(@Param('id') hotelId: string, @Body() dto: any) {
-    return this.send('bulk_update_pricing', { hotelId, ...dto });
+  bulkUpdatePricing(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) hotelId: string,
+    @Body() dto: any,
+  ) {
+    this.refuseOwnerOverride(req);
+    return this.send('bulk_update_pricing', { ...dto, hotelId, ownerId: this.ownerOf(req) });
   }
 
   @Put('owner/bookings/:id/no-show')
@@ -318,8 +391,9 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: mark a booking as no-show' })
-  markNoShow(@Param('id') bookingId: string) {
-    return this.send('mark_no_show', { bookingId });
+  markNoShow(@Req() req: any, @Param('id', ParseUUIDPipe) bookingId: string) {
+    this.refuseOwnerOverride(req);
+    return this.send('mark_no_show', { bookingId, ownerId: this.ownerOf(req) });
   }
 
   @Get('owner/payouts')
@@ -328,11 +402,12 @@ export class HotelController {
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: view payout history' })
   getOwnerPayouts(
-    @Query('ownerId') ownerId: string,
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
   ) {
-    return this.send('get_owner_payouts', { ownerId, page, limit });
+    this.refuseOwnerOverride(req);
+    return this.send('get_owner_payouts', { ownerId: this.ownerOf(req), page, limit });
   }
 
   @Get('owner/reviews')
@@ -340,8 +415,9 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: get reviews for owned hotels' })
-  getOwnerReviews(@Query('ownerId') ownerId: string) {
-    return this.send('get_owner_reviews', { ownerId });
+  getOwnerReviews(@Req() req: any) {
+    this.refuseOwnerOverride(req);
+    return this.send('get_owner_reviews', { ownerId: this.ownerOf(req) });
   }
 
   @Post('owner/reviews/:id/reply')
@@ -349,8 +425,13 @@ export class HotelController {
   @Roles(UserRole.SELLER)
   @SellerModule('hotel')
   @ApiOperation({ summary: 'Owner: reply to a guest review' })
-  replyToReview(@Param('id') reviewId: string, @Body('reply') reply: string) {
-    return this.send('reply_to_review', { reviewId, reply });
+  replyToReview(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) reviewId: string,
+    @Body('reply') reply: string,
+  ) {
+    this.refuseOwnerOverride(req);
+    return this.send('reply_to_review', { reviewId, reply, ownerId: this.ownerOf(req) });
   }
 
   // ── Admin ─────────────────────────────────────────────────────────────
