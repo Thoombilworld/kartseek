@@ -118,6 +118,24 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA :"schema" TO :"role";
 ALTER DEFAULT PRIVILEGES IN SCHEMA :"schema" GRANT ALL ON TABLES TO :"role";
 ALTER DEFAULT PRIVILEGES IN SCHEMA :"schema" GRANT ALL ON SEQUENCES TO :"role";
 REVOKE ALL ON SCHEMA public FROM :"role";
+
+-- The one thing a module legitimately owns outside its schema: its migration
+-- ledger. IN3 put it at `public.<module>_migrations`, because TypeORM builds the
+-- ledger before the first migration's up() runs and a schema that does not exist
+-- yet cannot hold it. Without these two grants `migration:run` as a module role
+-- fails on the ledger INSERT — a role that can build its whole schema but not
+-- record that it did, which would re-run every migration on the next deploy.
+--
+-- Granted only where the table already exists. The role is deliberately NOT
+-- given CREATE on `public` (that is how a module would shadow `users`), so the
+-- very first migration run against an empty database is still a superuser job
+-- — the bootstrap, once, documented in infra/docker/README.md.
+SELECT format('GRANT ALL ON TABLE public.%I TO %I', :'schema' || '_migrations', :'role')
+WHERE to_regclass('public.' || quote_ident(:'schema' || '_migrations')) IS NOT NULL
+\gexec
+SELECT format('GRANT ALL ON SEQUENCE public.%I TO %I', :'schema' || '_migrations_id_seq', :'role')
+WHERE to_regclass('public.' || quote_ident(:'schema' || '_migrations_id_seq')) IS NOT NULL
+\gexec
 SQL
 }
 

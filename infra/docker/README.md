@@ -64,8 +64,19 @@ means a module role never does.
 
 Each role gets `USAGE, CREATE` on its own schema and `ALL` on that schema's
 tables and sequences (including, by default privileges, ones it creates later).
-It gets nothing on another module's schema and nothing on `public`, where
-`users`, `orders` and the gateway's own tables live.
+It gets nothing on another module's schema and no `CREATE` on `public`, where
+`users`, `orders` and the gateway's own tables live — so a module cannot create
+a table there that shadows one of them.
+
+The one exception is the module's own migration ledger. IN3 put it at
+`public.<module>_migrations` (TypeORM builds the ledger before the first
+migration runs, and a schema that does not exist yet cannot hold it), so the
+script grants the role `ALL` on that table and its sequence — **where the table
+already exists**. Without it `migration:run` would build the whole schema and
+then fail to record that it had, and re-run everything on the next deploy.
+Because the role has no `CREATE` on `public`, the first migration run against a
+genuinely empty database is still a superuser job; run it as `postgres` once,
+then re-run this script to pick up the ledger grant.
 
 **Init scripts run only on an empty data directory.** An existing volume — any
 machine that ran `npm run infra:up` before this file existed — needs it applying
