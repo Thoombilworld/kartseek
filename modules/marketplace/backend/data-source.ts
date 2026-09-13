@@ -148,6 +148,7 @@ export const MarketplaceDataSource = new DataSource({
   migrations: [
     'migrations/1786498000000-InitialMarketplaceSchema.ts',
     'migrations/1786502300000-OfferMarket.ts',
+    'migrations/1786502700000-ProductListingMrp.ts',
   ],
   migrationsTableName: MARKETPLACE_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
