@@ -71,6 +71,58 @@ describe('resolveMarket', () => {
       'Your account is restricted to the QA market; those users belongs to IN.',
     );
   });
+
+  /**
+   * A sub-region lock addressing its own country (dispatch addendum item 4).
+   *
+   * `users.region_code` is an unvalidated varchar and the development database
+   * holds `IN-MH`, so this is a shape that exists rather than one that might.
+   * The comparison was against the RAW lock — `'IN' !== 'IN-KA'` — so an
+   * administrator locked to an Indian state was refused India: empty lists and
+   * a 403 on approve, for the one market they are entitled to. Every other
+   * comparison on the platform (`assertInMarket`, `assertRecordInScope`)
+   * already normalised both sides; this was the one that did not.
+   */
+  const stateAdmin = { id: 'u-ka', role: 'ADMIN', regionCode: 'IN-KA', regionLocked: true };
+
+  it('lets a sub-region lock address its own country', () => {
+    expect(resolveMarket(reqAs(stateAdmin), 'IN', 'those sellers')).toBe('IN-KA');
+  });
+
+  it('accepts the sub-region itself, and the country in any case', () => {
+    expect(resolveMarket(reqAs(stateAdmin), 'IN-KA', 'those sellers')).toBe('IN-KA');
+    expect(resolveMarket(reqAs(stateAdmin), 'in', 'those sellers')).toBe('IN-KA');
+  });
+
+  it('accepts a sibling sub-region of the same country', () => {
+    // `IN-KA` and `IN-MH` normalise to the same market. The lock's granularity
+    // is the country; the sub-region is recorded, not enforced as a second
+    // boundary — enforcing it would require a sub-region model the platform
+    // does not have, and half-enforcing it is what produced the 403 above.
+    expect(resolveMarket(reqAs(stateAdmin), 'IN-MH', 'those sellers')).toBe('IN-KA');
+  });
+
+  it('still refuses another country', () => {
+    expect(() => resolveMarket(reqAs(stateAdmin), 'QA', 'those sellers')).toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('still refuses a market that does not normalise at all', () => {
+    expect(() => resolveMarket(reqAs(stateAdmin), 'IND', 'those sellers')).toThrow(
+      ForbiddenException,
+    );
+    expect(() => resolveMarket(reqAs(stateAdmin), 'NOT-A-COUNTRY', 'those sellers')).toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('returns the raw lock, so the audit trail keeps the sub-region', () => {
+    // Not narrowed to `IN` on the way out: a row filed against `IN` is any
+    // Indian market's, and the trail would lose which sub-region the actor was
+    // confined to.
+    expect(resolveMarket(reqAs(stateAdmin), undefined, 'those sellers')).toBe('IN-KA');
+  });
 });
 
 describe('assertRecordInScope', () => {

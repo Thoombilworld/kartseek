@@ -76,7 +76,8 @@ export function resolveMarket(
   const wanted =
     typeof requested === 'string' && requested.trim() ? requested.trim().toUpperCase() : undefined;
   if (!scope.locked) return wanted;
-  if (!normaliseMarket(scope.region)) {
+  const lockedCountry = normaliseMarket(scope.region);
+  if (!lockedCountry) {
     logger.warn(
       `[region-scope-denied] user=${scope.userId ?? 'unknown'} role=${scope.role} ` +
         `scope="${scope.region}" is not a market this platform knows; refused rather than ` +
@@ -86,9 +87,38 @@ export function resolveMarket(
     );
     throw new ForbiddenException(`This ${what} cannot be attributed to a market yet.`);
   }
-  if (wanted && wanted !== scope.region) {
+  /**
+   * ── BOTH SIDES NORMALISE ───────────────────────────────────────────────────
+   *
+   * This compared `wanted` to the RAW lock, so an admin locked to a sub-region
+   * was refused their own country: `IN-KA` asking for `IN` is `'IN' !== 'IN-KA'`
+   * and 403. That is not a theoretical shape — `users.region_code` is an
+   * unvalidated varchar and the dev database holds `IN-MH` — and the symptom is
+   * the one AUD2-079 describes: empty lists and a 403 on approve, for an
+   * administrator addressing the market they are locked to.
+   *
+   * `normaliseMarket` resolves a sub-region to its country and validates
+   * against `REGION_CONFIGS`, which is exactly what `assertInMarket` and
+   * `assertRecordInScope` already do on the record side. Comparing normalised
+   * forms here is what makes those three agree.
+   *
+   * A `wanted` that does not normalise at all — `IND`, `NOT-A-COUNTRY` — is
+   * still refused, because `normaliseMarket` returns `undefined` and `undefined
+   * !== lockedCountry`.
+   */
+  if (wanted && normaliseMarket(wanted) !== lockedCountry) {
     denyOutOfScope(req, scope, wanted, what);
   }
+
+  /**
+   * The RAW lock, not the normalised country.
+   *
+   * What comes back is the caller's own scope as their token states it, and it
+   * travels into responses, audit rows and `scope` payload fields. Narrowing
+   * `IN-KA` to `IN` on the way out would widen what the value means — a record
+   * filed against `IN` is any Indian market's — and would erase, from the audit
+   * trail, which sub-region the actor was actually confined to.
+   */
   return scope.region;
 }
 
