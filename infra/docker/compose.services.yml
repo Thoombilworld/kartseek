@@ -5460,13 +5460,26 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
-      # Where the shell rewrites each vertical path (next.config.mjs).
+      # Where the shell WOULD rewrite each vertical path — same build-time story
+      # as API_GATEWAY_ORIGIN above: next.config.mjs reads these, and a
+      # standalone image has already frozen its rewrites, so setting them here
+      # changes nothing. A zone is reachable through nginx.compose.conf, which
+      # routes each basePath straight to the zone container, or on the zone’s
+      # own published port — not through the console. See infra/docker/README.md,
+      # “Which nginx config is mounted”.
       MARKETPLACE_ZONE_ORIGIN: http://marketplace-frontend:3002
       GROCERY_ZONE_ORIGIN: http://grocery-frontend:3003
       RESTAURANT_ZONE_ORIGIN: http://restaurant-frontend:3004
@@ -5502,10 +5515,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
@@ -5535,10 +5555,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
@@ -5568,10 +5595,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
@@ -5601,10 +5635,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
@@ -5634,10 +5675,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
@@ -5667,10 +5715,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
@@ -5700,10 +5755,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
@@ -5733,10 +5795,17 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # Server-side fetches go straight to the gateway container, and so do the
-      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back
-      # to the loopback address there, which inside this container is this
-      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.
+      # API_URL is read by application code at request time, so server-side
+      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
+      # NOT: it is read only inside next.config.mjs, and a standalone image
+      # never loads that file again — `next build` materialises the two
+      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
+      # config into server.js as JSON. So the value below cannot move those
+      # rewrites; the one compiled in at build time wins (http://localhost:3001,
+      # which inside this container is this container). It is emitted anyway
+      # because a non-standalone `next start` does read it, and because the fix
+      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
+      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
       API_URL: http://api-gateway:3001/api/v1
       API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:

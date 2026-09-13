@@ -101,9 +101,19 @@ test('the only host addressing is the published port and the in-container probe'
   // side of a port mapping, where loopback is the safe default, and the
   // healthcheck, which runs inside the container it is checking. Everything
   // else naming the host would be the AUD2-067 bug this file exists to prevent.
+  //
+  // Directives only. A comment may NAME a host address — the web branch has to
+  // explain that next.config.mjs's baked-in `http://localhost:3001` is what a
+  // standalone image actually uses — and a rule that forbids saying so is a
+  // rule against documenting the trap.
   const rest = out
     .split('\n')
-    .filter((l) => !l.includes('${APP_BIND:-127.0.0.1}') && !/wget -qO-|nc -z/.test(l))
+    .filter(
+      (l) =>
+        !l.trim().startsWith('#') &&
+        !l.includes('${APP_BIND:-127.0.0.1}') &&
+        !/wget -qO-|nc -z/.test(l),
+    )
     .join('\n');
   assert.ok(
     !/localhost|127\.0\.0\.1|host\.docker\.internal/.test(rest),

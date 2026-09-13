@@ -351,10 +351,17 @@ export function envGroups(s, reg) {
     const groups = [
       ['The image already sets this; nothing here may put it back.', [['NODE_ENV', 'production']]],
       [
-        'Server-side fetches go straight to the gateway container, and so do the' +
-          '\n      # two `/api/*` rewrites in next.config.mjs — API_GATEWAY_ORIGIN falls back' +
-          '\n      # to the loopback address there, which inside this container is this' +
-          '\n      # container. The browser uses the build-time NEXT_PUBLIC_API_URL above.',
+        'API_URL is read by application code at request time, so server-side' +
+          '\n      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is' +
+          '\n      # NOT: it is read only inside next.config.mjs, and a standalone image' +
+          '\n      # never loads that file again — `next build` materialises the two' +
+          '\n      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole' +
+          '\n      # config into server.js as JSON. So the value below cannot move those' +
+          '\n      # rewrites; the one compiled in at build time wins (http://localhost:3001,' +
+          '\n      # which inside this container is this container). It is emitted anyway' +
+          '\n      # because a non-standalone `next start` does read it, and because the fix' +
+          '\n      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The' +
+          '\n      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.',
         [
           ['API_URL', 'http://api-gateway:3001/api/v1'],
           ['API_GATEWAY_ORIGIN', 'http://api-gateway:3001'],
@@ -365,7 +372,13 @@ export function envGroups(s, reg) {
       const zones = reg.services.filter((z) => z.kind === 'web-zone');
       if (zones.length)
         groups.push([
-          'Where the shell rewrites each vertical path (next.config.mjs).',
+          'Where the shell WOULD rewrite each vertical path — same build-time story' +
+            '\n      # as API_GATEWAY_ORIGIN above: next.config.mjs reads these, and a' +
+            '\n      # standalone image has already frozen its rewrites, so setting them here' +
+            '\n      # changes nothing. A zone is reachable through nginx.compose.conf, which' +
+            '\n      # routes each basePath straight to the zone container, or on the zone’s' +
+            '\n      # own published port — not through the console. See infra/docker/README.md,' +
+            '\n      # “Which nginx config is mounted”.',
           zones.map((z) => [`${stem(z.name)}_ZONE_ORIGIN`, `http://${z.name}:${z.ports.http}`]),
         ]);
     }
