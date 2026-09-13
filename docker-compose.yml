@@ -5,9 +5,24 @@
 # root and variable interpolation keeps reading the root .env (the only .env
 # Compose reads — see docs/guides/local-setup.md).
 #
-#   compose.infra.yml          Postgres (platform + one per module), Redis,
-#                              Kafka, MongoDB, Elasticsearch, nginx, tools
-#   compose.services.yml       the 35 application images (generated; phase 3)
-#   compose.observability.yml  Prometheus + Grafana, `monitoring` profile (phase 2)
+#   compose.infra.yml      Postgres (platform + one per module), Redis,
+#                          Kafka, MongoDB, Elasticsearch, nginx, tools
+#   compose.services.yml   the 35 application images, generated from
+#                          services.yaml — `admin` and `full` profiles
+#
+#   (Prometheus + Grafana were planned for phase 2 and do not exist; when they
+#    land they get their own include line and a `monitoring` profile.)
+#
+# Nothing in compose.services.yml carries a profile-less entry, so a bare
+# `docker compose up -d` still starts the infrastructure alone. Start the
+# application tier with `npm run stack:up:admin` (or `:full`).
 include:
   - path: infra/docker/compose.infra.yml
+  # `project_directory: .` — this file's own directory, the repository root.
+  # Relative paths in an included file otherwise resolve against the included
+  # file's directory, which for compose.services.yml would make `context: .`
+  # mean infra/docker/ and put every Dockerfile path one level too deep. The
+  # infra file above wants the default: its bind mounts are written as
+  # `../postgres/...`, relative to itself.
+  - path: infra/docker/compose.services.yml
+    project_directory: .

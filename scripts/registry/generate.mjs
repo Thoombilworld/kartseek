@@ -5,17 +5,19 @@
  *   node scripts/registry/generate.mjs           write (npm run registry:generate)
  *   node scripts/registry/generate.mjs --check   exit 1 if anything is stale
  *
- * Outputs: docs/architecture/services.md (whole file), the platform table
- * between markers in README.md, docs/guides/running-services.md,
- * apps/api/README.md and apps/api/docs/runbook.md, and the block between
- * markers in every entry's README.md. A README without markers is skipped
- * and listed, not created. Tables are wrapped in prettier range-ignore
- * comments so format:check and registry:check agree.
+ * Outputs: docs/architecture/services.md and infra/docker/compose.services.yml
+ * (whole files), the platform table between markers in README.md,
+ * docs/guides/running-services.md, apps/api/README.md and
+ * apps/api/docs/runbook.md, and the block between markers in every entry's
+ * README.md. A README without markers is skipped and listed, not created.
+ * Tables are wrapped in prettier range-ignore comments, and the compose
+ * renderer emits what prettier would, so format:check and registry:check agree.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadRegistry, repoRoot, NEST_KINDS } from './lib.mjs';
+import { renderComposeServices } from './compose.mjs';
 
 export const START = '<!-- registry:start -->';
 export const END = '<!-- registry:end -->';
@@ -145,6 +147,11 @@ export function generateAll(reg, root, { check = false } = {}) {
   const result = { written: [], skipped: [], stale: [] };
   const targets = [
     { rel: 'docs/architecture/services.md', next: () => renderServicesTable(reg), whole: true },
+    {
+      rel: 'infra/docker/compose.services.yml',
+      next: () => renderComposeServices(reg),
+      whole: true,
+    },
     ...PLATFORM_TARGETS.map((rel) => ({
       rel,
       next: (cur) => replaceBlock(cur, renderPlatformBlock(reg)),
