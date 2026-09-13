@@ -11,28 +11,9 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  Smartphone,
-  Laptop,
-  Shirt,
-  Sofa,
-  Dumbbell,
-  Baby,
-  Sparkles,
-  BookOpen,
-  Car,
-  ShoppingBasket,
-  Tv,
-  Headphones,
-  Monitor,
-  Briefcase,
-  PawPrint,
-  Paperclip,
-  Watch,
-  Armchair,
-  Footprints,
-  ToyBrick,
   SlidersHorizontal,
 } from 'lucide-react';
+import { CATEGORY_ICONS } from './category-icon';
 import { addToWishlist, removeFromWishlist } from '@/lib/api/marketplace';
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { useToast } from '@/lib/contexts/toast-context';
@@ -96,29 +77,8 @@ function cardImages(product: Pick<ProductCardModel, 'imageUrl' | 'images'>): str
 /** Above this the dots become unreadable and the track a scroll trap. */
 const MAX_CARD_IMAGES = 6;
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  Smartphone,
-  Laptop,
-  Shirt,
-  Sofa,
-  Dumbbell,
-  Baby,
-  Sparkles,
-  BookOpen,
-  Car,
-  ShoppingBasket,
-  Tv,
-  Headphones,
-  Monitor,
-  Briefcase,
-  PawPrint,
-  Paperclip,
-  Watch,
-  Armchair,
-  Heart,
-  Footprints,
-  ToyBrick,
-};
+// One icon map for every surface — see category-icon.tsx.
+const ICON_MAP = CATEGORY_ICONS;
 
 function discountPercent(mrp: number, price: number): number {
   if (!mrp || !price || mrp <= price) return 0;

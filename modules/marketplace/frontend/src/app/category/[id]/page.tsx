@@ -1,108 +1,35 @@
 import React, { cache } from 'react';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { getCategoryById, getProducts } from '@/lib/api/marketplace';
 import { categoryMeta } from '@/lib/seo/metadata';
-import {
-  Smartphone,
-  Laptop,
-  Shirt,
-  Sofa,
-  Dumbbell,
-  Baby,
-  Sparkles,
-  BookOpen,
-  Car,
-  ShoppingBasket,
-  Tv,
-  Headphones,
-  Monitor,
-  Briefcase,
-  PawPrint,
-  Paperclip,
-  Watch,
-  Armchair,
-  Heart,
-  Footprints,
-  ToyBrick,
-} from 'lucide-react';
-import CategoryFilters from './category-filters';
-import { buyBoxPrice, buyBoxMrp } from '@/lib/api/map-catalog-product';
-import { productImageList } from '@/lib/product-image';
 import { itemListSchema, breadcrumbSchema } from '@/lib/seo/schema';
 import { JsonLd } from '@/components/seo/json-ld';
 import { productPath } from '@/lib/marketplace/product-url';
 import { requestCurrency, requestCountry } from '@/lib/localization/request-region';
-
-/** Turn a human-readable label like "Smartphones" into a URL-safe slug */
-function slugify(label: string): string {
-  return (
-    label
-      // Decompose accents so "Décor" slugs to `decor`, matching the catalog. Left
-      // as-is, `é` fell through to the punctuation rule and produced `d-cor`,
-      // which matches no subcategory row.
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase()
-      .replace(/['']/g, '')
-      .replace(/&/g, 'and')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '')
-  );
-}
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  Smartphone,
-  Laptop,
-  Shirt,
-  Sofa,
-  Dumbbell,
-  Baby,
-  Sparkles,
-  BookOpen,
-  Car,
-  ShoppingBasket,
-  Tv,
-  Headphones,
-  Monitor,
-  Briefcase,
-  PawPrint,
-  Paperclip,
-  Watch,
-  Armchair,
-  Heart,
-  Footprints,
-  ToyBrick,
-};
-
-// ── Deterministic product data generator (no random prices) ─────────────────
-interface CatProduct {
-  id: string;
-  title: string;
-  brand: string;
-  price: number;
-  mrp: number;
-  rating: number;
-  reviews: string;
-  createdAt?: string;
-  badge?: string;
-  imageUrl?: string;
-  /** Every catalogue image, primary first — the card swipes through them. */
-  images?: string[];
-  /** Variant axes from the catalogue, rendered as swatches / size counts. */
-  variantAxes?: { variantName: string; variantOptions: string[] }[];
-}
-
-// No mock fallbacks allowed for category data.
+import { CatalogFilters } from '../../components/catalog-filters';
+import {
+  CatalogListingHeader,
+  CatalogListingNotice,
+  type ListingChip,
+  type TrailStep,
+} from '../../components/catalog-listing';
+import { catalogRows, mapCatalogRow, type CatalogCardRow } from '../../components/catalog-row';
 
 /**
- * Category listings are the storefront's head terms — "laptops", "womens
- * fashion" — and every one of them shared the marketplace layout's single
- * title and description. Two categories that rank for entirely different
- * queries were, to a crawler, the same page.
+ * `/category/[id]` — a listing for one node of the category tree.
  *
- * `getCategoryById` is memoised for the request so the page body's own call
- * costs nothing extra.
+ * Data flow, in one direction:
+ *
+ *   URL (slug or uuid) → getCategoryById → the canonical category row
+ *   category.slug + market → getProducts → the first page of cards
+ *   both → this server render → CatalogFilters (client), keyed on identity
+ *
+ * There is no second source. No client fetch re-requests the first page, no
+ * effect copies server props into state, and nothing bundled stands in when
+ * the catalogue is unreachable — the page says so instead.
+ *
+ * `getCategoryById` is memoised for the request so `generateMetadata` and the
+ * page body share one lookup.
  */
 const loadCategory = cache(async (id: string) => {
   try {
@@ -111,6 +38,14 @@ const loadCategory = cache(async (id: string) => {
     return null;
   }
 });
+
+/** A readable name for a slug when the category could not be resolved. */
+function titleFromSlug(slug: string): string {
+  return slug
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 export async function generateMetadata({
   params,
@@ -122,12 +57,7 @@ export async function generateMetadata({
   const { id } = await params;
   const { subcategory } = await searchParams;
   const category = await loadCategory(id);
-  const name =
-    category?.name ||
-    id
-      .split('-')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
+  const name = category?.name || titleFromSlug(id);
 
   const meta = categoryMeta({
     name,
@@ -158,13 +88,7 @@ export default async function CategoryPage({
 
   // Memoised above — `generateMetadata` already resolved this for the request.
   const category = await loadCategory(id);
-
-  const categoryName =
-    category?.name ||
-    id
-      .split('-')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
+  const categoryName = category?.name || titleFromSlug(id);
 
   // This route addresses BOTH levels of the category tree — the homepage grid
   // and /category-list link every row here, subcategories included. A product
@@ -174,45 +98,26 @@ export default async function CategoryPage({
   const isSubcategoryRoute = Boolean(category?.isSubcategory ?? category?.parent);
   const parentCategory: { name?: string; slug?: string } | null = category?.parent ?? null;
 
-  // Prefer real subcategory rows (they carry slugs, so they can be filtered);
-  const dbSubs: { label: string; slug: string }[] = Array.isArray(category?.subcategories)
+  // Real subcategory rows only: they carry slugs, so they can be filtered. A
+  // leaf legitimately has none, and nothing bundled is grafted on in that case.
+  const subcategories: { label: string; slug: string }[] = Array.isArray(category?.subcategories)
     ? category.subcategories
         .filter((c: any) => c?.name && c?.slug)
         .map((c: any) => ({ label: c.name, slug: c.slug }))
     : [];
 
-  // Fall back to bundled demo categories when the DB is empty — this keeps
-  // subcategory pills visible even before seed data is loaded. Skipped for a
-  // leaf: a subcategory legitimately has no children, and the fallback would
-  // graft on pills belonging to a same-named top-level demo category.
-  // No demo fallback. This grafted the bundled category's subcategory names on
-  // when the database returned none, so a category with no subcategories showed
-  // pills that led nowhere — each one filtering on a slug no row carries. A
-  // category with no children should show none.
-  const subcategories = dbSubs;
-
-  // Filter by the **resolved** category's slug, not by the raw route segment.
-  //
-  // This is the durable guard against the class of bug that made the product
-  // page's breadcrumb render "No products found": the catalogue filters on
-  // `category.slug`, so any caller that addressed this route with a uuid — as
-  // `product.category?.id` did — produced a query that matched nothing. The
-  // page could not tell that apart from a genuinely empty category, so it
-  // showed the empty-state message and the real fault stayed invisible.
-  //
-  // `getCategoryById` accepts either key and hands back the canonical row, so
-  // taking the slug from it makes this page correct whichever identifier the
-  // link used. Falling back to the raw segment keeps the page working when the
-  // metadata lookup itself failed.
+  // Filter by the **resolved** category's slug, not by the raw route segment:
+  // the catalogue filters on `category.slug`, so a uuid in the URL would match
+  // nothing and be indistinguishable from an empty category. Falling back to
+  // the raw segment keeps the page working when the lookup itself failed.
   const filterSlug = category?.slug ?? id;
 
-  // A zero result is now unambiguous, which is what lets the three states below
-  // stay honest: `loadFailed` = the request broke, `categoryUnknown` = the
-  // identifier matched no category, and an empty list = the category is real
-  // and has nothing in it.
-  const categoryUnknown = !category;
+  // The market this request browses. Resolved once, used for the server query,
+  // the "show more" continuation and the client component's identity key, so
+  // every row on the page comes from one market.
+  const country = await requestCountry();
 
-  let products: CatProduct[] = [];
+  let products: CatalogCardRow[] = [];
   let loadFailed = false;
   try {
     const res: any = await getProducts({
@@ -223,55 +128,29 @@ export default async function CategoryPage({
       // A server component cannot send the region header (it comes from the
       // browser cookie), so the market travels explicitly — without it the
       // gateway scoped this listing by IP and India saw Qatari offers.
-      country: await requestCountry(),
+      country,
     });
-    const list = res?.data ?? res?.products ?? [];
-    products = (Array.isArray(list) ? list : []).map((p: any): CatProduct => {
-      const price = buyBoxPrice(p);
-      return {
-        id: p.id,
-        title: p.name ?? p.title ?? 'Product',
-        brand: p.brand?.name ?? (typeof p.brand === 'string' ? p.brand : ''),
-        price,
-        mrp: buyBoxMrp(p) || price,
-        rating: Number(p.averageRating ?? p.rating ?? 0),
-        reviews: String(p.reviewCount ?? p.reviews ?? 0),
-        // Carried so the filter panel can offer "Newest" and "Best Selling".
-        // Baymard's listing research (#511) names price, rating, best-selling
-        // and newest as the four sorts a listing should support; this page had
-        // the first two and no field to compute the others from.
-        createdAt: p.created_at ?? p.createdAt ?? undefined,
-        badge: p.badge || undefined,
-        imageUrl: productImageList(p)[0],
-        images: productImageList(p),
-        variantAxes: p.variantAxes ?? undefined,
-      };
-    });
+    products = catalogRows(res).map(mapCatalogRow);
   } catch {
     products = [];
     loadFailed = true;
   }
-  const iconName = category?.icon || '';
-  const colorClass = 'bg-slate-100 text-slate-600'; // Default styling
-  const CatIcon = ICON_MAP[iconName] || ShoppingBasket;
 
-  // Structured data. Until now only the product detail page emitted any, so a
-  // category — the page that actually ranks for "buy <category> online" — was
-  // an untyped list of links to a crawler. The trail mirrors the visible
-  // breadcrumb above rather than being composed separately, so the two cannot
-  // disagree.
-  const trail = [
-    { name: 'Home', url: '/marketplace' },
-    { name: 'Categories', url: '/marketplace/category-list' },
+  // Structured data: the same trail the visible breadcrumb renders, so the
+  // two cannot disagree. Emitted only when the fetch succeeded — an ItemList
+  // of zero products on a failed load tells a crawler the category is empty.
+  const trail: TrailStep[] = [
+    { name: 'Home', href: '/' },
+    { name: 'Categories', href: '/category-list' },
     ...(parentCategory?.slug
       ? [
           {
             name: parentCategory.name ?? parentCategory.slug,
-            url: `/marketplace/category/${parentCategory.slug}`,
+            href: `/category/${parentCategory.slug}`,
           },
         ]
       : []),
-    { name: categoryName, url: `/marketplace/category/${filterSlug}` },
+    { name: categoryName },
   ];
   const listCurrency = await requestCurrency();
   const listJsonLd = itemListSchema(
@@ -284,142 +163,62 @@ export default async function CategoryPage({
     })),
     categoryName,
   );
+  const breadcrumbJsonLd = breadcrumbSchema(
+    trail.map((step) => ({
+      name: step.name,
+      url: step.href
+        ? `/marketplace${step.href === '/' ? '' : step.href}`
+        : `/marketplace/category/${filterSlug}`,
+    })),
+  );
+
+  const chips: ListingChip[] = subcategories.map(({ label, slug }) => ({
+    label,
+    href: `/category/${id}?subcategory=${encodeURIComponent(slug)}`,
+    active: slug === activeSub,
+  }));
+
+  const countLabel = loadFailed
+    ? 'Product list unavailable'
+    : `${products.length} ${products.length === 1 ? 'product' : 'products'}${
+        activeSub && !isSubcategoryRoute ? ' in this subcategory' : ''
+      }`;
+
+  const loadMorePath = isSubcategoryRoute
+    ? `/products?subcategory=${encodeURIComponent(filterSlug)}&country=${country}`
+    : `/products?category=${encodeURIComponent(filterSlug)}${
+        activeSub ? `&subcategory=${encodeURIComponent(activeSub)}` : ''
+      }&country=${country}`;
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-mobile-nav">
-      {/* Emitted only when the fetch succeeded — an ItemList of zero products
-          on a failed load tells a crawler the category is empty. */}
-      {!loadFailed && products.length > 0 && (
-        <JsonLd data={[listJsonLd, breadcrumbSchema(trail)]} />
-      )}
+    <div className="min-h-screen pb-mobile-nav">
+      {!loadFailed && products.length > 0 && <JsonLd data={[listJsonLd, breadcrumbJsonLd]} />}
 
-      {/* Breadcrumb + Header */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-3 xs:px-4 py-4">
-          <div className="flex items-center gap-2 text-sm text-slate-500 mb-2 flex-wrap">
-            <Link href="/" className="hover:text-blue-600 transition-colors">
-              Home
-            </Link>
-            <span>/</span>
-            <Link href="/category-list" className="hover:text-blue-600 transition-colors">
-              Categories
-            </Link>
-            {/* A subcategory reached through this route sits one level deeper —
-                show the parent so the trail is walkable in both directions. */}
-            {parentCategory?.slug && (
-              <>
-                <span>/</span>
-                <Link
-                  href={`/category/${parentCategory.slug}`}
-                  className="hover:text-blue-600 transition-colors"
-                >
-                  {parentCategory.name ?? parentCategory.slug}
-                </Link>
-              </>
-            )}
-            <span>/</span>
-            <span className="text-slate-900 font-semibold">{categoryName}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorClass} shrink-0`}
-            >
-              <CatIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900">{categoryName}</h1>
-              <p className="text-sm text-slate-500">
-                {loadFailed
-                  ? 'Product list unavailable'
-                  : `${products.length} ${products.length === 1 ? 'product' : 'products'} found${activeSub && !isSubcategoryRoute ? ' in this subcategory' : ''}`}
-              </p>
-            </div>
-          </div>
-          {/* Subcategory pills — these were non-interactive <span>s styled to
-              look clickable. Real subcategory rows carry a slug, so they filter
-              this listing for real; bundled fallback labels have no slug and can
-              only feed a search query. */}
-          {subcategories.length > 0 && (
-            <div className="chip-row mt-4">
-              {activeSub && (
-                <Link
-                  href={`/category/${id}`}
-                  className="text-xs bg-slate-800 text-white px-3 py-2 rounded-full font-semibold whitespace-nowrap shrink-0 min-h-9 inline-flex items-center gap-1.5 hover:bg-slate-900 transition-colors"
-                >
-                  Clear filter <span aria-hidden="true">×</span>
-                </Link>
-              )}
-              {subcategories.map(({ label, slug }) => {
-                const isActive = !!slug && slug === activeSub;
-                const href = slug
-                  ? `/category/${id}?subcategory=${encodeURIComponent(slug)}`
-                  : `/search?q=${encodeURIComponent(label)}`;
-                return (
-                  <Link
-                    key={slug || label}
-                    href={href}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`text-xs px-3 py-2 rounded-full font-medium border transition-colors whitespace-nowrap shrink-0 min-h-9 inline-flex items-center ${
-                      isActive
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100 active:bg-blue-200'
-                    }`}
-                  >
-                    {label}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+      <CatalogListingHeader
+        trail={trail}
+        title={categoryName}
+        iconName={category?.icon}
+        countLabel={countLabel}
+        chips={chips}
+        clearHref={activeSub && !isSubcategoryRoute ? `/category/${id}` : undefined}
+      />
 
-      {/* A load failure is surfaced as a banner *above* the normal page, never
-          in place of it — the grid and filter sidebar must stay reachable so a
-          catalog hiccup doesn't leave the user on a dead end. */}
-      {loadFailed && (
-        <div className="max-w-7xl mx-auto px-3 xs:px-4 pt-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-amber-900">
-                Couldn&apos;t load products for this category
-              </p>
-              <p className="text-xs text-amber-800/80 mt-0.5">
-                The catalog service didn&apos;t respond, so this list is incomplete rather than
-                empty.
-              </p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Link
-                href={`/category/${id}`}
-                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
-              >
-                Retry
-              </Link>
-              <Link
-                href={`/search?q=${encodeURIComponent(categoryName)}`}
-                className="border border-amber-300 text-amber-900 text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors"
-              >
-                Search instead
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
+      {loadFailed && <CatalogListingNotice retryHref={`/category/${id}`} />}
 
-      {/* Interactive Filter + Product Grid (client component) */}
-      <CategoryFilters
+      {/* Keyed on the listing's identity — category, subcategory filter and
+          market — so React mounts a fresh instance whenever any of them
+          changes. The server render is the only source of the product list;
+          the client component holds it as initial state and must never carry
+          one listing's rows, filters or pages into another. */}
+      <CatalogFilters
+        key={`${category?.id ?? filterSlug}:${activeSub ?? ''}:${country}`}
         products={products}
-        categoryName={categoryName}
-        iconName={iconName}
+        listingName={categoryName}
+        iconName={category?.icon || undefined}
         pageSize={48}
-        // Mirrors the server query above, so page 2 continues the same listing
-        // rather than a differently-filtered one.
-        loadMorePath={
-          isSubcategoryRoute
-            ? `/products?subcategory=${encodeURIComponent(filterSlug)}`
-            : `/products?category=${encodeURIComponent(filterSlug)}${activeSub ? `&subcategory=${encodeURIComponent(activeSub)}` : ''}`
-        }
+        // Same filter AND same market as the server query, so page 2 continues
+        // the same listing rather than a differently-scoped one.
+        loadMorePath={loadMorePath}
       />
     </div>
   );

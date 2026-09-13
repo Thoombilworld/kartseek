@@ -466,112 +466,12 @@ export const healthApi = {
   ready: () => api.get('/health/ready'),
   metrics: () => api.get('/health/metrics'),
 };
-
-// ─── Marketplace (Customer) ───────────────────────────────────────────────────
-
-export const marketplaceApi = {
-  // Categories
-  getCategories: () => api.get('/marketplace/categories'),
-  getCategoryById: (id: string) => api.get(`/marketplace/categories/${id}`),
-
-  // Products
-  getProducts: (params?: Record<string, string | number | boolean | undefined>) =>
-    api.get('/marketplace/products', params),
-  getProductById: (id: string) => api.get(`/marketplace/products/${id}`),
-  searchProducts: (q: string, params?: Record<string, string | number | boolean | undefined>) =>
-    api.get('/marketplace/search', { q, ...params }),
-  getProductReviews: (
-    productId: string,
-    params?: Record<string, string | number | boolean | undefined>,
-  ) => api.get(`/marketplace/products/${productId}/reviews`, params),
-  addProductReview: (productId: string, data: object) =>
-    api.post(`/marketplace/products/${productId}/reviews`, data),
-
-  // Brands & Sellers
-  getBrands: () => api.get('/marketplace/brands'),
-  getTopBrands: () => api.get('/marketplace/brands/top'),
-  getSellers: () => api.get('/marketplace/sellers'),
-  getVerifiedSellers: () => api.get('/marketplace/sellers/verified'),
-
-  // Cart (Redis-backed)
-  getCart: (userId: string) => api.get(`/marketplace/cart/${userId}`),
-  addToCart: (userId: string, data: object) => api.post(`/marketplace/cart/${userId}`, data),
-  updateCartItem: (userId: string, itemId: string, data: object) =>
-    api.put(`/marketplace/cart/${userId}/${itemId}`, data),
-  removeCartItem: (userId: string, itemId: string) =>
-    api.delete(`/marketplace/cart/${userId}/${itemId}`),
-
-  // Wishlist
-  getWishlist: (userId: string) => api.get(`/marketplace/wishlist/${userId}`),
-  addToWishlist: (userId: string, data: object) =>
-    api.post(`/marketplace/wishlist/${userId}`, data),
-  removeFromWishlist: (userId: string, productId: string) =>
-    api.delete(`/marketplace/wishlist/${userId}/${productId}`),
-
-  // Orders
-  getOrders: (params?: Record<string, string | number | boolean | undefined>) =>
-    api.get('/marketplace/orders', params),
-  placeOrder: (data: object) => api.post('/marketplace/orders', data),
-  cancelOrder: (orderId: string, data?: object) =>
-    api.put(`/marketplace/orders/${orderId}/cancel`, data),
-  trackOrder: (orderId: string) => api.get(`/marketplace/orders/${orderId}/track`),
-
-  // Recently viewed
-  getRecentlyViewed: (userId: string) => api.get(`/marketplace/recently-viewed/${userId}`),
-
-  // ── Tier 6: Returns ─────────────────────────────────────────────────────
-  getReturns: (params?: Record<string, string | number | boolean | undefined>) =>
-    api.get('/marketplace/returns', params),
-  getReturnById: (id: string) => api.get(`/marketplace/returns/${id}`),
-  createReturn: (data: object) => api.post('/marketplace/returns', data),
-  updateReturnStatus: (id: string, data: object) =>
-    api.put(`/marketplace/returns/${id}/status`, data),
-  assignReturnPickup: (id: string, data: object) =>
-    api.put(`/marketplace/returns/${id}/assign-pickup`, data),
-
-  // ── Tier 6: Coupons ─────────────────────────────────────────────────────
-  getCoupons: (params?: Record<string, string | number | boolean | undefined>) =>
-    api.get('/marketplace/coupons', params),
-  getCouponById: (id: string) => api.get(`/marketplace/coupons/${id}`),
-  // Bank/card offers, served by the gateway from `bank_offers`. The cart and
-  // product pages were rendering a hardcoded HDFC/SBI/ICICI list instead.
-  getBankOffers: (params?: Record<string, string | number | boolean | undefined>) =>
-    api.get('/marketplace/offers/bank', params),
-  // Real gift-card balance. The cart credited a flat 5,000 to any code starting
-  // with `KART-GIFT-`, which checkout then refused to redeem.
-  getGiftCardBalance: (data: { code: string }) => api.post('/marketplace/gift-cards/balance', data),
-  validateCoupon: (data: object) => api.post('/marketplace/coupons/validate', data),
-  redeemCoupon: (data: object) => api.post('/marketplace/coupons/redeem', data),
-  getCouponUsage: (id: string) => api.get(`/marketplace/coupons/${id}/usage`),
-
-  // ── Tier 6: Tracking ────────────────────────────────────────────────────
-  getTrackingEvents: (orderId: string) => api.get(`/marketplace/tracking/order/${orderId}`),
-  getTrackingById: (trackingId: string) => api.get(`/marketplace/tracking/${trackingId}`),
-
-  // ── Tier 6: Variants ────────────────────────────────────────────────────
-  getVariants: (productId: string) => api.get(`/marketplace/products/${productId}/variants`),
-  getVariantById: (id: string) => api.get(`/marketplace/variants/${id}`),
-
-  // ── Tier 6: Q&A ─────────────────────────────────────────────────────────
-  getQuestions: (
-    productId: string,
-    params?: Record<string, string | number | boolean | undefined>,
-  ) => api.get(`/marketplace/products/${productId}/questions`, params),
-  createQuestion: (productId: string, data: object) =>
-    api.post(`/marketplace/products/${productId}/questions`, data),
-  getAnswers: (questionId: string) => api.get(`/marketplace/questions/${questionId}/answers`),
-  createAnswer: (questionId: string, data: object) =>
-    api.post(`/marketplace/questions/${questionId}/answers`, data),
-  upvoteQuestion: (id: string) => api.post(`/marketplace/questions/${id}/upvote`, {}),
-  voteAnswerHelpful: (id: string) => api.post(`/marketplace/answers/${id}/helpful`, {}),
-
-  // ── Tier 6: Delivery Assignments ────────────────────────────────────────
-  getDeliveryAssignments: (params?: Record<string, string | number | boolean | undefined>) =>
-    api.get('/marketplace/delivery-assignments', params),
-  getDeliveryById: (id: string) => api.get(`/marketplace/delivery-assignments/${id}`),
-  verifyDeliveryOtp: (id: string, otp: string) =>
-    api.post(`/marketplace/delivery-assignments/${id}/verify-otp`, { otp }),
-};
+// ─── Marketplace ─────────────────────────────────────────────────────────────
+// The storefront's catalogue, cart, coupon and gift-card calls live in
+// `api/marketplace.ts` (one function per route). The `marketplaceApi` object
+// that used to sit here was a second copy of the same routes — including
+// `/marketplace/categories` in a different shape from the one the pages used —
+// and nothing but the cart page's coupon and gift-card calls still reached it.
 
 // ─── Seller Portal ────────────────────────────────────────────────────────────
 

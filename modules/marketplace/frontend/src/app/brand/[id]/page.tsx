@@ -16,7 +16,6 @@ import {
   Package,
 } from 'lucide-react';
 import { discountPercent } from '@/lib/marketplace/pricing';
-import { getBrandImage, getProductImage } from '@/lib/demo-data/marketplace-images';
 import { getBrandById, getProducts } from '@/lib/api/marketplace';
 import { getBrandUpdates } from '@/lib/api/brand-follow';
 import { buyBoxPrice, buyBoxMrp } from '@/lib/api/map-catalog-product';
@@ -185,9 +184,12 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
           it claims nothing: unlike the logo above, nobody reads this as "this
           is the brand's photograph". A real banner still wins when set.
         */}
-        {(brand.bannerUrl || getBrandImage(brand.slug, 'banner')) && (
+        {/* Only the brand's own banner. The bundled stock photograph that
+            stood in for it was the last demo asset on a storefront page; the
+            gradient behind this is the designed state when none is set. */}
+        {brand.bannerUrl && (
           <img
-            src={brand.bannerUrl || getBrandImage(brand.slug, 'banner')}
+            src={brand.bannerUrl}
             alt=""
             className="absolute inset-0 w-full h-full object-cover opacity-20"
           />
@@ -397,7 +399,7 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
                 />
 
                 <ProductThumb
-                  src={product.imageUrl || getProductImage(product.id)}
+                  src={product.imageUrl}
                   alt={product.title}
                   brand={brandName}
                   sizes={THUMB_SIZES.grid4}

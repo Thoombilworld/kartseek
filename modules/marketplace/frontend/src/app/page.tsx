@@ -3,39 +3,54 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
-  Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Zap, Star,
-  Sparkles, BookOpen, Car, ShoppingBasket, Tv, ChevronRight, Timer,
-  Truck, ShieldCheck, RotateCcw, Headphones, Heart, ChevronLeft,
-  Monitor, Briefcase, PawPrint, Paperclip, Watch, Armchair,
-  BadgeCheck, TrendingUp, Crown, Flame, Tag, Sun, GraduationCap, Award,
-  ArrowRight, Footprints, Clock, Gift, Store,
+  Smartphone,
+  Laptop,
+  Shirt,
+  Sofa,
+  Dumbbell,
+  Baby,
+  Zap,
+  Star,
+  Sparkles,
+  BookOpen,
+  Car,
+  ShoppingBasket,
+  Tv,
+  ChevronRight,
+  Timer,
+  Truck,
+  ShieldCheck,
+  RotateCcw,
+  Headphones,
+  Heart,
+  ChevronLeft,
+  Monitor,
+  Briefcase,
+  PawPrint,
+  Paperclip,
+  Watch,
+  Armchair,
+  BadgeCheck,
+  TrendingUp,
+  Crown,
+  Flame,
+  Tag,
+  Sun,
+  GraduationCap,
+  Award,
+  ArrowRight,
+  Footprints,
+  Clock,
+  Gift,
+  Store,
   ToyBrick,
 } from 'lucide-react';
-import { CATEGORIES, FLASH_DEALS, ELECTRONICS_PRODUCTS, FASHION_PRODUCTS, HOME_PRODUCTS, BEAUTY_PRODUCTS, SPORTS_PRODUCTS, TOYS_PRODUCTS, APPLIANCES_PRODUCTS, BRAND_PROMOS, TRENDING_PRODUCTS, DEALS_OF_DAY, NEW_ARRIVALS, BEST_SELLERS, RECOMMENDED, SPONSORED_PRODUCTS, MARKETPLACE_FAQ, TRUST_BADGES } from '@/lib/demo-data/marketplace-home';
+import { MARKETPLACE_FAQ, TRUST_BADGES } from '@/lib/marketplace/home-content';
 import { discountPercent, buildBrandDiscount, forRegion } from '@/lib/marketplace/pricing';
 import type { HomeProduct, HomeBrand, CampaignBanner } from '@/lib/marketplace/types';
 import { useRegion } from '@/lib/contexts/region-context';
-import { getLocalPaymentMethods } from '@/lib/localization';
 import { CountryFlag } from '@/components/shared/country-flag';
 
-/**
- * Cashback promotion, in each market's own currency.
- *
- * Amounts are per-market rather than converted: a promotion is a round number a
- * shopper recognises ("₹150 off", "QR 15 off"), not an exchange-rate result.
- */
-const CASHBACK_OFFERS: Record<string, { reward: number; minOrder: number }> = {
-  QA: { reward: 15, minOrder: 100 },
-  IN: { reward: 150, minOrder: 999 },
-  AE: { reward: 15, minOrder: 100 },
-  SA: { reward: 15, minOrder: 100 },
-  BH: { reward: 2, minOrder: 10 },
-  KW: { reward: 1, minOrder: 10 },
-  OM: { reward: 2, minOrder: 10 },
-  GB: { reward: 5, minOrder: 35 },
-  US: { reward: 5, minOrder: 35 },
-  SG: { reward: 5, minOrder: 40 },
-};
 import { useModuleTitle } from '@/hooks/useModuleTitle';
 import { useRecommendations } from '@/lib/hooks/use-recommendations';
 import { RecommendationCarousel, CrossModulePicks } from '@/components/recommendations';
@@ -64,7 +79,9 @@ type GroupedProducts = Record<string, any[]>;
  */
 function mapSellerProduct(p: any) {
   const mrp = Number(p?.mrp ?? 0);
-  const listings: any[] = (Array.isArray(p?.listings) ? p.listings : []).filter((l: any) => l?.isActive !== false);
+  const listings: any[] = (Array.isArray(p?.listings) ? p.listings : []).filter(
+    (l: any) => l?.isActive !== false,
+  );
   const buyBox = listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0];
   const primaryImage =
     (p?.images ?? []).find((img: any) => img?.isPrimary)?.url ?? p?.images?.[0]?.url;
@@ -84,9 +101,9 @@ function mapSellerProduct(p: any) {
     // It used to be stamped on every card in these sections unconditionally,
     // which makes it worthless as a signal and misstates the seller's status.
     sellerVerified:
-      p?.seller?.isVerified === true
-      || String(p?.seller?.verificationStatus ?? '').toUpperCase() === 'VERIFIED'
-      || String(p?.seller?.verificationStatus ?? '').toUpperCase() === 'APPROVED',
+      p?.seller?.isVerified === true ||
+      String(p?.seller?.verificationStatus ?? '').toUpperCase() === 'VERIFIED' ||
+      String(p?.seller?.verificationStatus ?? '').toUpperCase() === 'APPROVED',
   };
 }
 
@@ -102,16 +119,19 @@ function useApprovedByCategory(region: string) {
       // long tail — toys, appliances, beauty — was routinely cut off and those
       // sections fell back to bundled demo products. Wide enough now to reach
       // the whole catalogue for a market of this size.
-      const res = await apiFetch(`/marketplace/products?limit=250&country=${encodeURIComponent(region)}`, {
-        // Was `cache: 'no-store'`. The catalogue routes now answer
-        // `public, max-age=0, s-maxage=60, stale-while-revalidate=120` with a
-        // strong ETag, so `max-age=0` already forces the browser to revalidate
-        // on every read — the shopper cannot see a stale price from their own
-        // cache. What `no-store` additionally did was forbid *storing* the
-        // response, which meant no `If-None-Match` was ever sent and a poll
-        // that changed nothing still transferred all 250 rows.
-        signal: AbortSignal.timeout(5000),
-      });
+      const res = await apiFetch(
+        `/marketplace/products?limit=250&country=${encodeURIComponent(region)}`,
+        {
+          // Was `cache: 'no-store'`. The catalogue routes now answer
+          // `public, max-age=0, s-maxage=60, stale-while-revalidate=120` with a
+          // strong ETag, so `max-age=0` already forces the browser to revalidate
+          // on every read — the shopper cannot see a stale price from their own
+          // cache. What `no-store` additionally did was forbid *storing* the
+          // response, which meant no `If-None-Match` was ever sent and a poll
+          // that changed nothing still transferred all 250 rows.
+          signal: AbortSignal.timeout(5000),
+        },
+      );
       if (!res.ok) return;
       const json = await res.json();
 
@@ -154,7 +174,7 @@ function useApprovedByCategory(region: string) {
   return { groups, total };
 }
 
-// ── Live Data Hook — fetches the real /marketplace/home feed (demo fallback) ──
+// ── Live Data Hook — fetches the real /marketplace/home feed ──
 //
 // Goes through `apiFetch` rather than a bare `fetch` so the request carries the
 // region headers the gateway scopes on; a raw fetch was scoped by the egress IP.
@@ -179,7 +199,9 @@ function mapFeedProduct(p: any): HomeProduct {
   // cards showed the list price with no discount.
   // Inactive listings are filtered out — the `find`-based feed endpoints cannot
   // exclude them in SQL, and pricing off a withdrawn offer would be wrong.
-  const listings: any[] = (Array.isArray(p?.listings) ? p.listings : []).filter((l: any) => l?.isActive !== false);
+  const listings: any[] = (Array.isArray(p?.listings) ? p.listings : []).filter(
+    (l: any) => l?.isActive !== false,
+  );
   const buyBox = listings.find((l: any) => l?.isBuyBoxWinner) ?? listings[0];
   const mrp = Number(p?.mrp ?? p?.price ?? 0);
   const price = Number(p?.discountedPrice ?? p?.sellingPrice ?? buyBox?.sellingPrice ?? mrp);
@@ -206,25 +228,19 @@ function mapFeedProduct(p: any): HomeProduct {
 }
 
 /**
- * Products for one home section.
+ * Products for one home section: what the feed returned, or nothing.
  *
- * A section the backend returned is rendered as-is, even when empty — swapping in
- * demo products there is what produced dead links: their ids live only in this
- * bundle, so `/marketplace/product/<demo id>` 404s. Cards without an id are
- * dropped for the same reason.
- *
- * When the feed never arrived (backend unreachable) the bundled catalogue still
- * renders, so the storefront isn't a blank page — but flagged `displayOnly`, which
- * `ProductCard` renders unclickable rather than linking to a detail page that
- * cannot load.
- *
- * The flag used to be an emptied `id`. That id is also the React key, so every
- * placeholder in a section collapsed onto the same key `''` — React warned about
- * duplicate keys and reserves the right to drop or duplicate such children.
+ * There is no bundled fallback. Until now an unreachable feed rendered the
+ * demo catalogue — products whose ids exist only in this bundle, at prices no
+ * listing quotes — flagged `displayOnly` so the cards would not link. A card a
+ * shopper cannot open, priced by nobody, is not a degraded storefront; it is a
+ * fabricated one. When the feed is unavailable the page says so
+ * (`HomeFeedUnavailable`) and the rails stay empty. Cards without an id are
+ * dropped because the detail route cannot resolve them.
  */
-function pickProducts(feedArr: any, fallback: HomeProduct[], isLive: boolean): HomeProduct[] {
-  if (Array.isArray(feedArr)) return feedArr.map(mapFeedProduct).filter((p) => p.id);
-  return isLive ? [] : fallback.map((p) => ({ ...p, displayOnly: true }));
+function pickProducts(feedArr: any): HomeProduct[] {
+  if (!Array.isArray(feedArr)) return [];
+  return feedArr.map(mapFeedProduct).filter((p) => p.id);
 }
 
 /** Map a backend category into the shape the category grid/nav expects. */
@@ -280,14 +296,17 @@ function useMarketplaceHome(region: string) {
         }
       }
     } catch {
-      // fall back to curated demo data
+      // the page renders HomeFeedUnavailable; nothing is invented in its place
     }
     setIsLive(false);
     setLoading(false);
   }, [region]);
 
   // Single fetch per market — no polling. Users can trigger a manual refresh.
-  useEffect(() => { setLoading(true); fetchHome(); }, [fetchHome]);
+  useEffect(() => {
+    setLoading(true);
+    fetchHome();
+  }, [fetchHome]);
 
   return { feed, isLive, loading, refresh: fetchHome };
 }
@@ -295,12 +314,38 @@ function useMarketplaceHome(region: string) {
 // ── Icon Map ──────────────────────────────────────────────────────────────
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  Smartphone, Laptop, Shirt, Sofa, Dumbbell, Baby, Sparkles, BookOpen,
-  Car, ShoppingBasket, Tv, Headphones, Monitor, Briefcase, PawPrint,
-  Paperclip, Watch, Armchair, Heart, Footprints, ToyBrick, BabyIcon: Baby,
-  Tablet: Smartphone, Speaker: Headphones, Camera: Smartphone,
-  Glasses: Sparkles, Sun, GraduationCap, Truck, ShieldCheck,
-  RotateCcw, BadgeCheck,
+  Smartphone,
+  Laptop,
+  Shirt,
+  Sofa,
+  Dumbbell,
+  Baby,
+  Sparkles,
+  BookOpen,
+  Car,
+  ShoppingBasket,
+  Tv,
+  Headphones,
+  Monitor,
+  Briefcase,
+  PawPrint,
+  Paperclip,
+  Watch,
+  Armchair,
+  Heart,
+  Footprints,
+  ToyBrick,
+  BabyIcon: Baby,
+  Tablet: Smartphone,
+  Speaker: Headphones,
+  Camera: Smartphone,
+  Glasses: Sparkles,
+  Sun,
+  GraduationCap,
+  Truck,
+  ShieldCheck,
+  RotateCcw,
+  BadgeCheck,
 };
 
 function getCatIcon(iconName: string) {
@@ -320,7 +365,11 @@ function getCatIcon(iconName: string) {
  * ("Forest Essentials" → "FE").
  */
 function brandInitials(name: string) {
-  const words = name.replace(/[^\p{L}\p{N}\s]/gu, '').trim().split(/\s+/).filter(Boolean);
+  const words = name
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (words.length === 0) return '?';
   if (words.length === 1) return (words[0].length <= 4 ? words[0] : words[0][0]).toUpperCase();
   return (words[0][0] + words[1][0]).toUpperCase();
@@ -345,13 +394,23 @@ function BrandLogo({ brand }: { brand: HomeBrand }) {
           className="w-full h-full object-contain p-1.5"
         />
       ) : (
-        <span className="text-lg md:text-xl font-black text-slate-800 tracking-tight">{brandInitials(brand.name)}</span>
+        <span className="text-lg md:text-xl font-black text-slate-800 tracking-tight">
+          {brandInitials(brand.name)}
+        </span>
       )}
     </div>
   );
 }
 
-function BrandPromoCard({ brand, formatCurrencyValue, href }: { brand: HomeBrand; formatCurrencyValue: (n: number) => string; href: string }) {
+function BrandPromoCard({
+  brand,
+  formatCurrencyValue,
+  href,
+}: {
+  brand: HomeBrand;
+  formatCurrencyValue: (n: number) => string;
+  href: string;
+}) {
   const discountLabel = buildBrandDiscount(brand, formatCurrencyValue);
   return (
     <Link
@@ -366,20 +425,75 @@ function BrandPromoCard({ brand, formatCurrencyValue, href }: { brand: HomeBrand
         <BrandLogo brand={brand} />
         {/* `text-inherit`: the global `p { color: slate-600 }` base rule beats
             inherited colour, which left taglines unreadable on the gradient. */}
-        <h3 className="mt-2.5 text-lg md:text-xl font-bold tracking-tight leading-tight truncate">{brand.name}</h3>
-        <p className="text-[11px] md:text-xs text-inherit opacity-90 mt-0.5 line-clamp-2 leading-snug">{brand.tagline}</p>
+        <h3 className="mt-2.5 text-lg md:text-xl font-bold tracking-tight leading-tight truncate">
+          {brand.name}
+        </h3>
+        <p className="text-[11px] md:text-xs text-inherit opacity-90 mt-0.5 line-clamp-2 leading-snug">
+          {brand.tagline}
+        </p>
       </div>
       <div className="relative flex items-center justify-between gap-2">
-        <span className="text-xs font-bold bg-white/25 px-2.5 py-1.5 rounded-md">{discountLabel}</span>
+        <span className="text-xs font-bold bg-white/25 px-2.5 py-1.5 rounded-md">
+          {discountLabel}
+        </span>
         <ChevronRight className="w-4 h-4 opacity-60 group-hover:translate-x-1 transition-transform shrink-0" />
       </div>
     </Link>
   );
 }
 
+// ── Feed unavailable ──────────────────────────────────────────────────────
+
+/**
+ * Shown when `/marketplace/home` could not be fetched.
+ *
+ * An explicit state rather than a substitute: the previous fallback rendered
+ * the bundled demo catalogue, so an outage looked like a storefront full of
+ * products nobody could buy. The categories rail, search and the footer still
+ * work; only the promotional rails are missing, and this says why.
+ */
+function HomeFeedUnavailable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      role="alert"
+      className="mt-5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-amber-900">
+          The storefront feed is unavailable right now
+        </p>
+        <p className="text-xs text-amber-800/80 mt-0.5">
+          Deals, banners and product rails could not be loaded. Search and the categories below
+          still work.
+        </p>
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+        >
+          Try again
+        </button>
+        <Link
+          href="/category-list"
+          className="border border-amber-300 text-amber-900 text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors"
+        >
+          Browse categories
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 // ── Section Header ────────────────────────────────────────────────────────
 
-function SectionHeader({ title, subtitle, viewAllHref, icon: IconComp }: {
+function SectionHeader({
+  title,
+  subtitle,
+  viewAllHref,
+  icon: IconComp,
+}: {
   title: string;
   subtitle?: string;
   viewAllHref?: string;
@@ -395,8 +509,12 @@ function SectionHeader({ title, subtitle, viewAllHref, icon: IconComp }: {
         </div>
       </div>
       {viewAllHref && (
-        <Link href={viewAllHref} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1 transition-colors group">
-          View All <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+        <Link
+          href={viewAllHref}
+          className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1 transition-colors group"
+        >
+          View All{' '}
+          <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </Link>
       )}
     </div>
@@ -419,7 +537,8 @@ function SectionHeader({ title, subtitle, viewAllHref, icon: IconComp }: {
 function CountdownTimer({ endsAt }: { endsAt?: string | null }) {
   const target = endsAt ? new Date(endsAt).getTime() : NaN;
   const [remaining, setRemaining] = useState(() =>
-    Number.isNaN(target) ? 0 : Math.max(0, target - Date.now()));
+    Number.isNaN(target) ? 0 : Math.max(0, target - Date.now()),
+  );
 
   useEffect(() => {
     if (Number.isNaN(target)) return;
@@ -438,11 +557,17 @@ function CountdownTimer({ endsAt }: { endsAt?: string | null }) {
   const pad = (n: number) => String(n).padStart(2, '0');
   return (
     <div className="flex items-center gap-1">
-      <div className="bg-slate-900 text-white text-xs font-bold px-1.5 py-1 rounded">{pad(time.h)}</div>
+      <div className="bg-slate-900 text-white text-xs font-bold px-1.5 py-1 rounded">
+        {pad(time.h)}
+      </div>
       <span className="text-slate-900 font-bold">:</span>
-      <div className="bg-slate-900 text-white text-xs font-bold px-1.5 py-1 rounded">{pad(time.m)}</div>
+      <div className="bg-slate-900 text-white text-xs font-bold px-1.5 py-1 rounded">
+        {pad(time.m)}
+      </div>
       <span className="text-slate-900 font-bold">:</span>
-      <div className="bg-slate-900 text-white text-xs font-bold px-1.5 py-1 rounded">{pad(time.s)}</div>
+      <div className="bg-slate-900 text-white text-xs font-bold px-1.5 py-1 rounded">
+        {pad(time.s)}
+      </div>
     </div>
   );
 }
@@ -477,8 +602,13 @@ const DEFAULT_HERO = [
   },
 ];
 
-
-function HeroBannerCarousel({ formatCurrencyValue, banners }: { formatCurrencyValue: (n: number) => string, banners?: any[] }) {
+function HeroBannerCarousel({
+  formatCurrencyValue,
+  banners,
+}: {
+  formatCurrencyValue: (n: number) => string;
+  banners?: any[];
+}) {
   const [current, setCurrent] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { country } = useRegion();
@@ -505,7 +635,9 @@ function HeroBannerCarousel({ formatCurrencyValue, banners }: { formatCurrencyVa
 
   useEffect(() => {
     timeoutRef.current = setTimeout(advance, 5000);
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [current, advance]);
 
   const banner = activeBanners[current];
@@ -527,14 +659,20 @@ function HeroBannerCarousel({ formatCurrencyValue, banners }: { formatCurrencyVa
     <div className="relative">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         {/* Main banner */}
-        <div className={`md:col-span-3 bg-linear-to-r ${gradient} rounded-xl overflow-hidden relative h-56 md:h-72 flex items-center p-5 md:p-8 transition-all duration-700`}>
+        <div
+          className={`md:col-span-3 bg-linear-to-r ${gradient} rounded-xl overflow-hidden relative h-56 md:h-72 flex items-center p-5 md:p-8 transition-all duration-700`}
+        >
           {/* The gradient stays behind the artwork rather than being replaced by
               it: a banner image that 404s then degrades to a styled panel with
               legible text instead of an empty box. */}
           {artwork && <BannerArtwork src={artwork} alt={banner.headline || 'Promotion'} />}
           <div className="relative z-10 max-w-md">
-            <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1.5 mb-4 inline-block uppercase tracking-widest rounded-full">{banner.tag}</span>
-            <h2 className="text-white text-2xl md:text-4xl font-bold mb-4 leading-tight whitespace-pre-line">{headline}</h2>
+            <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1.5 mb-4 inline-block uppercase tracking-widest rounded-full">
+              {banner.tag}
+            </span>
+            <h2 className="text-white text-2xl md:text-4xl font-bold mb-4 leading-tight whitespace-pre-line">
+              {headline}
+            </h2>
             <Link
               href={banner.ctaHref || '/category-list'}
               className="inline-flex items-center gap-2 bg-white text-slate-900 font-bold px-6 py-2.5 text-sm rounded-lg hover:bg-slate-50 hover:shadow-lg transition-all"
@@ -542,7 +680,11 @@ function HeroBannerCarousel({ formatCurrencyValue, banners }: { formatCurrencyVa
               {banner.cta} <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          {!artwork && (() => { const I = iconMap[Object.keys(iconMap)[current % Object.keys(iconMap).length]]; return <I className="absolute -right-4 -bottom-4 w-56 h-56 text-white/10" />; })()}
+          {!artwork &&
+            (() => {
+              const I = iconMap[Object.keys(iconMap)[current % Object.keys(iconMap).length]];
+              return <I className="absolute -right-4 -bottom-4 w-56 h-56 text-white/10" />;
+            })()}
 
           {/* Carousel dots */}
           <div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 z-10">
@@ -556,34 +698,58 @@ function HeroBannerCarousel({ formatCurrencyValue, banners }: { formatCurrencyVa
                 aria-label={`Go to slide ${i + 1}`}
                 aria-current={i === current ? 'true' : undefined}
               >
-                <span className={`block h-1.5 rounded-full transition-all duration-300 ${i === current ? 'w-6 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/70'}`} />
+                <span
+                  className={`block h-1.5 rounded-full transition-all duration-300 ${i === current ? 'w-6 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/70'}`}
+                />
               </button>
             ))}
           </div>
 
           {/* Arrows — desktop only. On a phone they sat directly on top of the
               headline; the dots below and the 5s auto-advance cover mobile. */}
-          <button onClick={() => setCurrent((current - 1 + total) % total)} className="hidden md:block absolute left-3 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors z-10 backdrop-blur-sm" aria-label="Previous slide">
+          <button
+            onClick={() => setCurrent((current - 1 + total) % total)}
+            className="hidden md:block absolute left-3 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors z-10 backdrop-blur-sm"
+            aria-label="Previous slide"
+          >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <button onClick={() => setCurrent((current + 1) % total)} className="hidden md:block absolute right-3 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors z-10 backdrop-blur-sm" aria-label="Next slide">
+          <button
+            onClick={() => setCurrent((current + 1) % total)}
+            className="hidden md:block absolute right-3 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors z-10 backdrop-blur-sm"
+            aria-label="Next slide"
+          >
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Side banners */}
+        {/* Side tiles. Navigation only — the "iPhone 15 Pro, New Arrival" and
+            "Smart TVs, Up to 60% Off" tiles that stood here were hard-coded
+            claims no listing or campaign backed. */}
         <div className="hidden md:flex flex-col gap-3">
-          <Link href="/category/mobiles-tablets" className="flex-1 bg-linear-to-br from-indigo-600 to-purple-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all">
-            <span className="text-yellow-300 font-bold text-[10px] uppercase tracking-widest mb-1">New Arrival</span>
-            <h3 className="text-white font-bold text-lg leading-tight">iPhone 15 Pro</h3>
-            <p className="text-indigo-200 text-xs mt-1">Titanium. So strong. So light.</p>
-            <Smartphone className="absolute -right-2 -bottom-2 w-24 h-24 text-white/10 group-hover:text-white/15 transition-colors" />
+          <Link
+            href="/flash-deals"
+            className="flex-1 bg-linear-to-br from-rose-600 to-orange-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all"
+          >
+            <span className="text-yellow-200 font-bold text-[10px] uppercase tracking-widest mb-1">
+              Live now
+            </span>
+            <h3 className="text-white font-bold text-lg leading-tight">Flash deals</h3>
+            <p className="text-rose-100 text-xs mt-1">Time-limited offers from verified sellers</p>
+            <Zap className="absolute -right-2 -bottom-2 w-24 h-24 text-white/10 group-hover:text-white/15 transition-colors" />
           </Link>
-          <Link href="/category/appliances" className="flex-1 bg-linear-to-br from-emerald-600 to-teal-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all">
-            <span className="text-yellow-300 font-bold text-[10px] uppercase tracking-widest mb-1">Super Saver</span>
-            <h3 className="text-white font-bold text-lg leading-tight">Smart TVs</h3>
-            <p className="text-emerald-200 text-xs mt-1">Up to 60% Off</p>
-            <Tv className="absolute -right-2 -bottom-2 w-24 h-24 text-white/10 group-hover:text-white/15 transition-colors" />
+          <Link
+            href="/new-arrivals"
+            className="flex-1 bg-linear-to-br from-indigo-600 to-purple-600 rounded-xl p-5 relative overflow-hidden flex flex-col justify-center group hover:shadow-lg transition-all"
+          >
+            <span className="text-yellow-300 font-bold text-[10px] uppercase tracking-widest mb-1">
+              Just landed
+            </span>
+            <h3 className="text-white font-bold text-lg leading-tight">New arrivals</h3>
+            <p className="text-indigo-200 text-xs mt-1">
+              The latest listings across every category
+            </p>
+            <Sparkles className="absolute -right-2 -bottom-2 w-24 h-24 text-white/10 group-hover:text-white/15 transition-colors" />
           </Link>
         </div>
       </div>
@@ -613,7 +779,10 @@ function BannerArtwork({ src, alt }: { src: string; alt: string }) {
         fetchPriority="high"
         decoding="async"
       />
-      <div className="absolute inset-0 bg-linear-to-r from-slate-950/80 via-slate-950/45 to-transparent" aria-hidden="true" />
+      <div
+        className="absolute inset-0 bg-linear-to-r from-slate-950/80 via-slate-950/45 to-transparent"
+        aria-hidden="true"
+      />
     </>
   );
 }
@@ -646,7 +815,10 @@ function TrustBadgeStrip({ title }: { title?: string }) {
             ? `${badge.subtitle} ${formatCurrencyValue(badge.thresholdAmount)}`
             : badge.subtitle;
           return (
-            <div key={badge.id} className="flex items-center gap-2.5 bg-white border border-slate-200/80 rounded-xl px-4 py-3 shadow-sm min-w-[210px] shrink-0">
+            <div
+              key={badge.id}
+              className="flex items-center gap-2.5 bg-white border border-slate-200/80 rounded-xl px-4 py-3 shadow-sm min-w-[210px] shrink-0"
+            >
               <Icon className={`w-5 h-5 shrink-0 ${badge.color}`} aria-hidden="true" />
               <div className="min-w-0">
                 <p className="text-sm font-bold text-slate-800 truncate">{badge.title}</p>
@@ -661,12 +833,24 @@ function TrustBadgeStrip({ title }: { title?: string }) {
 }
 
 // ── Product Grid Section ──────────────────────────────────────────────────
-// Renders a named category section with optional brand promos beneath.
-// If `sellerProducts` is provided, real admin-approved seller items are
-// prepended to the grid (capped at 5) ahead of the static demo products.
-// This is the Amazon/Flipkart-style injection mechanism.
+// Renders a named section with optional brand promos beneath. `sellerProducts`
+// are the market's approved catalogue rows grouped by category (the category
+// rails); `products` are the rows a feed section returned (trending, new
+// arrivals, best sellers …). Seller rows lead, feed rows fill up to five.
 
-function ProductGridSection({ title, subtitle, products, viewAllHref, icon, bgClass, borderAccent, sellerProducts, formatCurrencyValue, brandPromos, brandLookup }: {
+function ProductGridSection({
+  title,
+  subtitle,
+  products,
+  viewAllHref,
+  icon,
+  bgClass,
+  borderAccent,
+  sellerProducts,
+  formatCurrencyValue,
+  brandPromos,
+  brandLookup,
+}: {
   title: string;
   subtitle?: string;
   products: HomeProduct[];
@@ -692,19 +876,19 @@ function ProductGridSection({ title, subtitle, products, viewAllHref, icon, bgCl
   });
 
   const hasSellerItems = sellerProducts && sellerProducts.length > 0;
-  // Show up to 5 catalogue items. `products` is empty whenever the home feed is
-  // live, so the demo array only ever fills slots on a storefront with no
-  // catalogue behind it at all.
+  // Up to five cards: seller rows first, then whatever the feed section holds.
   const sellerSlots = hasSellerItems ? sellerProducts!.slice(0, 5) : [];
-  const demoSlots = products.slice(0, Math.max(0, 5 - sellerSlots.length));
+  const feedSlots = products.slice(0, Math.max(0, 5 - sellerSlots.length));
   const verifiedCount = sellerSlots.filter((p) => p?.sellerVerified).length;
 
   // A live feed can legitimately return an empty section (nothing trending yet,
   // no deals today). Render nothing rather than a heading over an empty grid.
-  if (sellerSlots.length === 0 && demoSlots.length === 0) return null;
+  if (sellerSlots.length === 0 && feedSlots.length === 0) return null;
 
   return (
-    <section className={`${bgClass || 'bg-white'} border border-slate-200/80 rounded-xl p-5 shadow-sm relative overflow-hidden`}>
+    <section
+      className={`${bgClass || 'bg-white'} border border-slate-200/80 rounded-xl p-5 shadow-sm relative overflow-hidden`}
+    >
       {borderAccent && <div className={`absolute top-0 left-0 w-full h-1 ${borderAccent}`} />}
       <SectionHeader title={title} subtitle={subtitle} viewAllHref={viewAllHref} icon={icon} />
 
@@ -724,11 +908,18 @@ function ProductGridSection({ title, subtitle, products, viewAllHref, icon, bgCl
       <div className="card-grid-2-4">
         {/* Seller products first (with blue VERIFIED SELLER badge) */}
         {sellerSlots.map((product) => (
-          <SellerProductCard key={product.id} product={product} formatCurrencyValue={formatCurrencyValue} />
+          <SellerProductCard
+            key={product.id}
+            product={product}
+            formatCurrencyValue={formatCurrencyValue}
+          />
         ))}
-        {/* Demo products fill remaining grid slots */}
-        {demoSlots.map((product) => (
-          <ProductCard key={product.id} product={product} formatCurrencyValue={formatCurrencyValue} />
+        {feedSlots.map((product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            formatCurrencyValue={formatCurrencyValue}
+          />
         ))}
       </div>
 
@@ -742,11 +933,18 @@ function ProductGridSection({ title, subtitle, products, viewAllHref, icon, bgCl
         <div className="mt-4 pt-4 border-t border-slate-100">
           <div className="flex items-center gap-2 mb-3">
             <Crown className="w-4 h-4 text-amber-500" />
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Top Brands in {title}</h3>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+              Top Brands in {title}
+            </h3>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {resolvedBrandPromos.map(({ brand, href }) => (
-              <BrandPromoCard key={brand.id} brand={brand} href={href} formatCurrencyValue={formatCurrencyValue} />
+              <BrandPromoCard
+                key={brand.id}
+                brand={brand}
+                href={href}
+                formatCurrencyValue={formatCurrencyValue}
+              />
             ))}
           </div>
         </div>
@@ -767,7 +965,10 @@ function FAQSection() {
 
   return (
     <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-      <SectionHeader title="Frequently Asked Questions" subtitle={`Everything you need to know about KARTSEEK Marketplace in ${country.name}`} />
+      <SectionHeader
+        title="Frequently Asked Questions"
+        subtitle={`Everything you need to know about KARTSEEK Marketplace in ${country.name}`}
+      />
       <div className="space-y-2">
         {faqs.map((faq, i) => (
           <div key={i} className="border border-slate-200/80 rounded-lg overflow-hidden">
@@ -776,7 +977,9 @@ function FAQSection() {
               className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
             >
               <h3 className="text-sm font-semibold text-slate-800">{faq.q}</h3>
-              <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${openIndex === i ? 'rotate-90' : ''}`} />
+              <ChevronRight
+                className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${openIndex === i ? 'rotate-90' : ''}`}
+              />
             </button>
             {openIndex === i && (
               <div className="px-4 pb-4 text-sm text-slate-600 leading-relaxed animate-in fade-in">
@@ -792,29 +995,44 @@ function FAQSection() {
 
 // ── Campaign Banner Card ──────────────────────────────────────────────────
 
-function CampaignBannerCard({ banner, formatCurrencyValue }: { banner: CampaignBanner | any; formatCurrencyValue: (n: number) => string }) {
+function CampaignBannerCard({
+  banner,
+  formatCurrencyValue,
+}: {
+  banner: CampaignBanner | any;
+  formatCurrencyValue: (n: number) => string;
+}) {
   const Icon = getCatIcon(banner.icon);
   const sub = banner.startingPrice
     ? `${banner.subheadline} ${formatCurrencyValue(banner.startingPrice)}`
     : banner.subheadline;
   // Same two defences as the hero: an admin-authored banner has an image and
   // no gradient class, and neither field can be assumed present.
-  const artwork: string | undefined = banner.imageUrl || banner.image || banner.bannerUrl || undefined;
+  const artwork: string | undefined =
+    banner.imageUrl || banner.image || banner.bannerUrl || undefined;
   const gradient: string = banner.gradient || 'from-slate-800 to-slate-900';
   return (
     <section>
-      <Link href={banner.ctaHref || '/'} className={`block bg-linear-to-r ${gradient} rounded-xl p-6 md:p-8 text-white relative overflow-hidden group hover:shadow-xl transition-all`}>
+      <Link
+        href={banner.ctaHref || '/'}
+        className={`block bg-linear-to-r ${gradient} rounded-xl p-6 md:p-8 text-white relative overflow-hidden group hover:shadow-xl transition-all`}
+      >
         {artwork && <BannerArtwork src={artwork} alt={banner.headline || 'Campaign'} />}
         <div className="relative z-10 flex items-center gap-6">
           <div className="flex-1">
-            <span className="bg-white/20 backdrop-blur-sm text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">{banner.tag}</span>
+            <span className="bg-white/20 backdrop-blur-sm text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">
+              {banner.tag}
+            </span>
             <h3 className="text-xl md:text-2xl font-bold mt-3 mb-1">{banner.headline}</h3>
             <p className="text-sm opacity-80">{sub}</p>
             <span className="inline-flex items-center gap-2 bg-white text-slate-900 font-bold px-5 py-2 text-sm rounded-lg mt-4 group-hover:shadow-md transition-all">
-              {banner.cta} <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              {banner.cta}{' '}
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </span>
           </div>
-          {!artwork && <Icon className="w-24 h-24 md:w-32 md:h-32 opacity-20 shrink-0 hidden md:block" />}
+          {!artwork && (
+            <Icon className="w-24 h-24 md:w-32 md:h-32 opacity-20 shrink-0 hidden md:block" />
+          )}
         </div>
       </Link>
     </section>
@@ -825,14 +1043,19 @@ function CampaignBannerCard({ banner, formatCurrencyValue }: { banner: CampaignB
 // MAIN HOMEPAGE
 // ══════════════════════════════════════════════════════════════════════════
 
-// ── Seller Product Card (category-injected) ──────────────────────────────
-// Displayed inside existing category sections — matches the demo ProductCard
-// styling but includes a verified seller badge and real price/category data.
+// ── Seller Product Card (category rails) ─────────────────────────────────
+// The card for the market's approved catalogue rows, with the seller badge
+// and the category trail the feed sections do not carry.
 
-function SellerProductCard({ product, formatCurrencyValue }: { product: any; formatCurrencyValue: (n: number) => string }) {
-  const discount = product.mrp > product.price
-    ? Math.round((1 - product.price / product.mrp) * 100)
-    : 0;
+function SellerProductCard({
+  product,
+  formatCurrencyValue,
+}: {
+  product: any;
+  formatCurrencyValue: (n: number) => string;
+}) {
+  const discount =
+    product.mrp > product.price ? Math.round((1 - product.price / product.mrp) * 100) : 0;
   const rating = product.rating ?? 4.0;
   const reviews = product.reviews ?? 0;
   // The detail route resolves a product UUID. This used to synthesise a slug from
@@ -864,8 +1087,12 @@ function SellerProductCard({ product, formatCurrencyValue }: { product: any; for
         className="mt-2 mb-3 rounded-lg border border-slate-100"
       />
       <div className="flex-1 flex flex-col">
-        <p className="text-[10px] text-slate-400 font-semibold mb-0.5 uppercase tracking-wider">{product.brand || product.sellerName}</p>
-        <h3 className="font-semibold text-slate-800 text-sm mb-1 line-clamp-2 leading-snug group-hover:text-emerald-600 transition-colors">{product.name}</h3>
+        <p className="text-[10px] text-slate-400 font-semibold mb-0.5 uppercase tracking-wider">
+          {product.brand || product.sellerName}
+        </p>
+        <h3 className="font-semibold text-slate-800 text-sm mb-1 line-clamp-2 leading-snug group-hover:text-emerald-600 transition-colors">
+          {product.name}
+        </h3>
         {/* Star rating badge — matches ProductCard design */}
         <div className="flex items-center gap-1.5 mb-2">
           <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
@@ -877,22 +1104,28 @@ function SellerProductCard({ product, formatCurrencyValue }: { product: any; for
             only as far as it actually goes rather than "Electronics › undefined". */}
         {product.category && (
           <p className="text-[10px] text-slate-400 mb-2">
-            {product.category}{product.subcategory ? ` › ${product.subcategory}` : ''}
+            {product.category}
+            {product.subcategory ? ` › ${product.subcategory}` : ''}
           </p>
         )}
         <div className="mt-auto">
           <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5">
-            <span className="font-bold text-lg text-slate-900 whitespace-nowrap">{formatCurrencyValue(product.price)}</span>
+            <span className="font-bold text-lg text-slate-900 whitespace-nowrap">
+              {formatCurrencyValue(product.price)}
+            </span>
             {product.mrp > product.price && (
               <span className="flex items-baseline gap-1.5 whitespace-nowrap">
-                <span className="text-[11px] text-slate-400 line-through">{formatCurrencyValue(product.mrp)}</span>
+                <span className="text-[11px] text-slate-400 line-through">
+                  {formatCurrencyValue(product.mrp)}
+                </span>
                 <span className="text-[11px] text-green-600 font-bold">{discount}% off</span>
               </span>
             )}
           </div>
           {product.sellerName && (
             <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 min-w-0">
-              <Store className="w-2.5 h-2.5 shrink-0" /> <span className="truncate">{product.sellerName}</span>
+              <Store className="w-2.5 h-2.5 shrink-0" />{' '}
+              <span className="truncate">{product.sellerName}</span>
             </p>
           )}
         </div>
@@ -906,7 +1139,7 @@ export default function MarketplaceHome() {
   const { formatCurrencyValue, country } = useRegion();
   // Both feeds are scoped to the market being browsed, and both re-fetch when
   // it changes — banners, category sections and seller ranking all follow it.
-  const { feed, isLive, loading } = useMarketplaceHome(country.code);
+  const { feed, isLive, loading, refresh } = useMarketplaceHome(country.code);
 
   /**
    * When the current flash-deal window closes, or `null` if the feed does not
@@ -926,13 +1159,6 @@ export default function MarketplaceHome() {
   }, [feed]);
   const { groups: sellerGroups } = useApprovedByCategory(country.code);
 
-  // The market's domestic payment scheme, if it has one — Himyan/NAPS in Qatar,
-  // UPI in India, KNET in Kuwait. Drives the cashback banner below; markets
-  // without one simply do not show it.
-  const localPayment = getLocalPaymentMethods(country.code)[0];
-  // Offer thresholds scale with the currency so the figures stay plausible:
-  // a 150-unit reward is sensible in rupees, absurd in riyals.
-  const cashbackOffer = CASHBACK_OFFERS[country.code] ?? { reward: 15, minOrder: 100 };
   // Bundled campaign and city content, narrowed to this market.
   // The feed's campaign banners were fetched and then thrown away — this read
   // the bundled array unconditionally, so a campaign an admin scheduled never
@@ -947,9 +1173,15 @@ export default function MarketplaceHome() {
   const campaignBanners: any[] = feed?.campaignBanners?.length ? feed.campaignBanners : [];
 
   // ── Recommendation Engine ──
-  const { forYou, trending: recoTrending, crossModule, isLoading: recoLoading, trackClick } = useRecommendations('marketplace', null);
+  const {
+    forYou,
+    trending: recoTrending,
+    crossModule,
+    isLoading: recoLoading,
+    trackClick,
+  } = useRecommendations('marketplace', null);
 
-  // Real categories from the feed (with curated demo fallback when empty).
+  // Categories from the feed, or none.
   const categories = pickCategories(feed?.categories);
 
   // Brand promo cards need a *real* brand to link to. Neither source supplies
@@ -960,8 +1192,12 @@ export default function MarketplaceHome() {
   const [brandLookup, setBrandLookup] = useState<BrandLookup>(() => buildBrandLookup([]));
   useEffect(() => {
     let cancelled = false;
-    loadBrandLookup().then((l) => { if (!cancelled) setBrandLookup(l); });
-    return () => { cancelled = true; };
+    loadBrandLookup().then((l) => {
+      if (!cancelled) setBrandLookup(l);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Show a skeleton shimmer during the initial API fetch to prevent the "flash
@@ -996,12 +1232,15 @@ export default function MarketplaceHome() {
             </div>
           </div>
           {/* Product rows placeholder */}
-          {[1, 2].map(s => (
+          {[1, 2].map((s) => (
             <div key={s} className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
               <div className="h-5 w-48 bg-slate-200 rounded animate-pulse mb-4" />
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-lg border border-slate-100 p-3 space-y-3">
+                  <div
+                    key={i}
+                    className="bg-white rounded-lg border border-slate-100 p-3 space-y-3"
+                  >
                     <div className="w-full aspect-square bg-slate-200 rounded-md animate-pulse" />
                     <div className="h-4 w-3/4 bg-slate-200 rounded animate-pulse" />
                     <div className="h-3 w-1/2 bg-slate-200 rounded animate-pulse" />
@@ -1022,13 +1261,26 @@ export default function MarketplaceHome() {
   const renderSection = (section: any) => {
     switch (section.type) {
       case 'hero_slider':
-        return <HeroBannerCarousel key={section.id} formatCurrencyValue={formatCurrencyValue} banners={section.banners} />;
+        return (
+          <HeroBannerCarousel
+            key={section.id}
+            formatCurrencyValue={formatCurrencyValue}
+            banners={section.banners}
+          />
+        );
       case 'trust_badges':
         return <TrustBadgeStrip key={section.id} title={section.title} />;
       case 'category_grid':
         return (
-          <section key={section.id} className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-            <SectionHeader title={section.title || "Shop by Category"} subtitle={section.subtitle || "Explore 20+ categories"} viewAllHref={section.viewAllHref || "/category-list"} />
+          <section
+            key={section.id}
+            className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm"
+          >
+            <SectionHeader
+              title={section.title || 'Shop by Category'}
+              subtitle={section.subtitle || 'Explore 20+ categories'}
+              viewAllHref={section.viewAllHref || '/category-list'}
+            />
             {/* `.cat-grid` ladders 3→4→5→6→8→10 columns. The flat
                 `grid-cols-4 … gap-3` this replaces put four 56px tiles plus
                 three 12px gaps into a 256px content box on a 320px phone, so
@@ -1038,15 +1290,28 @@ export default function MarketplaceHome() {
                 const Icon = getCatIcon(cat.iconName);
                 const catImg = cat.imageUrl;
                 return (
-                  <Link key={cat.id} href={`/category/${cat.id}`} className="flex flex-col items-center justify-center gap-2 group">
-                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${!catImg ? cat.color : ''} group-hover:shadow-md group-hover:scale-105 transition-all duration-200 relative`}>
+                  <Link
+                    key={cat.id}
+                    href={`/category/${cat.id}`}
+                    className="flex flex-col items-center justify-center gap-2 group"
+                  >
+                    <div
+                      className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${!catImg ? cat.color : ''} group-hover:shadow-md group-hover:scale-105 transition-all duration-200 relative`}
+                    >
                       {catImg ? (
-                        <img src={catImg} alt={cat.label} className="w-full h-full object-cover" loading="lazy" />
+                        <img
+                          src={catImg}
+                          alt={cat.label}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
                       ) : (
                         <Icon className="w-6 h-6" />
                       )}
                     </div>
-                    <span className="text-[10px] md:text-[11px] font-medium text-slate-700 text-center leading-tight group-hover:text-blue-600 transition-colors">{cat.label}</span>
+                    <span className="text-[10px] md:text-[11px] font-medium text-slate-700 text-center leading-tight group-hover:text-blue-600 transition-colors">
+                      {cat.label}
+                    </span>
                   </Link>
                 );
               })}
@@ -1063,16 +1328,21 @@ export default function MarketplaceHome() {
          * broken page rather than a quiet promotions period. The dedicated
          * /flash-deals route says so in words; a home rail just steps aside.
          */
-        const deals = pickProducts(feed?.flashDeals, FLASH_DEALS, isLive);
+        const deals = pickProducts(feed?.flashDeals);
         if (deals.length === 0) return null;
         return (
-          <section key={section.id} className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm relative overflow-hidden">
+          <section
+            key={section.id}
+            className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm relative overflow-hidden"
+          >
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-red-500 via-orange-500 to-yellow-500" />
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
                   <Zap className="w-5 h-5 text-red-500 fill-red-500" />
-                  <h2 className="text-lg md:text-xl font-bold text-slate-900">{section.title || "Flash Deals"}</h2>
+                  <h2 className="text-lg md:text-xl font-bold text-slate-900">
+                    {section.title || 'Flash Deals'}
+                  </h2>
                 </div>
                 {flashDealsEndsAt && (
                   <div className="hidden md:flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">
@@ -1082,7 +1352,10 @@ export default function MarketplaceHome() {
                   </div>
                 )}
               </div>
-              <Link href={section.viewAllHref || "/offers"} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1">
+              <Link
+                href={section.viewAllHref || '/offers'}
+                className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1"
+              >
                 View All <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -1094,7 +1367,11 @@ export default function MarketplaceHome() {
                 quoted, and each card linked to a product page that would 404.
               */}
               {deals.map((product) => (
-                <ProductCard key={product.id} product={product} formatCurrencyValue={formatCurrencyValue} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  formatCurrencyValue={formatCurrencyValue}
+                />
               ))}
             </div>
           </section>
@@ -1104,10 +1381,10 @@ export default function MarketplaceHome() {
         return (
           <ProductGridSection
             key={section.id}
-            title={section.title || "Best of Electronics"}
-            subtitle={section.subtitle || "Top-rated products"}
-            products={pickProducts(null, ELECTRONICS_PRODUCTS, isLive)}
-            viewAllHref={section.viewAllHref || "/category/electronics"}
+            title={section.title || 'Best of Electronics'}
+            subtitle={section.subtitle || 'Top-rated products'}
+            products={[]}
+            viewAllHref={section.viewAllHref || '/category/electronics'}
             icon={Laptop}
             sellerProducts={sellerGroups['electronics']}
             formatCurrencyValue={formatCurrencyValue}
@@ -1117,30 +1394,39 @@ export default function MarketplaceHome() {
         return (
           <section key={section.id}>
             <div className="flex items-center gap-2 mb-3">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{section.title || "Top Brands"}</h3>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                {section.title || 'Top Brands'}
+              </h3>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {BRAND_PROMOS.electronics.flatMap((brand) => {
-                // Same resolution as the in-grid promo row: a card that maps to
-                // no catalogue brand is dropped rather than linked into a 404.
-                if (!brandLookup.isReady) return [{ brand, href: `/brand/${brand.id}` }];
-                const slug = brandLookup.resolve(brand);
-                return slug ? [{ brand, href: `/brand/${slug}` }] : [];
-              }).map(({ brand, href }) => (
-                <BrandPromoCard key={brand.id} brand={brand} href={href} formatCurrencyValue={formatCurrencyValue} />
-              ))}
+              {((feed?.brandPromos?.electronics ?? []) as HomeBrand[])
+                .flatMap((brand) => {
+                  // Same resolution as the in-grid promo row: a card that maps to
+                  // no catalogue brand is dropped rather than linked into a 404.
+                  if (!brandLookup.isReady) return [{ brand, href: `/brand/${brand.id}` }];
+                  const slug = brandLookup.resolve(brand);
+                  return slug ? [{ brand, href: `/brand/${slug}` }] : [];
+                })
+                .map(({ brand, href }) => (
+                  <BrandPromoCard
+                    key={brand.id}
+                    brand={brand}
+                    href={href}
+                    formatCurrencyValue={formatCurrencyValue}
+                  />
+                ))}
             </div>
           </section>
         );
       default:
         return (
-           /* Was pickProducts(null, ...), so this rail never looked at the feed. */
-           <ProductGridSection
-             key={section.id}
-             title={section.title || "Products"}
-             products={pickProducts(feed?.recommended, RECOMMENDED, isLive)}
-             formatCurrencyValue={formatCurrencyValue}
-           />
+          /* Was pickProducts(null, ...), so this rail never looked at the feed. */
+          <ProductGridSection
+            key={section.id}
+            title={section.title || 'Products'}
+            products={pickProducts(feed?.recommended)}
+            formatCurrencyValue={formatCurrencyValue}
+          />
         );
     }
   };
@@ -1149,12 +1435,11 @@ export default function MarketplaceHome() {
     // Background comes from the marketplace shell (`.mp-surface`); bottom-nav
     // clearance now lives on the footer so there is no dead gap above it.
     <div className="min-h-screen animate-in fade-in duration-300">
-      {/* The green "Live catalog — showing real marketplace data" strip that
-          used to sit here was a developer diagnostic on a customer-facing
-          storefront. It told shoppers nothing they need and implied, by
-          contrast, that the page is sometimes showing data that is not real.
-          `isLive` still drives whether the demo product arrays are rendered;
-          it just no longer announces itself. */}
+      {/* The one honest state for a feed that did not arrive: say so, offer a
+          retry, and leave the rails empty. It replaces two earlier behaviours —
+          a green "Live catalog" strip that implied the page sometimes showed
+          data that was not real, and the demo catalogue that then made it so. */}
+      {!isLive && <HomeFeedUnavailable onRetry={refresh} />}
 
       {/* ── Top Categories Navigation Bar ──────────────────────────── */}
       <div className="bg-white shadow-sm border-b border-slate-200/80 sticky top-(--mp-header-h) z-30">
@@ -1169,7 +1454,10 @@ export default function MarketplaceHome() {
                 {cat.label}
               </Link>
             ))}
-            <Link href="/category-list" className="text-blue-600 hover:underline cursor-pointer whitespace-nowrap font-bold">
+            <Link
+              href="/category-list"
+              className="text-blue-600 hover:underline cursor-pointer whitespace-nowrap font-bold"
+            >
               All Categories →
             </Link>
           </div>
@@ -1177,37 +1465,56 @@ export default function MarketplaceHome() {
       </div>
 
       <div className="max-w-[1400px] 3xl:max-w-app-wide 4xl:max-w-app-full mx-auto px-3 xs:px-4 space-y-6 pt-5 3xl:px-8">
-        
         {/* ══ FULL HOMEPAGE — Always rendered with all category sections ══ */}
         <>
-            {/* 1. Hero Banner Carousel */}
-            <HeroBannerCarousel formatCurrencyValue={formatCurrencyValue} banners={feed?.heroBanners} />
+          {/* 1. Hero Banner Carousel */}
+          <HeroBannerCarousel
+            formatCurrencyValue={formatCurrencyValue}
+            banners={feed?.heroBanners}
+          />
 
-            {/* 3. Shop by Category */}
-            <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-              <SectionHeader title="Shop by Category" subtitle="Explore 20+ categories" viewAllHref="/category-list" />
-              <div className="cat-grid pt-1">
-                {categories.map((cat) => {
-                  const Icon = getCatIcon(cat.iconName);
-                  const catImg = cat.imageUrl;
-                  return (
-                    <Link key={cat.id} href={`/category/${cat.id}`} className="flex flex-col items-center justify-center gap-2 group">
-                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${!catImg ? cat.color : ''} group-hover:shadow-md group-hover:scale-105 transition-all duration-200 relative`}>
-                        {catImg ? (
-                          <img src={catImg} alt={cat.label} className="w-full h-full object-cover" loading="lazy" />
-                        ) : (
-                          <Icon className="w-6 h-6" />
-                        )}
-                      </div>
-                      <span className="text-[10px] md:text-[11px] font-medium text-slate-700 text-center leading-tight group-hover:text-blue-600 transition-colors">{cat.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
+          {/* 3. Shop by Category */}
+          <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
+            <SectionHeader
+              title="Shop by Category"
+              subtitle="Explore 20+ categories"
+              viewAllHref="/category-list"
+            />
+            <div className="cat-grid pt-1">
+              {categories.map((cat) => {
+                const Icon = getCatIcon(cat.iconName);
+                const catImg = cat.imageUrl;
+                return (
+                  <Link
+                    key={cat.id}
+                    href={`/category/${cat.id}`}
+                    className="flex flex-col items-center justify-center gap-2 group"
+                  >
+                    <div
+                      className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${!catImg ? cat.color : ''} group-hover:shadow-md group-hover:scale-105 transition-all duration-200 relative`}
+                    >
+                      {catImg ? (
+                        <img
+                          src={catImg}
+                          alt={cat.label}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Icon className="w-6 h-6" />
+                      )}
+                    </div>
+                    <span className="text-[10px] md:text-[11px] font-medium text-slate-700 text-center leading-tight group-hover:text-blue-600 transition-colors">
+                      {cat.label}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
 
-            {/* 4. Flash Deals — hidden entirely when no campaign is running. */}
-            {pickProducts(feed?.flashDeals, FLASH_DEALS, isLive).length > 0 && (
+          {/* 4. Flash Deals — hidden entirely when no campaign is running. */}
+          {pickProducts(feed?.flashDeals).length > 0 && (
             <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-red-500 via-orange-500 to-yellow-500" />
               <div className="flex items-center justify-between mb-5">
@@ -1224,148 +1531,125 @@ export default function MarketplaceHome() {
                     </div>
                   )}
                 </div>
-                <Link href="/offers" className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1">
+                <Link
+                  href="/offers"
+                  className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1"
+                >
                   View All <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
               <div className="card-grid-2-4">
-                {pickProducts(feed?.flashDeals, FLASH_DEALS, isLive).map((product) => (
-                  <ProductCard key={product.id} product={product} formatCurrencyValue={formatCurrencyValue} />
+                {pickProducts(feed?.flashDeals).map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    formatCurrencyValue={formatCurrencyValue}
+                  />
                 ))}
               </div>
             </section>
-            )}
+          )}
 
-            {/* 5. Best of Electronics + Brand Cards */}
-            <ProductGridSection
-              title="Best of Electronics"
-              subtitle="Top-rated tech products"
-              products={pickProducts(null, ELECTRONICS_PRODUCTS, isLive)}
-              viewAllHref="/category/electronics"
-              icon={Laptop}
-              sellerProducts={sellerGroups['electronics']}
+          {/* 5. Best of Electronics + Brand Cards */}
+          <ProductGridSection
+            title="Best of Electronics"
+            subtitle="Top-rated tech products"
+            products={[]}
+            viewAllHref="/category/electronics"
+            icon={Laptop}
+            sellerProducts={sellerGroups['electronics']}
+            formatCurrencyValue={formatCurrencyValue}
+            brandLookup={brandLookup}
+            brandPromos={feed?.brandPromos?.electronics ?? []}
+          />
+
+          {/* 7. Fashion Store + Brand Cards */}
+          <ProductGridSection
+            title="Fashion Store"
+            subtitle="Latest trends & styles"
+            products={[]}
+            viewAllHref="/category/fashion"
+            icon={Shirt}
+            sellerProducts={sellerGroups['fashion']}
+            formatCurrencyValue={formatCurrencyValue}
+            brandLookup={brandLookup}
+            brandPromos={feed?.brandPromos?.fashion ?? []}
+          />
+
+          {/* 8. Home & Kitchen + Brand Cards */}
+          <ProductGridSection
+            title="Home & Kitchen"
+            subtitle="Everything for your home"
+            products={[]}
+            viewAllHref="/category/home-kitchen"
+            icon={Sofa}
+            sellerProducts={sellerGroups['home-kitchen']}
+            formatCurrencyValue={formatCurrencyValue}
+            brandLookup={brandLookup}
+            brandPromos={feed?.brandPromos?.home ?? []}
+          />
+
+          {/* 9. Seasonal campaign banner for this market */}
+          {campaignBanners[1] && (
+            <CampaignBannerCard
+              banner={campaignBanners[1]}
               formatCurrencyValue={formatCurrencyValue}
-              brandLookup={brandLookup}
-              brandPromos={feed?.brandPromos?.electronics ?? BRAND_PROMOS.electronics}
             />
+          )}
 
-            {/* 5b. Domestic payment cashback — rendered only where the region
-                has a domestic scheme to promote. This banner used to be an
-                unconditional UPI/rupee promotion, so a Doha shopper was offered
-                "₹150 off with GPay/PhonePe/Paytm" — a currency they do not pay
-                in and a payment network their bank cannot reach. */}
-            {localPayment && (
-              <section className="rounded-xl overflow-hidden relative">
-                <div className="bg-linear-to-r from-violet-600 via-purple-700 to-indigo-700 p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center shrink-0 text-3xl">💳</div>
-                    <div>
-                      <span className="bg-white/20 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest">
-                        {localPayment.label} Cashback
-                      </span>
-                      <h3 className="text-white text-xl font-black mt-1">
-                        Pay with {localPayment.label} &amp; save {formatCurrencyValue(cashbackOffer.reward, { decimals: 0 })} instantly
-                      </h3>
-                      <p className="text-violet-200 text-sm mt-0.5">
-                        {localPayment.description ?? `Available on all ${localPayment.label} payments`}. Minimum order {formatCurrencyValue(cashbackOffer.minOrder, { decimals: 0 })}.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center gap-2 shrink-0">
-                    <Link href="/offers" className="inline-flex items-center gap-2 bg-white text-violet-700 font-black px-6 py-2.5 text-sm rounded-lg hover:bg-violet-50 transition-all mt-1">
-                      Claim {formatCurrencyValue(cashbackOffer.reward, { decimals: 0 })} off <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                </div>
-              </section>
-            )}
+          {/* 10. Beauty & Personal Care + Brand Cards */}
+          <ProductGridSection
+            title="Beauty & Personal Care"
+            subtitle="Skincare, makeup & grooming"
+            products={[]}
+            viewAllHref="/category/beauty"
+            icon={Sparkles}
+            sellerProducts={sellerGroups['beauty']}
+            formatCurrencyValue={formatCurrencyValue}
+            brandLookup={brandLookup}
+            brandPromos={feed?.brandPromos?.beauty ?? []}
+          />
 
+          {/* 11. Sports & Fitness + Brand Cards */}
+          <ProductGridSection
+            title="Sports & Fitness"
+            subtitle="Gear up for performance"
+            products={[]}
+            viewAllHref="/category/sports"
+            icon={Dumbbell}
+            sellerProducts={sellerGroups['sports']}
+            formatCurrencyValue={formatCurrencyValue}
+            brandLookup={brandLookup}
+            brandPromos={feed?.brandPromos?.sports ?? []}
+          />
 
+          {/* 12. Toys & Baby Products + Brand Cards */}
+          <ProductGridSection
+            title="Toys & Baby Products"
+            subtitle="Fun for all ages"
+            products={[]}
+            viewAllHref="/category/toys-baby"
+            icon={Baby}
+            sellerProducts={sellerGroups['toys-baby']}
+            formatCurrencyValue={formatCurrencyValue}
+            brandLookup={brandLookup}
+            brandPromos={feed?.brandPromos?.toys ?? []}
+          />
 
-            {/* 7. Fashion Store + Brand Cards */}
-            <ProductGridSection
-              title="Fashion Store"
-              subtitle="Latest trends & styles"
-              products={pickProducts(null, FASHION_PRODUCTS, isLive)}
-              viewAllHref="/category/fashion"
-              icon={Shirt}
-              sellerProducts={sellerGroups['fashion']}
-              formatCurrencyValue={formatCurrencyValue}
-              brandLookup={brandLookup}
-              brandPromos={feed?.brandPromos?.fashion ?? BRAND_PROMOS.fashion}
-            />
+          {/* 13. Appliances + Brand Cards */}
+          <ProductGridSection
+            title="Appliances"
+            subtitle="Smart home essentials"
+            products={[]}
+            viewAllHref="/category/appliances"
+            icon={Tv}
+            sellerProducts={sellerGroups['appliances']}
+            formatCurrencyValue={formatCurrencyValue}
+            brandLookup={brandLookup}
+            brandPromos={feed?.brandPromos?.appliances ?? []}
+          />
 
-            {/* 8. Home & Kitchen + Brand Cards */}
-            <ProductGridSection
-              title="Home & Kitchen"
-              subtitle="Everything for your home"
-              products={pickProducts(null, HOME_PRODUCTS, isLive)}
-              viewAllHref="/category/home-kitchen"
-              icon={Sofa}
-              sellerProducts={sellerGroups['home-kitchen']}
-              formatCurrencyValue={formatCurrencyValue}
-              brandLookup={brandLookup}
-              brandPromos={feed?.brandPromos?.home ?? BRAND_PROMOS.home}
-            />
-
-            {/* 9. Seasonal campaign banner for this market */}
-            {campaignBanners[1] && (
-              <CampaignBannerCard banner={campaignBanners[1]} formatCurrencyValue={formatCurrencyValue} />
-            )}
-
-            {/* 10. Beauty & Personal Care + Brand Cards */}
-            <ProductGridSection
-              title="Beauty & Personal Care"
-              subtitle="Skincare, makeup & grooming"
-              products={pickProducts(null, BEAUTY_PRODUCTS, isLive)}
-              viewAllHref="/category/beauty"
-              icon={Sparkles}
-              sellerProducts={sellerGroups['beauty']}
-              formatCurrencyValue={formatCurrencyValue}
-              brandLookup={brandLookup}
-              brandPromos={feed?.brandPromos?.beauty ?? BRAND_PROMOS.beauty}
-            />
-
-            {/* 11. Sports & Fitness + Brand Cards */}
-            <ProductGridSection
-              title="Sports & Fitness"
-              subtitle="Gear up for performance"
-              products={pickProducts(null, SPORTS_PRODUCTS, isLive)}
-              viewAllHref="/category/sports"
-              icon={Dumbbell}
-              sellerProducts={sellerGroups['sports']}
-              formatCurrencyValue={formatCurrencyValue}
-              brandLookup={brandLookup}
-              brandPromos={feed?.brandPromos?.sports ?? BRAND_PROMOS.sports}
-            />
-
-            {/* 12. Toys & Baby Products + Brand Cards */}
-            <ProductGridSection
-              title="Toys & Baby Products"
-              subtitle="Fun for all ages"
-              products={pickProducts(null, TOYS_PRODUCTS, isLive)}
-              viewAllHref="/category/toys-baby"
-              icon={Baby}
-              sellerProducts={sellerGroups['toys-baby']}
-              formatCurrencyValue={formatCurrencyValue}
-              brandLookup={brandLookup}
-              brandPromos={feed?.brandPromos?.toys ?? BRAND_PROMOS.toys}
-            />
-
-            {/* 13. Appliances + Brand Cards */}
-            <ProductGridSection
-              title="Appliances"
-              subtitle="Smart home essentials"
-              products={pickProducts(null, APPLIANCES_PRODUCTS, isLive)}
-              viewAllHref="/category/appliances"
-              icon={Tv}
-              sellerProducts={sellerGroups['appliances']}
-              formatCurrencyValue={formatCurrencyValue}
-              brandLookup={brandLookup}
-              brandPromos={feed?.brandPromos?.appliances ?? BRAND_PROMOS.appliances}
-            />
-
-            {/* A "Made in India — Atmanirbhar Bharat" rail stood here, rendered
+          {/* A "Made in India — Atmanirbhar Bharat" rail stood here, rendered
                 unconditionally: an Indian flag, a tricolour bar and six hardcoded
                 Indian brands (boAt, Noise, Tata, Prestige, Mamaearth, Wildcraft)
                 shown to every shopper, including in Doha where the platform
@@ -1382,86 +1666,86 @@ export default function MarketplaceHome() {
                 market by hand is how this one ended up advertising Indian
                 manufacturing to Qatar. */}
 
-            {/* 14. Trending Now */}
-            <ProductGridSection
-              title="Trending Now"
-              subtitle="What everyone is buying"
-              products={pickProducts(feed?.trending, TRENDING_PRODUCTS, isLive)}
-              viewAllHref="/trending"
-              icon={TrendingUp}
-              formatCurrencyValue={formatCurrencyValue}
-              borderAccent="bg-linear-to-r from-violet-500 via-purple-500 to-fuchsia-500"
-            />
+          {/* 14. Trending Now */}
+          <ProductGridSection
+            title="Trending Now"
+            subtitle="What everyone is buying"
+            products={pickProducts(feed?.trending)}
+            viewAllHref="/trending"
+            icon={TrendingUp}
+            formatCurrencyValue={formatCurrencyValue}
+            borderAccent="bg-linear-to-r from-violet-500 via-purple-500 to-fuchsia-500"
+          />
 
-            {/* ── 🧠 Recommended For You (powered by recommendation engine) ── */}
-            <RecommendationCarousel
-              title="Recommended For You"
-              icon="🎯"
-              recommendations={forYou}
-              module="marketplace"
-              isLoading={recoLoading}
-              onCardClick={trackClick}
-            />
+          {/* ── 🧠 Recommended For You (powered by recommendation engine) ── */}
+          <RecommendationCarousel
+            title="Recommended For You"
+            icon="🎯"
+            recommendations={forYou}
+            module="marketplace"
+            isLoading={recoLoading}
+            onCardClick={trackClick}
+          />
 
-            {/* ── ✨ Explore Other Services ── */}
-            <CrossModulePicks
-              recommendations={crossModule}
-              currentModule="marketplace"
-              onCardClick={trackClick}
-            />
+          {/* ── ✨ Explore Other Services ── */}
+          <CrossModulePicks
+            recommendations={crossModule}
+            currentModule="marketplace"
+            onCardClick={trackClick}
+          />
 
-            {/* 15. New Arrivals */}
-            <ProductGridSection
-              title="New Arrivals"
-              subtitle="Just landed on KARTSEEK"
-              products={pickProducts(feed?.newArrivals, NEW_ARRIVALS, isLive)}
-              viewAllHref="/new-arrivals"
-              icon={Sparkles}
-              formatCurrencyValue={formatCurrencyValue}
-              borderAccent="bg-linear-to-r from-blue-500 via-cyan-500 to-teal-500"
-            />
+          {/* 15. New Arrivals */}
+          <ProductGridSection
+            title="New Arrivals"
+            subtitle="Just landed on KARTSEEK"
+            products={pickProducts(feed?.newArrivals)}
+            viewAllHref="/new-arrivals"
+            icon={Sparkles}
+            formatCurrencyValue={formatCurrencyValue}
+            borderAccent="bg-linear-to-r from-blue-500 via-cyan-500 to-teal-500"
+          />
 
-            {/* 16. Best Sellers */}
-            <ProductGridSection
-              title="Best Sellers"
-              subtitle="Top-rated by customers"
-              products={pickProducts(feed?.bestSellers, BEST_SELLERS, isLive)}
-              viewAllHref="/best-sellers"
-              icon={Award}
-              formatCurrencyValue={formatCurrencyValue}
-              borderAccent="bg-linear-to-r from-amber-500 via-yellow-500 to-orange-500"
-            />
+          {/* 16. Best Sellers */}
+          <ProductGridSection
+            title="Best Sellers"
+            subtitle="Top-rated by customers"
+            products={pickProducts(feed?.bestSellers)}
+            viewAllHref="/best-sellers"
+            icon={Award}
+            formatCurrencyValue={formatCurrencyValue}
+            borderAccent="bg-linear-to-r from-amber-500 via-yellow-500 to-orange-500"
+          />
 
-            {/* 17. Deals of the Day */}
-            <ProductGridSection
-              title="Deals of the Day"
-              subtitle="Massive savings, limited time"
-              products={pickProducts(feed?.dealsOfDay, DEALS_OF_DAY, isLive)}
-              viewAllHref="/deals"
-              icon={Flame}
-              formatCurrencyValue={formatCurrencyValue}
-              borderAccent="bg-linear-to-r from-red-500 via-rose-500 to-pink-500"
-            />
+          {/* 17. Deals of the Day */}
+          <ProductGridSection
+            title="Deals of the Day"
+            subtitle="Massive savings, limited time"
+            products={pickProducts(feed?.dealsOfDay)}
+            viewAllHref="/deals"
+            icon={Flame}
+            formatCurrencyValue={formatCurrencyValue}
+            borderAccent="bg-linear-to-r from-red-500 via-rose-500 to-pink-500"
+          />
 
-            {/* 18. Recommended For You */}
-            <ProductGridSection
-              title="Recommended For You"
-              subtitle="Personalized picks"
-              products={pickProducts(feed?.recommended, RECOMMENDED, isLive)}
-              viewAllHref="/recommended"
-              icon={Heart}
-              formatCurrencyValue={formatCurrencyValue}
-            />
+          {/* 18. Recommended For You */}
+          <ProductGridSection
+            title="Recommended For You"
+            subtitle="Personalized picks"
+            products={pickProducts(feed?.recommended)}
+            viewAllHref="/recommended"
+            icon={Heart}
+            formatCurrencyValue={formatCurrencyValue}
+          />
 
-            {/* 19. Sponsored Products */}
-            <ProductGridSection
-              title="Sponsored Products"
-              subtitle="Featured by sellers"
-              products={pickProducts(feed?.sponsored, SPONSORED_PRODUCTS, isLive)}
-              formatCurrencyValue={formatCurrencyValue}
-              bgClass="bg-slate-50"
-            />
-          </>
+          {/* 19. Sponsored Products */}
+          <ProductGridSection
+            title="Sponsored Products"
+            subtitle="Featured by sellers"
+            products={pickProducts(feed?.sponsored)}
+            formatCurrencyValue={formatCurrencyValue}
+            bgClass="bg-slate-50"
+          />
+        </>
 
         {/* A "Shop by City" section stood here. Every card linked to
              `/?city=<slug>` — a parameter this page never reads and
@@ -1473,15 +1757,20 @@ export default function MarketplaceHome() {
              Removed rather than restyled: it needs a city filter end to end and
              a real delivery-coverage source before it can tell the truth. */}
 
-
-
         {/* ── Explore Directory (SEO footer links) ────────────────── */}
         <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Explore All Categories</h2>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+            Explore All Categories
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {categories.slice(0, 12).map((cat: any) => (
               <div key={cat.id}>
-                <Link href={`/category/${cat.id}`} className="text-sm font-bold text-slate-800 hover:text-blue-600 hover:underline mb-2 block">{cat.label}</Link>
+                <Link
+                  href={`/category/${cat.id}`}
+                  className="text-sm font-bold text-slate-800 hover:text-blue-600 hover:underline mb-2 block"
+                >
+                  {cat.label}
+                </Link>
                 <div className="flex flex-col gap-0.5">
                   {(cat.subcategories || []).slice(0, 5).map((sub: any) => (
                     <Link
@@ -1493,7 +1782,12 @@ export default function MarketplaceHome() {
                     </Link>
                   ))}
                   {(cat.subcategories || []).length > 5 && (
-                    <Link href={`/category/${cat.id}`} className="text-xs text-blue-600 hover:underline mt-0.5">See more…</Link>
+                    <Link
+                      href={`/category/${cat.id}`}
+                      className="text-xs text-blue-600 hover:underline mt-0.5"
+                    >
+                      See more…
+                    </Link>
                   )}
                 </div>
               </div>
@@ -1509,7 +1803,6 @@ export default function MarketplaceHome() {
             layout — two `contentinfo` landmarks, duplicated link sets and a
             double copyright line. The layout footer is the single source of
             truth; its payment + compliance rows carry what was unique here. */}
-
       </div>
     </div>
   );

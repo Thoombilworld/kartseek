@@ -24,7 +24,12 @@ import {
 import { useRegion } from '@/lib/contexts/region-context';
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { useAuth } from '@/lib/contexts/auth-context';
-import { marketplaceApi } from '@/lib/api-endpoints';
+import {
+  getBankOffers,
+  getCoupons,
+  getGiftCardBalance,
+  validateCoupon,
+} from '@/lib/api/marketplace';
 import {
   marketplaceDeliveryFee,
   amountToFreeDelivery,
@@ -114,8 +119,7 @@ export default function CartPage() {
 
   useEffect(() => {
     let cancelled = false;
-    marketplaceApi
-      .getCoupons({ limit: 20 })
+    getCoupons({ limit: 20 })
       .then((res: any) => {
         if (cancelled) return;
         // The gateway wraps list payloads twice — rows sit at data.data.
@@ -149,8 +153,7 @@ export default function CartPage() {
 
   useEffect(() => {
     let cancelled = false;
-    marketplaceApi
-      .getBankOffers()
+    getBankOffers()
       .then((res: any) => {
         if (cancelled) return;
         const rows: any[] = res?.data?.data ?? res?.data ?? [];
@@ -240,7 +243,7 @@ export default function CartPage() {
 
     setCouponChecking(true);
     try {
-      const res: any = await marketplaceApi.validateCoupon({ code, cartTotal: subtotal });
+      const res: any = await validateCoupon({ code, cartTotal: subtotal });
       const result = res?.data ?? res;
       if (!result?.valid) {
         setCouponError(result?.reason || 'This coupon cannot be applied to your order.');
@@ -281,7 +284,7 @@ export default function CartPage() {
 
     setGiftCardChecking(true);
     try {
-      const res: any = await marketplaceApi.getGiftCardBalance({ code });
+      const res: any = await getGiftCardBalance(code);
       const card = res?.data ?? res;
       const balance = Number(card?.currentBalance) || 0;
       if (balance <= 0) {

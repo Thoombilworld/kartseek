@@ -9,13 +9,6 @@
       "autoPort": false
     },
     {
-      "name": "web",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:web"],
-      "port": 3000,
-      "autoPort": false
-    },
-    {
       "name": "api",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:api"],

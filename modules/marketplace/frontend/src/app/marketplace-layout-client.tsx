@@ -426,15 +426,15 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
           const city = addr.city || addr.town || addr.village || addr.county || addr.state || '';
           const country = addr.country || '';
 
-          // Auto-detect and set region
-          const cc = (addr.country_code || '').toUpperCase() as Exclude<
-            SupportedCountryCode,
-            'ALL'
-          >;
-          if (cc && REGIONS[cc]) {
-            setSelectedRegion(cc);
-          }
-
+          // The label only. This used to call `setSelectedRegion(country_code)`
+          // here, on every page load, which made the browser's physical
+          // location overwrite the market the server had already rendered for:
+          // the page arrived priced and stocked for the cookie's market, then
+          // hydration flipped the region (and rewrote the cookie), the SSR'd
+          // prices were re-formatted in another currency, and the next refresh
+          // rendered a different catalogue. A shopper in London who chose India
+          // was snapped back to the default market every time. The market is
+          // chosen through the picker, and only there; GPS may name the city.
           return city ? `${city}, ${country}` : country || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
         }
       } catch {}
@@ -473,7 +473,7 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
       // No geolocation API → same region fallback
       setLocation(detectViaRegion() || 'Select Location');
     }
-  }, [setSelectedRegion, country]);
+  }, [country]);
 
   useEffect(() => {
     detectLocation();

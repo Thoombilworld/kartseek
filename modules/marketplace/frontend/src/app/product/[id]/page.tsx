@@ -413,6 +413,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             decide independently, so a colour picked in one was invisible to
             the other two. */}
         <VariantProvider
+          // The client state under here — the chosen SKU, the gallery's active
+          // frame, the quantity — belongs to ONE product in ONE market. Keying
+          // the subtree on both means a different product (or the same product
+          // after a market switch) always mounts fresh, so Product A's
+          // selection can never be applied to Product B's variants.
+          key={`${product.id}:${market}`}
           rawVariants={product.variants}
           categorySlug={subcategorySlug ?? categorySlug}
           basePrice={payablePrice}

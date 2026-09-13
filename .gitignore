@@ -154,3 +154,7 @@ modules/*/backend/src/**/*.js.map
 # builds can run detached rather than holding a terminal for ten minutes. Kept
 # on disk because a failed layer's message is worth re-reading; never committed.
 .build-logs/
+
+# Playwright output (apps/web/e2e)
+test-results/
+playwright-report/
