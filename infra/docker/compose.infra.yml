@@ -325,6 +325,14 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      # TWO listeners, and which one a client uses is not a preference.
+      # PLAINTEXT advertises itself as `kafka:29092` and is the one for anything
+      # ON the network — every container in compose.services.yml, and kafka-ui
+      # below. PLAINTEXT_HOST advertises `localhost:9092` and is for the
+      # developer's own fleet running on the host. A container that bootstraps
+      # against 9092 is answered with metadata naming `localhost:9092` and then
+      # dials its own loopback: it looks like a broker outage and is not.
+      # Do not "simplify" these to one listener.
       KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT

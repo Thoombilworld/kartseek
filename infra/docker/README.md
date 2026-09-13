@@ -287,12 +287,29 @@ every commit) fails when it is stale. Change the registry, not the YAML.
 
 ### Start the infrastructure first
 
+**Docker Compose ≥ 2.24 is required** for this file — it uses the `env_file:
+[{ path, required }]` long syntax, and 2.20–2.23 fail at `docker compose
+config` with no useful hint. `docker compose version` to check.
+
 ```bash
 npm run infra:up        # datastores, nginx — AND kartseek-network, AND the 166 Kafka topics
 npm run stack:up:admin  # the twelve an administrator needs, built and started
 npm run stack:logs      # follow them
-npm run stack:down      # stop the application tier
+npm run stack:down      # stop and remove the 35 application containers, and only those
+npm run infra:down      # the one that takes the datastores down too
 ```
+
+`stack:down` is `scripts/stack/down.mjs`, which names the 35 services from
+`services.yaml`. It is deliberately not `docker compose down`: profiles gate
+`up`, not `down`, so a project-wide `down` takes Postgres, Redis, Kafka, Mongo,
+Elasticsearch, nginx **and `kartseek-network`** with it — and then `infra:up`
+has to run again before anything else will start.
+
+The first `stack:up` on a machine whose infrastructure containers predate the
+second `include` line **recreates** postgres, redis and kafka: the project's
+`config_files` label changed, so Compose considers them out of date. Data and
+the 166 Kafka topics survive — they are all on named volumes — but expect the
+restart, once.
 
 `infra:up` is not optional and not merely conventional:
 
@@ -326,11 +343,11 @@ builds at the end — use it knowing that.
 `env_file` gives each service the root `.env` (**required**) plus the
 untracked workspace files, `apps/api/.env` and, for a module service,
 `modules/<module>/backend/.env` (both optional). Those workspace files are
-where the ~120 platform variables live — `JWT_SECRET`, `ENCRYPTION_KEY`, the
-MFA and storage settings, the DDoS limits — and a container without them boots
-into a Joi validation failure naming the first one missing. `npm run env:init`
-writes the root `.env`; the workspace ones are a developer's own, copied from
-each `.env.example`.
+where the ~120 platform variables live — the MFA and storage settings, the
+DDoS limits, the feature switches — and a container without them boots into a
+Joi validation failure naming the first one missing. `npm run env:init` writes
+the root `.env`; the workspace ones are a developer's own, copied from each
+`.env.example`.
 
 The generated `environment:` block then **overrides every address and
 credential in them**, because `environment` beats `env_file` in Compose. That
@@ -341,11 +358,26 @@ registry: `postgres`, `redis`, `kafka:29092` (not 9092 — that listener
 advertises itself back as `localhost:9092`), `mongodb`, `elasticsearch`, every
 peer's container name, every port, and `NODE_ENV=production`.
 
+**`JWT_SECRET` and `ENCRYPTION_KEY` come from the ROOT `.env`, not from
+`apps/api/.env`.** They have to. `NODE_ENV=production` arms the gateway's own
+Joi gates: `JWT_SECRET` is refused if it contains `dev`, `test`, `change`,
+`example` or `placeholder`, and `ENCRYPTION_KEY` (64 hex characters) becomes
+required. A developer's `apps/api/.env` holds exactly the kind of value that
+refusal is aimed at, so the gateway threw at boot before anything listened.
+Both are `${VAR:?…}` in the generated file, so Compose refuses to start and
+names the variable instead. `npm run env:init` fills them into the root `.env`
+— and it is now re-runnable: on an existing `.env` it adds the keys that are
+missing or empty and never rewrites one that is set.
+
 A module service connects **as its own Postgres role** — `grocery_user` and
 friends, created by `init-roles.sh` (see above) — against the shared
-`kartseek_db`. `DB_SSL` is `false` everywhere: the images run
-`NODE_ENV=production`, which turns SSL on by default, and this Postgres speaks
-plaintext on a private network.
+`kartseek_db`. A service whose registry entry says `database: null` gets
+`DB_HOST` and `DB_PORT` but no name, role or password: it opens no connection,
+and the superuser credential has no business being in its environment.
+`DB_SSL` is `false` everywhere: the images run `NODE_ENV=production`, which
+turns SSL on by default, and this Postgres speaks plaintext on a private
+network. `DEV_AUTH_BYPASS` is pinned `false` rather than left to the
+`NODE_ENV` gate in `jwt-auth.guard.ts`.
 
 The console and the zones read **no** `.env` at all. Nothing in the root
 `.env` is theirs, `NEXT_PUBLIC_*` are inlined at build time, and keeping it out

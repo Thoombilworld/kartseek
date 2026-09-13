@@ -14,8 +14,11 @@ after (running services day to day, testing, and troubleshooting).
   is actually developed and verified against.
 - **npm** `>= 10`. The installed `packageManager` is npm 11; anything 10 or
   newer resolves the workspace the same way.
-- **Docker Desktop** with Compose v2.20 or newer (`docker compose version`),
-  for Postgres, Redis, Kafka, MongoDB, and Elasticsearch.
+- **Docker Desktop** with Compose **v2.24 or newer** (`docker compose version`),
+  for Postgres, Redis, Kafka, MongoDB, and Elasticsearch. 2.24 is a hard floor,
+  not a preference: `infra/docker/compose.services.yml` uses the `env_file:
+[{ path, required }]` long syntax, which 2.20–2.23 reject outright at
+  `docker compose config`.
 - **Git.**
 - **Mobile only** — Flutter 3.44 with Dart 3.12, for the three apps under
   `apps/customer`, `apps/partner`, and `apps/seller`.
