@@ -33,7 +33,8 @@ import type { ConfigService } from '@nestjs/config';
  * `ConfigModule` falls back to `apps/api/.env`.
  *
  * With a prefix, the order is the same one the module resolvers use —
- * `<PREFIX>_PASSWORD`, then `DB_PASSWORD` — and the refusal names both.
+ * `<PREFIX>_PASSWORD`, then `DB_PASSWORD`, then `DB_PASS` — and the refusal
+ * names every one it tried.
  *
  * ── The pool (AUD2-033) ─────────────────────────────────────────────────────
  *
@@ -50,8 +51,9 @@ import type { ConfigService } from '@nestjs/config';
 export interface DatabaseCredentialsOptions {
   /**
    * A module's variable prefix, e.g. `MARKETPLACE_DB`. `<PREFIX>_PASSWORD` is
-   * then tried before `DB_PASSWORD`, and the refusal names both. Omitted, only
-   * `DB_PASSWORD` is read — which is what the gateway and the core services do.
+   * then tried before `DB_PASSWORD` and `DB_PASS`, and the refusal names all
+   * three. Omitted, only the two shared spellings are read — which is what the
+   * gateway and the core services do.
    */
   envPrefix?: string;
 }
