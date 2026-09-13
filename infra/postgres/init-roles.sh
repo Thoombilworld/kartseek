@@ -19,6 +19,10 @@
 # There is no default password. The script exits non-zero, naming the variable,
 # rather than creating a role anyone could read the password for.
 #
+# Re-run it after anything that adds objects to a module schema as another role
+# — a `migration:run` executed as `postgres`, or a seed script — so the module
+# role picks up ownership of what appeared. It is idempotent by design.
+#
 # ── Why it also creates the extensions ───────────────────────────────────────
 #
 # IN3's initial migrations open with `CREATE EXTENSION IF NOT EXISTS` for
@@ -39,10 +43,17 @@
 #
 # ── What a role gets ─────────────────────────────────────────────────────────
 #
-#   USAGE + CREATE on its own schema, ALL on that schema's existing tables and
-#   sequences, and the same by default on whatever it creates later. Nothing on
-#   any other module's schema, and nothing on `public` — where `users`, `orders`
-#   and the gateway's own tables live.
+#   Ownership of its own schema and of every table, sequence and view already in
+#   it; USAGE + CREATE on it, and ALL by default on whatever it creates later.
+#   CREATE on the database, which is only the right to create NEW schemas and
+#   is what the initial migration's `CREATE SCHEMA IF NOT EXISTS` demands.
+#   Ownership of its migration ledger, `public.<module>_migrations`, which this
+#   script creates. Nothing on any other module's schema, and nothing else on
+#   `public` — where `users`, `orders` and the gateway's own tables live.
+#
+#   Ownership rather than grants, because ALTER TABLE, DROP TABLE and CREATE
+#   INDEX are owner-only: a role with every grant PostgreSQL can express still
+#   cannot run a migration against a table someone else owns.
 #
 # NOTE: this revokes `public` from the role by name. PostgreSQL also grants
 # USAGE on `public` to PUBLIC, which no per-role REVOKE removes — so a module
@@ -110,31 +121,94 @@ done
 # (the `isolated` profile, or `npm run db:split`) carries only its own.
 grant_in() {
   local db="$1" m="$2" role="$3"
-  psql_run --dbname "$db" -v schema="$m" -v role="$role" <<'SQL'
+  psql_run --dbname "$db" -v schema="$m" -v role="$role" -v db="$db" <<'SQL'
 CREATE SCHEMA IF NOT EXISTS :"schema";
+-- The role owns its schema, rather than merely having rights inside one owned
+-- by `postgres`. Ownership is what lets it DROP and re-CREATE its own objects,
+-- which a migration that alters a table has to do.
+ALTER SCHEMA :"schema" OWNER TO :"role";
 GRANT USAGE, CREATE ON SCHEMA :"schema" TO :"role";
 GRANT ALL ON ALL TABLES IN SCHEMA :"schema" TO :"role";
 GRANT ALL ON ALL SEQUENCES IN SCHEMA :"schema" TO :"role";
 ALTER DEFAULT PRIVILEGES IN SCHEMA :"schema" GRANT ALL ON TABLES TO :"role";
 ALTER DEFAULT PRIVILEGES IN SCHEMA :"schema" GRANT ALL ON SEQUENCES TO :"role";
-REVOKE ALL ON SCHEMA public FROM :"role";
 
--- The one thing a module legitimately owns outside its schema: its migration
--- ledger. IN3 put it at `public.<module>_migrations`, because TypeORM builds the
--- ledger before the first migration's up() runs and a schema that does not exist
--- yet cannot hold it. Without these two grants `migration:run` as a module role
--- fails on the ledger INSERT — a role that can build its whole schema but not
--- record that it did, which would re-run every migration on the next deploy.
+-- ── `public` ────────────────────────────────────────────────────────────────
 --
--- Granted only where the table already exists. The role is deliberately NOT
--- given CREATE on `public` (that is how a module would shadow `users`), so the
--- very first migration run against an empty database is still a superuser job
--- — the bootstrap, once, documented in infra/docker/README.md.
+-- Nothing on `public` except the right to traverse it. USAGE alone grants no
+-- access to any table in it — it is the permission to *name* objects there —
+-- and it is needed for the one object the role legitimately uses, its migration
+-- ledger below. Without it `migration:run` fails on the ledger with
+-- "permission denied for schema public".
+--
+-- PostgreSQL also grants USAGE on `public` to the pseudo-role PUBLIC, which no
+-- per-role REVOKE removes; that is revoked once per database further down, so
+-- this grant is what the role actually holds rather than a no-op.
+REVOKE ALL ON SCHEMA public FROM :"role";
+GRANT USAGE ON SCHEMA public TO :"role";
+
+-- ── Why the role needs CREATE on the database ───────────────────────────────
+--
+-- Every module's initial migration opens with `CREATE SCHEMA IF NOT EXISTS
+-- "<module>"`. PostgreSQL checks the CREATE privilege on the database BEFORE it
+-- checks whether the schema already exists, so that statement fails with
+-- "permission denied for database kartseek_db" for a role without it — even
+-- though the line above has already created the schema and the statement would
+-- do nothing. Without this grant a module role cannot run `migration:run` at
+-- all, and every deploy's schema step stays a superuser job.
+--
+-- What it actually permits is creating NEW schemas. It confers nothing on any
+-- schema that already exists: no read, no write, no drop. `CREATE SCHEMA
+-- <name>` on a name already taken is an error, so this is not a route to
+-- another module's data.
+GRANT CREATE ON DATABASE :"db" TO :"role";
+
+-- ── The migration ledger ────────────────────────────────────────────────────
+--
+-- The one thing a module legitimately owns outside its schema. IN3 put it at
+-- `public.<module>_migrations`, because TypeORM builds the ledger before the
+-- first migration's up() runs and a schema that does not exist yet cannot hold
+-- it. The role is deliberately NOT given CREATE on `public` — that is how a
+-- module would shadow `users` — so TypeORM cannot create the ledger itself, and
+-- `migration:run` as a module role would fail on the very first statement.
+--
+-- So create it here, as the superuser this script already runs as, with the
+-- three columns TypeORM's Postgres driver expects. TypeORM only checks that the
+-- table exists, not what its primary key is called, so the constraint name
+-- below does not have to match the one it would have generated.
+SELECT format(
+  'CREATE TABLE IF NOT EXISTS public.%I (id SERIAL PRIMARY KEY, "timestamp" bigint NOT NULL, name character varying NOT NULL)',
+  :'schema' || '_migrations')
+\gexec
+SELECT format('ALTER TABLE public.%I OWNER TO %I', :'schema' || '_migrations', :'role')
+\gexec
+SELECT format('ALTER SEQUENCE public.%I OWNER TO %I', :'schema' || '_migrations_id_seq', :'role')
+WHERE to_regclass('public.' || quote_ident(:'schema' || '_migrations_id_seq')) IS NOT NULL
+\gexec
 SELECT format('GRANT ALL ON TABLE public.%I TO %I', :'schema' || '_migrations', :'role')
-WHERE to_regclass('public.' || quote_ident(:'schema' || '_migrations')) IS NOT NULL
 \gexec
 SELECT format('GRANT ALL ON SEQUENCE public.%I TO %I', :'schema' || '_migrations_id_seq', :'role')
 WHERE to_regclass('public.' || quote_ident(:'schema' || '_migrations_id_seq')) IS NOT NULL
+\gexec
+
+-- ── Ownership of what is already there ──────────────────────────────────────
+--
+-- Grants are not enough for a schema that already has tables. Those were built
+-- by `synchronize` or by a migration run as `postgres`, so `postgres` owns
+-- them — and ALTER TABLE, DROP TABLE and CREATE INDEX are owner-only, no grant
+-- can confer them. A module role flipped onto a pre-existing schema would read
+-- and write its data happily and then fail on the first migration that changed
+-- a column.
+--
+-- Idempotent, and it does nothing on a schema the role already owns.
+SELECT format('ALTER TABLE %I.%I OWNER TO %I', schemaname, tablename, :'role')
+FROM pg_tables WHERE schemaname = :'schema'
+\gexec
+SELECT format('ALTER SEQUENCE %I.%I OWNER TO %I', schemaname, sequencename, :'role')
+FROM pg_sequences WHERE schemaname = :'schema'
+\gexec
+SELECT format('ALTER VIEW %I.%I OWNER TO %I', schemaname, viewname, :'role')
+FROM pg_views WHERE schemaname = :'schema'
 \gexec
 SQL
 }
@@ -144,6 +218,27 @@ extensions_in() {
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS postgis;
+SQL
+}
+
+# ── Close `public` to everyone who was not named ─────────────────────────────
+#
+# PostgreSQL grants USAGE on the `public` schema to the pseudo-role PUBLIC, so
+# every login role in the cluster can traverse it by default and no per-role
+# REVOKE takes that away. This is the one statement that does. It runs AFTER
+# the per-module grants above, each of which hands its own role the USAGE it
+# needs for its migration ledger — so the module roles keep exactly that and
+# nothing else, while any role added later starts with no access to `users`,
+# `orders` or the gateway's tables at all.
+#
+# It does not affect `postgres`: superusers bypass permission checks entirely,
+# and every apps/api service still connects as DB_USER=postgres today.
+#
+# CREATE was already revoked from PUBLIC in PostgreSQL 15 and later; this is
+# written to be correct on 14 as well, and is idempotent either way.
+close_public_in() {
+  psql_run --dbname "$1" <<'SQL'
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
 SQL
 }
 
@@ -161,8 +256,13 @@ for m in "${MODULES[@]}"; do
   if [ "$dedicated" != "$SHARED_DB" ] && db_exists "$dedicated"; then
     extensions_in "$dedicated"
     grant_in "$dedicated" "$m" "$role"
+    close_public_in "$dedicated"
     echo "init-roles: $dedicated.$m granted to $role"
   fi
 done
+
+# Last, so the per-module USAGE grants above are already in place.
+close_public_in "$SHARED_DB"
+echo "init-roles: public closed to PUBLIC in $SHARED_DB"
 
 echo "init-roles: ${#MODULES[@]} module roles ready"
