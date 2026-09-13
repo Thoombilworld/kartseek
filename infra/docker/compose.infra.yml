@@ -4,13 +4,15 @@
 # ⚠️  SECURITY: every credential below is a REQUIRED variable — `${VAR:?…}`,
 # never `${VAR:-a_default}`. Compose refuses to start, naming the variable, if
 # the root `.env` is missing or incomplete. That is deliberate: the defaults
-# used to be the literal `change_me_in_development`, published in tracked
-# source, so a deploy that forgot its env file came up *successfully* with a
-# password anyone reading this repository already knew (AUD2-022). Failing to
-# start is the louder failure, and the only one that cannot be missed.
+# used to be one literal placeholder password, published in tracked source, so a
+# deploy that forgot its env file came up *successfully* with a password anyone
+# reading this repository already knew (AUD2-022). Failing to start is the
+# louder failure, and the only one that cannot be missed.
 #
-# Copy `.env.example` to `.env` at the repository ROOT — the only file Compose
-# reads — and fill in every variable it lists.
+# `${VAR:?…}` only refuses a value that is unset or EMPTY — a placeholder string
+# satisfies it — which is why every secret in `.env.example` is left blank and
+# `npm run env:init` generates the real ones into the root `.env`, the only file
+# Compose reads. Do not `cp .env.example .env`.
 #
 # Host binding: the datastore ports below publish on ${DB_BIND}, which defaults
 # to 127.0.0.1. These are the ports behind a development gateway that may run
@@ -451,10 +453,17 @@ services:
       # Credentials on the check too: without them this now gets 401 and the
       # container would be `unhealthy` for ever, which is the failure mode
       # AUD2-020 is about on the other side of the stack.
+      #
+      # The `-u` argument is QUOTED. Compose interpolates the password into this
+      # string and `/bin/sh -c` then parses the result, so an unquoted value
+      # containing a space, `;`, a backtick or `$` would either break the check
+      # (unhealthy for ever) or run as a command inside the container, as root.
+      # `npm run env:init` generates hex, which needs no quoting — the quotes are
+      # for the password someone sets by hand.
       test:
         [
           'CMD-SHELL',
-          'curl -fsSL -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health | grep -qE "green|yellow"',
+          'curl -fsSL -u "elastic:${ELASTIC_PASSWORD}" http://localhost:9200/_cluster/health | grep -qE "green|yellow"',
         ]
       interval: 15s
       timeout: 10s
