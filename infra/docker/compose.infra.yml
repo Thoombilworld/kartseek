@@ -126,7 +126,11 @@ services:
       - postgres_marketplace_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${MARKETPLACE_DB_USER:-marketplace_user}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${MARKETPLACE_DB_USER:-marketplace_user} -d ${MARKETPLACE_DB_NAME:-kartseek_marketplace}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -153,7 +157,11 @@ services:
       - postgres_grocery_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${GROCERY_DB_USER:-grocery_user}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${GROCERY_DB_USER:-grocery_user} -d ${GROCERY_DB_NAME:-kartseek_grocery}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -177,7 +185,11 @@ services:
       - postgres_restaurant_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${RESTAURANT_DB_USER:-restaurant_user}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${RESTAURANT_DB_USER:-restaurant_user} -d ${RESTAURANT_DB_NAME:-kartseek_restaurant}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -201,7 +213,11 @@ services:
       - postgres_pharmacy_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${PHARMACY_DB_USER:-pharmacy_user}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${PHARMACY_DB_USER:-pharmacy_user} -d ${PHARMACY_DB_NAME:-kartseek_pharmacy}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -225,7 +241,11 @@ services:
       - postgres_doctor_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DOCTOR_DB_USER:-doctor_user}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${DOCTOR_DB_USER:-doctor_user} -d ${DOCTOR_DB_NAME:-kartseek_doctor}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -249,7 +269,11 @@ services:
       - postgres_hotel_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${HOTEL_DB_USER:-hotel_user}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${HOTEL_DB_USER:-hotel_user} -d ${HOTEL_DB_NAME:-kartseek_hotel}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -273,7 +297,8 @@ services:
       - postgres_taxi_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${TAXI_DB_USER:-taxi_user}']
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${TAXI_DB_USER:-taxi_user} -d ${TAXI_DB_NAME:-kartseek_taxi}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -297,7 +322,11 @@ services:
       - postgres_franchise_data:/var/lib/postgresql/data
       - ../postgres/init-extensions.sql:/docker-entrypoint-initdb.d/10-extensions.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${FRANCHISE_DB_USER:-franchise_user}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${FRANCHISE_DB_USER:-franchise_user} -d ${FRANCHISE_DB_NAME:-kartseek_franchise}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
