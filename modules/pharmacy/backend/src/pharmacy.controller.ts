@@ -560,28 +560,18 @@ export class PharmacyController {
   }
 
   // ── Admin console commands ────────────────────────────────────────────────
-  // The gateway's admin-* controllers address this service with dot-notation
-  // commands and none had a handler, so every admin screen for this module got
-  // "no matching message handler" — an empty 200 while the gateway fallbacks
-  // were in place, a 503 once they were removed. The implementations already
-  // existed; only the patterns were missing.
-
-  // `getAdminStoreList`, not `franchiseView.getStores` — the latter is scoped to
-  // one franchise, and the admin console sends only { page, limit, status }, so
-  // it filtered on an undefined franchiseId and the Stores screen was empty
-  // while the database held six.
-  @MessagePattern({ cmd: 'admin.pharmacy.stores' })
-  tcpAdminGetStores(@Payload() d: any) {
-    return this.svc.getAdminStoreList({
-      status: d?.status,
-      page: d?.page,
-      limit: d?.limit,
-      regionCode: d?.scope ?? d?.countryCode,
-    });
-  }
-
-  @MessagePattern({ cmd: 'admin.pharmacy.categories' })
-  tcpAdminGetCategories(@Payload() d: EmptyMessage) {
-    return this.svc.getCategories();
-  }
+  //
+  // They are not here any more. All NINETEEN `admin.pharmacy.*` commands the
+  // gateway sends live in `admin/admin.controller.ts`, including the two that
+  // used to sit at the bottom of this file (`admin.pharmacy.stores` and
+  // `admin.pharmacy.categories`). Seventeen had no handler at all, and a
+  // contract split two-to-seventeen across two files is one a reader has to
+  // reconstruct before they can check it (M3).
+  //
+  // The customer, seller and franchise surfaces stay here. The `admin_*`
+  // snake-case commands above — `admin_list_pharmacy_stores`,
+  // `approve_pharmacy_store`, `set_pharmacy_commission`,
+  // `get_pending_prescriptions`, `verify_prescription` — also stay: they are
+  // `pharmacy.controller.ts`'s own older admin surface on the gateway
+  // (`/pharmacy/admin/*`), a different set of routes from `/admin/pharmacy/*`.
 }

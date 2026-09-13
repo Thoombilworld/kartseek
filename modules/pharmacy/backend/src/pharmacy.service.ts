@@ -808,7 +808,7 @@ export class PharmacyService {
    * `regionCode`, the platform's ISO-2 identifier — not `countryCode`, which
    * carries a legacy alpha-3 default ('KEN') that nothing seeds.
    */
-  async approveStore(storeId: string, scope?: string) {
+  async approveStore(storeId: string, scope?: string, actorId?: string) {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
     // The first `assertInMarket` in this module. Until now suspend, approve and
@@ -819,18 +819,41 @@ export class PharmacyService {
     store.isOnline = true;
     store.isTemporarilyClosed = false;
     const saved = await this.storeRepo.save(store);
-    await this.kafka.publish('pharmacy.store.approved', { id: saved.id, name: saved.name });
+    // `actorId` and `market` on the event: a decision that cannot be traced to
+    // a person and a market is one nobody can review afterwards. It is optional
+    // because the older `/pharmacy/admin/:storeId/approve` route and the
+    // `approve_pharmacy_store` command do not carry an actor; the console route
+    // (`admin.pharmacy.approve`) always does, from the verified token.
+    await this.kafka.publish('pharmacy.store.approved', {
+      id: saved.id,
+      name: saved.name,
+      market: saved.regionCode,
+      actorId: actorId ?? null,
+      at: new Date().toISOString(),
+    });
     return saved;
   }
 
-  async suspendStore(storeId: string, reason?: string, scope?: string) {
+  async suspendStore(storeId: string, reason?: string, scope?: string, actorId?: string) {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) throw new NotFoundException(`Store ${storeId} not found`);
     assertInMarket(store.regionCode, scope, 'pharmacy', this.logger);
     store.status = PharmacyStoreStatus.SUSPENDED;
     store.isOnline = false;
     if (reason) store.rejectionReason = reason;
-    return this.storeRepo.save(store);
+    const saved = await this.storeRepo.save(store);
+    // Approve published an event and suspend did not, so a pharmacy going
+    // offline was invisible to every other service — the storefront cache and
+    // the franchise view both learned about it only on their next full read.
+    await this.kafka.publish('pharmacy.store.suspended', {
+      id: saved.id,
+      name: saved.name,
+      market: saved.regionCode,
+      reason: reason ?? null,
+      actorId: actorId ?? null,
+      at: new Date().toISOString(),
+    });
+    return saved;
   }
 
   /**
@@ -858,12 +881,18 @@ export class PharmacyService {
     // uniqueness spec's new where-object test rather than by review.
     const market = requireMarket(regionCode, 'stores', this.logger);
     if (market) where.regionCode = market;
-    return this.storeRepo.findAndCount({
+    const [data, total] = await this.storeRepo.findAndCount({
       where,
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
     });
+    // `{ data, total, page, limit }`, not the raw `[rows, count]` tuple
+    // `findAndCount` returns. Over TCP that tuple serialises as a two-element
+    // array, so every caller had to know that `response[0]` was the rows and
+    // `response[1]` the count — the shape the MODULES plan's Interfaces table
+    // replaces with the same envelope every other list in this module uses.
+    return { data, total, page, limit };
   }
 
   async setCommission(storeId: string, rate: number, scope?: string) {

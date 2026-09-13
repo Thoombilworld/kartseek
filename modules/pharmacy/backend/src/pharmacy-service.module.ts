@@ -6,6 +6,8 @@ import { KafkaModule } from '@app/kafka';
 import { PharmacyController } from './pharmacy.controller';
 import { PharmacyService } from './pharmacy.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
+import { PharmacyAdminController } from './admin/admin.controller';
+import { PharmacyAdminService } from './admin/admin.service';
 
 import {
   PharmacyStore,
@@ -16,6 +18,7 @@ import {
   PharmacyReview,
   PharmacyStaff,
   PharmacyPromotion,
+  PharmacySetting,
 } from './entities';
 
 const ENTITIES = [
@@ -27,6 +30,7 @@ const ENTITIES = [
   PharmacyReview,
   PharmacyStaff,
   PharmacyPromotion,
+  PharmacySetting,
 ];
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
@@ -120,8 +124,12 @@ const envSchema = buildEnvSchema({
     RedisModule,
     KafkaModule.forService('pharmacy-service'),
   ],
-  controllers: [PharmacyController],
-  providers: [PharmacyService, FranchiseViewService],
+  // `PharmacyAdminController` carries the nineteen `admin.pharmacy.*` commands
+  // the gateway's admin console sends; `PharmacyController` keeps the customer,
+  // seller and franchise surfaces. Both are TCP handlers — neither publishes an
+  // HTTP route that `HttpSurfaceGuard` would have to close.
+  controllers: [PharmacyController, PharmacyAdminController],
+  providers: [PharmacyService, PharmacyAdminService, FranchiseViewService],
   exports: [PharmacyService],
 })
 export class PharmacyServiceModule {}

@@ -10,6 +10,7 @@ import {
   PharmacyReview,
   PharmacyStaff,
   PharmacyPromotion,
+  PharmacySetting,
 } from './src/entities';
 
 /**
@@ -93,10 +94,12 @@ export const PharmacyDataSource = new DataSource({
     PharmacyReview,
     PharmacyStaff,
     PharmacyPromotion,
+    PharmacySetting,
   ],
   migrations: [
     'migrations/1786498300000-InitialPharmacySchema.ts',
     'migrations/1786502400000-DropDeadMarketColumns.ts',
+    'migrations/1786503100000-PharmacySettings.ts',
   ],
   migrationsTableName: PHARMACY_MIGRATIONS_TABLE,
   migrationsTransactionMode: 'each',
