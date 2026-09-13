@@ -1,0 +1,316 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  boardVerdict,
+  classifyLogLine,
+  composeVersionAtLeast,
+  driftCensus,
+  expectedBoardKeys,
+  expectedRole,
+  missingEnvKeys,
+  parseArgs,
+  readinessBody,
+  requiredComposeVars,
+  summarise,
+} from './validate.mjs';
+
+// ── classifyLogLine ─────────────────────────────────────────────────────────
+
+test('classifyLogLine catches the boot failures that matter', () => {
+  assert.equal(
+    classifyLogLine('[Nest] ERROR [ExceptionHandler] UnknownDependenciesException'),
+    'fatal',
+  );
+  assert.equal(classifyLogLine('ERROR [TypeOrmModule] Unable to connect to the database'), 'error');
+  assert.equal(classifyLogLine('QueryFailedError: relation "user.users" does not exist'), 'error');
+  // The words that are noise, not faults: a handled 404 and the throttler's own log line.
+  assert.equal(classifyLogLine('GET /api/v1/does-not-exist 404'), null);
+  assert.equal(classifyLogLine('LOG [RouterExplorer] Mapped {/health, GET} route'), null);
+});
+
+test('classifyLogLine catches the container-specific faults IN6 left behind', () => {
+  // A Joi failure: the env_file trio did not carry a platform variable.
+  assert.equal(
+    classifyLogLine('Error: Config validation error: "JWT_SECRET" is required'),
+    'fatal',
+  );
+  assert.equal(
+    classifyLogLine('Error: listen EADDRINUSE: address already in use :::3001'),
+    'fatal',
+  );
+  assert.equal(
+    classifyLogLine('error: password authentication failed for user "grocery_user"'),
+    'fatal',
+  );
+  // Host addressing leaked into an image: the 9092 listener advertises localhost.
+  assert.equal(
+    classifyLogLine('KafkaJSConnectionError: Connection error: connect to localhost:9092'),
+    'fatal',
+  );
+  assert.equal(classifyLogLine('connect ECONNREFUSED 127.0.0.1:5432'), 'fatal');
+  // A module role missing a grant, and schema drift.
+  assert.equal(
+    classifyLogLine('QueryFailedError: permission denied for table grocery_stores'),
+    'error',
+  );
+  assert.equal(classifyLogLine('error: column "mrp" does not exist'), 'error');
+  assert.equal(classifyLogLine('RedisUnavailableError: no connection to redis'), 'error');
+});
+
+test('classifyLogLine does not cry wolf over the lines every healthy boot prints', () => {
+  for (const line of [
+    'LOG [InstanceLoader] TypeOrmModule dependencies initialized',
+    'LOG [NestFactory] Starting Nest application...',
+    'LOG [Bootstrap] API Gateway running on: http://localhost:3001/api/v1',
+    'LOG [NestApplication] Nest application successfully started',
+    'LOG [KafkaProducer] Kafka producer connected to kafka:29092',
+    '🥦 Grocery Service — HTTP :3018 | gRPC :5010 | TCP :4008',
+    'GET /api/v1/admin/marketplace/sellers?country=QA 403',
+  ])
+    assert.equal(classifyLogLine(line), null, line);
+});
+
+// ── summarise ───────────────────────────────────────────────────────────────
+
+test('summarise reports the first failure and an exit code', () => {
+  assert.equal(
+    summarise([
+      { name: 'a', ok: true },
+      { name: 'b', ok: true },
+    ]).code,
+    0,
+  );
+  const bad = summarise([
+    { name: 'a', ok: true },
+    { name: 'b', ok: false, detail: 'boom' },
+  ]);
+  assert.equal(bad.code, 1);
+  assert.match(bad.report, /b .*boom/);
+});
+
+test('a skipped check is neither a pass nor a failure, and must carry its reason', () => {
+  const s = summarise([
+    { name: 'a', ok: true },
+    { name: 'edge proxy', ok: false, skipped: true, detail: 'nginx upstreams the host (IN11)' },
+  ]);
+  assert.equal(s.code, 0, 'a skipped check does not fail the run');
+  assert.equal(s.skipped, 1);
+  assert.equal(s.passed, 1);
+  assert.match(s.report, /~ edge proxy.*nginx upstreams the host/);
+  // A silent pass is what this exists to prevent: the reason is in the report.
+  assert.ok(!/✓ edge proxy/.test(s.report));
+});
+
+// ── argument parsing ────────────────────────────────────────────────────────
+
+test('parseArgs takes the profile either way round, and every flag', () => {
+  assert.deepEqual(parseArgs([]), {
+    profile: 'admin',
+    skipBuild: false,
+    keep: false,
+    json: false,
+  });
+  assert.equal(parseArgs(['--profile', 'full']).profile, 'full');
+  assert.equal(parseArgs(['--profile=full']).profile, 'full');
+  assert.equal(parseArgs(['--skip-build']).skipBuild, true);
+  assert.equal(parseArgs(['--keep']).keep, true);
+  assert.equal(parseArgs(['--json']).json, true);
+});
+
+test('parseArgs refuses a profile it cannot honour rather than falling back to admin', () => {
+  // `--profile` with no value used to mean "admin", which is a flag that does
+  // the opposite of what it says: a typo would silently validate twelve
+  // containers and report on thirty-five.
+  for (const argv of [['--profile'], ['--profile', 'everything'], ['--profile=']])
+    assert.throws(() => parseArgs(argv), /profile/i, JSON.stringify(argv));
+});
+
+// ── the Compose floor ───────────────────────────────────────────────────────
+
+test('composeVersionAtLeast compares numerically, not as text', () => {
+  // `env_file: [{ path, required }]` is rejected by 2.20-2.23 at `config` time.
+  assert.equal(composeVersionAtLeast('Docker Compose version v2.24.0', [2, 24]), true);
+  assert.equal(composeVersionAtLeast('Docker Compose version v2.23.3', [2, 24]), false);
+  assert.equal(composeVersionAtLeast('Docker Compose version v2.9.0', [2, 24]), false);
+  // The trap a string compare falls into: '5.5.0' < '2.24' lexically for the
+  // minor, and v5 is this machine's.
+  assert.equal(composeVersionAtLeast('Docker Compose version v5.5.0', [2, 24]), true);
+  assert.equal(composeVersionAtLeast('Docker Compose version v10.0.1', [2, 24]), true);
+  // Unparseable is not evidence of a new enough Compose.
+  assert.equal(composeVersionAtLeast('docker: command not found', [2, 24]), false);
+});
+
+// ── the root .env contract, read off the compose files themselves ───────────
+
+test('requiredComposeVars takes the keys that have no default, and only those', () => {
+  const yaml = [
+    'image: kartseek/web:${KARTSEEK_TAG:-dev}',
+    'REDIS_PASSWORD: ${REDIS_PASSWORD}',
+    'JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}',
+    "ports: - '${APP_BIND:-127.0.0.1}:3001:3001'",
+    'DB_NAME: ${POSTGRES_DB:-kartseek_db}',
+    'MONGO_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/x',
+  ].join('\n');
+  assert.deepEqual(requiredComposeVars(yaml), [
+    'JWT_SECRET',
+    'MONGO_ROOT_PASSWORD',
+    'REDIS_PASSWORD',
+  ]);
+});
+
+test('requiredComposeVars does not read the comments that describe the rule', () => {
+  // Both real compose files carry these lines. Taken literally they demand a
+  // variable called VAR, and the validator would then tell a developer with a
+  // complete .env to run env:init for a key that does not exist.
+  const yaml = [
+    '# every credential below is a REQUIRED variable — `${VAR:?…}`,',
+    '# never `${VAR:-a_default}`. Compose refuses to start.',
+    '  # the datastore ports below publish on ${DB_BIND}, which defaults to loopback',
+    'REDIS_PASSWORD: ${REDIS_PASSWORD}',
+  ].join('\n');
+  assert.deepEqual(requiredComposeVars(yaml), ['REDIS_PASSWORD']);
+});
+
+test('missingEnvKeys treats an empty value as missing, because ${VAR:?} does', () => {
+  const env = { JWT_SECRET: 'abc', REDIS_PASSWORD: '', POSTGRES_PASSWORD: '   ' };
+  assert.deepEqual(
+    missingEnvKeys(['JWT_SECRET', 'REDIS_PASSWORD', 'POSTGRES_PASSWORD', 'X'], env),
+    ['REDIS_PASSWORD', 'POSTGRES_PASSWORD', 'X'],
+  );
+});
+
+// ── what a service's readiness board has to say ─────────────────────────────
+
+const grocery = {
+  name: 'grocery-service',
+  kind: 'module-service',
+  database: { name: 'kartseek_db', schema: 'grocery', envPrefix: 'GROCERY_DB' },
+  dependsOn: ['postgres', 'redis', 'kafka'],
+};
+const gateway = {
+  name: 'api-gateway',
+  kind: 'gateway',
+  database: { name: 'kartseek_db', schema: 'public', envPrefix: 'DB' },
+  dependsOn: ['postgres', 'redis', 'kafka', 'mongodb'],
+};
+const auth = { name: 'auth-service', kind: 'core-service', database: null, dependsOn: ['redis'] };
+
+test('expectedBoardKeys comes from the registry, and the gateway spells Postgres its own way', () => {
+  assert.deepEqual(expectedBoardKeys(grocery), ['database', 'redis', 'kafka']);
+  assert.deepEqual(expectedBoardKeys(gateway), ['postgresql', 'redis', 'kafka', 'mongodb']);
+  // No database in the registry means no database check is owed — not that one
+  // is missing.
+  assert.deepEqual(expectedBoardKeys(auth), ['redis']);
+});
+
+test('boardVerdict accepts both wire shapes and fails a dependency that is not up', () => {
+  // A module service answers anonymously: one word per dependency.
+  const good = boardVerdict(grocery, { status: 'ready', checks: { database: 'up', redis: 'up' } });
+  assert.equal(good.ok, true);
+  // Kafka is declared in the registry and this board does not check it — said
+  // out loud rather than counted as a pass.
+  assert.deepEqual(good.unchecked, ['kafka']);
+
+  const down = boardVerdict(grocery, { status: 'down', checks: { database: 'down', redis: 'up' } });
+  assert.equal(down.ok, false);
+  assert.match(down.detail, /database=down/);
+
+  // The gateway with a staff token answers with the full objects.
+  const staff = boardVerdict(gateway, {
+    status: 'ready',
+    checks: {
+      postgresql: { status: 'up', detail: 'SELECT 1 on kartseek_db as postgres' },
+      redis: { status: 'up', emulated: false },
+      kafka: { status: 'up' },
+      mongodb: { status: 'up' },
+      'marketplace-grpc': { status: 'up' },
+    },
+  });
+  assert.equal(staff.ok, true);
+  assert.deepEqual(staff.unchecked, []);
+});
+
+test('readinessBody finds the board whether or not an interceptor wrapped it', () => {
+  // The gateway runs a global response interceptor and the other 25 do not, so
+  // the same route answers in two shapes. Reading `json.checks` alone reported
+  // "no readiness board" for the gateway over a stack that was entirely fine.
+  const board = { status: 'ready', checks: { redis: 'up' } };
+  assert.deepEqual(readinessBody(board), board);
+  assert.deepEqual(readinessBody({ success: true, data: board, timestamp: 'x' }), board);
+  assert.equal(readinessBody({ success: true, data: { total: 0 } }), null);
+  assert.equal(readinessBody(null), null);
+  assert.equal(readinessBody('<!doctype html>'), null);
+});
+
+test('boardVerdict unwraps the envelope before judging the gateway', () => {
+  const v = boardVerdict(gateway, {
+    success: true,
+    data: {
+      status: 'ready',
+      checks: {
+        postgresql: { status: 'up', detail: 'SELECT 1 on kartseek_db as postgres' },
+        redis: { status: 'up' },
+        kafka: { status: 'up' },
+        mongodb: { status: 'up' },
+      },
+    },
+  });
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.unchecked, []);
+});
+
+test('boardVerdict refuses a board that never arrived', () => {
+  const none = boardVerdict(grocery, null);
+  assert.equal(none.ok, false);
+  assert.match(none.detail, /no readiness board/i);
+});
+
+test('boardVerdict fails an emulated Redis even though it answers up', () => {
+  // `degraded` is the honest verdict, but the emulator has reported `up` before
+  // now — the flag is the thing that cannot be faked by a PONG.
+  const v = boardVerdict(gateway, {
+    status: 'ready',
+    checks: {
+      postgresql: { status: 'up' },
+      redis: { status: 'up', emulated: true },
+      kafka: { status: 'up' },
+      mongodb: { status: 'up' },
+    },
+  });
+  assert.equal(v.ok, false);
+  assert.match(v.detail, /emulator/i);
+});
+
+// ── which role a service is supposed to be connecting as ────────────────────
+
+test('expectedRole is the module role for a module and the platform owner otherwise', () => {
+  const env = { POSTGRES_USER: 'postgres', GROCERY_DB_USER: 'grocery_user' };
+  assert.equal(expectedRole(grocery, env), 'grocery_user');
+  assert.equal(expectedRole(gateway, env), 'postgres');
+  assert.equal(expectedRole(auth, env), null, 'no database, no connection to attribute');
+  // The root .env is the authority; the convention is only the fallback.
+  assert.equal(expectedRole(grocery, {}), 'grocery_user');
+  assert.equal(expectedRole(gateway, {}), 'postgres');
+});
+
+// ── the drift census line ───────────────────────────────────────────────────
+
+test('driftCensus counts tables and findings, and never hides an unreachable module', () => {
+  assert.equal(
+    driftCensus({
+      reports: [
+        { module: 'grocery', tables: 14, findings: [] },
+        { module: 'taxi', tables: 9, findings: [] },
+      ],
+    }).line,
+    '2 module(s), 23 table(s), 0 finding(s), 0 unreachable',
+  );
+  const bad = driftCensus({
+    reports: [
+      { module: 'grocery', tables: 14, findings: [{ kind: 'missing-column' }] },
+      { module: 'taxi', tables: 0, findings: [], error: 'password authentication failed' },
+    ],
+  });
+  assert.equal(bad.ok, false);
+  assert.match(bad.line, /1 finding\(s\), 1 unreachable/);
+});
