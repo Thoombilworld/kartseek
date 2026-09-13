@@ -5,6 +5,7 @@ import {
   findDuplicatePorts,
   parseConfigMapData,
   checkConfigMapPorts,
+  portEnvNamesRead,
   undeclaredPortEnv,
 } from './validate.mjs';
 
@@ -98,6 +99,21 @@ test('the ConfigMap gate fails when it matches nothing, rather than passing', ()
   ]);
 });
 
+test('the tally has an absolute floor, not just a relative one', () => {
+  // `matched < expected` is satisfied by 0 of 0: a registry with no Nest
+  // services would pass this gate with no failures at all. loadRegistry refuses
+  // an empty `services:` list, but a guard that depends on somebody else's
+  // validation is not a guard.
+  const data = parseConfigMapData(configMap("  NODE_ENV: 'production'"));
+  for (const empty of [{ services: [] }, { services: [{ name: 'web', kind: 'web-shell' }] }]) {
+    const failures = checkConfigMapPorts(empty, data);
+    assert.ok(
+      failures.some((f) => /matched 0 of 0 services/.test(f)),
+      `a Nest-free registry passed the gate: ${JSON.stringify(failures)}`,
+    );
+  }
+});
+
 test('undeclaredPortEnv finds a port main.ts binds and the registry does not declare', () => {
   // audit-log-service bound AUDIT_LOG_TCP_PORT for months with the registry
   // listing only its HTTP port; every other check reads the registry INTO
@@ -117,6 +133,34 @@ test('undeclaredPortEnv finds a port main.ts binds and the registry does not dec
     undeclaredPortEnv({ ...order, env: { ...order.env, x: 'ORDER_ADMIN_PORT' } }, src),
     [],
   );
+});
+
+test('a port read with no literal default is caught too', () => {
+  // `parseMainDefaults` only sees a read it can put a number to, which is the
+  // whole point of that function and a blind spot in this one: these three are
+  // how a service would bind an undeclared port without tripping anything.
+  const src = `
+    const a = Number(process.env.ORDER_METRICS_PORT);
+    const b = this.cfg.get('ORDER_DEBUG_PORT');
+    const c = Joi.number().port().description("ORDER_ADMIN_PORT");
+    const d = +(process.env.ORDER_SERVICE_PORT ?? 3014);
+    const e = Number(process.env.REDIS_PORT);
+  `;
+  assert.deepEqual(parseMainDefaults(src).has('ORDER_METRICS_PORT'), false);
+  assert.deepEqual([...portEnvNamesRead(src)].sort(), [
+    'ORDER_ADMIN_PORT',
+    'ORDER_DEBUG_PORT',
+    'ORDER_METRICS_PORT',
+    'ORDER_SERVICE_PORT',
+    'REDIS_PORT',
+  ]);
+  // Own stem, undeclared, `_PORT`: the infrastructure name and the declared one
+  // are not this entry's to answer for.
+  assert.deepEqual(undeclaredPortEnv(order, src), [
+    'ORDER_METRICS_PORT',
+    'ORDER_DEBUG_PORT',
+    'ORDER_ADMIN_PORT',
+  ]);
 });
 
 test('findDuplicatePorts names both services and the port kind', () => {

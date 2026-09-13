@@ -55,9 +55,33 @@ export function parseMainDefaults(text) {
 export function undeclaredPortEnv(s, mainTs) {
   const own = `${stem(s.name)}_`;
   const declared = new Set(Object.values(s.env ?? {}));
-  return [...parseMainDefaults(mainTs).keys()].filter(
+  return [...portEnvNamesRead(mainTs)].filter(
     (n) => n.startsWith(own) && n.endsWith('_PORT') && !declared.has(n),
   );
+}
+
+/**
+ * Every `*_PORT` environment variable a source file reads, with or without a
+ * literal default.
+ *
+ * `parseMainDefaults` only sees `process.env.X ?? 4028` — it exists to compare
+ * the default with the registry, so a read it cannot value is no use to it. That
+ * made the direction check above blind to `Number(process.env.X_PORT)` and to
+ * `cfg.get('X_PORT')`, which are how a service would bind a port the registry
+ * has never heard of WITHOUT tripping any of this. Three patterns, and a name
+ * only has to appear once:
+ *
+ *   process.env.X_PORT        any read, default or not
+ *   'X_PORT' / "X_PORT"       a quoted name — ConfigService.get, Joi schemas
+ *
+ * Over-matching is harmless: the caller keeps only names beginning with the
+ * service's own stem and ending `_PORT`, and a name it already declares.
+ */
+export function portEnvNamesRead(text) {
+  const names = new Set();
+  for (const m of text.matchAll(/process\.env\.([A-Z][A-Z0-9_]*_PORT)\b/g)) names.add(m[1]);
+  for (const m of text.matchAll(/['"`]([A-Z][A-Z0-9_]*_PORT)['"`]/g)) names.add(m[1]);
+  return names;
 }
 
 /**
@@ -107,10 +131,17 @@ export function checkConfigMapPorts(reg, data) {
         fail.push(`infra/k8s/config.yaml: ${envName}=${raw}, registry says ${s.ports[kind]}`);
     }
   }
-  if (servicesSeen < entries.length)
+  // An ABSOLUTE floor as well as a relative one. `servicesSeen < entries.length`
+  // alone is satisfied by 0 of 0 — a registry with no Nest entries would pass
+  // this gate with no failures at all, which is the same "green while checking
+  // nothing" the gate exists to prevent, one level up. `loadRegistry` rejects an
+  // empty `services:` list, so today that is unreachable through the real entry
+  // point; a guard that depends on somebody else's validation is not a guard.
+  if (servicesSeen !== entries.length || servicesSeen === 0)
     fail.push(
       `infra/k8s/config.yaml: the port gate matched ${servicesSeen} of ${entries.length} services — ` +
-        'it is checking nothing (a renamed key, or a ConfigMap this parser did not find)',
+        'it is checking nothing (a renamed key, a ConfigMap this parser did not find, or a ' +
+        'registry with no Nest services in it)',
     );
   return fail;
 }
@@ -167,8 +198,14 @@ export async function runChecks(reg, root) {
   if (!reg.services.some((s) => s.path === 'apps/web')) fail.push('apps/web has no registry entry');
 
   // 3. main.ts defaults, zone dev ports and basePaths.
+  let mainsRead = 0;
   for (const s of nestEntries(reg)) {
+    // Not a silent `continue`. Check 1 above already fails on a missing entry
+    // file, but this loop is a gate of its own and a gate that quietly examines
+    // nothing is the failure mode this whole round is about — so it is counted,
+    // and the tally below says so in its own words.
     if (!exists(root, `${s.path}/src/main.ts`)) continue;
+    mainsRead++;
     const mainTs = read(root, `${s.path}/src/main.ts`);
     const defaults = parseMainDefaults(mainTs);
     for (const n of undeclaredPortEnv(s, mainTs))
@@ -186,6 +223,13 @@ export async function runChecks(reg, root) {
         );
     }
   }
+  if (mainsRead !== nestEntries(reg).length || mainsRead === 0)
+    fail.push(
+      `the main.ts gate read ${mainsRead} of ${nestEntries(reg).length} services — the rest have no ` +
+        'src/main.ts at the path the registry gives, so neither their port defaults nor the ports ' +
+        'they bind undeclared were checked',
+    );
+
   for (const s of webEntries(reg)) {
     const pkg = JSON.parse(read(root, `${s.path}/package.json`));
     const m = /-p\s+(\d+)/.exec(pkg.scripts?.dev ?? '');
