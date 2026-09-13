@@ -74,13 +74,27 @@ export class RefundController {
   }
 
   /**
-   * The admin queue. `scope` is the caller's market, written by the gateway
-   * from the signed token — it was not forwarded here at all, which is why the
-   * gateway had to refuse every region-locked admin outright instead.
+   * The admin queue.
+   *
+   * `scope` is the caller's market, written by the gateway from the signed
+   * token — it was not forwarded here at all, which is why the gateway had to
+   * refuse every region-locked admin outright instead. `region` is what a
+   * global admin asked to filter on; the gateway has always sent it, and this
+   * signature used to omit it, so the console's region picker narrowed the
+   * heading and not the rows.
    */
   @MessagePattern({ cmd: 'get_pending_refunds' })
-  msgPending(@Payload() d: { page?: number; limit?: number; scope?: string }) {
-    return this.svc.getPendingRefunds(d?.page, d?.limit, d?.scope);
+  msgPending(
+    @Payload()
+    d: {
+      page?: number;
+      limit?: number;
+      scope?: string;
+      region?: string;
+      status?: string;
+    },
+  ) {
+    return this.svc.getPendingRefunds(d?.page, d?.limit, d?.scope, d?.region, d?.status);
   }
 
   @MessagePattern({ cmd: 'get_refund_stats' })

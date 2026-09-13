@@ -1,25 +1,13 @@
 import { IsIn, IsInt, IsOptional, IsString, Max, Min, Length } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { ADMIN_ORDER_STATUSES, type AdminOrderStatus, normaliseStatusFilter } from '@app/common';
 
 /**
- * The admin order statuses, in the order the fulfilment path moves through
- * them. Declared here rather than imported from `order.service.ts` so the DTO
- * layer does not pull the service (and its repository, Redis and Kafka
- * dependencies) into a validation-only import.
+ * The order statuses, re-exported from `@app/common` where the gateway DTO
+ * reads the same list. Two copies is how a status comes to be accepted at the
+ * edge and refused one hop later; this file kept the name it had.
  */
-export const ADMIN_ORDER_STATUSES = [
-  'PENDING',
-  'CONFIRMED',
-  'PREPARING',
-  'READY',
-  'PICKED_UP',
-  'OUT_FOR_DELIVERY',
-  'DELIVERED',
-  'CANCELLED',
-  'REFUND_REQUESTED',
-  'REFUNDED',
-] as const;
-export type AdminOrderStatus = (typeof ADMIN_ORDER_STATUSES)[number];
+export { ADMIN_ORDER_STATUSES, type AdminOrderStatus };
 
 /**
  * The admin list payload. `scope` is written by the gateway from the token and
@@ -34,10 +22,18 @@ export type AdminOrderStatus = (typeof ADMIN_ORDER_STATUSES)[number];
 export class AdminListOrdersDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number = 20;
-  // Constrained to the enum rather than any 40-character string: an unknown
-  // status silently matched nothing and read on screen as "this market has no
-  // orders in that state", which is the same lie this task exists to remove.
+  /**
+   * Constrained to the enum rather than any 40-character string: an unknown
+   * status silently matched nothing and read on screen as "this market has no
+   * orders in that state", which is the same lie this task exists to remove.
+   *
+   * Case-folded first. The gateway normalises the query before forwarding, but
+   * this service is also reachable over TCP without passing through it, and an
+   * enum that refuses `delivered` while the platform's own console sends
+   * exactly that is a gate nobody can get through.
+   */
   @IsOptional()
+  @Transform(({ value }) => normaliseStatusFilter(value))
   @IsString()
   @IsIn(ADMIN_ORDER_STATUSES as unknown as string[])
   status?: AdminOrderStatus;

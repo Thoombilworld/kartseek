@@ -81,6 +81,60 @@ describe('RefundService — the pending queue carries a market', () => {
   it('refuses a scope that is not a market this platform knows', async () => {
     await expect(svc.getPendingRefunds(1, 20, 'NOT-A-COUNTRY')).rejects.toThrow(ForbiddenException);
   });
+
+  it("applies a global admin's requested market — the console's region picker", async () => {
+    // The gateway has always sent `region`; this handler's signature had no
+    // slot for it, so a SUPER_ADMIN selecting Qatar got every market's refunds
+    // under a Qatar heading. Not a leak — the caller is global — but the same
+    // lie in the other direction, and the other four routes all honour it.
+    const res = await svc.getPendingRefunds(1, 20, undefined, 'qa');
+    expect(res.data.map((r) => r.id)).toEqual(['RFD-1']);
+    expect(res.total).toBe(1);
+  });
+
+  it('lets the lock beat a conflicting requested market', async () => {
+    const res = await svc.getPendingRefunds(1, 20, 'QA', 'IN');
+    expect(res.data.map((r) => r.id)).toEqual(['RFD-1']);
+  });
+
+  it('refuses a requested market it cannot read rather than widening', async () => {
+    await expect(svc.getPendingRefunds(1, 20, undefined, 'QQ')).rejects.toThrow(ForbiddenException);
+  });
+});
+
+describe('RefundService — the queue is the decidable states unless one is named', () => {
+  it('answers PENDING and UNDER_REVIEW when no status is asked for', async () => {
+    const { svc } = makeService([
+      pending('RFD-1', 'QA'),
+      { ...pending('RFD-2', 'QA'), status: RefundStatus.UNDER_REVIEW },
+      { ...pending('RFD-3', 'QA'), status: RefundStatus.REJECTED },
+    ]);
+    const res = await svc.getPendingRefunds(1, 20);
+    expect(res.data.map((r) => r.id).sort()).toEqual(['RFD-1', 'RFD-2']);
+  });
+
+  it('answers exactly the state named, so the queue also reads as a history', async () => {
+    const { svc } = makeService([
+      pending('RFD-1', 'QA'),
+      { ...pending('RFD-3', 'QA'), status: RefundStatus.REJECTED },
+    ]);
+    const res = await svc.getPendingRefunds(1, 20, undefined, undefined, 'REJECTED');
+    expect(res.data.map((r) => r.id)).toEqual(['RFD-3']);
+  });
+
+  it('never expires a refund somebody has already decided', async () => {
+    // The expiry sweep belongs to the decision queue. Running it over an
+    // APPROVED refund would rewrite a decision from inside a read.
+    const decided = {
+      ...pending('RFD-9', 'QA'),
+      status: RefundStatus.APPROVED,
+      expiresAt: new Date(Date.now() - 86400_000).toISOString(),
+    };
+    const { svc, db } = makeService([decided]);
+    const res = await svc.getPendingRefunds(1, 20, undefined, undefined, 'APPROVED');
+    expect(res.data.map((r) => r.id)).toEqual(['RFD-9']);
+    expect(db.get('refund:RFD-9').status).toBe(RefundStatus.APPROVED);
+  });
 });
 
 describe('RefundService — a refund is stamped with its market at request time', () => {

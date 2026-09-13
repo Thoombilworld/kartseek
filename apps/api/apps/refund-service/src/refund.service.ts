@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { marketPredicate, normaliseMarket } from '@app/common';
+import { marketPredicate, normaliseMarket, requireMarket } from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 
@@ -32,9 +32,15 @@ export interface RefundRequest {
    *
    * Without it the pending queue was the whole platform's, which is why the
    * gateway blunt-refused every region-locked admin rather than show one market
-   * another's refunds under its own heading. Stamped from the order at request
-   * time; on a refund written before this field existed it is absent, and an
-   * unattributable refund is not a scoped admin's to see.
+   * another's refunds under its own heading.
+   *
+   * Taken from the CALLER'S PAYLOAD at request time, not read from the order —
+   * this service holds no order and speaks to no one who does. Nothing on the
+   * platform calls `request_refund` yet, so nothing supplies it yet either;
+   * whichever route eventually creates a refund has to resolve the order's
+   * market and send it. Until then, and on any refund written before this field
+   * existed, it is absent — and an unattributable refund is not a scoped
+   * admin's to see.
    */
   regionCode?: string | null;
   userId: string;
@@ -268,27 +274,43 @@ export class RefundService {
   /**
    * The admin refund queue, narrowed to the caller's market.
    *
-   * `scope` is the gateway's lock, taken from the signed token. It is resolved
-   * before the scan so an unreadable lock is refused rather than dropped —
-   * dropping it would add no filter at all and hand a confined admin every
-   * market's refunds, which is the exact failure the closed route avoided.
+   * `scope` is the gateway's lock, taken from the signed token; `region` is what
+   * a global admin asked to filter on. BOTH are applied, by the same rule every
+   * other admin list uses — the lock wins, and a requested market that is not a
+   * market this platform knows is refused rather than dropped. Dropping either
+   * one adds no filter at all: for a locked caller that is every market's
+   * refunds behind their own market's heading, and for a global caller who
+   * picked Qatar in the console it is every market's refunds under a Qatar
+   * heading. The second is not a leak, but it is the same lie, and this handler
+   * did exactly that — the gateway sent `region` and it was discarded by
+   * construction.
    *
-   * The filter sits inside the scan, before pagination: filtering a page after
+   * `status` narrows to one state. Absent, the answer is the decision queue:
+   * PENDING and UNDER_REVIEW, the two an admin can still act on.
+   *
+   * Every filter sits inside the scan, before pagination: filtering a page after
    * slicing it returns a short page that reads as "this market has nothing".
    */
-  async getPendingRefunds(page = 1, limit = 20, scope?: string) {
-    const market = marketPredicate(scope, undefined, this.logger);
+  async getPendingRefunds(page = 1, limit = 20, scope?: string, region?: string, status?: string) {
+    const market = marketPredicate(
+      scope,
+      requireMarket(region, 'those refunds', this.logger),
+      this.logger,
+    );
+    const wanted = status
+      ? [String(status).trim().toUpperCase()]
+      : [RefundStatus.PENDING as string, RefundStatus.UNDER_REVIEW as string];
+    const decidable = new Set<string>([RefundStatus.PENDING, RefundStatus.UNDER_REVIEW]);
     const allKeys = await this.redis.scanKeys('refund:RFD-*');
     const pending: RefundRequest[] = [];
 
     for (const key of allKeys) {
       const refund = await this.redis.getJson<RefundRequest>(key);
-      if (
-        refund &&
-        (refund.status === RefundStatus.PENDING || refund.status === RefundStatus.UNDER_REVIEW)
-      ) {
-        // Auto-expire if past due
-        if (new Date(refund.expiresAt) < new Date()) {
+      if (refund && wanted.includes(refund.status)) {
+        // Auto-expire if past due — but only a refund still awaiting a decision.
+        // Sweeping one that has already been approved or rejected would rewrite
+        // a decision somebody took, which a read has no business doing.
+        if (decidable.has(refund.status) && new Date(refund.expiresAt) < new Date()) {
           await this.expireRefund(refund.id);
           continue;
         }

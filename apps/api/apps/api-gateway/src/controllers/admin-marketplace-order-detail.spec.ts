@@ -72,7 +72,7 @@ describe('the admin order detail reads the order', () => {
   it('refuses a locked admin who names another market, before any RPC', async () => {
     const { ctrl, order } = build();
     await expect(
-      (ctrl as any).getOrderById({ ...req(qaAdmin), query: {} }, 'KS-1', 'IN'),
+      (ctrl as any).getOrderById({ ...req(qaAdmin), query: {} }, 'KS-1', { country: 'IN' }),
     ).rejects.toThrow(ForbiddenException);
     expect(order.mock.calls).toHaveLength(0);
   });

@@ -58,7 +58,7 @@ function build() {
 describe('the admin order list is a real read', () => {
   it('forwards the order list to order-service with the locked market', async () => {
     const { ctrl, orderClient } = build();
-    await ctrl.getOrders(req(qaAdmin), 1, 20, undefined, undefined, undefined);
+    await ctrl.getOrders(req(qaAdmin), { page: 1, limit: 20 });
     expect(orderClient.send).toHaveBeenCalledWith(
       { cmd: 'admin_list_orders' },
       expect.objectContaining({ region: 'QA', scope: 'QA', page: 1, limit: 20 }),
@@ -67,7 +67,13 @@ describe('the admin order list is a real read', () => {
 
   it('sends no scope for a global admin and passes their chosen market through', async () => {
     const { ctrl, orderClient } = build();
-    await ctrl.getOrders(req(globalAdmin), 2, 50, 'DELIVERED', 'ORD', 'in');
+    await ctrl.getOrders(req(globalAdmin), {
+      page: 2,
+      limit: 50,
+      status: 'DELIVERED',
+      search: 'ORD',
+      country: 'in',
+    });
     expect(orderClient.send.mock.calls[0][1]).toMatchObject({
       page: 2,
       limit: 50,
@@ -80,16 +86,18 @@ describe('the admin order list is a real read', () => {
 
   it('refuses a locked admin who names another market, before any RPC', async () => {
     const { ctrl, orderClient } = build();
-    await expect(ctrl.getOrders(req(qaAdmin), 1, 20, undefined, undefined, 'IN')).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(
+      ctrl.getOrders(req(qaAdmin), { page: 1, limit: 20, country: 'IN' }),
+    ).rejects.toThrow(ForbiddenException);
     expect(orderClient.send).not.toHaveBeenCalled();
   });
 
   it('propagates an order-service outage as 503 rather than an empty page', async () => {
     const { ctrl, orderClient } = build();
     orderClient.send.mockReturnValueOnce(throwError(() => new Error('ECONNREFUSED')));
-    await expect(ctrl.getOrders(req(globalAdmin), 1, 20)).rejects.toMatchObject({ status: 503 });
+    await expect(ctrl.getOrders(req(globalAdmin), { page: 1, limit: 20 })).rejects.toMatchObject({
+      status: 503,
+    });
   });
 
   it('returns the rows the service gave it, unwrapped and uninvented', async () => {
@@ -97,7 +105,7 @@ describe('the admin order list is a real read', () => {
     orderClient.send.mockReturnValueOnce(
       of({ data: [{ orderNumber: 'ORD-1', regionCode: 'QA' }], total: 1, page: 1, limit: 20 }),
     );
-    const res: any = await ctrl.getOrders(req(qaAdmin), 1, 20);
+    const res: any = await ctrl.getOrders(req(qaAdmin), { page: 1, limit: 20 });
     expect(res.data).toHaveLength(1);
     expect(res.total).toBe(1);
   });
@@ -123,7 +131,7 @@ describe('the admin order detail asks order-service', () => {
 describe('the admin returns queue is scoped at the gateway too', () => {
   it('forwards page, status and the resolved market to marketplace-service', async () => {
     const { ctrl, marketplaceClient } = build();
-    await ctrl.getReturns(req(qaAdmin), 1, 20, 'REQUESTED');
+    await ctrl.getReturns(req(qaAdmin), { page: 1, limit: 20, status: 'REQUESTED' });
     expect(marketplaceClient.send).toHaveBeenCalledWith(
       { cmd: MARKETPLACE_PATTERNS.GET_RETURNS },
       expect.objectContaining({
@@ -138,9 +146,9 @@ describe('the admin returns queue is scoped at the gateway too', () => {
 
   it('refuses a locked admin who names another market, before any RPC', async () => {
     const { ctrl, marketplaceClient } = build();
-    await expect(ctrl.getReturns(req(qaAdmin), 1, 20, undefined, 'IN')).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(
+      ctrl.getReturns(req(qaAdmin), { page: 1, limit: 20, country: 'IN' }),
+    ).rejects.toThrow(ForbiddenException);
     expect(marketplaceClient.send).not.toHaveBeenCalled();
   });
 });
@@ -148,14 +156,16 @@ describe('the admin returns queue is scoped at the gateway too', () => {
 describe('the refunds queue is open to a regional admin now that refunds carry a market', () => {
   it('lets a locked admin read the refunds queue and sends their market with it', async () => {
     const { ctrl, refundClient } = build();
-    await ctrl.getRefunds(req(qaAdmin), 1, 20, undefined);
+    await ctrl.getRefunds(req(qaAdmin), { page: 1, limit: 20 });
     expect(refundClient.send.mock.calls[0][0]).toMatchObject({ cmd: 'get_pending_refunds' });
     expect(refundClient.send.mock.calls[0][1]).toMatchObject({ scope: 'QA', region: 'QA' });
   });
 
   it('still refuses a locked admin who names another market', async () => {
     const { ctrl, refundClient } = build();
-    await expect(ctrl.getRefunds(req(qaAdmin), 1, 20, 'IN')).rejects.toThrow(ForbiddenException);
+    await expect(
+      ctrl.getRefunds(req(qaAdmin), { page: 1, limit: 20, country: 'IN' }),
+    ).rejects.toThrow(ForbiddenException);
     expect(refundClient.send).not.toHaveBeenCalled();
   });
 });
@@ -163,7 +173,7 @@ describe('the refunds queue is open to a regional admin now that refunds carry a
 describe('the admin payments list is a real read', () => {
   it('forwards to payment-service with the resolved market', async () => {
     const { ctrl, paymentClient } = build();
-    await ctrl.getPayments(req(qaAdmin), 1, 20, 'SUCCESS');
+    await ctrl.getPayments(req(qaAdmin), { page: 1, limit: 20, status: 'SUCCESS' });
     expect(paymentClient.send).toHaveBeenCalledWith(
       { cmd: 'admin_list_payments' },
       expect.objectContaining({ page: 1, limit: 20, status: 'SUCCESS', region: 'QA', scope: 'QA' }),
@@ -173,14 +183,16 @@ describe('the admin payments list is a real read', () => {
   it('propagates a payment-service outage as 503 rather than an empty page', async () => {
     const { ctrl, paymentClient } = build();
     paymentClient.send.mockReturnValueOnce(throwError(() => new Error('ECONNREFUSED')));
-    await expect(ctrl.getPayments(req(globalAdmin), 1, 20)).rejects.toMatchObject({ status: 503 });
+    await expect(ctrl.getPayments(req(globalAdmin), { page: 1, limit: 20 })).rejects.toMatchObject({
+      status: 503,
+    });
   });
 
   it('refuses a locked admin who names another market, before any RPC', async () => {
     const { ctrl, paymentClient } = build();
-    await expect(ctrl.getPayments(req(qaAdmin), 1, 20, undefined, 'IN')).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(
+      ctrl.getPayments(req(qaAdmin), { page: 1, limit: 20, country: 'IN' }),
+    ).rejects.toThrow(ForbiddenException);
     expect(paymentClient.send).not.toHaveBeenCalled();
   });
 });

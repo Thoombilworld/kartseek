@@ -10,6 +10,7 @@ import { ILike, In, Repository } from 'typeorm';
 import {
   applyMarketFilter,
   assertInMarket,
+  escapeLikeTerm,
   marketPredicate,
   normaliseMarket,
   requireMarket,
@@ -440,10 +441,14 @@ export class OrderService {
     // Each alternative restates `where` — TypeORM ORs the array, and a leg that
     // dropped the market predicate would return that customer's orders in every
     // market the moment anyone typed in the search box.
-    const criteria = q.search
+    // `%` and `_` in the box are escaped: parameterised either way, but an
+    // unescaped `_` is a single-character wildcard, so a customer id with one in
+    // it quietly matched far more than the search term looked like.
+    const term = q.search ? `%${escapeLikeTerm(q.search)}%` : undefined;
+    const criteria = term
       ? [
-          { ...where, orderNumber: ILike(`%${q.search}%`) },
-          { ...where, customerId: ILike(`%${q.search}%`) },
+          { ...where, orderNumber: ILike(term) },
+          { ...where, customerId: ILike(term) },
         ]
       : where;
 

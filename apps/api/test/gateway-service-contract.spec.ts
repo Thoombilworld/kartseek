@@ -49,47 +49,106 @@ const MODULE_BACKEND_ROOTS: string[] = fs.existsSync(MODULES_DIR)
 /** Commands the gateway sends that no service implements yet. May only shrink. */
 const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   // Restaurant — customer surface not yet built service-side
-  'add_address', 'delete_address', 'list_addresses', 'update_address',
-  'add_favorite', 'remove_favorite', 'list_favorites',
-  'list_gift_cards', 'purchase_gift_card', 'subscribe', 'list_subscriptions',
-  'apply_coupon', 'remove_coupon', 'call_waiter', 'update_customization',
-  'get_order_receipt', 'request_rider',
+  'add_address',
+  'delete_address',
+  'list_addresses',
+  'update_address',
+  'add_favorite',
+  'remove_favorite',
+  'list_favorites',
+  'list_gift_cards',
+  'purchase_gift_card',
+  'subscribe',
+  'list_subscriptions',
+  'apply_coupon',
+  'remove_coupon',
+  'call_waiter',
+  'update_customization',
+  'get_order_receipt',
+  'request_rider',
   // Restaurant — operator surface
-  'approve_menu_change', 'reject_menu_change', 'get_menu_approvals', 'get_menu_audit',
-  'update_prep_time', 'update_services', 'upload_banner', 'get_quality_score',
+  'approve_menu_change',
+  'reject_menu_change',
+  'get_menu_approvals',
+  'get_menu_audit',
+  'update_prep_time',
+  'update_services',
+  'upload_banner',
+  'get_quality_score',
   'get_current_payout',
   // Restaurant — admin analytics
-  'admin_analytics_cuisines', 'admin_analytics_orders', 'admin_analytics_overview',
-  'admin_analytics_revenue', 'admin_bottom_restaurants', 'admin_top_restaurants',
-  'admin_compliance_report', 'admin_list_restaurants', 'admin_payout_report',
+  'admin_analytics_cuisines',
+  'admin_analytics_orders',
+  'admin_analytics_overview',
+  'admin_analytics_revenue',
+  'admin_bottom_restaurants',
+  'admin_top_restaurants',
+  'admin_compliance_report',
+  'admin_list_restaurants',
+  'admin_payout_report',
   // Complaints — implementations exist in taxi-service/marketplace-service but
   // are not reachable from the restaurant client that sends these.
-  'escalate_complaint', 'resolve_complaint', 'get_complaint', 'list_complaints',
+  'escalate_complaint',
+  'resolve_complaint',
+  'get_complaint',
+  'list_complaints',
   // Delivery dispatch — no delivery domain in restaurant-service
-  'delivery_accept_task', 'delivery_arrived', 'delivery_arrived_customer',
-  'delivery_available_tasks', 'delivery_complete', 'delivery_earnings',
-  'delivery_pickup', 'delivery_update_location',
+  'delivery_accept_task',
+  'delivery_arrived',
+  'delivery_arrived_customer',
+  'delivery_available_tasks',
+  'delivery_complete',
+  'delivery_earnings',
+  'delivery_pickup',
+  'delivery_update_location',
 
   // Admin console, dot-notation. The six admin-* controllers send 65 of these;
   // 23 were wired to methods that already existed. The rest have no
   // implementation — several were deliberately left unwired rather than pointed
   // at a franchise- or geo-scoped method, which would have returned a confident
   // empty list instead of admitting the command is not built.
-  'admin.doctor.appointments', 'admin.doctor.dashboard', 'admin.doctor.prescriptions',
-  'admin.doctor.reports', 'admin.doctor.settings',
-  'admin.hotel.amenities', 'admin.hotel.bookings', 'admin.hotel.dashboard',
-  'admin.hotel.get', 'admin.hotel.list', 'admin.hotel.pricing', 'admin.hotel.reports',
-  'admin.hotel.reviews', 'admin.hotel.rooms', 'admin.hotel.settings',
-  'admin.pharmacy.approve', 'admin.pharmacy.commissions', 'admin.pharmacy.dashboard',
-  'admin.pharmacy.orders', 'admin.pharmacy.prescriptions', 'admin.pharmacy.products',
-  'admin.pharmacy.reports', 'admin.pharmacy.settings', 'admin.pharmacy.settlements',
-  'admin.pharmacy.suspend', 'admin.pharmacy.verifications',
-  'admin.restaurant.analytics', 'admin.restaurant.commissions',
-  'admin.restaurant.complaints', 'admin.restaurant.dashboard', 'admin.restaurant.get',
-  'admin.restaurant.orders', 'admin.restaurant.zones',
-  'admin.taxi.complaints', 'admin.taxi.compliance', 'admin.taxi.dashboard',
-  'admin.taxi.fleet', 'admin.taxi.pricing', 'admin.taxi.rides',
-  'admin.taxi.routes', 'admin.taxi.settings', ]);
+  'admin.doctor.appointments',
+  'admin.doctor.dashboard',
+  'admin.doctor.prescriptions',
+  'admin.doctor.reports',
+  'admin.doctor.settings',
+  'admin.hotel.amenities',
+  'admin.hotel.bookings',
+  'admin.hotel.dashboard',
+  'admin.hotel.get',
+  'admin.hotel.list',
+  'admin.hotel.pricing',
+  'admin.hotel.reports',
+  'admin.hotel.reviews',
+  'admin.hotel.rooms',
+  'admin.hotel.settings',
+  'admin.pharmacy.approve',
+  'admin.pharmacy.commissions',
+  'admin.pharmacy.dashboard',
+  'admin.pharmacy.orders',
+  'admin.pharmacy.prescriptions',
+  'admin.pharmacy.products',
+  'admin.pharmacy.reports',
+  'admin.pharmacy.settings',
+  'admin.pharmacy.settlements',
+  'admin.pharmacy.suspend',
+  'admin.pharmacy.verifications',
+  'admin.restaurant.analytics',
+  'admin.restaurant.commissions',
+  'admin.restaurant.complaints',
+  'admin.restaurant.dashboard',
+  'admin.restaurant.get',
+  'admin.restaurant.orders',
+  'admin.restaurant.zones',
+  'admin.taxi.complaints',
+  'admin.taxi.compliance',
+  'admin.taxi.dashboard',
+  'admin.taxi.fleet',
+  'admin.taxi.pricing',
+  'admin.taxi.rides',
+  'admin.taxi.routes',
+  'admin.taxi.settings',
+]);
 
 // Removed 2026-09-01: implemented in the extracted module backends, and only
 // still listed because this suite could not see `modules/*/backend`. The
@@ -145,16 +204,18 @@ function readHandledCommands(): Set<string> {
   const roots = [API_ROOT, ...MODULE_BACKEND_ROOTS];
 
   for (const root of roots) {
-  for (const file of walk(root, (f) => f.endsWith('.ts'))) {
-    if (file.includes(`${path.sep}api-gateway${path.sep}`)) continue;
-    const source = stripComments(fs.readFileSync(file, 'utf8'));
-    for (const [, cmd] of source.matchAll(/@MessagePattern\(\s*\{\s*cmd\s*:\s*['"`]([^'"`]+)['"`]/g)) {
-      handled.add(cmd);
+    for (const file of walk(root, (f) => f.endsWith('.ts'))) {
+      if (file.includes(`${path.sep}api-gateway${path.sep}`)) continue;
+      const source = stripComments(fs.readFileSync(file, 'utf8'));
+      for (const [, cmd] of source.matchAll(
+        /@MessagePattern\(\s*\{\s*cmd\s*:\s*['"`]([^'"`]+)['"`]/g,
+      )) {
+        handled.add(cmd);
+      }
+      for (const [, cmd] of source.matchAll(/@MessagePattern\(\s*['"`]([^'"`]+)['"`]\s*\)/g)) {
+        handled.add(cmd);
+      }
     }
-    for (const [, cmd] of source.matchAll(/@MessagePattern\(\s*['"`]([^'"`]+)['"`]\s*\)/g)) {
-      handled.add(cmd);
-    }
-  }
   }
   return handled;
 }
@@ -168,10 +229,20 @@ function readSentCommands(constants: Map<string, string>): Map<string, string> {
 
   for (const file of walk(path.join(API_ROOT, 'api-gateway'), (f) => f.endsWith('.ts'))) {
     const source = stripComments(fs.readFileSync(file, 'utf8'));
-    for (const [, cmd] of source.matchAll(/\{\s*cmd\s*:\s*['"`]([^'"`]+)['"`]\s*\}/g)) record(cmd, file);
+    for (const [, cmd] of source.matchAll(/\{\s*cmd\s*:\s*['"`]([^'"`]+)['"`]\s*\}/g))
+      record(cmd, file);
+    // The optional quoted argument before the command is the SERVICE LABEL that
+    // `sendTo(client, 'Order service', 'admin_list_orders', …)` carries for its
+    // 503 message. Without it this regex stopped at the label and captured
+    // nothing, so every command sent through the four-argument form —
+    // `admin_list_orders`, `admin_get_order`, `admin_list_payments`,
+    // `get_pending_refunds` — was invisible to this gate, which stayed green
+    // while proving nothing about those routes. A gate that cannot see a call
+    // is worse than no gate: it reads as coverage.
     for (const [, cmd] of source.matchAll(
-      /this\.send(?:To\w*)?(?:<[^>]*>)?\(\s*(?:this\.\w+\s*,\s*)?['"`]([a-z0-9_.]+)['"`]/g,
-    )) record(cmd, file);
+      /this\.send(?:To\w*)?(?:<[^>]*>)?\(\s*(?:this\.\w+\s*,\s*)?(?:['"`][^'"`]*['"`]\s*,\s*)?['"`]([a-z0-9_.]+)['"`]/g,
+    ))
+      record(cmd, file);
     for (const [, key] of source.matchAll(/[A-Z_]*PATTERNS\.([A-Z0-9_]+)/g)) {
       const cmd = constants.get(key);
       if (cmd) record(cmd, file);
@@ -232,11 +303,11 @@ function shadows(earlier: string, later: string): boolean {
   for (let i = 0; i < a.length; i++) {
     const isParam = a[i].startsWith(':');
     if (isParam) {
-      if (b[i].startsWith(':')) continue;   // both params — not shadowing
-      sawParamOverLiteral = true;           // param swallows a literal
+      if (b[i].startsWith(':')) continue; // both params — not shadowing
+      sawParamOverLiteral = true; // param swallows a literal
       continue;
     }
-    if (a[i] !== b[i]) return false;        // different literal — no overlap
+    if (a[i] !== b[i]) return false; // different literal — no overlap
   }
   return sawParamOverLiteral;
 }
@@ -254,6 +325,29 @@ describe('gateway ↔ service contract', () => {
     // dot-notation commands went unnoticed for so long.
     expect(sent.size).toBeGreaterThan(400);
     expect(handled.size).toBeGreaterThan(400);
+  });
+
+  /**
+   * The gate can only fail on a call it can see, and it could not see these.
+   *
+   * `sendTo(client, 'Order service', 'admin_list_orders', …)` puts a quoted
+   * service label between the client and the command, and the extractor above
+   * used to stop there — so the four commands the admin money routes depend on
+   * were absent from `sent` entirely and "no orphans" said nothing about them.
+   * Named here so that if the extractor narrows again, this fails immediately
+   * rather than going quietly green; the assertion below then makes a deleted
+   * `@MessagePattern` a failure.
+   */
+  it('sees the commands sent through the labelled four-argument form', () => {
+    for (const cmd of [
+      'admin_list_orders',
+      'admin_get_order',
+      'admin_list_payments',
+      'get_pending_refunds',
+    ]) {
+      expect(sent.has(cmd), `${cmd} is sent by the gateway but the extractor missed it`).toBe(true);
+      expect(handled.has(cmd), `${cmd} has no @MessagePattern`).toBe(true);
+    }
   });
 
   it('sends no command that a service does not implement', () => {
@@ -276,7 +370,9 @@ describe('gateway ↔ service contract', () => {
   it('declares literal routes before parameterised siblings', () => {
     const violations: string[] = [];
 
-    for (const file of fs.readdirSync(GATEWAY_CONTROLLERS).filter((f) => f.endsWith('.controller.ts'))) {
+    for (const file of fs
+      .readdirSync(GATEWAY_CONTROLLERS)
+      .filter((f) => f.endsWith('.controller.ts'))) {
       const source = stripComments(fs.readFileSync(path.join(GATEWAY_CONTROLLERS, file), 'utf8'));
 
       for (const controller of readControllers(source)) {
@@ -307,7 +403,9 @@ describe('gateway ↔ service contract', () => {
     // unimplemented command for as long as the registration order held.
     const duplicates: string[] = [];
 
-    for (const file of fs.readdirSync(GATEWAY_CONTROLLERS).filter((f) => f.endsWith('.controller.ts'))) {
+    for (const file of fs
+      .readdirSync(GATEWAY_CONTROLLERS)
+      .filter((f) => f.endsWith('.controller.ts'))) {
       const source = stripComments(fs.readFileSync(path.join(GATEWAY_CONTROLLERS, file), 'utf8'));
 
       for (const controller of readControllers(source)) {

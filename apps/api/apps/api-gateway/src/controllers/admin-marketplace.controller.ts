@@ -50,6 +50,13 @@ import { UserRole, rpcCatch } from '@app/common';
 import { User } from '../entities/user.entity';
 import { MARKETPLACE_PATTERNS } from '../contracts';
 import { AdminCouponDto, AdminCouponUpdateDto } from '../dto/admin-marketplace.dto';
+import {
+  AdminOrderDetailQueryDto,
+  AdminOrdersQueryDto,
+  AdminPaymentsQueryDto,
+  AdminRefundsQueryDto,
+  AdminReturnsQueryDto,
+} from '../dto/admin-orders.dto';
 import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagination.pipe';
 
 /**
@@ -1077,23 +1084,16 @@ export class AdminMarketplaceController {
   @Get('orders')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
   @ApiOperation({ summary: 'List marketplace orders (admin view)' })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'search', required: false })
-  @ApiQuery({ name: 'country', required: false })
-  async getOrders(
-    @Req() req: any,
-    @Query('page', ParsePagePipe) page = 1,
-    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
-    @Query('status') status?: string,
-    @Query('search') search?: string,
-    @Query('country') country?: string,
-  ) {
-    const { scope, market } = this.scopeOf(req, country, 'those orders');
+  async getOrders(@Req() req: any, @Query() q: AdminOrdersQueryDto) {
+    // `q.status` has already been folded to the wire's UPPER_SNAKE by the DTO —
+    // the console's dropdown sends `delivered`, and an enum that refused it
+    // would 400 the one page this route exists to feed.
+    const { scope, market } = this.scopeOf(req, q.country, 'those orders');
     return this.sendTo(this.orderClient, 'Order service', 'admin_list_orders', {
-      page: +page,
-      limit: +limit,
-      status,
-      search,
+      page: q.page ?? 1,
+      limit: q.limit ?? DEFAULT_PAGE_SIZE,
+      status: q.status,
+      search: q.search,
       region: market,
       scope,
     });
@@ -1129,9 +1129,9 @@ export class AdminMarketplaceController {
   async getOrderById(
     @Req() req: any,
     @Param('orderNumber') orderNumber: string,
-    @Query('country') country?: string,
+    @Query() q: AdminOrderDetailQueryDto = {},
   ) {
-    const { scope } = this.scopeOf(req, country, 'that order');
+    const { scope } = this.scopeOf(req, q?.country, 'that order');
     return {
       data: await this.sendTo(this.orderClient, 'Order service', 'admin_get_order', {
         orderNumber,
@@ -1186,20 +1186,16 @@ export class AdminMarketplaceController {
   @Get('returns')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
   @ApiOperation({ summary: 'List return requests' })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'country', required: false })
-  async getReturns(
-    @Req() req: any,
-    @Query('page', ParsePagePipe) page = 1,
-    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
-    @Query('status') status?: string,
-    @Query('country') country?: string,
-  ) {
-    const { scope, market } = this.scopeOf(req, country, 'those returns');
+  async getReturns(@Req() req: any, @Query() q: AdminReturnsQueryDto) {
+    // The status matters more here than anywhere else on this controller:
+    // `return_requests.status` is a Postgres `enum`, so an unvalidated word
+    // travelling into `where.status` is a cast error, not an empty list. It
+    // could not happen while this route answered a literal. It can now.
+    const { scope, market } = this.scopeOf(req, q.country, 'those returns');
     return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_RETURNS, {
-      page: +page,
-      limit: +limit,
-      status,
+      page: q.page ?? 1,
+      limit: q.limit ?? DEFAULT_PAGE_SIZE,
+      status: q.status,
       region: market,
       scope,
     });
@@ -1235,23 +1231,22 @@ export class AdminMarketplaceController {
   @Get('refunds')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:orders.view')
   @ApiOperation({ summary: 'List refund requests awaiting a decision' })
-  @ApiQuery({ name: 'country', required: false })
-  async getRefunds(
-    @Req() req: any,
-    @Query('page', ParsePagePipe) page = 1,
-    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
-    @Query('country') country?: string,
-  ) {
+  async getRefunds(@Req() req: any, @Query() q: AdminRefundsQueryDto) {
     // Open to a regional admin now: a refund carries `regionCode` on the stored
     // record and `get_pending_refunds` filters the queue on it, so this no
     // longer has to refuse a locked caller outright to avoid showing them the
     // whole platform's queue under their own market's heading. Refunds are
     // still Redis-only — the field is on the JSON this service writes, which is
     // why this needed no migration.
-    const { scope, market } = this.scopeOf(req, country, 'those refunds');
+    //
+    // `region` was sent here before refund-service had a parameter to receive
+    // it in, so a global admin picking Qatar in the console narrowed the
+    // heading and not the rows. Both slots are honoured there now.
+    const { scope, market } = this.scopeOf(req, q.country, 'those refunds');
     return this.sendTo(this.refundClient, 'Refund service', 'get_pending_refunds', {
-      page: +page,
-      limit: +limit,
+      page: q.page ?? 1,
+      limit: q.limit ?? DEFAULT_PAGE_SIZE,
+      status: q.status,
       region: market,
       scope,
     });
@@ -3434,20 +3429,12 @@ export class AdminMarketplaceController {
   @Get('payments')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE_MANAGER, 'perm:finance.view')
   @ApiOperation({ summary: 'List marketplace payments (admin view)' })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'country', required: false })
-  async getPayments(
-    @Req() req: any,
-    @Query('page', ParsePagePipe) page = 1,
-    @Query('limit', ParseLimitPipe) limit = DEFAULT_PAGE_SIZE,
-    @Query('status') status?: string,
-    @Query('country') country?: string,
-  ) {
-    const { scope, market } = this.scopeOf(req, country, 'those payments');
+  async getPayments(@Req() req: any, @Query() q: AdminPaymentsQueryDto) {
+    const { scope, market } = this.scopeOf(req, q.country, 'those payments');
     return this.sendTo(this.paymentClient, 'Payment service', 'admin_list_payments', {
-      page: +page,
-      limit: +limit,
-      status,
+      page: q.page ?? 1,
+      limit: q.limit ?? DEFAULT_PAGE_SIZE,
+      status: q.status,
       module: 'marketplace',
       region: market,
       scope,

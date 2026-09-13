@@ -36,6 +36,9 @@ export * from './market/http-market-scope';
 
 // ─── Admin permission vocabulary & seeded roles ──────────────────────────────
 export * from './admin/permissions';
+// The status words the admin console filters on, and the fold that turns what a
+// human clicked into the value the wire carries.
+export * from './admin/status-vocabularies';
 
 // ─── Health (the one implementation for every deployable) ────────────────────
 export * from './health/health.types';
