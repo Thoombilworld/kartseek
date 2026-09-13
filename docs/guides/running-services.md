@@ -156,6 +156,7 @@ npm run infra:up       # Postgres, Redis, Kafka and MongoDB must be reachable
 npm run smoke          # boot all 26 Nest deployables and probe /health
 npm run smoke -- --only=order-service,marketplace-service
 npm run smoke:test     # the smoke's own unit tests; no build, no services
+npm run ports:sweep    # what is holding a platform port right now
 ```
 
 `tests/smoke/boot-all.mjs` starts every Nest deployable from its built output
@@ -173,7 +174,15 @@ report `26/26 healthy` when it was not:
   log, whatever the probe said.
 - **After the run every port must be free again.** A leftover listener fails the
   run even when all 26 booted, because the next run would otherwise be measuring
-  this one.
+  this one. So does a child that outlived the kill, ports released or not.
+
+The second of those needs a way to ask the operating system who owns a listening
+socket, so **the runner must have `ss`, `netstat` or `lsof`** — a slim CI image
+(Debian or Alpine without `iproute2` or `net-tools`) has none of them, and the
+smoke then fails every service closed with "no nameable owner" rather than
+assume the answer came from its own child. It prints one warning line saying so
+before it boots. Install `iproute2` (or `net-tools`) in the image; Windows and
+macOS ship a tool already.
 
 ### `SMOKE_PORT_OFFSET` — running the smoke while the dev fleet is up
 
@@ -210,14 +219,31 @@ Kill the smoke and its children outlive it. The sweep is by port, not by command
 line — two of the leftovers IN5 had to clean up were started from a module
 directory and had no `KARTSEEKAPP` anywhere in their command line:
 
-```powershell
-# every registry port with a listener, and who holds it
-Get-NetTCPConnection -State Listen |
-  Where-Object { $_.LocalPort -in 3001,3010..3035 + 4002..4028 + 5001..5010 } |
-  Select-Object LocalAddress, LocalPort, OwningProcess
+```bash
+npm run ports:sweep                    # every registry port, and who holds it
+npm run ports:sweep -- --offset 10000  # the ports a SMOKE_PORT_OFFSET run used
+```
 
-netstat -ano | findstr "13012"      # one port, including the offset ones
-taskkill /PID <pid> /T /F           # /T: a Nest process spawns workers
+It reads `services.yaml` for the port list — http, TCP and gRPC, shifted by
+`--offset` — probes each one on `127.0.0.1`, `0.0.0.0` and `::`, and prints the
+owning PID (or `PID unknown` when no tool on the machine can name it). Exit 0
+means nothing is bound, exit 1 means something is; it never kills anything.
+A running `npm run dev` fleet holds all 57 registry ports, so the offset form is
+the one that answers "did my smoke run leave something behind".
+
+To stop a leftover: `taskkill /PID <pid> /T /F` on Windows (`/T` because a Nest
+process spawns workers), `kill -TERM <pid>` then `-KILL` elsewhere.
+
+Without Node — and only then — the same sweep in PowerShell. Note the `@()`
+around the first element and the parentheses: `3001,3010..3035 + 4002..4028`
+throws `Cannot convert … System.Object[] … to … Int32` and returns nothing,
+which reads exactly like "all clear".
+
+```powershell
+$ports = @(3001) + (3010..3035) + (4002..4028) + (5001..5010)
+$ports += @(13001) + (13010..13035) + (14002..14028) + (15001..15010)  # offset 10000
+Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in $ports } |
+  Select-Object LocalAddress, LocalPort, OwningProcess
 ```
 
 ## Flags
