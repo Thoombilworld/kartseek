@@ -45,19 +45,21 @@ zones, three Flutter apps, and the infrastructure to run them.
 ## Ten-minute local setup
 
 ```bash
-git clone <url> && cd KARTSEEKAPP
+git clone https://github.com/Thoombilworld/kartseek.git && cd kartseek
 nvm use            # or: nvm use 26.5.0 (nvm-windows)
 npm ci
 npm run env:init   # writes .env AND apps/api/.env, with every secret generated
+cp apps/web/.env.example apps/web/.env.local   # the shell's public config, no secrets
 npm run infra:up
 npm run dev
 ```
 
-Do not copy the `.env.example` files by hand: every secret in them is
-deliberately empty, and `JWT_SECRET` is required in every environment, so a
-plain copy gives you a Compose stack that refuses to start and a gateway that
-throws at boot. `env:init` is re-runnable and never rewrites a value you have
-already set.
+Do not copy the root or `apps/api` `.env.example` by hand: every secret in
+them is deliberately empty, and `JWT_SECRET` is required in every environment,
+so a plain copy gives you a Compose stack that refuses to start and a gateway
+that throws at boot. `env:init` is re-runnable and never rewrites a value you
+have already set. The web shell's and the zones' examples carry only public
+`NEXT_PUBLIC_*` values and localhost origins, so those are copied as shown.
 
 Open http://localhost:3000. The API answers at
 http://localhost:3001/api/v1/health and documents itself at

@@ -126,9 +126,10 @@ Who reads which file matters, because it is not "everyone reads the same
   `apps/api/.env` as a fallback in its `envFilePath` array (see
   `ConfigModule.forRoot({ envFilePath: [...] })` in each `*.module.ts`), so a
   module that has no `.env` of its own still picks up the shared one.
-- **The web shell** (`apps/web`) reads `apps/web/.env.local`, which is not
-  copied from an example file by default — create it if you need to override
-  the Next.js defaults.
+- **The web shell** (`apps/web`) reads `apps/web/.env.local`. Copy it from
+  `apps/web/.env.example` (`cp apps/web/.env.example apps/web/.env.local`);
+  it holds only public `NEXT_PUBLIC_*` values and the zone origins, so unlike
+  the two secret-bearing files it is safe to copy by hand.
 
 ## Infrastructure
 
