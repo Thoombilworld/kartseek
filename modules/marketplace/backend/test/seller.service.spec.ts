@@ -29,6 +29,7 @@ const mockRedis = {
   get: jest.fn().mockResolvedValue(null),
   set: jest.fn().mockResolvedValue(undefined),
   del: jest.fn().mockResolvedValue(undefined),
+  delPattern: jest.fn().mockResolvedValue(0),
 };
 
 const mockKafka = {
@@ -172,7 +173,15 @@ describe('SellerService', () => {
     });
 
     it('should query DB and cache when no cache hit', async () => {
-      const seller = { id: 'seller-1', businessName: 'Test Store', verificationStatus: 'ACTIVE', sellerRating: 4.5, storeSlug: 'test', regionCode: 'IN', createdAt: new Date() };
+      const seller = {
+        id: 'seller-1',
+        businessName: 'Test Store',
+        verificationStatus: 'ACTIVE',
+        sellerRating: 4.5,
+        storeSlug: 'test',
+        regionCode: 'IN',
+        createdAt: new Date(),
+      };
       sellerRepo.findOne.mockResolvedValueOnce(seller);
       kycRepo.findOne.mockResolvedValueOnce({ status: 'APPROVED' });
       orderRepo.count.mockResolvedValueOnce(100);
@@ -207,11 +216,19 @@ describe('SellerService', () => {
       expect(mockDataSource.transaction).toHaveBeenCalled();
 
       expect(txRepo(Seller).create).toHaveBeenCalledWith(
-        expect.objectContaining({ businessName: 'New Store', ownerId: 'user-1', verificationStatus: 'PENDING' }),
+        expect.objectContaining({
+          businessName: 'New Store',
+          ownerId: 'user-1',
+          verificationStatus: 'PENDING',
+        }),
       );
       expect(txRepo(Seller).save).toHaveBeenCalled();
       expect(txRepo(SellerKyc).create).toHaveBeenCalledWith(
-        expect.objectContaining({ ownerFullName: 'John Doe', countryCode: 'IN', status: 'PENDING' }),
+        expect.objectContaining({
+          ownerFullName: 'John Doe',
+          countryCode: 'IN',
+          status: 'PENDING',
+        }),
       );
       expect(txRepo(SellerKyc).save).toHaveBeenCalled();
       expect(txRepo(SellerSettings).create).toHaveBeenCalled();
@@ -228,7 +245,9 @@ describe('SellerService', () => {
 
     it('should refuse a second seller account for the same user', async () => {
       sellerRepo.findOne.mockResolvedValueOnce({ id: 'seller-1', businessName: 'Existing Store' });
-      await expect(service.registerSeller(dto, 'user-1')).rejects.toThrow(/already have a seller account/i);
+      await expect(service.registerSeller(dto, 'user-1')).rejects.toThrow(
+        /already have a seller account/i,
+      );
       expect(mockDataSource.transaction).not.toHaveBeenCalled();
     });
   });
@@ -260,7 +279,11 @@ describe('SellerService', () => {
 
   describe('getSettings', () => {
     it('should return combined settings and KYC data', async () => {
-      settingsRepo.findOne.mockResolvedValueOnce({ storeName: 'My Store', isOnline: true, commissionRate: 15 });
+      settingsRepo.findOne.mockResolvedValueOnce({
+        storeName: 'My Store',
+        isOnline: true,
+        commissionRate: 15,
+      });
       kycRepo.findOne.mockResolvedValueOnce({ status: 'APPROVED', ownerFullName: 'John' });
 
       const result = await service.getSettings('seller-1');
@@ -280,7 +303,11 @@ describe('SellerService', () => {
       const result = await service.addProduct('seller-1', 'IN', dto);
       expect(result.success).toBe(true);
       expect(productRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Test Product', status: 'ACTIVE', approval_status: 'PENDING' }),
+        expect.objectContaining({
+          name: 'Test Product',
+          status: 'ACTIVE',
+          approval_status: 'PENDING',
+        }),
       );
       expect(mockKafka.publish).toHaveBeenCalledWith('seller.product.created', expect.any(Object));
     });

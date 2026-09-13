@@ -41,7 +41,8 @@ describe('SellerService', () => {
   const entityManagerMock = {
     getRepository: (entity: unknown) => {
       const repo = repoByEntity.get(entity);
-      if (!repo) throw new Error(`No mock repository registered for ${String((entity as any)?.name)}`);
+      if (!repo)
+        throw new Error(`No mock repository registered for ${String((entity as any)?.name)}`);
       return repo;
     },
   };
@@ -83,11 +84,15 @@ describe('SellerService', () => {
       setJson: jest.fn().mockResolvedValue('OK'),
       getJson: jest.fn().mockResolvedValue(null),
       del: jest.fn().mockResolvedValue(1),
+      // Price, stock and image writes drop the storefront's catalogue caches.
+      delPattern: jest.fn().mockResolvedValue(0),
     };
     const kafkaMock: Partial<jest.Mocked<KafkaProducerService>> = {
       publish: jest.fn().mockResolvedValue(undefined),
     };
-    catalogMock = { recomputeBuyBox: jest.fn().mockResolvedValue({ productId: 'p1', winnerId: 'l1' }) };
+    catalogMock = {
+      recomputeBuyBox: jest.fn().mockResolvedValue({ productId: 'p1', winnerId: 'l1' }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -113,7 +118,10 @@ describe('SellerService', () => {
         { provide: getRepositoryToken(SellerBankAccount), useFactory: mockRepoFactory },
         {
           provide: EncryptionService,
-          useValue: { encrypt: jest.fn((v: string) => `enc:${v}`), decrypt: jest.fn((v: string) => v) },
+          useValue: {
+            encrypt: jest.fn((v: string) => `enc:${v}`),
+            decrypt: jest.fn((v: string) => v),
+          },
         },
         // Staff, promotions and support tickets are real tables now, rather than
         // the fabricated `STF-`/`PROMO-`/`TKT-` ids the service used to invent.
@@ -182,7 +190,11 @@ describe('SellerService', () => {
 
     it('should query DB and cache when not cached', async () => {
       redis.getJson.mockResolvedValue(null);
-      sellerRepo.findOne.mockResolvedValue({ id: 's1', businessName: 'Super Seller', countryCode: 'IN' });
+      sellerRepo.findOne.mockResolvedValue({
+        id: 's1',
+        businessName: 'Super Seller',
+        countryCode: 'IN',
+      });
       kycRepo.findOne.mockResolvedValue({ sellerId: 's1', status: 'VERIFIED' });
       orderRepo.count.mockResolvedValue(42);
       const result = await service.getSellerProfile('s1', 'IN');
@@ -193,9 +205,9 @@ describe('SellerService', () => {
 
   describe('getSellerProducts', () => {
     it('should return paginated products', async () => {
-      productRepo.createQueryBuilder().getManyAndCount.mockResolvedValue([
-        [{ id: 'p1', name: 'Widget' }], 1,
-      ]);
+      productRepo
+        .createQueryBuilder()
+        .getManyAndCount.mockResolvedValue([[{ id: 'p1', name: 'Widget' }], 1]);
       const result = await service.getSellerProducts('s1', 'IN');
       expect(result.data).toHaveLength(1);
       expect(result.total).toBe(1);
@@ -204,9 +216,9 @@ describe('SellerService', () => {
 
   describe('getSellerOrders', () => {
     it('should return seller orders', async () => {
-      orderRepo.createQueryBuilder().getManyAndCount.mockResolvedValue([
-        [{ id: 'o1', status: 'PENDING' }], 1,
-      ]);
+      orderRepo
+        .createQueryBuilder()
+        .getManyAndCount.mockResolvedValue([[{ id: 'o1', status: 'PENDING' }], 1]);
       const result = await service.getSellerOrders('s1', 'IN');
       expect(result.data).toHaveLength(1);
     });
@@ -229,8 +241,9 @@ describe('SellerService', () => {
     it('reports back the window it actually measured', async () => {
       redis.getJson.mockResolvedValue(null);
       for (const period of ['today', 'week', 'month'] as const) {
-        await expect(service.getSellerDashboard('s1', 'IN', period))
-          .resolves.toMatchObject({ period });
+        await expect(service.getSellerDashboard('s1', 'IN', period)).resolves.toMatchObject({
+          period,
+        });
       }
     });
 
@@ -289,11 +302,13 @@ describe('SellerService', () => {
       });
 
       const deleted = redis.del.mock.calls.map((c: any[]) => c[0]);
-      expect(deleted).toEqual(expect.arrayContaining([
-        'seller:dashboard:s1:today',
-        'seller:dashboard:s1:week',
-        'seller:dashboard:s1:month',
-      ]));
+      expect(deleted).toEqual(
+        expect.arrayContaining([
+          'seller:dashboard:s1:today',
+          'seller:dashboard:s1:week',
+          'seller:dashboard:s1:month',
+        ]),
+      );
     });
 
     it('clears the same keys the dashboard actually writes', async () => {
@@ -309,7 +324,9 @@ describe('SellerService', () => {
       orderRepo.findOne.mockResolvedValue(null);
       orderRepo.save.mockImplementation((o: any) => Promise.resolve({ id: 'o-2', ...o }));
       await service.createSellerOrders({
-        orderId: 'ord-2', orderNumber: 'ORD-2', customerId: 'c-1',
+        orderId: 'ord-2',
+        orderNumber: 'ORD-2',
+        customerId: 'c-1',
         items: [{ productId: 'p-1', sellerId: 's1', quantity: 1, price: 100 }],
       });
       const deleted = redis.del.mock.calls.map((c: any[]) => c[0]);
@@ -320,8 +337,11 @@ describe('SellerService', () => {
 
   describe('registerSeller', () => {
     const canonical = {
-      businessName: 'New Store', ownerName: 'Jane Doe',
-      email: 'seller@test.com', phone: '+91982345678', country: 'IN',
+      businessName: 'New Store',
+      ownerName: 'Jane Doe',
+      email: 'seller@test.com',
+      phone: '+91982345678',
+      country: 'IN',
     };
 
     beforeEach(() => {
@@ -342,19 +362,25 @@ describe('SellerService', () => {
     });
 
     it('refuses to create an ownerless seller — it would be unreachable by its owner', async () => {
-      await expect(service.registerSeller({ ...canonical })).rejects.toThrow(/authenticated owner/i);
+      await expect(service.registerSeller({ ...canonical })).rejects.toThrow(
+        /authenticated owner/i,
+      );
       expect(sellerRepo.save).not.toHaveBeenCalled();
     });
 
     it('accepts regionCode in place of country without throwing', async () => {
       await service.registerSeller(
-        { businessName: 'Region Store', ownerName: 'R', email: 'r@test.com', phone: '+91982345678', regionCode: 'qa' },
+        {
+          businessName: 'Region Store',
+          ownerName: 'R',
+          email: 'r@test.com',
+          phone: '+91982345678',
+          regionCode: 'qa',
+        },
         'user-42',
       );
 
-      expect(sellerRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ regionCode: 'QA' }),
-      );
+      expect(sellerRepo.create).toHaveBeenCalledWith(expect.objectContaining({ regionCode: 'QA' }));
     });
 
     // The web onboarding wizard posts none of the canonical field names. Reading
@@ -404,7 +430,14 @@ describe('SellerService', () => {
 
     it('writes seller, KYC, settings and payout destination in ONE transaction', async () => {
       await service.registerSeller(
-        { ...canonical, bankDetails: { accountHolderName: 'Jane Doe', bankName: 'HDFC', accountNumber: '123456789' } },
+        {
+          ...canonical,
+          bankDetails: {
+            accountHolderName: 'Jane Doe',
+            bankName: 'HDFC',
+            accountNumber: '123456789',
+          },
+        },
         'user-42',
       );
 
@@ -419,7 +452,14 @@ describe('SellerService', () => {
     // in the plaintext `seller_settings.bankDetails` jsonb column.
     it('encrypts the account number and never stores it in settings', async () => {
       await service.registerSeller(
-        { ...canonical, bankDetails: { accountHolderName: 'Jane Doe', bankName: 'HDFC', accountNumber: '123456789' } },
+        {
+          ...canonical,
+          bankDetails: {
+            accountHolderName: 'Jane Doe',
+            bankName: 'HDFC',
+            accountNumber: '123456789',
+          },
+        },
         'user-42',
       );
 
@@ -434,7 +474,9 @@ describe('SellerService', () => {
     it('refuses a second seller account for the same owner', async () => {
       sellerRepo.findOne.mockResolvedValue({ id: 's-existing', businessName: 'First Store' });
 
-      await expect(service.registerSeller(canonical, 'user-42')).rejects.toThrow(/already have a seller account/i);
+      await expect(service.registerSeller(canonical, 'user-42')).rejects.toThrow(
+        /already have a seller account/i,
+      );
       expect(dataSource.transaction).not.toHaveBeenCalled();
     });
 
@@ -458,7 +500,9 @@ describe('SellerService', () => {
   describe('getGst', () => {
     it('masks PAN and GSTIN down to their last 4 characters', async () => {
       kycRepo.findOne.mockResolvedValue({
-        sellerId: 's1', gstin: '27AAPFU0939F1ZV', panNumber: 'AAPFU0939F',
+        sellerId: 's1',
+        gstin: '27AAPFU0939F1ZV',
+        panNumber: 'AAPFU0939F',
       });
 
       const result = await service.getGst('s1');
@@ -490,8 +534,11 @@ describe('SellerService', () => {
    */
   describe('addListing', () => {
     const APPROVED_PRODUCT = {
-      id: 'prod-1', name: 'Wireless Earbuds', slug: 'wireless-earbuds',
-      approval_status: 'APPROVED', mrp: 2999,
+      id: 'prod-1',
+      name: 'Wireless Earbuds',
+      slug: 'wireless-earbuds',
+      approval_status: 'APPROVED',
+      mrp: 2999,
     };
 
     beforeEach(() => {
@@ -502,7 +549,9 @@ describe('SellerService', () => {
 
     it('attaches a second seller’s offer to an existing product', async () => {
       const result = await service.addListing('seller-2', {
-        productId: 'prod-1', sellingPrice: 2499, stock: 10,
+        productId: 'prod-1',
+        sellingPrice: 2499,
+        stock: 10,
       });
 
       expect(result.success).toBe(true);
@@ -516,7 +565,11 @@ describe('SellerService', () => {
       await service.addListing('seller-2', { productId: 'prod-1', sellingPrice: 2499, stock: 10 });
 
       expect(listingRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ approvalStatus: 'PENDING', isActive: false, isBuyBoxWinner: false }),
+        expect.objectContaining({
+          approvalStatus: 'PENDING',
+          isActive: false,
+          isBuyBoxWinner: false,
+        }),
       );
     });
 
@@ -561,8 +614,12 @@ describe('SellerService', () => {
   describe('updateListing', () => {
     beforeEach(() => {
       listingRepo.findOne.mockResolvedValue({
-        id: 'listing-1', approvalStatus: 'APPROVED', isActive: true,
-        sellingPrice: 2499, stockQuantity: 5, product: { id: 'prod-1' },
+        id: 'listing-1',
+        approvalStatus: 'APPROVED',
+        isActive: true,
+        sellingPrice: 2499,
+        stockQuantity: 5,
+        product: { id: 'prod-1' },
       });
     });
 
@@ -577,7 +634,10 @@ describe('SellerService', () => {
 
     it('refuses to switch an unapproved offer on', async () => {
       listingRepo.findOne.mockResolvedValue({
-        id: 'listing-1', approvalStatus: 'PENDING', isActive: false, product: { id: 'prod-1' },
+        id: 'listing-1',
+        approvalStatus: 'PENDING',
+        isActive: false,
+        product: { id: 'prod-1' },
       });
 
       await expect(
@@ -597,8 +657,11 @@ describe('SellerService', () => {
   describe('updateProduct', () => {
     beforeEach(() => {
       productRepo.findOne.mockResolvedValue({
-        id: 'prod-1', seller_id: 'seller-1', name: 'Old name',
-        approval_status: 'PENDING', is_active: false,
+        id: 'prod-1',
+        seller_id: 'seller-1',
+        name: 'Old name',
+        approval_status: 'PENDING',
+        is_active: false,
       });
     });
 
@@ -613,7 +676,9 @@ describe('SellerService', () => {
       // `{approval_status: 'APPROVED', is_active: true}` onto their own product
       // and skip review entirely, which made the whole approvals queue advisory.
       await service.updateProduct('seller-1', 'prod-1', {
-        name: 'New name', approval_status: 'APPROVED', is_active: true,
+        name: 'New name',
+        approval_status: 'APPROVED',
+        is_active: true,
       });
 
       expect(productRepo.save).toHaveBeenCalledWith(
@@ -629,5 +694,4 @@ describe('SellerService', () => {
       );
     });
   });
-
 });

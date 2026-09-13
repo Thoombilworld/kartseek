@@ -25,6 +25,7 @@ import { GiftCard, GiftCardStatus } from './entities/gift-card.entity';
 import { type ProductFilter, type DataList } from './types/marketplace.types';
 import { PUBLIC_SELLER_FIELDS, publicSellerColumns } from './entities/seller.public-fields';
 import { CatalogService } from './catalog/catalog.service';
+import { CatalogCache, catalogKeys } from './catalog/catalog-cache';
 import { MarketplaceHomeCacheService } from './catalog/home-cache.service';
 import { MarketplaceFulfillmentService } from './fulfillment/fulfillment.service';
 import { getRegionConfig, DEFAULT_REGION } from '@app/region';
@@ -67,6 +68,13 @@ export class MarketplaceService {
     private readonly fulfillment: MarketplaceFulfillmentService,
   ) {}
 
+  private catalogCacheInstance?: CatalogCache;
+
+  /** The catalogue's cache, over this service's own Redis handle — see CatalogCache. */
+  private get catalogCache(): CatalogCache {
+    return (this.catalogCacheInstance ??= new CatalogCache(this.redis, this.logger));
+  }
+
   async healthCheck() {
     return { service: 'marketplace-service', status: 'ok', timestamp: new Date().toISOString() };
   }
@@ -88,7 +96,7 @@ export class MarketplaceService {
     const product = this.productRepo.create(dto as any);
     const saved = await this.productRepo.save(product);
     const entity: any = Array.isArray(saved) ? saved[0] : saved;
-    await this.redis.delPattern('marketplace:featured:*');
+    await this.catalogCache.invalidateListings();
     await this.kafka.publish('product.created', { id: entity.id, name: entity.name });
     this.logger.log(`Product created: ${entity.name ?? entity.id}`);
     return { success: true, productId: entity.id };
@@ -98,10 +106,9 @@ export class MarketplaceService {
     const product = await this.productRepo.findOne({ where: { id } });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
     await this.productRepo.update(id, dto);
-    // Detail responses are cached per market and under both the id and the
-    // slug (`product:<key>:<market>`); a bare `product:<id>` matched nothing.
-    await this.redis.delPattern(`product:${id}:*`);
-    if ((product as any).slug) await this.redis.delPattern(`product:${(product as any).slug}:*`);
+    // Every market's copy of the detail, by id and by slug, and every listing
+    // that embeds the product's name, image or category.
+    await this.catalogCache.invalidateProductAndListings(id, (product as any).slug);
     await this.kafka.publish('product.updated', { id, ...dto });
     return { success: true, id };
   }
@@ -413,27 +420,12 @@ export class MarketplaceService {
    */
   private async invalidateCatalogueCaches(productId: string) {
     // Every market's copy: detail is cached per market under id and slug, and
-    // the featured / deals / flash-deal rails are cached per region.
-    await this.redis.delPattern(`product:${productId}:*`);
+    // every listing (lists, search, rails, home feed) embeds the product.
     const row = await this.productRepo.findOne({
       where: { id: productId },
       select: ['id', 'slug'] as any,
     });
-    if (row?.slug) await this.redis.delPattern(`product:${row.slug}:*`);
-    await this.redis.delPattern('marketplace:featured:*');
-    await this.redis.delPattern('marketplace:deals:*');
-    await this.redis.delPattern('marketplace:flash-deals:*');
-
-    const stale = [
-      ...(await this.redis.scanKeys('products:*')),
-      ...(await this.redis.scanKeys('search:*')).filter((k) => !k.startsWith('search:index:')),
-    ];
-    await Promise.all(stale.map((k) => this.redis.del(k)));
-    if (stale.length) {
-      this.logger.log(
-        `Invalidated ${stale.length} cached listing/search result(s) for ${productId}`,
-      );
-    }
+    await this.catalogCache.invalidateProductAndListings(productId, row?.slug);
   }
 
   private indexPayload(product: Product) {
@@ -506,7 +498,7 @@ export class MarketplaceService {
     const brand = await this.brandRepo.findOne({ where: { id: brandId } });
     if (!brand) throw new NotFoundException(`Brand ${brandId} not found`);
     await this.brandRepo.update(brandId, { isVerified: true });
-    await this.redis.del('marketplace:brands:top');
+    await this.catalogCache.invalidateBrands();
     await this.kafka.publish('brand.approved', { id: brandId, approvedBy: adminId });
     this.logger.log(`Brand ${brandId} approved by ${adminId}`);
     return { success: true, brandId };
@@ -1030,8 +1022,8 @@ export class MarketplaceService {
    */
   async getMarketplaceHome(country?: string) {
     const region = country ? country.toUpperCase() : undefined;
-    const cacheKey = `marketplace:home:${region || 'global'}`;
-    const cached = await this.redis.getJson(cacheKey);
+    const cacheKey = catalogKeys.home(region);
+    const cached = await this.catalogCache.get(cacheKey);
     if (cached) return cached;
 
     // Full homepage payload — single source of truth for web + Flutter + admin

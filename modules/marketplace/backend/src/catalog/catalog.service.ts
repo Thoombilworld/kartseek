@@ -33,6 +33,8 @@ import { FlashDealNomination } from '../entities/flash-deal.entity';
 import { MarketplaceFulfillmentService } from '../fulfillment/fulfillment.service';
 import { PUBLIC_SELLER_FIELDS, INVOICE_SELLER_FIELDS } from '../entities/seller.public-fields';
 import { type ProductFilter } from '../types/marketplace.types';
+import { CatalogCache, CATALOG_TTL, catalogKeys } from './catalog-cache';
+import { currentRequestId } from '../transport/request-context';
 
 /**
  * CatalogService — public, read-only view of the Marketplace catalogue.
@@ -73,6 +75,45 @@ export class CatalogService {
     private readonly fulfillment: MarketplaceFulfillmentService,
   ) {}
 
+  private cacheInstance?: CatalogCache;
+
+  /**
+   * The catalogue's cache — every key and every invalidation, in one place.
+   *
+   * Public so the write paths in the other services (approval, seller price and
+   * stock edits, category edits) invalidate through the same object that
+   * named the keys. See `CatalogCache` for the scheme.
+   */
+  get cache(): CatalogCache {
+    return (this.cacheInstance ??= new CatalogCache(this.redis, this.logger));
+  }
+
+  /**
+   * Categories in the order the storefront shows them.
+   *
+   * The closure-table reads (`findDescendants`, `findTrees`) carry no ORDER BY,
+   * so the order of a category's children was whatever Postgres produced —
+   * stable by luck, not by contract. Sorted here on the same two keys the flat
+   * list uses, with the id as the final tiebreak so equal sort orders and names
+   * still come back in one order.
+   */
+  private static sortCategories<T extends Category>(rows: T[]): T[] {
+    return [...rows].sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+        (a.name ?? '').localeCompare(b.name ?? '') ||
+        a.id.localeCompare(b.id),
+    );
+  }
+
+  /** `sortCategories`, applied to every level of a tree. */
+  private static sortTree(rows: Category[]): Category[] {
+    return CatalogService.sortCategories(rows).map((row) => ({
+      ...row,
+      children: row.children ? CatalogService.sortTree(row.children) : row.children,
+    })) as Category[];
+  }
+
   // ── Category attributes ─────────────────────────────────────────────────────
 
   /**
@@ -107,8 +148,8 @@ export class CatalogService {
     // invalidate by id, so a schema change made from the panel stayed invisible
     // to every slug-addressed reader (which is all of them) until the TTL ran
     // out.
-    const cacheKey = `marketplace:category-attributes:${category?.id ?? 'all'}`;
-    const cached = await this.redis.getJson(cacheKey);
+    const cacheKey = catalogKeys.categoryAttributes(category?.id ?? 'all');
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
     if (category) {
@@ -150,7 +191,7 @@ export class CatalogService {
       total: data.length,
       variantAxes: data.filter((a) => a.isVariantAxis).map((a) => a.slug),
     };
-    await this.redis.setJson(cacheKey, result, 300);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.categoryAttributes);
     return result;
   }
 
@@ -251,11 +292,6 @@ export class CatalogService {
       .addSelect(this.localSellerExpr(), 'is_local')
       .setParameter('regionCode', region.toUpperCase())
       .orderBy('is_local', 'DESC');
-  }
-
-  /** Region suffix for a cache key. Without it one region's feed is served to another. */
-  private regionKey(region?: string): string {
-    return region ? region.toUpperCase() : 'global';
   }
 
   /**
@@ -443,13 +479,18 @@ export class CatalogService {
    * counting the wrong one reports 0 for half the tree.
    */
   async getCategories() {
-    const cached = await this.redis.getJson('marketplace:categories');
+    const cacheKey = catalogKeys.categories();
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
-    const trees = await this.categoryRepo.findTrees({ relations: ['children'] });
+    const trees = CatalogService.sortTree(
+      await this.categoryRepo.findTrees({ relations: ['children'] }),
+    );
     const flat = await this.categoryRepo.find({
       where: { is_active: true },
-      order: { sort_order: 'ASC' },
+      // Three keys, not one: `sort_order` alone leaves every equal-ranked row
+      // (most of them are 0) in whatever order the planner produced.
+      order: { sort_order: 'ASC', name: 'ASC', id: 'ASC' },
       relations: { parent: true },
     });
 
@@ -464,7 +505,7 @@ export class CatalogService {
     }));
 
     const result = { data, total: data.length, tree: trees };
-    await this.redis.setJson('marketplace:categories', result, 300);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.categories);
     return result;
   }
 
@@ -508,7 +549,7 @@ export class CatalogService {
     });
     return {
       ...category,
-      subcategories: children.filter((c) => c.id !== category.id),
+      subcategories: CatalogService.sortCategories(children.filter((c) => c.id !== category.id)),
       isSubcategory,
       parent: category.parent
         ? { id: category.parent.id, name: category.parent.name, slug: category.parent.slug }
@@ -524,14 +565,14 @@ export class CatalogService {
       // relation condition whose every field is undefined, so this returned the
       // whole flat category list, subcategories included. Roots need IsNull().
       const all = await this.categoryRepo
-        .find({ where: { parent: IsNull() }, order: { sort_order: 'ASC' } })
-        .catch((): unknown[] => []);
+        .find({ where: { parent: IsNull() }, order: { sort_order: 'ASC', name: 'ASC', id: 'ASC' } })
+        .catch((): Category[] => []);
       return { data: all, total: all.length };
     }
     const parent = await this.resolveCategory(categoryIdOrSlug);
     if (!parent) return { data: [], total: 0, categoryId: categoryIdOrSlug };
     const children = await this.categoryRepo.findDescendants(parent);
-    const subs = children.filter((c) => c.id !== parent.id);
+    const subs = CatalogService.sortCategories(children.filter((c) => c.id !== parent.id));
     return { data: subs, total: subs.length, categoryId: parent.id };
   }
 
@@ -1131,8 +1172,10 @@ export class CatalogService {
   // ── Products ────────────────────────────────────────────────────────────────
   async getProducts(page = 1, limit = 20, filter?: ProductFilter) {
     const region = filter?.country;
-    const cacheKey = `products:${JSON.stringify(filter || {})}:${page}:${limit}`;
-    const cached = await this.redis.getJson(cacheKey);
+    // Keyed on the market and a canonical digest of the remaining filter, so
+    // the same query is one key however the caller assembled the object.
+    const cacheKey = catalogKeys.products(region, filter as Record<string, unknown>, page, limit);
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
     const qb = this.productRepo
@@ -1229,6 +1272,19 @@ export class CatalogService {
         qb.addOrderBy('p.reviewCount', 'DESC');
     }
 
+    /**
+     * The final tiebreak, on every sort.
+     *
+     * None of the sort keys above is unique — two products in one category
+     * share a rating of 4.5 and 3 100 reviews today, and seeded rows share
+     * `created_at` to the millisecond. Postgres makes no promise about the
+     * order of rows that compare equal, and with `skip`/`take` the set of rows
+     * a page holds depends on that order. Every ORDER BY in this service ends
+     * on the primary key for that reason: the same request returns the same
+     * page, on every refresh, until the data changes.
+     */
+    qb.addOrderBy('p.id', 'ASC');
+
     qb.skip((page - 1) * limit).take(limit);
     const [data, total] = await qb.getManyAndCount();
     await this.attachVariantAxes(data);
@@ -1240,7 +1296,15 @@ export class CatalogService {
       hasMore: total > page * limit,
       region: region ?? null,
     };
-    await this.redis.setJson(cacheKey, result, 60);
+    this.logger.log(
+      `products market=${region ?? 'global'} filter=${JSON.stringify(filter ?? {})} page=${page} ` +
+        `rows=${data.length}/${total} ids=[${data
+          .slice(0, 6)
+          .map((p) => p.id.slice(0, 8))
+          .join(',')}${data.length > 6 ? ',…' : ''}] ` +
+        `reqId=${currentRequestId()}`,
+    );
+    await this.cache.set(cacheKey, result, CATALOG_TTL.products);
     return result;
   }
 
@@ -1296,8 +1360,8 @@ export class CatalogService {
 
     // Keyed by market as well as id: the same product carries a different offer,
     // SKUs and currency per market, and one key served Qatar's detail to India.
-    const detailKey = `product:${idOrSlug}:${region ? region.toUpperCase() : 'ALL'}`;
-    const cached = await this.redis.getJson(detailKey);
+    const detailKey = catalogKeys.product(region, idOrSlug);
+    const cached = await this.cache.get(detailKey);
     if (cached) return cached;
 
     // Try with subcategory first; fall back without it if the relation doesn't exist
@@ -1331,7 +1395,7 @@ export class CatalogService {
     try {
       [images, listings, reviews, variants] = await Promise.all([
         this.imageRepo
-          .find({ where: { product: { id: productId } }, order: { sortOrder: 'ASC' } })
+          .find({ where: { product: { id: productId } }, order: { sortOrder: 'ASC', id: 'ASC' } })
           .catch((): unknown[] => []),
         // Every seller offering this product, buy-box winner first — this is the
         // "Other Sellers on KartSeek" panel's data. Unapproved offers are
@@ -1340,18 +1404,18 @@ export class CatalogService {
           .find({
             where: { product: { id: productId }, ...CatalogService.LIVE_LISTING },
             relations: ['seller'],
-            order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC' },
+            order: { isBuyBoxWinner: 'DESC', sellingPrice: 'ASC', id: 'ASC' },
           })
           .catch((): unknown[] => []),
         this.reviewRepo
           .find({
             where: { productId, status: 'PUBLISHED' },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'ASC' },
             take: 10,
           })
           .catch((): unknown[] => []),
         this.variantRepo
-          .find({ where: { productId, isActive: true }, order: { sellingPrice: 'ASC' } })
+          .find({ where: { productId, isActive: true }, order: { sellingPrice: 'ASC', id: 'ASC' } })
           .catch((): unknown[] => []),
       ]);
     } catch {
@@ -1387,7 +1451,11 @@ export class CatalogService {
       reviewCount: product.reviewCount,
       averageRating: product.averageRating,
     };
-    await this.redis.setJson(detailKey, result, 120);
+    this.logger.log(
+      `product id=${productId} market=${market ?? 'global'} offers=${listings.length} ` +
+        `buyBoxSeller=${buyBoxSellerId ?? 'none'} reqId=${currentRequestId()}`,
+    );
+    await this.cache.set(detailKey, result, CATALOG_TTL.productDetail);
     return result;
   }
 
@@ -1420,8 +1488,8 @@ export class CatalogService {
   }
 
   async getFeaturedProducts(region?: string) {
-    const cacheKey = `marketplace:featured:${this.regionKey(region)}`;
-    const cached = await this.redis.getJson(cacheKey);
+    const cacheKey = catalogKeys.featured(region);
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
     const qb = this.productRepo
@@ -1442,18 +1510,19 @@ export class CatalogService {
     this.rankLocalFirst(qb, region);
     (region ? qb.addOrderBy('p.averageRating', 'DESC') : qb.orderBy('p.averageRating', 'DESC'))
       .addOrderBy('p.reviewCount', 'DESC')
+      .addOrderBy('p.id', 'ASC')
       .take(20);
 
     const data = await qb.getMany();
     await this.attachVariantAxes(data);
     const result = { data, total: data.length };
-    await this.redis.setJson(cacheKey, result, 120);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.featured);
     return result;
   }
 
   async getDeals(region?: string) {
-    const cacheKey = `marketplace:deals:${this.regionKey(region)}`;
-    const cached = await this.redis.getJson(cacheKey);
+    const cacheKey = catalogKeys.deals(region);
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
     // Genuinely discounted products, ordered by how deep the discount is.
     //
@@ -1485,6 +1554,7 @@ export class CatalogService {
       ? dealsQb.addOrderBy('discount_ratio', 'DESC')
       : dealsQb.orderBy('discount_ratio', 'DESC')
     )
+      .addOrderBy('p.id', 'ASC')
       // take(), not limit(): limit() caps *raw joined rows*, and the images join
       // multiplies them, so `limit(20)` returned only 9 products.
       .take(20);
@@ -1492,7 +1562,7 @@ export class CatalogService {
     const data = await dealsQb.getMany();
     await this.attachVariantAxes(data);
     const result = { data, total: data.length };
-    await this.redis.setJson(cacheKey, result, 120);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.deals);
     return result;
   }
 
@@ -1512,8 +1582,8 @@ export class CatalogService {
    * cache on a deal ending in 90 seconds would keep selling it after it closed.
    */
   async getFlashDeals(region?: string) {
-    const cacheKey = `marketplace:flash-deals:${this.regionKey(region)}`;
-    const cached = await this.redis.getJson(cacheKey);
+    const cacheKey = catalogKeys.flashDeals(region);
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
     const now = new Date();
@@ -1550,6 +1620,7 @@ export class CatalogService {
       // the column name, which is why the rest of this query looks inconsistent
       // but works.
       .addOrderBy('deal.windowEnd', 'ASC')
+      .addOrderBy('n.id', 'ASC')
       .take(24);
 
     const rows = await qb.getMany();
@@ -1580,8 +1651,12 @@ export class CatalogService {
 
     const secondsLeft = soonestEnd
       ? Math.floor((soonestEnd.getTime() - now.getTime()) / 1000)
-      : 300;
-    await this.redis.setJson(cacheKey, result, Math.max(15, Math.min(300, secondsLeft)));
+      : CATALOG_TTL.flashDealsMax;
+    await this.cache.set(
+      cacheKey,
+      result,
+      Math.max(CATALOG_TTL.flashDealsMin, Math.min(CATALOG_TTL.flashDealsMax, secondsLeft)),
+    );
     return result;
   }
 
@@ -1590,8 +1665,8 @@ export class CatalogService {
     this.logger.log(`Search: "${query}" page=${page} region=${region ?? 'global'}`);
     if (!query || query.trim().length === 0) return { data: [], total: 0, query, page, limit };
 
-    const cacheKey = `search:${this.regionKey(region)}:${query}:${page}:${limit}`;
-    const cached = await this.redis.getJson(cacheKey);
+    const cacheKey = catalogKeys.search(region, query, page, limit);
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
     // PostgreSQL full-text search with ts_rank for relevance scoring.
@@ -1641,6 +1716,7 @@ export class CatalogService {
     this.scopeToRegion(qb, region);
     this.rankLocalFirst(qb, region);
     (region ? qb.addOrderBy('rank', 'DESC') : qb.orderBy('rank', 'DESC'))
+      .addOrderBy('p.id', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
 
@@ -1654,30 +1730,34 @@ export class CatalogService {
       hasMore: total > page * limit,
       region: region ?? null,
     };
-    await this.redis.setJson(cacheKey, result, 30);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.search);
     return result;
   }
 
   // ── Brands ──────────────────────────────────────────────────────────────────
   async getBrands() {
-    const cached = await this.redis.getJson('marketplace:brands');
+    const cacheKey = catalogKeys.brands();
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
-    const [data, total] = await this.brandRepo.findAndCount({ order: { name: 'ASC' } });
+    const [data, total] = await this.brandRepo.findAndCount({
+      order: { name: 'ASC', id: 'ASC' },
+    });
     const result = { data, total };
-    await this.redis.setJson('marketplace:brands', result, 300);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.brands);
     return result;
   }
 
   async getTopBrands() {
-    const cached = await this.redis.getJson('marketplace:brands:top');
+    const cacheKey = catalogKeys.topBrands();
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
     const data = await this.brandRepo.find({
       where: { isVerified: true },
-      order: { name: 'ASC' },
+      order: { name: 'ASC', id: 'ASC' },
       take: 20,
     });
     const result = { data, total: data.length };
-    await this.redis.setJson('marketplace:brands:top', result, 300);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.brands);
     return result;
   }
 
@@ -1735,8 +1815,8 @@ export class CatalogService {
   }
 
   async getVerifiedSellers(region?: string) {
-    const cacheKey = `marketplace:verified-sellers:${this.regionKey(region)}`;
-    const cached = await this.redis.getJson(cacheKey);
+    const cacheKey = catalogKeys.verifiedSellers(region);
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
     const [rows, total] = await this.sellerRepo.findAndCount({
@@ -1750,10 +1830,11 @@ export class CatalogService {
       take: 20,
     });
     const data = (await this.withRealCounters(rows)).sort(
-      (a: any, b: any) => (b.sellerRating ?? 0) - (a.sellerRating ?? 0),
+      (a: any, b: any) =>
+        (b.sellerRating ?? 0) - (a.sellerRating ?? 0) || String(a.id).localeCompare(String(b.id)),
     );
     const result = { data, total, region: region ?? null };
-    await this.redis.setJson(cacheKey, result, 300);
+    await this.cache.set(cacheKey, result, CATALOG_TTL.verifiedSellers);
     return result;
   }
 

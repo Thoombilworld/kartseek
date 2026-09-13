@@ -14,6 +14,7 @@ import { KafkaProducerService } from '@app/kafka';
 import { EncryptionService } from '@app/security';
 import { getRegionConfig, isSupportedRegion, DEFAULT_REGION } from '@app/region';
 import { CatalogService } from '../catalog/catalog.service';
+import { CatalogCache } from '../catalog/catalog-cache';
 import { Seller } from '../entities/seller.entity';
 import { Product } from '../entities/product.entity';
 import { ProductListing } from '../entities/product-listing.entity';
@@ -88,6 +89,13 @@ export class SellerService {
     // knows nothing about this class.
     private readonly catalog: CatalogService,
   ) {}
+
+  private catalogCacheInstance?: CatalogCache;
+
+  /** The catalogue's cache — dropped after every price, stock or image write below. */
+  private get catalogCache(): CatalogCache {
+    return (this.catalogCacheInstance ??= new CatalogCache(this.redis, this.logger));
+  }
 
   /**
    * Turn a placed customer order into one fulfilment record per seller.
@@ -1010,7 +1018,13 @@ export class SellerService {
     await this.listingRepo.save(listing);
 
     const productId = (listing as any).product?.id;
-    if (productId) await this.catalog.recomputeBuyBox(productId);
+    if (productId) {
+      await this.catalog.recomputeBuyBox(productId);
+      // A price or stock edit changes the card and the detail page at once;
+      // until this line only the admin approval path dropped these caches, so
+      // a seller's new price stayed invisible for up to two minutes.
+      await this.catalogCache.invalidateProductAndListings(productId);
+    }
 
     await this.invalidateDashboard(sellerId);
     await this.kafka.publish('seller.listing.updated', { listingId, sellerId, productId });
@@ -1081,7 +1095,10 @@ export class SellerService {
     // out-of-stock winner keeps the product advertising a price that
     // `priceOrderItems` then refuses at checkout.
     const listingProductId = (listing as any).product?.id;
-    if (listingProductId) await this.catalog.recomputeBuyBox(listingProductId);
+    if (listingProductId) {
+      await this.catalog.recomputeBuyBox(listingProductId);
+      await this.catalogCache.invalidateProductAndListings(listingProductId);
+    }
 
     await this.kafka.publish('inventory.updated', {
       sellerId,
@@ -1551,6 +1568,8 @@ export class SellerService {
       }),
     );
 
+    // Images are embedded in every cached card and detail for this product.
+    await this.catalogCache.invalidateProductAndListings(productId);
     return { success: true, image: saved };
   }
 
@@ -1564,6 +1583,7 @@ export class SellerService {
     await this.imageRepo.update({ product: { id: productId } }, { isPrimary: false });
     image.isPrimary = true;
     await this.imageRepo.save(image);
+    await this.catalogCache.invalidateProductAndListings(productId);
     return { success: true, imageId };
   }
 
@@ -1581,6 +1601,7 @@ export class SellerService {
     }
 
     await Promise.all(ids.map((id, index) => this.imageRepo.update({ id }, { sortOrder: index })));
+    await this.catalogCache.invalidateProductAndListings(productId);
     return { success: true, productId, ordered: ids.length };
   }
 
@@ -1605,6 +1626,7 @@ export class SellerService {
       }
     }
 
+    await this.catalogCache.invalidateProductAndListings(productId);
     return { success: true, imageId };
   }
 

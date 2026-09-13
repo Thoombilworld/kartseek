@@ -32,6 +32,7 @@ import { BankOffer } from '../entities/bank-offer.entity';
 import { ExchangeOffer } from '../entities/exchange-offer.entity';
 import { MarketplaceHomeCacheService } from '../catalog/home-cache.service';
 import { getRegionConfig, DEFAULT_REGION } from '@app/region';
+import { CatalogCache } from '../catalog/catalog-cache';
 
 /**
  * MarketplaceAdminService — back-office governance for the Marketplace module.
@@ -82,6 +83,13 @@ export class MarketplaceAdminService {
     private readonly sellerPromotionRepo: Repository<SellerPromotion>,
   ) {}
 
+  private catalogCacheInstance?: CatalogCache;
+
+  /** The catalogue's cache, for the writes below that change what the storefront shows. */
+  private get catalogCache(): CatalogCache {
+    return (this.catalogCacheInstance ??= new CatalogCache(this.redis, this.logger));
+  }
+
   async updateCategory(id: string, dto: any) {
     const cat = await this.categoryRepo.findOne({ where: { id } });
     if (!cat) throw new NotFoundException(`Category ${id} not found`);
@@ -111,7 +119,7 @@ export class MarketplaceAdminService {
         await this.categoryRepo.save(updated);
       }
     }
-    await this.redis.del('marketplace:categories');
+    await this.catalogCache.invalidateCategories();
     await this.kafka.publish('category.updated', { id, ...dto });
     this.logger.log(`Category updated: ${id}`);
     return { success: true, id };
@@ -143,7 +151,7 @@ export class MarketplaceAdminService {
       if (parent) entity.parent = parent;
     }
     const saved = await this.categoryRepo.save(entity);
-    await this.redis.del('marketplace:categories');
+    await this.catalogCache.invalidateCategories();
     await this.kafka.publish('category.created', {
       id: saved.id,
       name: saved.name,
@@ -296,7 +304,7 @@ export class MarketplaceAdminService {
       parent,
     });
     const saved = await this.categoryRepo.save(entity);
-    await this.redis.del('marketplace:categories');
+    await this.catalogCache.invalidateCategories();
     await this.kafka.publish('subcategory.created', {
       id: saved.id,
       name: saved.name,
@@ -323,7 +331,7 @@ export class MarketplaceAdminService {
       return { success: true, id, action: 'deactivated', reason: `${productCount} products exist` };
     }
     await this.categoryRepo.remove(sub);
-    await this.redis.del('marketplace:categories');
+    await this.catalogCache.invalidateCategories();
     await this.kafka.publish('subcategory.deleted', { id });
     this.logger.log(`Subcategory ${id} deleted`);
     return { success: true, id };
@@ -344,13 +352,13 @@ export class MarketplaceAdminService {
     const productCount = await this.productRepo.count({ where: { category: { id } } });
     if (productCount > 0) {
       await this.categoryRepo.update(id, { is_active: false });
-      await this.redis.del('marketplace:categories');
+      await this.catalogCache.invalidateCategories();
       await this.kafka.publish('category.deactivated', { id });
       this.logger.log(`Category ${id} deactivated (has ${productCount} products)`);
       return { success: true, id, action: 'deactivated', reason: `${productCount} products exist` };
     }
     await this.categoryRepo.remove(cat);
-    await this.redis.del('marketplace:categories');
+    await this.catalogCache.invalidateCategories();
     await this.kafka.publish('category.deleted', { id });
     this.logger.log(`Category ${id} deleted`);
     return { success: true, id };
@@ -494,15 +502,16 @@ export class MarketplaceAdminService {
    * joins another.
    */
   private async invalidateAttributeCaches(...categoryIds: (string | null | undefined)[]) {
-    const keys = new Set<string>(['admin:attributes:all', 'marketplace:category-attributes:all']);
+    const keys = new Set<string>(['admin:attributes:all']);
     for (const categoryId of categoryIds) {
       if (!categoryId) continue;
       keys.add(`admin:attributes:${categoryId}`);
-      keys.add(`marketplace:category-attributes:${categoryId}`);
     }
     await Promise.all(
       [...keys].map((key) => this.redis.del(key).catch((): undefined => undefined)),
     );
+    // The storefront's copy is named by the catalogue's own key scheme.
+    await this.catalogCache.invalidateCategoryAttributes(...categoryIds);
   }
 
   async createBrand(dto: any) {
@@ -521,7 +530,7 @@ export class MarketplaceAdminService {
       isVerified: dto.isVerified ?? false,
     });
     const saved = await this.brandRepo.save(entity);
-    await this.redis.del('marketplace:brands:top');
+    await this.catalogCache.invalidateBrands();
     await this.kafka.publish('brand.created', { id: saved.id, name: saved.name, slug: saved.slug });
     this.logger.log(`Brand created: ${saved.name} (${saved.id})`);
     return { success: true, id: saved.id, name: saved.name, slug: saved.slug };
@@ -537,7 +546,7 @@ export class MarketplaceAdminService {
       update.logoUrl = dto.logoUrl ?? dto.logo;
     if (dto.isVerified !== undefined) update.isVerified = dto.isVerified;
     await this.brandRepo.update(id, update);
-    await this.redis.del('marketplace:brands:top');
+    await this.catalogCache.invalidateBrands();
     await this.kafka.publish('brand.updated', { id, ...dto });
     this.logger.log(`Brand updated: ${id}`);
     return { success: true, id };
@@ -550,13 +559,13 @@ export class MarketplaceAdminService {
     const productCount = await this.productRepo.count({ where: { brand: { id } } });
     if (productCount > 0) {
       await this.brandRepo.update(id, { isVerified: false });
-      await this.redis.del('marketplace:brands:top');
+      await this.catalogCache.invalidateBrands();
       await this.kafka.publish('brand.deactivated', { id });
       this.logger.log(`Brand ${id} deactivated (has ${productCount} products)`);
       return { success: true, id, action: 'deactivated', reason: `${productCount} products exist` };
     }
     await this.brandRepo.remove(brand);
-    await this.redis.del('marketplace:brands:top');
+    await this.catalogCache.invalidateBrands();
     await this.kafka.publish('brand.deleted', { id });
     this.logger.log(`Brand ${id} deleted`);
     return { success: true, id };
@@ -1817,7 +1826,7 @@ export class MarketplaceAdminService {
     product.is_featured = true;
     await this.productRepo.save(product);
     await this.kafka.publish('featured.added', { id });
-    await this.redis.del('marketplace:featured');
+    await this.catalogCache.invalidateListings();
     await this.home.invalidateHomeCache();
     return { success: true, id };
   }
@@ -1830,7 +1839,7 @@ export class MarketplaceAdminService {
     product.is_featured = false;
     await this.productRepo.save(product);
     await this.kafka.publish('featured.removed', { id });
-    await this.redis.del('marketplace:featured');
+    await this.catalogCache.invalidateListings();
     await this.home.invalidateHomeCache();
     return { success: true, id };
   }
@@ -2134,7 +2143,7 @@ export class MarketplaceAdminService {
   private async invalidateOfferCaches() {
     await this.redis.delPattern('marketplace:bank-offers*');
     await this.redis.delPattern('marketplace:exchange-offers*');
-    await this.redis.delPattern('marketplace:featured:*');
+    await this.catalogCache.invalidateListings();
   }
 
   async getSponsoredProducts(status?: string, scope?: string) {

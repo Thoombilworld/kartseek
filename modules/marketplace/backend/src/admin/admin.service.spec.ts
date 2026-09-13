@@ -75,6 +75,8 @@ describe('MarketplaceAdminService', () => {
       getJson: jest.fn().mockResolvedValue(null),
       setJson: jest.fn().mockResolvedValue('OK'),
       del: jest.fn().mockResolvedValue(1),
+      // Category and offer writes drop the storefront's listing caches by pattern.
+      delPattern: jest.fn().mockResolvedValue(0),
     };
     const kafkaMock: Partial<jest.Mocked<KafkaProducerService>> = {
       publish: jest.fn().mockResolvedValue(undefined),

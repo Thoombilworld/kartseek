@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
+import { catalogKeys } from './catalog-cache';
 
 /** Regions whose home feed is cached separately. */
 const CACHED_REGIONS = [
@@ -183,7 +184,7 @@ export class MarketplaceHomeCacheService {
       Array.isArray(regions) && regions.length
         ? ['global', ...regions.map((r) => String(r).toUpperCase())]
         : [...CACHED_REGIONS];
-    await Promise.all(targets.map((r) => this.redis.del(`marketplace:home:${r}`)));
+    await Promise.all(targets.map((r) => this.redis.del(catalogKeys.home(r))));
     this.logger.log(`Marketplace home cache invalidated: ${targets.join(', ')}`);
   }
 }

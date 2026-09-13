@@ -605,9 +605,11 @@ describe('CatalogService', () => {
       await service.getFeaturedProducts('QA');
       await service.getFeaturedProducts('IN');
 
+      // The market is the key's own segment (`marketplace:v2:<market>:featured`),
+      // so a wildcard over one market can never reach another's entries.
       const keys = redis.setJson.mock.calls.map((call) => call[0]);
-      expect(keys).toContain('marketplace:featured:QA');
-      expect(keys).toContain('marketplace:featured:IN');
+      expect(keys).toContain('marketplace:v2:QA:featured');
+      expect(keys).toContain('marketplace:v2:IN:featured');
     });
 
     it('includes sellers whose region is not yet backfilled', async () => {

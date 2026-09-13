@@ -33,6 +33,7 @@ import {
 } from '../entities/product-report.entity';
 import { PriceAlert } from '../entities/price-alert.entity';
 import { ProductListing } from '../entities/product-listing.entity';
+import { CatalogCache } from '../catalog/catalog-cache';
 
 /**
  * The authenticated caller, as forwarded by the API Gateway from the verified
@@ -84,6 +85,13 @@ export class MarketplaceFulfillmentService {
     @InjectRepository(ProductListing) private readonly listingRepo: Repository<ProductListing>,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
+
+  private catalogCacheInstance?: CatalogCache;
+
+  /** The catalogue's cache — a SKU's stock is on the detail page and on every card's axes. */
+  private get catalogCache(): CatalogCache {
+    return (this.catalogCacheInstance ??= new CatalogCache(this.redis, this.logger));
+  }
 
   // ── Object-level authorisation ──────────────────────────────────────────────
   //
@@ -941,24 +949,36 @@ export class MarketplaceFulfillmentService {
     assertInMarket(await this.sellerMarket(sellerId), scope, 'variant', this.logger);
 
     // Row-lock the variant so concurrent decrements can't oversell.
-    const { newQty, sku, lowStockThreshold } = await this.dataSource.transaction(async (mgr) => {
-      const repo = mgr.getRepository(ProductVariant);
-      const variant = await repo.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
-      if (!variant) throw new NotFoundException(`Variant ${id} not found`);
-      let q = variant.stockQuantity;
-      if (dto.operation === 'SET') q = dto.quantity;
-      else if (dto.operation === 'INCREMENT') q += dto.quantity;
-      else if (dto.operation === 'DECREMENT') {
-        if (variant.stockQuantity < dto.quantity) {
-          throw new BadRequestException(
-            `Insufficient stock: have ${variant.stockQuantity}, requested ${dto.quantity}`,
-          );
+    const { newQty, sku, lowStockThreshold, productId } = await this.dataSource.transaction(
+      async (mgr) => {
+        const repo = mgr.getRepository(ProductVariant);
+        const variant = await repo.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+        if (!variant) throw new NotFoundException(`Variant ${id} not found`);
+        let q = variant.stockQuantity;
+        if (dto.operation === 'SET') q = dto.quantity;
+        else if (dto.operation === 'INCREMENT') q += dto.quantity;
+        else if (dto.operation === 'DECREMENT') {
+          if (variant.stockQuantity < dto.quantity) {
+            throw new BadRequestException(
+              `Insufficient stock: have ${variant.stockQuantity}, requested ${dto.quantity}`,
+            );
+          }
+          q = variant.stockQuantity - dto.quantity;
         }
-        q = variant.stockQuantity - dto.quantity;
-      }
-      await repo.update(id, { stockQuantity: q });
-      return { newQty: q, sku: variant.sku, lowStockThreshold: variant.lowStockThreshold };
-    });
+        await repo.update(id, { stockQuantity: q });
+        return {
+          newQty: q,
+          sku: variant.sku,
+          lowStockThreshold: variant.lowStockThreshold,
+          productId: variant.productId,
+        };
+      },
+    );
+    // After the commit, never inside it: a reader must not repopulate the cache
+    // from a row this transaction is about to change.
+    if (productId) {
+      await this.catalogCache.invalidateProductAndListings(productId);
+    }
     if (newQty <= lowStockThreshold) {
       await this.kafka.publish('variant.low-stock', { id, sku, stockQuantity: newQty });
     }

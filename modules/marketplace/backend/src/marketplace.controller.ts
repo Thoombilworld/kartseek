@@ -1,5 +1,6 @@
 import {
   UseFilters,
+  UseInterceptors,
   Controller,
   Get,
   Post,
@@ -14,6 +15,7 @@ import {
   Logger,
   Req,
 } from '@nestjs/common';
+import { RpcContextInterceptor } from './transport/rpc-context.interceptor';
 import {
   type DtoMessage,
   type EmptyMessage,
@@ -126,6 +128,10 @@ function actorOf(data: any): { ownerId?: string; role?: string; regionCode?: str
 // a missing product became "catalogue unavailable". The filter cannot be bound in
 // main.ts: connectMicroservice() does not inherit the app's global filters.
 @UseFilters(RpcAwareExceptionsFilter)
+// Lifts the gateway's `_requestId` off every TCP payload into the request
+// context, so cache and query log lines in the services below carry the same
+// `reqId=` the gateway logged for the browser request. See request-context.ts.
+@UseInterceptors(RpcContextInterceptor)
 @Controller('marketplace')
 export class MarketplaceController {
   private readonly logger = new Logger(MarketplaceController.name);
@@ -1296,7 +1302,11 @@ export class MarketplaceController {
   }
 
   @MessagePattern({ cmd: 'get_category_by_id' })
-  tcpGetCategoryById(@Payload() id: string) {
+  tcpGetCategoryById(@Payload() data: string | { id?: string }) {
+    // Both shapes arrive: the gateway's REST route and the GraphQL resolver
+    // send `{ id }`, older callers the bare identifier. The resolver's object
+    // used to reach `findOne({ slug: {…} })`, which matches nothing useful.
+    const id = typeof data === 'string' ? data : String(data?.id ?? '');
     return this.catalog.getCategoryById(id);
   }
 
