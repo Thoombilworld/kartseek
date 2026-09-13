@@ -40,6 +40,25 @@ const nextConfig = {
   turbopack: {
     root: path.resolve(__dirname, '../../..'),
   },
+
+  // ── Container output (infra/docker/nextjs.Dockerfile) ─────────────────────
+  //
+  // Standalone emits .next/standalone: a self-contained server.js plus only the
+  // node_modules the traced import graph actually reaches. The zone image's
+  // runtime stage copies that directory, so without this key the zone builds
+  // and then fails on the standalone COPY — which is what every zone did until
+  // Task IN11. Purely additive: `next dev` and `next start` read .next as
+  // before and are unchanged.
+  //
+  // The tracing root is the monorepo root, three levels up from
+  // modules/<module>/frontend — the same path `turbopack.root` above resolves.
+  // With the default root (the nearest lockfile's directory, resolved per file)
+  // everything this zone imports from packages/shared-core is traced from
+  // outside the workspace and silently left out of the bundle; the image then
+  // starts and 500s on the first page that needs one.
+  output: 'standalone',
+  outputFileTracingRoot: path.resolve(__dirname, '../../..'),
+
   // ── Images ────────────────────────────────────────────────────────────────
   //
   // Carried over from the shell. A zone is its own Next application, so it

@@ -8,7 +8,9 @@ import {
   healthPathFor,
   stem,
 } from './compose.mjs';
-import { loadRegistry } from './lib.mjs';
+import { loadRegistry, repoRoot, webEntries } from './lib.mjs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const gateway = {
   name: 'api-gateway',
@@ -307,4 +309,47 @@ test('the real registry renders all 35 deployables once each', () => {
   assert.equal((out.match(/^\s{4}container_name: kartseek-/gm) ?? []).length, 35);
   assert.equal((out.match(/profiles: \[admin, full\]/g) ?? []).length, 12);
   assert.equal((out.match(/profiles: \[full\]/g) ?? []).length, 23);
+});
+
+/**
+ * The precondition infra/docker/nextjs.Dockerfile states in its header, checked
+ * against the config Next itself would load rather than against the source
+ * text: the runtime stage copies `.next/standalone`, which Next only emits when
+ * that workspace's own next.config sets `output: 'standalone'`. A Next
+ * deployable that does not set it builds — the whole application, in full —
+ * and then fails on the COPY, so this is worth catching in a test that runs in
+ * a second rather than at the end of a 40-minute image build.
+ *
+ * The tracing root is checked too, and it has to be the monorepo root. Every
+ * one of these workspaces imports from packages/shared-core, and the shell also
+ * imports from modules/*\/frontend; with the default root (the nearest
+ * lockfile's directory, resolved per file) those files are traced from outside
+ * the workspace and silently left out. That failure survives the build, the
+ * image starts, and the first page that needs one 500s.
+ *
+ * The list comes from the registry, so a zone added to services.yaml without
+ * the key fails here.
+ */
+test('every Next deployable emits standalone output, traced from the monorepo root', async () => {
+  const root = repoRoot();
+  const webs = webEntries(loadRegistry());
+  assert.equal(webs.length, 9, 'the console and the eight zones');
+  for (const s of webs) {
+    const file = path.join(root, s.path, 'next.config.mjs');
+    const loaded = await import(pathToFileURL(file).href);
+    // next-intl's plugin returns the config object today; a Next config may
+    // also be a (phase, { defaultConfig }) function, so handle both.
+    const cfg =
+      typeof loaded.default === 'function'
+        ? await loaded.default('phase-production-build', { defaultConfig: {} })
+        : loaded.default;
+    assert.equal(cfg.output, 'standalone', `${s.path} must set output: 'standalone'`);
+    assert.equal(
+      cfg.outputFileTracingRoot,
+      root,
+      `${s.path} must trace from the monorepo root, not its own directory`,
+    );
+    // A zone is mounted under its base path and the healthcheck probes it.
+    if (s.kind === 'web-zone') assert.equal(cfg.basePath, s.basePath, `${s.path} basePath`);
+  }
 });
