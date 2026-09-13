@@ -52,19 +52,26 @@ const ds = new DataSource({
 });
 
 /** Markets a franchise may operate in — active, and running the franchise module. */
-const MARKETS = (Object.keys(REGION_CONFIGS) as SupportedCountryCode[])
-  .filter((c) => REGION_CONFIGS[c].isActive && REGION_CONFIGS[c].enabledModules.includes('franchise' as never));
+const MARKETS = (Object.keys(REGION_CONFIGS) as SupportedCountryCode[]).filter(
+  (c) =>
+    REGION_CONFIGS[c].isActive && REGION_CONFIGS[c].enabledModules.includes('franchise' as never),
+);
 
 /** Commission keys that predate the registry's naming. */
 const RENAMED: Record<string, string> = {
   hotel: 'hotel-booking',
   hotels: 'hotel-booking',
-  'hotel_booking': 'hotel-booking',
+  hotel_booking: 'hotel-booking',
 };
 
 const DEFAULT_RATES: Record<string, number> = {
-  marketplace: 8, grocery: 12, restaurant: 18, pharmacy: 10,
-  doctor: 12, taxi: 20, 'hotel-booking': 15,
+  marketplace: 8,
+  grocery: 12,
+  restaurant: 18,
+  pharmacy: 10,
+  doctor: 12,
+  taxi: 20,
+  'hotel-booking': 15,
 };
 
 async function main() {
@@ -73,7 +80,9 @@ async function main() {
   const rows = await repo.find({ order: { businessName: 'ASC' } });
 
   console.log(`${APPLY ? 'APPLYING' : 'DRY RUN — pass --apply to write'}`);
-  console.log(`${rows.length} franchises; ${MARKETS.length} active markets: ${MARKETS.join(', ')}\n`);
+  console.log(
+    `${rows.length} franchises; ${MARKETS.length} active markets: ${MARKETS.join(', ')}\n`,
+  );
 
   let changed = 0;
   const unsupported: string[] = [];
@@ -98,11 +107,10 @@ async function main() {
 
     const aligned: Record<string, number> = {};
     for (const m of enabled) {
-      if (!(m in DEFAULT_RATES)) continue;   // wallet, loyalty and delivery take no commission
+      if (!(m in DEFAULT_RATES)) continue; // wallet, loyalty and delivery take no commission
       const existing = rekeyed[m];
-      aligned[m] = Number.isFinite(existing) && existing >= 0 && existing <= 100
-        ? existing
-        : DEFAULT_RATES[m];
+      aligned[m] =
+        Number.isFinite(existing) && existing >= 0 && existing <= 100 ? existing : DEFAULT_RATES[m];
     }
 
     const dropped = Object.keys(rekeyed).filter((k) => !(k in aligned));
@@ -116,9 +124,12 @@ async function main() {
     const cur = `${region.currencyCode} ${region.currencySymbol} ${region.currencyDecimals}dp`;
     console.log(`  ${f.businessName}  [${market} · ${cur}]`);
     if (countryChanged) console.log(`      country   '${before.country}' → '${market}'`);
-    if (renamed.length) console.log(`      rekeyed   ${renamed.map((k) => `${k} → ${RENAMED[k]}`).join(', ')}`);
-    if (dropped.length) console.log(`      dropped   ${dropped.join(', ')}   (not enabled in ${market})`);
-    if (added.length) console.log(`      added     ${added.map((k) => `${k}=${aligned[k]}`).join(', ')}`);
+    if (renamed.length)
+      console.log(`      rekeyed   ${renamed.map((k) => `${k} → ${RENAMED[k]}`).join(', ')}`);
+    if (dropped.length)
+      console.log(`      dropped   ${dropped.join(', ')}   (not enabled in ${market})`);
+    if (added.length)
+      console.log(`      added     ${added.map((k) => `${k}=${aligned[k]}`).join(', ')}`);
 
     if (APPLY) {
       f.countryCode = market;
@@ -128,12 +139,18 @@ async function main() {
   }
 
   if (unsupported.length) {
-    console.log(`\n  ${unsupported.length} franchise(s) in a country that is not an active market:`);
+    console.log(
+      `\n  ${unsupported.length} franchise(s) in a country that is not an active market:`,
+    );
     unsupported.forEach((u) => console.log(`      ${u}`));
-    console.log('      Left untouched. Set the country deliberately — guessing one picks a currency.');
+    console.log(
+      '      Left untouched. Set the country deliberately — guessing one picks a currency.',
+    );
   }
 
-  console.log(`\n${changed} franchise(s) ${APPLY ? 'updated' : 'would change'}, ${unsupported.length} need a decision.`);
+  console.log(
+    `\n${changed} franchise(s) ${APPLY ? 'updated' : 'would change'}, ${unsupported.length} need a decision.`,
+  );
   await ds.destroy();
 }
 

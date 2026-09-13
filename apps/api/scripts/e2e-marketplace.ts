@@ -46,7 +46,12 @@ const JSON_OUT = process.argv.includes('--json');
 // ── Reporting ───────────────────────────────────────────────────────────────
 
 type Status = 'pass' | 'fail' | 'skip';
-interface Check { layer: string; what: string; status: Status; detail: string }
+interface Check {
+  layer: string;
+  what: string;
+  status: Status;
+  detail: string;
+}
 const checks: Check[] = [];
 
 function record(layer: string, what: string, status: Status, detail = '') {
@@ -85,15 +90,22 @@ async function call(method: string, path: string, body?: unknown) {
     });
     const text = await res.text();
     let json: any = null;
-    try { json = text ? JSON.parse(text) : null; } catch { /* not json */ }
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      /* not json */
+    }
     return { status: res.status, json, text };
   } catch (e) {
     return { status: 0, json: null, text: String((e as Error).message) };
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** The gateway wraps payloads; list rows sit at data.data, single rows at data. */
-const unwrap = (j: any) => (j?.data?.data !== undefined ? j.data.data : j?.data !== undefined ? j.data : j);
+const unwrap = (j: any) =>
+  j?.data?.data !== undefined ? j.data.data : j?.data !== undefined ? j.data : j;
 
 /**
  * Poll until a condition holds, or give up.
@@ -142,7 +154,9 @@ const redis = new Redis({
   lazyConnect: true,
   maxRetriesPerRequest: 1,
 });
-redis.on('error', () => { /* reported through the checks, not the console */ });
+redis.on('error', () => {
+  /* reported through the checks, not the console */
+});
 
 const STAMP = process.env.E2E_STAMP ?? 'e2e';
 const PRODUCT_NAME = `E2E Integration Probe ${STAMP}`;
@@ -186,28 +200,34 @@ async function main() {
   const list = await call('GET', '/marketplace/products?limit=3');
   const rows = unwrap(list.json);
   if (list.status === 200 && Array.isArray(rows) && rows.length)
-    ok('gateway', 'GET /marketplace/products returns rows from the service', `${rows.length} returned`);
-  else
-    bad('gateway', 'GET /marketplace/products did not return rows', `status ${list.status}`);
+    ok(
+      'gateway',
+      'GET /marketplace/products returns rows from the service',
+      `${rows.length} returned`,
+    );
+  else bad('gateway', 'GET /marketplace/products did not return rows', `status ${list.status}`);
 
   const doubled = await call('GET', '/marketplace/marketplace/products');
   if (doubled.status === 404)
     ok('gateway', 'a doubled path prefix is rejected', '/marketplace/marketplace/products -> 404');
-  else
-    bad('gateway', 'a doubled path prefix was accepted', `status ${doubled.status}`);
+  else bad('gateway', 'a doubled path prefix was accepted', `status ${doubled.status}`);
 
-  const doubledApi = await fetch(`${SHELL}/api/v1/api/v1/marketplace/products`).then(r => r.status).catch(() => 0);
+  const doubledApi = await fetch(`${SHELL}/api/v1/api/v1/marketplace/products`)
+    .then((r) => r.status)
+    .catch(() => 0);
   if (doubledApi === 404) ok('gateway', 'a doubled /api/v1 prefix is rejected');
   else bad('gateway', 'a doubled /api/v1 prefix was accepted', `status ${doubledApi}`);
 
   // ── 2. Seller submits a product ───────────────────────────────────────────
   section('Seller: submit a product');
 
-  const sellerRow = await db.query(
-    // camelCase: only some columns on this table carry an explicit name.
-    `SELECT id, "businessName" FROM marketplace.sellers
+  const sellerRow = await db
+    .query(
+      // camelCase: only some columns on this table carry an explicit name.
+      `SELECT id, "businessName" FROM marketplace.sellers
       WHERE "verificationStatus" = 'VERIFIED' ORDER BY "createdAt" LIMIT 1`,
-  ).catch(() => []);
+    )
+    .catch(() => []);
   const seller = sellerRow[0];
 
   if (!seller) {
@@ -219,7 +239,9 @@ async function main() {
   // Clear any product left by a previous run so the test is repeatable.
   await db.query(
     `DELETE FROM marketplace.product_listings
-      WHERE product_id IN (SELECT id FROM marketplace.products WHERE name = $1)`, [PRODUCT_NAME]);
+      WHERE product_id IN (SELECT id FROM marketplace.products WHERE name = $1)`,
+    [PRODUCT_NAME],
+  );
   await db.query('DELETE FROM marketplace.products WHERE name = $1', [PRODUCT_NAME]);
 
   const submit = await call('POST', `/sellers/${seller.id}/products`, {
@@ -238,7 +260,11 @@ async function main() {
     productId = created?.id ?? created?.productId ?? created?.product?.id ?? null;
     ok('gateway', 'POST /sellers/:id/products accepted', `status ${submit.status}`);
   } else {
-    bad('gateway', 'POST /sellers/:id/products rejected', `status ${submit.status} ${submit.text.slice(0, 120)}`);
+    bad(
+      'gateway',
+      'POST /sellers/:id/products rejected',
+      `status ${submit.status} ${submit.text.slice(0, 120)}`,
+    );
   }
 
   // The row is the proof, not the status. A gateway route that answers without
@@ -249,9 +275,17 @@ async function main() {
   );
   if (dbRow.length === 1) {
     productId = dbRow[0].id;
-    ok('database', 'product row written to Postgres', `id ${productId}, approval ${dbRow[0].approval_status}`);
+    ok(
+      'database',
+      'product row written to Postgres',
+      `id ${productId}, approval ${dbRow[0].approval_status}`,
+    );
   } else {
-    bad('database', 'no product row was written', `${dbRow.length} rows matched — the 2xx above wrote nothing`);
+    bad(
+      'database',
+      'no product row was written',
+      `${dbRow.length} rows matched — the 2xx above wrote nothing`,
+    );
     return finish();
   }
 
@@ -261,42 +295,72 @@ async function main() {
   );
   if (listingRows.length)
     ok('database', 'a sellable listing was created with it', `${listingRows.length} listing(s)`);
-  else
-    bad('database', 'no listing created — the product exists but nothing is for sale');
+  else bad('database', 'no listing created — the product exists but nothing is for sale');
 
   // ── 3. Product is invisible to customers before approval ──────────────────
   section('Customer: unapproved product must not be visible');
 
-  const beforeSearch = await call('GET', `/marketplace/search?q=${encodeURIComponent(PRODUCT_NAME)}`);
+  const beforeSearch = await call(
+    'GET',
+    `/marketplace/search?q=${encodeURIComponent(PRODUCT_NAME)}`,
+  );
   const beforeRows = unwrap(beforeSearch.json);
-  const visibleBefore = Array.isArray(beforeRows) && beforeRows.some((p: any) => p?.id === productId);
+  const visibleBefore =
+    Array.isArray(beforeRows) && beforeRows.some((p: any) => p?.id === productId);
   if (!visibleBefore) ok('gateway', 'pending product is not returned to customers');
-  else bad('gateway', 'pending product is already visible to customers', 'approval gate is not enforced');
+  else
+    bad(
+      'gateway',
+      'pending product is already visible to customers',
+      'approval gate is not enforced',
+    );
 
   // ── 4. Admin approves ─────────────────────────────────────────────────────
   section('Admin: approve the product');
 
   const approve = await call('PATCH', `/admin/marketplace/products/${productId}/approve`, {});
   if (approve.status >= 200 && approve.status < 300)
-    ok('gateway', 'PATCH /admin/marketplace/products/:id/approve accepted', `status ${approve.status}`);
+    ok(
+      'gateway',
+      'PATCH /admin/marketplace/products/:id/approve accepted',
+      `status ${approve.status}`,
+    );
   else
-    bad('gateway', 'admin approve rejected', `status ${approve.status} ${approve.text.slice(0, 120)}`);
+    bad(
+      'gateway',
+      'admin approve rejected',
+      `status ${approve.status} ${approve.text.slice(0, 120)}`,
+    );
 
   const afterRow = await db.query(
-    'SELECT approval_status, is_active, status FROM marketplace.products WHERE id = $1', [productId]);
+    'SELECT approval_status, is_active, status FROM marketplace.products WHERE id = $1',
+    [productId],
+  );
   if (afterRow[0]?.approval_status === 'APPROVED' && afterRow[0]?.is_active === true)
-    ok('database', 'approval persisted', `approval_status APPROVED, is_active true, status ${afterRow[0].status}`);
+    ok(
+      'database',
+      'approval persisted',
+      `approval_status APPROVED, is_active true, status ${afterRow[0].status}`,
+    );
   else
-    bad('database', 'approval did not persist',
-      `approval_status ${afterRow[0]?.approval_status}, is_active ${afterRow[0]?.is_active} — the 2xx above wrote nothing`);
+    bad(
+      'database',
+      'approval did not persist',
+      `approval_status ${afterRow[0]?.approval_status}, is_active ${afterRow[0]?.is_active} — the 2xx above wrote nothing`,
+    );
 
   const afterListings = await db.query(
-    'SELECT "isActive", "approvalStatus" FROM marketplace.product_listings WHERE product_id = $1', [productId]);
+    'SELECT "isActive", "approvalStatus" FROM marketplace.product_listings WHERE product_id = $1',
+    [productId],
+  );
   if (afterListings.some((l: any) => l.isActive && l.approvalStatus === 'APPROVED'))
     ok('database', "the submitting seller's offer went live with it");
   else
-    bad('database', 'no listing was activated — the product is approved but unbuyable',
-      JSON.stringify(afterListings));
+    bad(
+      'database',
+      'no listing was activated — the product is approved but unbuyable',
+      JSON.stringify(afterListings),
+    );
 
   // ── 5. Cache and search index ─────────────────────────────────────────────
   section('Cache invalidation and search index');
@@ -304,17 +368,30 @@ async function main() {
   if (redisUp) {
     const stale = await redis.get('marketplace:featured');
     if (!stale) ok('cache', 'marketplace:featured cleared, so the storefront re-reads');
-    else bad('cache', 'marketplace:featured still cached after approval',
-      'the customer home page can serve a list that predates the approval');
+    else
+      bad(
+        'cache',
+        'marketplace:featured still cached after approval',
+        'the customer home page can serve a list that predates the approval',
+      );
 
     const idxKey = `search:index:marketplace:${productId}`;
-    const idx = await eventually(() => redis.get(idxKey), (v) => !!v);
+    const idx = await eventually(
+      () => redis.get(idxKey),
+      (v) => !!v,
+    );
     if (idx.value)
-      ok('search', 'approved product indexed via product.approved',
-        `arrived after ${idx.waitedMs}ms — Kafka -> search-service -> index`);
+      ok(
+        'search',
+        'approved product indexed via product.approved',
+        `arrived after ${idx.waitedMs}ms — Kafka -> search-service -> index`,
+      );
     else
-      bad('search', 'approved product never reached the search index',
-        `${idxKey} still unset after ${idx.waitedMs}ms`);
+      bad(
+        'search',
+        'approved product never reached the search index',
+        `${idxKey} still unset after ${idx.waitedMs}ms`,
+      );
   } else {
     skip('cache', 'cache and index checks skipped — Redis unreachable');
   }
@@ -329,16 +406,23 @@ async function main() {
   // `search:<region>:<query>:...`. If approval does not clear it, a customer
   // who looked before the product went live keeps being told it does not exist.
   const searched = await eventually(
-    async () => unwrap((await call('GET', `/marketplace/search?q=${encodeURIComponent(PRODUCT_NAME)}`)).json),
+    async () =>
+      unwrap((await call('GET', `/marketplace/search?q=${encodeURIComponent(PRODUCT_NAME)}`)).json),
     (rows: any) => Array.isArray(rows) && rows.some((p: any) => p?.id === productId),
   );
   if (Array.isArray(searched.value) && searched.value.some((p: any) => p?.id === productId))
-    ok('gateway', 'approved product returned by customer search',
-      searched.waitedMs ? `after ${searched.waitedMs}ms` : 'immediately');
+    ok(
+      'gateway',
+      'approved product returned by customer search',
+      searched.waitedMs ? `after ${searched.waitedMs}ms` : 'immediately',
+    );
   else
-    bad('gateway', 'approved product not returned by customer search',
+    bad(
+      'gateway',
+      'approved product not returned by customer search',
       `${Array.isArray(searched.value) ? searched.value.length : 0} rows after ${searched.waitedMs}ms — ` +
-      'the stale search cache was not invalidated on approval');
+        'the stale search cache was not invalidated on approval',
+    );
 
   // Paginate. The catalogue holds ~180 products and the page size is clamped to
   // 100, so checking page one only proved the probe does not sort into the first
@@ -354,49 +438,70 @@ async function main() {
   };
   const browsed = await eventually(findInBrowse, (r) => r.found);
   if (browsed.value.found)
-    ok('gateway', 'approved product appears in the customer browse listing',
-      `page ${browsed.value.pages}${browsed.waitedMs ? `, after ${browsed.waitedMs}ms` : ''}`);
+    ok(
+      'gateway',
+      'approved product appears in the customer browse listing',
+      `page ${browsed.value.pages}${browsed.waitedMs ? `, after ${browsed.waitedMs}ms` : ''}`,
+    );
   else
-    bad('gateway', 'approved product missing from the browse listing',
-      `not found across ${browsed.value.pages} page(s) of 100`);
+    bad(
+      'gateway',
+      'approved product missing from the browse listing',
+      `not found across ${browsed.value.pages} page(s) of 100`,
+    );
 
   const detail = await call('GET', `/marketplace/products/${productId}`);
   if (detail.status === 200 && unwrap(detail.json)?.id === productId)
     ok('gateway', 'product detail endpoint serves the approved product');
-  else
-    bad('gateway', 'product detail endpoint does not serve it', `status ${detail.status}`);
+  else bad('gateway', 'product detail endpoint does not serve it', `status ${detail.status}`);
 
   // The storefront page, through the shell — the surface a customer actually uses.
   const page = await fetch(`${SHELL}/marketplace/product/${productId}`, {
     headers: { 'X-Region-Code': 'QA' },
-  }).then(async r => ({ status: r.status, body: r.status === 200 ? await r.text() : '' }))
+  })
+    .then(async (r) => ({ status: r.status, body: r.status === 200 ? await r.text() : '' }))
     .catch(() => ({ status: 0, body: '' }));
 
   if (page.status === 200 && page.body.includes(PRODUCT_NAME))
     ok('frontend', 'storefront product page renders the approved product');
   else if (page.status === 200)
-    bad('frontend', 'storefront page rendered without the product name',
-      'the page served, but the product it was asked for is not in the markup');
-  else
-    bad('frontend', 'storefront product page did not render', `status ${page.status}`);
+    bad(
+      'frontend',
+      'storefront page rendered without the product name',
+      'the page served, but the product it was asked for is not in the markup',
+    );
+  else bad('frontend', 'storefront product page did not render', `status ${page.status}`);
 
   // ── 7. Rejection is honoured too ──────────────────────────────────────────
   section('Admin: rejection writes a real state change');
 
-  const reject = await call('PATCH', `/admin/marketplace/products/${productId}/reject`, { reason: 'e2e probe' });
+  const reject = await call('PATCH', `/admin/marketplace/products/${productId}/reject`, {
+    reason: 'e2e probe',
+  });
   const rejectedRow = await db.query(
-    'SELECT approval_status, is_active FROM marketplace.products WHERE id = $1', [productId]);
+    'SELECT approval_status, is_active FROM marketplace.products WHERE id = $1',
+    [productId],
+  );
   if (rejectedRow[0]?.approval_status === 'REJECTED')
     ok('database', 'rejection persisted', `is_active now ${rejectedRow[0].is_active}`);
   else
-    bad('database', 'rejection did not persist',
-      `status ${reject.status}, approval_status ${rejectedRow[0]?.approval_status}`);
+    bad(
+      'database',
+      'rejection did not persist',
+      `status ${reject.status}, approval_status ${rejectedRow[0]?.approval_status}`,
+    );
 
   if (redisUp) {
     const gone = await eventually(
-      () => redis.get(`search:index:marketplace:${productId}`), (v) => !v);
-    if (!gone.value) ok('search', 'rejected product removed from the search index',
-      gone.waitedMs ? `after ${gone.waitedMs}ms` : 'immediately');
+      () => redis.get(`search:index:marketplace:${productId}`),
+      (v) => !v,
+    );
+    if (!gone.value)
+      ok(
+        'search',
+        'rejected product removed from the search index',
+        gone.waitedMs ? `after ${gone.waitedMs}ms` : 'immediately',
+      );
     else bad('search', 'rejected product still findable in the search index');
   }
 
@@ -414,12 +519,17 @@ async function main() {
   });
 
   const catRow = await db.query(
-    'SELECT id, name, slug, is_active FROM marketplace.categories WHERE name = $1', [CAT_NAME]);
+    'SELECT id, name, slug, is_active FROM marketplace.categories WHERE name = $1',
+    [CAT_NAME],
+  );
   if (catRow.length === 1)
     ok('database', 'admin category create wrote a row', `id ${catRow[0].id}`);
   else
-    bad('database', 'admin category create wrote nothing',
-      `status ${catCreate.status}, ${catRow.length} rows matched`);
+    bad(
+      'database',
+      'admin category create wrote nothing',
+      `status ${catCreate.status}, ${catRow.length} rows matched`,
+    );
 
   const categoryId = catRow[0]?.id;
   if (categoryId) {
@@ -428,41 +538,51 @@ async function main() {
     if (redisUp) {
       const cached = await redis.get('marketplace:categories');
       if (!cached) ok('cache', 'marketplace:categories cleared by the write');
-      else bad('cache', 'marketplace:categories still cached after a create',
-        'the storefront category menu can serve a set that predates it');
+      else
+        bad(
+          'cache',
+          'marketplace:categories still cached after a create',
+          'the storefront category menu can serve a set that predates it',
+        );
     }
 
     const RENAMED = `${CAT_NAME} renamed`;
     await call('PATCH', `/admin/marketplace/categories/${categoryId}`, { name: RENAMED });
-    const afterUpdate = await db.query(
-      'SELECT name FROM marketplace.categories WHERE id = $1', [categoryId]);
-    if (afterUpdate[0]?.name === RENAMED)
-      ok('database', 'admin category update persisted');
+    const afterUpdate = await db.query('SELECT name FROM marketplace.categories WHERE id = $1', [
+      categoryId,
+    ]);
+    if (afterUpdate[0]?.name === RENAMED) ok('database', 'admin category update persisted');
     else
-      bad('database', 'admin category update did not persist',
-        `name is still "${afterUpdate[0]?.name}"`);
+      bad(
+        'database',
+        'admin category update did not persist',
+        `name is still "${afterUpdate[0]?.name}"`,
+      );
 
     // The PUT alias must reach the same implementation as the PATCH. Both are
     // declared because the admin client sends PUT, and stacking two verb
     // decorators on one handler registers only the last.
     await call('PUT', `/admin/marketplace/categories/${categoryId}`, { name: CAT_NAME });
-    const afterPut = await db.query(
-      'SELECT name FROM marketplace.categories WHERE id = $1', [categoryId]);
-    if (afterPut[0]?.name === CAT_NAME)
-      ok('database', 'the PUT alias writes as the PATCH does');
-    else
-      bad('database', 'the PUT alias did not write', `name is "${afterPut[0]?.name}"`);
+    const afterPut = await db.query('SELECT name FROM marketplace.categories WHERE id = $1', [
+      categoryId,
+    ]);
+    if (afterPut[0]?.name === CAT_NAME) ok('database', 'the PUT alias writes as the PATCH does');
+    else bad('database', 'the PUT alias did not write', `name is "${afterPut[0]?.name}"`);
 
     const del = await call('DELETE', `/admin/marketplace/categories/${categoryId}`);
     const afterDelete = await db.query(
-      'SELECT is_active FROM marketplace.categories WHERE id = $1', [categoryId]);
+      'SELECT is_active FROM marketplace.categories WHERE id = $1',
+      [categoryId],
+    );
     // Deleting a category that has products deactivates rather than removes it;
     // either outcome is a real write, and an unchanged active row is not.
     if (afterDelete.length === 0 || afterDelete[0]?.is_active === false)
-      ok('database', 'admin category delete removed or deactivated it',
-        afterDelete.length === 0 ? 'row removed' : 'deactivated (products reference it)');
-    else
-      bad('database', 'admin category delete changed nothing', `status ${del.status}`);
+      ok(
+        'database',
+        'admin category delete removed or deactivated it',
+        afterDelete.length === 0 ? 'row removed' : 'deactivated (products reference it)',
+      );
+    else bad('database', 'admin category delete changed nothing', `status ${del.status}`);
   }
 
   // ── 9. Admin: flash deals ─────────────────────────────────────────────────
@@ -471,7 +591,9 @@ async function main() {
   // The column is `name`, not `title`, and the discount is
   // `min_discount_percent` — this table is snake_case throughout.
   const DEAL_TITLE = `E2E Flash Deal ${STAMP}`;
-  await db.query('DELETE FROM marketplace.flash_deals WHERE name = $1', [DEAL_TITLE]).catch(() => undefined);
+  await db
+    .query('DELETE FROM marketplace.flash_deals WHERE name = $1', [DEAL_TITLE])
+    .catch(() => undefined);
 
   const now = Date.now();
   const dealCreate = await call('POST', '/admin/marketplace/flash-deals', {
@@ -484,19 +606,24 @@ async function main() {
     regionCode: 'QA',
   });
 
-  const dealRow = await db.query(
-    'SELECT id, name FROM marketplace.flash_deals WHERE name = $1', [DEAL_TITLE]).catch(() => []);
+  const dealRow = await db
+    .query('SELECT id, name FROM marketplace.flash_deals WHERE name = $1', [DEAL_TITLE])
+    .catch(() => []);
   if (dealRow.length === 1)
     ok('database', 'admin flash deal create wrote a row', `id ${dealRow[0].id}`);
   else
-    bad('database', 'admin flash deal create wrote nothing',
-      `status ${dealCreate.status} ${dealCreate.text.slice(0, 100)}`);
+    bad(
+      'database',
+      'admin flash deal create wrote nothing',
+      `status ${dealCreate.status} ${dealCreate.text.slice(0, 100)}`,
+    );
 
   if (dealRow[0]?.id) {
     const dealId = dealRow[0].id;
     await call('PATCH', `/admin/marketplace/flash-deals/${dealId}`, { minDiscountPercent: 40 });
-    const afterDeal = await db.query(
-      'SELECT * FROM marketplace.flash_deals WHERE id = $1', [dealId]).catch(() => []);
+    const afterDeal = await db
+      .query('SELECT * FROM marketplace.flash_deals WHERE id = $1', [dealId])
+      .catch(() => []);
     const pct = afterDeal[0]?.min_discount_percent;
     if (Number(pct) === 40) ok('database', 'admin flash deal update persisted');
     else bad('database', 'admin flash deal update did not persist', `discount is ${pct}`);
@@ -506,16 +633,26 @@ async function main() {
     // sellers whose nominations reference it. Asserting the row had vanished
     // reported a working soft delete as a no-op.
     const dealDel = await call('DELETE', `/admin/marketplace/flash-deals/${dealId}`);
-    const cancelled = await db.query(
-      'SELECT status FROM marketplace.flash_deals WHERE id = $1', [dealId]).catch(() => []);
+    const cancelled = await db
+      .query('SELECT status FROM marketplace.flash_deals WHERE id = $1', [dealId])
+      .catch(() => []);
     if (cancelled[0]?.status === 'CANCELLED')
-      ok('database', 'admin flash deal delete cancelled the campaign', 'status CANCELLED, row retained');
+      ok(
+        'database',
+        'admin flash deal delete cancelled the campaign',
+        'status CANCELLED, row retained',
+      );
     else
-      bad('database', 'admin flash deal delete changed nothing',
-        `status ${dealDel.status}, deal status ${cancelled[0]?.status}`);
+      bad(
+        'database',
+        'admin flash deal delete changed nothing',
+        `status ${dealDel.status}, deal status ${cancelled[0]?.status}`,
+      );
 
     // Clean up the probe campaign so re-running starts from the same place.
-    await db.query('DELETE FROM marketplace.flash_deals WHERE id = $1', [dealId]).catch(() => undefined);
+    await db
+      .query('DELETE FROM marketplace.flash_deals WHERE id = $1', [dealId])
+      .catch(() => undefined);
   }
 
   // Leave the probe approved so the artefact it creates is a coherent one.
@@ -525,9 +662,9 @@ async function main() {
 }
 
 async function finish() {
-  const pass = checks.filter(c => c.status === 'pass').length;
-  const fail = checks.filter(c => c.status === 'fail').length;
-  const skipped = checks.filter(c => c.status === 'skip').length;
+  const pass = checks.filter((c) => c.status === 'pass').length;
+  const fail = checks.filter((c) => c.status === 'fail').length;
+  const skipped = checks.filter((c) => c.status === 'skip').length;
 
   if (JSON_OUT) {
     console.log(JSON.stringify({ pass, fail, skipped, checks }, null, 2));
@@ -536,14 +673,25 @@ async function finish() {
     console.log(`  ${pass} passed   ${fail} failed   ${skipped} skipped`);
     if (fail) {
       console.log('\n  Failures:');
-      checks.filter(c => c.status === 'fail')
-        .forEach(c => console.log(`    ${c.layer.padEnd(11)} ${c.what}${c.detail ? ` — ${c.detail}` : ''}`));
+      checks
+        .filter((c) => c.status === 'fail')
+        .forEach((c) =>
+          console.log(`    ${c.layer.padEnd(11)} ${c.what}${c.detail ? ` — ${c.detail}` : ''}`),
+        );
     }
     console.log('═'.repeat(68));
   }
 
-  try { await db.destroy(); } catch { /* already closed */ }
-  try { redis.disconnect(); } catch { /* already closed */ }
+  try {
+    await db.destroy();
+  } catch {
+    /* already closed */
+  }
+  try {
+    redis.disconnect();
+  } catch {
+    /* already closed */
+  }
   process.exit(fail ? 1 : 0);
 }
 

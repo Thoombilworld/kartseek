@@ -27,7 +27,7 @@
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 
 const DRY_RUN = process.argv.includes('--dry-run');
-const TARGET_IMAGES = 3;      // enough for the gallery to be worth swiping
+const TARGET_IMAGES = 3; // enough for the gallery to be worth swiping
 const CONCURRENCY = 12;
 const TIMEOUT_MS = 15000;
 
@@ -49,12 +49,14 @@ async function alive(url) {
 async function pool(items, fn, size) {
   const out = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(size, items.length) || 1 }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) || 1 }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
   return out;
 }
 
@@ -142,7 +144,10 @@ async function pool(items, fn, size) {
       if (!url) break;
       used.add(url);
       if (!DRY_RUN) {
-        await client.query('UPDATE marketplace.product_images SET url = $1 WHERE id = $2', [url, img.id]);
+        await client.query('UPDATE marketplace.product_images SET url = $1 WHERE id = $2', [
+          url,
+          img.id,
+        ]);
       }
       replaced++;
     }
@@ -188,4 +193,7 @@ async function pool(items, fn, size) {
   if (DRY_RUN) console.log('\n(dry run — nothing written)');
 
   await client.end();
-})().catch((err) => { console.error('❌', err.message); process.exit(1); });
+})().catch((err) => {
+  console.error('❌', err.message);
+  process.exit(1);
+});

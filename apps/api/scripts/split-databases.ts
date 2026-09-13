@@ -28,7 +28,9 @@ dotenv.config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 
 const APPLY = process.argv.includes('--apply');
 const ONLY = (process.argv.find((a) => a.startsWith('--only='))?.split('=')[1] ?? '')
-  .split(',').map((s) => s.trim()).filter(Boolean);
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 /** Ports match the `isolated` profile in docker-compose.yml. */
 const MODULES = [
@@ -58,7 +60,7 @@ const SRC = {
  */
 const SRC_CONTAINER = process.env.SPLIT_SOURCE_CONTAINER || 'kartseek-postgres';
 
-function creds(m: typeof MODULES[number]) {
+function creds(m: (typeof MODULES)[number]) {
   const U = m.name.toUpperCase();
   return {
     container: `kartseek-postgres-${m.name}`,
@@ -68,7 +70,11 @@ function creds(m: typeof MODULES[number]) {
   };
 }
 
-function dockerExec(container: string, argv: string[], opts: { input?: string; password?: string } = {}) {
+function dockerExec(
+  container: string,
+  argv: string[],
+  opts: { input?: string; password?: string } = {},
+) {
   const args = ['exec', '-i'];
   if (opts.password) args.push('-e', `PGPASSWORD=${opts.password}`);
   args.push(container, ...argv);
@@ -80,16 +86,16 @@ function dockerExec(container: string, argv: string[], opts: { input?: string; p
 }
 
 function srcQuery(db: string, sql: string): string {
-  return dockerExec(SRC_CONTAINER,
-    ['psql', '-U', SRC.user, '-d', db, '-t', '-A', '-c', sql],
-    { password: SRC.password }).trim();
+  return dockerExec(SRC_CONTAINER, ['psql', '-U', SRC.user, '-d', db, '-t', '-A', '-c', sql], {
+    password: SRC.password,
+  }).trim();
 }
 
-function dstQuery(m: typeof MODULES[number], sql: string): string {
+function dstQuery(m: (typeof MODULES)[number], sql: string): string {
   const c = creds(m);
-  return dockerExec(c.container,
-    ['psql', '-U', c.user, '-d', c.db, '-t', '-A', '-c', sql],
-    { password: c.pass }).trim();
+  return dockerExec(c.container, ['psql', '-U', c.user, '-d', c.db, '-t', '-A', '-c', sql], {
+    password: c.pass,
+  }).trim();
 }
 
 /** Table name -> row count, for one schema. */
@@ -97,10 +103,15 @@ function tableCounts(read: (sql: string) => string, schema: string): Record<stri
   const names = read(
     `SELECT table_name FROM information_schema.tables
       WHERE table_schema = '${schema}' AND table_type = 'BASE TABLE' ORDER BY table_name`,
-  ).split('\n').map((s) => s.trim()).filter(Boolean);
+  )
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (!names.length) return {};
   const counts = read(
-    names.map((t) => `SELECT '${t}' AS t, count(*)::bigint AS n FROM "${schema}"."${t}"`).join(' UNION ALL '),
+    names
+      .map((t) => `SELECT '${t}' AS t, count(*)::bigint AS n FROM "${schema}"."${t}"`)
+      .join(' UNION ALL '),
   );
   const out: Record<string, number> = {};
   for (const line of counts.split('\n')) {
@@ -111,16 +122,26 @@ function tableCounts(read: (sql: string) => string, schema: string): Record<stri
 }
 
 function reachable(fn: () => string): boolean {
-  try { fn(); return true; } catch { return false; }
+  try {
+    fn();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function main() {
-  console.log(APPLY ? 'COPYING module databases onto their own instances\n'
-                    : 'DRY RUN — pass --apply to copy. Nothing is written.\n');
+  console.log(
+    APPLY
+      ? 'COPYING module databases onto their own instances\n'
+      : 'DRY RUN — pass --apply to copy. Nothing is written.\n',
+  );
   console.log(`source  ${SRC.host}:${SRC.port} (shared)\n`);
   console.log('module        target      source rows   target rows   status');
 
-  let copied = 0, skipped = 0, failed = 0;
+  let copied = 0,
+    skipped = 0,
+    failed = 0;
 
   for (const m of MODULES) {
     const srcDb = process.env[`${m.name.toUpperCase()}_DB_NAME`] || `kartseek_${m.name}`;
@@ -143,22 +164,39 @@ async function main() {
     if (!APPLY) {
       const after = tableCounts((sql) => dstQuery(m, sql), m.schema);
       const dstRows = Object.values(after).reduce((a, b) => a + b, 0);
-      console.log(`${label}${String(srcRows).padStart(11)}   ${String(dstRows).padStart(11)}   would copy`);
+      console.log(
+        `${label}${String(srcRows).padStart(11)}   ${String(dstRows).padStart(11)}   would copy`,
+      );
       continue;
     }
 
     try {
       // Schema and data in one pass, restored into the same schema name.
       // --no-owner because the target runs as the module's own role, not postgres.
-      const dump = dockerExec(SRC_CONTAINER, [
-        'pg_dump', '-U', SRC.user, '-d', srcDb,
-        '--schema', m.schema, '--no-owner', '--no-privileges', '--clean', '--if-exists',
-      ], { password: SRC.password });
+      const dump = dockerExec(
+        SRC_CONTAINER,
+        [
+          'pg_dump',
+          '-U',
+          SRC.user,
+          '-d',
+          srcDb,
+          '--schema',
+          m.schema,
+          '--no-owner',
+          '--no-privileges',
+          '--clean',
+          '--if-exists',
+        ],
+        { password: SRC.password },
+      );
 
       const c = creds(m);
-      dockerExec(c.container,
+      dockerExec(
+        c.container,
         ['psql', '-U', c.user, '-d', c.db, '-v', 'ON_ERROR_STOP=1', '-f', '-'],
-        { input: dump, password: c.pass });
+        { input: dump, password: c.pass },
+      );
 
       // Per-table verification. A restore can exit 0 having skipped rows.
       const after = tableCounts((sql) => dstQuery(m, sql), m.schema);
@@ -168,16 +206,26 @@ async function main() {
 
       const dstRows = Object.values(after).reduce((a, b) => a + b, 0);
       if (mismatched.length) {
-        console.log(`${label}${String(srcRows).padStart(11)}   ${String(dstRows).padStart(11)}   MISMATCH`);
-        mismatched.slice(0, 4).forEach((x) => console.log(`                                                ${x}`));
+        console.log(
+          `${label}${String(srcRows).padStart(11)}   ${String(dstRows).padStart(11)}   MISMATCH`,
+        );
+        mismatched
+          .slice(0, 4)
+          .forEach((x) => console.log(`                                                ${x}`));
         failed++;
       } else {
-        console.log(`${label}${String(srcRows).padStart(11)}   ${String(dstRows).padStart(11)}   copied, ${Object.keys(before).length} tables verified`);
+        console.log(
+          `${label}${String(srcRows).padStart(11)}   ${String(dstRows).padStart(11)}   copied, ${Object.keys(before).length} tables verified`,
+        );
         copied++;
       }
     } catch (e) {
       console.log(`${label}${String(srcRows).padStart(11)}   —             FAILED`);
-      console.log(`                                                ${String((e as Error).message).split('\n')[0].slice(0, 90)}`);
+      console.log(
+        `                                                ${String((e as Error).message)
+          .split('\n')[0]
+          .slice(0, 90)}`,
+      );
       failed++;
     }
   }

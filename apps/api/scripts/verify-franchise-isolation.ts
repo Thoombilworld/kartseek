@@ -79,7 +79,9 @@ async function main() {
   console.log(`\nVerifying franchise views against live DB (franchiseId=${FRANCHISE_ID})\n`);
 
   const grocery = new GroceryView(
-    ds.getRepository(GroceryStore), ds.getRepository(GroceryItem), ds.getRepository(GroceryOrder),
+    ds.getRepository(GroceryStore),
+    ds.getRepository(GroceryItem),
+    ds.getRepository(GroceryOrder),
   );
   console.log('GROCERY');
   await check('kpis', () => grocery.getKpis(FRANCHISE_ID));
@@ -89,7 +91,9 @@ async function main() {
   await check('analytics', () => grocery.getAnalytics(FRANCHISE_ID, '30d'));
 
   const restaurant = new RestaurantView(
-    ds.getRepository(Restaurant), ds.getRepository(RestaurantOrder), ds.getRepository(MenuItem),
+    ds.getRepository(Restaurant),
+    ds.getRepository(RestaurantOrder),
+    ds.getRepository(MenuItem),
   );
   console.log('\nRESTAURANT');
   await check('kpis', () => restaurant.getKpis(FRANCHISE_ID));
@@ -99,7 +103,9 @@ async function main() {
   await check('analytics', () => restaurant.getAnalytics(FRANCHISE_ID, '30d'));
 
   const pharmacy = new PharmacyView(
-    ds.getRepository(PharmacyStore), ds.getRepository(PharmacyOrder), ds.getRepository(PharmacyItem),
+    ds.getRepository(PharmacyStore),
+    ds.getRepository(PharmacyOrder),
+    ds.getRepository(PharmacyItem),
   );
   console.log('\nPHARMACY');
   await check('kpis', () => pharmacy.getKpis(FRANCHISE_ID));
@@ -111,7 +117,9 @@ async function main() {
   await check('analytics', () => pharmacy.getAnalytics(FRANCHISE_ID, '30d'));
 
   const doctor = new DoctorView(
-    ds.getRepository(Clinic), ds.getRepository(Doctor), ds.getRepository(Appointment),
+    ds.getRepository(Clinic),
+    ds.getRepository(Doctor),
+    ds.getRepository(Appointment),
   );
   console.log('\nDOCTOR');
   await check('kpis', () => doctor.getKpis(FRANCHISE_ID));
@@ -121,7 +129,9 @@ async function main() {
   await check('analytics', () => doctor.getAnalytics(FRANCHISE_ID, '30d'));
 
   const marketplace = new MarketplaceView(
-    ds.getRepository(Seller), ds.getRepository(Product), ds.getRepository(MarketplaceOrder),
+    ds.getRepository(Seller),
+    ds.getRepository(Product),
+    ds.getRepository(MarketplaceOrder),
   );
   console.log('\nMARKETPLACE');
   await check('kpis', () => marketplace.getKpis(FRANCHISE_ID));

@@ -41,49 +41,81 @@ const TIMEOUT_MS = 20000;
  */
 const KEYWORDS = {
   // Books & stationery
-  fiction: 'novel,book', 'non-fiction': 'book,reading', 'academic-and-textbooks': 'textbook,study',
-  stationery: 'stationery,pen', 'paper-products': 'notebook,paper',
-  'desk-accessories': 'desk,organiser', 'filing-and-organisation': 'files,folders',
+  fiction: 'novel,book',
+  'non-fiction': 'book,reading',
+  'academic-and-textbooks': 'textbook,study',
+  stationery: 'stationery,pen',
+  'paper-products': 'notebook,paper',
+  'desk-accessories': 'desk,organiser',
+  'filing-and-organisation': 'files,folders',
   // Furniture
-  'living-room': 'sofa,livingroom', bedroom: 'bedroom,furniture', mattresses: 'mattress,bed',
-  'office-furniture': 'office,chair', lighting: 'lamp,lighting',
+  'living-room': 'sofa,livingroom',
+  bedroom: 'bedroom,furniture',
+  mattresses: 'mattress,bed',
+  'office-furniture': 'office,chair',
+  lighting: 'lamp,lighting',
   // Computing
-  desktops: 'desktop,computer', monitors: 'monitor,screen', printers: 'printer',
-  'keyboards-and-mice': 'keyboard,mouse', 'storage-devices': 'harddrive,ssd',
+  desktops: 'desktop,computer',
+  monitors: 'monitor,screen',
+  printers: 'printer',
+  'keyboards-and-mice': 'keyboard,mouse',
+  'storage-devices': 'harddrive,ssd',
   // Devices & accessories
-  drones: 'drone,quadcopter', 'gaming-consoles': 'gaming,console',
-  smartwatches: 'smartwatch,wearable', 'fitness-devices': 'fitnesstracker,smartband',
-  'cases-and-covers': 'phonecase', 'screen-protectors': 'screenprotector,phone',
+  drones: 'drone,quadcopter',
+  'gaming-consoles': 'gaming,console',
+  smartwatches: 'smartwatch,wearable',
+  'fitness-devices': 'fitnesstracker,smartband',
+  'cases-and-covers': 'phonecase',
+  'screen-protectors': 'screenprotector,phone',
   // Bags & travel
-  backpacks: 'backpack', handbags: 'handbag,purse', luggage: 'suitcase,luggage',
+  backpacks: 'backpack',
+  handbags: 'handbag,purse',
+  luggage: 'suitcase,luggage',
   'laptop-bags': 'laptopbag,messenger',
   // Fashion & accessories
-  'mens-casual': 'menswear,shirt', 'sports-shoes': 'sneakers,shoes',
-  'sandals-and-slippers': 'sandals,slippers', sunglasses: 'sunglasses',
+  'mens-casual': 'menswear,shirt',
+  'sports-shoes': 'sneakers,shoes',
+  'sandals-and-slippers': 'sandals,slippers',
+  sunglasses: 'sunglasses',
   'mens-watches': 'wristwatch,watch',
   // Beauty & health
-  makeup: 'makeup,cosmetics', fragrances: 'perfume,fragrance',
-  'personal-care': 'skincare,toiletries', 'bathing-and-skincare': 'soap,skincare',
-  ayurvedic: 'herbs,ayurveda', 'medical-devices': 'medical,device',
+  makeup: 'makeup,cosmetics',
+  fragrances: 'perfume,fragrance',
+  'personal-care': 'skincare,toiletries',
+  'bathing-and-skincare': 'soap,skincare',
+  ayurvedic: 'herbs,ayurveda',
+  'medical-devices': 'medical,device',
   'household-personal-care': 'cleaning,household',
   // Grocery
-  'breakfast-and-cereals': 'cereal,breakfast', 'cooking-essentials': 'cooking,oil',
-  'dry-fruits-and-nuts': 'nuts,driedfruit', 'snacks-and-beverages': 'snacks,drinks',
+  'breakfast-and-cereals': 'cereal,breakfast',
+  'cooking-essentials': 'cooking,oil',
+  'dry-fruits-and-nuts': 'nuts,driedfruit',
+  'snacks-and-beverages': 'snacks,drinks',
   // Baby
-  'baby-food': 'babyfood', 'baby-gear': 'stroller,baby',
-  diapers: 'diapers,baby', 'diapers-and-wipes': 'babywipes,diapers',
-  'feeding-bottles': 'babybottle,feeding', 'educational-toys': 'toys,children',
+  'baby-food': 'babyfood',
+  'baby-gear': 'stroller,baby',
+  diapers: 'diapers,baby',
+  'diapers-and-wipes': 'babywipes,diapers',
+  'feeding-bottles': 'babybottle,feeding',
+  'educational-toys': 'toys,children',
   // Pets
-  'dog-food': 'dog,food', 'cat-food': 'cat,food',
-  'collars-and-leashes': 'dog,collar', 'pet-toys': 'pet,toy',
+  'dog-food': 'dog,food',
+  'cat-food': 'cat,food',
+  'collars-and-leashes': 'dog,collar',
+  'pet-toys': 'pet,toy',
   // Sports & auto
-  cricket: 'cricket,bat', helmets: 'helmet,motorcycle',
-  'bike-accessories': 'bicycle,accessory', 'car-accessories': 'car,interior',
+  cricket: 'cricket,bat',
+  helmets: 'helmet,motorcycle',
+  'bike-accessories': 'bicycle,accessory',
+  'car-accessories': 'car,interior',
   'car-care': 'carwash,polish',
   // Remaining subcategories surfaced by the first dry run.
-  'gym-equipment': 'gym,dumbbell', 'toys-and-games': 'toys,game',
-  'vitamins-and-supplements': 'vitamins,supplements', 'winter-wear': 'winterjacket,coat',
-  'womens-flats': 'flats,womensshoes', 'womens-watches': 'womenswatch,wristwatch',
+  'gym-equipment': 'gym,dumbbell',
+  'toys-and-games': 'toys,game',
+  'vitamins-and-supplements': 'vitamins,supplements',
+  'winter-wear': 'winterjacket,coat',
+  'womens-flats': 'flats,womensshoes',
+  'womens-watches': 'womenswatch,wristwatch',
   'writing-instruments': 'pen,fountainpen',
 };
 
@@ -94,7 +126,12 @@ async function alive(url) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-256' }, redirect: 'follow', signal: ctrl.signal });
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-256' },
+      redirect: 'follow',
+      signal: ctrl.signal,
+    });
     return res.ok && (res.headers.get('content-type') || '').startsWith('image/');
   } catch {
     return false;
@@ -106,9 +143,14 @@ async function alive(url) {
 async function pool(items, fn, size) {
   const out = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(size, items.length) || 1 }, async () => {
-    while (next < items.length) { const i = next++; out[i] = await fn(items[i]); }
-  }));
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) || 1 }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
   return out;
 }
 
@@ -138,7 +180,10 @@ async function pool(items, fn, size) {
   const jobs = [];
   products.forEach((p, pi) => {
     const keyword = KEYWORDS[p.subcategory];
-    if (!keyword) { unmapped.add(p.subcategory); return; }
+    if (!keyword) {
+      unmapped.add(p.subcategory);
+      return;
+    }
     for (let n = 0; n < IMAGES_PER_PRODUCT; n++) {
       // Lock is derived from position so re-runs regenerate identical URLs.
       jobs.push({ product: p, url: imageUrl(keyword, pi * 10 + n + 1), slot: n });
@@ -164,7 +209,9 @@ async function pool(items, fn, size) {
     if (urls.length === 0) continue;
     if (!DRY_RUN) {
       // Drop the placeholder rows, then insert verified photos in their place.
-      await client.query('DELETE FROM marketplace.product_images WHERE product_id = $1', [productId]);
+      await client.query('DELETE FROM marketplace.product_images WHERE product_id = $1', [
+        productId,
+      ]);
       for (let i = 0; i < urls.length; i++) {
         await client.query(
           `INSERT INTO marketplace.product_images (product_id, url, "isPrimary", "sortOrder")
@@ -188,4 +235,7 @@ async function pool(items, fn, size) {
   if (DRY_RUN) console.log('\n(dry run — nothing written)');
 
   await client.end();
-})().catch((err) => { console.error('❌', err.message); process.exit(1); });
+})().catch((err) => {
+  console.error('❌', err.message);
+  process.exit(1);
+});

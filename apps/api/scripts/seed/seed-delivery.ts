@@ -10,8 +10,12 @@
 
 import { DataSource } from 'typeorm';
 import {
-  DeliveryPartner, DeliveryTask, DeliveryTaskStatusHistory,
-  DeliveryPartnerEarning, DeliveryCodCollection, DeliveryReturnTask,
+  DeliveryPartner,
+  DeliveryTask,
+  DeliveryTaskStatusHistory,
+  DeliveryPartnerEarning,
+  DeliveryCodCollection,
+  DeliveryReturnTask,
 } from '../../apps/api-gateway/src/entities/delivery.entity';
 
 const ds = new DataSource({
@@ -21,7 +25,14 @@ const ds = new DataSource({
   username: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'kartseek123',
   database: process.env.DB_NAME || 'kartseek_db',
-  entities: [DeliveryPartner, DeliveryTask, DeliveryTaskStatusHistory, DeliveryPartnerEarning, DeliveryCodCollection, DeliveryReturnTask],
+  entities: [
+    DeliveryPartner,
+    DeliveryTask,
+    DeliveryTaskStatusHistory,
+    DeliveryPartnerEarning,
+    DeliveryCodCollection,
+    DeliveryReturnTask,
+  ],
   synchronize: false,
   logging: false,
 });
@@ -31,11 +42,11 @@ async function seed() {
   await ds.initialize();
   console.log('✅ Connected.\n');
 
-  const partnerRepo  = ds.getRepository(DeliveryPartner);
-  const taskRepo     = ds.getRepository(DeliveryTask);
-  const historyRepo  = ds.getRepository(DeliveryTaskStatusHistory);
-  const earningRepo  = ds.getRepository(DeliveryPartnerEarning);
-  const codRepo      = ds.getRepository(DeliveryCodCollection);
+  const partnerRepo = ds.getRepository(DeliveryPartner);
+  const taskRepo = ds.getRepository(DeliveryTask);
+  const historyRepo = ds.getRepository(DeliveryTaskStatusHistory);
+  const earningRepo = ds.getRepository(DeliveryPartnerEarning);
+  const codRepo = ds.getRepository(DeliveryCodCollection);
 
   // ── 1. Delivery Partners ────────────────────────────────────────────────────
   console.log('👤 Seeding delivery partners...');
@@ -53,7 +64,10 @@ async function seed() {
   const savedPartners: DeliveryPartner[] = [];
   for (const p of partnerData) {
     const existing = await partnerRepo.findOneBy({ partnerId: p.partnerId });
-    if (existing) { savedPartners.push(existing); continue; }
+    if (existing) {
+      savedPartners.push(existing);
+      continue;
+    }
     savedPartners.push(await partnerRepo.save(partnerRepo.create(p)));
   }
   console.log(`   ✅ ${savedPartners.length} partners seeded.\n`);
@@ -62,15 +76,57 @@ async function seed() {
   console.log('📦 Seeding delivery tasks...');
   const serviceTypes = ['food', 'grocery', 'pharmacy', 'marketplace'];
   const locations = [
-    { pickup: 'Tandoori Palace, Indiatta Ave', drop: 'Khar, Mumbai', pLat: 19.0760, pLng: 72.8777, dLat: -1.2750, dLng: 36.7800 },
-    { pickup: 'HealthPlus Pharmacy, Andheri West', drop: 'Powai, Mumbai', pLat: -1.2637, pLng: 36.8118, dLat: -1.2800, dLng: 36.7700 },
-    { pickup: 'FreshMart Grocery, Juhu', drop: 'Bandra East, Mumbai', pLat: -1.3202, pLng: 36.7178, dLat: -1.3300, dLng: 36.7600 },
-    { pickup: 'KartSeek Warehouse, Ikeja', drop: 'Victoria Island, Lagos', pLat: 6.6018, pLng: 3.3515, dLat: 6.4281, dLng: 3.4219 },
-    { pickup: 'Suya Republic, Allen Ave', drop: 'Lekki Phase 1, Lagos', pLat: 6.6000, pLng: 3.3500, dLat: 6.4400, dLng: 3.4200 },
+    {
+      pickup: 'Tandoori Palace, Indiatta Ave',
+      drop: 'Khar, Mumbai',
+      pLat: 19.076,
+      pLng: 72.8777,
+      dLat: -1.275,
+      dLng: 36.78,
+    },
+    {
+      pickup: 'HealthPlus Pharmacy, Andheri West',
+      drop: 'Powai, Mumbai',
+      pLat: -1.2637,
+      pLng: 36.8118,
+      dLat: -1.28,
+      dLng: 36.77,
+    },
+    {
+      pickup: 'FreshMart Grocery, Juhu',
+      drop: 'Bandra East, Mumbai',
+      pLat: -1.3202,
+      pLng: 36.7178,
+      dLat: -1.33,
+      dLng: 36.76,
+    },
+    {
+      pickup: 'KartSeek Warehouse, Ikeja',
+      drop: 'Victoria Island, Lagos',
+      pLat: 6.6018,
+      pLng: 3.3515,
+      dLat: 6.4281,
+      dLng: 3.4219,
+    },
+    {
+      pickup: 'Suya Republic, Allen Ave',
+      drop: 'Lekki Phase 1, Lagos',
+      pLat: 6.6,
+      pLng: 3.35,
+      dLat: 6.44,
+      dLng: 3.42,
+    },
   ];
-  const taskStatuses = ['DELIVERED', 'DELIVERED', 'DELIVERED', 'PICKED_UP', 'DELIVERING', 'ASSIGNED'];
+  const taskStatuses = [
+    'DELIVERED',
+    'DELIVERED',
+    'DELIVERED',
+    'PICKED_UP',
+    'DELIVERING',
+    'ASSIGNED',
+  ];
 
-  const activePartners = savedPartners.filter(p => p.status === 'APPROVED');
+  const activePartners = savedPartners.filter((p) => p.status === 'APPROVED');
   let taskCount = 0;
   for (let i = 0; i < 20; i++) {
     const partner = activePartners[i % activePartners.length];
@@ -101,7 +157,8 @@ async function seed() {
 
       // Add status history
       const historyStatuses = ['ASSIGNED', 'ACCEPTED'];
-      if (['PICKED_UP', 'DELIVERING', 'DELIVERED'].includes(status)) historyStatuses.push('PICKING_UP', 'PICKED_UP');
+      if (['PICKED_UP', 'DELIVERING', 'DELIVERED'].includes(status))
+        historyStatuses.push('PICKING_UP', 'PICKED_UP');
       if (['DELIVERING', 'DELIVERED'].includes(status)) historyStatuses.push('DELIVERING');
       if (status === 'DELIVERED') historyStatuses.push('DELIVERED');
 
@@ -111,24 +168,30 @@ async function seed() {
 
       // Add earning for delivered tasks
       if (status === 'DELIVERED') {
-        await earningRepo.save(earningRepo.create({
-          partnerId: partner.id,
-          taskId: savedTask.id,
-          amount: +(50 + Math.random() * 150).toFixed(2),
-          status: Math.random() > 0.5 ? 'PAID' : 'UNPAID',
-        }));
+        await earningRepo.save(
+          earningRepo.create({
+            partnerId: partner.id,
+            taskId: savedTask.id,
+            amount: +(50 + Math.random() * 150).toFixed(2),
+            status: Math.random() > 0.5 ? 'PAID' : 'UNPAID',
+          }),
+        );
       }
 
       // Add COD collection for COD delivered tasks
       if (isCod && status === 'DELIVERED') {
-        await codRepo.save(codRepo.create({
-          partnerId: partner.id,
-          taskId: savedTask.id,
-          collectedAmount: task.codAmount,
-          status: Math.random() > 0.5 ? 'REMITTED' : 'PENDING_REMITTANCE',
-        }));
+        await codRepo.save(
+          codRepo.create({
+            partnerId: partner.id,
+            taskId: savedTask.id,
+            collectedAmount: task.codAmount,
+            status: Math.random() > 0.5 ? 'REMITTED' : 'PENDING_REMITTANCE',
+          }),
+        );
       }
-    } catch { /* skip duplicates */ }
+    } catch {
+      /* skip duplicates */
+    }
   }
   console.log(`   ✅ ${taskCount} tasks seeded.\n`);
 

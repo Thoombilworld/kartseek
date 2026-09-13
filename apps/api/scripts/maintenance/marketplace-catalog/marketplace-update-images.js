@@ -1,9 +1,9 @@
 /**
  * Update Marketplace Product Images
- * 
+ *
  * Replaces placeholder images with high-quality product photography
  * from Unsplash (royalty-free, direct CDN links).
- * 
+ *
  * Run:  node scripts/maintenance/marketplace-catalog/marketplace-update-images.js
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
@@ -207,8 +207,10 @@ const PRODUCT_IMAGES = {
 
 async function updateImages() {
   const client = new Client({
-    host: '127.0.0.1', port: 5432,
-    user: 'postgres', password: 'kartseek123',
+    host: '127.0.0.1',
+    port: 5432,
+    user: 'postgres',
+    password: 'kartseek123',
     database: 'kartseek_db',
   });
   await client.connect();
@@ -220,10 +222,7 @@ async function updateImages() {
 
   for (const [slug, urls] of Object.entries(PRODUCT_IMAGES)) {
     // Get the product ID by slug
-    const res = await client.query(
-      'SELECT id FROM marketplace.products WHERE slug = $1',
-      [slug]
-    );
+    const res = await client.query('SELECT id FROM marketplace.products WHERE slug = $1', [slug]);
     if (res.rows.length === 0) {
       console.warn(`⚠️  Product slug "${slug}" not found, skipping`);
       continue;
@@ -233,22 +232,22 @@ async function updateImages() {
     // Update the primary image (first URL)
     const existing = await client.query(
       'SELECT id FROM marketplace.product_images WHERE product_id = $1 ORDER BY "sortOrder" ASC',
-      [productId]
+      [productId],
     );
 
     if (existing.rows.length > 0) {
       // Update existing primary image
-      await client.query(
-        'UPDATE marketplace.product_images SET url = $1 WHERE id = $2',
-        [urls[0], existing.rows[0].id]
-      );
+      await client.query('UPDATE marketplace.product_images SET url = $1 WHERE id = $2', [
+        urls[0],
+        existing.rows[0].id,
+      ]);
       updated++;
     } else {
       // Insert new primary image
       await client.query(
         `INSERT INTO marketplace.product_images (id, product_id, url, "altText", "sortOrder", "isPrimary", "createdAt")
          VALUES ($1, $2, $3, $4, 0, true, $5)`,
-        [randomUUID(), productId, urls[0], slug, now]
+        [randomUUID(), productId, urls[0], slug, now],
       );
       added++;
     }
@@ -260,7 +259,7 @@ async function updateImages() {
         `INSERT INTO marketplace.product_images (id, product_id, url, "altText", "sortOrder", "isPrimary", "createdAt")
          VALUES ($1, $2, $3, $4, $5, false, $6)
          ON CONFLICT DO NOTHING`,
-        [imgId, productId, urls[i], `${slug} view ${i + 1}`, i, now]
+        [imgId, productId, urls[i], `${slug} view ${i + 1}`, i, now],
       );
       added++;
     }
@@ -273,12 +272,13 @@ async function updateImages() {
   console.log(`  Added:   ${added}`);
 
   // Verify
-  const counts = await client.query(
-    'SELECT COUNT(*) as total FROM marketplace.product_images'
-  );
+  const counts = await client.query('SELECT COUNT(*) as total FROM marketplace.product_images');
   console.log(`  Total images in DB: ${counts.rows[0].total}`);
 
   await client.end();
 }
 
-updateImages().catch(err => { console.error('FATAL:', err); process.exit(1); });
+updateImages().catch((err) => {
+  console.error('FATAL:', err);
+  process.exit(1);
+});

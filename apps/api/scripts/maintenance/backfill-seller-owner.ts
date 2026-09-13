@@ -50,9 +50,7 @@ async function main() {
       console.log(`  ${r.businessName} <${r.email}> -> user ${r.user_id} (${r.role})`);
     }
 
-    const unresolved = unowned.filter(
-      (s: any) => !matched.some((m: any) => m.seller_id === s.id),
-    );
+    const unresolved = unowned.filter((s: any) => !matched.some((m: any) => m.seller_id === s.id));
     if (unresolved.length) {
       console.log(`\nno matching user — these need a link chosen by hand:`);
       for (const s of unresolved) console.log(`  ${s.businessName} <${s.email}> (${s.id})`);

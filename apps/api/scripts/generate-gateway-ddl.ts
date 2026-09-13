@@ -27,7 +27,12 @@ const ds = new DataSource({
   username: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'kartseek123',
   database: process.env.DB_NAME || 'kartseek_db',
-  entities: [path.join(__dirname, process.env.ENTITY_GLOB || '../apps/api-gateway/src/entities/*.entity.{ts,js}')],
+  entities: [
+    path.join(
+      __dirname,
+      process.env.ENTITY_GLOB || '../apps/api-gateway/src/entities/*.entity.{ts,js}',
+    ),
+  ],
   schema: process.env.TARGET_SCHEMA || undefined,
   synchronize: false,
   logging: false,

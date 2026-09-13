@@ -68,8 +68,10 @@ const placeholderFor = (brand) =>
         // The card and gallery both need a primary, so swap it for an honest
         // placeholder rather than removing the row.
         if (!DRY_RUN) {
-          await client.query('UPDATE marketplace.product_images SET url = $1 WHERE id = $2',
-            [placeholderFor(u.brand), u.id]);
+          await client.query('UPDATE marketplace.product_images SET url = $1 WHERE id = $2', [
+            placeholderFor(u.brand),
+            u.id,
+          ]);
         }
         reverted++;
       } else {
@@ -103,4 +105,7 @@ const placeholderFor = (brand) =>
   if (DRY_RUN) console.log('\n(dry run — nothing written)');
 
   await client.end();
-})().catch((err) => { console.error('❌', err.message); process.exit(1); });
+})().catch((err) => {
+  console.error('❌', err.message);
+  process.exit(1);
+});

@@ -18,33 +18,52 @@ const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 
 // Axis definitions per subcategory slug. `priceDelta` is added to the product's
 // own selling price, so a larger size legitimately costs more.
-const APPAREL_SIZES = { name: 'Size', options: [
-  { value: 'S', priceDelta: 0 }, { value: 'M', priceDelta: 0 },
-  { value: 'L', priceDelta: 0 }, { value: 'XL', priceDelta: 200 },
-] };
+const APPAREL_SIZES = {
+  name: 'Size',
+  options: [
+    { value: 'S', priceDelta: 0 },
+    { value: 'M', priceDelta: 0 },
+    { value: 'L', priceDelta: 0 },
+    { value: 'XL', priceDelta: 200 },
+  ],
+};
 
-const FOOTWEAR_SIZES = { name: 'Size (UK)', options: [
-  { value: '7', priceDelta: 0 }, { value: '8', priceDelta: 0 },
-  { value: '9', priceDelta: 0 }, { value: '10', priceDelta: 0 },
-] };
+const FOOTWEAR_SIZES = {
+  name: 'Size (UK)',
+  options: [
+    { value: '7', priceDelta: 0 },
+    { value: '8', priceDelta: 0 },
+    { value: '9', priceDelta: 0 },
+    { value: '10', priceDelta: 0 },
+  ],
+};
 
-const DEVICE_COLOURS = { name: 'Colour', options: [
-  { value: 'Midnight Black', priceDelta: 0 },
-  { value: 'Silver', priceDelta: 0 },
-  { value: 'Blue', priceDelta: 1000 },
-] };
+const DEVICE_COLOURS = {
+  name: 'Colour',
+  options: [
+    { value: 'Midnight Black', priceDelta: 0 },
+    { value: 'Silver', priceDelta: 0 },
+    { value: 'Blue', priceDelta: 1000 },
+  ],
+};
 
-const SIMPLE_COLOURS = { name: 'Colour', options: [
-  { value: 'Black', priceDelta: 0 },
-  { value: 'Navy', priceDelta: 0 },
-  { value: 'Grey', priceDelta: 0 },
-] };
+const SIMPLE_COLOURS = {
+  name: 'Colour',
+  options: [
+    { value: 'Black', priceDelta: 0 },
+    { value: 'Navy', priceDelta: 0 },
+    { value: 'Grey', priceDelta: 0 },
+  ],
+};
 
-const STORAGE = { name: 'Storage', options: [
-  { value: '128GB', priceDelta: 0 },
-  { value: '256GB', priceDelta: 10000 },
-  { value: '512GB', priceDelta: 25000 },
-] };
+const STORAGE = {
+  name: 'Storage',
+  options: [
+    { value: '128GB', priceDelta: 0 },
+    { value: '256GB', priceDelta: 10000 },
+    { value: '512GB', priceDelta: 25000 },
+  ],
+};
 
 // subcategory slug → the axes that product type actually varies on.
 const BY_SUBCATEGORY = {
@@ -53,7 +72,7 @@ const BY_SUBCATEGORY = {
   'womens-clothing': [APPAREL_SIZES, SIMPLE_COLOURS],
   'kids-wear': [APPAREL_SIZES],
   'ethnic-wear': [APPAREL_SIZES],
-  'sportswear': [APPAREL_SIZES, SIMPLE_COLOURS],
+  sportswear: [APPAREL_SIZES, SIMPLE_COLOURS],
   // Footwear
   'running-shoes': [FOOTWEAR_SIZES],
   'casual-shoes': [FOOTWEAR_SIZES],
@@ -77,16 +96,20 @@ const BY_SUBCATEGORY = {
 /** Cartesian product of the axes, so each row is one concrete SKU. */
 function combinations(axes) {
   return axes.reduce(
-    (acc, axis) => acc.flatMap((combo) =>
-      axis.options.map((opt) => [...combo, { name: axis.name, ...opt }]),
-    ),
+    (acc, axis) =>
+      acc.flatMap((combo) => axis.options.map((opt) => [...combo, { name: axis.name, ...opt }])),
     [[]],
   );
 }
 
 function skuSuffix(combo) {
   return combo
-    .map((c) => String(c.value).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase())
+    .map((c) =>
+      String(c.value)
+        .replace(/[^A-Za-z0-9]/g, '')
+        .slice(0, 6)
+        .toUpperCase(),
+    )
     .join('-');
 }
 
@@ -100,7 +123,8 @@ function skuSuffix(combo) {
   });
   await client.connect();
 
-  const { rows: products } = await client.query(`
+  const { rows: products } = await client.query(
+    `
     SELECT p.id, p.slug, p.mrp, c.slug AS sub_slug,
            COALESCE(
              (SELECT pl."sellingPrice" FROM marketplace.product_listings pl
@@ -111,7 +135,9 @@ function skuSuffix(combo) {
     FROM marketplace.products p
     JOIN marketplace.categories c ON c.id = p.subcategory_id
     WHERE c.slug = ANY($1)
-  `, [Object.keys(BY_SUBCATEGORY)]);
+  `,
+    [Object.keys(BY_SUBCATEGORY)],
+  );
 
   let variantCount = 0;
   let productCount = 0;
@@ -132,7 +158,8 @@ function skuSuffix(combo) {
       // every 7th SKU is out of stock, which exercises the sold-out UI path.
       const stock = variantCount % 7 === 0 ? 0 : 12 + (variantCount % 25);
 
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO marketplace.product_variants
           (product_id, sku, attributes, "variantName", mrp, "sellingPrice", "stockQuantity", "isActive")
         VALUES ($1, $2, $3, $4, $5, $6, $7, true)
@@ -142,11 +169,16 @@ function skuSuffix(combo) {
           mrp = EXCLUDED.mrp,
           "sellingPrice" = EXCLUDED."sellingPrice",
           "stockQuantity" = EXCLUDED."stockQuantity"
-      `, [p.id, sku, JSON.stringify(attributes), variantName, mrp, selling, stock]);
+      `,
+        [p.id, sku, JSON.stringify(attributes), variantName, mrp, selling, stock],
+      );
       variantCount++;
     }
   }
 
   console.log(`✅ Seeded ${variantCount} variants across ${productCount} products`);
   await client.end();
-})().catch((err) => { console.error('❌', err.message); process.exit(1); });
+})().catch((err) => {
+  console.error('❌', err.message);
+  process.exit(1);
+});

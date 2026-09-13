@@ -22,7 +22,11 @@ async function check(url) {
     // Some CDNs reject HEAD; fall back to a ranged GET rather than trusting a 405.
     let res = await fetch(url, { method: 'HEAD', signal: ctrl.signal });
     if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-64' }, signal: ctrl.signal });
+      res = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-64' },
+        signal: ctrl.signal,
+      });
     }
     return res.status;
   } catch (err) {
@@ -36,12 +40,14 @@ async function check(url) {
 async function pool(items, fn, size) {
   const out = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
   return out;
 }
 
@@ -64,7 +70,9 @@ async function pool(items, fn, size) {
   `);
 
   const real = rows.filter((r) => !isPlaceholder(r.url));
-  console.log(`Auditing ${rows.length} images (${real.length} real URLs, ${rows.length - real.length} placeholders)…\n`);
+  console.log(
+    `Auditing ${rows.length} images (${real.length} real URLs, ${rows.length - real.length} placeholders)…\n`,
+  );
 
   const statuses = await pool(real, (r) => check(r.url), CONCURRENCY);
   const dead = real.filter((_, i) => statuses[i] !== 200);
@@ -100,4 +108,7 @@ async function pool(items, fn, size) {
   }
 
   await client.end();
-})().catch((err) => { console.error('❌', err.message); process.exit(1); });
+})().catch((err) => {
+  console.error('❌', err.message);
+  process.exit(1);
+});
