@@ -156,16 +156,47 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // Fire-and-forget on purpose: a write path must not wait for a broker
+    // round-trip, let alone kafkajs's retry ladder. But the outcome is
+    // observed: "Published" used to be logged the moment emit() was called,
+    // so an event the broker refused — every topic missing from the registry
+    // failed its metadata lookup and was dropped after the retries — read as
+    // delivered. Now the debug line follows completion and a refusal is an
+    // ERROR naming the topic and the reason. Non-fatal either way: Kafka
+    // errors must not crash request handlers.
     try {
-      this.client.emit(topic, {
-        key: (payload['id'] ?? Date.now()).toString(),
-        value: JSON.stringify({ ...payload, _publishedAt: new Date().toISOString() }),
-      });
-      this.logger.debug(`Published to ${topic}: ${JSON.stringify(payload).slice(0, 120)}`);
+      this.client
+        .emit(topic, {
+          key: (payload['id'] ?? Date.now()).toString(),
+          value: JSON.stringify({ ...payload, _publishedAt: new Date().toISOString() }),
+        })
+        .subscribe({
+          complete: () =>
+            this.logger.debug(`Published to ${topic}: ${JSON.stringify(payload).slice(0, 120)}`),
+          error: (err: unknown) =>
+            this.logger.error(
+              `Failed to publish to ${topic}: ${KafkaProducerService.describe(err)}`,
+            ),
+        });
     } catch (err) {
-      this.logger.error(`Failed to publish to ${topic}`, err);
-      // Non-fatal — Kafka errors should not crash request handlers
+      this.logger.error(`Failed to publish to ${topic}: ${KafkaProducerService.describe(err)}`);
     }
+  }
+
+  /**
+   * The broker's reason, with the one case an operator can act on spelled
+   * out: kafkajs reports a topic the broker does not know as "This server
+   * does not host this topic-partition", which reads like a partition or
+   * leader fault and is not one — with auto-create off, the topic simply
+   * does not exist until the registry declares it and the provisioner runs.
+   */
+  static describe(err: unknown): string {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err);
+    if (/does not host this topic-partition|UNKNOWN_TOPIC_OR_PARTITION/i.test(message)) {
+      return `${message} (the topic does not exist on the broker: declare it in KAFKA_TOPICS / PUBLISHED_TOPICS and run npm run kafka:topics)`;
+    }
+    return message;
   }
 
   /** Alias for publish() — matches the NestJS ClientProxy emit() API surface */
