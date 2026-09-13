@@ -3,7 +3,7 @@
  * Rebuild the marketplace search index from the marketplace database.
  *
  *   node apps/api/scripts/search-reindex.mjs [--dry-run]
- *   npm run search:reindex -w kartseek-api -- --dry-run
+ *   cd apps/api && npm run search:reindex -- --dry-run
  *
  * AUD2-032: the index held 60 documents against 178 active products, so every
  * search result was a 34% sample of the catalogue — and search-service reported
@@ -13,58 +13,99 @@
  *
  * Reads the catalogue directly rather than through search-service, because the
  * point is to establish the truth the service then maintains incrementally.
- * Idempotent: documents are upserted by product id, so running it twice leaves
- * the same index.
  *
- * ── The document shape is search-service's, not the table's ─────────────────
+ * ── What it does, and why it is not an in-place upsert ──────────────────────
  *
- * `SearchService.esIndexDocument` PUTs a `SearchResult` — `{ id, title,
- * description, module, price, rating, imageUrl, url, metadata }` — and
- * `queryElasticsearch` searches `title^3`, `description^2`,
- * `metadata.category`, `metadata.brand`, filters on `metadata.country` and
- * sorts on `price` / `rating` / `metadata.createdAt`. A bulk load of raw
- * `marketplace.products` rows would index documents with no `title` and no
- * `description`: every one of them invisible to the query that is supposed to
- * find them, while `_count` climbed to 178 and looked repaired. So this script
- * builds the same shape the service builds, and a reindexed document is
- * indistinguishable from an incrementally indexed one.
+ * It builds a fresh `<prefix>marketplace_<timestamp>` index with an explicit
+ * mapping, bulks every active product into it, checks the count, then moves the
+ * `<prefix>marketplace` **alias** onto it in a single atomic `_aliases` call and
+ * deletes the index the alias used to point at. Searches see the old index
+ * until the swap and the new one after it; there is no half-built state in
+ * between, and a failure before the swap changes nothing at all.
  *
- * ── The price is the buy-box price ──────────────────────────────────────────
+ * Upserting by id into the live index — the obvious version — never removes the
+ * document of a product that has since been withdrawn, so the storefront keeps
+ * offering it; and it makes the script's own success test unsatisfiable, since
+ * the live count then permanently exceeds the row count. See the long note in
+ * `search-reindex.lib.mjs`.
+ *
+ * ── The one-time migration ─────────────────────────────────────────────────
+ *
+ * An Elasticsearch alias may not share a name with a concrete index. Today
+ * `kartseek_marketplace` IS a concrete index (search-service created it by
+ * writing documents to it), so the first run has to delete it to free the name
+ * before the alias can be created. The script detects this, says so, and does
+ * it only after the replacement index is built and verified — but that one step
+ * is not atomic, so the first run is the one to do at a quiet moment. Every run
+ * after it is a clean swap.
+ *
+ * ── The price is the buy-box price ─────────────────────────────────────────
  *
  * `products.mrp` is the list price and is not what anyone pays. The payable
  * price is the winning listing's `sellingPrice`, so that is what is indexed and
  * what the `price_asc` / `price_desc` sorts then order by; `mrp` is carried in
- * `metadata` for display alongside it. Indexing `mrp` as `price` would sort the
- * catalogue by a number no order ever uses.
+ * `metadata` for display beside it.
  */
 import 'dotenv/config';
 import { Client } from 'pg';
+import { ALIAS, esEndpoint, runReindex } from './search-reindex.lib.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
+const alias = ALIAS();
+const { origin: NODE, headers: AUTH } = esEndpoint();
 
-/**
- * Elasticsearch runs with security enabled, and the documented way to carry
- * credentials is userinfo in `ELASTICSEARCH_NODE`. Node's `fetch` refuses such
- * a URL outright — `TypeError: Request cannot be constructed from a URL that
- * includes credentials` — so the userinfo is split out into a Basic header
- * exactly as `apps/search-service/src/elasticsearch-endpoint.ts` does it.
- */
-function elasticsearch() {
-  const raw = process.env.ELASTICSEARCH_NODE ?? 'http://localhost:9200';
-  const url = new URL(raw);
-  const user = decodeURIComponent(url.username) || process.env.ELASTICSEARCH_USERNAME || '';
-  const pass = decodeURIComponent(url.password) || process.env.ELASTICSEARCH_PASSWORD || '';
-  url.username = '';
-  url.password = '';
-  const origin = url.toString().replace(/\/+$/, '');
-  const headers = user
-    ? { Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}` }
-    : {};
-  return { origin, headers };
-}
+const json = { 'Content-Type': 'application/json', ...AUTH };
 
-const { origin: NODE, headers: AUTH } = elasticsearch();
-const INDEX = `${process.env.ELASTICSEARCH_INDEX_PREFIX ?? 'kartseek_'}marketplace`;
+/** The `fetch`-backed client `runReindex` drives. Mocked wholesale in the spec. */
+const es = {
+  async getAlias(name) {
+    const res = await fetch(`${NODE}/_alias/${name}`, { headers: AUTH });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`GET _alias/${name}: ${res.status} ${await res.text()}`);
+    return res.json();
+  },
+  async indexExists(name) {
+    return (await fetch(`${NODE}/${name}`, { method: 'HEAD', headers: AUTH })).ok;
+  },
+  async createIndex(name, body) {
+    const res = await fetch(`${NODE}/${name}`, {
+      method: 'PUT',
+      headers: json,
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`PUT ${name}: ${res.status} ${await res.text()}`);
+  },
+  async bulk(ndjson) {
+    const res = await fetch(`${NODE}/_bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-ndjson', ...AUTH },
+      body: ndjson,
+    });
+    if (!res.ok) throw new Error(`_bulk: ${res.status} ${await res.text()}`);
+    return res.json();
+  },
+  async refresh(name) {
+    await fetch(`${NODE}/${name}/_refresh`, { method: 'POST', headers: AUTH });
+  },
+  async count(name) {
+    const res = await fetch(`${NODE}/${name}/_count`, { headers: AUTH });
+    return res.ok ? (await res.json()).count : 0;
+  },
+  async updateAliases(actions) {
+    const res = await fetch(`${NODE}/_aliases`, {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({ actions }),
+    });
+    if (!res.ok) throw new Error(`_aliases: ${res.status} ${await res.text()}`);
+  },
+  async deleteIndex(name) {
+    const res = await fetch(`${NODE}/${name}`, { method: 'DELETE', headers: AUTH });
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`DELETE ${name}: ${res.status} ${await res.text()}`);
+    }
+  },
+};
 
 const pg = new Client({
   host: process.env.MARKETPLACE_DB_HOST || process.env.DB_HOST,
@@ -80,8 +121,8 @@ await pg.connect();
  * `marketplace.*`, never a bare table name: `public` holds shadow copies of
  * these tables, and an unqualified `products` resolves to the wrong one.
  *
- * `status = 'ACTIVE' AND is_active` is the same pair the catalogue read uses —
- * a product can be ACTIVE and soft-deleted, and indexing one puts a result in
+ * `status = 'ACTIVE' AND is_active` is the pair the catalogue read uses — a
+ * product can be ACTIVE and soft-deleted, and indexing one puts a result in
  * front of a shopper that 404s when they click it.
  */
 const { rows } = await pg.query(`
@@ -123,81 +164,23 @@ const { rows } = await pg.query(`
   WHERE p.status = 'ACTIVE' AND p.is_active
   ORDER BY p.created_at`);
 
-console.log(`${rows.length} active products in ${pg.database}`);
+console.log(`${rows.length} active product(s) in ${pg.database}`);
 
-const count = async () => {
-  const res = await fetch(`${NODE}/${INDEX}/_count`, { headers: AUTH });
-  return res.ok ? (await res.json()).count : 0;
-};
+try {
+  const before = await es.count(alias).catch(() => 0);
+  console.log(`${before} document(s) in ${alias} before`);
 
-const before = await count();
-console.log(`${before} documents in ${INDEX} before`);
-
-if (dryRun) {
-  console.log(`--dry-run: ${rows.length - before} document(s) would be added or updated`);
+  const result = await runReindex({ es, rows, alias, dryRun });
   await pg.end();
+
+  if (result.planned) process.exit(0);
+
+  console.log(`${result.indexed} document(s) in ${result.newIndex}; ${alias} now points at it`);
   process.exit(0);
-}
-
-/** The shape `SearchService.esIndexDocument` writes. */
-const toDocument = (r) => ({
-  id: r.id,
-  title: r.name ?? '',
-  description: r.description ?? '',
-  module: 'marketplace',
-  // `numeric` comes back from pg as a string; ES would then index it as text
-  // and every range filter and price sort would fail silently.
-  price: r.price == null ? undefined : Number(r.price),
-  rating: r.rating == null ? undefined : Number(r.rating),
-  imageUrl: r.image_url ?? undefined,
-  url: `/marketplace/${r.slug ?? r.id}`,
-  metadata: {
-    slug: r.slug,
-    brand: r.brand ?? undefined,
-    category: r.category ?? undefined,
-    subcategory: r.subcategory ?? undefined,
-    mrp: r.mrp == null ? undefined : Number(r.mrp),
-    reviewCount: r.review_count ?? 0,
-    createdAt: r.created_at,
-  },
-});
-
-const body =
-  rows
-    .flatMap((r) => [{ index: { _index: INDEX, _id: r.id } }, toDocument(r)])
-    .map((o) => JSON.stringify(o))
-    .join('\n') + '\n';
-
-const res = await fetch(`${NODE}/_bulk`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/x-ndjson', ...AUTH },
-  body,
-});
-
-if (!res.ok) {
-  console.error(`Elasticsearch refused the bulk request: ${res.status} ${await res.text()}`);
+} catch (err) {
+  console.error(String(err?.message ?? err));
   await pg.end();
+  // Non-zero because "it ran" and "the index is right" are different claims,
+  // and only the second one is worth anything to a readiness probe.
   process.exit(1);
 }
-
-const result = await res.json();
-if (result.errors) {
-  console.error(
-    result.items
-      .filter((i) => i.index?.error)
-      .slice(0, 3)
-      .map((i) => `${i.index._id}: ${i.index.error.reason}`)
-      .join('\n'),
-  );
-  await pg.end();
-  process.exit(1);
-}
-
-await fetch(`${NODE}/${INDEX}/_refresh`, { method: 'POST', headers: AUTH });
-const after = await count();
-console.log(`${after} documents after — ${after === rows.length ? 'complete' : 'INCOMPLETE'}`);
-await pg.end();
-
-// A non-zero exit when the index does not match the catalogue: the whole point
-// of this script is that "it ran" and "the index is right" are different claims.
-process.exit(after === rows.length ? 0 : 1);
