@@ -305,11 +305,14 @@ Dockerfiles in `infra/docker/` now cover every kind of deployable between
 them: `api-gateway.Dockerfile` (the gateway), `core-service.Dockerfile`
 (`--build-arg APP=<nestProject>` → any of the 17 core services),
 `module-service.Dockerfile` (`--build-arg APP=<module>` → any of the 8 module
-backends) and `nextjs.Dockerfile` (`--build-arg WORKSPACE_DIR=<path>` → the
-web shell or any of the 8 module zones). All are built from the repository
-root so every image shares the one root lockfile, and all take
-`--build-arg PORT=<port>` so the image's HEALTHCHECK probes the port the
-service registry says that deployable listens on.
+backends) and `nextjs.Dockerfile` (`--build-arg WORKSPACE_DIR=<path>` → a Next
+workspace that emits `.next/standalone`, which today is `apps/web` alone —
+adding `output: 'standalone'` to the 8 module zones is Phase IN11). All are
+built from the repository root so every image shares the one root lockfile,
+and all **require** `--build-arg PORT=<port>` so the image's HEALTHCHECK probes
+the port the service registry says that deployable listens on; each asserts it
+with a `RUN test -n "$PORT"` in its runtime stage, because `EXPOSE ${PORT}`
+with an empty expansion is a silent no-op rather than a build failure.
 
 <!-- counted with: git ls-files infra/docker | grep -c '\.Dockerfile$' → 4 -->
 

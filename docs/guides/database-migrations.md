@@ -341,6 +341,24 @@ so a failed or half-finished run costs nothing, but it also means the two
 copies diverge the moment traffic starts hitting the new one. Do this with
 services stopped, and use `--only=<module>[,<module>...]` to limit it.
 
+### The dedicated instances on a machine that has been running a while
+
+Read this before switching a module back to `--profile isolated` on an existing
+developer machine. Every module `.env` now points at the **shared** database
+(`kartseek_db`, port 5432) as that module's own login role, so the eight
+dedicated containers on 5433–5440 are no longer what anything connects to. Their
+volumes still hold whatever was in them at the moment of the switch, and
+**nothing reconciles the two**: migrations run against the shared database do
+not reach them, so a volume that was ahead is now behind, and one that was built
+by an older `synchronize` may not match the entities at all. On the machine
+where the switch was made, `kartseek_taxi.taxi` held 10 tables against the 9 the
+migration builds.
+
+So a module pointed back at its dedicated instance gets whatever that volume
+happens to contain. Run `npm run migration:show` against it before trusting it,
+and `docker compose down -v` on that one container (which discards its data) if
+you would rather start from the migrations.
+
 ## Where this is heading
 
 This split-by-opt-in arrangement is for the _module_ databases. The 18 core

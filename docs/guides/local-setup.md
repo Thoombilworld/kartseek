@@ -46,22 +46,30 @@ installs the commit hooks described in [`conventions.md`](conventions.md#commits
 
 ## Environment
 
-Two files are copied before anything else:
+Two files come before anything else:
 
 ```bash
-cp .env.example .env
-cp apps/api/.env.example apps/api/.env
+npm run env:init                          # root .env, with every secret generated
+cp apps/api/.env.example apps/api/.env    # then set DB_PASSWORD, see below
 ```
 
-Fill in **every** variable the root `.env.example` lists before going any
-further. Compose treats all of them as required: it refuses to start and names
-the one that is missing, rather than falling back to the
-`change_me_in_development` default it used to carry in tracked source
-(AUD2-022). Generate a distinct value per line:
+**Do not `cp .env.example .env`.** Every secret in that file is deliberately
+empty, so a straight copy produces a `.env` that Compose refuses — which is the
+point. It used to ship a literal placeholder password for `POSTGRES_PASSWORD`
+and thirteen more like it, and because `${VAR:?…}` only fires on a value that is
+unset or empty — never on a placeholder — the documented first run brought the
+whole stack up on a password published in tracked source (AUD2-022).
 
-```bash
-node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
-```
+`npm run env:init` (`scripts/env/generate-secrets.mjs`) copies the example and
+fills each empty secret with 24 random bytes as hex. It **refuses to overwrite
+an existing `.env`** — Postgres bakes its superuser password into the data
+directory at first init, so silently rotating that file would leave a running
+stack unable to authenticate against its own volumes. To start over, delete or
+rename `.env` yourself and run it again.
+
+Then open `apps/api/.env` and set `DB_PASSWORD` to the `POSTGRES_PASSWORD` that
+`env:init` generated in the root `.env`. Those two files must agree and nothing
+checks that they do — this is the one value you copy by hand.
 
 Each of the eight module backends (`modules/<vertical>/backend/`) also ships
 its own `.env.example`. Those now point at the **shared** Postgres — port
@@ -164,9 +172,18 @@ One credential per module, valid in either topology: the same pair is the
 dedicated instance's own superuser under the `isolated` profile, so moving a
 module between the two does not change what it presents.
 
-Do them **one at a time**, and after each one:
+Do them **one at a time**. Step 0 applies to the cluster once, not per module,
+and skipping it makes step 2 fail immediately:
 
 ```bash
+# 0. ONCE per cluster. Any Postgres whose roles were created before this
+#    existed has no CREATE on the database and no migration ledger, so
+#    `migration:run` as a module role fails on the first statement. The script
+#    is idempotent; the docker exec one-liner is in infra/docker/README.md.
+set -a; . ./.env; set +a
+docker exec -i $env_flags kartseek-postgres bash -s < infra/postgres/init-roles.sh
+
+# 1-4, per module:
 cd modules/taxi/backend
 npm run migration:run     # builds the schema as the module's own role
 npm run build && npm test
@@ -177,6 +194,26 @@ The order matters. Start with a module that references no schema but its own —
 `taxi`, `doctor` and `hotel` reach nothing outside theirs; `marketplace` and
 `franchise` have the most cross-schema references and should be last, since
 they may need explicit grants rather than a plain flip.
+
+### `public` is closed to `PUBLIC`
+
+The roles script ends with `REVOKE ALL ON SCHEMA public FROM PUBLIC`, on the
+shared database and on each dedicated one. PostgreSQL grants every role USAGE on
+`public` by default and no per-role `REVOKE` takes it away, so without this the
+per-module isolation has a hole in it: any login role could traverse the schema
+holding `users`, `orders` and the gateway's own tables.
+
+**This is a cluster-wide change, and it is safe today for one reason only: all
+26 services still connect as `postgres`, and a superuser bypasses permission
+checks entirely.** The eight module roles are named explicitly — `grant_in()`
+gives each one `GRANT USAGE ON SCHEMA public` _before_ the revoke runs, which is
+what keeps its migration ledger at `public.<module>_migrations` reachable.
+
+So: **any non-superuser role added later starts with no access to `public` at
+all** and needs an explicit `GRANT USAGE ON SCHEMA public`, plus grants on
+whatever tables it is meant to read. That includes the obvious next step of this
+work — moving the core services off `DB_USER=postgres` onto roles of their own.
+If one of those comes up unable to see `users`, this is why.
 
 ### If the role cannot do something
 
