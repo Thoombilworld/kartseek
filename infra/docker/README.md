@@ -203,6 +203,46 @@ which is the whole point of preferring it to silent eviction. If you hit it,
 raise `--maxmemory` or move the balance to Postgres (the loyalty half of that is
 IN10's money workstream); do not put `allkeys-lru` back.
 
+#### Every key written without a TTL
+
+`volatile-lru` protects exactly these keys from eviction, and they are also the
+keys that fill `--maxmemory` and eventually cause the OOM above, so the list is
+worth keeping short and worth knowing. Counted by walking every
+`redis.set` / `setJson` / `setJSON` call in `apps/api/apps`, `apps/api/libs` and
+`modules` and checking whether a TTL argument was passed: **277 writes, 266 with
+a TTL, 11 without** (IN10, dispatch addendum item 11).
+
+"Rebuildable" means: if this key vanished, could the owning service reconstruct
+it from a durable source? That is the property that decides whether living
+without a TTL is safe or is an unbacked record.
+
+| Key                             | Written at                                                         | Why no TTL                                         | Rebuildable                                              | Owner   |
+| ------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------- | ------- |
+| `admin:kyc:pending:<type>:<id>` | `apps/admin-service/src/admin.service.ts:644`                      | An approval queue entry waits as long as it waits. | **No** — this key _is_ the queue. Nothing else holds it. | INFRA   |
+| `loyalty:<userId>`              | `apps/loyalty-service/src/loyalty.service.ts:50,78,103,140,224`    | A points balance is a record, not a cache.         | **No** — AUD2-031; belongs in Postgres.                  | MONEY   |
+| `wallet:frozen:<userId>`        | `apps/wallet-service/src/wallet.service.ts:252`                    | A fraud freeze that expires is not a freeze.       | **No** — the flag exists only here.                      | MONEY   |
+| `notifications:unread:<userId>` | `apps/api-gateway/src/gateways/notifications.gateway.ts:176`       | A badge count with no natural expiry.              | **Yes, in principle** — derivable from the stored queue. | MODULES |
+| `seller:<sellerId>:couriers`    | `modules/marketplace/backend/src/seller/seller.service.ts:3157`    | Seller courier configuration, not a cache.         | **No** — configuration with no row behind it.            | MODULES |
+| `ride:waiting:<rideId>`         | `modules/taxi/backend/src/services/driver-dispatch.service.ts:169` | Start of the waiting-time charge.                  | **No** — and a lost one under-charges the rider.         | TAXI    |
+
+Two notes on that table:
+
+- `admin:counter:pending_kyc` used to be a twelfth entry — a bare
+  `set(get() + 1)` / `set(get() - 1)` with no source and no rebuild path, which
+  read `0` for ever after the AOF transition emptied the development instance
+  and which the console displayed. It is gone: the dashboard COUNTs
+  `admin:kyc:pending:*` instead (`admin.service.ts` `countPendingKyc`). **The
+  rule it established:** a figure the console displays is derived from the rows
+  that are its source of truth, cached with a short TTL if it needs to be —
+  never accumulated in a key that can only drift.
+- `order.service.ts:118` looks like a twelfth match to a naive grep. It is prose
+  in a comment recording that orders _used_ to live in
+  `redis.setJson(..., 86400)` and now go to Postgres first.
+
+The three rows marked MONEY and TAXI are recorded here rather than fixed by
+IN10: moving a balance, a freeze flag or a fare component into Postgres is a
+money-path schema change and belongs to those workstreams.
+
 ### Per-module database roles
 
 Two init scripts are mounted into the shared `postgres` service, and the
