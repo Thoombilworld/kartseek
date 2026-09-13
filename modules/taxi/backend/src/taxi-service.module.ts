@@ -76,11 +76,16 @@ const ENTITIES = [
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         type: 'postgres' as const,
-        // Kept for the two things it owns: the SSL policy, and the production
-        // guard that refuses to boot with the built-in development password
-        // when NODE_ENV=production. The connection target itself is overridden
-        // immediately below, by the resolver the CLI runner shares.
-        ...databaseCredentials(cfg),
+        // SSL, the pool, the connect timeout and the retry policy — one policy
+        // for every service (AUD2-033). The connection target itself is
+        // overridden immediately below, by the resolver the CLI runner shares.
+        //
+        // The prefix matters: this module reads `TAXI_PASSWORD`, not
+        // `DB_PASSWORD`, and its .env.example declares only the former. Without
+        // it the helper refused to boot on a variable this service never uses —
+        // masked in-repo by the fallback to apps/api/.env, fatal for a module
+        // lifted out of this repository into an image of its own.
+        ...databaseCredentials(cfg, { envPrefix: 'TAXI_DB' }),
         // One resolver, shared with data-source.ts — see ./db-config.ts. The
         // two used to resolve these five values separately, with different
         // last resorts, so without a module .env the CLI and the service
