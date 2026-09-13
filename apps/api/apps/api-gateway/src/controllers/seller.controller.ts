@@ -57,20 +57,16 @@ import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagin
  * accepted: "A product name is required." is not a temporary outage.
  */
 /**
- * A seller product write that was refused for its content comes back as a
- * normal reply `{ success: false, statusCode: 400, message, errors: [{ slug,
- * message }] }` rather than as an RPC error, because the RPC error channel is
- * flattened to one message string and the form needs the per-attribute list
- * to mark its fields. Turn it back into the HTTP 400 it is.
+ * The HTTP exception for an RPC error, keeping the per-field `errors` a
+ * validation refusal carries (`RpcAwareExceptionsFilter` forwards it on a
+ * 4xx; the HTTP envelope emits it) so the seller form can mark the field.
  */
-function unwrapSellerWrite<T extends Record<string, any>>(reply: T): T {
-  if (reply && reply.success === false && Number.isFinite(Number(reply.statusCode))) {
-    throw new HttpException(
-      { message: reply.message ?? 'The request could not be saved.', errors: reply.errors ?? [] },
-      Number(reply.statusCode),
-    );
-  }
-  return reply;
+function rpcHttpError(err: any, fallback: string): HttpException {
+  const body = {
+    message: err?.message || fallback,
+    ...(Array.isArray(err?.errors) ? { errors: err.errors } : {}),
+  };
+  return new HttpException(body, rpcStatus(err));
 }
 
 function rpcStatus(err: any): number {
@@ -274,20 +270,14 @@ export class SellerController {
     //
     // A create that did not happen has to say so.
     try {
-      return unwrapSellerWrite(
-        await firstValueFrom(
-          this.sellerClient.send({ cmd: 'create_seller_product' }, { sellerId, ...body }),
-        ),
+      return await firstValueFrom(
+        this.sellerClient.send({ cmd: 'create_seller_product' }, { sellerId, ...body }),
       );
     } catch (err: any) {
-      if (err instanceof HttpException) throw err;
       this.logger.error(
         `create_seller_product failed for seller=${sellerId}: ${err?.message ?? err}`,
       );
-      throw new HttpException(
-        err?.message || 'We could not create this listing. Please try again.',
-        rpcStatus(err),
-      );
+      throw rpcHttpError(err, 'We could not create this listing. Please try again.');
     }
   }
 
@@ -323,15 +313,12 @@ export class SellerController {
     // product belongs to that seller before writing.
     const sellerId = await this.resolveSellerId(req);
     try {
-      return unwrapSellerWrite(
-        await firstValueFrom(
-          this.sellerClient
-            .send({ cmd: 'update_seller_product' }, { sellerId, productId: id, ...body })
-            .pipe(timeout(8000)),
-        ),
+      return await firstValueFrom(
+        this.sellerClient
+          .send({ cmd: 'update_seller_product' }, { sellerId, productId: id, ...body })
+          .pipe(timeout(8000)),
       );
     } catch (err: any) {
-      if (err instanceof HttpException) throw err;
       // No more "Product updated successfully" for a write that never happened.
       // A validation refusal is a 400 with the field list; an ownership miss a
       // 404; only an unreachable service is a 503.
@@ -339,7 +326,7 @@ export class SellerController {
       if (status === HttpStatus.SERVICE_UNAVAILABLE) {
         throw new ServiceUnavailableException('Product could not be updated — please try again.');
       }
-      throw new HttpException(err?.message || 'Product could not be updated.', status);
+      throw rpcHttpError(err, 'Product could not be updated.');
     }
   }
 
