@@ -147,6 +147,59 @@ Four differences from `apps/api/data-source.ts`, all deliberate:
   `migration:generate` propose creating the whole module in `public` and
   dropping it from the module's own schema.
 
+### One-off: dropping the stale `<module>.migrations` ledgers
+
+The first runner placed the ledger at `<module>.migrations`, before the ruling
+above moved it to `public.<module>_migrations`. Every development database
+provisioned before that change therefore carries **two** ledger tables, and the
+stale one is the dangerous kind of leftover: it is a real table, with real rows,
+that looks authoritative and is read by nothing. Anyone diagnosing "has this
+migration run?" can land on it, believe it, and be told a truth that stopped
+being updated at whatever date the ruling landed.
+
+This is a cleanup, not a migration. Writing it as a migration would make every
+future database run a `DROP` for a table it never had, and would put the
+deletion of a ledger inside the mechanism the ledger records.
+
+**Confirm first, in each database, that the canonical ledger holds everything
+the stale one does.** Do not skip this: the stale table is the only copy of any
+row the canonical one is missing.
+
+```bash
+# Per module — marketplace, grocery, restaurant, pharmacy, doctor, hotel,
+# taxi, franchise. Expect missing_from_canonical=0.
+docker exec kartseek-postgres-<m> psql -U <m>_user -d kartseek_<m> -tAc "
+  SELECT 'stale='  || (SELECT count(*) FROM <m>.migrations)
+      || ' canonical=' || (SELECT count(*) FROM public.<m>_migrations)
+      || ' missing_from_canonical=' || (
+           SELECT count(*) FROM <m>.migrations s
+           WHERE NOT EXISTS (SELECT 1 FROM public.<m>_migrations p WHERE p.name = s.name));"
+```
+
+Then, and only for a module that reported `missing_from_canonical=0`:
+
+```bash
+docker exec kartseek-postgres-<m> psql -U <m>_user -d kartseek_<m> \
+  -c "DROP TABLE IF EXISTS <m>.migrations"
+```
+
+Verified on this machine on 2026-09-13 (IN10, dispatch addendum item 8). All
+eight databases carry both tables and all eight are safe to clean:
+
+| Database               | `<m>.migrations` | `public.<m>_migrations` | Missing from canonical |
+| ---------------------- | ---------------- | ----------------------- | ---------------------- |
+| `kartseek_marketplace` | 2 rows           | 2 rows                  | 0                      |
+| `kartseek_grocery`     | 2 rows           | 2 rows                  | 0                      |
+| `kartseek_restaurant`  | 2 rows           | 2 rows                  | 0                      |
+| `kartseek_pharmacy`    | 2 rows           | 2 rows                  | 0                      |
+| `kartseek_doctor`      | 1 row            | 1 row                   | 0                      |
+| `kartseek_hotel`       | 2 rows           | 2 rows                  | 0                      |
+| `kartseek_taxi`        | 1 row            | 1 row                   | 0                      |
+| `kartseek_franchise`   | 1 row            | 1 row                   | 0                      |
+
+A freshly provisioned database has only `public.<m>_migrations` and needs none
+of this.
+
 ### Timestamps are allocated, not taken from the clock
 
 `migration:generate` stamps the file with `Date.now()`. Rename it. A timestamp
