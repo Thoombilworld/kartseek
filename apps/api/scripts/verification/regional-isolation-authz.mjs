@@ -2,6 +2,7 @@
 import pg from 'pg';
 
 import { createRequire } from 'node:module';
+import { pacedFetch } from './probe-pacing.mjs';
 
 // The database password comes from the environment (or apps/api/.env, which
 // this helper loads) or the script stops — there is no built-in default
@@ -17,7 +18,7 @@ const API = process.env.API_BASE ?? 'http://127.0.0.1:3001/api/v1';
  * is no token at all — hence the explicit failure rather than 36 confusing 401s.
  */
 const login = async (email, password) => {
-  const r = await fetch(API + '/auth/login', {
+  const r = await pacedFetch(API + '/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -26,7 +27,7 @@ const login = async (email, password) => {
   if (j.requires2FA) {
     if (!j.devCode)
       throw new Error(`MFA required for ${email}; run the fleet with DEV_MFA_ECHO=true`);
-    const v = await fetch(API + '/auth/mfa/verify', {
+    const v = await pacedFetch(API + '/auth/mfa/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
@@ -41,7 +42,7 @@ const qa = await login('qa-admin@kartseek.com', 'AdminPass123!');
 const global = await login('admin@kartseek.com', 'AdminPass123!');
 const india = await login('india-admin@kartseek.com', 'AdminPass123!');
 const call = async (token, method, path, body, extra = {}) => {
-  const r = await fetch(API + path, {
+  const r = await pacedFetch(API + path, {
     method,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...extra },
     body: body ? JSON.stringify(body) : undefined,

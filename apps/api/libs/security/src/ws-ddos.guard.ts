@@ -2,6 +2,7 @@ import { Injectable, type CanActivate, type ExecutionContext, Logger } from '@ne
 import { WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
 import { RedisService } from '@app/redis';
+import { banSuppressedForLoopback } from './client-ip.util';
 
 /**
  * The peers whose `X-Forwarded-For` a socket handshake may believe.
@@ -282,6 +283,14 @@ export class WsDdosGuard implements CanActivate {
     this.logger.warn(`⚡ WS Strike ${strikes}/${this.WS_STRIKE_THRESHOLD} for ${ip}: ${reason}`);
 
     if (strikes >= this.WS_STRIKE_THRESHOLD) {
+      if (banSuppressedForLoopback(ip)) {
+        this.logger.warn(
+          `⚠️ WS ban NOT written for ${ip}: ${strikes} strikes (${reason}), but a loopback ban in ` +
+            `development disconnects every local socket, not the offender's. Per-socket message ` +
+            `and connection limits still apply. See docs/guides/troubleshooting.md.`,
+        );
+        return;
+      }
       const multiplierIndex = Math.min(strikes - this.WS_STRIKE_THRESHOLD, 3);
       const multipliers = [1, 3, 6, 18]; // 10min → 30min → 1h → 3h
       const banDuration = this.WS_BAN_DURATION * multipliers[multiplierIndex];

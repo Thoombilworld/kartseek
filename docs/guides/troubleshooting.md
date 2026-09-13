@@ -223,3 +223,52 @@ npm run kafka:topics
 It is idempotent and safe to run any time — see
 [`seeding.md`](seeding.md#kafka-topics-do-this-before-seeding-anything-that-publishes)
 for what it actually does.
+
+## Every local caller answers 429 after a probe or e2e run
+
+**Symptom.** Every request to the gateway — a page load, `/health`, another
+terminal's `curl`, the smoke — comes back `429 Too Many Requests` with a
+`Retry-After` of minutes or hours. It starts right after somebody ran
+`npm run verify:regional`, one of its siblings in
+`apps/api/scripts/verification/`, or a Playwright suite against `:3001`.
+
+**Cause.** `DdosProtectionMiddleware` counts requests **per IP** (100 per 60 s
+by default, 20 per 5 s of burst), records a strike on every request past the
+limit, and bans the IP for 15 minutes and upwards after 5 strikes. On a
+developer's machine every local caller shares `127.0.0.1`, so the ban is not
+"the flooding script is refused" — it is "this machine is refused", out of the
+Redis the whole fleet shares. This happened twice on 2026-09-12: once for 15
+minutes, once with `Retry-After: 21397`.
+
+**Fix.** Two things already prevent it, and neither needs you to do anything:
+
+- The probe scripts pace themselves. `apps/api/scripts/verification/probe-pacing.mjs`
+  derives the gap between requests from the middleware's own `DDOS_*`
+  variables, and a `429` aborts the run with an explanation instead of being
+  reported as a failed check.
+- In `NODE_ENV=development` the shield never writes a **ban** key for a loopback
+  address (`client-ip.util.ts`'s `banSuppressedForLoopback`). Per-window 429s
+  and strikes still apply, so a genuine local flood is still refused request by
+  request — it just cannot leave a crater. Production is unchanged.
+
+If a probe still reports throttling, the shared per-IP window is being spent by
+something else on the machine. Either slow the probe down:
+
+```bash
+PROBE_DELAY_MS=1500 npm run verify:regional      # from apps/api
+```
+
+or give the probe a gateway of its own with the limits raised **for that
+process only**, and point the probe at it:
+
+```bash
+# a temporary gateway beside the running fleet — never restart the fleet's own
+API_GATEWAY_PORT=3099 DDOS_RATE_LIMIT_MAX=100000 DDOS_BURST_MAX=10000 \
+  npx nest start api-gateway            # from apps/api
+API_BASE=http://localhost:3099/api/v1 PROBE_DELAY_MS=0 npm run verify:regional
+```
+
+**Do not** delete `ddos:banned:*` / `ddos:strikes:*` keys to clear a ban. They
+are live state of the running platform, deleting them hides the flood that
+caused them, and the probe scripts are tested against ever doing it
+(`probe-pacing.spec.ts`).

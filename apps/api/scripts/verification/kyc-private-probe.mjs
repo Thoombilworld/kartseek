@@ -42,6 +42,7 @@
 import { createRequire } from 'module';
 import * as fs from 'fs';
 import * as path from 'path';
+import { pacedFetch } from './probe-pacing.mjs';
 
 const require = createRequire(import.meta.url);
 const BASE = process.env.API_BASE ?? 'http://localhost:3099/api/v1';
@@ -71,7 +72,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64url');
 
 async function login(email, password = PASSWORD, attempt = 0) {
-  const r = await fetch(`${BASE}/auth/login`, {
+  const r = await pacedFetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -83,7 +84,7 @@ async function login(email, password = PASSWORD, attempt = 0) {
   let j = await r.json();
   if (j.requires2FA) {
     if (!j.devCode) throw new Error(`MFA without an echoed code for ${email}`);
-    const v = await fetch(`${BASE}/auth/mfa/verify`, {
+    const v = await pacedFetch(`${BASE}/auth/mfa/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
@@ -97,7 +98,7 @@ async function login(email, password = PASSWORD, attempt = 0) {
 
 async function makeSeller() {
   const email = `probe.kycpriv.${Date.now()}@kartseek.test`;
-  const r = await fetch(`${BASE}/auth/seller/register`, {
+  const r = await pacedFetch(`${BASE}/auth/seller/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -118,7 +119,7 @@ async function makeSeller() {
 async function uploadKyc(token) {
   const fd = new FormData();
   fd.append('document', new Blob([PDF], { type: 'application/pdf' }), 'national_id.pdf');
-  const r = await fetch(`${BASE}/upload/kyc-document`, {
+  const r = await pacedFetch(`${BASE}/upload/kyc-document`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: fd,
@@ -128,7 +129,7 @@ async function uploadKyc(token) {
 }
 
 async function fetchDoc(token, key) {
-  const r = await fetch(`${BASE}/admin/kyc/documents/${b64(key)}`, {
+  const r = await pacedFetch(`${BASE}/admin/kyc/documents/${b64(key)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   const type = r.headers.get('content-type') ?? '';
@@ -212,7 +213,7 @@ if (!PRIVATE_DIR) {
 
 console.log('\n── 3. the approval queue has the row (there was none at all) ──');
 {
-  const r = await fetch(`${BASE}/admin/kyc/pending?limit=100`, {
+  const r = await pacedFetch(`${BASE}/admin/kyc/pending?limit=100`, {
     headers: { Authorization: `Bearer ${superAdmin}` },
   });
   const j = await r.json().catch(() => null);
@@ -321,7 +322,7 @@ if (!process.env.DB_PASSWORD) {
     JSON.stringify(foreign.json ?? {}).slice(0, 240),
   );
 
-  const queue = await fetch(`${BASE}/admin/kyc/pending?limit=100`, {
+  const queue = await pacedFetch(`${BASE}/admin/kyc/pending?limit=100`, {
     headers: { Authorization: `Bearer ${qa}` },
   });
   const qj = await queue.json().catch(() => null);

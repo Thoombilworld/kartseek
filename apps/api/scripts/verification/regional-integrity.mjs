@@ -24,7 +24,17 @@
  * R1-R10 have taken it, and a new row is a line of data rather than a new
  * function. Accounts and base URL come from the environment, like
  * `admin-scope-authz.mjs`.
+ *
+ * Every request goes through `pacedFetch`, which keeps the run below the
+ * gateway's own per-IP rate limit. It is not a courtesy: an unpaced run of this
+ * file banned `:3001` for fifteen minutes in the shared Redis on 2026-09-12,
+ * and on a developer's machine that ban lands on every local caller, not on
+ * this script. `PROBE_DELAY_MS` overrides the derived gap — see
+ * `docs/guides/troubleshooting.md`, "Every local caller answers 429 after a
+ * probe or e2e run".
  */
+import { pacedFetch, pacingSummary } from './probe-pacing.mjs';
+
 const BASE = process.env.API_BASE ?? 'http://localhost:3099/api/v1';
 const PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminPass123!';
 const ACCOUNTS = {
@@ -77,7 +87,7 @@ const skip = (name, why) => {
  * the mailbox, so it says so rather than reporting every check as a failure.
  */
 async function login({ email, password }) {
-  const r = await fetch(`${BASE}/auth/login`, {
+  const r = await pacedFetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -86,7 +96,7 @@ async function login({ email, password }) {
   if (j.requires2FA) {
     if (!j.devCode)
       throw new Error(`MFA required for ${email}; run the fleet with DEV_MFA_ECHO=true`);
-    const v = await fetch(`${BASE}/auth/mfa/verify`, {
+    const v = await pacedFetch(`${BASE}/auth/mfa/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
@@ -99,7 +109,7 @@ async function login({ email, password }) {
 }
 
 async function call(token, method, path, body) {
-  const r = await fetch(`${BASE}${path}`, {
+  const r = await pacedFetch(`${BASE}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -498,6 +508,9 @@ const unreachable = (status) => status >= 500;
 
   const summary = `\n${pass} passed, ${fail} failed, ${skipped} skipped`;
   console.log(summary);
+  // Visible in the transcript on purpose: a run that reports no 429 is only
+  // evidence that the pacing worked if the pacing is on show next to it.
+  console.log(pacingSummary());
   if (skips.length) {
     console.log('\nskipped, with reasons:');
     for (const s of skips) console.log(`  ○ ${s}`);

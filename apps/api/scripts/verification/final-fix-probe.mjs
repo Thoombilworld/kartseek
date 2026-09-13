@@ -21,6 +21,8 @@
  * Every request carries a bearer, so `DEV_AUTH_BYPASS` never applies — an
  * anonymous request is SUPER_ADMIN locally and would prove nothing.
  */
+import { pacedFetch } from './probe-pacing.mjs';
+
 const BASE = process.env.API_BASE ?? 'http://localhost:3099/api/v1';
 const PASSWORD = 'AdminPass123!';
 
@@ -44,7 +46,7 @@ const skip = (name, why) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function login(email, password = PASSWORD, attempt = 0) {
-  const r = await fetch(`${BASE}/auth/login`, {
+  const r = await pacedFetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -59,7 +61,7 @@ async function login(email, password = PASSWORD, attempt = 0) {
   let j = await r.json();
   if (j.requires2FA) {
     if (!j.devCode) throw new Error(`MFA without an echoed code for ${email}`);
-    const v = await fetch(`${BASE}/auth/mfa/verify`, {
+    const v = await pacedFetch(`${BASE}/auth/mfa/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
@@ -72,7 +74,7 @@ async function login(email, password = PASSWORD, attempt = 0) {
 }
 
 async function call(token, method, path, body) {
-  const r = await fetch(`${BASE}${path}`, {
+  const r = await pacedFetch(`${BASE}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -96,7 +98,7 @@ async function call(token, method, path, body) {
 async function makeSeller() {
   const email = `probe.kyc.${Date.now()}@kartseek.test`;
   const password = 'SellerPass123!';
-  const r = await fetch(`${BASE}/auth/seller/register`, {
+  const r = await pacedFetch(`${BASE}/auth/seller/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -124,7 +126,7 @@ async function makeSeller() {
 /** A throwaway customer, so the "any authenticated caller" claim is tested with one. */
 async function makeCustomer() {
   const email = `probe.finalfix.${Date.now()}@kartseek.test`;
-  const r = await fetch(`${BASE}/auth/register`, {
+  const r = await pacedFetch(`${BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -310,7 +312,7 @@ console.log('\n── 4. GET /admin/marketplace/orders/:id reads the order ─�
 console.log('\n── 5. POST /upload/kyc-document stores what it reports ──');
 {
   // A customer is refused whatever the storage does — the route is SELLER/DRIVER.
-  const asCustomer = await fetch(`${BASE}/upload/kyc-document`, {
+  const asCustomer = await pacedFetch(`${BASE}/upload/kyc-document`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${customer.token}` },
     body: (() => {
@@ -340,7 +342,7 @@ console.log('\n── 5. POST /upload/kyc-document stores what it reports ──
       new Blob([Buffer.from('%PDF-1.7 probe')], { type: 'application/pdf' }),
       'id.pdf',
     );
-    const r = await fetch(`${BASE}/upload/kyc-document`, {
+    const r = await pacedFetch(`${BASE}/upload/kyc-document`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${sellerToken}` },
       body: fd,

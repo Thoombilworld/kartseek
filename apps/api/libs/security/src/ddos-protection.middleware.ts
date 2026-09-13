@@ -1,6 +1,7 @@
 import { Injectable, type NestMiddleware, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { type Request, type Response, type NextFunction } from 'express';
 import { RedisService } from '@app/redis';
+import { banSuppressedForLoopback } from './client-ip.util';
 
 /**
  * DDoS Protection Middleware — Multi-layer defense for the KARTSEEK API Gateway.
@@ -331,6 +332,14 @@ export class DdosProtectionMiddleware implements NestMiddleware {
     ); // Keep violation records for 7 days
 
     if (strikes >= this.STRIKE_THRESHOLD) {
+      if (banSuppressedForLoopback(ip)) {
+        this.logger.warn(
+          `⚠️ Ban NOT written for ${ip}: ${strikes} strikes (${reason}), but a loopback ban in ` +
+            `development takes every local caller down with the offender. Rate limiting still ` +
+            `applies per window. See docs/guides/troubleshooting.md.`,
+        );
+        return;
+      }
       // Progressive ban: 15m → 30m → 1h → 2h → 6h → 24h (caps at 24h)
       const multiplierIndex = Math.min(strikes - this.STRIKE_THRESHOLD, 5);
       const multipliers = [1, 2, 4, 8, 24, 96];

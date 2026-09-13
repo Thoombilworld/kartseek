@@ -2,6 +2,8 @@
 // Live proof that a regional admin is confined on the admin API. Run with the
 // fleet up: `npm run verify:admin-scope` from apps/api. Every request carries a
 // bearer so DEV_AUTH_BYPASS never applies.
+import { pacedFetch } from './probe-pacing.mjs';
+
 const BASE = process.env.API_BASE ?? 'http://localhost:3001/api/v1';
 const ACCOUNTS = {
   qa: { email: 'qa-admin@kartseek.com', password: 'AdminPass123!' },
@@ -37,7 +39,7 @@ const skip = (name, why) => {
  * the mailbox, so it says so rather than reporting every check as a failure.
  */
 async function login({ email, password }) {
-  const r = await fetch(`${BASE}/auth/login`, {
+  const r = await pacedFetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -46,7 +48,7 @@ async function login({ email, password }) {
   if (j.requires2FA) {
     if (!j.devCode)
       throw new Error(`MFA required for ${email}; run the fleet with DEV_MFA_ECHO=true`);
-    const v = await fetch(`${BASE}/auth/mfa/verify`, {
+    const v = await pacedFetch(`${BASE}/auth/mfa/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challengeToken: j.challengeToken, code: j.devCode }),
@@ -58,7 +60,7 @@ async function login({ email, password }) {
   return j.accessToken;
 }
 async function call(token, method, path, body) {
-  const r = await fetch(`${BASE}${path}`, {
+  const r = await pacedFetch(`${BASE}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
