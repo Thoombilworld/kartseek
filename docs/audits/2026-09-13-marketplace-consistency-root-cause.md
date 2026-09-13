@@ -266,6 +266,6 @@ Deleted outright (no `legacy/old/v1` copies kept):
 | `980135e` | Gateway category routes, request ids, `PublicCache`, shared-core client                                | 7     |
 | `5c185e9` | Zone listing shell, one-way data flow, no demo fallbacks, shell trending rail, e2e                     | 27    |
 | `a0dbc3f` | e2e pacing under the gateway's per-address limits, hydration-safe sort click, write-then-read scenario | 1     |
-| (next)    | Offer approve/reject invalidate the catalogue cache (A.10); this report                                | 2     |
+| `eed98b0` | Offer approve/reject invalidate the catalogue cache (A.10); this report                                | 2     |
 
 Memory notes for future sessions: `project_marketplace_db_target_drift`, `project_marketplace_catalog_cache_scheme`, `project_kafka_identity_and_producer_only`, `project_marketplace_listing_data_flow`.
