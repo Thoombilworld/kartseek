@@ -22,7 +22,9 @@ import {
   processParents,
   shiftPort,
   smokeEnvOverrides,
+  staleUnregistered,
 } from './boot-all.mjs';
+import { loadRegistry, nestEntries } from '../../scripts/registry/lib.mjs';
 
 const listen = (port, host) =>
   new Promise((resolve) => {
@@ -144,6 +146,34 @@ test('portPlan covers every port the registry declares', () => {
   assert.equal(plan.filter((r) => r.base === 4028).length, 1);
 });
 
+test('an UNREGISTERED_PORTS row the registry has caught up with is refused', () => {
+  // The workaround's whole risk: services.yaml gains the port, nobody deletes
+  // the hand-written row, and portPlan quietly emits it twice — 58 rows under a
+  // header that says 57. The fixtures above cannot see that, because they are
+  // fixtures; this is what the run checks before it boots anything.
+  const extras = [
+    { service: 'audit-log-service', kind: 'tcp', env: 'AUDIT_LOG_TCP_PORT', port: 4028 },
+  ];
+  assert.deepEqual(staleUnregistered(entries, extras), extras, 'the registry declares tcp 4028');
+  assert.equal(portPlan(entries, 0, extras).filter((r) => r.base === 4028).length, 2);
+
+  const registryWithout = entries.map((s) =>
+    s.name === 'audit-log-service' ? { ...s, ports: { http: 3028 }, env: { http: s.env.http } } : s,
+  );
+  assert.deepEqual(
+    staleUnregistered(registryWithout, extras),
+    [],
+    'still the only way to see 4028',
+  );
+  assert.equal(portPlan(registryWithout, 0, extras).filter((r) => r.base === 4028).length, 1);
+});
+
+test('the real registry leaves no stale UNREGISTERED_PORTS row behind', () => {
+  // Against services.yaml itself, not a fixture — the check the report promised
+  // and the previous round did not have.
+  assert.deepEqual(staleUnregistered(nestEntries(loadRegistry()), UNREGISTERED_PORTS), []);
+});
+
 test('offset 0 changes no environment at all', () => {
   assert.deepEqual(smokeEnvOverrides(entries, 0), {});
 });
@@ -184,8 +214,8 @@ test('listenerPidsFrom returns every pid on the port, not just the first', () =>
 
 test('listenerPidsFrom reads lsof, where the pid is the second column', () => {
   const lsof = 'node    1234 me   20u  IPv4 0x1 0t0  TCP 127.0.0.1:3001 (LISTEN)';
-  assert.deepEqual(listenerPidsFrom(lsof, 3001, { lsof: true }), [1234]);
-  assert.deepEqual(listenerPidsFrom(lsof, 3002, { lsof: true }), []);
+  assert.deepEqual(listenerPidsFrom(lsof, 3001, { format: 'lsof' }), [1234]);
+  assert.deepEqual(listenerPidsFrom(lsof, 3002, { format: 'lsof' }), []);
 });
 
 test('ownedByChild accepts the child and its descendants, and nothing else', () => {

@@ -35,6 +35,10 @@
  *      liveness board carries no pid/startedAt of its own, so the socket is
  *      the only evidence available. An answer from anything else is a FAIL,
  *      and so is an answer whose owner nothing on this machine could name.
+ *      REQUIREMENT: that last clause means the runner needs `ss`, `netstat` or
+ *      `lsof` — a slim CI image without `iproute2` or `net-tools` has none, and
+ *      this script fails every service closed rather than guess. It says so once
+ *      before booting; see `canNameOwners` in scripts/lib/ports.mjs.
  *   3. `EADDRINUSE` in a child's log fails that service whatever the probe said.
  *   4. TEARDOWN BY PORT AND BY TREE. `stop()` kills the whole process tree, and
  *      afterwards every port of every service that ran must be free again. A
@@ -57,7 +61,13 @@
  * itself and never to the developer's processes. That covers `<SVC>_SERVICE_PORT`,
  * `<SVC>_TCP_PORT`, `<SVC>_GRPC_PORT`, `<SVC>_GRPC_URL` /
  * `<SVC>_SERVICE_GRPC_URL`, and pins every `<SVC>_SERVICE_HOST` to loopback.
+ * It does NOT touch `<SVC>_TCP_HOST` (a child's own bind address) or any
+ * infrastructure port: the shift is driven by the registry's `env` map, so
+ * `DB_PORT` and `REDIS_PORT` cannot be caught by it.
  * The pre-flight, the probes and the teardown assertion all follow the offset.
+ *
+ * `npm run ports:sweep -- --offset 10000` lists what is still holding those
+ * ports if a run is ever killed before its teardown.
  *
  * The children read these from the environment they inherit, which beats the
  * `.env` files on disk: `dotenv.config()` does not overwrite an existing
@@ -75,12 +85,21 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadRegistry, repoRoot, nestEntries } from '../../scripts/registry/lib.mjs';
 import {
-  OWNER_TOOLS,
-  namePortOwners,
-  parseLsofOwners,
-  probePort,
+  PROBE_HOSTS,
+  canNameOwners,
+  formatPortRows,
+  listenerPids,
+  listenerPidsFrom,
+  portsInUse,
   shResult,
 } from '../../scripts/lib/ports.mjs';
+
+// Re-exported because this script's own suite tests them through it, and because
+// they are the pieces a reader of this file will want to follow. They live in
+// scripts/lib/ports.mjs so `npm run ports:sweep` and scripts/stack/validate.mjs
+// get the same three-address probe and the same parser, rather than a second
+// copy that drifts.
+export { PROBE_HOSTS, listenerPidsFrom };
 
 const root = repoRoot();
 const logDir = path.join(root, 'tests/smoke/logs');
@@ -109,8 +128,19 @@ export const UNREGISTERED_PORTS = [];
  */
 export const EXTRA_HOST_PREFIXES = ['SELLER'];
 
-/** Bind addresses the pre-flight and the teardown assertion both try. */
-export const PROBE_HOSTS = ['127.0.0.1', '0.0.0.0', '::'];
+/**
+ * An `UNREGISTERED_PORTS` row the registry has since caught up with.
+ *
+ * The table above is a workaround, and a workaround that outlives its reason is
+ * a liability: `portPlan` would emit the port twice, the header would count 58
+ * where it prints 57, and the hand-written row would sit there forever looking
+ * load-bearing. The fixture tests cannot catch that on their own — they build
+ * their own entries and never read `services.yaml` — so the run itself checks
+ * the real registry and refuses before it boots anything.
+ */
+export function staleUnregistered(entries, extras = UNREGISTERED_PORTS) {
+  return extras.filter((x) => entries.some((s) => s.name === x.service && s.ports?.[x.kind]));
+}
 
 export function shiftPort(port, offset = 0) {
   const shifted = Number(port) + Number(offset);
@@ -160,7 +190,10 @@ export function smokeEnvOverrides(allEntries, offset = 0, extras = UNREGISTERED_
     env[`${prefix}_SERVICE_GRPC_URL`] = url;
   }
   for (const prefix of hostPrefixes) env[`${prefix}_SERVICE_HOST`] = '127.0.0.1';
-  env.PAYMENT_TCP_HOST = '127.0.0.1';
+  // No `<SVC>_TCP_HOST` here on purpose. Those are a child's OWN bind address
+  // (payment-service and hotel-service read one, defaulting to 0.0.0.0), not a
+  // peer address, so pinning one narrows a bind that already accepts loopback —
+  // and pinning only the one service that has the variable would be arbitrary.
   return env;
 }
 
@@ -168,62 +201,14 @@ export function smokeEnvOverrides(allEntries, offset = 0, extras = UNREGISTERED_
  * Which of these ports cannot be bound, and who holds them.
  *
  * `ports` may be plain numbers or `portPlan` rows. One row out per busy port:
- * `{ port, host, reason, pid, tool, service, kind }`, in the order asked for.
+ * `{ port, host, reason, pid, tool, service, kind }`, in the order asked for —
+ * registry order, so the refusal lists a service's ports together.
  *
- * The verdict is a real `listen()` on each of PROBE_HOSTS, never a parse of
- * `netstat` — a listener the tool cannot show is still a listener, and on a
- * machine where the tool is missing a parse reads as "all free". Three
- * addresses because one is not enough on Windows: a socket bound to 127.0.0.1
- * does not stop a bind on 0.0.0.0 and vice versa, and a dual-stack `::` socket
- * shows up in `netstat` as an 0.0.0.0 row it does not actually reserve. Any
- * address that refuses is a conflict for whichever child wanted that address.
- *
- * EADDRINUSE on any of the three is busy. Another error code counts only on the
- * first (loopback) address, where every service either binds or connects: an
- * EACCES there is not "in use", but it is not "and therefore the child will
- * bind it" either. `pid`/`tool` are null when nothing could name the owner,
- * which is information and never permission to continue.
+ * The probe, the three addresses it tries and the PID naming all live in
+ * `scripts/lib/ports.mjs`; this is the smoke's name for them.
  */
-export async function busyPorts(
-  ports,
-  { hosts = PROBE_HOSTS, probe = probePort, name = namePortOwners } = {},
-) {
-  const rows = [];
-  for (const entry of ports ?? []) {
-    const port = Number(entry?.port ?? entry);
-    let hit = null;
-    for (const host of hosts) {
-      const verdict = await probe(port, host);
-      if (!verdict.inUse) continue;
-      if (verdict.reason === 'EADDRINUSE' || host === hosts[0]) {
-        hit = { host, reason: verdict.reason ?? 'in use' };
-        break;
-      }
-    }
-    if (!hit) continue;
-    rows.push({
-      port,
-      host: hit.host,
-      reason: hit.reason,
-      pid: null,
-      tool: null,
-      service: entry?.service ?? null,
-      kind: entry?.kind ?? null,
-    });
-  }
-  if (!rows.length) return [];
-  const owners = name(
-    rows.map((r) => r.port),
-    {},
-  );
-  for (const row of rows) {
-    const owner = owners.get(row.port);
-    if (owner) {
-      row.pid = owner.pid ?? null;
-      row.tool = owner.tool ?? null;
-    }
-  }
-  return rows;
+export async function busyPorts(ports, opts = {}) {
+  return portsInUse(ports, { sort: false, ...opts });
 }
 
 /** Which of these ports still has a listener. The teardown assertion. */
@@ -231,55 +216,7 @@ export async function portsStillListening(ports, opts) {
   return (await busyPorts(ports, opts)).map((r) => r.port);
 }
 
-export function formatBusy(rows) {
-  return rows
-    .map((r) => {
-      const who = r.service ? `${r.service} (${r.kind})` : '';
-      const owner = r.pid ? `PID ${r.pid}${r.tool ? ` via ${r.tool}` : ''}` : 'PID unknown';
-      return `  ${`${r.host}:${r.port}`.padEnd(22)} ${who.padEnd(30)} ${owner} [${r.reason}]`;
-    })
-    .join('\n');
-}
-
-/**
- * Every PID with a LISTENING socket on `port`, from one `netstat`/`ss`/`lsof` run.
- *
- * `scripts/lib/ports.mjs` answers a different question — one owner per port, to
- * put a name next to a bind that already failed — and stops at the first match.
- * Ownership needs all of them: on Windows two processes can hold 127.0.0.1:P
- * and [::]:P separately, which is the shape of the false pass IN5 found.
- */
-export function listenerPidsFrom(text, port, { lsof = false } = {}) {
-  const pids = new Set();
-  for (const line of String(text ?? '').split(/\r?\n/)) {
-    if (lsof ? !/\(LISTEN\)/.test(line) : !/\bLISTEN(?:ING)?\b/.test(line)) continue;
-    const cols = line.trim().split(/\s+/);
-    const local = lsof
-      ? cols.find((c, i) => i > 1 && /:\d+$/.test(c))
-      : cols.find((c) => /:\d+$/.test(c));
-    if (!local || Number(/:(\d+)$/.exec(local)[1]) !== Number(port)) continue;
-    const pid = lsof
-      ? /^\d+$/.test(cols[1])
-        ? cols[1]
-        : null
-      : (/\bpid=(\d+)/.exec(line)?.[1] ??
-        /(?:^|\s)(\d+)\/\S+\s*$/.exec(line)?.[1] ??
-        /(?:^|\s)(\d+)\s*$/.exec(line)?.[1] ??
-        null);
-    if (pid) pids.add(Number(pid));
-  }
-  return [...pids];
-}
-
-function listenerPids(port, { platform = process.platform, run = shResult } = {}) {
-  for (const tool of OWNER_TOOLS[platform] ?? OWNER_TOOLS.linux) {
-    const r = run(tool.command);
-    if (r.code !== 0 || !String(r.stdout ?? '').trim()) continue;
-    const pids = listenerPidsFrom(r.stdout, port, { lsof: tool.parse === parseLsofOwners });
-    if (pids.length) return { pids, tool: tool.command };
-  }
-  return { pids: [], tool: null };
-}
+export const formatBusy = formatPortRows;
 
 /**
  * Did the child this script spawned bind the socket that answered?
@@ -451,8 +388,10 @@ function stop(child) {
   if (process.platform === 'win32') {
     try {
       // /T because a Nest process spawns workers; /F because SIGTERM is not a
-      // thing on Windows and `child.kill()` leaves the tree behind.
-      execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore' });
+      // thing on Windows and `child.kill()` leaves the tree behind. The timeout
+      // matters: this also runs from the `exit` handler, where a wedged taskkill
+      // would hang the script with no signal left to interrupt it with.
+      execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore', timeout: 10_000 });
     } catch {
       /* the tree is already gone */
     }
@@ -511,7 +450,11 @@ async function main() {
     return 2;
   }
   const onlyArg = process.argv.find((a) => a.startsWith('--only='));
-  const only = onlyArg ? onlyArg.slice('--only='.length).split(',').filter(Boolean) : null;
+  // Deduplicated: `--only=auth-service,auth-service` is a typo, not two services,
+  // and counting it twice used to report an unknown service with an empty name.
+  const only = onlyArg
+    ? [...new Set(onlyArg.slice('--only='.length).split(',').filter(Boolean))]
+    : null;
   fs.mkdirSync(logDir, { recursive: true });
 
   const all = nestEntries(loadRegistry(root));
@@ -519,6 +462,19 @@ async function main() {
   if (only && entries.length !== only.length) {
     console.error(
       `unknown service in --only: ${only.filter((n) => !entries.some((e) => e.name === n)).join(', ')}`,
+    );
+    return 2;
+  }
+
+  const stale = staleUnregistered(all);
+  if (stale.length) {
+    console.error(
+      `\n✗ UNREGISTERED_PORTS is out of date — services.yaml now declares ` +
+        `${stale.length === 1 ? 'this port' : 'these ports'}:\n\n` +
+        stale.map((x) => `  ${x.service} ${x.kind} ${x.port} (${x.env})`).join('\n') +
+        `\n\n  Remove the row from UNREGISTERED_PORTS in tests/smoke/boot-all.mjs.\n` +
+        `  Left in, portPlan counts the port twice: probed twice, listed twice in a\n` +
+        `  refusal, and a port count that does not match the header.\n`,
     );
     return 2;
   }
@@ -557,7 +513,19 @@ async function main() {
   }
   console.log('pre-flight: every port is free');
 
+  // Ownership is proved by asking the OS who holds the listening socket. With no
+  // tool to ask, every service fails as "no nameable owner" — correct, but it
+  // looks like 26 broken services rather than one missing package, so say it
+  // once, up front, before the table fills with failures.
+  if (!canNameOwners())
+    console.log(
+      'warning: no ss/netstat/lsof on this machine, so no listening socket can be\n' +
+        '         attributed to the child that answered — every service will FAIL as\n' +
+        '         "no nameable owner". Install iproute2 or net-tools and re-run.',
+    );
+
   const results = [];
+  const survivors = [];
   for (let i = 0; i < entries.length; i += batchSize) {
     const batch = entries.slice(i, i + batchSize);
     const children = [];
@@ -576,7 +544,11 @@ async function main() {
       }),
     );
     for (const [s, c] of children) {
-      if (!(await stopAndReap(c))) console.error(`  ! ${s.name} (pid ${c.pid}) did not exit`);
+      if (await stopAndReap(c)) continue;
+      // A child that outlived the kill is something left behind whether or not it
+      // still holds a port, and this script is named for not doing that.
+      console.error(`  ! ${s.name} (pid ${c.pid}) did not exit`);
+      survivors.push(`${s.name} (pid ${c.pid})`);
     }
     results.push(...settled);
     await new Promise((r) => setTimeout(r, 500));
@@ -615,6 +587,14 @@ async function main() {
     console.error(
       `\n✗ ${leftover.length} port(s) still listening after teardown:\n\n${formatBusy(leftover)}\n\n` +
         `  Windows: taskkill /PID <pid> /T /F      elsewhere: kill -9 <pid>`,
+    );
+    return 1;
+  }
+  if (survivors.length) {
+    console.error(
+      `\n✗ ${survivors.length} child process(es) outlived teardown, ports released:\n\n` +
+        survivors.map((s) => `  ${s}`).join('\n') +
+        `\n\n  Windows: taskkill /PID <pid> /T /F      elsewhere: kill -9 <pid>`,
     );
     return 1;
   }
