@@ -5,7 +5,30 @@ const catalog = { stats: () => ({ status: 'up' as const, detail: 'grpc' }) };
 const okRedis = { health: async () => ({ status: 'up' as const, detail: 'PONG' }) };
 const emulated = { health: async () => ({ status: 'degraded' as const, emulated: true }) };
 
-const staff = { user: { role: 'SUPER_ADMIN' } } as any;
+/**
+ * The board is gated on the permission `system.health`, not on a role, so the
+ * token a spec presents has to carry the claim a real one does. SUPER_ADMIN
+ * signs in with the wildcard rather than an enumerated list.
+ */
+const staff = { user: { role: 'SUPER_ADMIN', adminPermissions: ['*'] } } as any;
+
+/** An `admin`: the enumerated list, which includes `system.health`. */
+const admin = {
+  user: { role: 'ADMIN', adminPermissions: ['dashboard.view', 'system.health', 'audit.logs'] },
+} as any;
+
+/**
+ * A `regional_admin`: everything an admin can do inside one market, and
+ * deliberately NOT `system.health` — platform topology is not a market's.
+ */
+const regionalAdmin = {
+  user: {
+    role: 'ADMIN',
+    regionCode: 'QA',
+    regionLocked: true,
+    adminPermissions: ['dashboard.view', 'orders.view', 'sellers.view', 'audit.logs'],
+  },
+} as any;
 
 /** Captures the status codes the handler puts on the response. */
 const sink = () => {
@@ -90,6 +113,52 @@ describe('gateway health', () => {
     expect(full.services['order-service']).toBeDefined();
     expect(full.transport.kafka).toContain('brokers');
     expect(full.totalServices).toBe(Object.keys(full.services).length);
+  });
+
+  /**
+   * The gate is `perm:system.health`, not a role (dispatch addendum item 1).
+   *
+   * A regional admin's remit is one market's records. The full board is the
+   * platform's internal topology — 26 ports, every gRPC URL, the broker list,
+   * the database name and the user the gateway connects as — which belongs to
+   * no market, so `regional_admin` does not carry the key and the board reduces
+   * for them exactly as it does for an anonymous caller.
+   *
+   * The reduction is deliberately not a 403: these routes are `@Public()`
+   * because a kubelet holds no token, and a probe that can fail authorisation
+   * restarts healthy pods.
+   */
+  it('reduces the catalogue for a regional admin, who holds no system.health', () => {
+    const c = new HealthController(okRedis as any, catalog as any, null);
+    const reduced = c.services(regionalAdmin) as any;
+    expect(reduced).toEqual({ status: 'ok', totalServices: expect.any(Number) });
+    expect(JSON.stringify(reduced)).not.toMatch(/\d{4}/);
+  });
+
+  it('gives an admin who holds system.health the full catalogue', () => {
+    const c = new HealthController(okRedis as any, catalog as any, null);
+    expect((c.services(admin) as any).services['order-service']).toBeDefined();
+  });
+
+  it('reduces the board for a revoked token, which arrives with no user at all', async () => {
+    // `JwtAuthGuard` rejects a revoked session before the handler runs, so
+    // `request.user` is unset and the claim cannot be read. Reducing — rather
+    // than throwing — is what keeps the probe answering while the caller loses
+    // the privileged view.
+    const c = new HealthController(okRedis as any, catalog as any, null);
+    const { res } = sink();
+    const revoked = (await c.readiness(res, { user: undefined } as any)) as any;
+    expect(revoked.config).toBeUndefined();
+    expect(typeof revoked.checks.redis).toBe('string');
+  });
+
+  it('does not privilege a role string on its own, however senior it reads', () => {
+    // The old gate was `role === ADMIN || role === SUPER_ADMIN`. A token that
+    // says SUPER_ADMIN but carries no permission claim was never minted by this
+    // platform's login, and it does not open the board.
+    const c = new HealthController(okRedis as any, catalog as any, null);
+    const roleOnly = { user: { role: 'SUPER_ADMIN' } } as any;
+    expect(c.services(roleOnly)).toEqual({ status: 'ok', totalServices: expect.any(Number) });
   });
 
   /**

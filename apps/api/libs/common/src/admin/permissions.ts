@@ -268,3 +268,24 @@ export function unknownPermissionKeys(permissions: readonly string[]): string[] 
   const known = new Set(ADMIN_PERMISSIONS.map((p) => p.key));
   return permissions.filter((p) => p !== ALL_PERMISSIONS && !known.has(p));
 }
+
+/**
+ * Does this caller hold a permission key?
+ *
+ * One implementation, because there were about to be two with different
+ * answers. `RolesGuard` decides `perm:` requirements this way — the wildcard,
+ * then exact membership of the signed `adminPermissions` claim — and the health
+ * board needs the same verdict without being able to use the guard: its routes
+ * are `@Public()` and must answer an unpermitted caller with a *reduced body*
+ * rather than 403, because a readiness probe that can fail authorisation is a
+ * probe that restarts healthy pods.
+ *
+ * A claim that is absent, or is not an array, holds nothing. That is the
+ * direction that fails closed: `undefined` means "this token was not minted for
+ * a member of staff", not "no restrictions were specified".
+ */
+export function hasPermission(user: unknown, key: string): boolean {
+  const granted = (user as { adminPermissions?: unknown })?.adminPermissions;
+  if (!Array.isArray(granted)) return false;
+  return granted.includes(ALL_PERMISSIONS) || granted.includes(key);
+}

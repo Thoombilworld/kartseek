@@ -5,7 +5,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@app/security';
 import {
-  UserRole,
+  hasPermission,
   publicReadiness,
   readinessHttpStatus,
   worstOf,
@@ -74,16 +74,33 @@ export class HealthController {
   ) {}
 
   /**
-   * Whether this caller may see internal topology.
+   * Whether this caller may see internal topology — `perm:system.health`.
    *
-   * The role is lower-cased before comparing: `UserRole` stores `super_admin`
-   * while the JWT and the admin console both talk in `SUPER_ADMIN`, so a
-   * case-sensitive comparison would reduce the view for every real staff token
-   * and leave the detailed branch unreachable.
+   * This was a role test (`ADMIN || SUPER_ADMIN`), which is the wrong shape for
+   * what it protects. The full board names all 26 internal ports, every gRPC
+   * URL, the broker list, the database name and the username the gateway
+   * connects as, and a driver error message during an outage; the service
+   * catalogue is a map of the platform's whole internal surface (AUD2-072).
+   * Who may read that is a permission decision, and the vocabulary already had
+   * the key for it: `system.health` is carried by `admin` and deliberately not
+   * by `regional_admin`, whose remit is one market's records, not the
+   * platform's topology.
+   *
+   * `hasPermission` is `RolesGuard`'s own `perm:` verdict, shared rather than
+   * re-implemented, so the board and a `@Roles('perm:system.health')` route can
+   * never disagree about what the key means. SUPER_ADMIN carries `'*'` and is
+   * unaffected.
+   *
+   * The gate cannot be the guard itself. These routes are `@Public()` because a
+   * kubelet holds no token, and a readiness probe that can answer 403 is a
+   * probe that restarts healthy pods — so an unpermitted caller is answered
+   * with the reduced body, exactly as an anonymous one is, and never with a
+   * rejection. That also means a revoked or expired token simply stops being
+   * privileged here: `JwtAuthGuard` leaves `request.user` unset, the claim is
+   * absent, and the board reduces.
    */
   private isStaff(req: unknown): boolean {
-    const role = String((req as any)?.user?.role ?? '').toLowerCase();
-    return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+    return hasPermission((req as any)?.user, 'system.health');
   }
 
   // ── Root Endpoint ────────────────────────────────────────────────────────────

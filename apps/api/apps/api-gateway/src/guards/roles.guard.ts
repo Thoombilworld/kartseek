@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { hasPermission } from '@app/common';
 
 /**
  * Enhanced RolesGuard with permission validation.
@@ -79,12 +80,19 @@ export class RolesGuard implements CanActivate {
     // exactly the users least entitled to it. No route uses `perm:` yet, so this
     // was a trap laid for the first one rather than a live hole.
     if (permRequirements.length > 0) {
-      const granted: string[] = Array.isArray(user.adminPermissions) ? user.adminPermissions : [];
-      // `'*'` is what SUPER_ADMIN signs in with — one wildcard instead of an
+      // `hasPermission` (`@app/common`) is the shared verdict: it honours the
+      // `'*'` wildcard SUPER_ADMIN signs in with — one wildcard instead of an
       // enumerated list, so a permission key introduced by a later route does
-      // not have to be back-filled onto the account that grants it.
-      const hasPerms =
-        granted.includes('*') || permRequirements.every((perm) => granted.includes(perm));
+      // not have to be back-filled onto the account that grants it — and treats
+      // an absent or non-array claim as holding nothing.
+      //
+      // Shared because the gateway's health board has to reach the same verdict
+      // without being able to use this guard (its routes are `@Public()`, and a
+      // readiness probe that can answer 403 restarts healthy pods). Two copies
+      // of "what does a permission key mean" is one copy too many, and the
+      // board is the surface where the weaker copy would go unnoticed: it
+      // discloses more, it does not deny.
+      const hasPerms = permRequirements.every((perm) => hasPermission(user, perm));
       if (!hasPerms) {
         throw new ForbiddenException(
           `Missing required permissions: ${permRequirements.join(', ')}`,

@@ -6,6 +6,7 @@ import {
   ALL_PERMISSIONS,
   SYSTEM_ROLES,
   unknownPermissionKeys,
+  hasPermission,
 } from './permissions';
 
 const MIGRATIONS = path.join(__dirname, '..', '..', '..', '..', 'migrations');
@@ -125,5 +126,67 @@ describe('admin permission registry', () => {
   it('rejects an unknown key and accepts the wildcard', () => {
     expect(unknownPermissionKeys(['orders.view', 'not.a.key'])).toEqual(['not.a.key']);
     expect(unknownPermissionKeys([ALL_PERMISSIONS])).toEqual([]);
+  });
+});
+
+/**
+ * `hasPermission` is the one `perm:` verdict on the platform.
+ *
+ * `RolesGuard` decides route access with it and the gateway's health board
+ * decides how much of itself to disclose with it (dispatch addendum item 1).
+ * Two implementations of this answer would be two definitions of what a
+ * permission key means, and the board is the surface where the weaker one
+ * would not be noticed — it discloses more, it does not deny.
+ */
+describe('hasPermission', () => {
+  it('honours the wildcard super_admin signs in with', () => {
+    expect(hasPermission({ adminPermissions: [ALL_PERMISSIONS] }, 'system.health')).toBe(true);
+  });
+
+  it('honours an exact key', () => {
+    expect(hasPermission({ adminPermissions: ['system.health'] }, 'system.health')).toBe(true);
+  });
+
+  it('denies a key the claim does not carry', () => {
+    expect(hasPermission({ adminPermissions: ['orders.view'] }, 'system.health')).toBe(false);
+  });
+
+  it('denies when the claim is absent, not-an-array, or the user is missing', () => {
+    // The direction that fails closed. `undefined` means "this token was not
+    // minted for a member of staff", never "no restrictions were specified" —
+    // and a string would make `.includes()` answer on substrings.
+    expect(hasPermission({ adminPermissions: undefined }, 'system.health')).toBe(false);
+    expect(hasPermission({ adminPermissions: '*' }, 'system.health')).toBe(false);
+    expect(hasPermission({ adminPermissions: { all: true } }, 'system.health')).toBe(false);
+    expect(hasPermission(undefined, 'system.health')).toBe(false);
+    expect(hasPermission(null, 'system.health')).toBe(false);
+  });
+
+  it('ignores the role entirely', () => {
+    expect(hasPermission({ role: 'SUPER_ADMIN' }, 'system.health')).toBe(false);
+  });
+});
+
+/**
+ * The seeded roles decide who sees the platform's internal topology, so the
+ * ruling's own words are checked against the vocabulary rather than left in a
+ * comment: `admin` carries `system.health`, `regional_admin` does not.
+ */
+describe('system.health belongs to the platform, not to a market', () => {
+  const permsOf = (key: string) => SYSTEM_ROLES.find((r) => r.key === key)!.permissions;
+
+  it('is a key in the vocabulary', () => {
+    expect(ADMIN_PERMISSIONS.map((p) => p.key)).toContain('system.health');
+  });
+
+  it('is carried by admin', () => {
+    expect(permsOf('admin')).toContain('system.health');
+  });
+
+  it('is not carried by regional_admin', () => {
+    // A regional admin's remit is one market's RECORDS. 26 internal ports,
+    // every gRPC URL, the broker list and the database credentials the gateway
+    // connects with belong to no market.
+    expect(permsOf('regional_admin')).not.toContain('system.health');
   });
 });
