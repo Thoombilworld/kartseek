@@ -1387,22 +1387,32 @@ export class MarketplaceFulfillmentService {
   }
 
   async getQuestions(productId: string, page = 1, limit = 20) {
-    const [data, total] = await this.questionRepo.findAndCount({
+    const [rows, total] = await this.questionRepo.findAndCount({
       where: { productId, status: 'PUBLISHED' },
-      order: { upvoteCount: 'DESC', createdAt: 'DESC' },
+      order: { upvoteCount: 'DESC', createdAt: 'DESC', id: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
     });
-    // Attach answer count for each question
-    const questionsWithAnswers = await Promise.all(
-      data.map(async (q) => {
-        const answerCount = await this.answerRepo.count({
-          where: { questionId: q.id, status: 'PUBLISHED' },
-        });
-        return { ...q, answerCount };
-      }),
-    );
-    return { data: questionsWithAnswers, total, page, limit };
+    // One grouped count for the page instead of one COUNT per question.
+    const counts = new Map<string, number>();
+    if (rows.length) {
+      const grouped: Array<{ questionId: string; count: string }> = await this.answerRepo
+        .createQueryBuilder('a')
+        .select('a.questionId', 'questionId')
+        .addSelect('COUNT(*)', 'count')
+        .where('a.questionId IN (:...ids)', { ids: rows.map((q) => q.id) })
+        .andWhere('a.status = :status', { status: 'PUBLISHED' })
+        .groupBy('a.questionId')
+        .getRawMany();
+      for (const g of grouped) counts.set(g.questionId, Number(g.count) || 0);
+    }
+    // A question is public; the account that asked it is not. The display
+    // name is what the customer chose to sign with.
+    const data = rows.map(({ customerId: _customerId, ...q }) => {
+      void _customerId;
+      return { ...q, answerCount: counts.get(q.id) ?? 0 };
+    });
+    return { data, total, page, limit };
   }
 
   async createAnswer(
@@ -1418,9 +1428,15 @@ export class MarketplaceFulfillmentService {
   }
 
   async getAnswers(questionId: string) {
-    const answers = await this.answerRepo.find({
+    const rows = await this.answerRepo.find({
       where: { questionId, status: 'PUBLISHED' },
-      order: { isAccepted: 'DESC', helpfulCount: 'DESC', createdAt: 'ASC' },
+      order: { isAccepted: 'DESC', helpfulCount: 'DESC', createdAt: 'ASC', id: 'ASC' },
+    });
+    // Same rule as questions and reviews: the author's account id stays
+    // private; name and role are what the page shows.
+    const answers = rows.map(({ authorId: _authorId, ...a }) => {
+      void _authorId;
+      return a;
     });
     return { questionId, answers, total: answers.length };
   }
