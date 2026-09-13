@@ -39,3 +39,18 @@ test('it is `rm --stop --force`, not `down`, and enables both profiles', () => {
   assert.ok(!args.includes('down'), 'down is project-wide and would remove the datastores');
   assert.ok(!args.includes('--remove-orphans'), 'orphans here are the infrastructure containers');
 });
+
+test('it refuses rather than passing through a name that would hit infrastructure', () => {
+  // Without the guard the protection was the test above — a property of today's
+  // registry rather than of the function (re-review finding 18).
+  for (const name of ['postgres', 'redis', 'kafka', 'nginx', 'pgadmin'])
+    assert.throws(() => downArgs({ services: [{ name }] }), /collides with an infrastructure/);
+});
+
+test('it refuses an empty registry instead of removing everything', () => {
+  // `docker compose rm --stop --force` with no service argument means ALL of
+  // them, datastores included — the one shape of this command the script exists
+  // to avoid.
+  assert.throws(() => downArgs({ services: [] }), /names no services/);
+  assert.throws(() => downArgs({}), /names no services/);
+});

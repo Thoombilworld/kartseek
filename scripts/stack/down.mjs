@@ -29,7 +29,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadRegistry, repoRoot } from '../registry/lib.mjs';
+import { INFRA, loadRegistry, repoRoot } from '../registry/lib.mjs';
 
 /**
  * `docker <these>`. Both profiles, because a service carrying `profiles:` is
@@ -37,7 +37,23 @@ import { loadRegistry, repoRoot } from '../registry/lib.mjs';
  * "no such service". `rm -s` stops before removing; `-f` skips the prompt.
  */
 export function downArgs(reg) {
-  const names = reg.services.map((s) => s.name);
+  const names = reg.services?.map((s) => s.name) ?? [];
+  // An empty list would make this `docker compose rm --stop --force` with no
+  // service argument, which is "all of them" — the infrastructure included.
+  // A registry that failed to load must stop here, not fall through to the
+  // one shape of this command that does the thing the script exists to avoid.
+  if (!names.length)
+    throw new Error('stack:down: the registry names no services — refusing to run');
+  // The infra names are compose services in the same project, so passing one
+  // through WOULD remove that container. down.test.mjs asserts the real
+  // registry contains none; this makes it an invariant of the function rather
+  // than a property of today's registry (re-review finding 18).
+  const reserved = [...INFRA, 'nginx', 'kafka-ui', 'pgadmin', 'kibana', 'redis-insight'];
+  for (const name of names)
+    if (reserved.includes(name))
+      throw new Error(
+        `stack:down: registry service "${name}" collides with an infrastructure container — refusing to run`,
+      );
   return [
     'compose',
     '--profile',
