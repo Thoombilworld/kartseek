@@ -29,6 +29,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
 import { Throttle } from '@nestjs/throttler';
+import { requestRegion } from '../services/request-region';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -445,6 +446,21 @@ export class AuthController {
   }
 
   // ── Registration ───────────────────────────────────────────────────────────
+  /**
+   * The phone number as the account holder may see it. Numbers are stored
+   * encrypted (`iv:tag:ciphertext`); the profile used to hand that string
+   * back, so the account page showed a hex blob where the number belonged.
+   * Rows written before encryption hold plain text and pass through.
+   */
+  private readablePhone(stored: string | null | undefined): string | null {
+    if (!stored) return null;
+    try {
+      return this.encryption.decrypt(stored);
+    } catch {
+      return stored;
+    }
+  }
+
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -464,8 +480,11 @@ export class AuthController {
   })
   @ApiCreatedResponse({ description: 'Account created successfully' })
   @ApiBadRequestResponse({ description: 'Email already exists or invalid data' })
+  // Same per-address budget as login: account creation is the other
+  // anonymous write on this controller, and it had no limit of its own.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
-  async register(@Body() body: RegisterDto) {
+  async register(@Req() req: any, @Body() body: RegisterDto) {
     if (!body.name || !body.email || !body.password) {
       throw new BadRequestException('Name, email, and password are required');
     }
@@ -492,6 +511,10 @@ export class AuthController {
       lastName: nameParts.slice(1).join(' ') || '',
       role: UserRole.CUSTOMER,
       isActive: true,
+      // The market the customer signed up from (edge cookie/header, the same
+      // resolution every catalogue read uses). Left unset, the column's
+      // default recorded every customer — Qatar, UAE, Saudi — as India.
+      country: requestRegion(req),
     });
     const savedUser = await this.userRepo.save(user);
 
@@ -516,7 +539,8 @@ export class AuthController {
         id: savedUser.id,
         name: body.name,
         email: savedUser.email,
-        phone: savedUser.phone,
+        // What the customer typed, not the ciphertext the row stores.
+        phone: body.phone ?? null,
         role: savedUser.role,
         createdAt: savedUser.createdAt,
       },
@@ -987,7 +1011,7 @@ export class AuthController {
       success: true,
       id: user.id,
       email: user.email,
-      phone: user.phone,
+      phone: this.readablePhone(user.phone),
       role: user.role,
       sellerType: user.sellerType ?? sellerTypeFromRole(user.role),
       // `status` drives `sellerApproved` in the web client, which decides

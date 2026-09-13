@@ -31,14 +31,20 @@ import { ForwardedBody } from '../decorators/forwarded-body.decorator';
 import { SELLER_TYPES } from '@app/common';
 
 /**
- * Password complexity regex:
- *  - At least 1 uppercase letter
- *  - At least 1 lowercase letter
- *  - At least 1 digit
- *  - At least 1 special character (@$!%*?&^#)
+ * Password complexity: 8–128 characters, no whitespace, and at least one
+ * lowercase letter, one uppercase letter, one digit and one symbol — where a
+ * symbol is ANY character that is not a letter or a digit.
+ *
+ * The previous rule accepted only `@$!%*?&^#` as symbols and, worse, refused
+ * every other character outright (the character class was the whole
+ * alphabet). `Passw0rd_2026.` was rejected with a message saying it lacked a
+ * special character, and every customer whose password manager or habit used
+ * `_ . - + , ( ) ~ /` could not create an account or reset a password.
+ * Mirrored by PASSWORD_RULE in apps/web's signup and reset-password pages.
  */
-const PASSWORD_REGEX =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#])[A-Za-z\d@$!%*?&^#]{8,128}$/;
+export const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d\s])\S{8,128}$/;
+export const PASSWORD_RULE_MESSAGE =
+  'Password must be 8–128 characters with no spaces and include at least 1 uppercase letter, 1 lowercase letter, 1 digit and 1 symbol (for example ! @ # _ -)';
 
 // ─── Shared / Primitives ──────────────────────────────────────────────────────
 
@@ -134,18 +140,14 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
-  @Matches(PASSWORD_REGEX, {
-    message:
-      'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)',
-  })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_RULE_MESSAGE })
   password: string;
 
-  @ApiPropertyOptional({
-    example: 'CUSTOMER',
-    enum: ['CUSTOMER', 'SELLER', 'DRIVER', 'SUPER_ADMIN'],
-  })
-  @IsOptional()
-  role?: string;
+  // `role` used to be declared here, documented in Swagger as accepting
+  // SUPER_ADMIN. The handler never read it (every registration is a
+  // CUSTOMER), so the field only advertised a privilege escalation that did
+  // not exist. Staff accounts are created by an admin, sellers through
+  // /auth/seller/register.
 }
 
 export class ResetPasswordDto {
@@ -161,10 +163,7 @@ export class ResetPasswordDto {
   @IsNotEmpty({ message: 'New password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
-  @Matches(PASSWORD_REGEX, {
-    message:
-      'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)',
-  })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_RULE_MESSAGE })
   newPassword: string;
 }
 
@@ -240,10 +239,7 @@ export class SellerRegisterDto {
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
-  @Matches(PASSWORD_REGEX, {
-    message:
-      'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character (@$!%*?&^#)',
-  })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_RULE_MESSAGE })
   password: string;
 }
 

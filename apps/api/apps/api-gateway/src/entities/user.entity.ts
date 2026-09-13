@@ -69,6 +69,16 @@ export class User {
   @Column({ name: 'region_code', type: 'varchar', nullable: true })
   regionCode: string | null;
 
+  /**
+   * The market the account was created in (ISO 3166-1 alpha-2), the same
+   * column user-service's entity maps. The gateway never mapped it, so
+   * registration could not set it and the column default recorded every new
+   * customer as India, whatever market they signed up from. `regionCode`
+   * above is different: it is the admin scope lock, null for customers.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  country: string | null;
+
   @Column({ name: 'region_locked', type: 'boolean', default: false })
   regionLocked: boolean;
 

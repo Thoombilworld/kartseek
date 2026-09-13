@@ -78,7 +78,11 @@ export class PasswordResetConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    try { await this.consumer?.disconnect(); } catch { /* shutting down anyway */ }
+    try {
+      await this.consumer?.disconnect();
+    } catch {
+      /* shutting down anyway */
+    }
   }
 
   async handle(event: PasswordResetRequestedEvent) {
@@ -91,7 +95,7 @@ export class PasswordResetConsumer implements OnModuleInit, OnModuleDestroy {
 
     // The link is a bearer credential: it is never logged here, and the copy tells
     // the customer what to do if they did not ask for it.
-    await this.notifications.sendEmail({
+    const result = await this.notifications.sendEmail({
       to: event.email,
       subject: 'Reset your KARTSEEK password',
       body: [
@@ -109,6 +113,15 @@ export class PasswordResetConsumer implements OnModuleInit, OnModuleDestroy {
       ].join('\n'),
     });
 
-    this.logger.log(`Password reset email dispatched for user ${event.userId}`);
+    // "Dispatched" only when it was. Without a mail provider the message is
+    // logged and nothing reaches the customer, which in production is an
+    // outage of the reset flow, not a success.
+    if (result?.status === 'SENT') {
+      this.logger.log(`Password reset email dispatched for user ${event.userId}`);
+    } else {
+      this.logger.warn(
+        `Password reset email NOT delivered for user ${event.userId}: provider=${result?.provider ?? 'none'} status=${result?.status ?? 'unknown'}${result?.error ? ` (${result.error})` : ''}`,
+      );
+    }
   }
 }

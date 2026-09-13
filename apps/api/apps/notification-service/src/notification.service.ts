@@ -62,13 +62,16 @@ export class NotificationService {
     private readonly redis: RedisService,
     private readonly kafka: KafkaProducerService,
   ) {
-    this.fcmConfigured = !!(process.env.FCM_SERVER_KEY);
+    this.fcmConfigured = !!process.env.FCM_SERVER_KEY;
     this.twilioConfigured = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
-    this.sendgridConfigured = !!(process.env.SENDGRID_API_KEY);
+    this.sendgridConfigured = !!process.env.SENDGRID_API_KEY;
 
-    if (!this.fcmConfigured) this.logger.warn('FCM_SERVER_KEY not set — push notifications will be queued but not sent');
-    if (!this.twilioConfigured) this.logger.warn('Twilio credentials not set — SMS will be logged but not sent');
-    if (!this.sendgridConfigured) this.logger.warn('SENDGRID_API_KEY not set — emails will be logged but not sent');
+    if (!this.fcmConfigured)
+      this.logger.warn('FCM_SERVER_KEY not set — push notifications will be queued but not sent');
+    if (!this.twilioConfigured)
+      this.logger.warn('Twilio credentials not set — SMS will be logged but not sent');
+    if (!this.sendgridConfigured)
+      this.logger.warn('SENDGRID_API_KEY not set — emails will be logged but not sent');
   }
 
   async healthCheck() {
@@ -109,7 +112,7 @@ export class NotificationService {
 
     // 2. Increment unread counter
     const unreadKey = `notifications:unread:${dto.userId}`;
-    const currentUnread = parseInt(await this.redis.get(unreadKey) || '0', 10);
+    const currentUnread = parseInt((await this.redis.get(unreadKey)) || '0', 10);
     await this.redis.set(unreadKey, String(currentUnread + 1), 86400 * 7);
 
     // 3. Send via FCM if configured
@@ -152,8 +155,16 @@ export class NotificationService {
         this.logger.log(`SMS sent → ${dto.phone.slice(0, 4)}****`);
         return { success: true, smsId, provider: 'twilio', status: 'SENT' };
       } catch (err) {
-        this.logger.error(`Twilio SMS failed → ${dto.phone.slice(0, 4)}****: ${(err as Error).message}`);
-        return { success: false, smsId, provider: 'twilio', status: 'FAILED', error: (err as Error).message };
+        this.logger.error(
+          `Twilio SMS failed → ${dto.phone.slice(0, 4)}****: ${(err as Error).message}`,
+        );
+        return {
+          success: false,
+          smsId,
+          provider: 'twilio',
+          status: 'FAILED',
+          error: (err as Error).message,
+        };
       }
     }
 
@@ -178,12 +189,26 @@ export class NotificationService {
 
     if (this.sendgridConfigured) {
       try {
-        await this.sendViaSendGrid(dto.to, subject, body, dto.templateId, dto.cc, dto.bcc, dto.replyTo);
+        await this.sendViaSendGrid(
+          dto.to,
+          subject,
+          body,
+          dto.templateId,
+          dto.cc,
+          dto.bcc,
+          dto.replyTo,
+        );
         this.logger.log(`Email sent → ${dto.to}: ${subject}`);
         return { success: true, emailId, provider: 'sendgrid', status: 'SENT' };
       } catch (err) {
         this.logger.error(`SendGrid email failed → ${dto.to}: ${(err as Error).message}`);
-        return { success: false, emailId, provider: 'sendgrid', status: 'FAILED', error: (err as Error).message };
+        return {
+          success: false,
+          emailId,
+          provider: 'sendgrid',
+          status: 'FAILED',
+          error: (err as Error).message,
+        };
       }
     }
 
@@ -195,7 +220,10 @@ export class NotificationService {
   // ── Get Notifications ────────────────────────────────────────────────────────
   async getNotifications(userId: string, page = 1, limit = 20) {
     const inbox = (await this.redis.getJson<any[]>(`notifications:inbox:${userId}`)) ?? [];
-    const unreadCount = parseInt(await this.redis.get(`notifications:unread:${userId}`) || '0', 10);
+    const unreadCount = parseInt(
+      (await this.redis.get(`notifications:unread:${userId}`)) || '0',
+      10,
+    );
     const start = (page - 1) * limit;
 
     return {
@@ -224,7 +252,7 @@ export class NotificationService {
     await this.redis.setJson(`notifications:inbox:${userId}`, updated, 86400 * 7);
 
     // Decrement unread counter
-    const current = parseInt(await this.redis.get(`notifications:unread:${userId}`) || '0', 10);
+    const current = parseInt((await this.redis.get(`notifications:unread:${userId}`)) || '0', 10);
     const newUnread = Math.max(0, current - markedCount);
     await this.redis.set(`notifications:unread:${userId}`, String(newUnread), 86400 * 7);
 
@@ -234,22 +262,28 @@ export class NotificationService {
   // ── Mark All as Read ─────────────────────────────────────────────────────────
   async markAllAsRead(userId: string) {
     const inbox = (await this.redis.getJson<any[]>(`notifications:inbox:${userId}`)) ?? [];
-    const updated = inbox.map((n) => n.read ? n : { ...n, read: true, readAt: new Date().toISOString() });
+    const updated = inbox.map((n) =>
+      n.read ? n : { ...n, read: true, readAt: new Date().toISOString() },
+    );
     await this.redis.setJson(`notifications:inbox:${userId}`, updated, 86400 * 7);
     await this.redis.set(`notifications:unread:${userId}`, '0', 86400 * 7);
-    return { success: true, marked: inbox.filter(n => !n.read).length, unread: 0 };
+    return { success: true, marked: inbox.filter((n) => !n.read).length, unread: 0 };
   }
 
   // ── Delete Notification ──────────────────────────────────────────────────────
   async deleteNotification(userId: string, notificationId: string) {
     const inbox = (await this.redis.getJson<any[]>(`notifications:inbox:${userId}`)) ?? [];
-    const wasUnread = inbox.find(n => n.id === notificationId && !n.read);
-    const updated = inbox.filter(n => n.id !== notificationId);
+    const wasUnread = inbox.find((n) => n.id === notificationId && !n.read);
+    const updated = inbox.filter((n) => n.id !== notificationId);
     await this.redis.setJson(`notifications:inbox:${userId}`, updated, 86400 * 7);
 
     if (wasUnread) {
-      const current = parseInt(await this.redis.get(`notifications:unread:${userId}`) || '0', 10);
-      await this.redis.set(`notifications:unread:${userId}`, String(Math.max(0, current - 1)), 86400 * 7);
+      const current = parseInt((await this.redis.get(`notifications:unread:${userId}`)) || '0', 10);
+      await this.redis.set(
+        `notifications:unread:${userId}`,
+        String(Math.max(0, current - 1)),
+        86400 * 7,
+      );
     }
 
     return { success: true, deleted: notificationId };
@@ -258,16 +292,18 @@ export class NotificationService {
   // ── Notification Preferences ─────────────────────────────────────────────────
   async getPreferences(userId: string) {
     const prefs = await this.redis.getJson<any>(`notifications:prefs:${userId}`);
-    return prefs ?? {
-      userId,
-      push: true,
-      sms: true,
-      email: true,
-      inApp: true,
-      orderUpdates: true,
-      promos: true,
-      securityAlerts: true,
-    };
+    return (
+      prefs ?? {
+        userId,
+        push: true,
+        sms: true,
+        email: true,
+        inApp: true,
+        orderUpdates: true,
+        promos: true,
+        securityAlerts: true,
+      }
+    );
   }
 
   async updatePreferences(userId: string, prefs: Record<string, boolean>) {
@@ -341,23 +377,55 @@ export class NotificationService {
   }
 
   // ── Private: SendGrid Email Integration ──────────────────────────────────────
+  /**
+   * Deliver through SendGrid's v3 Mail Send API.
+   *
+   * This was a stub: the SDK call sat in a comment and the method logged
+   * "dispatched" and returned, so with a key configured every e-mail —
+   * password resets included — was reported SENT and never left the process.
+   * The REST call needs no SDK (global fetch), and a non-2xx answer is thrown
+   * so `sendEmail()` records the failure instead of a success.
+   */
   private async sendViaSendGrid(
-    to: string, subject: string, body: string,
-    templateId?: string, cc?: string[], bcc?: string[], replyTo?: string,
+    to: string,
+    subject: string,
+    body: string,
+    templateId?: string,
+    cc?: string[],
+    bcc?: string[],
+    replyTo?: string,
   ): Promise<void> {
-    // In production: use @sendgrid/mail SDK
-    // const sgMail = require('@sendgrid/mail');
-    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    // await sgMail.send({
-    //   to,
-    //   from: process.env.EMAIL_FROM || 'no-reply@kartseek.com',
-    //   subject,
-    //   html: body,
-    //   ...(templateId ? { templateId } : {}),
-    //   ...(cc ? { cc } : {}),
-    //   ...(bcc ? { bcc } : {}),
-    //   ...(replyTo ? { replyTo } : {}),
-    // });
-    this.logger.debug(`SendGrid email dispatched to ${to}`);
+    const from = process.env.EMAIL_FROM || 'no-reply@kartseek.com';
+    const personalization: Record<string, unknown> = { to: [{ email: to }] };
+    if (cc?.length) personalization.cc = cc.map((email) => ({ email }));
+    if (bcc?.length) personalization.bcc = bcc.map((email) => ({ email }));
+    const payload: Record<string, unknown> = {
+      personalizations: [personalization],
+      from: { email: from },
+      subject,
+      ...(replyTo ? { reply_to: { email: replyTo } } : {}),
+      ...(templateId
+        ? { template_id: templateId }
+        : { content: [{ type: 'text/plain', value: body }] }),
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const detail = (await res.text().catch(() => '')).slice(0, 300);
+        throw new Error(`SendGrid answered ${res.status}${detail ? `: ${detail}` : ''}`);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
