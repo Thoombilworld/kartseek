@@ -14,13 +14,30 @@ const eslint = require('@eslint/js');
  */
 module.exports = function backendEslintConfig(rootDir, files) {
   return tseslint.config(
-    eslint.configs.recommended,
-    ...tseslint.configs.recommended,
     {
       ignores: ['eslint.config.js', 'eslint.base.js', 'dist', 'node_modules', '*.js', '*.mts'],
     },
     {
       files,
+      /**
+       * The two recommended presets are scoped to `files` rather than applied
+       * globally.
+       *
+       * Applied globally they reached files no workspace lints — `scripts/`,
+       * `migrations/`, `data-source.ts` — with only the halves of this config
+       * that carry no `files` key. So a maintenance script got `no-undef` with
+       * no Node globals declared (`console is not defined`, 171 times) and
+       * `no-explicit-any` and `no-unused-vars` at full strength, while the
+       * `rules` block below that turns those off never applied to it.
+       *
+       * Nobody saw it, because every workspace's `lint` script passes these
+       * same globs on the command line. `lint-staged` does not: it runs
+       * `eslint --fix` on whatever is staged, so the first commit that touched
+       * a script failed the pre-commit hook on 171 errors it had not
+       * introduced. Scoped here, `npm run lint` reports exactly what it did
+       * before and the hook agrees with it.
+       */
+      extends: [eslint.configs.recommended, ...tseslint.configs.recommended],
       languageOptions: {
         parser: tseslint.parser,
         parserOptions: {
