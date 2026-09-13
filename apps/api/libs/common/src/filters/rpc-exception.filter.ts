@@ -37,8 +37,16 @@ export class RpcAwareExceptionsFilter extends AllExceptionsFilter {
     }
 
     // The client proxy rejects with this object verbatim, so it is the whole
-    // contract the gateway has to work with. Keep it flat and JSON-safe.
-    return throwError(() => ({ statusCode, message, errorCode })) as Observable<never>;
+    // contract the gateway has to work with. Keep it flat and JSON-safe. The
+    // one optional addition is `errors`: per-field detail a 4xx thrower
+    // attached, bounded, never on a 5xx — the gateway forwards it as-is.
+    const errors = statusCode < 500 ? AllExceptionsFilter.detailsOf(exception) : undefined;
+    return throwError(() => ({
+      statusCode,
+      message,
+      errorCode,
+      ...(errors ? { errors } : {}),
+    })) as Observable<never>;
   }
 
   private toRpcError(exception: unknown): {

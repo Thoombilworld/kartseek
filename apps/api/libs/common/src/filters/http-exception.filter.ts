@@ -43,11 +43,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const path = request?.originalUrl ?? request?.url ?? 'unknown';
     const method = request?.method ?? 'unknown';
 
+    // Per-field detail, only when the thrower attached it and only on a 4xx:
+    // `{ message, errors: [{ slug, message }] }` from a validation refusal.
+    // Every other envelope field is unchanged.
+    const errors = statusCode < 500 ? AllExceptionsFilter.detailsOf(exception) : undefined;
+
     const errorBody = {
       success: false,
       statusCode,
       message,
       errorCode,
+      ...(errors ? { errors } : {}),
       timestamp: new Date().toISOString(),
       requestId,
       path,
@@ -204,6 +210,36 @@ export class AllExceptionsFilter implements ExceptionFilter {
    * re-created from a plain object on the other side, losing its prototype and
    * sometimes its non-enumerable fields.
    */
+  /**
+   * The `errors` (or `details`) ARRAY an HttpException's response object
+   * carries, bounded so the envelope cannot become a dump: at most 100 entries,
+   * each a plain object of string/number/boolean values with strings cut at 500
+   * characters, or a bare string. Anything else is dropped. Never called for a
+   * 5xx, so a server fault cannot leak internals through this field.
+   */
+  protected static detailsOf(exception: unknown): unknown[] | undefined {
+    if (!(exception instanceof HttpException)) return undefined;
+    const response = exception.getResponse();
+    if (!response || typeof response !== 'object') return undefined;
+    const raw = (response as any).errors ?? (response as any).details;
+    if (!Array.isArray(raw) || raw.length === 0) return undefined;
+    const clip = (s: string) => (s.length > 500 ? `${s.slice(0, 500)}…` : s);
+    const entries: unknown[] = [];
+    for (const item of raw.slice(0, 100)) {
+      if (typeof item === 'string') {
+        entries.push(clip(item));
+      } else if (item && typeof item === 'object' && !Array.isArray(item)) {
+        const entry: Record<string, string | number | boolean> = {};
+        for (const [k, v] of Object.entries(item as Record<string, unknown>)) {
+          if (typeof v === 'string') entry[k] = clip(v);
+          else if (typeof v === 'number' || typeof v === 'boolean') entry[k] = v;
+        }
+        if (Object.keys(entry).length) entries.push(entry);
+      }
+    }
+    return entries.length ? entries : undefined;
+  }
+
   protected isInvalidTextRepresentation(exception: unknown): boolean {
     if (!exception || typeof exception !== 'object') return false;
     const err = exception as { code?: unknown; message?: unknown };
