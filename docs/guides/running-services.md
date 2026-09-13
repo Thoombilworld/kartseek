@@ -148,6 +148,78 @@ environment variable read in `apps/web/next.config.mjs`:
 origin the shell proxies `/api/*` to is likewise configurable via
 `API_GATEWAY_ORIGIN`.
 
+## The smoke test
+
+```bash
+npm run build          # once — the smoke runs dist/, it does not compile
+npm run infra:up       # Postgres, Redis, Kafka and MongoDB must be reachable
+npm run smoke          # boot all 26 Nest deployables and probe /health
+npm run smoke -- --only=order-service,marketplace-service
+npm run smoke:test     # the smoke's own unit tests; no build, no services
+```
+
+`tests/smoke/boot-all.mjs` starts every Nest deployable from its built output
+in batches of `SMOKE_BATCH` (default 6), gives each `SMOKE_TIMEOUT_MS` (default 90000) to answer its registry `health.live` route, then kills it and checks up
+after itself. Three of those checks exist because the script used to be able to
+report `26/26 healthy` when it was not:
+
+- **It refuses to start when a port it needs is taken**, naming the port and the
+  PID holding it, and exits 2. It never kills a process it did not start — a
+  running `npm run dev` fleet is not the smoke's to stop.
+- **A 200 only counts when the child that answered is the child it started.**
+  The PID the OS reports for the listening socket has to be that child or one of
+  its descendants. An answer from anything else, or one whose owner nothing on
+  the machine can name, is a failure — as is `EADDRINUSE` anywhere in a child's
+  log, whatever the probe said.
+- **After the run every port must be free again.** A leftover listener fails the
+  run even when all 26 booted, because the next run would otherwise be measuring
+  this one.
+
+### `SMOKE_PORT_OFFSET` — running the smoke while the dev fleet is up
+
+The dev fleet holds every registry port, so on a machine running `npm run dev`
+the smoke refuses to start. Rather than stop the fleet, move the smoke:
+
+```bash
+SMOKE_PORT_OFFSET=10000 npm run smoke
+```
+
+10000 is the documented value: 3001 → 13001, 4002 → 14002, 5006 → 15006, clear
+of the registry and clear of Windows' 49152+ ephemeral range. The default is 0,
+which means the registry's own ports.
+
+The offset shifts every port by the same amount, and — this is the part that
+makes the run mean anything — it shifts both sides of every address. Each child
+gets its own ports under its registry variable names (`<SVC>_SERVICE_PORT`,
+`<SVC>_TCP_PORT`, `<SVC>_GRPC_PORT`) _and_ every peer address it resolves
+through the environment (the same names again, plus `<SVC>_GRPC_URL` /
+`<SVC>_SERVICE_GRPC_URL`, with `<SVC>_SERVICE_HOST` pinned to loopback). The
+fleet under test therefore talks only to itself and never to the developer's
+processes. The pre-flight refusal, the health probes and the teardown assertion
+all follow the offset too.
+
+Those variables reach the children through the environment, which beats the
+`.env` files on disk: `dotenv.config()` does not overwrite a key that is already
+in `process.env`, and `@nestjs/config` merges `{ ...envFile, ...process.env }`
+and then assigns only the keys not already there. So `apps/api/.env` cannot pull
+a child back onto the real ports.
+
+### When the smoke itself was killed mid-run
+
+Kill the smoke and its children outlive it. The sweep is by port, not by command
+line — two of the leftovers IN5 had to clean up were started from a module
+directory and had no `KARTSEEKAPP` anywhere in their command line:
+
+```powershell
+# every registry port with a listener, and who holds it
+Get-NetTCPConnection -State Listen |
+  Where-Object { $_.LocalPort -in 3001,3010..3035 + 4002..4028 + 5001..5010 } |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+
+netstat -ano | findstr "13012"      # one port, including the offset ones
+taskkill /PID <pid> /T /F           # /T: a Nest process spawns workers
+```
+
 ## Flags
 
 **`SKIP_DB`, `SKIP_KAFKA`, `SKIP_REDIS`** — dev-convenience flags validated in
@@ -175,7 +247,9 @@ authorization — see [`testing.md`](testing.md).
 ## Logs
 
 - **`npm run smoke`** (`tests/smoke/boot-all.mjs`) writes each service's
-  stdout/stderr to `tests/smoke/logs/<service-name>.log` (gitignored).
+  stdout/stderr to `tests/smoke/logs/<service-name>.log` (gitignored). The
+  smoke reads them back as it runs: `EADDRINUSE` in one fails that service
+  whatever its health probe returned.
 - **`nest start <project> --watch`** and `npm run dev -w <workspace>` — via
   `start:*` or Turbo — print straight to the terminal that ran them; there is
   no separate log file for interactive dev runs.
