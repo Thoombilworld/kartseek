@@ -41,13 +41,17 @@ function loadApiEnvOnce() {
 
 /**
  * @param {...string} preferred  Module-specific variables to try first, e.g.
- *                               'GROCERY_DB_PASSWORD'. `DB_PASSWORD` and
- *                               `DB_PASS` are always tried after them.
+ *                               'GROCERY_DB_PASSWORD'. `DB_PASSWORD` is always
+ *                               tried after them, and is the only shared
+ *                               spelling — the former `DB_PASS` alias was a
+ *                               second name for the same secret that the
+ *                               compose renderer could not blank, so it is no
+ *                               longer read anywhere (whole-branch review N2).
  * @returns {string}
  */
 function requireDbPassword(...preferred) {
   loadApiEnvOnce();
-  const keys = [...preferred, 'DB_PASSWORD', 'DB_PASS'];
+  const keys = [...preferred, 'DB_PASSWORD'];
   for (const key of keys) {
     const value = process.env[key];
     if (value) return value;

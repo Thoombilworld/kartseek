@@ -513,6 +513,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: audit-log-consumers
@@ -723,6 +724,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -927,6 +929,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1133,6 +1136,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1339,6 +1343,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1751,6 +1756,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -1957,6 +1963,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: notification-password-reset
@@ -2791,6 +2798,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -2997,6 +3005,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
       API_GATEWAY_PORT: '3001'
@@ -3203,6 +3212,7 @@ services:
       DB_NAME: 'unused'
       DB_USER: 'unused'
       DB_PASSWORD: ''
+      DB_PASS: ''
       DB_SSL: 'false'
       # Kafka consumer group.
       KAFKA_GROUP_ID: search-indexer

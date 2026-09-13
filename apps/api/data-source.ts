@@ -47,7 +47,7 @@ export const AppDataSource = new DataSource({
   username: process.env.MARKETPLACE_DB_USER || process.env.DB_USER || 'postgres',
   // No built-in default — see data-source.main.ts for why (AUD2-074).
   password: (() => {
-    const p = process.env.MARKETPLACE_DB_PASSWORD || process.env.DB_PASSWORD || process.env.DB_PASS;
+    const p = process.env.MARKETPLACE_DB_PASSWORD || process.env.DB_PASSWORD;
     if (!p) {
       throw new Error(
         'MARKETPLACE_DB_PASSWORD or DB_PASSWORD is not set — the migration CLI will not use a ' +

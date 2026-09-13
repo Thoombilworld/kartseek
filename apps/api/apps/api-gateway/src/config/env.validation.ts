@@ -61,7 +61,12 @@ export const envValidationSchema = Joi.object({
   // variable is unset, which would make the production guard in
   // `databaseCredentials()` unreachable — it would never see a missing password.
   DB_PASSWORD: Joi.string().allow('').optional(),
-  DB_PASS: Joi.string().optional(), // Alias for DB_PASSWORD
+  // There is deliberately no `DB_PASS`. It was an accepted alias until the
+  // whole-branch review found that `scripts/registry/compose.mjs` blanks only
+  // `DB_PASSWORD` for the ten `database: null` services, so the alias carried
+  // the superuser password into every credential-free container (N2). One
+  // secret, one name. `allowUnknown` below means an old `.env` line is ignored
+  // rather than fatal — but nothing reads it.
   DB_NAME: Joi.string().default('kartseek_db'),
   /**
    * Connection-pool and retry policy, applied by `databaseCredentials()` in

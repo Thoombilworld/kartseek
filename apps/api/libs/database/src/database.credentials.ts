@@ -33,8 +33,26 @@ import type { ConfigService } from '@nestjs/config';
  * `ConfigModule` falls back to `apps/api/.env`.
  *
  * With a prefix, the order is the same one the module resolvers use —
- * `<PREFIX>_PASSWORD`, then `DB_PASSWORD`, then `DB_PASS` — and the refusal
- * names every one it tried.
+ * `<PREFIX>_PASSWORD`, then `DB_PASSWORD` — and the refusal names both.
+ *
+ * ── Why there is no `DB_PASS` ───────────────────────────────────────────────
+ *
+ * There used to be a third spelling. It was accepted here, in the eight module
+ * resolvers, in both migration CLIs and in `scripts/lib/db-password.js`, and
+ * it cost more than it bought. `scripts/registry/compose.mjs` blanks the
+ * credentials of the ten services that declare `database: null` precisely so
+ * `env_file: apps/api/.env` cannot hand them the superuser password — and it
+ * blanked `DB_PASSWORD`, because that was the name anybody thought of. The
+ * short alias walked straight past the fix: on a machine whose `.env` carried
+ * `DB_PASS=…`, every credential-free container held the superuser password
+ * after all, and a `DataSource` appearing in one of them would have connected
+ * as the superuser instead of failing on `role "unused" does not exist`, which
+ * is the whole point of blanking them (whole-branch review N2).
+ *
+ * An alias is a second name for one secret, and a second name is a second
+ * place to forget. `DB_PASSWORD` (or `<PREFIX>_PASSWORD`) is now the only
+ * spelling any resolver reads, so there is exactly one name to blank, to
+ * rotate, and to grep for.
  *
  * ── The pool (AUD2-033) ─────────────────────────────────────────────────────
  *
@@ -51,9 +69,8 @@ import type { ConfigService } from '@nestjs/config';
 export interface DatabaseCredentialsOptions {
   /**
    * A module's variable prefix, e.g. `MARKETPLACE_DB`. `<PREFIX>_PASSWORD` is
-   * then tried before `DB_PASSWORD` and `DB_PASS`, and the refusal names all
-   * three. Omitted, only the two shared spellings are read — which is what the
-   * gateway and the core services do.
+   * then tried before `DB_PASSWORD`, and the refusal names both. Omitted, only
+   * `DB_PASSWORD` is read — which is what the gateway and the core services do.
    */
   envPrefix?: string;
 }
@@ -71,24 +88,21 @@ export function databaseCredentials(cfg: ConfigService, options: DatabaseCredent
       : String(value);
   };
 
-  // `DB_PASS` is read as well as `DB_PASSWORD`, because the eight module
-  // resolvers (`modules/<m>/backend/src/db-config.ts`) accept both and this
-  // helper is the other half of the same decision. It did not, so a workspace
-  // whose `.env` used the short name resolved a password through the CLI runner
-  // and none through the service factory — which fails at boot with "set
-  // DB_PASSWORD", naming a variable the developer believed they had already set
-  // (IN4 minor). `DB_PASSWORD` still wins where both are present.
+  // Two names, not three: see "Why there is no `DB_PASS`" above. A `.env` that
+  // still carries the old short spelling now fails at boot naming `DB_PASSWORD`,
+  // which is the variable to set — rather than connecting with a credential the
+  // renderer cannot blank.
   const prefixedKey = options.envPrefix ? `${options.envPrefix}_PASSWORD` : undefined;
-  const password =
-    (prefixedKey ? read(prefixedKey) : undefined) ?? read('DB_PASSWORD') ?? read('DB_PASS');
+  const password = (prefixedKey ? read(prefixedKey) : undefined) ?? read('DB_PASSWORD');
   if (!password) {
     // Every name that was tried, so the message cannot send someone to set a
-    // variable they have already set under one of the other spellings.
-    const named = prefixedKey ? `${prefixedKey}, DB_PASSWORD or DB_PASS` : 'DB_PASSWORD or DB_PASS';
+    // variable they have already set under the other spelling.
+    const named = prefixedKey ? `${prefixedKey} or DB_PASSWORD` : 'DB_PASSWORD';
     throw new Error(
       `${named} is not set. Copy .env.example to .env in this workspace (or ` +
         'apps/api/.env for the shared platform database) and set it. There is no ' +
-        'built-in default password in any environment.',
+        'built-in default password in any environment, and `DB_PASS` is no longer ' +
+        'read — rename it to DB_PASSWORD.',
     );
   }
 

@@ -365,10 +365,19 @@ describe.each(RUNNERS)(
       expect(() => resolve((key) => (key === 'DB_PASSWORD' ? '' : undefined))).toThrow(
         /DB_PASSWORD/,
       );
-      // Any one of the three supplies it.
-      for (const key of [`${module.toUpperCase()}_DB_PASSWORD`, 'DB_PASSWORD', 'DB_PASS']) {
+      // Either of the two supplies it.
+      for (const key of [`${module.toUpperCase()}_DB_PASSWORD`, 'DB_PASSWORD']) {
         expect(resolve((k) => (k === key ? 'secret' : undefined)).password).toBe('secret');
       }
+      // And the third spelling no longer does. `DB_PASS` was an alias for the
+      // same secret that `scripts/registry/compose.mjs` did not blank for the
+      // ten `database: null` services, so it carried the superuser password
+      // into every credential-free container (whole-branch review N2). One
+      // secret, one name — an environment with only the old spelling must
+      // refuse, naming the variable to set.
+      expect(() => resolve((k) => (k === 'DB_PASS' ? 'superuser-secret' : undefined))).toThrow(
+        new RegExp(`${module.toUpperCase()}_DB_PASSWORD or DB_PASSWORD`),
+      );
     });
   },
 );

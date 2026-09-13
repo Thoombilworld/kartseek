@@ -200,8 +200,18 @@ test('a service with database: null gets the address but no credential', () => {
   assert.match(only, /^\s+DB_NAME: 'unused'$/m);
   assert.match(only, /^\s+DB_USER: 'unused'$/m);
   assert.match(only, /^\s+DB_PASSWORD: ''$/m);
+  // EVERY password spelling, not only the first one anybody thinks of. This
+  // block blanked `DB_PASSWORD` alone while `databaseCredentials()` fell
+  // through it to `DB_PASS`, which the developer's untracked apps/api/.env
+  // carries and `env_file` mounts into all 26 containers — so on that machine
+  // the superuser password was in every credential-free container anyway
+  // (whole-branch review N2). No resolver reads `DB_PASS` any more; it is
+  // blanked regardless, because a fix that depends on nobody reintroducing an
+  // alias is not one.
+  assert.match(only, /^\s+DB_PASS: ''$/m);
   assert.ok(!/DB_USER: \$\{/.test(only), 'no role interpolation');
   assert.ok(!/DB_PASSWORD: \$\{/.test(only), 'no password interpolation');
+  assert.ok(!/DB_PASS: \$\{/.test(only), 'no alias interpolation either');
   assert.ok(!/DB_USER: ''/.test(only), 'an empty DB_USER is a Joi failure, not a safety measure');
   assert.ok(!/DB_NAME: ''/.test(only), 'an empty DB_NAME is a Joi failure, not a safety measure');
   // And the ones that DO own a database still get all three.

@@ -147,7 +147,9 @@ describe('the migration CLI refuses a missing password', () => {
    * that file; and the module registry has already evaluated them once, at the
    * top of this spec.
    */
-  const KEYS = ['DB_PASSWORD', 'DB_PASS', 'MARKETPLACE_DB_PASSWORD'] as const;
+  // Not `DB_PASS`: neither CLI reads it any more, and the case below sets it
+  // deliberately to prove exactly that.
+  const KEYS = ['DB_PASSWORD', 'MARKETPLACE_DB_PASSWORD'] as const;
 
   async function importError(load: () => Promise<unknown>): Promise<Error | null> {
     const saved = KEYS.map((k) => [k, process.env[k]] as const);
@@ -177,6 +179,26 @@ describe('the migration CLI refuses a missing password', () => {
     const err = await importError(() => import('./data-source'));
     expect(err).toBeInstanceOf(Error);
     expect(err?.message).toMatch(/MARKETPLACE_DB_PASSWORD or DB_PASSWORD is not set/);
+  });
+
+  it('neither CLI accepts the old DB_PASS spelling', async () => {
+    // `DB_PASS` was a second name for the same secret. The compose renderer
+    // blanks `DB_PASSWORD` for the ten `database: null` services and never
+    // knew about the alias, so on a machine whose `.env` carried it the
+    // superuser password reached every credential-free container (whole-branch
+    // review N2). One secret, one name — and the refusal has to name the
+    // variable to SET, not the one it found.
+    const saved = process.env.DB_PASS;
+    process.env.DB_PASS = 'superuser-secret';
+    try {
+      const main = await importError(() => import('./data-source.main'));
+      expect(main?.message).toMatch(/DB_PASSWORD is not set/);
+      const marketplace = await importError(() => import('./data-source'));
+      expect(marketplace?.message).toMatch(/MARKETPLACE_DB_PASSWORD or DB_PASSWORD is not set/);
+    } finally {
+      if (saved === undefined) delete process.env.DB_PASS;
+      else process.env.DB_PASS = saved;
+    }
   });
 
   it('imports cleanly once the password is back', async () => {

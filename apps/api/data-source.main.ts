@@ -28,7 +28,7 @@ import { DataSource } from 'typeorm';
  * applied by hand, which is why nobody hit it; nothing made that repeatable.
  *
  * Credentials are the gateway's own: `DB_HOST` / `DB_PORT` / `DB_USER` /
- * `DB_PASSWORD` (with the `DB_PASS` alias `app.config.ts` accepts) / `DB_NAME`,
+ * `DB_PASSWORD` (the only password spelling on the platform) / `DB_NAME`,
  * matching `libs/database/src/database.credentials.ts`. No `MARKETPLACE_DB_*`
  * fallback: reaching for one is how a main-DB migration ends up in the
  * marketplace database, which is the bug this file exists to close.
@@ -192,11 +192,12 @@ export const MainDataSource = new DataSource({
   // `migration:run` against a production host with DB_PASSWORD unset did not
   // fail, it connected. The migration CLI refuses instead.
   password: (() => {
-    const p = process.env.DB_PASSWORD || process.env.DB_PASS;
+    const p = process.env.DB_PASSWORD;
     if (!p) {
       throw new Error(
         'DB_PASSWORD is not set — the migration CLI will not use a built-in default. ' +
-          'Set DB_PASSWORD (or DB_PASS) in apps/api/.env.',
+          'Set DB_PASSWORD in apps/api/.env. (`DB_PASS` is no longer read: it was a ' +
+          'second name for the same secret that the compose renderer could not blank.)',
       );
     }
     return p;

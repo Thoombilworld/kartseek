@@ -269,11 +269,22 @@ function credentialEnv(s) {
   // is gone either way, and if a DataSource ever does appear in one of these
   // nine it fails loudly with `role "unused" does not exist` instead of quietly
   // connecting to kartseek_db as the superuser.
+  //
+  // EVERY password spelling, not just the one anybody thinks of first. The
+  // first version of this blanked `DB_PASSWORD` alone, and `databaseCredentials`
+  // fell through it to `DB_PASS` — a second name for the same secret, which the
+  // developer's untracked `apps/api/.env` carried and `env_file` mounted into
+  // all 26 containers. The blanking therefore achieved nothing on the machine
+  // it was written on (whole-branch review N2). `DB_PASS` is no longer read by
+  // any resolver, and it is still blanked here: the fix is worth nothing if it
+  // depends on nobody ever reintroducing an alias, and an alias that IS blanked
+  // is harmless.
   if (!p)
     return [
       ['DB_NAME', "'unused'"],
       ['DB_USER', "'unused'"],
       ['DB_PASSWORD', "''"],
+      ['DB_PASS', "''"],
     ];
   if (p === 'DB')
     return [
