@@ -169,8 +169,10 @@ Two settings follow from that, and `npm run stack:validate` asserts both live
 - **`--appendonly yes --appendfsync everysec`.** `--save 60 1` alone is an RDB
   snapshot at most once a minute, so an unclean stop loses up to a minute of
   exactly the keys the policy change was made to protect. The AOF lives on the
-  same `redis_data` volume and is replayed ahead of the RDB on start.
-  `everysec` trades one second of exposure for throughput.
+  same `redis_data` volume, and once it exists it is the **only** thing Redis
+  loads at startup — the RDB is not replayed after it, or at all (which is what
+  the note below is about). `everysec` trades one second of exposure for
+  throughput.
 
 **Turning the AOF on costs you the current dataset, once.** When Redis starts
 with `appendonly yes` it loads the **AOF**, not the RDB — so on the first start
