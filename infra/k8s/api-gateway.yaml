@@ -38,7 +38,6 @@ metadata:
   labels:
     app: api-gateway
     tier: gateway
-    version: "2.0.0"
 spec:
   replicas: 3
   strategy:
@@ -54,18 +53,22 @@ spec:
       labels:
         app: api-gateway
         tier: gateway
-        version: "2.0.0"
       annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
-        prometheus.io/path: "/metrics"
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9090'
+        prometheus.io/path: '/metrics'
     spec:
       serviceAccountName: api-gateway
+      # 1001, not 1000: infra/docker/api-gateway.Dockerfile ends `USER nestjs`,
+      # created with `adduser --system --uid 1001`. A runAsUser that disagrees
+      # with the image is one of the things `--validate=strict` cannot see
+      # (2026-08-13 audit) — the pod starts as a uid with no passwd entry and
+      # no ownership of anything the build chowned.
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
-      
+        runAsUser: 1001
+        fsGroup: 1001
+
       # ── Image Pull Policy ──────────────────────────────────────────────────
       imagePullSecrets:
         - name: regcred
@@ -74,24 +77,60 @@ spec:
       # `resources` is mandatory here, not tidiness: the namespace ResourceQuota
       # tracks requests/limits and its admission check walks init containers too,
       # so a resourceless init container makes the whole pod un-creatable.
+      #
+      # One per entry in this service's `dependsOn` in services.yaml, the same
+      # list the generated manifests and Compose both read — postgres, redis,
+      # kafka, mongodb.
       initContainers:
-        - name: wait-for-db
+        - name: wait-for-postgres
           image: busybox:1.36
-          command: ['sh', '-c', 'until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for db; sleep 2; done']
+          command:
+            [
+              'sh',
+              '-c',
+              'until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for postgres; sleep 2; done',
+            ]
           resources:
-            requests: { cpu: "10m", memory: "16Mi" }
-            limits: { cpu: "50m", memory: "64Mi" }
+            requests: { cpu: '10m', memory: '16Mi' }
+            limits: { cpu: '50m', memory: '64Mi' }
         - name: wait-for-redis
           image: busybox:1.36
-          command: ['sh', '-c', 'until nc -z redis.kartseek.svc.cluster.local 6379; do echo waiting for redis; sleep 2; done']
+          command:
+            [
+              'sh',
+              '-c',
+              'until nc -z redis.kartseek.svc.cluster.local 6379; do echo waiting for redis; sleep 2; done',
+            ]
           resources:
-            requests: { cpu: "10m", memory: "16Mi" }
-            limits: { cpu: "50m", memory: "64Mi" }
+            requests: { cpu: '10m', memory: '16Mi' }
+            limits: { cpu: '50m', memory: '64Mi' }
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command:
+            [
+              'sh',
+              '-c',
+              'until nc -z kafka.kartseek.svc.cluster.local 9092; do echo waiting for kafka; sleep 2; done',
+            ]
+          resources:
+            requests: { cpu: '10m', memory: '16Mi' }
+            limits: { cpu: '50m', memory: '64Mi' }
+        - name: wait-for-mongodb
+          image: busybox:1.36
+          command:
+            [
+              'sh',
+              '-c',
+              'until nc -z mongodb.kartseek.svc.cluster.local 27017; do echo waiting for mongodb; sleep 2; done',
+            ]
+          resources:
+            requests: { cpu: '10m', memory: '16Mi' }
+            limits: { cpu: '50m', memory: '64Mi' }
 
       # ── Containers ─────────────────────────────────────────────────────────
       containers:
         - name: api-gateway
-          image: kartseek/api-gateway:2.0.0
+          image: kartseek/api-gateway:${KARTSEEK_TAG}
           imagePullPolicy: IfNotPresent
 
           # ── Environment Variables ──────────────────────────────────────────
@@ -122,6 +161,27 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
 
+            # ── Postgres ──────────────────────────────────────────────────
+            # The Secret calls it POSTGRES_PASSWORD — the name .env.example,
+            # Compose and the Postgres StatefulSet all use — and this service
+            # reads DB_PASSWORD. Everything else about the connection is in the
+            # ConfigMap.
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: POSTGRES_PASSWORD
+
+            # ── Mongo ─────────────────────────────────────────────────────
+            # Assembled by the kubelet from keys `envFrom` has already brought
+            # in — MONGO_ROOT_USER and MONGO_DB_NAME from the ConfigMap,
+            # MONGO_ROOT_PASSWORD from the Secret — so the URI's shape is in
+            # the manifest and the password is not. Without it the gateway's
+            # Mongo client falls back to localhost, which in a pod is the pod
+            # (AUD2-028).
+            - name: MONGO_URI
+              value: 'mongodb://$(MONGO_ROOT_USER):$(MONGO_ROOT_PASSWORD)@mongodb.kartseek.svc.cluster.local:27017/$(MONGO_DB_NAME)?authSource=admin'
+
           # ── Ports ──────────────────────────────────────────────────────────
           ports:
             - name: http
@@ -132,29 +192,40 @@ spec:
               protocol: TCP
 
           # ── Health Checks ──────────────────────────────────────────────────
+          # /health is a 404 here. main.ts sets the global prefix `api` and
+          # enables URI versioning, so the routes are /api/v1/health and
+          # /api/v1/health/ready — all three probes pointed at the bare paths,
+          # which is a rollout that never passes readiness and crash-loops on
+          # liveness (AUD2-001). The paths come from this service's own
+          # `health` block in services.yaml, and k8s.test.mjs asserts they
+          # still agree.
+          #
+          # No initialDelaySeconds on liveness or readiness: the startupProbe
+          # below holds both off until the process answers at all, and a delay
+          # next to it only makes a healthy pod look slow.
           livenessProbe:
             httpGet:
-              path: /health
+              path: /api/v1/health
               port: http
-            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
 
+          # 503 while a dependency is down, 200 while it is merely degraded
+          # (IN1), so a warm-cache problem does not empty the Service.
           readinessProbe:
             httpGet:
-              path: /health/ready
+              path: /api/v1/health/ready
               port: http
-            initialDelaySeconds: 15
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 2
 
+          # 30 x 10s = 300s before liveness may kill a pod that is still booting.
           startupProbe:
             httpGet:
-              path: /health
+              path: /api/v1/health
               port: http
-            initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 30
@@ -162,18 +233,18 @@ spec:
           # ── Resource Limits ────────────────────────────────────────────────
           resources:
             requests:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: '500m'
+              memory: '512Mi'
             limits:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: '1000m'
+              memory: '1Gi'
 
           # ── Security Context ──────────────────────────────────────────────
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
             runAsNonRoot: true
-            runAsUser: 1000
+            runAsUser: 1001
             capabilities:
               # NET_BIND_SERVICE was granted back after dropping ALL, but it only
               # matters below port 1024 and the gateway listens on 3001.
@@ -215,7 +286,7 @@ spec:
                   - key: node-role.kubernetes.io/worker
                     operator: In
                     values:
-                      - "true"
+                      - 'true'
 
       # ── Termination Grace Period ───────────────────────────────────────────
       terminationGracePeriodSeconds: 30
