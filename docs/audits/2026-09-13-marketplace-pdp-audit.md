@@ -1,6 +1,6 @@
 # KARTSEEK Marketplace — Product Detail Page Audit and Remediation
 
-Date: 2026-09-13 · Branch: `feat/admin-platform-upgrade` · Backend/API/data commits: `a2c974e`, `e308376`, `c70d289` · Frontend/UX commits: see §I (session 6b)
+Date: 2026-09-13 · Branch: `feat/admin-platform-upgrade` · Backend/API/data commits: `a2c974e`, `e308376`, `c70d289`, `4ce9c52`, `dd24d77`, `db78aa4`, `7ba3b44` (+ the follow-up that removes the interim reply envelope) · Frontend/UX commits: see §I (session 6b)
 
 Two sessions shared this brief and split it by layer: this document is the single report. Sections A–F and H (API side) are the backend/gateway/data work; §G and the frontend rows of §H come from the zone work and are integrated as delivered.
 
@@ -98,6 +98,24 @@ Route parameter: `/marketplace/product/<slug>-<uuid>`; only the uuid resolves th
 ### B10 · Edit-after-approval semantics (§17 of the brief)
 
 - A content edit (name, descriptions, category, brand, attributes) on an APPROVED product sets `approval_status = PENDING`; the public read hides it until an admin re-approves; the reply says so (`reReview: true`). Price and stock edits go through the listing routes and never trigger it. There is no revision table, so the previously approved content cannot stay live beside the edit — the honest trade-off, stated in the seller form.
+
+### B12 · Seller product routes refused the owning seller (High, found during 6b's probe)
+
+- **Issue**: `GET/PUT /seller/products/:id` and `PATCH /seller/products/:id/stock` answered 403 "You do not have access to this seller account" to the seller who owns the product (list 200, detail 403 with the same token).
+- **Root cause**: `SellerOwnershipGuard` reads any `:id` route param as a SELLER id, looks it up in `sellers`, misses, and refuses. PUT and PATCH had that shape before this pass; the new GET inherited it.
+- **Fix**: the routes take `:productId`; with no seller param the guard defers to the handler, which resolves the seller from the JWT and loads the row by (id, seller_id). The market-scope census records the renamed routes. Commit `4ce9c52`.
+
+### B13 · Q&A reads published account ids (Medium)
+
+- `GET /products/:id/questions` rows carried each asker's `customerId`, `/questions/:id/answers` each author's `authorId`. Both stripped; the per-question answer COUNT loop became one grouped query. Commit `dd24d77`.
+
+### B14 · Structured validation errors could not reach a client (Medium)
+
+- Both exception filters in `libs/common` rebuilt every error as `{ statusCode, message, errorCode }`, so the seller form could never receive the per-attribute list. With the infrastructure owner's sign-off the filters now carry `errors` when a 4xx thrower attached an `errors`/`details` array (bounded: 100 entries, plain fields, strings cut at 500 chars, never on a 5xx); the RPC filter mirrors it and the gateway forwards it. Commit `db78aa4`. The interim reply-envelope workaround was removed once this landed.
+
+### B15 · Seller product list without price, stock or SKU (Medium)
+
+- `GET /sellers/:sellerId/products` returned bare catalogue rows; the portal rendered NaN. Each row now carries the seller's own `listing`, `category`, `approvalStatus` and `isActive`, from one query per page. Commit `7ba3b44`.
 
 ### B11 · Cache and invalidation
 
@@ -197,4 +215,7 @@ _Delivered by session 6b — integrated on receipt, with commit hashes._
 5. Q&A `getAnswers` shape and the fulfillment-side Q&A fixes wait for that path's release (MODULES M1).
 6. No product revision table: a content edit takes an approved product off sale until re-approval (§B10).
 7. `hsnCode`/`gstBracket` are null on all seed data; India's "inclusive of all taxes" label has nothing to compute from yet.
-8. Structured validation errors travel as a `{ success:false }` reply because `RpcAwareExceptionsFilter` (libs/common) flattens exceptions; an optional `details` field on the filter would make this a real error. Owner: infra.
+8. ~~Structured validation errors travel as a `{ success:false }` reply because `RpcAwareExceptionsFilter` flattens exceptions.~~ Resolved in `db78aa4` (§B14).
+9. A customer who registers through `POST /sellers/register` and is approved keeps `role=customer`, so every `/seller/*` route answers 403; only `POST /auth/seller/register` mints a SELLER-role user. Owner: MODULES M12 (approval must promote the role, or the route must refuse non-seller users).
+10. `SellerOwnershipGuard` treats any `:id` param as a seller id (§B12); other `:id` routes in guard-bound classes deserve the same audit. Owner: MODULES residue.
+11. Dev fleet: the marketplace backend's `nest --watch` rebuilt `dist/` without swapping the running process once during this work (runner from 19:20, dist from 19:26); a `touch` on a source file restarted it. Check the `:3012` process start time against `dist/main.js` before trusting a "not fixed" probe.
