@@ -53,6 +53,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       API_GATEWAY_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -262,6 +272,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       ADMIN_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -470,6 +490,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       AUDIT_LOG_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -681,6 +711,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       AUTH_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -886,6 +926,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       CART_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1093,6 +1143,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       COMMISSION_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1300,6 +1360,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       DELIVERY_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1507,6 +1577,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       LOCATION_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1713,6 +1793,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       LOYALTY_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1920,6 +2010,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       NOTIFICATION_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2129,6 +2229,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       ORDER_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2338,6 +2448,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       PAYMENT_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2547,6 +2667,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       PAYOUT_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2755,6 +2885,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       REFUND_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2962,6 +3102,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       REPORT_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3169,6 +3319,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       SEARCH_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3380,6 +3540,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       USER_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3586,6 +3756,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       WALLET_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3796,6 +3976,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       DOCTOR_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4008,6 +4198,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       FRANCHISE_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4220,6 +4420,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       GROCERY_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4433,6 +4643,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       HOTEL_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4645,6 +4865,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       MARKETPLACE_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4858,6 +5088,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       PHARMACY_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -5070,6 +5310,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       RESTAURANT_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -5283,6 +5533,16 @@ services:
       # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
       # nothing; setting it does not move the gateway bind.
       TAXI_HTTP_HOST: '0.0.0.0'
+      # Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer
+      # a request ever has is the nginx container, whose address Docker assigns
+      # from this network — so without the subnet here, every forwarded header
+      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on
+      # that one container: one connection cap for the whole platform, and one
+      # flooder banning every socket (whole-branch review N1). Trusting the
+      # private network is the intent — nothing reaches a service on it except
+      # through the edge. The subnet is pinned in compose.infra.yml; loopback
+      # stays so a container probing itself still counts.
+      DDOS_TRUSTED_PROXIES: '172.28.0.0/16,127.0.0.1,::1'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing

@@ -117,6 +117,17 @@ const moduleDir = (s) => s.path.split('/')[1];
  * containers for nothing (review finding 5, and addendum item 6). Knowing
  * *where* Postgres is costs nothing; knowing how to sign in to it does.
  */
+/**
+ * The private network every container on this stack shares.
+ *
+ * Pinned in `infra/docker/compose.infra.yml`
+ * (`networks.default.ipam.config.subnet`) and repeated here because the trust
+ * list below is rendered from it. The two are kept in step by
+ * `compose.test.mjs`, which reads that file — a security decision made against
+ * an address range cannot be allowed to drift from the range itself.
+ */
+export const APP_NETWORK_SUBNET = '172.28.0.0/16';
+
 const INFRA_ENV = [
   ['DB_HOST', 'postgres'],
   ['DB_PORT', "'5432'"],
@@ -427,6 +438,18 @@ export function envGroups(s, reg) {
         '\n      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by' +
         '\n      # nothing; setting it does not move the gateway bind.',
       [[`${stem(s.name)}_HTTP_HOST`, "'0.0.0.0'"]],
+    ],
+    [
+      'Whose X-Forwarded-For the rate limiter believes. Behind nginx the only peer' +
+        '\n      # a request ever has is the nginx container, whose address Docker assigns' +
+        '\n      # from this network — so without the subnet here, every forwarded header' +
+        '\n      # was discarded and ws:banned:/ws:strikes:/ws:connections: all keyed on' +
+        '\n      # that one container: one connection cap for the whole platform, and one' +
+        '\n      # flooder banning every socket (whole-branch review N1). Trusting the' +
+        '\n      # private network is the intent — nothing reaches a service on it except' +
+        '\n      # through the edge. The subnet is pinned in compose.infra.yml; loopback' +
+        '\n      # stays so a container probing itself still counts.',
+      [['DDOS_TRUSTED_PROXIES', `'${APP_NETWORK_SUBNET},127.0.0.1,::1'`]],
     ],
   ];
 

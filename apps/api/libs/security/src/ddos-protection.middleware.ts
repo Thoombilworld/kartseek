@@ -2,6 +2,7 @@ import { Injectable, type NestMiddleware, HttpException, HttpStatus, Logger } fr
 import { type Request, type Response, type NextFunction } from 'express';
 import { RedisService } from '@app/redis';
 import { banSuppressedForLoopback } from './client-ip.util';
+import { isTrustedProxy } from './trusted-proxies.util';
 
 /**
  * DDoS Protection Middleware — Multi-layer defense for the KARTSEEK API Gateway.
@@ -15,7 +16,7 @@ import { banSuppressedForLoopback } from './client-ip.util';
  * │    4    │  Payload size guard       │  10 MB (configurable)         │
  * │    5    │  Sliding window rate limit│  100 req / 60s (per IP)       │
  * │    6    │  Endpoint-specific limits │  Auth: 10 req/60s, etc.       │
- * │    7    │  Burst detection          │  20 req / 5s (per IP)         │
+ * │    7    │  Burst detection          │  60 req / 5s (per IP)         │
  * │    8    │  Attack-mode tightening   │  Redis: ddos:attack_mode      │
  * │    9    │  Header analysis          │  UA + header anomaly scoring  │
  * │   10    │  Request fingerprinting   │  UA + Accept + path entropy   │
@@ -26,7 +27,7 @@ import { banSuppressedForLoopback } from './client-ip.util';
  *   DDOS_RATE_LIMIT_WINDOW   Sliding window in seconds           (default: 60)
  *   DDOS_RATE_LIMIT_MAX      Max requests per window             (default: 100)
  *   DDOS_BURST_WINDOW        Burst micro-window in seconds       (default: 5)
- *   DDOS_BURST_MAX           Max requests per burst window       (default: 20)
+ *   DDOS_BURST_MAX           Max requests per burst window       (default: 60)
  *   DDOS_BAN_DURATION        Base ban duration in seconds        (default: 900)
  *   DDOS_MAX_BODY_SIZE       Max allowed body size in bytes      (default: 10485760)
  *   DDOS_STRIKE_THRESHOLD    Strikes before auto-ban             (default: 5)
@@ -41,7 +42,22 @@ export class DdosProtectionMiddleware implements NestMiddleware {
   private readonly RATE_LIMIT_WINDOW = +(process.env.DDOS_RATE_LIMIT_WINDOW || 60);
   private readonly RATE_LIMIT_MAX = +(process.env.DDOS_RATE_LIMIT_MAX || 100);
   private readonly BURST_WINDOW = +(process.env.DDOS_BURST_WINDOW || 5);
-  private readonly BURST_MAX = +(process.env.DDOS_BURST_MAX || 20);
+  /**
+   * 60, not 20.
+   *
+   * The burst window is meant to catch a script, and 20 requests in 5 seconds
+   * is not one: a single console product page issues 15 client-side gateway
+   * requests per view in development (8 distinct, doubled by React
+   * StrictMode), so TWO page views in five seconds from one address crossed it
+   * — a human clicking through the admin console, scored as a flood, striked,
+   * and eventually banned. The rate that matters is the sliding window above
+   * (100/60s); this layer exists for the request-per-millisecond case, and 60
+   * in 5 seconds is still an order of magnitude past anything a person does.
+   *
+   * `DDOS_BURST_WINDOW` / `DDOS_BURST_MAX` — the names that were already here.
+   * A second pair of names for the same two numbers is how `DB_PASS` happened.
+   */
+  private readonly BURST_MAX = +(process.env.DDOS_BURST_MAX || 60);
   private readonly BAN_DURATION = +(process.env.DDOS_BAN_DURATION || 900);
   private readonly MAX_BODY_SIZE = +(process.env.DDOS_MAX_BODY_SIZE || 10_485_760);
   private readonly STRIKE_THRESHOLD = +(process.env.DDOS_STRIKE_THRESHOLD || 5);
@@ -49,14 +65,6 @@ export class DdosProtectionMiddleware implements NestMiddleware {
   /** Paths that bypass DDoS checks (health, readiness probes). */
   private readonly BYPASS_PATHS: Set<string> = new Set(
     (process.env.DDOS_BYPASS_PATHS || '/health,/metrics,/ping').split(',').map((p) => p.trim()),
-  );
-
-  /**
-   * Trusted reverse-proxy IPs whose X-Forwarded-For header we respect.
-   * Any IP not in this list that sends X-Forwarded-For is treated with suspicion.
-   */
-  private readonly TRUSTED_PROXIES: Set<string> = new Set(
-    (process.env.DDOS_TRUSTED_PROXIES || '127.0.0.1,::1').split(',').map((p) => p.trim()),
   );
 
   /**
@@ -226,12 +234,22 @@ export class DdosProtectionMiddleware implements NestMiddleware {
       if (requestCount === 1) await this.redis.expire(windowKey, this.RATE_LIMIT_WINDOW + 1);
 
       const remaining = Math.max(0, globalMax - requestCount);
+      const reset = Math.ceil(now / this.RATE_LIMIT_WINDOW) * this.RATE_LIMIT_WINDOW;
       res.setHeader('X-RateLimit-Limit', String(globalMax));
       res.setHeader('X-RateLimit-Remaining', String(remaining));
-      res.setHeader(
-        'X-RateLimit-Reset',
-        String(Math.ceil(now / this.RATE_LIMIT_WINDOW) * this.RATE_LIMIT_WINDOW),
-      );
+      res.setHeader('X-RateLimit-Reset', String(reset));
+      // The same three numbers under names nothing else writes.
+      //
+      // `ThrottlerGuard` is an APP_GUARD, so it runs AFTER this middleware and
+      // sets `X-RateLimit-*` from ITS OWN bucket — a different window, a
+      // different limit, and the last writer wins. A client reading
+      // `X-RateLimit-Remaining` therefore sees the throttler's budget while
+      // being refused by this one, which is how a caller pacing itself
+      // "correctly" still gets banned. Both limits are real; only this one
+      // records strikes, so this one has to be readable.
+      res.setHeader('X-Shield-Limit', String(globalMax));
+      res.setHeader('X-Shield-Remaining', String(remaining));
+      res.setHeader('X-Shield-Reset', String(reset));
 
       if (requestCount > globalMax) {
         await this.recordStrike(clientIp, 'global_rate_limit', req);
@@ -458,8 +476,14 @@ export class DdosProtectionMiddleware implements NestMiddleware {
   private extractClientIp(req: Request): string {
     const remoteAddr = req.ip || req.socket?.remoteAddress || 'unknown';
 
-    // Only trust X-Forwarded-For if the direct connection is from a known proxy
-    const isFromTrustedProxy = this.TRUSTED_PROXIES.has(remoteAddr);
+    // Only trust X-Forwarded-For if the direct connection is from a known proxy.
+    // By CIDR, not by string equality: this file's own header has documented the
+    // variable as "trusted proxy CIDRs" since it was written, while the match
+    // was exact — so the containerised nginx, whose address on the compose
+    // network is a `172.x.y.z`, was never trusted by either half of the shield
+    // (whole-branch review N1). Read per call so a process that loads its `.env`
+    // late, and a test that stubs the environment, both get the current list.
+    const isFromTrustedProxy = isTrustedProxy(remoteAddr);
     if (isFromTrustedProxy) {
       const forwardedFor = req.headers['x-forwarded-for'];
       if (forwardedFor) {

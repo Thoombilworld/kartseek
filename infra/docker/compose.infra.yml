@@ -620,3 +620,36 @@ volumes:
 networks:
   default:
     name: kartseek-network
+    # A FIXED subnet, because a security decision is made against it.
+    #
+    # `DDOS_TRUSTED_PROXIES` is the list of peers whose `X-Forwarded-For` the
+    # rate limiter believes, and behind the containerised nginx the only peer
+    # every request has is the nginx container. Its address is assigned by
+    # Docker from whatever range was free when the network was created, so
+    # "trust the edge" cannot be written down unless the range is. Pinning it
+    # here lets `scripts/registry/compose.mjs` emit
+    # `DDOS_TRUSTED_PROXIES: 172.28.0.0/16,127.0.0.1,::1` for every app-tier
+    # service, which is the intent: nothing reaches a service on this network
+    # except through the edge (whole-branch review N1).
+    #
+    # Without it the header was discarded and `ws:banned:`, `ws:strikes:` and
+    # `ws:connections:` all keyed on the nginx container's own IP — one
+    # connection cap for the entire platform, and one flooder banning every
+    # WebSocket client at once.
+    #
+    # 172.28.0.0/16 is outside what Docker has handed out on a developer
+    # machine here (172.17–172.20: the default bridge, this network's current
+    # dynamic range, a Desktop extension, and kind). An EXISTING
+    # kartseek-network keeps the range it was created with — Docker does not
+    # re-address a live network — so this takes effect on the next recreate:
+    #
+    #     npm run stack:down && npm run infra:down
+    #     docker network rm kartseek-network
+    #     npm run infra:up
+    #
+    # If that range is taken on some other machine, change it here and
+    # regenerate (`npm run registry:generate`): the trust list is rendered from
+    # this value and the two cannot drift apart.
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

@@ -204,6 +204,38 @@ the way a browser does.
 never show the problem. Check `WEB_APP_URL` and `CORS_ORIGINS` in
 `apps/api/.env` against the origin the browser is actually using.
 
+## Every WebSocket client behind containerised nginx shares one ban
+
+**Symptom.** In the compose stack, one abusive socket gets _everybody_
+disconnected with `WS_BANNED`, or new sockets are refused with the
+per-IP connection cap while only a handful are actually open.
+
+**Cause.** Behind the edge, the only peer a request has is the nginx container,
+so `X-Forwarded-For` is the only thing separating one client from another.
+`ws-ddos.guard.ts` believes that header only from a peer in
+`DDOS_TRUSTED_PROXIES` — which used to be matched as **exact strings** against a
+default of `127.0.0.1,::1`, and nginx's address on `kartseek-network` is
+neither. The header arrived and was discarded, so `ws:banned:`, `ws:strikes:`
+and `ws:connections:` all keyed on the one container.
+
+**Fix.** Membership is by CIDR now
+(`apps/api/libs/security/src/trusted-proxies.util.ts`, shared by the HTTP
+middleware and the WebSocket guard), the compose network's subnet is pinned in
+`infra/docker/compose.infra.yml` (`172.28.0.0/16`), and
+`scripts/registry/compose.mjs` emits
+`DDOS_TRUSTED_PROXIES=172.28.0.0/16,127.0.0.1,::1` for every app-tier service.
+
+**An existing network keeps the range it was created with** — Docker does not
+re-address a live network — so on a machine whose `kartseek-network` predates
+this, recreate it or the trust list names a subnet nothing is on:
+
+```bash
+npm run stack:down && npm run infra:down
+docker network rm kartseek-network
+npm run infra:up
+docker network inspect kartseek-network --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+```
+
 ## Kafka topics are gone after `docker compose down -v`
 
 **Symptom.** Anything that publishes an event starts failing right after
@@ -233,7 +265,7 @@ terminal's `curl`, the smoke — comes back `429 Too Many Requests` with a
 `apps/api/scripts/verification/`, or a Playwright suite against `:3001`.
 
 **Cause.** `DdosProtectionMiddleware` counts requests **per IP** (100 per 60 s
-by default, 20 per 5 s of burst), records a strike on every request past the
+by default, 60 per 5 s of burst), records a strike on every request past the
 limit, and bans the IP for 15 minutes and upwards after 5 strikes. On a
 developer's machine every local caller shares `127.0.0.1`, so the ban is not
 "the flooding script is refused" — it is "this machine is refused", out of the
@@ -272,3 +304,22 @@ API_BASE=http://localhost:3099/api/v1 PROBE_DELAY_MS=0 npm run verify:regional
 are live state of the running platform, deleting them hides the flood that
 caused them, and the probe scripts are tested against ever doing it
 (`probe-pacing.spec.ts`).
+
+**Which budget am I actually against?** Two limiters answer on the same request
+and both set `X-RateLimit-*`: this middleware, and `ThrottlerGuard`
+(`api-gateway.module.ts`, 300/min). The guard is an `APP_GUARD`, so it runs
+last and its numbers are the ones that survive in those headers. The shield
+repeats its own under `X-Shield-Limit` / `X-Shield-Remaining` /
+`X-Shield-Reset` — that is the limiter that records strikes, so that is the one
+to pace against:
+
+```bash
+curl -sI http://localhost:3001/api/v1/health | grep -i 'x-shield\|x-ratelimit'
+```
+
+The burst window is 60 requests per 5 s, not 20. A single console product page
+issues about 15 client-side gateway requests per view in development (React
+StrictMode doubles them), so at 20 two page views in five seconds were a
+"flood" — a person clicking through the admin console, striked and eventually
+banned. `DDOS_BURST_WINDOW` and `DDOS_BURST_MAX` tune it; the sliding window
+above is the limit that is meant to bite.

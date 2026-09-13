@@ -7,6 +7,7 @@ import {
   envFilesFor,
   healthPathFor,
   stem,
+  APP_NETWORK_SUBNET,
 } from './compose.mjs';
 import { loadRegistry, repoRoot, webEntries } from './lib.mjs';
 import fs from 'node:fs';
@@ -106,12 +107,18 @@ test('the only host addressing is the published port and the in-container probe'
   // explain that next.config.mjs's baked-in `http://localhost:3001` is what a
   // standalone image actually uses — and a rule that forbids saying so is a
   // rule against documenting the trap.
+  //
+  // DDOS_TRUSTED_PROXIES is the third exception, and the same kind: loopback
+  // appears there as a *membership test* for the peer that sent a request, not
+  // as somewhere to send one. A container probing itself arrives from 127.0.0.1
+  // and still has to be recognised.
   const rest = out
     .split('\n')
     .filter(
       (l) =>
         !l.trim().startsWith('#') &&
         !l.includes('${APP_BIND:-127.0.0.1}') &&
+        !/^\s*DDOS_TRUSTED_PROXIES:/.test(l) &&
         !/wget -qO-|nc -z/.test(l),
     )
     .join('\n');
@@ -256,6 +263,39 @@ test('every nest service is told to bind its HTTP port on all interfaces', () =>
 test('the real registry gives marketplace-service the variable its main.ts reads', () => {
   const out = renderComposeServices(loadRegistry());
   assert.match(out, /MARKETPLACE_HTTP_HOST: '0\.0\.0\.0'/);
+});
+
+test('every app-tier service is told to trust the private network, by CIDR', () => {
+  // Behind the containerised nginx the only peer a request has is the nginx
+  // container, so `X-Forwarded-For` is the only thing that separates one client
+  // from another. ws-ddos.guard.ts believed it only from a peer in
+  // DDOS_TRUSTED_PROXIES, which defaulted to `127.0.0.1,::1` and was emitted by
+  // nobody — so every socket through the edge shared one ban, one strike
+  // counter and one MAX_CONNECTIONS_PER_IP (whole-branch review N1).
+  const out = renderComposeServices(reg);
+  const emitted = out.match(/DDOS_TRUSTED_PROXIES: '[^']*'/g) ?? [];
+  assert.equal(emitted.length, 3, 'one per nest service, none for a Next server');
+  for (const line of emitted) {
+    assert.ok(line.includes(APP_NETWORK_SUBNET), `${line} does not carry the compose subnet`);
+    // Loopback stays: a container probing itself still has to count.
+    assert.ok(line.includes('127.0.0.1'), line);
+    assert.ok(line.includes('::1'), line);
+  }
+  assert.ok(!/DDOS_TRUSTED_PROXIES/.test(renderComposeServices({ services: [web] })));
+});
+
+test('the emitted trust list is the subnet compose.infra.yml actually pins', () => {
+  // The security decision is made against an address range, so the range has to
+  // be fixed — and the two statements of it must not drift. Docker assigns a
+  // range per network at creation time; without the pin, `trust the edge` names
+  // a subnet nothing is on.
+  const infra = fs.readFileSync(path.join(repoRoot(), 'infra/docker/compose.infra.yml'), 'utf8');
+  const m = infra.match(/^\s*-\s*subnet:\s*(\S+)\s*$/m);
+  assert.ok(m, 'compose.infra.yml no longer pins networks.default.ipam.config.subnet');
+  assert.equal(m[1], APP_NETWORK_SUBNET, 'the renderer and the network disagree');
+  // And it is a CIDR, not a bare address: a /32 would trust one container and
+  // silently stop working the moment Docker re-addressed it.
+  assert.match(APP_NETWORK_SUBNET, /^\d+\.\d+\.\d+\.\d+\/(?:[89]|1\d|2[0-4])$/);
 });
 
 test('env_file is the root .env plus the untracked workspace files', () => {
@@ -518,6 +558,15 @@ function locationBlocks(conf) {
  * strike banning all of them. It cost both nginx configs their forwarded
  * headers on /socket.io/ (and the host config's `/` as well), and `nginx -t`
  * does not warn: the file is perfectly valid.
+ *
+ * NECESSARY, NOT SUFFICIENT — and this comment used to claim otherwise.
+ * Sending the header is half of it; the guard has to believe it. It matched
+ * `DDOS_TRUSTED_PROXIES` as exact strings against a default of `127.0.0.1,::1`,
+ * and the nginx container's address on kartseek-network is neither — so the
+ * header arrived and was thrown away, and the single bucket above survived the
+ * fix that was supposed to remove it (whole-branch review N1). The other half
+ * is `libs/security/src/trusted-proxies.util.ts` (CIDR membership) plus the
+ * `DDOS_TRUSTED_PROXIES` this renderer now emits from the pinned subnet.
  */
 test('a location that sets any proxy header re-sends the forwarding set', () => {
   const required = ['X-Forwarded-For', 'X-Real-IP', 'Host'];

@@ -50,7 +50,7 @@ describe('the delay is derived from the gateway, not guessed', () => {
   });
 
   it('paces below the slower of the two per-IP windows', () => {
-    // 60 s / 100 requests = 600 ms; the burst window allows 250 ms, so the
+    // 60 s / 100 requests = 600 ms; the burst window allows 84 ms, so the
     // sliding window is the binding constraint. Plus headroom.
     const delay = probeDelayMs({});
     expect(delay).toBeGreaterThan(600);

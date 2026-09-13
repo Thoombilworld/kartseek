@@ -39,7 +39,8 @@
 
 /**
  * The middleware's defaults, transcribed from
- * `apps/api/libs/security/src/ddos-protection.middleware.ts:40-47`.
+ * `apps/api/libs/security/src/ddos-protection.middleware.ts` (the `DDOS_*`
+ * block at the top of the class).
  *
  * Kept as one object so the spec can assert the transcription is still true
  * against that file rather than trusting this comment.
@@ -48,7 +49,7 @@ export const GATEWAY_LIMIT_DEFAULTS = Object.freeze({
   DDOS_RATE_LIMIT_WINDOW: 60,
   DDOS_RATE_LIMIT_MAX: 100,
   DDOS_BURST_WINDOW: 5,
-  DDOS_BURST_MAX: 20,
+  DDOS_BURST_MAX: 60,
 });
 
 /** How much slower than the limit to run. 1 would sit exactly on the threshold. */
@@ -68,7 +69,7 @@ const positive = (raw, fallback) => {
  *
  * Both layers are per-IP counters over a fixed window, so the sustainable rate
  * of each is `window / max` seconds per request and the binding constraint is
- * the slower of the two (60/100 = 600 ms against 5/20 = 250 ms by default).
+ * the slower of the two (60/100 = 600 ms against 5/60 = 84 ms by default).
  * `PROBE_DELAY_MS` wins when set, including `0`.
  */
 export function probeDelayMs(env = process.env) {
@@ -144,10 +145,12 @@ export class ProbeThrottledError extends Error {
  * `fetch`, paced, and loud about a 429.
  *
  * Also reads the shield's own budget back out of the response:
- * `X-RateLimit-Remaining` is the requests left in THIS window across every
- * local caller, not just this script, so when it runs low the only safe move is
- * to wait for `X-RateLimit-Reset` rather than to keep spending at the paced
- * rate.
+ * `X-Shield-Remaining` is the requests left in THIS window across every local
+ * caller, not just this script, so when it runs low the only safe move is to
+ * wait for `X-Shield-Reset` rather than to keep spending at the paced rate.
+ * `X-RateLimit-*` is the fallback and not the first choice: `ThrottlerGuard`
+ * runs after the shield and overwrites those three with its own, different
+ * bucket — real, but not the one that records strikes and bans.
  */
 export async function pacedFetch(url, init) {
   await takeSlot();
@@ -157,9 +160,14 @@ export async function pacedFetch(url, init) {
     throw new ProbeThrottledError(url, res.status, res.headers.get('retry-after'));
   }
 
-  const remaining = Number(res.headers.get('x-ratelimit-remaining'));
+  // `X-Shield-*` first: `ThrottlerGuard` runs after the DDoS middleware and
+  // overwrites `X-RateLimit-*` with its own (different) bucket, so the generic
+  // names report a budget that is not the one recording strikes.
+  const remaining = Number(
+    res.headers.get('x-shield-remaining') ?? res.headers.get('x-ratelimit-remaining'),
+  );
   if (Number.isFinite(remaining) && remaining < REMAINING_FLOOR) {
-    const reset = Number(res.headers.get('x-ratelimit-reset'));
+    const reset = Number(res.headers.get('x-shield-reset') ?? res.headers.get('x-ratelimit-reset'));
     const waitMs = Number.isFinite(reset)
       ? Math.max(0, reset * 1000 - Date.now()) + 1000
       : probeDelayMs() * REMAINING_FLOOR;

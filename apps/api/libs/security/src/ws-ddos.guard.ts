@@ -3,16 +3,7 @@ import { WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
 import { RedisService } from '@app/redis';
 import { banSuppressedForLoopback } from './client-ip.util';
-
-/**
- * The peers whose `X-Forwarded-For` a socket handshake may believe.
- *
- * The same list `DdosProtectionMiddleware` reads, from the same variable, so
- * the HTTP and WebSocket halves of the rate limiter cannot disagree about which
- * hop is ours.
- */
-const wsTrustedProxies = (): Set<string> =>
-  new Set((process.env.DDOS_TRUSTED_PROXIES || '127.0.0.1,::1').split(',').map((p) => p.trim()));
+import { isTrustedProxy } from './trusted-proxies.util';
 
 /**
  * Does this look like an address at all?
@@ -341,6 +332,15 @@ export class WsDdosGuard implements CanActivate {
    * connection counter were all keyed on a string the banned client picks, so
    * evading a flood ban was one header away, and a flooder could equally pin
    * the ban on somebody else's address.
+   *
+   * Then it matched the trusted list as EXACT STRINGS, which broke it the other
+   * way behind the containerised nginx: the edge's address on the compose
+   * network is a `172.x.y.z` that is neither `127.0.0.1` nor `::1`, so the
+   * header was discarded and every key here collapsed onto the nginx container
+   * — one `MAX_CONNECTIONS_PER_IP` for the whole platform, and one flooder
+   * banning every socket (whole-branch review N1). `isTrustedProxy` matches by
+   * CIDR, the renderer emits the compose subnet, and an exact address still
+   * means exactly itself.
    */
   private getSocketIp(client: Socket): string {
     const peer = client.handshake.address || 'unknown';
@@ -348,7 +348,7 @@ export class WsDdosGuard implements CanActivate {
     // per instance, and a module-level `const` fixes the answer at the moment
     // this file is first imported — before a test can stub the environment, and
     // before a process that loads its `.env` late has one.
-    if (!wsTrustedProxies().has(peer)) return peer;
+    if (!isTrustedProxy(peer)) return peer;
 
     const forwarded = client.handshake.headers['x-forwarded-for'];
     if (forwarded) {
