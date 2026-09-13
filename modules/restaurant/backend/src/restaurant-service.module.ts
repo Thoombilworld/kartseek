@@ -70,7 +70,7 @@ const envSchema = buildEnvSchema({
         // for every service (AUD2-033). The connection target itself is
         // overridden immediately below, by the resolver the CLI runner shares.
         //
-        // The prefix matters: this module reads `RESTAURANT_PASSWORD`, not
+        // The prefix matters: this module reads `RESTAURANT_DB_PASSWORD`, not
         // `DB_PASSWORD`, and its .env.example declares only the former. Without
         // it the helper refused to boot on a variable this service never uses —
         // masked in-repo by the fallback to apps/api/.env, fatal for a module
@@ -87,11 +87,15 @@ const envSchema = buildEnvSchema({
         // glob match nothing, leaving TypeORM with no metadata and every
         // DB-backed route throwing while /health still returns 200.
         entities: ENTITIES,
-        // Matches marketplace-service: each vertical owns a dedicated schema, so a
-        // dev auto-sync cannot collide with another service's tables. Was gated on
-        // DB_SYNCHRONIZE, which is explicitly false, so these tables were never
-        // created and every query failed with "relation ... does not exist".
-        // Production still uses migrations - see migrations/1786500000000.
+        // The schema comes from `migrations/`, and from nothing else.
+        //
+        // What stood here was the rationale for allowing a development
+        // auto-sync — "each vertical owns a dedicated schema, so an auto-sync
+        // cannot collide with another service's tables" — written when
+        // DB_SYNCHRONIZE being false meant these tables were never created at
+        // all. IN3 gave this module a migration folder, so that reasoning is
+        // spent, and leaving it in place argued for the opposite of what the
+        // two guards below now enforce (IN3 review N1).
         // Auto-sync is refused, everywhere, by two independent guards:
         //
         //   • `validateDatabaseConfig()` in main.ts throws on DB_SYNCHRONIZE=true

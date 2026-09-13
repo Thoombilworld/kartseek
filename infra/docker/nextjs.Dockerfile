@@ -105,8 +105,11 @@ WORKDIR /repo
 # not. BuildKit word-splits that instruction's arguments after expansion, so an
 # empty expansion yields zero ports and EXPOSE silently does nothing; `docker
 # build --check` reports no warning either. Here an empty PORT is worse than
-# elsewhere: it is also what the server binds, so the container would listen on
-# a random port AND be unhealthy for ever.
+# elsewhere: it is also what the server binds. `ENV PORT=` leaves the variable
+# empty, and Next's standalone `server.js` falls back to its own default of
+# 3000 — so the container listens on 3000 whatever the registry entry says, and
+# is unhealthy for ever because `HEALTHCHECK_PORT` is empty. Not a random port:
+# a WRONG one, silently, which is harder to spot than a random one would be.
 RUN test -n "$PORT" || { echo "build arg PORT is required (see infra/docker/README.md)" >&2; exit 1; }
 ENV NODE_ENV=production
 ENV PORT=${PORT}

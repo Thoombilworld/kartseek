@@ -69,8 +69,16 @@ export function databaseCredentials(cfg: ConfigService, options: DatabaseCredent
       : String(value);
   };
 
+  // `DB_PASS` is read as well as `DB_PASSWORD`, because the eight module
+  // resolvers (`modules/<m>/backend/src/db-config.ts`) accept both and this
+  // helper is the other half of the same decision. It did not, so a workspace
+  // whose `.env` used the short name resolved a password through the CLI runner
+  // and none through the service factory — which fails at boot with "set
+  // DB_PASSWORD", naming a variable the developer believed they had already set
+  // (IN4 minor). `DB_PASSWORD` still wins where both are present.
   const prefixedKey = options.envPrefix ? `${options.envPrefix}_PASSWORD` : undefined;
-  const password = (prefixedKey ? read(prefixedKey) : undefined) ?? read('DB_PASSWORD');
+  const password =
+    (prefixedKey ? read(prefixedKey) : undefined) ?? read('DB_PASSWORD') ?? read('DB_PASS');
   if (!password) {
     const named = prefixedKey ? `${prefixedKey} or DB_PASSWORD` : 'DB_PASSWORD';
     throw new Error(

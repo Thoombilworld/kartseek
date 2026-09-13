@@ -80,7 +80,7 @@ const ENTITIES = [
         // for every service (AUD2-033). The connection target itself is
         // overridden immediately below, by the resolver the CLI runner shares.
         //
-        // The prefix matters: this module reads `TAXI_PASSWORD`, not
+        // The prefix matters: this module reads `TAXI_DB_PASSWORD`, not
         // `DB_PASSWORD`, and its .env.example declares only the former. Without
         // it the helper refused to boot on a variable this service never uses —
         // masked in-repo by the fallback to apps/api/.env, fatal for a module
@@ -94,20 +94,15 @@ const ENTITIES = [
         // Fixed, not configurable: each entity names this schema too.
         schema: TAXI_DB_SCHEMA,
         entities: ENTITIES,
-        // Matches the other verticals now that taxi owns its own database.
+        // The schema comes from `migrations/`, and from nothing else.
         //
-        // This was gated on DB_SYNCHRONIZE, which is explicitly false because
-        // the services used to share one database and an auto-sync could ALTER
-        // another service's tables. The consequence here was that none of the
-        // nine entities below ever became tables: the `taxi` schema existed in
-        // kartseek_db with zero tables in it, so the service booted, answered
-        // /health with 200, and failed every database-backed route with
-        // "relation ... does not exist". Nothing created them — no migration
-        // covers this schema either.
-        //
-        // With a dedicated kartseek_taxi database that risk is gone: an
-        // auto-sync here cannot reach another service's tables. Production
-        // still uses migrations.
+        // What stood here was the rationale for allowing a development
+        // auto-sync — "each vertical owns a dedicated schema, so an auto-sync
+        // cannot collide with another service's tables" — written when
+        // DB_SYNCHRONIZE being false meant these tables were never created at
+        // all. IN3 gave this module a migration folder, so that reasoning is
+        // spent, and leaving it in place argued for the opposite of what the
+        // two guards below now enforce (IN3 review N1).
         // Auto-sync is refused, everywhere, by two independent guards:
         //
         //   • `validateDatabaseConfig()` in main.ts throws on DB_SYNCHRONIZE=true

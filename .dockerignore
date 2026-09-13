@@ -66,7 +66,13 @@ npm-debug.log*
 # Docker Desktop's own WSL data directory, which lives in this repository root
 # on at least one developer machine: 36 GB of virtual disk, gitignored but never
 # excluded here, so `docker build` was uploading Docker's own storage into the
-# build context — 7 GB and climbing before the transfer was cut short. It is
-# matched by name rather than by location because nothing else in this tree is
-# ever called that.
+# build context — 7 GB and climbing before the transfer was cut short.
+#
+# This pattern is anchored at the context root, which is where the directory
+# is. A `.dockerignore` pattern with no slash in it matches the FIRST path
+# element only — it is not a name match the way a `.gitignore` entry would be —
+# so this excludes `<context>/DockerDesktopWSL` and nothing nested (IN5 minor:
+# the comment here used to claim the opposite). A copy somewhere deeper would
+# need `**/DockerDesktopWSL`; there is none, and the images build from the
+# repository root, so the anchored form is the accurate and sufficient one.
 DockerDesktopWSL

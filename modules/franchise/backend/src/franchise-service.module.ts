@@ -60,7 +60,7 @@ const envSchema = buildEnvSchema({
         // for every service (AUD2-033). The connection target itself is
         // overridden immediately below, by the resolver the CLI runner shares.
         //
-        // The prefix matters: this module reads `FRANCHISE_PASSWORD`, not
+        // The prefix matters: this module reads `FRANCHISE_DB_PASSWORD`, not
         // `DB_PASSWORD`, and its .env.example declares only the former. Without
         // it the helper refused to boot on a variable this service never uses —
         // masked in-repo by the fallback to apps/api/.env, fatal for a module
