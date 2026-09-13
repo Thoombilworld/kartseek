@@ -50,6 +50,8 @@ export interface ResolvedFranchiseDb {
 /**
  * `FRANCHISE_DB_*` wins, the shared `DB_*` answers next, and the last resorts are the
  * shared platform database — the same order and the same values on both sides.
+ *
+ * The password has no last resort: it throws. See `requirePassword` below.
  */
 export function resolveFranchiseDbConfig(read: EnvReader): ResolvedFranchiseDb {
   const first = (...keys: string[]): string | undefined => {
@@ -60,14 +62,34 @@ export function resolveFranchiseDbConfig(read: EnvReader): ResolvedFranchiseDb {
     return undefined;
   };
 
+  /**
+   * The password, or a refusal naming both variables that would have supplied
+   * it. Deliberately not a `first(...) ?? default` like the four values above:
+   * a wrong host fails loudly on connect, whereas a wrong password used to
+   * succeed against the development database and quietly write there.
+   */
+  const requirePassword = (moduleKey: string): string => {
+    const value = first(moduleKey, 'DB_PASSWORD', 'DB_PASS');
+    if (!value) {
+      throw new Error(
+        `${moduleKey} or DB_PASSWORD is not set. Copy .env.example to .env in this module ` +
+          `(or apps/api/.env for the shared platform database) and set it. There is no ` +
+          `built-in default password.`,
+      );
+    }
+    return value;
+  };
+
   return {
     host: first('FRANCHISE_DB_HOST', 'DB_HOST') ?? 'localhost',
     port: Number(first('FRANCHISE_DB_PORT', 'DB_PORT') ?? 5432),
     username: first('FRANCHISE_DB_USER', 'DB_USER') ?? 'postgres',
-    // Matches DEV_FALLBACK_PASSWORD in @app/database's databaseCredentials(),
-    // which the service still calls for the production guard that refuses this
-    // fallback when NODE_ENV=production.
-    password: first('FRANCHISE_DB_PASSWORD', 'DB_PASSWORD', 'DB_PASS') ?? 'kartseek123',
+    // No built-in default, matching databaseCredentials() in @app/database.
+    // The literal that used to close this line was the real development
+    // password in tracked source (AUD2-074), and it was reached by BOTH sides:
+    // the migration CLI and the running service. A missing password is a
+    // startup failure on both, in every environment.
+    password: requirePassword('FRANCHISE_DB_PASSWORD'),
     database: first('FRANCHISE_DB_NAME', 'DB_NAME') ?? 'kartseek_db',
   };
 }
