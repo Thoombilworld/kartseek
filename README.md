@@ -70,7 +70,7 @@ _Generated from `services.yaml` by `npm run registry:generate`; edit the registr
 | `api-gateway` | API gateway | `apps/api/apps/api-gateway` | 3001 | — | — | kartseek_db / public | `/api/v1/health` | postgres, redis, kafka, mongodb |
 | `admin-service` | core service | `apps/api/apps/admin-service` | 3027 | 4017 | — | kartseek_db / admin | `/health` | postgres, redis, kafka |
 | `audit-log-service` | core service | `apps/api/apps/audit-log-service` | 3028 | — | — | — | `/health` | mongodb, redis, kafka |
-| `auth-service` | core service | `apps/api/apps/auth-service` | 3010 | — | 5001 | kartseek_db / public | `/health` | postgres, redis |
+| `auth-service` | core service | `apps/api/apps/auth-service` | 3010 | — | 5001 | — | `/health` | redis |
 | `cart-service` | core service | `apps/api/apps/cart-service` | 3013 | 4003 | — | — | `/health` | redis, kafka |
 | `commission-service` | core service | `apps/api/apps/commission-service` | 3030 | 4020 | — | — | `/health` | redis, kafka |
 | `delivery-service` | core service | `apps/api/apps/delivery-service` | 3022 | — | 5008 | — | `/health` | redis, kafka |

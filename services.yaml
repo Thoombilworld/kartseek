@@ -68,13 +68,14 @@ services:
     ports: { http: 3010, grpc: 5001 }
     env: { http: AUTH_SERVICE_PORT, grpc: AUTH_GRPC_PORT }
     health: { live: /health, ready: /health/ready }
-    database: { name: kartseek_db, schema: public, envPrefix: DB }
-    # redis was missing here. auth-service imports SecurityModule, and that is
-    # where AccountLockoutService and RefreshTokenService live — login throttling
-    # and the one refresh-token slot per user are both Redis keys. The entry said
-    # postgres only, so readiness would not have pinged the store that decides
-    # whether a session can be issued at all.
-    dependsOn: [postgres, redis]
+    # No database. The module registered a Postgres connection with no entities
+    # and no query anywhere in the service — an idle pool per replica, and a
+    # readiness failure whenever the database was down, for a service whose only
+    # state is in Redis (AUD2-142). auth-service imports SecurityModule, and that
+    # is where AccountLockoutService and RefreshTokenService live — login
+    # throttling and the one refresh-token slot per user are both Redis keys.
+    database: null
+    dependsOn: [redis]
 
   - name: cart-service
     kind: core-service

@@ -42,6 +42,60 @@ The default `docker compose up` (via `npm run infra:up`) starts none of
 these; every module falls back to the shared Postgres instance, which is the
 lighter way to work on one module at a time.
 
+### Per-module database roles
+
+Two init scripts are mounted into the shared `postgres` service, and the
+entrypoint runs them in name order when the data directory is first created:
+
+| Mounted as          | Source                               | What it does                                                   |
+| ------------------- | ------------------------------------ | -------------------------------------------------------------- |
+| `10-extensions.sql` | `infra/postgres/init-extensions.sql` | `uuid-ossp`, `pg_trgm`, `postgis` in `POSTGRES_DB`.            |
+| `20-roles.sh`       | `infra/postgres/init-roles.sh`       | One login role per module, with rights to its own schema only. |
+
+`20-roles.sh` reads the eight `<MODULE>_DB_USER` / `<MODULE>_DB_PASSWORD`
+pairs the root `.env` already defines for the `isolated` profile — the same
+credential for a module whether it has its own instance or a schema in the
+shared one. **It exits non-zero, naming the variable, if any of the eight
+passwords is unset**, so the container fails to start rather than creating a
+role with a password anyone could guess. It also creates the three extensions
+in every database it touches, because IN3's initial migrations open with
+`CREATE EXTENSION IF NOT EXISTS` and that needs superuser — doing it here once
+means a module role never does.
+
+Each role gets `USAGE, CREATE` on its own schema and `ALL` on that schema's
+tables and sequences (including, by default privileges, ones it creates later).
+It gets nothing on another module's schema and nothing on `public`, where
+`users`, `orders` and the gateway's own tables live.
+
+**Init scripts run only on an empty data directory.** An existing volume — any
+machine that ran `npm run infra:up` before this file existed — needs it applying
+by hand, once. The script is mounted, not copied, so it is the same file:
+
+```bash
+# From the repository root, with the eight passwords set in .env
+docker compose -f infra/docker/compose.infra.yml up -d postgres   # picks up the mount + env
+docker compose -f infra/docker/compose.infra.yml exec postgres bash /docker-entrypoint-initdb.d/20-roles.sh
+
+# Or, without recreating the container, pipe the same file in with the
+# variables the script reads (bash/zsh; `set -a` exports what .env defines):
+set -a; . ./.env; set +a
+env_flags=$(for m in MARKETPLACE GROCERY RESTAURANT PHARMACY DOCTOR HOTEL TAXI FRANCHISE; do
+  printf -- '-e %s_DB_USER -e %s_DB_PASSWORD -e %s_DB_NAME ' "$m" "$m" "$m"
+done)
+docker exec -i $env_flags kartseek-postgres bash -s < infra/postgres/init-roles.sh
+
+# Eight roles
+docker exec kartseek-postgres psql -U postgres -d kartseek_db -c '\du' | grep _user
+```
+
+Re-running is safe: every statement is idempotent, and `ALTER ROLE … PASSWORD`
+is unconditional, so a password changed in `.env` is rotated in the database by
+running the script again.
+
+Nothing connects as these roles yet — the services still use `DB_USER`. Moving
+a service onto its own role is one `<MODULE>_DB_USER` change at a time, with
+that module's suite run after each, and is tracked as IN5.
+
 ## The root `docker-compose.yml`
 
 The root `docker-compose.yml` pulls in `compose.infra.yml` (and only that
