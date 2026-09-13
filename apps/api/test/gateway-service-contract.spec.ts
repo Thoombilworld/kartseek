@@ -121,21 +121,20 @@ const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   // `modules/restaurant/backend/src/admin/admin.controller.ts`.
   // `keeps the unimplemented baseline honest` below is what would have failed
   // had either set been left.
+  //
+  // The ten `admin.hotel.*` entries that stood here are gone too, and for a
+  // second reason on top of the first: M5 gave the twelve unhandled hotel
+  // commands a `@MessagePattern` AND repointed the gateway at the names this
+  // module implements, so none of these dotted spellings is sent by anything
+  // any more. An entry for a command nobody sends is a baseline describing a
+  // platform that no longer exists — the rot this list's one rule exists to
+  // prevent. (`dashboard`, `get` and `list` had already stopped being sent by
+  // the R-task rewiring; they were simply never taken out.)
   'admin.doctor.appointments',
   'admin.doctor.dashboard',
   'admin.doctor.prescriptions',
   'admin.doctor.reports',
   'admin.doctor.settings',
-  'admin.hotel.amenities',
-  'admin.hotel.bookings',
-  'admin.hotel.dashboard',
-  'admin.hotel.get',
-  'admin.hotel.list',
-  'admin.hotel.pricing',
-  'admin.hotel.reports',
-  'admin.hotel.reviews',
-  'admin.hotel.rooms',
-  'admin.hotel.settings',
   'admin.taxi.complaints',
   'admin.taxi.compliance',
   'admin.taxi.dashboard',
@@ -186,12 +185,15 @@ const NEWLY_VISIBLE_ORPHANS: ReadonlySet<string> = new Set([
   'admin.doctor.updateSettings',
   'admin.doctor.verifyDoctor',
 
-  // ── hotel → M5 ────────────────────────────────────────────────────────────
-  'admin.hotel.bookingDetail',
-  'admin.hotel.createAmenity',
-  'admin.hotel.moderateReview',
-  'admin.hotel.updatePricing',
-  'admin.hotel.updateSettings',
+  // ── hotel → M5: EMPTY, and an `it` below keeps it that way ────────────────
+  //
+  // All five of this module's newly visible commands — `bookingDetail`,
+  // `createAmenity`, `moderateReview`, `updatePricing`, `updateSettings` — are
+  // served by `modules/hotel/backend/src/admin/admin.controller.ts`, together
+  // with the seven that were visible all along. Seventeen commands, seventeen
+  // handlers, one spelling each: the gateway now sends the underscored names
+  // hotel-service implements, and the two dot-notation ALIASES that let one
+  // decision answer to two names are deleted.
 
   // ── restaurant → M4: EMPTY, and an `it` below keeps it that way ───────────
   //
@@ -466,6 +468,16 @@ describe('gateway ↔ service contract', () => {
     );
 
     expect(restaurantEntries).toEqual([]);
+  });
+
+  it('has no hotel command left in either baseline', () => {
+    // M5 gave all seventeen hotel admin commands one spelling and one handler.
+    // This is the assertion that keeps that true: a hotel command reappearing
+    // in either list would mean a handler was removed and excused rather than
+    // replaced, or that the dotted convention had come back.
+    const hotelEntries = [...KNOWN_ORPHANS].filter((cmd) => cmd.startsWith('admin.hotel.'));
+
+    expect(hotelEntries).toEqual([]);
   });
 
   it('declares literal routes before parameterised siblings', () => {

@@ -385,6 +385,7 @@ export const PUBLISHED_TOPICS = {
   GROCERY_SETTINGS_UPDATED: 'grocery.settings.updated',
   GROCERY_STORE_STATUS_CHANGED: 'grocery.store.status_changed',
   // ── hotel ──
+  HOTEL_AMENITY_CREATED: 'hotel.amenity.created',
   HOTEL_APPROVED: 'hotel.approved',
   HOTEL_BOOKING_CREATED: 'hotel.booking.created',
   HOTEL_BOOKING_MODIFIED: 'hotel.booking.modified',
@@ -392,7 +393,10 @@ export const PUBLISHED_TOPICS = {
   HOTEL_OWNER_REGISTERED: 'hotel.owner.registered',
   HOTEL_PAYMENT_PROCESSED: 'hotel.payment.processed',
   HOTEL_REFUND_PROCESSED: 'hotel.refund.processed',
+  HOTEL_REVIEW_MODERATED: 'hotel.review.moderated',
   HOTEL_REVIEW_SUBMITTED: 'hotel.review.submitted',
+  HOTEL_SETTINGS_UPDATED: 'hotel.settings.updated',
+  HOTEL_SUSPENDED: 'hotel.suspended',
   // ── hsn ──
   HSN_CREATED: 'hsn.created',
   HSN_UPDATED: 'hsn.updated',
