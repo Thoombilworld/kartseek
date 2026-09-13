@@ -4,24 +4,39 @@
  *
  * ── Why these are interfaces and not class-validator classes ────────────────
  *
- * The request BODY is validated at the gateway, by a class-validator DTO under
- * the gateway's `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`
- * — `apps/api-gateway/src/dto/admin-pharmacy.dto.ts`. That is the boundary the
- * client can reach, and it is where a 400 belongs.
+ * Because the client boundary is the GATEWAY, and it is already covered there.
+ * Every body and query on `/admin/pharmacy/*` is a class-validator DTO under
+ * `GatewayValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`) —
+ * `apps/api-gateway/src/dto/admin-pharmacy.dto.ts`. That is the only surface a
+ * client can address, so that is where a 400 belongs and where the plan's
+ * "every body/query is a class-validator DTO" is satisfied.
  *
- * Declaring these as VALIDATED CLASSES would be actively dangerous here.
- * `main.ts` binds a global `ValidationPipe({ whitelist: true })`, and a global
- * pipe applies to microservice handlers as well as HTTP ones. `whitelist`
- * strips every property the class does not declare — so a DTO class that forgot
- * to declare `scope` would have it silently removed from the payload, the
- * handler would read `scope === undefined`, and a region-locked administrator
- * would be served every market's rows. A leak caused by a validator is a poor
- * trade for a boundary no client can address.
- *
- * A plain interface has no metatype for the pipe to act on, so the payload
- * arrives intact and the handlers validate what actually matters themselves:
+ * Nothing on THIS side of the wire is client input. `scope` and `actorId` are
+ * written by the gateway from the signed token and can be set by nobody else;
+ * the rest has already been validated one hop earlier. What is left to check
+ * here is not shape but meaning, and the handlers do that themselves:
  * `requireId` for identifiers, `requireMarket` for market filters, and the
- * whitelist in `PHARMACY_SETTING_DEFAULTS` for settings keys.
+ * whitelist in `PHARMACY_SETTING_DEFAULTS` for settings keys — each of which
+ * refuses in a way a class-validator decorator could not express.
+ *
+ * ── What is NOT the reason, and a hazard if that ever changes ───────────────
+ *
+ * A global pipe does not reach these handlers at all. `main.ts` calls
+ * `app.connectMicroservice({ transport: TCP, … })` with no
+ * `{ inheritAppConfig: true }`, so neither the global `ValidationPipe` nor the
+ * global `HttpSurfaceGuard` applies to a `@MessagePattern` — they are bound to
+ * the HTTP application only. (No service in this repository passes
+ * `inheritAppConfig` today.) An earlier version of this comment argued from the
+ * opposite premise; it was wrong, and M4-M7 should not copy it.
+ *
+ * The hazard it described is real but CONDITIONAL, and worth stating so it is
+ * not rediscovered the hard way: if someone later adds `inheritAppConfig: true`
+ * here, `whitelist: true` would begin stripping every property a payload class
+ * does not declare. A class that forgot `scope` would have it silently removed,
+ * the handler would read `scope === undefined`, and a region-locked
+ * administrator would be served every market's rows. Interfaces have no
+ * metatype for a pipe to act on, so they are immune to that either way — which
+ * is a reason to keep them, not the reason they were chosen.
  *
  * ── `scope` and `actorId` ───────────────────────────────────────────────────
  *
