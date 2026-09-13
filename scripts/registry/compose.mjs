@@ -250,16 +250,29 @@ function moduleDatabaseEnv(reg) {
  */
 function credentialEnv(s) {
   const p = s.database?.envPrefix;
-  // Blank, not absent. Omitting the key hands it straight back to `env_file`,
-  // which is the mechanism this generator exists to defeat: apps/api/.env
-  // declares DB_USER=postgres with the superuser password, so a service that
-  // opens no connection was still carrying it (review finding 14). An empty
-  // value reads as "not set" to databaseCredentials(), which then refuses by
-  // name rather than connecting as the superuser.
+  // Overridden, not absent. Omitting the key hands it straight back to
+  // `env_file`, which is the mechanism this generator exists to defeat:
+  // apps/api/.env declares DB_USER=postgres with the superuser password, so a
+  // service that opens no connection was still carrying it (IN6 review
+  // finding 14).
+  //
+  // The password is blanked; the user and the database are NOT. `@app/common`'s
+  // shared Joi schema declares `DB_USER: Joi.string().default('postgres')` and
+  // `DB_NAME: Joi.string().default('kartseek_db')`, and a Joi string rejects
+  // '' unless it says `.allow('')` — which only DB_PASSWORD does. Blanking all
+  // three therefore crash-looped every null-database service on
+  // `Config validation error: DB_USER: "DB_USER" is not allowed to be empty`
+  // (auth-service, audit-log-service and notification-service, found by
+  // `npm run stack:validate` — IN7 fix round 1).
+  //
+  // `unused` rather than the real names is the fail-closed choice: the secret
+  // is gone either way, and if a DataSource ever does appear in one of these
+  // nine it fails loudly with `role "unused" does not exist` instead of quietly
+  // connecting to kartseek_db as the superuser.
   if (!p)
     return [
-      ['DB_NAME', "''"],
-      ['DB_USER', "''"],
+      ['DB_NAME', "'unused'"],
+      ['DB_USER', "'unused'"],
       ['DB_PASSWORD', "''"],
     ];
   if (p === 'DB')
@@ -383,7 +396,12 @@ export function envGroups(s, reg) {
         '\n      # INSIDE the container, on that same loopback) still reports healthy.' +
         '\n      # Emitted for every Nest service under its own stem rather than for the' +
         '\n      # one that reads it today, so the next service to adopt the pattern is' +
-        '\n      # container-correct by default; it is inert for the other twenty-five.',
+        '\n      # container-correct by default; it is inert for the other twenty-five.' +
+        '\n      #' +
+        '\n      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —' +
+        '\n      # one word shorter — and that is the documented override for the' +
+        '\n      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by' +
+        '\n      # nothing; setting it does not move the gateway bind.',
       [[`${stem(s.name)}_HTTP_HOST`, "'0.0.0.0'"]],
     ],
   ];

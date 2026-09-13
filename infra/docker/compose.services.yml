@@ -47,6 +47,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       API_GATEWAY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -250,6 +255,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       ADMIN_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -452,6 +462,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       AUDIT_LOG_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -493,8 +508,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Kafka consumer group.
@@ -655,6 +670,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       AUTH_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -696,8 +716,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
@@ -853,6 +873,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       CART_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -894,8 +919,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
@@ -1053,6 +1078,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       COMMISSION_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -1094,8 +1124,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
@@ -1253,6 +1283,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       DELIVERY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -1294,8 +1329,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
@@ -1453,6 +1488,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       LOCATION_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -1653,6 +1693,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       LOYALTY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -1694,8 +1739,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
@@ -1853,6 +1898,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       NOTIFICATION_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -1894,8 +1944,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Kafka consumer group.
@@ -2055,6 +2105,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       ORDER_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -2258,6 +2313,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       PAYMENT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -2461,6 +2521,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       PAYOUT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -2663,6 +2728,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       REFUND_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -2704,8 +2774,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
@@ -2863,6 +2933,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       REPORT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -2904,8 +2979,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Every port on the platform, from the registry.
@@ -3063,6 +3138,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       SEARCH_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -3104,8 +3184,8 @@ services:
       # How this service signs in, and no SSL — the images run NODE_ENV=production,
       # which turns SSL on by default, and this Postgres speaks plaintext on a
       # private network.
-      DB_NAME: ''
-      DB_USER: ''
+      DB_NAME: 'unused'
+      DB_USER: 'unused'
       DB_PASSWORD: ''
       DB_SSL: 'false'
       # Kafka consumer group.
@@ -3267,6 +3347,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       USER_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -3467,6 +3552,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       WALLET_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -3671,6 +3761,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       DOCTOR_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -3877,6 +3972,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       FRANCHISE_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -4083,6 +4183,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       GROCERY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -4290,6 +4395,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       HOTEL_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -4496,6 +4606,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       MARKETPLACE_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -4703,6 +4818,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       PHARMACY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -4909,6 +5029,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       RESTAURANT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
@@ -5116,6 +5241,11 @@ services:
       # Emitted for every Nest service under its own stem rather than for the
       # one that reads it today, so the next service to adopt the pattern is
       # container-correct by default; it is inert for the other twenty-five.
+      #
+      # NOT the gateway bind. api-gateway/src/main.ts reads API_GATEWAY_HOST —
+      # one word shorter — and that is the documented override for the
+      # DEV_AUTH_BYPASS loopback rule. API_GATEWAY_HTTP_HOST below is read by
+      # nothing; setting it does not move the gateway bind.
       TAXI_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses

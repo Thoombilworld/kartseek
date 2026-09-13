@@ -171,15 +171,26 @@ test('a service with database: null gets the address but no credential', () => {
   const only = renderComposeServices({ services: [search] });
   assert.match(only, /DB_HOST: postgres/, 'the address still overrides apps/api/.env');
   assert.match(only, /DB_PORT: '5432'/);
-  // BLANK, not absent: omitting them hands the keys back to env_file, and
+  // OVERRIDDEN, not absent: omitting them hands the keys back to env_file, and
   // apps/api/.env declares DB_USER=postgres with the superuser password. The
   // first attempt at this finding only dropped them from the YAML, which left
   // the credential in the resolved container (review finding 14).
-  assert.match(only, /^\s+DB_NAME: ''$/m);
-  assert.match(only, /^\s+DB_USER: ''$/m);
+  //
+  // The password is blank; the other two are not, and must not be. A Joi
+  // string rejects '' unless it says `.allow('')`, which in
+  // env-schema.builder.ts only DB_PASSWORD does — so blanking all three
+  // crash-looped auth-service, audit-log-service and notification-service on
+  // `Config validation error: DB_USER: "DB_USER" is not allowed to be empty`.
+  // `unused` is fail-closed: the secret is still gone, and a DataSource that
+  // ever did appear here would fail on `role "unused" does not exist` rather
+  // than connect as the superuser.
+  assert.match(only, /^\s+DB_NAME: 'unused'$/m);
+  assert.match(only, /^\s+DB_USER: 'unused'$/m);
   assert.match(only, /^\s+DB_PASSWORD: ''$/m);
   assert.ok(!/DB_USER: \$\{/.test(only), 'no role interpolation');
   assert.ok(!/DB_PASSWORD: \$\{/.test(only), 'no password interpolation');
+  assert.ok(!/DB_USER: ''/.test(only), 'an empty DB_USER is a Joi failure, not a safety measure');
+  assert.ok(!/DB_NAME: ''/.test(only), 'an empty DB_NAME is a Joi failure, not a safety measure');
   // And the ones that DO own a database still get all three.
   const withDb = renderComposeServices({ services: [gateway] });
   assert.match(withDb, /DB_NAME: \$\{POSTGRES_DB:-kartseek_db\}/);
