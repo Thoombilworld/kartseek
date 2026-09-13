@@ -1,5 +1,11 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
-import { assertInMarket, requireMarket } from '@app/common';
+import {
+  assertInMarket,
+  requireMarket,
+  SEARCH_COUNTRY_KEY,
+  SEARCH_COUNTRY_ANY,
+  normaliseSearchCountries,
+} from '@app/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
@@ -198,7 +204,7 @@ export class MarketplaceService {
         await this.catalog.recomputeBuyBox(productId);
         await this.invalidateCatalogueCaches(productId);
         await this.kafka.publish('product.approved', {
-          ...this.indexPayload(product),
+          ...(await this.indexPayload(product)),
           approvedBy: adminId,
         });
         return { success: true, productId, listingsActivated: 0 };
@@ -211,7 +217,7 @@ export class MarketplaceService {
 
     await this.invalidateCatalogueCaches(productId);
     await this.kafka.publish('product.approved', {
-      ...this.indexPayload(product),
+      ...(await this.indexPayload(product)),
       approvedBy: adminId,
     });
     this.logger.log(
@@ -436,7 +442,43 @@ export class MarketplaceService {
     await this.catalogCache.invalidateProductAndListings(productId, row?.slug);
   }
 
-  private indexPayload(product: Product) {
+  /**
+   * The markets a product is offered in, as the search index stores them.
+   *
+   * The same two paths `CatalogService.regionPredicate()` uses: a seller with
+   * an approved, live listing on it, or the product's own seller (the
+   * single-seller case, where no listing row is created). A seller whose
+   * `region_code` is NULL is available everywhere — that column is nullable
+   * pending backfill, and a strict match would empty the storefront — which a
+   * `term` filter cannot express, so it is written down as
+   * `SEARCH_COUNTRY_ANY` and the filter asks for it alongside the shopper's
+   * own market.
+   */
+  private async marketsOf(productId: string, sellerId: string | null): Promise<string[]> {
+    const listings = this.dataSource.getMetadata(ProductListing).tablePath;
+    const sellers = this.dataSource.getMetadata(Seller).tablePath;
+    const rows: Array<{ code: string | null }> = await this.dataSource.query(
+      `SELECT sl.region_code AS code
+         FROM ${listings} pl
+         JOIN ${sellers} sl ON sl.id = pl.seller_id
+        WHERE pl.product_id = $1 AND pl."isActive" AND pl."approvalStatus" = 'APPROVED'
+        UNION
+       SELECT sp.region_code AS code FROM ${sellers} sp WHERE sp.id = $2`,
+      [productId, sellerId],
+    );
+    return normaliseSearchCountries(rows.map((r) => r.code ?? SEARCH_COUNTRY_ANY)) ?? [];
+  }
+
+  /**
+   * What a catalogue event carries so search-service can index the product.
+   *
+   * `countryCode` used to be read off `product.country_code` — a column that
+   * does not exist on `marketplace.products`, so every event carried
+   * `undefined` and the search index has never held a market for anything. It
+   * is resolved from the sellers now, under the one key the index and the
+   * filter both use (whole-branch review item 18).
+   */
+  private async indexPayload(product: Product) {
     return {
       id: product.id,
       name: product.name,
@@ -444,7 +486,7 @@ export class MarketplaceService {
       description: product.short_description ?? product.long_description ?? '',
       price: product.mrp == null ? undefined : Number(product.mrp),
       sellerId: product.seller_id,
-      countryCode: (product as unknown as { country_code?: string }).country_code,
+      [SEARCH_COUNTRY_KEY]: await this.marketsOf(product.id, product.seller_id ?? null),
     };
   }
 
