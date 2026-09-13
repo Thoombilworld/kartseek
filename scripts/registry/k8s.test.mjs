@@ -280,14 +280,22 @@ test('every application container carries resources and pulls the local image', 
   }
 });
 
-test('the header says the zone images cannot be built yet', () => {
-  // The nine Next Deployments are ready wiring for images that do not exist:
-  // only apps/web sets output: 'standalone' (Task IN11). An operator reading
-  // ErrImagePull deserves to find that here rather than in a task report.
+test('the header says the zone images do not exist yet, and why', () => {
+  // The nine Next Deployments are ready wiring for images that do not exist.
+  // The reason changed with Task IN11 and the header had to change with it:
+  // the zones are no longer BLOCKED (all nine set output: 'standalone' now),
+  // they have simply never been built. An operator reading ErrImagePull
+  // deserves the true reason here rather than in a task report — and a false
+  // one sends them to fix a next.config that is already correct.
   const out = renderMicroservices(fixture);
-  assert.match(out, /NOT EVERY IMAGE HERE CAN BE BUILT YET/);
+  assert.match(out, /NOT EVERY IMAGE HERE EXISTS YET/);
+  assert.match(out, /docker compose --profile full/, 'the command that makes them');
   assert.match(out, /output: 'standalone'/);
   assert.match(out, /IN11/);
+  assert.ok(
+    !/CAN BE BUILT YET|need `output/.test(out),
+    'the pre-IN11 claim that the zones cannot be built is false and must not come back',
+  );
 });
 
 test('the image tag is substituted at deploy time, never baked', () => {

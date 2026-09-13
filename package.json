@@ -35,7 +35,7 @@
     "infra:restart": "docker compose -f docker-compose.yml restart",
     "infra:status": "docker compose -f docker-compose.yml ps",
     "infra:tools": "docker compose -f docker-compose.yml --profile tools up -d",
-    "//stack": "Needs Docker Compose >= 2.24 (the env_file long syntax). Run `infra:up` first: it creates kartseek-network and the 166 Kafka topics, which the consumers need before they start, and the first stack:up recreates postgres/redis/kafka for anyone whose containers predate the second include. `stack:up:full` cannot build the eight web zones yet — only apps/web sets output:'standalone' (Task IN11) — so use it for the API tier and expect the zones to fail on the standalone COPY. `stack:down` stops only the application tier; `infra:down` is the one that takes the datastores with it.",
+    "//stack": "Needs Docker Compose >= 2.24 (the env_file long syntax). Run `infra:up` first: it creates kartseek-network and the 166 Kafka topics, which the consumers need before they start, and the first stack:up recreates postgres/redis/kafka for anyone whose containers predate the second include. `stack:up:full` builds all 35, the eight web zones included (every Next workspace sets output:'standalone' since IN11), but it has never been run to completion — budget 45-90 minutes and 22-28 GB, and read infra/docker/README.md, section `Full profile status`, first. `stack:down` stops only the application tier; `infra:down` is the one that takes the datastores with it.",
     "stack:up:admin": "docker compose --profile admin up -d --build",
     "stack:up:full": "docker compose --profile full up -d --build",
     "stack:validate": "node scripts/stack/validate.mjs",
