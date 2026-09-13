@@ -7,8 +7,10 @@ import test from 'node:test';
 import {
   fillMissing,
   fillSecrets,
+  generateApiEnvFile,
   generateEnvFile,
   generateSecret,
+  mirrorMap,
   parseAssignments,
   repoRoot,
   SECRET_BYTES,
@@ -16,6 +18,17 @@ import {
 
 function tmpdir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'kartseek-env-'));
+}
+
+/** A throwaway repository: a root example/.env pair and an apps/api example. */
+function fakeRepo({ rootExample, rootEnv, apiExample, apiEnv }) {
+  const dir = tmpdir();
+  fs.mkdirSync(path.join(dir, 'apps/api'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.env.example'), rootExample ?? '');
+  if (rootEnv !== undefined) fs.writeFileSync(path.join(dir, '.env'), rootEnv);
+  fs.writeFileSync(path.join(dir, 'apps/api/.env.example'), apiExample ?? '');
+  if (apiEnv !== undefined) fs.writeFileSync(path.join(dir, 'apps/api/.env'), apiEnv);
+  return dir;
 }
 
 test('a value that is already set is never rewritten', () => {
@@ -92,6 +105,163 @@ test('an empty .env gets every declared key', () => {
   assert.equal(result.created, false, 'the file existed, so this is the update path');
   assert.deepEqual(result.appended, ['POSTGRES_PASSWORD']);
   assert.match(fs.readFileSync(envPath, 'utf8'), /^POSTGRES_PASSWORD=[0-9a-f]{48}$/m);
+});
+
+test('a CRLF .env is filled, and does not come back with mixed endings', () => {
+  // `.env` is untracked, so .gitattributes' eol=lf never reaches it and a
+  // Windows editor leaves CRLF. Without the \r? the key never matched and
+  // env:init reported "already has every key" (re-review finding 17).
+  const dir = tmpdir();
+  const examplePath = path.join(dir, '.env.example');
+  const envPath = path.join(dir, '.env');
+  fs.writeFileSync(examplePath, 'A=\nB=\n');
+  fs.writeFileSync(envPath, 'A=\r\n');
+
+  const result = generateEnvFile({ examplePath, envPath });
+  assert.deepEqual(result.filled, ['A'], 'the CRLF line was seen');
+  assert.deepEqual(result.appended, ['B']);
+
+  const after = fs.readFileSync(envPath, 'utf8');
+  assert.match(after, /^A=[0-9a-f]{48}\r$/m, 'the carriage return was put back');
+  assert.equal(/[^\r]\n/.test(after), false, 'every line ending is still CRLF');
+  assert.match(after, /^B=[0-9a-f]{48}\r$/m, 'the appended block is CRLF too');
+});
+
+test('an LF file stays LF', () => {
+  const { text } = fillMissing('A=\n', 'A=\nB=\n');
+  assert.equal(/\r/.test(text), false);
+});
+
+test('the update is written through a temp file and renamed', () => {
+  // The file being rewritten is the only copy of the Postgres superuser
+  // password; a half-written one is data loss (re-review finding 20).
+  const dir = tmpdir();
+  const examplePath = path.join(dir, '.env.example');
+  const envPath = path.join(dir, '.env');
+  fs.writeFileSync(examplePath, 'A=\n');
+  fs.writeFileSync(envPath, '');
+  generateEnvFile({ examplePath, envPath });
+  assert.deepEqual(
+    fs.readdirSync(dir).sort(),
+    ['.env', '.env.example'],
+    'no temp file was left behind',
+  );
+});
+
+test('mirrorMap pairs the workspace names with the root ones', () => {
+  const map = mirrorMap('POSTGRES_PASSWORD=\nGROCERY_DB_PASSWORD=\nTAXI_DB_PASSWORD=\nDB_BIND=x\n');
+  assert.equal(map.DB_PASSWORD, 'POSTGRES_PASSWORD', 'the one renamed key');
+  assert.equal(map.REDIS_PASSWORD, 'REDIS_PASSWORD');
+  assert.equal(map.GROCERY_DB_PASSWORD, 'GROCERY_DB_PASSWORD');
+  assert.equal(map.TAXI_DB_PASSWORD, 'TAXI_DB_PASSWORD');
+  assert.equal(map.DB_BIND, undefined, 'only passwords are mirrored');
+});
+
+test('apps/api/.env takes the datastore passwords from the root .env', () => {
+  // Both files talk to the same Postgres and Redis, so a generated password
+  // here is not merely different — it is a WRONGPASS at the first query. This
+  // used to be a manual step in local-setup.md (re-review finding 15).
+  const dir = fakeRepo({
+    rootExample: 'POSTGRES_PASSWORD=\nREDIS_PASSWORD=\nGROCERY_DB_PASSWORD=\n',
+    rootEnv:
+      'POSTGRES_PASSWORD=root-pg\nREDIS_PASSWORD=root-redis\nGROCERY_DB_PASSWORD=root-groc\n',
+    apiExample:
+      'DB_USER=postgres\nDB_PASSWORD=\nREDIS_PASSWORD=\nGROCERY_DB_PASSWORD=\nJWT_SECRET=\nENCRYPTION_KEY=\n',
+  });
+
+  const result = generateApiEnvFile({ root: dir });
+  assert.equal(result.created, true);
+
+  const api = parseAssignments(fs.readFileSync(path.join(dir, 'apps/api/.env'), 'utf8'));
+  assert.equal(api.get('DB_PASSWORD'), 'root-pg', 'renamed from POSTGRES_PASSWORD');
+  assert.equal(api.get('REDIS_PASSWORD'), 'root-redis');
+  assert.equal(api.get('GROCERY_DB_PASSWORD'), 'root-groc');
+  assert.equal(api.get('DB_USER'), 'postgres', "the example's own value is kept");
+  assert.deepEqual(result.mirrored.sort(), [
+    'DB_PASSWORD',
+    'GROCERY_DB_PASSWORD',
+    'REDIS_PASSWORD',
+  ]);
+
+  // Not mirrored: the containers override both from the root .env, so the host
+  // fleet having its own is one fewer place the production key is written.
+  assert.match(api.get('JWT_SECRET'), /^[0-9a-f]{48}$/);
+  assert.match(api.get('ENCRYPTION_KEY'), /^[0-9a-f]{64}$/);
+  assert.notEqual(api.get('JWT_SECRET'), api.get('ENCRYPTION_KEY'));
+});
+
+test('a third-party credential in the workspace example is left blank, not invented', () => {
+  // apps/api/.env.example leaves STRIPE_SECRET_KEY, TWILIO_AUTH_TOKEN and a
+  // dozen more empty. Random hex in one of those reads as configured to
+  // anything that checks it, and fails at the first call — worse than a blank.
+  const dir = fakeRepo({
+    rootExample: 'POSTGRES_PASSWORD=\n',
+    rootEnv: 'POSTGRES_PASSWORD=root-pg\n',
+    apiExample: 'JWT_SECRET=\nSTRIPE_SECRET_KEY=\nTWILIO_AUTH_TOKEN=\nPORT=3001\n',
+  });
+  const result = generateApiEnvFile({ root: dir });
+  assert.deepEqual(result.filled, ['JWT_SECRET'], 'only the allow-listed key');
+
+  const text = fs.readFileSync(path.join(dir, 'apps/api/.env'), 'utf8');
+  assert.match(text, /^STRIPE_SECRET_KEY=$/m, 'still blank');
+  assert.match(text, /^TWILIO_AUTH_TOKEN=$/m, 'still blank');
+  assert.match(text, /^PORT=3001$/m, 'a key with a value is copied through as ever');
+});
+
+test('an update to apps/api/.env adds only allow-listed keys', () => {
+  // The other ~50 keys the example declares are the developer's business; the
+  // defaults in code already cover them, and appending them all to a working
+  // file would be presumptuous and could change behaviour.
+  const dir = fakeRepo({
+    rootExample: 'POSTGRES_PASSWORD=\n',
+    rootEnv: 'POSTGRES_PASSWORD=root-pg\n',
+    apiExample: 'JWT_SECRET=\nENCRYPTION_KEY=\nSTRIPE_SECRET_KEY=\nSTORAGE_PROVIDER=local\n',
+    apiEnv: 'JWT_SECRET=mine\n',
+  });
+  const result = generateApiEnvFile({ root: dir });
+  assert.deepEqual(result.appended, ['ENCRYPTION_KEY']);
+  const text = fs.readFileSync(path.join(dir, 'apps/api/.env'), 'utf8');
+  assert.ok(!/STRIPE_SECRET_KEY/.test(text), 'a blank third-party key is not appended');
+  assert.ok(!/STORAGE_PROVIDER/.test(text), 'nor is a non-secret default');
+});
+
+test('an existing apps/api/.env keeps every value it already has', () => {
+  const dir = fakeRepo({
+    rootExample: 'POSTGRES_PASSWORD=\n',
+    rootEnv: 'POSTGRES_PASSWORD=root-pg\n',
+    apiExample: 'DB_PASSWORD=\nJWT_SECRET=\nENCRYPTION_KEY=\n',
+    apiEnv: 'DB_PASSWORD=mine-already\nJWT_SECRET=a-secret-i-chose-myself\n',
+  });
+
+  const result = generateApiEnvFile({ root: dir });
+  assert.equal(result.updated, true);
+  assert.deepEqual(result.appended, ['ENCRYPTION_KEY'], 'only the missing one');
+  assert.deepEqual(result.mirrored, [], 'nothing to mirror: DB_PASSWORD was set');
+
+  const api = parseAssignments(fs.readFileSync(path.join(dir, 'apps/api/.env'), 'utf8'));
+  assert.equal(api.get('DB_PASSWORD'), 'mine-already');
+  assert.equal(api.get('JWT_SECRET'), 'a-secret-i-chose-myself');
+  assert.match(api.get('ENCRYPTION_KEY'), /^[0-9a-f]{64}$/);
+});
+
+test('an EMPTY DB_PASSWORD in apps/api/.env is filled from the root', () => {
+  const dir = fakeRepo({
+    rootExample: 'POSTGRES_PASSWORD=\n',
+    rootEnv: 'POSTGRES_PASSWORD=root-pg\n',
+    apiExample: 'DB_PASSWORD=\n',
+    apiEnv: '# mine\nDB_PASSWORD=\n',
+  });
+  const result = generateApiEnvFile({ root: dir });
+  assert.deepEqual(result.filled, ['DB_PASSWORD']);
+  assert.deepEqual(result.mirrored, ['DB_PASSWORD']);
+  assert.match(fs.readFileSync(path.join(dir, 'apps/api/.env'), 'utf8'), /^DB_PASSWORD=root-pg$/m);
+});
+
+test('the real apps/api/.env.example declares the two secrets, both empty', () => {
+  const example = fs.readFileSync(path.join(repoRoot, 'apps/api/.env.example'), 'utf8');
+  const keys = parseAssignments(example);
+  for (const key of ['JWT_SECRET', 'ENCRYPTION_KEY', 'DB_PASSWORD', 'REDIS_PASSWORD'])
+    assert.equal(keys.get(key), '', `${key} must be declared and EMPTY`);
 });
 
 test('parseAssignments reads keys and ignores comments', () => {
