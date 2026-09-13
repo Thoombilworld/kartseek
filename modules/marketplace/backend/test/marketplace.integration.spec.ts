@@ -34,6 +34,19 @@ if (!/test/i.test(DB_NAME)) {
   );
 }
 
+/**
+ * The password, from the environment only. It used to fall back to the real
+ * development password as a literal (AUD2-074) — on a suite that sets
+ * `dropSchema`, which made "forgot to export DB_PASSWORD" a connection rather
+ * than an error.
+ */
+const DB_PASSWORD = process.env.DB_PASSWORD;
+if (!DB_PASSWORD) {
+  throw new Error(
+    'DB_PASSWORD is not set. This suite needs a real connection and has no built-in default.',
+  );
+}
+
 describe('Marketplace Integration Tests', () => {
   let module: TestingModule;
   let ds: DataSource;
@@ -54,13 +67,31 @@ describe('Marketplace Integration Tests', () => {
           host: process.env.DB_HOST || 'localhost',
           port: +(process.env.DB_PORT || 5432),
           username: process.env.DB_USER || 'postgres',
-          password: process.env.DB_PASSWORD || 'kartseek123',
+          password: DB_PASSWORD,
           database: DB_NAME,
-          entities: [Seller, Category, Brand, Product, ProductImage, ProductListing, MarketplaceOrder, Review],
+          entities: [
+            Seller,
+            Category,
+            Brand,
+            Product,
+            ProductImage,
+            ProductListing,
+            MarketplaceOrder,
+            Review,
+          ],
           synchronize: true,
           dropSchema: true, // fresh DB for each test run
         }),
-        TypeOrmModule.forFeature([Seller, Category, Brand, Product, ProductImage, ProductListing, MarketplaceOrder, Review]),
+        TypeOrmModule.forFeature([
+          Seller,
+          Category,
+          Brand,
+          Product,
+          ProductImage,
+          ProductListing,
+          MarketplaceOrder,
+          Review,
+        ]),
       ],
     }).compile();
 
@@ -81,7 +112,11 @@ describe('Marketplace Integration Tests', () => {
   // ── Categories ────────────────────────────────────────────────────
   describe('Category CRUD', () => {
     it('should create and retrieve a category', async () => {
-      const cat = categoryRepo.create({ name: 'Electronics', slug: 'electronics', is_active: true });
+      const cat = categoryRepo.create({
+        name: 'Electronics',
+        slug: 'electronics',
+        is_active: true,
+      });
       const saved = await categoryRepo.save(cat);
       expect(saved.id).toBeDefined();
 
@@ -91,7 +126,11 @@ describe('Marketplace Integration Tests', () => {
     });
 
     it('should enforce unique slugs', async () => {
-      const dup = categoryRepo.create({ name: 'Electronics 2', slug: 'electronics', is_active: true });
+      const dup = categoryRepo.create({
+        name: 'Electronics 2',
+        slug: 'electronics',
+        is_active: true,
+      });
       await expect(categoryRepo.save(dup)).rejects.toThrow();
     });
   });
@@ -126,7 +165,7 @@ describe('Marketplace Integration Tests', () => {
     let savedSeller: Seller;
 
     beforeAll(async () => {
-      savedSeller = await sellerRepo.findOne({ where: { storeSlug: 'test-store' } }) as Seller;
+      savedSeller = (await sellerRepo.findOne({ where: { storeSlug: 'test-store' } })) as Seller;
       const cat = await categoryRepo.findOne({ where: { slug: 'electronics' } });
       const brand = await brandRepo.findOne({ where: { slug: 'apple' } });
 
@@ -184,7 +223,17 @@ describe('Marketplace Integration Tests', () => {
         orderNumber: `ORD-${Date.now()}`,
         customerId: 'customer-1',
         sellerId: seller!.id,
-        items: [{ productId: 'p1', listingId: 'l1', name: 'Test', sellerSku: 'sku1', quantity: 2, unitPrice: 1000, subtotal: 2000 }],
+        items: [
+          {
+            productId: 'p1',
+            listingId: 'l1',
+            name: 'Test',
+            sellerSku: 'sku1',
+            quantity: 2,
+            unitPrice: 1000,
+            subtotal: 2000,
+          },
+        ],
         itemTotal: 2000,
         grandTotal: 2100,
         status: 'PENDING',

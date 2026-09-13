@@ -170,18 +170,28 @@ const ENTITIES = [
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => {
-        // Called for the guard it carries and nothing else: it refuses to boot
-        // with the built-in development password when NODE_ENV=production. The
-        // other seven modules spread its result for the SSL policy too; this one
-        // never has, and a review round is the wrong place to start.
-        databaseCredentials(cfg);
-
         return {
           type: 'postgres' as const,
+          /**
+           * The one module that did not spread this (AUD2-023).
+           *
+           * Dropping the spread dropped the SSL block — catalogue, orders and
+           * seller KYC ran plaintext under `DB_SSL=true` — and with it the
+           * pool, the connect timeout and the retry policy, so this service
+           * took node-postgres's default of ten connections while the platform
+           * budget assumed five. Calling the helper for its side effect alone,
+           * as this factory did last, kept the guard and none of the policy.
+           *
+           * Spread first, then overridden: everything except the five values
+           * below comes from the one helper.
+           */
+          ...databaseCredentials(cfg),
           // One resolver, shared with data-source.ts — see ./db-config.ts. The
           // two used to resolve these five values separately, with different
           // last resorts, so without a module .env the CLI and the service
-          // reached different databases.
+          // reached different databases. `MARKETPLACE_DB_*` wins here where the
+          // helper above reads the shared `DB_*`; the password refuses to
+          // default on both sides.
           ...resolveMarketplaceDbConfig((key) => cfg.get<string>(key)),
           // Fixed, not configurable: each entity names this schema too.
           schema: MARKETPLACE_DB_SCHEMA,
