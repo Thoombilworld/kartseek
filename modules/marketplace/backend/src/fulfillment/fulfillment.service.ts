@@ -284,7 +284,7 @@ export class MarketplaceFulfillmentService {
     // predicate returns every market's returns under one market's heading.
     const market = marketPredicate(
       filters.scope,
-      requireMarket(filters.region, 'those returns', this.logger),
+      requireMarket(filters.region, 'returns queue', this.logger),
       this.logger,
     );
     if (market) where.regionCode = market;
