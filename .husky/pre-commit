@@ -1,2 +1,6 @@
-npx lint-staged
+# --no-stash: lint-staged must not back up the whole working tree around a commit.
+# Several sessions edit this tree at once; the backup stash/restore window reverted
+# another session's unstaged file (2026-09-13). Without the stash lint-staged touches
+# only the files it formats; stage whole files by path so partial staging never matters.
+npx lint-staged --no-stash
 node scripts/registry/validate.mjs
