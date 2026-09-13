@@ -1,8 +1,8 @@
 # KARTSEEK Marketplace — Product Detail Page Audit and Remediation
 
-Date: 2026-09-13 · Branch: `feat/admin-platform-upgrade` · Backend/API/data commits: `a2c974e`, `e308376`, `c70d289`, `4ce9c52`, `dd24d77`, `db78aa4`, `7ba3b44` (+ the follow-up that removes the interim reply envelope) · Frontend/UX commits: see §I (session 6b)
+Date: 2026-09-13 · Branch: `feat/admin-platform-upgrade` · Backend/API/data commits: `a2c974e`, `e308376`, `c70d289`, `4ce9c52`, `dd24d77`, `db78aa4`, `7ba3b44`, `c5a76ae`, `41445dd` · Frontend/UX commits: see §I (session 6b)
 
-Two sessions shared this brief and split it by layer: this document is the single report. Sections A–F and H (API side) are the backend/gateway/data work; §G and the frontend rows of §H come from the zone work and are integrated as delivered.
+Two sessions shared this brief and split it by layer: this document is the single report. Sections A–F and the API rows of §H are the backend/gateway/data work; §G, the page rows of §H and §I come from the zone, seller-portal and shared-client work.
 
 ## 0. The data flow as it actually runs
 
@@ -181,30 +181,120 @@ Cache keys are market-segmented (`marketplace:v3:<market>:product:<id>`), offers
 
 ## G. Responsive testing
 
-_Delivered by session 6b — integrated on receipt._
+| Viewport                      | Result                     |
+| ----------------------------- | -------------------------- |
+| Mobile (320 × 640, 375 × 812) | PASS                       |
+| Tablet (768)                  | PASS (sticky bar boundary) |
+| Laptop / Desktop (1440 × 900) | PASS                       |
+
+Checked in the in-app browser (375×812 emulation) and by Playwright (320×640 and 1440×900): no horizontal overflow (`scrollWidth === clientWidth`), sticky Add to Cart / Buy Now bar present below 768 px and hidden above, thumbnails scroll, specification rows stack (`dt` over `dd`) under 640 px, breadcrumb category levels collapse to "Home / <title>" on phones (JSON-LD keeps the full trail), quantity control 40 px targets, review histogram and sort fit at 320 px.
 
 ## H. End-to-end testing
 
-| Area               | Result                                               | Where                                                                                        |
-| ------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Product loading    | pending 6b run                                       | `apps/web/e2e/product-detail.spec.ts`                                                        |
-| Product attributes | PASS (API) · pending 6b (page)                       | live detail: 18 attributes / 8 groups / 7 highlights on the iPhone; 12-product matrix seeded |
-| Variants           | PASS (consistency suite A/B/C) · pending 6b (switch) | `marketplace-consistency.spec.ts`                                                            |
-| Price              | PASS                                                 | buy-box per market; tamper refused                                                           |
-| Inventory          | pending 6b                                           | stock from the listing / variant                                                             |
-| Cart               | PASS (API)                                           | server-priced line                                                                           |
-| Wishlist           | pending 6b                                           |                                                                                              |
-| Checkout           | out of scope for this pass (unchanged)               |                                                                                              |
-| Reviews            | PASS (API)                                           | histogram, no ids, 1..5, 409                                                                 |
-| Region             | PASS                                                 | §F                                                                                           |
-| Authorization      | PASS                                                 | §E                                                                                           |
-| Security           | PASS                                                 | §E                                                                                           |
+| Area               | Result                 | Where                                                                                                                                        |
+| ------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product loading    | PASS                   | product-detail.spec.ts: phone, fashion, no-attribute product; legacy uuid URL 308 → canonical; 400/404 pages                                 |
+| Product attributes | PASS                   | API: 18 attributes / 8 groups / 7 highlights on the iPhone; page: specs/highlights match the API, fashion shows no phone rows, no "N/A" rows |
+| Variants           | PASS                   | consistency suite A/B/C; product-detail: storage switch moves the price and SKU                                                              |
+| Price              | PASS                   | buy-box per market; tamper refused (400); JSON-LD agrees with the page                                                                       |
+| Inventory          | PASS                   | availability badge and Add to Cart gated on the same SKU stock                                                                               |
+| Cart               | PASS                   | guest Add to Cart with variantId; server-priced line                                                                                         |
+| Wishlist           | PASS (auth-gated)      | real toggle; signed-out write skipped under DEV_AUTH_BYPASS                                                                                  |
+| Checkout           | unchanged in this pass |                                                                                                                                              |
+| Reviews            | PASS (API)             | histogram, no ids, 1..5, 409; page renders the server histogram                                                                              |
+| Region             | PASS                   | §F; QA vs IN differ in offer, symbol and price on the page                                                                                   |
+| Authorization      | PASS                   | §E; signed-out review/question asserts 401 wherever the guard is live                                                                        |
+| Security           | PASS                   | §E; page shows no seller banking/identity/internal columns                                                                                   |
 
-Unit/integration: marketplace backend 335/335 (incl. 14 attribute-validation cases and the seller write cases); `apps/api` 1512/1512; market-scope gates 30/30; schema drift 0.
+| Scenario (product-detail.spec.ts, 9 passed · 1 skipped)                                                                   | Result                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Phone: specs/highlights/price/SKU picker match the API; JSON-LD agrees; storage switch moves the price; guest Add to Cart | PASS                                                                                                                                  |
+| Fashion product shows fashion attributes and no phone rows                                                                | PASS                                                                                                                                  |
+| Product without attribute values renders no specification section, no "N/A"                                               | PASS                                                                                                                                  |
+| Malformed id 400 / missing uuid 404 on the API; both URLs render the 404 page                                             | PASS (after pointing the request context at 127.0.0.1; first run failed on ::1)                                                       |
+| Legacy bare-uuid URL 308-redirects to the canonical slug URL                                                              | PASS                                                                                                                                  |
+| QA vs IN: different offers, currency symbol and price per market                                                          | PASS                                                                                                                                  |
+| Seller banking/identity/internal columns absent; reviews carry no customerId                                              | PASS                                                                                                                                  |
+| Signed-out review/question refused                                                                                        | SKIPPED locally (gateway runs DEV_AUTH_BYPASS — detected via anonymous GET /marketplace/cart); asserts 401 wherever the guard is live |
+| No horizontal overflow at 320 px; sticky buy bar present                                                                  | PASS                                                                                                                                  |
+| No horizontal overflow at 1440 px; sticky buy bar hidden                                                                  | PASS                                                                                                                                  |
+
+Unit: zone jest 51/51 (`product-detail.spec.ts`, `attribute-form.spec.ts` added), web jest 633/633; `tsc --noEmit` clean for the zone and apps/web; eslint 0 errors.
+
+Unit/integration: marketplace backend 335/335 (incl. 14 attribute-validation cases and the seller write cases); `apps/api` 1512/1512 (1520 with the filter specs; the three failures in the last whole-suite run were another plan's in-flight edits); market-scope gates 44/44; libs/common filter specs 16/16; schema drift 0. Regression: `marketplace-consistency.spec.ts` re-run against the rebuilt page after all commits: 16/16 in 4.8 min (category ×5 refresh, away/back, subcategory, sort leak, product A/B/C, four markets, cross-market cache, ten concurrent reads, cold/warm, slug, retired alias, admin write then read).
 
 ## I. Frontend, UX and accessibility (session 6b)
 
-_Delivered by session 6b — integrated on receipt, with commit hashes._
+Commits: `ed65d55` (shared-core: one `ProductDetail` model, attribute-form and category-tree helpers, typed clients), `b1ed7e0` (marketplace zone: the product page renders only catalogue data, per market), `340eb53` (web: category-driven seller product form, admin attribute bounds/group/highlight, `e2e/product-detail.spec.ts`). Unit: zone jest 51/51, web jest 633/633; `tsc --noEmit` clean for the zone and apps/web; eslint 0 errors.
+
+### I.1 Information architecture and UX (storefront)
+
+Rendered order on `/marketplace/product/<slug>-<uuid>` (`modules/marketplace/frontend/src/app/product/[id]/page.tsx`):
+
+1. Breadcrumb (`nav[aria-label=Breadcrumb]`, category levels by slug; JSON-LD BreadcrumbList mirrors it)
+2. Gallery (swipe track, thumbnails, zoom, 360° only when frames exist; SVG/placeholder hosts served unoptimised instead of "Image unavailable")
+3. Brand link + follow (only when the product has a brand id) · Title (h1, `data-testid=product-title`) · Rating badge + "N ratings" link, or "No ratings yet — be the first to review" · SKU (offer's `sellerSku`)
+4. Availability badge (`data-availability` = in_stock | low_stock | out_of_stock | unavailable), from the same stock the buy button is gated on; follows the selected SKU
+5. Price block: payable price, struck list price with the market's own label (M.R.P. / Was / RRP), saving, and the market's tax treatment from the localization registry ("Inclusive of VAT" / "No sales tax applies in this market")
+6. Offers (bank / exchange) — client fetch with market; renders nothing when none
+7. Highlights (≤ 8 bullets, derived from attributes flagged `isHighlight`)
+8. Variant pickers (colour swatches / size chips; unavailable combinations struck)
+9. Quantity (bounded by the SKU's stock)
+10. Policies block — only data-backed lines: delivery rule for the market (fee / free-above), tax note, `warranty` attribute, box contents attribute. The literal "1 Year Brand Warranty" / "7 Days Replacement Policy" / "Verified Listing" / "Authorized <Brand> Seller" / "KARTSEEK Buyer Protection" are gone.
+11. PIN-code check (India only) · EMI (only when the market quotes plans; deep link to the plans page)
+12. Add to Cart / Buy Now (disabled with a reason when out of stock, unavailable, or options unpicked) · Wishlist (real, auth-gated) · Share · Add to Compare; sticky bar on phones offset by the consent-banner height
+13. Specifications — grouped `dl` from `specificationGroups`; folds after 8 rows; a product with no attribute values renders no section at all
+14. Description — sanitised A+ HTML, else `long_description` paragraphs, else short description; no "No description provided." filler
+15. Frequently bought together (market-scoped bundle containing this product; hidden otherwise)
+16. Ratings & reviews — server histogram (`ratingDistribution`), sort, paging (5 per page), review photos, seller reply, auth-gated "helpful"; "Verified purchase" only when `isVerifiedPurchase === true`
+17. Questions & answers — answers now render (client read `answers`, not `data`); auth-gated ask/upvote/helpful with error toasts; "See all N questions" link
+18. Similar products (subcategory first, widened to the category when thin) · Recently viewed (browser trail, same-market prices only)
+19. Sidebar: Sold by (public seller projection with read-time stats, condition, Fulfilled by KartSeek only when true, Visit store) · Other sellers (buy-box first; "Default offer" wording) · Help + Report this listing
+
+Sub-pages: `/emi` reads the product's buy-box price and the market's real plans (was a literal 115 900 and five hard-coded Indian banks); `/qa` and `/review` unchanged except wording; `/compare` rows are the union of the compared products' attribute values (was 12 hard-coded phone keys) and the delivery row is the market rule.
+
+### I.2 Frontend data mapping (backend → DTO → client model → component)
+
+One reader: `packages/shared-core/src/marketplace/product-detail.ts` → `ProductDetail`. Components never read the raw entity.
+
+| Backend / DTO field                                                       | ProductDetail                                                                      | Component                                                                      |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `name`                                                                    | `name`                                                                             | h1, breadcrumb, metadata title, JSON-LD name                                   |
+| `slug` + `id`                                                             | `slug`, `id`                                                                       | canonical URL (`productPath`), 308 redirect                                    |
+| `short_description` / `long_description` / `metadata.richDescriptionHtml` | `shortDescription` / `longDescription` / `richDescriptionHtml`                     | metadata description; description section (sanitised)                          |
+| `brand{id,name,slug}`                                                     | `brand`                                                                            | brand link + follow, JSON-LD brand                                             |
+| `category` / `subcategory`                                                | `category` / `subcategory`                                                         | breadcrumb, similar-products query (subcategory → `?subcategory=`)             |
+| `images[{url,isPrimary,sortOrder}]`                                       | `images[]` (primary first, deduped)                                                | gallery, OG image, JSON-LD image                                               |
+| `metadata.spin360Urls`                                                    | `spinFrames`                                                                       | 360° viewer (≥ 8 frames)                                                       |
+| `listings[]` (live, market-scoped) → buy box                              | `offer`, `offers[]`, `price`, `listPrice`, `discountPercent`                       | price block, Sold by, Other sellers, JSON-LD Offer/AggregateOffer              |
+| `listings[].seller` (14 public fields)                                    | `ProductOffer.sellerName/storeSlug/sellerRating/sellerReviews/verified/regionCode` | Sold by, Other sellers                                                         |
+| `listings[].stockQuantity` / `variants[].stockQuantity`                   | `availability{status,stock,hasVariants}`                                           | availability badge, quantity max, Add to Cart gate, JSON-LD availability       |
+| `listings[].condition`                                                    | `offer.condition`                                                                  | Sold by, JSON-LD itemCondition                                                 |
+| `listings[].sellerSku` / `gtin`                                           | `sku` / `gtin`                                                                     | SKU line, JSON-LD sku/gtin                                                     |
+| `variants[]`                                                              | `variants[]` (raw → `VariantProvider`)                                             | pickers, price, gallery, cart line `variantId`                                 |
+| `attributes[]`                                                            | `attributes[]` (typed, `displayValue`)                                             | compare rows, warranty / box contents lookups                                  |
+| `specificationGroups[]`                                                   | `specificationGroups[]`                                                            | Specifications section                                                         |
+| `highlights[]`                                                            | `highlights[]`                                                                     | Highlights section                                                             |
+| `averageRating` / `reviewCount`                                           | same                                                                               | rating badge, reviews aggregate, JSON-LD aggregateRating (only when count > 0) |
+| `approval_status` / `is_active` (seller preview only)                     | `isPublic`                                                                         | page returns 404 for a non-public row                                          |
+
+Satellites read through typed client functions in `packages/shared-core/src/api/marketplace.ts`: `getProductReviews(page,limit,sort)` → `ProductReviewsPage` (histogram, no customerId), `getAnswers` → `{answers}`, `getEmiOptions(country)`, `getProductOffers(country)`, `getProductBundles(country)`.
+
+### I.3 Accessibility
+
+- Landmarks: `nav[aria-label=Breadcrumb]` with `aria-current=page`; every section is a `section[aria-labelledby]` with its own `h2`; sidebar is an `aside`.
+- Rating badge is a link with a full `aria-label` ("Rated 4.9 out of 5 from N ratings. Jump to reviews."); the gallery is a `region` with `aria-roledescription=carousel`, thumbnails are `tab`s.
+- Availability is `role=status`; Add to Cart carries `aria-disabled` and a reason toast; swatches keep `aria-label`/`aria-pressed`; quantity buttons have labels and a described hint at the maximum.
+- Q&A upvote/helpful buttons have names and `aria-pressed`; the ask form's textarea has a label; review histogram bars are `img` with per-star labels; sort is a labelled `select`.
+- Colour is never the only signal (availability has an icon and text; unavailable chips are struck through).
+- Known: the react-hooks "set-state-in-effect" lint warnings on the gallery/context/rail are advisory (baseline pattern in the zone).
+
+### I.4 Seller portal (upstream of the PDP)
+
+- `apps/web/src/app/seller/marketplace/products/product-form.tsx` (add + edit): categories from the catalogue (flat rows → tree), attribute fields from `GET /marketplace/categories/:slug/attributes` grouped by `groupName`, typed inputs (number with unit and min/max hint, select, multi-select, boolean, date, range), client validation mirroring the server, server `errors[{slug,message}]` mapped per field, re-review warning + confirmation for approved products, success screen linking to photos / variants / product.
+- Add page (`/add`) and edit page (`/[id]/edit`) are thin wrappers; the overview (`/[id]`) shows moderation state, offer, photos, attribute values (no invented KPIs); the list maps catalogue rows to Live / Awaiting review / Correction requested / Draft / Rejected / Not on sale and no longer crashes on search.
+- Admin attributes page: definitions gain specification group, highlight flag and min/max bounds.
+- Verified in the browser as a fresh seller (fixture created through `POST /auth/seller/register` → `/sellers/register` → admin approval): "RAM is required." shown client-side; a valid submission answered "Submitted for review" and the product appeared in the list and the edit form prefilled 18 attribute inputs.
 
 ## J. Open items (not fixed in this pass, with owners)
 
@@ -219,3 +309,4 @@ _Delivered by session 6b — integrated on receipt, with commit hashes._
 9. A customer who registers through `POST /sellers/register` and is approved keeps `role=customer`, so every `/seller/*` route answers 403; only `POST /auth/seller/register` mints a SELLER-role user. Owner: MODULES M12 (approval must promote the role, or the route must refuse non-seller users).
 10. `SellerOwnershipGuard` treats any `:id` param as a seller id (§B12); other `:id` routes in guard-bound classes deserve the same audit. Owner: MODULES residue.
 11. Dev fleet: the marketplace backend's `nest --watch` rebuilt `dist/` without swapping the running process once during this work (runner from 19:20, dist from 19:26); a `touch` on a source file restarted it. Check the `:3012` process start time against `dist/main.js` before trusting a "not fixed" probe.
+12. The seeded fixture account `seller@kartseek.com` no longer matches its seeded password (the hash was changed outside this work). Neither session reset it; the frontend e2e used a fresh seller created through `POST /auth/seller/register`. Owner: whoever maintains the seed fixtures.
