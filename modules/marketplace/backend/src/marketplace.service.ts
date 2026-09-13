@@ -115,7 +115,22 @@ export class MarketplaceService {
     // Every market's copy of the detail, by id and by slug, and every listing
     // that embeds the product's name, image or category.
     await this.catalogCache.invalidateProductAndListings(id, (product as any).slug);
-    await this.kafka.publish('product.updated', { id, ...dto });
+    // The full index payload, not `{ id, ...dto }`.
+    //
+    // search-service writes with `PUT /_doc/<id>`, which REPLACES the document
+    // rather than merging into it, so whatever this event omits is deleted from
+    // the index. A partial edit therefore dropped `metadata.country` — the
+    // field every country-filtered search matches on — and the product fell out
+    // of its own market's results until the next full reindex. It dropped the
+    // title too, on any edit that did not happen to include one.
+    //
+    // `dto` stays under it so an unrelated consumer still sees the fields that
+    // changed; the resolved payload wins, because it is the one read back from
+    // the row rather than from the request.
+    await this.kafka.publish('product.updated', {
+      ...dto,
+      ...(await this.indexPayload({ ...(product as any), ...dto } as Product)),
+    });
     return { success: true, id };
   }
 
