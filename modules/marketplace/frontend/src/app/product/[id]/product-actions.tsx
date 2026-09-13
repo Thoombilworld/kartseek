@@ -1,116 +1,173 @@
 'use client';
 
 import React from 'react';
-import { ShoppingCart, Heart } from 'lucide-react';
+import { ShoppingCart, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCartContext } from '@/lib/contexts/cart-context';
 import { useToast } from '@/lib/contexts/toast-context';
+import { WishlistButton } from '@/components/shared/wishlist-button';
+import { ShareButton } from '@/components/shared/share-button';
 import { useVariants } from './variant-context';
+import type { ProductDetail } from '@/lib/marketplace/product-detail';
 
-export function ProductActions({ product, qty = 1 }: { product: any, qty?: number }) {
+/**
+ * Add to Cart / Buy Now, inline on desktop and as a sticky bar on a phone.
+ *
+ * Gated on the one stock figure the page shows: a product with no SKUs and an
+ * offer at zero stock used to have a live button (only variant products were
+ * checked), so an unbuyable line went into the basket and checkout refused it.
+ *
+ * The line sent to the cart carries the product id, the SKU id and the
+ * quantity. The price is display-only: the gateway prices every line itself
+ * from the buy-box offer and the SKU (`PRICE_ORDER_ITEMS`), so nothing a
+ * browser sends can move the amount charged.
+ *
+ * The heart used to raise a toast and save nothing; it is the shared
+ * `WishlistButton`, which is auth-gated and writes to the account.
+ */
+export function ProductActions({ product }: { product: ProductDetail }) {
   const cart = useCartContext();
   const toast = useToast();
   const router = useRouter();
-  // The page's one variant selection. This component used to render its own
-  // second set of variant buttons off `metadata.variantDimensions`, entirely
-  // unconnected to the selector above it — two pickers, two answers, and the
-  // one that decided what went in the cart was the one nobody was looking at.
   const variants = useVariants();
 
   const selected = variants?.selected ?? null;
-  const blocked = !!variants && variants.axes.length > 0 && (!selected || selected.stock <= 0);
+  const blockedReason =
+    variants?.blockedReason ??
+    (product.availability.status === 'in_stock' || product.availability.status === 'low_stock'
+      ? null
+      : 'out_of_stock');
+  const blocked = blockedReason !== null;
+  const quantity = variants?.quantity ?? 1;
 
-  const handleAddToCart = () => {
-    // Never add a line the seller cannot fulfil. Before this the button always
-    // succeeded: it added the parent product at the parent's price with a
-    // stringified attribute map as the "variant id" — not a SKU any order can
-    // resolve — so an out-of-stock 512GB choice became an in-stock 128GB line
-    // at the 128GB price.
-    if (blocked) {
-      toast.error(selected
-        ? 'That option is out of stock. Please choose another.'
-        : 'Please choose an available option first.');
-      return;
+  const explain = () => {
+    switch (blockedReason) {
+      case 'select_options':
+        toast.error('Please choose an available option first.');
+        break;
+      case 'out_of_stock':
+        toast.error(
+          selected
+            ? 'That option is out of stock. Please choose another.'
+            : 'This product is out of stock.',
+        );
+        break;
+      case 'unavailable':
+        toast.error('This product is not available in your market.');
+        break;
+      default:
+        break;
     }
+  };
 
+  const addLine = (): boolean => {
+    if (blocked) {
+      explain();
+      return false;
+    }
     cart.add({
       id: product.id,
-      name: selected?.name ? `${product.title} — ${selected.name}` : product.title,
-      // The SKU's own price when one is selected; `effectivePrice` falls back
-      // to the buy-box price for a product with no variants.
-      price: Number(variants?.effectivePrice ?? product.listing?.sellingPrice ?? product.mrp ?? 0),
-      quantity: qty,
-      // `metadata.imageGalleryUrls` is empty for every catalogue product — the
-      // images live in the `images` relation — so cart lines had no picture.
-      imageUrl: variants?.images?.[0] || product.images?.[0]?.url || product.metadata?.imageGalleryUrls?.[0] || '',
+      name: selected?.name ? `${product.name} — ${selected.name}` : product.name,
+      // Display price for the optimistic cart row; the server re-prices it.
+      price: Number(variants?.effectivePrice ?? product.price) || 0,
+      quantity,
+      imageUrl: variants?.images?.[0] || product.images[0] || '',
       variantId: selected?.id,
-      brand: product.brand?.name || 'Unknown',
+      brand: product.brand?.name || '',
     });
-    toast.success(`Added ${selected?.name ? `${product.title} (${selected.name})` : product.title} to cart`);
+    return true;
+  };
+
+  const handleAddToCart = () => {
+    if (!addLine()) return;
+    toast.success(
+      `Added ${quantity > 1 ? `${quantity} × ` : ''}${
+        selected?.name ? `${product.name} (${selected.name})` : product.name
+      } to cart`,
+    );
   };
 
   const handleBuyNow = () => {
-    handleAddToCart();
-    // Marketplace has its own checkout (coupons, wallet, stepped flow) — the
+    if (!addLine()) return;
+    // Marketplace has its own checkout (coupons, wallet, stepped flow); the
     // cart page already routes here, so Buy Now must not diverge to /checkout.
     router.push('/checkout');
   };
 
+  const label =
+    blockedReason === 'out_of_stock'
+      ? 'Out of stock'
+      : blockedReason === 'unavailable'
+        ? 'Not available'
+        : blockedReason === 'select_options'
+          ? 'Choose options'
+          : 'Add to Cart';
+
   return (
     <>
-      {/* Action Buttons — inline on tablet/desktop */}
-      <div className="hidden md:flex gap-3 mt-6">
+      {/* Inline on tablet/desktop */}
+      <div className="hidden md:flex items-center gap-3 mt-6" data-testid="product-actions">
         <button
+          type="button"
           onClick={handleAddToCart}
           disabled={blocked}
+          aria-disabled={blocked}
           className="flex-1 bg-[#ff9f00] hover:bg-[#f39800] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-sm flex items-center justify-center gap-2 transition-transform transform active:scale-95 shadow-sm text-sm uppercase tracking-wide"
         >
-          <ShoppingCart className="w-5 h-5" /> Add to Cart
+          <ShoppingCart className="w-5 h-5" aria-hidden="true" /> {label}
         </button>
         <button
+          type="button"
           onClick={handleBuyNow}
           disabled={blocked}
-          className="flex-1 bg-[#fb641b] hover:bg-[#f35914] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-sm flex items-center justify-center transition-transform transform active:scale-95 shadow-sm text-sm uppercase tracking-wide"
+          aria-disabled={blocked}
+          className="flex-1 bg-[#fb641b] hover:bg-[#f35914] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-sm flex items-center justify-center gap-2 transition-transform transform active:scale-95 shadow-sm text-sm uppercase tracking-wide"
         >
-          Buy Now
+          <Zap className="w-5 h-5" aria-hidden="true" /> Buy Now
         </button>
-        <button
-          title="Add to Wishlist"
-          onClick={() => toast.success('Added to Wishlist')}
-          className="w-12 bg-white border border-slate-200 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-sm flex items-center justify-center transition-colors shadow-sm"
-        >
-          <Heart className="w-5 h-5" />
-        </button>
+        <WishlistButton
+          productId={product.id}
+          className="w-12 h-12 bg-white border border-slate-200 hover:bg-red-50 rounded-sm flex items-center justify-center transition-colors shadow-sm"
+        />
+        <ShareButton
+          title={product.name}
+          text={product.shortDescription || product.name}
+          className="h-12 px-3 bg-white border border-slate-200 hover:bg-slate-50 rounded-sm text-sm font-semibold text-slate-700 shadow-sm"
+        />
       </div>
 
-      {/* Action Buttons — sticky bar on mobile, above the bottom nav.
-          Same handlers as the desktop row; the page used to render a separate
-          decorative bar here with no click handlers at all. */}
+      {/* Sticky bar on a phone, above the bottom navigation and above the
+          consent banner when it is showing — the banner is fixed too, and a
+          bar under it cannot be tapped. */}
       <div
         className="md:hidden fixed left-0 right-0 z-40 bg-white border-t border-slate-200 px-3 py-2.5 flex gap-2 shadow-[0_-4px_16px_-2px_rgba(0,0,0,0.08)]"
-        style={{ bottom: 'calc(3.75rem + env(safe-area-inset-bottom, 0px))' }}
+        style={{
+          bottom:
+            'calc(3.75rem + env(safe-area-inset-bottom, 0px) + var(--consent-banner-height, 0px))',
+        }}
+        data-testid="product-actions-sticky"
       >
+        <WishlistButton
+          productId={product.id}
+          className="w-12 shrink-0 border border-slate-200 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+        />
         <button
+          type="button"
           onClick={handleAddToCart}
           disabled={blocked}
+          aria-disabled={blocked}
           className="flex-1 bg-[#ff9f00] disabled:bg-slate-300 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm active:scale-95 transition-transform"
         >
-          <ShoppingCart className="w-4 h-4" /> Add to Cart
+          <ShoppingCart className="w-4 h-4" aria-hidden="true" /> {label}
         </button>
         <button
+          type="button"
           onClick={handleBuyNow}
           disabled={blocked}
+          aria-disabled={blocked}
           className="flex-1 bg-[#fb641b] disabled:bg-slate-300 text-white font-bold py-3 rounded-xl flex items-center justify-center text-sm active:scale-95 transition-transform"
         >
           Buy Now
-        </button>
-        <button
-          title="Add to Wishlist"
-          aria-label="Add to Wishlist"
-          onClick={() => toast.success('Added to Wishlist')}
-          className="w-12 shrink-0 border border-slate-200 text-slate-400 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
-        >
-          <Heart className="w-5 h-5" />
         </button>
       </div>
     </>

@@ -1,12 +1,15 @@
 'use client';
 
-import React, {
-  createContext, useCallback, useContext, useEffect, useMemo, useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '@/lib/api-fetch';
 import {
-  type CategoryAttribute, type CategoryAttributeSchema,
-  indexAttributes, findAttribute, isColourAxis, optionHex, swatchFill,
+  type CategoryAttribute,
+  type CategoryAttributeSchema,
+  indexAttributes,
+  findAttribute,
+  isColourAxis,
+  optionHex,
+  swatchFill,
 } from '@/lib/marketplace/variant-display';
 
 /**
@@ -78,6 +81,17 @@ interface VariantContextValue {
   fillFor: (axis: VariantAxis, value: string) => string | null;
   /** True once every axis has a value — what "ready to buy" means here. */
   isComplete: boolean;
+  /**
+   * Units the shopper can buy right now: the selected SKU's stock, or the
+   * buy-box offer's stock for a product without SKUs. Zero while a variant
+   * product has no complete selection.
+   */
+  availableStock: number;
+  /** How many the shopper wants. Clamped to `[1, availableStock]`. */
+  quantity: number;
+  setQuantity: (quantity: number) => void;
+  /** Why Add to Cart is disabled, or null when it is not. */
+  blockedReason: 'select_options' | 'out_of_stock' | 'unavailable' | null;
 }
 
 const VariantContext = createContext<VariantContextValue | null>(null);
@@ -91,7 +105,11 @@ const num = (value: unknown): number => {
 /** `imageUrls` is a `simple-array` column: an array over JSON, CSV over gRPC. */
 function variantImages(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.map((u) => String(u).trim()).filter(Boolean);
-  if (typeof raw === 'string') return raw.split(',').map((u) => u.trim()).filter(Boolean);
+  if (typeof raw === 'string')
+    return raw
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
   return [];
 }
 
@@ -103,7 +121,7 @@ export function normaliseVariants(raw: any): Variant[] {
       id: String(v.id),
       sku: String(v.sku ?? ''),
       name: String(v.variantName ?? v.name ?? v.sku ?? ''),
-      attributes: (v.attributes && typeof v.attributes === 'object') ? v.attributes : {},
+      attributes: v.attributes && typeof v.attributes === 'object' ? v.attributes : {},
       mrp: num(v.mrp),
       price: num(v.sellingPrice ?? v.priceOverride ?? v.price) || num(v.mrp),
       stock: num(v.stockQuantity ?? v.stock),
@@ -118,6 +136,8 @@ export function VariantProvider({
   basePrice,
   baseMrp,
   baseImages,
+  baseStock = 0,
+  offered = true,
   children,
 }: {
   rawVariants: any;
@@ -125,9 +145,14 @@ export function VariantProvider({
   basePrice: number;
   baseMrp: number;
   baseImages: string[];
+  /** The buy-box offer's stock, for a product that has no SKUs. */
+  baseStock?: number;
+  /** False when no seller offers the product in this market. */
+  offered?: boolean;
   children: React.ReactNode;
 }) {
   const variants = useMemo(() => normaliseVariants(rawVariants), [rawVariants]);
+  const [quantity, setQuantityState] = useState(1);
   const [schema, setSchema] = useState<CategoryAttributeSchema | null>(null);
 
   // The category's attribute schema is what says a "Shade" axis is a colour and
@@ -141,9 +166,15 @@ export function VariantProvider({
       signal: AbortSignal.timeout(6000),
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((json) => { if (!cancelled && json) setSchema(json?.data ?? json); })
-      .catch(() => { /* pickers fall back to the variants' own axis names */ });
-    return () => { cancelled = true; };
+      .then((json) => {
+        if (!cancelled && json) setSchema(json?.data ?? json);
+      })
+      .catch(() => {
+        /* pickers fall back to the variants' own axis names */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [categorySlug]);
 
   const attributeIndex = useMemo(() => indexAttributes(schema), [schema]);
@@ -187,7 +218,10 @@ export function VariantProvider({
    */
   const [selection, setSelection] = useState<Record<string, string>>({});
   useEffect(() => {
-    if (variants.length === 0) { setSelection({}); return; }
+    if (variants.length === 0) {
+      setSelection({});
+      return;
+    }
     const inStock = variants.filter((v) => v.stock > 0);
     const opening = (inStock.length ? inStock : variants)
       .slice()
@@ -204,38 +238,47 @@ export function VariantProvider({
    * new value, as much of the old selection as survives, cheapest in stock —
    * is what a shopper means by that click.
    */
-  const select = useCallback((axis: string, value: string) => {
-    setSelection((prev) => {
-      const wanted = { ...prev, [axis]: value };
-      const exact = variants.find((v) =>
-        Object.entries(wanted).every(([k, val]) => v.attributes[k] === val));
-      if (exact) return wanted;
+  const select = useCallback(
+    (axis: string, value: string) => {
+      setSelection((prev) => {
+        const wanted = { ...prev, [axis]: value };
+        const exact = variants.find((v) =>
+          Object.entries(wanted).every(([k, val]) => v.attributes[k] === val),
+        );
+        if (exact) return wanted;
 
-      const candidates = variants.filter((v) => v.attributes[axis] === value);
-      if (candidates.length === 0) return prev;
+        const candidates = variants.filter((v) => v.attributes[axis] === value);
+        if (candidates.length === 0) return prev;
 
-      const score = (v: Variant) =>
-        Object.entries(prev).filter(([k, val]) => k !== axis && v.attributes[k] === val).length;
-      const best = candidates.slice().sort((a, b) => {
-        const overlap = score(b) - score(a);
-        if (overlap !== 0) return overlap;
-        const stock = Number(b.stock > 0) - Number(a.stock > 0);
-        if (stock !== 0) return stock;
-        return a.price - b.price;
-      })[0];
-      return { ...best.attributes };
-    });
-  }, [variants]);
+        const score = (v: Variant) =>
+          Object.entries(prev).filter(([k, val]) => k !== axis && v.attributes[k] === val).length;
+        const best = candidates.slice().sort((a, b) => {
+          const overlap = score(b) - score(a);
+          if (overlap !== 0) return overlap;
+          const stock = Number(b.stock > 0) - Number(a.stock > 0);
+          if (stock !== 0) return stock;
+          return a.price - b.price;
+        })[0];
+        return { ...best.attributes };
+      });
+    },
+    [variants],
+  );
 
   const selected = useMemo(() => {
     if (variants.length === 0 || axes.length === 0) return null;
     if (axes.some((axis) => !selection[axis.name])) return null;
-    return variants.find((v) =>
-      axes.every((axis) => v.attributes[axis.name] === selection[axis.name])) ?? null;
+    return (
+      variants.find((v) =>
+        axes.every((axis) => v.attributes[axis.name] === selection[axis.name]),
+      ) ?? null
+    );
   }, [variants, axes, selection]);
 
-  const exists = useCallback((axis: string, value: string) =>
-    variants.some((v) => v.attributes[axis] === value), [variants]);
+  const exists = useCallback(
+    (axis: string, value: string) => variants.some((v) => v.attributes[axis] === value),
+    [variants],
+  );
 
   /**
    * Availability is judged against the *other* axes' current selection, which
@@ -244,14 +287,20 @@ export function VariantProvider({
    * looked at one arbitrary variant carrying that value, ignoring the rest of
    * the selection entirely).
    */
-  const isAvailable = useCallback((axis: string, value: string) => variants.some((v) => {
-    if (v.attributes[axis] !== value) return false;
-    if (v.stock <= 0) return false;
-    return Object.entries(selection).every(([k, val]) => k === axis || v.attributes[k] === val);
-  }), [variants, selection]);
+  const isAvailable = useCallback(
+    (axis: string, value: string) =>
+      variants.some((v) => {
+        if (v.attributes[axis] !== value) return false;
+        if (v.stock <= 0) return false;
+        return Object.entries(selection).every(([k, val]) => k === axis || v.attributes[k] === val);
+      }),
+    [variants, selection],
+  );
 
-  const fillFor = useCallback((axis: VariantAxis, value: string) =>
-    swatchFill(value, optionHex(axis.attribute, value)), []);
+  const fillFor = useCallback(
+    (axis: VariantAxis, value: string) => swatchFill(value, optionHex(axis.attribute, value)),
+    [],
+  );
 
   const images = useMemo(() => {
     const own = selected?.images ?? [];
@@ -260,6 +309,35 @@ export function VariantProvider({
     // still applies to it.
     return own.length ? [...new Set([...own, ...baseImages])] : baseImages;
   }, [selected, baseImages]);
+
+  /**
+   * What can be bought, and why not when it cannot.
+   *
+   * The old `blocked` test only looked at variants, so a product with no SKUs
+   * and an offer at zero stock had a live Add to Cart that put an unbuyable
+   * line in the basket. Stock is read from the same figure the availability
+   * badge shows, so the button and the badge can never disagree.
+   */
+  const hasAxes = axes.length > 0;
+  const availableStock = hasAxes
+    ? selected
+      ? Math.max(0, Math.trunc(selected.stock))
+      : 0
+    : Math.max(0, Math.trunc(baseStock));
+  const blockedReason: VariantContextValue['blockedReason'] = !offered
+    ? 'unavailable'
+    : hasAxes && !selected
+      ? 'select_options'
+      : availableStock <= 0
+        ? 'out_of_stock'
+        : null;
+
+  // A quantity is only meaningful against the stock of the SKU it applies to,
+  // so it is clamped every time either changes rather than only on input.
+  const setQuantity = useCallback((next: number) => {
+    setQuantityState(Math.max(1, Math.trunc(Number(next) || 1)));
+  }, []);
+  const quantityClamped = availableStock > 0 ? Math.min(quantity, availableStock) : 1;
 
   const value: VariantContextValue = {
     variants,
@@ -274,6 +352,10 @@ export function VariantProvider({
     exists,
     fillFor,
     isComplete: axes.length === 0 || axes.every((axis) => !!selection[axis.name]),
+    availableStock,
+    quantity: quantityClamped,
+    setQuantity,
+    blockedReason,
   };
 
   return <VariantContext.Provider value={value}>{children}</VariantContext.Provider>;

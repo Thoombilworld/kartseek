@@ -2,7 +2,16 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { ChevronLeft, ChevronRight, ZoomIn, X, RotateCw, Minus, Plus, ImageOff } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  X,
+  RotateCw,
+  Minus,
+  Plus,
+  ImageOff,
+} from 'lucide-react';
 import { useVariants } from './variant-context';
 
 import { DismissOnEscape } from '@/components/shared/dismiss-on-escape';
@@ -57,14 +66,17 @@ export default function ProductGallery({
 
   const count = images.length;
 
-  const goTo = useCallback((index: number) => {
-    const next = Math.max(0, Math.min(index, count - 1));
-    setActive(next);
-    const track = trackRef.current;
-    if (!track) return;
-    scrollingTo.current = next;
-    track.scrollTo({ left: next * track.clientWidth, behavior: 'smooth' });
-  }, [count]);
+  const goTo = useCallback(
+    (index: number) => {
+      const next = Math.max(0, Math.min(index, count - 1));
+      setActive(next);
+      const track = trackRef.current;
+      if (!track) return;
+      scrollingTo.current = next;
+      track.scrollTo({ left: next * track.clientWidth, behavior: 'smooth' });
+    },
+    [count],
+  );
 
   // Keep `active` in step with a finger-driven scroll.
   const handleScroll = useCallback(() => {
@@ -81,8 +93,14 @@ export default function ProductGallery({
 
   // Arrow keys move the gallery whenever it holds focus.
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowRight') { e.preventDefault(); goTo(active + 1); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(active - 1); }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      goTo(active + 1);
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      goTo(active - 1);
+    }
   };
 
   // A resize changes what one "page" of the track measures, so the current
@@ -90,7 +108,9 @@ export default function ProductGallery({
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-    const onResize = () => { track.scrollTo({ left: active * track.clientWidth }); };
+    const onResize = () => {
+      track.scrollTo({ left: active * track.clientWidth });
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [active]);
@@ -141,7 +161,10 @@ export default function ProductGallery({
                 src={img}
                 alt={i === 0 ? title : `${title} — image ${i + 1}`}
                 priority={i === 0}
-                onOpen={() => { setActive(i); setZoomOpen(true); }}
+                onOpen={() => {
+                  setActive(i);
+                  setZoomOpen(true);
+                }}
               />
             </div>
           ))}
@@ -201,7 +224,11 @@ export default function ProductGallery({
       </div>
 
       {count > 1 && (
-        <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar" role="tablist" aria-label="Product image thumbnails">
+        <div
+          className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar"
+          role="tablist"
+          aria-label="Product image thumbnails"
+        >
           {images.map((img, i) => (
             <button
               key={`${img}-thumb-${i}`}
@@ -273,14 +300,28 @@ function ThumbImage({ src, index }: { src: string; index: number }) {
       alt=""
       fill
       sizes="64px"
+      unoptimized={isUnoptimisable(src)}
       onError={() => setFailed(true)}
       className="object-contain p-1"
     />
   );
 }
 
+/**
+ * URLs the image optimiser refuses. It answers 400 for an SVG source (and
+ * `placehold.co` serves SVG), which the gallery then reported as a missing
+ * photograph; served as-is the placeholder at least shows what the catalogue
+ * holds.
+ */
+function isUnoptimisable(src: string): boolean {
+  return /\.svg(\?|#|$)/i.test(src) || /(^|\/\/)(www\.)?placehold\.co\//i.test(src);
+}
+
 function HoverZoomImage({
-  src, alt, priority, onOpen,
+  src,
+  alt,
+  priority,
+  onOpen,
 }: {
   src: string;
   alt: string;
@@ -303,7 +344,9 @@ function HoverZoomImage({
   const [failed, setFailed] = useState(false);
 
   const canHover = useCallback(
-    () => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches,
     [],
   );
 
@@ -326,7 +369,8 @@ function HoverZoomImage({
       role="button"
       tabIndex={-1}
       aria-label={`${alt} — click to enlarge`}
-    ><DismissOnEscape onDismiss={onOpen} />
+    >
+      <DismissOnEscape onDismiss={onOpen} />
       {failed ? (
         // Matches how ProductThumb fails on the listings: a quiet placeholder
         // that says there is no picture, rather than a broken glyph that reads
@@ -338,25 +382,26 @@ function HoverZoomImage({
           <span className="text-xs text-slate-400">Image unavailable</span>
         </div>
       ) : (
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        onError={() => setFailed(true)}
-        sizes="(min-width: 768px) 50vw, 100vw"
-        // Only the first image is part of the initial view; the rest sit
-        // off-screen in the track and must not compete for bandwidth.
-        //
-        // Spelled out rather than `priority`, which Next 16 superseded. The old
-        // prop still suppressed lazy-loading — the first slide correctly had no
-        // `loading="lazy"` — but emitted no `fetchpriority`, so the image the
-        // page is measured on queued at default priority behind every other
-        // request, and Next warned about the LCP element on every product page.
-        loading={priority ? 'eager' : 'lazy'}
-        fetchPriority={priority ? 'high' : 'auto'}
-        className="object-contain p-4 transition-transform duration-200 ease-out"
-        style={origin ? { transform: 'scale(2)', transformOrigin: origin } : undefined}
-      />
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          unoptimized={isUnoptimisable(src)}
+          onError={() => setFailed(true)}
+          sizes="(min-width: 768px) 50vw, 100vw"
+          // Only the first image is part of the initial view; the rest sit
+          // off-screen in the track and must not compete for bandwidth.
+          //
+          // Spelled out rather than `priority`, which Next 16 superseded. The old
+          // prop still suppressed lazy-loading — the first slide correctly had no
+          // `loading="lazy"` — but emitted no `fetchpriority`, so the image the
+          // page is measured on queued at default priority behind every other
+          // request, and Next warned about the LCP element on every product page.
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
+          className="object-contain p-4 transition-transform duration-200 ease-out"
+          style={origin ? { transform: 'scale(2)', transformOrigin: origin } : undefined}
+        />
       )}
     </div>
   );
@@ -372,7 +417,11 @@ function HoverZoomImage({
  * zoom level.
  */
 function ZoomModal({
-  images, index, title, onIndex, onClose,
+  images,
+  index,
+  title,
+  onIndex,
+  onClose,
 }: {
   images: string[];
   index: number;
@@ -412,7 +461,12 @@ function ZoomModal({
   const src = images[index];
 
   return (
-    <div className="fixed inset-0 z-100 bg-slate-950/95 flex flex-col" role="dialog" aria-modal="true" aria-label={`${title} — enlarged`}>
+    <div
+      className="fixed inset-0 z-100 bg-slate-950/95 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${title} — enlarged`}
+    >
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0">
         <span className="text-sm font-semibold truncate pr-4">{title}</span>
         <div className="flex items-center gap-2">
@@ -435,18 +489,31 @@ function ZoomModal({
           >
             <Plus className="w-4 h-4" />
           </button>
-          <button type="button" onClick={onClose} aria-label="Close" className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors ml-2">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors ml-2"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       <div ref={paneRef} className="flex-1 overflow-auto overscroll-contain">
-        <div className="relative mx-auto" style={{ width: `${scale * 100}%`, aspectRatio: '1 / 1' }}>
+        <div
+          className="relative mx-auto"
+          style={{ width: `${scale * 100}%`, aspectRatio: '1 / 1' }}
+        >
           {/* A plain <img>, not next/image: the optimiser caps the served file
               at the layout width it was given, which at 4× is exactly the
               resolution the zoom exists to reveal. */}
-          <img src={src} alt={title} className="w-full h-full object-contain select-none" draggable={false} />
+          <img
+            src={src}
+            alt={title}
+            className="w-full h-full object-contain select-none"
+            draggable={false}
+          />
         </div>
       </div>
 
@@ -481,7 +548,15 @@ function ZoomModal({
  * mid-drag makes the object stutter and appear to jump backwards, which reads
  * as a broken viewer rather than a slow one.
  */
-function SpinViewer({ frames, title, onClose }: { frames: string[]; title: string; onClose: () => void }) {
+function SpinViewer({
+  frames,
+  title,
+  onClose,
+}: {
+  frames: string[];
+  title: string;
+  onClose: () => void;
+}) {
   const [frame, setFrame] = useState(0);
   const [ready, setReady] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
@@ -498,7 +573,9 @@ function SpinViewer({ frames, title, onClose }: { frames: string[]; title: strin
       };
       img.src = src;
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [frames]);
 
   useEffect(() => {
@@ -510,8 +587,14 @@ function SpinViewer({ frames, title, onClose }: { frames: string[]; title: strin
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') { setAutoplay(false); setFrame((f) => (f + 1) % frames.length); }
-      if (e.key === 'ArrowLeft') { setAutoplay(false); setFrame((f) => (f - 1 + frames.length) % frames.length); }
+      if (e.key === 'ArrowRight') {
+        setAutoplay(false);
+        setFrame((f) => (f + 1) % frames.length);
+      }
+      if (e.key === 'ArrowLeft') {
+        setAutoplay(false);
+        setFrame((f) => (f - 1 + frames.length) % frames.length);
+      }
     };
     window.addEventListener('keydown', onKey);
     const previous = document.body.style.overflow;
@@ -538,22 +621,41 @@ function SpinViewer({ frames, title, onClose }: { frames: string[]; title: strin
   };
 
   return (
-    <div className="fixed inset-0 z-100 bg-slate-950/95 flex flex-col" role="dialog" aria-modal="true" aria-label={`${title} — 360 degree view`}>
+    <div
+      className="fixed inset-0 z-100 bg-slate-950/95 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${title} — 360 degree view`}
+    >
       <div className="flex items-center justify-between px-4 py-3 text-white shrink-0">
         <span className="text-sm font-semibold truncate pr-4 flex items-center gap-2">
           <RotateCw className="w-4 h-4" /> {title} — 360°
         </span>
-        <button type="button" onClick={onClose} aria-label="Close" className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+        >
           <X className="w-5 h-5" />
         </button>
       </div>
 
       <div
         className="flex-1 flex items-center justify-center select-none touch-none cursor-ew-resize"
-        onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); startDrag(e.clientX); }}
-        onPointerMove={(e) => { if (dragFrom.current) moveDrag(e.clientX, e.currentTarget.clientWidth); }}
-        onPointerUp={() => { dragFrom.current = null; }}
-        onPointerCancel={() => { dragFrom.current = null; }}
+        onPointerDown={(e) => {
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+          startDrag(e.clientX);
+        }}
+        onPointerMove={(e) => {
+          if (dragFrom.current) moveDrag(e.clientX, e.currentTarget.clientWidth);
+        }}
+        onPointerUp={() => {
+          dragFrom.current = null;
+        }}
+        onPointerCancel={() => {
+          dragFrom.current = null;
+        }}
       >
         <div className="relative w-full max-w-2xl aspect-square">
           {!ready && (

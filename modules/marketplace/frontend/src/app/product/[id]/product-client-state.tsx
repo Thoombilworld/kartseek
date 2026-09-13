@@ -20,9 +20,16 @@ const MAX_RECENT = 20;
 const MAX_COMPARE = 4;
 
 export interface ViewedProduct {
-  id: string; title: string; brand: string;
-  price: number; mrp: number; rating: number;
-  imageUrl?: string; viewedAt: number;
+  id: string;
+  title: string;
+  brand: string;
+  price: number;
+  mrp: number;
+  rating: number;
+  imageUrl?: string;
+  viewedAt: number;
+  /** The market the recorded price belongs to; a rail in another market skips it. */
+  market?: string;
 }
 
 function readList<T>(key: string): T[] {
@@ -32,12 +39,16 @@ function readList<T>(key: string): T[] {
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return [];   // corrupt or unavailable storage must not break the page
+    return []; // corrupt or unavailable storage must not break the page
   }
 }
 
 function writeList(key: string, value: unknown[]) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota or private mode */ }
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* quota or private mode */
+  }
 }
 
 export function ProductClientState({ product }: { product: ViewedProduct }) {
@@ -59,19 +70,19 @@ export function ProductClientState({ product }: { product: ViewedProduct }) {
     // without bound.
     const next = [
       { ...product, viewedAt: Date.now() },
-      ...readList<ViewedProduct>(RECENTLY_VIEWED_KEY).filter(p => p?.id !== product.id),
+      ...readList<ViewedProduct>(RECENTLY_VIEWED_KEY).filter((p) => p?.id !== product.id),
     ].slice(0, MAX_RECENT);
     writeList(RECENTLY_VIEWED_KEY, next);
 
-    const tray = readList<ViewedProduct>(COMPARE_KEY).filter(p => p?.id);
-    setCompared(tray.some(p => p.id === product.id));
+    const tray = readList<ViewedProduct>(COMPARE_KEY).filter((p) => p?.id);
+    setCompared(tray.some((p) => p.id === product.id));
     setCount(tray.length);
   }, [product]);
 
   const toggleCompare = () => {
-    const current = readList<ViewedProduct>(COMPARE_KEY).filter(p => p?.id);
-    if (current.some(p => p.id === product.id)) {
-      const next = current.filter(p => p.id !== product.id);
+    const current = readList<ViewedProduct>(COMPARE_KEY).filter((p) => p?.id);
+    if (current.some((p) => p.id === product.id)) {
+      const next = current.filter((p) => p.id !== product.id);
       writeList(COMPARE_KEY, next);
       setCompared(false);
       setCount(next.length);
@@ -90,17 +101,23 @@ export function ProductClientState({ product }: { product: ViewedProduct }) {
   return (
     <>
       <button
-      onClick={toggleCompare}
-      aria-pressed={compared}
-      className={`mt-3 w-full flex items-center justify-center gap-2 rounded-sm py-2.5 text-sm font-bold border transition-colors ${
-        compared
-          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-          : 'bg-white border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-600'
-      }`}
-    >
-      {compared
-        ? <><Check className="w-4 h-4" /> Added to Compare</>
-        : <><GitCompare className="w-4 h-4" /> Add to Compare</>}
+        onClick={toggleCompare}
+        aria-pressed={compared}
+        className={`mt-3 w-full flex items-center justify-center gap-2 rounded-sm py-2.5 text-sm font-bold border transition-colors ${
+          compared
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            : 'bg-white border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-600'
+        }`}
+      >
+        {compared ? (
+          <>
+            <Check className="w-4 h-4" /> Added to Compare
+          </>
+        ) : (
+          <>
+            <GitCompare className="w-4 h-4" /> Add to Compare
+          </>
+        )}
       </button>
 
       {/*

@@ -19,9 +19,16 @@ import { useRegion } from '@/lib/contexts/region-context';
  */
 export function ProductRecommendations({
   categorySlug,
+  subcategorySlug,
   excludeProductId,
 }: {
   categorySlug?: string;
+  /**
+   * The narrower group when the product has one. The catalogue keeps the
+   * parent in `category_id` and the child in `subcategory_id`, so a child slug
+   * sent as `category` matches nothing — it must travel as `subcategory`.
+   */
+  subcategorySlug?: string;
   excludeProductId?: string;
 }) {
   const { formatCurrencyValue } = useRegion();
@@ -33,36 +40,47 @@ export function ProductRecommendations({
       try {
         // With no category there is nothing to be similar to; showing an
         // arbitrary slice of the catalogue is worse than showing nothing.
-        if (!categorySlug) {
+        if (!categorySlug && !subcategorySlug) {
           setProducts([]);
           setLoading(false);
           return;
         }
-        const response = await getProducts({ category: categorySlug, limit: '12' });
-        const rawList = response?.data ?? (Array.isArray(response) ? response : []);
+        const rowsOf = (response: any): any[] => {
+          const list = response?.data ?? (Array.isArray(response) ? response : []);
+          return (Array.isArray(list) ? list : []).filter(
+            (p: any) => p?.id && p.id !== excludeProductId,
+          );
+        };
+        // The narrowest group first; a subcategory with only a product or two
+        // in it is widened to the parent category so the rail is worth having.
+        let rows: any[] = subcategorySlug
+          ? rowsOf(await getProducts({ subcategory: subcategorySlug, limit: '12' }))
+          : [];
+        if (rows.length < 4 && categorySlug) {
+          const wider = rowsOf(await getProducts({ category: categorySlug, limit: '12' }));
+          const seen = new Set(rows.map((p) => p.id));
+          rows = [...rows, ...wider.filter((p) => !seen.has(p.id))].slice(0, 12);
+        }
         // Normalise raw API products to the HomeProduct shape ProductCard expects.
         // The API returns `brand` as an object — rendering it directly crashes React
         // with "Objects are not valid as a React child".
-        const normalised = (Array.isArray(rawList) ? rawList : [])
-          // A product is not "similar" to itself.
-          .filter((p: any) => p?.id !== excludeProductId)
-          .map((p: any) => ({
-            id: p.id,
-            title: p.name ?? p.title ?? 'Product',
-            brand: typeof p.brand === 'string' ? p.brand : (p.brand?.name ?? ''),
-            // `listings[0]` is not necessarily the buy-box winner, and decimal
-            // columns arrive as strings — both handled by the shared helper.
-            price: buyBoxPrice(p),
-            mrp: buyBoxMrp(p),
-            rating: Number(p.averageRating ?? p.rating ?? 0),
-            reviews: String(p.reviewCount ?? p.reviews ?? '0'),
-            badge: p.badge || undefined,
-            imageUrl: productImageList(p)[0],
-            images: productImageList(p),
-            icon: p.category?.icon ?? undefined,
-            category: p.category?.slug ?? '',
-            delivery: p.delivery ?? undefined,
-          }));
+        const normalised = rows.map((p: any) => ({
+          id: p.id,
+          title: p.name ?? p.title ?? 'Product',
+          brand: typeof p.brand === 'string' ? p.brand : (p.brand?.name ?? ''),
+          // `listings[0]` is not necessarily the buy-box winner, and decimal
+          // columns arrive as strings — both handled by the shared helper.
+          price: buyBoxPrice(p),
+          mrp: buyBoxMrp(p),
+          rating: Number(p.averageRating ?? p.rating ?? 0),
+          reviews: String(p.reviewCount ?? p.reviews ?? '0'),
+          badge: p.badge || undefined,
+          imageUrl: productImageList(p)[0],
+          images: productImageList(p),
+          icon: p.category?.icon ?? undefined,
+          category: p.category?.slug ?? '',
+          delivery: p.delivery ?? undefined,
+        }));
         setProducts(normalised);
       } catch (err) {
         console.warn('Failed to fetch recommendations from API', err);
@@ -73,13 +91,13 @@ export function ProductRecommendations({
       }
     }
     fetchRecommendations();
-  }, [categorySlug, excludeProductId]);
+  }, [categorySlug, subcategorySlug, excludeProductId]);
 
   if (loading) {
     return (
       <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 mt-4">
         <h2 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">
-          Related Product Recommendations
+          Similar products
         </h2>
         <div className="flex gap-4 overflow-x-auto pb-4">
           {[1, 2, 3, 4].map((i) => (
@@ -102,7 +120,7 @@ export function ProductRecommendations({
   return (
     <div className="bg-white rounded-sm shadow-sm border border-slate-200 p-5 mt-4">
       <h2 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">
-        Related Product Recommendations
+        Similar products
       </h2>
       <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar">
         {products.map((p) => (

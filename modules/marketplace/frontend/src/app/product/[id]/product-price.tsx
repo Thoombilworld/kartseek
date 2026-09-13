@@ -5,54 +5,85 @@ import { getListPriceLabels } from '@/lib/localization';
 import { useVariants } from './variant-context';
 
 /**
- * Client-side price display component for the product detail page.
- * Uses useRegion() to format prices according to the user's detected country.
+ * The price block: payable price, struck-through list price, saving, and the
+ * market's tax treatment.
  *
- * The selected variant's price wins when there is one. Variants carry their own
- * `sellingPrice` — a 512GB phone is not the price of the 128GB — and this
- * showed the parent listing's price whatever was selected, so the page quoted
- * one number and the cart charged another.
+ * The selected SKU's price wins when there is one — a 512GB phone is not the
+ * price of the 128GB — and the figures are the backend's: the buy-box offer
+ * for this market, or the SKU's own `sellingPrice`. Nothing is computed here
+ * except the percentage shown beside the saving, from those two numbers.
+ *
+ * Prices arrive as decimal strings from Postgres; coerced once at the caller
+ * and once more here because the props are typed `number` but originate in an
+ * `any` response.
  */
-export function ProductPriceDisplay({ sellingPrice, mrp }: { sellingPrice: number; mrp: number }) {
+export function ProductPriceDisplay({
+  sellingPrice,
+  mrp,
+  offered = true,
+}: {
+  sellingPrice: number;
+  mrp: number;
+  /** False when no seller offers the product in this market. */
+  offered?: boolean;
+}) {
   const { formatCurrencyValue, country } = useRegion();
   const variants = useVariants();
-  // A struck-through figure is silent to a screen reader, and what it is
-  // called differs by market: "M.R.P." in India, a plain "Was" in the Gulf.
   const listPriceLabels = getListPriceLabels(country.code);
+  const tax = country.tax;
 
-  // Coerce here as well as at the caller: these props are typed `number`, but
-  // they originate in an `any`-typed API response whose `decimal` columns are
-  // strings on the wire, so TypeScript cannot actually enforce the annotation.
   const price = Number(variants?.selected ? variants.effectivePrice : sellingPrice) || 0;
   const list = Number(variants?.selected ? variants.effectiveMrp : mrp) || 0;
   const discounted = list > price && price > 0;
   const discount = discounted ? Math.round(((list - price) / list) * 100) : 0;
 
-  // A product no seller has listed and with no MRP has no price to show. Saying
-  // so is honest; "₹ 0.00" reads as free.
-  if (price <= 0) {
+  // A product no seller offers here has no price to show. Saying so is honest;
+  // a list price alone would read as the amount charged.
+  if (!offered || price <= 0) {
     return (
-      <div className="mb-2">
+      <div className="mb-2" data-testid="product-price">
         <span className="text-xl font-bold text-slate-500">Price unavailable</span>
         <p className="text-sm text-slate-400 mt-1">
-          This product is not currently offered by any seller.
+          This product is not currently offered by any seller in your market.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="flex items-end gap-3 mb-2">
-      <span className="text-4xl font-black text-slate-900">{formatCurrencyValue(price)}</span>
-      {discounted && (
-        <>
-          <span className="text-lg text-slate-400 line-through mb-1">
-            <span className="sr-only">{listPriceLabels.short} </span>
-            {formatCurrencyValue(list)}
+    <div className="mb-2" data-testid="product-price">
+      <div className="flex items-end gap-3 flex-wrap">
+        <span
+          className="text-3xl md:text-4xl font-black text-slate-900"
+          data-testid="product-price-payable"
+        >
+          {formatCurrencyValue(price)}
+        </span>
+        {discounted && (
+          <>
+            <span
+              className="text-lg text-slate-400 line-through mb-1"
+              data-testid="product-price-list"
+            >
+              <span className="sr-only">{listPriceLabels.short} </span>
+              {formatCurrencyValue(list)}
+            </span>
+            <span className="text-green-600 font-bold mb-1">{discount}% off</span>
+          </>
+        )}
+      </div>
+      <p className="text-xs text-slate-500 mt-1">
+        {discounted && (
+          <span className="text-green-700 font-semibold mr-2">
+            {listPriceLabels.savings}: {formatCurrencyValue(list - price)}
           </span>
-          <span className="text-green-600 font-bold mb-1">{discount}% off</span>
-        </>
-      )}
+        )}
+        {tax && tax.rate > 0
+          ? tax.inclusive
+            ? `Inclusive of ${tax.name}`
+            : `Excludes ${tax.name}, added at checkout`
+          : 'No sales tax applies in this market'}
+      </p>
     </div>
   );
 }
