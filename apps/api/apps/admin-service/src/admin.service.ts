@@ -164,7 +164,12 @@ export class AdminService {
       revenue,
       sellers: crossModule,
       drivers: crossModule,
-      pendingKyc: crossModule,
+      // NOT crossModule: the approval queue is this service's own. `recordKycDocument`
+      // writes `admin:kyc:pending:*` here and `getPendingKyc` reads them here, so
+      // reporting the figure as "owned by another module" was wrong in the same
+      // direction as a zero — it put a dash on the console next to a queue that
+      // this process can count exactly.
+      pendingKyc: { value: await this.countPendingKyc(scope) },
       // Null unless something has actually measured it. The previous literal
       // fallback rendered invented percentages as a traffic chart.
       serviceSplit: (await this.redis.getJson<any>('admin:service_split')) ?? null,
@@ -483,6 +488,47 @@ export class AdminService {
   }
 
   // ── KYC Management ─────────────────────────────────────────────────────────
+  /**
+   * How many identity checks are waiting — COUNTED, never accumulated.
+   *
+   * There used to be an `admin:counter:pending_kyc` key maintained by
+   * `set(get() + 1)` on submission and `set(get() - 1)` on approval or
+   * rejection. Three things are wrong with that, in increasing order of
+   * seriousness:
+   *
+   *   1. it is not atomic — two concurrent submissions read the same value and
+   *      write the same value, and one of them is lost;
+   *   2. it has no rebuild path, so any missed decrement (a crash between the
+   *      `del` and the `set`, a row expired by eviction) is permanent drift;
+   *   3. it was written with no TTL and no source, so when the Redis AOF
+   *      transition wiped the development instance it came back as 0 — and
+   *      would have read 0 for ever, whatever the real backlog was, on a
+   *      console whose whole mandate is not to show invented figures.
+   *
+   * The queue keys ARE the count. Scanning them is O(queue), the queue is
+   * administrative-sized, `getDashboardStats` already caches its whole result
+   * for 60 seconds, and the scan is non-blocking (`scanKeys`, AUD2-076). A
+   * number derived from the rows cannot drift from the rows.
+   *
+   * Scoped the same way `getPendingKyc` scopes its list, so the tile and the
+   * page it links to agree for a regional admin.
+   */
+  private async countPendingKyc(scope?: string): Promise<number> {
+    const keys = await this.redis.scanKeys('admin:kyc:pending:*');
+    const market = marketPredicate(scope);
+    if (!market) return keys.length;
+
+    let n = 0;
+    for (const key of keys) {
+      const row = await this.redis.getJson<any>(key);
+      if (!row) continue;
+      if (marketPredicate(undefined, row.country ?? row.countryCode ?? row.regionCode) === market) {
+        n += 1;
+      }
+    }
+    return n;
+  }
+
   async getPendingKyc(page = 1, limit = 20, scope?: string) {
     // Scan Redis for pending KYC records
     const keys = await this.redis.scanKeys('admin:kyc:pending:*');
@@ -597,10 +643,9 @@ export class AdminService {
     if (!row.country && market) row.country = market;
     await this.redis.setJson(queueKey, row);
 
-    if (!existing) {
-      const pending = parseInt((await this.redis.get('admin:counter:pending_kyc')) ?? '0', 10);
-      await this.redis.set('admin:counter:pending_kyc', String((pending || 0) + 1));
-    }
+    // No counter is incremented here. See `countPendingKyc()`: the queue keys
+    // written just above ARE the count, and a second number kept alongside them
+    // could only ever disagree with them.
 
     await this.kafka.publish('admin.kyc.submitted', {
       entityId: owner,
@@ -658,10 +703,8 @@ export class AdminService {
       86400 * 365,
     );
 
-    // Update counter
-    const pendingCount = parseInt((await this.redis.get('admin:counter:pending_kyc')) ?? '0', 10);
-    if (pendingCount > 0)
-      await this.redis.set('admin:counter:pending_kyc', String(pendingCount - 1));
+    // The queue row was deleted above, which is the whole of what "one fewer
+    // pending" means. `countPendingKyc()` reads the rows.
 
     await this.kafka.publish('admin.kyc.approved', { entityId, entityType, adminId });
     this.logger.log(`KYC approved: ${entityType}/${entityId} by admin ${adminId}`);
@@ -699,9 +742,8 @@ export class AdminService {
       86400 * 30,
     );
 
-    const pendingCount = parseInt((await this.redis.get('admin:counter:pending_kyc')) ?? '0', 10);
-    if (pendingCount > 0)
-      await this.redis.set('admin:counter:pending_kyc', String(pendingCount - 1));
+    // The queue row was deleted above, which is the whole of what "one fewer
+    // pending" means. `countPendingKyc()` reads the rows.
 
     await this.kafka.publish('admin.kyc.rejected', { entityId, entityType, adminId, reason });
     return { success: true, entityId, entityType, status: 'REJECTED' };

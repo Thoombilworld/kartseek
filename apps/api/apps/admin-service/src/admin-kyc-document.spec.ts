@@ -87,11 +87,39 @@ describe('an uploaded KYC document reaches the approval queue', () => {
     expect(page.data[0].documents).toHaveLength(2);
   });
 
-  it('counts the applicant once', async () => {
-    const { svc, counters } = makeService();
+  /**
+   * The applicant is counted once because there is ONE ROW, not because a
+   * counter was incremented once.
+   *
+   * This asserted `admin:counter:pending_kyc === '1'` — a key kept by
+   * `set(get() + 1)` with no rebuild path, which read 0 for ever after the
+   * Redis AOF transition wiped the development instance and which the console
+   * would then have displayed. The queue rows are the count now (dispatch
+   * addendum item 13), so a second document from the same applicant adds
+   * nothing to it, and that is what is checked.
+   */
+  it('counts the applicant once, from the queue rows themselves', async () => {
+    const { svc } = makeService();
     await svc.recordKycDocument(submission);
     await svc.recordKycDocument({ ...submission, key: 'kyc/u-2/second-doc.pdf' });
-    expect(counters.get('admin:counter:pending_kyc')).toBe('1');
+    expect((await svc.getPendingKyc(1, 20)).total).toBe(1);
+    expect(((await svc.getDashboardStats()) as any).pendingKyc).toEqual({ value: 1 });
+  });
+
+  it('keeps no free-standing counter that could drift from the queue', async () => {
+    const { svc, counters } = makeService();
+    await svc.recordKycDocument(submission);
+    expect([...counters.keys()].filter((k) => k.includes('pending_kyc'))).toEqual([]);
+  });
+
+  it('drops back to zero when the queue is emptied', async () => {
+    // The decrement used to be a second `set(get() - 1)`, so a crash between
+    // deleting the row and writing the counter left the console reporting work
+    // that was already done, permanently.
+    const { svc } = makeService();
+    await svc.recordKycDocument(submission);
+    await svc.approveKyc(submission.owner, submission.entityType, 'admin-1');
+    expect(((await svc.getDashboardStats()) as any).pendingKyc).toEqual({ value: 0 });
   });
 
   it('records no pointer a reviewer could follow without a token', async () => {

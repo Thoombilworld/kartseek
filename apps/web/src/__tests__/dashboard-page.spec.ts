@@ -55,10 +55,11 @@ const STATS = {
   revenue: { total: 2615268.15, today: 22187.97 },
   sellers: { value: null, unavailable: 'Owned by another module — query that module API directly' },
   drivers: { value: null, unavailable: 'Owned by another module — query that module API directly' },
-  pendingKyc: {
-    value: null,
-    unavailable: 'Owned by another module — query that module API directly',
-  },
+  // A real figure, not an "owned by another module" dash: the approval queue is
+  // admin-service's own (`admin:kyc:pending:*`), so it counts the rows rather
+  // than accumulating a free-standing counter (dispatch addendum item 13).
+  // `sellers` and `drivers` still cover the unavailable path below.
+  pendingKyc: { value: 4 },
   serviceSplit: null,
   generatedAt: '2026-09-11T19:38:43.822Z',
 };
