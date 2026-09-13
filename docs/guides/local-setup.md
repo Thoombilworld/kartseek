@@ -272,6 +272,73 @@ and how long it took, followed by a summary line like `26/26 healthy`. Any
 failure exits non-zero and points you at that service's log under
 `tests/smoke/logs/`.
 
+## Validate the container stack
+
+`npm run smoke` proves the services from their built output on your machine.
+`npm run stack:validate` proves them **as containers**, end to end:
+
+```bash
+npm run stack:validate                    # the twelve of the admin profile
+npm run stack:validate -- --profile full  # all 35
+npm run stack:validate -- --skip-build    # reuse the images already built
+npm run stack:validate -- --keep          # leave the containers up afterwards
+npm run stack:validate -- --json          # the results array instead of the table
+```
+
+It does the whole sequence itself, so you do not have to run `stack:up:admin`
+first: `npm run infra:up` (that is what creates the 166 Kafka topics), then
+`docker compose --profile admin up -d --build`, then the checks, then a
+teardown that removes the application tier and leaves the datastores running.
+
+What it proves, in order:
+
+- **Docker Compose is ≥ 2.24** and the root `.env` carries every variable the
+  compose files have no default for. Either one missing is exit **2** naming
+  `npm run env:init`. It never edits your `.env` files.
+- **Every container reaches `healthy`**, not merely `running`.
+- **A staff sign-in completes through the containerised gateway** — login,
+  then `/auth/mfa/verify`. The images run `NODE_ENV=production`, where the
+  gateway correctly refuses to echo the code, so the validator reads it out of
+  Redis the way an operator would.
+- **Every service's `/health/ready` reports each dependency `services.yaml`
+  gives it as `up`.** A dependency the board does not carry — Kafka, which
+  `@app/common`'s health module has no check for — is printed as a `~ skipped`
+  row naming it, never counted as a pass.
+- **Each service holds the Postgres role it is supposed to.** A module service
+  that fell back to the superuser answers `database: up` exactly like one that
+  did not, so this reads `pg_stat_activity` by the container's own address,
+  immediately after firing the readiness routes (the pool closes an idle
+  connection after ten seconds).
+- **The gateway is on the real Redis**, not the in-process emulator, and its
+  `SELECT 1` names a database and a role.
+- **Redis is not set to `allkeys-lru`** — several keys are written with no
+  expiry and are the only copy of what they hold — and **Kafka lists its
+  topics**.
+- **`GET /admin/login` returns a page with a password field.** Next answers 200
+  for `notFound()`, so the status code alone proves nothing.
+- **The main migration ledger is level** and `npm run verify:schema-drift`
+  finds no drift in any of the eight module schemas; the census is printed.
+- **The regional lock holds through containers**: `india-admin@kartseek.com`
+  and `qa-admin@kartseek.com` each read their own market, the IN admin is
+  refused `?country=QA` with the gateway's denial copy, and `superadmin` reads
+  both.
+- **No container's log carries a fatal or error line** — including a Joi
+  failure, `EADDRINUSE`, a failed password, a missing grant, and any mention of
+  `localhost:9092`, which means host addressing has leaked into an image.
+
+Exit 0 is a pass, 1 is a failed check, 2 is a setup error.
+
+**It does not go through nginx.** `infra/nginx/nginx.conf` still upstreams
+`host.docker.internal`, so a browser loading the containerised console through
+the proxy reaches _your own dev fleet_ rather than the containers. The
+validator probes the gateway on `127.0.0.1:3001` and the console on
+`127.0.0.1:3000` directly and prints a line saying so; the edge is Task IN11's.
+
+The first build is 20–45 minutes and needs about 12 GB of disk. It runs
+detached with its output in `.build-logs/stack-up-admin.log` — `tail -f` that
+if you want to watch it. With the images already built (`--skip-build`) the
+whole run is about three minutes.
+
 ## Mobile
 
 Each Flutter app is its own directory under `apps/`:

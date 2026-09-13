@@ -294,10 +294,18 @@ config` with no useful hint. `docker compose version` to check.
 ```bash
 npm run infra:up        # datastores, nginx — AND kartseek-network, AND the 166 Kafka topics
 npm run stack:up:admin  # the twelve an administrator needs, built and started
+npm run stack:validate  # prove them: healthy, ready, the right role, a real console, clean logs
 npm run stack:logs      # follow them
 npm run stack:down      # stop and remove the 35 application containers, and only those
 npm run infra:down      # the one that takes the datastores down too
 ```
+
+`stack:validate` is `scripts/stack/validate.mjs`. It does the whole sequence
+itself — `infra:up`, then the profile, then the checks, then the teardown — so
+running it on its own is enough; the two lines above it are for when you want
+the containers to stay. It is the gate that says whether this file works, and
+[`docs/guides/local-setup.md`](../../docs/guides/local-setup.md) lists what it
+proves and what it deliberately does not.
 
 `stack:down` is `scripts/stack/down.mjs`, which names the 35 services from
 `services.yaml`. It is deliberately not `docker compose down`: profiles gate
