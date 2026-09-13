@@ -11,6 +11,9 @@ import {
   RestaurantTable,
   RestaurantPromotion,
   RestaurantStaff,
+  RestaurantCuisine,
+  RestaurantDeliveryZone,
+  RestaurantComplaint,
 } from './src/entities';
 
 /**
@@ -95,10 +98,14 @@ export const RestaurantDataSource = new DataSource({
     RestaurantTable,
     RestaurantPromotion,
     RestaurantStaff,
+    RestaurantCuisine,
+    RestaurantDeliveryZone,
+    RestaurantComplaint,
   ],
   migrations: [
     'migrations/1786498200000-InitialRestaurantSchema.ts',
     'migrations/1786502400000-DropDeadMarketColumns.ts',
+    'migrations/1786503200000-RestaurantAdminSurfaces.ts',
   ],
   migrationsTableName: RESTAURANT_MIGRATIONS_TABLE,
   migrationsTransactionMode: 'each',

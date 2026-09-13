@@ -6,6 +6,8 @@ import { KafkaModule } from '@app/kafka';
 import { RestaurantController } from './restaurant.controller';
 import { RestaurantService } from './restaurant.service';
 import { FranchiseViewService } from './franchise/franchise-view.service';
+import { RestaurantAdminController } from './admin/admin.controller';
+import { RestaurantAdminService } from './admin/admin.service';
 
 import {
   Restaurant,
@@ -17,6 +19,9 @@ import {
   RestaurantTable,
   RestaurantPromotion,
   RestaurantStaff,
+  RestaurantCuisine,
+  RestaurantDeliveryZone,
+  RestaurantComplaint,
 } from './entities';
 
 const ENTITIES = [
@@ -29,6 +34,9 @@ const ENTITIES = [
   RestaurantTable,
   RestaurantPromotion,
   RestaurantStaff,
+  RestaurantCuisine,
+  RestaurantDeliveryZone,
+  RestaurantComplaint,
 ];
 import { HealthModule, buildEnvSchema, Joi } from '@app/common';
 import { assertSynchronizeAllowed, databaseCredentials } from '@app/database';
@@ -122,8 +130,13 @@ const envSchema = buildEnvSchema({
     RedisModule,
     KafkaModule.forService('restaurant-service'),
   ],
-  controllers: [RestaurantController],
-  providers: [RestaurantService, FranchiseViewService],
+  // `RestaurantAdminController` publishes no HTTP route — every handler in it is
+  // a `@MessagePattern`. It is a separate controller so that the seventeen
+  // `admin.restaurant.*` commands the gateway sends are in one file a reader can
+  // check the contract against, rather than four of them at the bottom of a
+  // 788-line storefront controller and thirteen nowhere at all.
+  controllers: [RestaurantController, RestaurantAdminController],
+  providers: [RestaurantService, FranchiseViewService, RestaurantAdminService],
   exports: [RestaurantService],
 })
 export class RestaurantServiceModule {}

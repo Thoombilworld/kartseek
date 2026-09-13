@@ -713,46 +713,19 @@ export class RestaurantController {
   }
 
   // ── Admin console commands ────────────────────────────────────────────────
-  // The gateway's admin-* controllers address this service with dot-notation
-  // commands and none had a handler, so every admin screen for this module got
-  // "no matching message handler" — an empty 200 while the gateway fallbacks
-  // were in place, a 503 once they were removed. The implementations already
-  // existed; only the patterns were missing.
-
-  // `scope` is the caller's market when the gateway resolved one for a
-  // region-locked administrator, and undefined for a global one. The list
-  // narrows to it; the decisions are asserted against the restaurant's own
-  // market inside the service, before anything is written or published.
-
-  // The gateway names the market `countryCode` on the wire; the column it
-  // resolves to here is `regionCode`, the platform's ISO-2 market identifier.
-  @MessagePattern({ cmd: 'admin.restaurant.list' })
-  tcpAdminGetAdminRestaurantList(@Payload() d: EmptyMessage) {
-    return this.svc.getAdminRestaurantList({ ...d, regionCode: d?.scope ?? d?.countryCode });
-  }
-
-  @MessagePattern({ cmd: 'admin.restaurant.approve' })
-  tcpAdminApproveRestaurant(
-    @Payload() d: RestaurantScopedMessage & IdMessage & { adminId?: string; scope?: string },
-  ) {
-    return this.svc.approveRestaurant(
-      requireId(d?.id, 'record') ?? d?.restaurantId,
-      requireId(d?.adminId, 'admin'),
-      d?.scope,
-    );
-  }
-
-  @MessagePattern({ cmd: 'admin.restaurant.suspend' })
-  tcpAdminSuspendRestaurant(
-    @Payload() d: RestaurantScopedMessage & IdMessage & { scope?: string },
-  ) {
-    return this.svc.suspendRestaurant(requireId(d?.id, 'record') ?? d?.restaurantId, d?.scope);
-  }
-
-  @MessagePattern({ cmd: 'admin.restaurant.cuisines' })
-  tcpAdminGetCuisines(@Payload() d: EmptyMessage) {
-    return this.svc.getCuisines();
-  }
+  //
+  // MOVED (M4). The four `admin.restaurant.*` patterns that used to sit here —
+  // `list`, `approve`, `suspend` and `cuisines` — now live in
+  // `src/admin/admin.controller.ts` beside the thirteen that had no handler at
+  // all, so the file a reader opens to check the admin contract holds all
+  // seventeen rather than four of them.
+  //
+  // The old `list` pattern also collapsed the caller's LOCK and their requested
+  // market into one slot (`regionCode: d?.scope ?? d?.countryCode`), which is
+  // the shape `requireMarket`'s docstring warns about: an unreadable value in
+  // that slot is *ignored*, and ignored means no predicate — every market's
+  // rows, to an administrator confined to one. `RestaurantAdminService.market()`
+  // resolves the two separately.
 
   // ── Discovery ──────────────────────────────────────────────────────────────
   //

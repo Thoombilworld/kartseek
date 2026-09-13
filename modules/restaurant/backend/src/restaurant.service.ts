@@ -30,6 +30,7 @@ import {
   TableStatus,
   RestaurantPromotion,
   RestaurantStaff,
+  RestaurantCuisine,
 } from './entities';
 
 @Injectable()
@@ -47,6 +48,11 @@ export class RestaurantService {
     @InjectRepository(RestaurantPromotion)
     private readonly promotionRepo: Repository<RestaurantPromotion>,
     @InjectRepository(RestaurantStaff) private readonly staffRepo: Repository<RestaurantStaff>,
+    // The cuisine CATALOGUE (M4). `getCuisines` unions it with the cuisines
+    // restaurants actually name, so the storefront list and the admin list are
+    // one implementation rather than two that can disagree.
+    @InjectRepository(RestaurantCuisine)
+    private readonly cuisineRepo: Repository<RestaurantCuisine>,
     private readonly redis: RedisService,
     private readonly kafka: KafkaProducerService,
   ) {}
@@ -1007,7 +1013,22 @@ export class RestaurantService {
     return { success: true, restaurantId, message: 'Restaurant rejected' };
   }
 
-  async suspendRestaurant(restaurantId: string, scope?: string) {
+  /**
+   * `opts.reason` reaches the restaurant owner, so it is recorded rather than
+   * discarded: a suspension with no reason is a restaurant taken offline and
+   * nobody able to say why. `opts.actorId` is the acting administrator, from the
+   * verified token — the same thing `approveRestaurant` records.
+   *
+   * The event is `restaurant.status.changed`, the topic this module already
+   * declares and already publishes from `toggleRestaurantStatus`. Suspension
+   * published NOTHING before, so a restaurant went offline without anything
+   * downstream — search indexing, the owner's notifications — ever hearing.
+   */
+  async suspendRestaurant(
+    restaurantId: string,
+    scope?: string,
+    opts: { reason?: string; actorId?: string } = {},
+  ) {
     const restaurant = await this.restaurantRepo.findOne({
       where: { id: restaurantId },
       select: { id: true, regionCode: true },
@@ -1015,11 +1036,22 @@ export class RestaurantService {
     if (!restaurant) throw new NotFoundException(`Restaurant ${restaurantId} not found`);
     assertInMarket(restaurant.regionCode, scope, 'restaurant', this.logger);
 
+    const reason = opts.reason?.trim() || null;
     await this.restaurantRepo.update(restaurantId, {
       status: RestaurantStatus.SUSPENDED,
       isOnline: false,
+      ...(reason ? { rejectionReason: reason } : {}),
     });
-    return { success: true };
+    await this.kafka.publish('restaurant.status.changed', {
+      id: restaurantId,
+      status: RestaurantStatus.SUSPENDED,
+      isOnline: false,
+      market: restaurant.regionCode ?? null,
+      reason,
+      actorId: opts.actorId ?? null,
+    });
+    this.logger.log(`Restaurant ${restaurantId} suspended by ${opts.actorId ?? 'unknown'}`);
+    return { success: true, restaurantId, status: RestaurantStatus.SUSPENDED, reason };
   }
 
   async unsuspendRestaurant(restaurantId: string) {
@@ -1148,21 +1180,76 @@ export class RestaurantService {
     });
   }
 
+  /**
+   * The cuisine list, for the storefront and for the admin console alike.
+   *
+   * ONE implementation, because they are one question. It is the union of two
+   * sources:
+   *
+   *   • `restaurant_cuisines`, the catalogue an administrator adds to. Before
+   *     M4 there was no such table, so `admin.restaurant.createCuisine` had
+   *     nowhere to write and a cuisine nobody used yet could not exist;
+   *   • the cuisines restaurants actually name in their own profile, which is
+   *     free text and always will be — dropping an uncatalogued one would make
+   *     this list disagree with the restaurants it describes.
+   *
+   * The count is always live: it is the approved restaurants naming that
+   * cuisine, so a newly catalogued cuisine reads `0` rather than being hidden.
+   * Catalogued entries carry their real uuid; an uncatalogued one keeps the
+   * synthetic `CUI-00N` id this method has always returned for them, so nothing
+   * that consumed the old shape breaks.
+   */
   async getCuisines() {
-    const result = await this.restaurantRepo
-      .createQueryBuilder('r')
-      .select("unnest(string_to_array(r.cuisines, ','))", 'cuisine')
-      .addSelect('COUNT(*)', 'count')
-      .where('r.status = :status', { status: RestaurantStatus.APPROVED })
-      .groupBy('cuisine')
-      .orderBy('count', 'DESC')
-      .getRawMany();
-    return result.map((r: any, i: number) => ({
-      id: `CUI-${String(i + 1).padStart(3, '0')}`,
-      name: r.cuisine?.trim(),
-      slug: r.cuisine?.trim().toLowerCase().replace(/\s+/g, '-'),
-      restaurantCount: parseInt(r.count),
+    const [used, catalogue] = await Promise.all([
+      this.restaurantRepo
+        .createQueryBuilder('r')
+        .select("unnest(string_to_array(r.cuisines, ','))", 'cuisine')
+        .addSelect('COUNT(*)', 'count')
+        .where('r.status = :status', { status: RestaurantStatus.APPROVED })
+        .groupBy('cuisine')
+        .orderBy('count', 'DESC')
+        .getRawMany(),
+      this.cuisineRepo.find({ order: { sortOrder: 'ASC', name: 'ASC' } }),
+    ]);
+
+    const counts = new Map<string, number>();
+    const order: string[] = [];
+    for (const row of used as Array<{ cuisine?: string; count?: string }>) {
+      const name = row.cuisine?.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + parseInt(String(row.count ?? '0'), 10));
+      if (!order.includes(key)) order.push(key);
+    }
+
+    const slugOf = (name: string) => name.trim().toLowerCase().replace(/\s+/g, '-');
+    const catalogued = catalogue.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      icon: c.icon,
+      isActive: c.isActive,
+      restaurantCount: counts.get(c.name.trim().toLowerCase()) ?? 0,
     }));
+    const known = new Set(catalogue.map((c) => c.name.trim().toLowerCase()));
+
+    const uncatalogued = order
+      .filter((key) => !known.has(key))
+      .map((key, i) => {
+        const name = (used as Array<{ cuisine?: string }>)
+          .map((r) => r.cuisine?.trim())
+          .find((n) => n?.toLowerCase() === key) as string;
+        return {
+          id: `CUI-${String(i + 1).padStart(3, '0')}`,
+          name,
+          slug: slugOf(name),
+          icon: null as string | null,
+          isActive: true,
+          restaurantCount: counts.get(key) ?? 0,
+        };
+      });
+
+    return [...catalogued, ...uncatalogued];
   }
 
   async getPayouts(restaurantId: string) {

@@ -4,9 +4,18 @@ import { RestaurantService } from '../restaurant.service';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import {
-  Restaurant, MenuCategory, MenuItem, RestaurantOrder, Reservation,
-  RestaurantReview, RestaurantTable, RestaurantPromotion, RestaurantStaff,
-  RestaurantOrderType, RestaurantPaymentMethod,
+  Restaurant,
+  MenuCategory,
+  MenuItem,
+  RestaurantOrder,
+  Reservation,
+  RestaurantReview,
+  RestaurantTable,
+  RestaurantPromotion,
+  RestaurantStaff,
+  RestaurantCuisine,
+  RestaurantOrderType,
+  RestaurantPaymentMethod,
 } from '../entities';
 
 describe('RestaurantService', () => {
@@ -71,6 +80,10 @@ describe('RestaurantService', () => {
         { provide: getRepositoryToken(RestaurantTable), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(RestaurantPromotion), useFactory: mockRepoFactory },
         { provide: getRepositoryToken(RestaurantStaff), useFactory: mockRepoFactory },
+        // The cuisine CATALOGUE (M4): `getCuisines` unions it with the cuisines
+        // restaurants name themselves, so the storefront and the admin console
+        // read one list rather than two that can disagree.
+        { provide: getRepositoryToken(RestaurantCuisine), useFactory: mockRepoFactory },
       ],
     }).compile();
 
@@ -164,7 +177,11 @@ describe('RestaurantService', () => {
       reviewRepo.create.mockImplementation((dto: any) => dto);
       reviewRepo.save.mockResolvedValue({ id: 'rev-1' });
       const result = await service.submitReview({
-        restaurantId: 'r1', customerId: 'u1', customerName: 'Test User', rating: 5, comment: 'Excellent!',
+        restaurantId: 'r1',
+        customerId: 'u1',
+        customerName: 'Test User',
+        rating: 5,
+        comment: 'Excellent!',
       });
       expect(result.success).toBe(true);
     });
@@ -172,11 +189,19 @@ describe('RestaurantService', () => {
 
   describe('bookTable', () => {
     it('should create table reservation', async () => {
-      restaurantRepo.findOne.mockResolvedValue({ id: 'r1', name: 'Test', acceptsReservations: true });
+      restaurantRepo.findOne.mockResolvedValue({
+        id: 'r1',
+        name: 'Test',
+        acceptsReservations: true,
+      });
       reservationRepo.create.mockImplementation((dto: any) => dto);
       reservationRepo.save.mockResolvedValue({ id: 'res-1' });
       const result = await service.bookTable('r1', {
-        customerId: 'u1', customerName: 'Test User', date: '2026-08-01', time: '19:00', guests: 4,
+        customerId: 'u1',
+        customerName: 'Test User',
+        date: '2026-08-01',
+        time: '19:00',
+        guests: 4,
       });
       expect(result.success).toBe(true);
     });
