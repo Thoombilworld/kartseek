@@ -452,9 +452,80 @@ test('nginx.compose.conf routes the whole app tier by compose service name', () 
   assert.match(conf, /resolver\s+127\.0\.0\.11/, 'which needs Docker’s embedded DNS');
 });
 
-test('the host nginx config is untouched and still fronts the dev fleet', () => {
+test('the host nginx config still fronts the dev fleet through host.docker.internal', () => {
   const host = fs.readFileSync(path.join(repoRoot(), 'infra/nginx/nginx.conf'), 'utf8');
   assert.match(host, /server host\.docker\.internal:3001/);
   assert.match(host, /server host\.docker\.internal:3000/);
   assert.match(host, /include \/etc\/nginx\/conf\.d\/\*\.conf/);
+});
+
+/**
+ * Every `location { … }` in an nginx file, as `{ header, body }`, with comment
+ * lines dropped. Brace-counted rather than regex-matched so a one-line location
+ * (`location = /taxi { proxy_pass …; }`) and a nested block are both handled.
+ */
+function locationBlocks(conf) {
+  const lines = conf.split('\n').filter((l) => !l.trim().startsWith('#'));
+  const blocks = [];
+  let current = null;
+  let depth = 0;
+  for (const line of lines) {
+    if (!current && /^\s*location\s/.test(line)) {
+      current = { header: line.trim(), body: [] };
+      depth = 0;
+    }
+    if (!current) continue;
+    current.body.push(line);
+    depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
+    if (depth <= 0 && current.body.length && /\}/.test(line)) {
+      blocks.push({ header: current.header, body: current.body.join('\n') });
+      current = null;
+    }
+  }
+  return blocks;
+}
+
+/**
+ * nginx inherits `proxy_set_header` from the enclosing level ONLY while the
+ * current level declares none of its own: it replaces, it does not merge, and
+ * there is no "inherit and add". So a location that sets `Upgrade` for a
+ * WebSocket and nothing else silently drops all seven server-level headers.
+ *
+ * That is a live defect, not a style point. ws-ddos.guard.ts identifies a socket
+ * by `handshake.headers['x-forwarded-for']` and falls back to the peer address
+ * — which through a proxy is the proxy — so every client behind the edge lands
+ * in one bucket: one MAX_CONNECTIONS_PER_IP for the whole platform, and one
+ * strike banning all of them. It cost both nginx configs their forwarded
+ * headers on /socket.io/ (and the host config's `/` as well), and `nginx -t`
+ * does not warn: the file is perfectly valid.
+ */
+test('a location that sets any proxy header re-sends the forwarding set', () => {
+  const required = ['X-Forwarded-For', 'X-Real-IP', 'Host'];
+  for (const rel of [
+    'infra/nginx/nginx.conf',
+    'infra/nginx/nginx.compose.conf',
+    'infra/nginx/conf.d/default.conf',
+  ]) {
+    const conf = fs.readFileSync(path.join(repoRoot(), rel), 'utf8');
+    const declaring = locationBlocks(conf).filter((b) => /proxy_set_header/.test(b.body));
+    for (const block of declaring) {
+      for (const header of required) {
+        assert.match(
+          block.body,
+          new RegExp(`proxy_set_header\\s+${header}\\s`, 'i'),
+          `${rel} — \`${block.header}\` declares a proxy_set_header of its own, so it inherits ` +
+            `NONE of the server-level ones. Repeat all seven inside it; ${header} is missing.`,
+        );
+      }
+    }
+  }
+  // The parser has to find something, or the assertions above are vacuous.
+  const compose = fs.readFileSync(path.join(repoRoot(), 'infra/nginx/nginx.compose.conf'), 'utf8');
+  const blocks = locationBlocks(compose);
+  assert.equal(blocks.length, 25, 'every location in the compose config is parsed');
+  assert.equal(
+    blocks.filter((b) => /proxy_set_header/.test(b.body)).length,
+    1,
+    'only /socket.io/ needs its own headers there',
+  );
 });
