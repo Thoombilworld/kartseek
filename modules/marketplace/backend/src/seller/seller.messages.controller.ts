@@ -1,45 +1,9 @@
-import {
-  BadRequestException,
-  Controller,
-  UseFilters,
-  UsePipes,
-  ValidationPipe,
-} from '@nestjs/common';
+import { Controller, UseFilters, UsePipes, ValidationPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RpcAwareExceptionsFilter } from '@app/common';
 import { SellerService } from './seller.service';
 import { RegisterSellerDto } from '../dto/seller.dto';
 import { DEFAULT_REGION } from '@app/region';
-
-/**
- * A product write refused for its content answers with a normal reply,
- * `{ success: false, statusCode: 400, message, errors: [{ slug, message }] }`,
- * instead of an RPC error. The RPC error channel (`RpcAwareExceptionsFilter`)
- * is flattened to `{ statusCode, message, errorCode }` by design, and the
- * seller form needs the per-attribute list to mark its fields; the gateway
- * turns this reply back into the HTTP 400 it is. Every other failure still
- * travels the error channel unchanged.
- */
-async function asValidationReply<T>(
-  run: () => Promise<T>,
-): Promise<T | { success: false; statusCode: 400; message: string; errors: unknown[] }> {
-  try {
-    return await run();
-  } catch (err) {
-    if (err instanceof BadRequestException) {
-      const response: any = err.getResponse();
-      if (response && typeof response === 'object' && Array.isArray(response.errors)) {
-        return {
-          success: false,
-          statusCode: 400,
-          message: String(response.message ?? err.message),
-          errors: response.errors,
-        };
-      }
-    }
-    throw err;
-  }
-}
 
 // Every `countryCode` below used to default to a literal 'IN'. These are RPC
 // entry points, so the default fires whenever a caller omits the field — and
@@ -398,7 +362,7 @@ export class SellerMessagesController {
   @MessagePattern({ cmd: 'update_seller_product' })
   msgUpdateProduct(@Payload() d: { sellerId: string; productId: string; [k: string]: any }) {
     const { sellerId, productId, ...dto } = d;
-    return asValidationReply(() => this.svc.updateProduct(sellerId, productId, dto));
+    return this.svc.updateProduct(sellerId, productId, dto);
   }
   @MessagePattern({ cmd: 'delete_seller_product' }) msgDeleteProduct(
     @Payload() d: { sellerId: string; productId: string },
@@ -568,9 +532,7 @@ export class SellerMessagesController {
   @MessagePattern({ cmd: 'create_seller_product' })
   msgCreateProduct(@Payload() d: { sellerId: string; countryCode?: string; [k: string]: any }) {
     const { sellerId, countryCode, ...dto } = d;
-    return asValidationReply(() =>
-      this.svc.addProduct(sellerId, countryCode ?? DEFAULT_REGION, dto),
-    );
+    return this.svc.addProduct(sellerId, countryCode ?? DEFAULT_REGION, dto);
   }
   @MessagePattern({ cmd: 'bulk_upload_products' })
   msgBulkUpload(@Payload() d: { sellerId: string; countryCode?: string; products: any[] }) {
