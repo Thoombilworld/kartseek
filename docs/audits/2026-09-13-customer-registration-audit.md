@@ -71,6 +71,18 @@ uses (request `regionCode` set by the edge, else the `X-Region-Code` header,
 else the platform default). `users.region_code` is a different column, the
 admin scope lock, and is untouched.
 
+**Which column is a customer's canonical market.** `users.country` (ISO
+3166-1 alpha-2, the market the account was created in). It is the only market
+column user-service maps, and its customer listing filters on it
+(`apps/api/apps/user-service/src/user.service.ts:67`). `users.region_code` is
+the admin scope lock: it rides into the JWT only when set
+(`gateway.controller.ts:144`), is `NULL` for every customer, and must never be
+read as a customer's market. An order's market is the order's own
+`orders.region_code` (`apps/api/apps/order-service/src/entities/order.entity.ts:105`),
+the market it was placed in, which need not equal the customer's home market.
+Anything that backfills a market from the customer row must read
+`users.country`, with the caveat in open item O8.
+
 ### RC3 — phone ciphertext in responses
 
 The phone is encrypted at rest through `EncryptionService` (AES-GCM,
@@ -168,7 +180,8 @@ seller promotion and reuses customer registration's hashing and validation):
 validation regex changed (`gateway.dto.ts:45`); hashing unchanged (bcrypt 12,
 `gateway.controller.ts:499`); `users.status` unchanged (`active` for customers,
 `pending` for self-registered sellers); `users.country` now set from the
-request's market; `users.region_code` untouched.
+request's market; `users.region_code` untouched. `users.country` is the customer's
+canonical market; `users.region_code` is admin scope only (see RC2).
 
 ## E. Tests and verification
 
@@ -209,15 +222,16 @@ whitelist + forbidNonWhitelisted, bcrypt 12, phone encryption at rest, the
 
 ## G. Findings outside this change (open)
 
-| #   | Severity  | Finding                                                                                                                                                   | Recommendation                                                                                                   |
-| --- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| O1  | P1 (prod) | `SENDGRID_API_KEY` is not set in any env file; without it reset mail is log-only in every environment                                                     | Set `SENDGRID_API_KEY` and `EMAIL_FROM` in the production secret; the service logs the missing key at boot       |
-| O2  | P2        | Register answers 409 "An account with this email already exists" while forgot-password is uniform, so register can enumerate addresses                    | Team decision: keep (usability, now throttled 10/min) or answer 201-shaped "check your e-mail" and send a notice |
-| O3  | P2        | The Flutter customer app is mock-first: no real register/login call, so mobile customers cannot create accounts at all                                    | Wire the mobile auth screens to `/auth/*` (tracked with the mobile programme)                                    |
-| O4  | P2        | No e-mail verification: `email_verified` stays false and nothing gates on it; accounts are active immediately                                             | Decide whether verification is required per market; if so, gate checkout/reset on it                             |
-| O5  | P3        | Seller self-registration leaves `role = customer` until admin approval                                                                                    | M12 (`applySellerDecision`), already reported                                                                    |
-| O6  | P3        | A click on the auth forms before hydration performs a native GET submit and reloads the page blank (inputs have no `name`, so nothing leaks into the URL) | Disable submit until hydrated, or add `noValidate` + a client-only submit                                        |
-| O7  | P3        | The gateway logs a reset link in non-production for local testing                                                                                         | Keep gated on `NODE_ENV !== 'production'`; never widen                                                           |
+| #   | Severity  | Finding                                                                                                                                                                                                                                 | Recommendation                                                                                                             |
+| --- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| O1  | P1 (prod) | `SENDGRID_API_KEY` is not set in any env file; without it reset mail is log-only in every environment                                                                                                                                   | Set `SENDGRID_API_KEY` and `EMAIL_FROM` in the production secret; the service logs the missing key at boot                 |
+| O2  | P2        | Register answers 409 "An account with this email already exists" while forgot-password is uniform, so register can enumerate addresses                                                                                                  | Team decision: keep (usability, now throttled 10/min) or answer 201-shaped "check your e-mail" and send a notice           |
+| O3  | P2        | The Flutter customer app is mock-first: no real register/login call, so mobile customers cannot create accounts at all                                                                                                                  | Wire the mobile auth screens to `/auth/*` (tracked with the mobile programme)                                              |
+| O4  | P2        | No e-mail verification: `email_verified` stays false and nothing gates on it; accounts are active immediately                                                                                                                           | Decide whether verification is required per market; if so, gate checkout/reset on it                                       |
+| O5  | P3        | Seller self-registration leaves `role = customer` until admin approval                                                                                                                                                                  | M12 (`applySellerDecision`), already reported                                                                              |
+| O6  | P3        | A click on the auth forms before hydration performs a native GET submit and reloads the page blank (inputs have no `name`, so nothing leaks into the URL)                                                                               | Disable submit until hydrated, or add `noValidate` + a client-only submit                                                  |
+| O7  | P3        | The gateway logs a reset link in non-production for local testing                                                                                                                                                                       | Keep gated on `NODE_ENV !== 'production'`; never widen                                                                     |
+| O8  | P2        | Every customer created through the gateway before 8b6e4a9 carries `users.country = 'IN'` (the column default), whatever market they signed up in, so a backfill from `users.country` is only trustworthy for rows created after the fix | Treat pre-fix `'IN'` as unknown; derive from the customer's addresses or first order if a market is needed, or leave unset |
 
 ## Appendix: commits
 
