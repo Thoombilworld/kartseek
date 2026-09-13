@@ -250,10 +250,26 @@ export const adminMarketplaceApi = {
   getSellerHealth: (id: string) => api.get<any>(`/admin/marketplace/sellers/${id}/health`),
 
   // ── Orders ────────────────────────────────────────────────────
-  getOrders: (params?: { userId?: string; sellerId?: string; status?: string; country?: string }) =>
+  //
+  // `userId` and `sellerId` used to be in this type and the route implements
+  // neither. Harmless while it answered an empty page; now that the gateway
+  // validates the query, an undeclared key is a 400 rather than a filter that
+  // quietly does nothing, so the type says what the route actually takes. No
+  // caller passed them.
+  getOrders: (params?: { status?: string; country?: string; page?: number; limit?: number }) =>
     api.get<Paginated<any>>('/admin/marketplace/orders', params as any),
 
-  getOrderById: (id: string) => api.get<any>('/admin/marketplace/orders/' + id),
+  /**
+   * One order, BY ORDER NUMBER.
+   *
+   * The route is `/admin/marketplace/orders/:orderNumber` and order-service
+   * looks orders up by that number — not by the row's uuid, which is what a
+   * parameter called `id` invites a caller to pass. Renamed rather than
+   * removed: it is the only typed way to reach the route, and a uuid here is a
+   * 404 that looks like a missing order.
+   */
+  getOrderByNumber: (orderNumber: string) =>
+    api.get<any>('/admin/marketplace/orders/' + encodeURIComponent(orderNumber)),
 
   // ── Returns Adjudication ──────────────────────────────────────
   getReturns: (params?: { sellerId?: string; status?: string; page?: number; country?: string }) =>
