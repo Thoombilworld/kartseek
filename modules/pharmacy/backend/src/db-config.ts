@@ -83,9 +83,15 @@ export function resolvePharmacyDbConfig(read: EnvReader): ResolvedPharmacyDb {
    * it. Deliberately not a `first(...) ?? default` like the four values above:
    * a wrong host fails loudly on connect, whereas a wrong password used to
    * succeed against the development database and quietly write there.
+   *
+   * Two spellings, not three. `DB_PASS` was a third name for the same secret,
+   * and `scripts/registry/compose.mjs` blanked only `DB_PASSWORD` when it
+   * stripped the credentials of the ten `database: null` containers — so the
+   * alias carried the superuser password past the fix (whole-branch review N2).
+   * It is no longer read anywhere; rename it to `DB_PASSWORD`.
    */
   const requirePassword = (moduleKey: string): string => {
-    const value = first(moduleKey, 'DB_PASSWORD', 'DB_PASS');
+    const value = first(moduleKey, 'DB_PASSWORD');
     if (!value) {
       throw new Error(
         `${moduleKey} or DB_PASSWORD is not set. Copy .env.example to .env in this module ` +
