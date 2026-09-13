@@ -5,8 +5,9 @@
  *   node scripts/registry/generate.mjs           write (npm run registry:generate)
  *   node scripts/registry/generate.mjs --check   exit 1 if anything is stale
  *
- * Outputs: docs/architecture/services.md and infra/docker/compose.services.yml
- * (whole files), the platform table between markers in README.md,
+ * Outputs: docs/architecture/services.md, infra/docker/compose.services.yml
+ * and infra/k8s/microservices-generated.yaml (whole files), the platform table
+ * between markers in README.md,
  * docs/guides/running-services.md, apps/api/README.md and
  * apps/api/docs/runbook.md, and the block between markers in every entry's
  * README.md. A README without markers is skipped and listed, not created.
@@ -18,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadRegistry, repoRoot, NEST_KINDS } from './lib.mjs';
 import { renderComposeServices } from './compose.mjs';
+import { renderMicroservices } from './k8s.mjs';
 
 export const START = '<!-- registry:start -->';
 export const END = '<!-- registry:end -->';
@@ -150,6 +152,11 @@ export function generateAll(reg, root, { check = false } = {}) {
     {
       rel: 'infra/docker/compose.services.yml',
       next: () => renderComposeServices(reg),
+      whole: true,
+    },
+    {
+      rel: 'infra/k8s/microservices-generated.yaml',
+      next: () => renderMicroservices(reg),
       whole: true,
     },
     ...PLATFORM_TARGETS.map((rel) => ({
