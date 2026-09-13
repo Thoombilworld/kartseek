@@ -20,12 +20,19 @@ import { GroceryStore } from '../../../../modules/grocery/backend/src/entities/g
 import { GroceryItem } from '../../../../modules/grocery/backend/src/entities/grocery-item.entity';
 import { GroceryOrder } from '../../../../modules/grocery/backend/src/entities/grocery-order.entity';
 
+/**
+ * The database password comes from the environment or the script stops — there
+ * is no built-in default (AUD2-074). CommonJS `require` because the helper is
+ * shared with the plain-node scripts under `maintenance/marketplace-catalog`.
+ */
+const requireDbPassword: (...keys: string[]) => string =
+  require('../lib/db-password').requireDbPassword;
 const ds = new DataSource({
   type: 'postgres',
   host: process.env.GROCERY_DB_HOST || process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.GROCERY_DB_PORT ?? process.env.DB_PORT ?? '5432', 10),
   username: process.env.GROCERY_DB_USER || process.env.DB_USER || 'postgres',
-  password: process.env.GROCERY_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
+  password: requireDbPassword('GROCERY_DB_PASSWORD'),
   // This vertical owns its own database now. Seeding kartseek_db would write
   // rows the service never reads, and leave the module looking empty.
   database: process.env.GROCERY_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_grocery',

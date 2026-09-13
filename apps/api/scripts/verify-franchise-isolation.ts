@@ -37,6 +37,13 @@ import { Category } from '../../../modules/marketplace/backend/src/entities/cate
 import { MarketplaceOrder } from '../../../modules/marketplace/backend/src/entities/marketplace-order.entity';
 import { FranchiseViewService as MarketplaceView } from '../../../modules/marketplace/backend/src/franchise/franchise-view.service';
 
+/**
+ * The database password comes from the environment or the script stops — there
+ * is no built-in default (AUD2-074). CommonJS `require` because the helper is
+ * shared with the plain-node scripts under `maintenance/marketplace-catalog`.
+ */
+const requireDbPassword: (...keys: string[]) => string =
+  require('./lib/db-password').requireDbPassword;
 const FRANCHISE_ID = process.env.VERIFY_FRANCHISE_ID || 'FR-001';
 
 const ds = new DataSource({
@@ -44,7 +51,7 @@ const ds = new DataSource({
   host: process.env.DB_HOST || 'localhost',
   port: +(process.env.DB_PORT || 5432),
   username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'kartseek123',
+  password: requireDbPassword(),
   database: process.env.DB_NAME || 'kartseek_db',
   // Full entity graph per module — relations (e.g. Restaurant#reservations) need
   // their inverse sides registered. Globs are fine here: this runs under ts-node,

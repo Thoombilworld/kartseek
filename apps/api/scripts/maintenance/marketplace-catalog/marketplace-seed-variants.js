@@ -16,6 +16,7 @@
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 
+const { requireDbPassword } = require('../../lib/db-password');
 // Axis definitions per subcategory slug. `priceDelta` is added to the product's
 // own selling price, so a larger size legitimately costs more.
 const APPAREL_SIZES = {
@@ -118,7 +119,7 @@ function skuSuffix(combo) {
     host: process.env.DB_HOST || '127.0.0.1',
     port: +(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'kartseek123',
+    password: requireDbPassword(),
     database: process.env.DB_NAME || 'kartseek_db',
   });
   await client.connect();

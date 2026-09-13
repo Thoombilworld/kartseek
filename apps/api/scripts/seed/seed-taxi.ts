@@ -41,12 +41,19 @@ import {
   TaxiAuditLog,
 } from '../../apps/api-gateway/src/entities/taxi.entity';
 
+/**
+ * The database password comes from the environment or the script stops — there
+ * is no built-in default (AUD2-074). CommonJS `require` because the helper is
+ * shared with the plain-node scripts under `maintenance/marketplace-catalog`.
+ */
+const requireDbPassword: (...keys: string[]) => string =
+  require('../lib/db-password').requireDbPassword;
 const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.TAXI_DB_HOST || process.env.DB_HOST || 'localhost',
   port: +(process.env.TAXI_DB_PORT || process.env.DB_PORT || 5432),
   username: process.env.TAXI_DB_USER || process.env.DB_USER || 'postgres',
-  password: process.env.TAXI_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
+  password: requireDbPassword('TAXI_DB_PASSWORD'),
   // This vertical owns its own database now. Seeding kartseek_db would write
   // rows the service never reads, and leave the module looking empty.
   database: process.env.TAXI_DB_NAME ?? process.env.DB_NAME ?? 'kartseek_taxi',

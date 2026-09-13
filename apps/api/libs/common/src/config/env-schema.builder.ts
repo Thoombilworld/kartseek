@@ -60,6 +60,20 @@ const BASE_SCHEMA = {
   // `databaseCredentials()` unreachable — it would never see a missing password.
   DB_PASSWORD: Joi.string().allow('').optional(),
   DB_NAME: Joi.string().default('kartseek_db'),
+  /**
+   * Connection-pool and retry policy, applied by `databaseCredentials()` in
+   * @app/database — one policy for every service rather than three (AUD2-033).
+   *
+   * No defaults here on purpose: a Joi default is returned by ConfigService
+   * even when the variable is unset, which would move the real defaults out of
+   * the helper and into two schemas that could drift from it. Declared so a
+   * non-numeric value is refused at boot instead of silently becoming NaN.
+   */
+  DB_POOL_SIZE: Joi.number().integer().min(1).optional(),
+  DB_POOL_TIMEOUT_MS: Joi.number().integer().min(0).optional(),
+  DB_CONNECT_TIMEOUT_MS: Joi.number().integer().min(0).optional(),
+  DB_RETRY_ATTEMPTS: Joi.number().integer().min(0).optional(),
+  DB_RETRY_DELAY_MS: Joi.number().integer().min(0).optional(),
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().default(6379),
   KAFKA_BROKER: Joi.string().default('localhost:9092'),

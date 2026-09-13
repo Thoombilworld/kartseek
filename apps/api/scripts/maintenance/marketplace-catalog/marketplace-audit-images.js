@@ -10,6 +10,7 @@
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 
+const { requireDbPassword } = require('../../lib/db-password');
 const CONCURRENCY = 12;
 const TIMEOUT_MS = 15000;
 
@@ -56,7 +57,7 @@ async function pool(items, fn, size) {
     host: process.env.DB_HOST || '127.0.0.1',
     port: +(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'kartseek123',
+    password: requireDbPassword(),
     database: process.env.DB_NAME || 'kartseek_db',
   });
   await client.connect();

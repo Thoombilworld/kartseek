@@ -235,28 +235,54 @@ describe.each(RUNNERS)(
           ({
             [`${UC}_DB_HOST`]: 'dedicated',
             [`${UC}_DB_PORT`]: '5499',
+            [`${UC}_DB_PASSWORD`]: 'dedicated-secret',
             DB_HOST: 'shared',
             DB_PORT: '5432',
+            DB_PASSWORD: 'shared-secret',
           })[key],
       );
       expect(both.host).toBe('dedicated');
       expect(both.port).toBe(5499);
+      expect(both.password).toBe('dedicated-secret');
 
-      const sharedOnly = resolve((key) => ({ DB_HOST: 'shared', DB_NAME: 'kartseek_db' })[key]);
+      const sharedOnly = resolve(
+        (key) => ({ DB_HOST: 'shared', DB_NAME: 'kartseek_db', DB_PASSWORD: 'shared-secret' })[key],
+      );
       expect(sharedOnly.host).toBe('shared');
       expect(sharedOnly.database).toBe('kartseek_db');
+      expect(sharedOnly.password).toBe('shared-secret');
 
       // The last resorts, which used to differ between the runner and the
       // service: the runner fell back to the dedicated container, the service
-      // to the shared platform database.
-      const nothing = resolve(() => undefined);
+      // to the shared platform database. The password has none — see below.
+      const nothing = resolve((key) => (key === 'DB_PASSWORD' ? 'supplied' : undefined));
       expect(nothing).toEqual({
         host: 'localhost',
         port: 5432,
         username: 'postgres',
-        password: 'kartseek123',
+        password: 'supplied',
         database: 'kartseek_db',
       });
+    });
+
+    it('refuses to resolve without a password rather than defaulting to a literal', () => {
+      // AUD2-074 (IN4). The last resort used to be the real development
+      // password, in tracked source, and it was reached by BOTH sides of this
+      // resolver: the migration CLI and the running service. A host that is
+      // wrong fails loudly on connect; a password that is wrong used to succeed
+      // against the development database and quietly write there.
+      expect(() => resolve(() => undefined)).toThrow(
+        new RegExp(`${module.toUpperCase()}_DB_PASSWORD or DB_PASSWORD`),
+      );
+      // An empty value is a missing value — `DB_PASSWORD=` in a .env must not
+      // read as "connect with no password".
+      expect(() => resolve((key) => (key === 'DB_PASSWORD' ? '' : undefined))).toThrow(
+        /DB_PASSWORD/,
+      );
+      // Any one of the three supplies it.
+      for (const key of [`${module.toUpperCase()}_DB_PASSWORD`, 'DB_PASSWORD', 'DB_PASS']) {
+        expect(resolve((k) => (k === key ? 'secret' : undefined)).password).toBe('secret');
+      }
     });
   },
 );

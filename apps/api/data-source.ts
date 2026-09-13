@@ -45,7 +45,17 @@ export const AppDataSource = new DataSource({
   host: process.env.MARKETPLACE_DB_HOST || process.env.DB_HOST || 'localhost',
   port: Number(process.env.MARKETPLACE_DB_PORT || process.env.DB_PORT || 5432),
   username: process.env.MARKETPLACE_DB_USER || process.env.DB_USER || 'postgres',
-  password: process.env.MARKETPLACE_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
+  // No built-in default — see data-source.main.ts for why (AUD2-074).
+  password: (() => {
+    const p = process.env.MARKETPLACE_DB_PASSWORD || process.env.DB_PASSWORD || process.env.DB_PASS;
+    if (!p) {
+      throw new Error(
+        'MARKETPLACE_DB_PASSWORD or DB_PASSWORD is not set — the migration CLI will not use a ' +
+          'built-in default. Set one of them in apps/api/.env.',
+      );
+    }
+    return p;
+  })(),
   database: process.env.MARKETPLACE_DB_NAME || process.env.DB_NAME || 'kartseek_db',
   schema: 'public',
   entities: [],

@@ -36,6 +36,13 @@ import { Franchise } from '../../../../modules/franchise/backend/src/entities/fr
 import { REGION_CONFIGS } from '../../libs/region/src/region.config';
 import type { SupportedCountryCode } from '../../libs/region/src/region.types';
 
+/**
+ * The database password comes from the environment or the script stops — there
+ * is no built-in default (AUD2-074). CommonJS `require` because the helper is
+ * shared with the plain-node scripts under `maintenance/marketplace-catalog`.
+ */
+const requireDbPassword: (...keys: string[]) => string =
+  require('../lib/db-password').requireDbPassword;
 const APPLY = process.argv.includes('--apply');
 
 const ds = new DataSource({
@@ -43,7 +50,7 @@ const ds = new DataSource({
   host: process.env.DB_HOST || 'localhost',
   port: +(process.env.DB_PORT || 5432),
   username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'kartseek123',
+  password: requireDbPassword('FRANCHISE_DB_PASSWORD'),
   database: process.env.FRANCHISE_DB_NAME ?? 'kartseek_franchise',
   schema: 'franchise',
   entities: [Franchise],

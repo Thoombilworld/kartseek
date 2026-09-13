@@ -23,3 +23,19 @@ import { vi } from 'vitest';
  * while porting.
  */
 (globalThis as any).jest = vi;
+
+/**
+ * A placeholder `DB_PASSWORD` for the specs that import a DataSource.
+ *
+ * `databaseCredentials()` and the eight `db-config.ts` resolvers have no
+ * built-in password any more (IN4/AUD2-074): a missing one throws. The module
+ * `data-source.ts` files resolve their connection at *import* time, so on a
+ * machine without `apps/api/.env` — a fresh clone, CI — `module-data-sources.spec.ts`
+ * would fail on the import rather than on anything it asserts.
+ *
+ * `||=` so a real environment always wins, and deliberately a value that could
+ * not authenticate against anything: nothing in the default suite opens a
+ * connection, and the specs that do (the integration suites, excluded from this
+ * run) read `process.env.DB_PASSWORD` themselves and refuse without it.
+ */
+process.env.DB_PASSWORD ||= 'vitest-placeholder-no-connection-is-opened';

@@ -8,7 +8,6 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 @Module({})
 export class DatabaseModule {
-
   // ── PostgreSQL — Relational data (Users, Orders, Transactions) ──────────────
   static registerPostgres(entities: any[] = [], schema: string = 'public'): DynamicModule {
     return {
@@ -26,23 +25,26 @@ export class DatabaseModule {
               );
             }
             return {
-              type:               'postgres',
-              // host/port come from the shared helper too; the locals above exist
-              // only for the dev log line.
+              type: 'postgres',
+              /**
+               * Host, port, credentials, SSL, pool size and the retry/timeout
+               * policy all come from the one helper; the locals above exist
+               * only for the dev log line.
+               *
+               * This factory used to restate the whole policy underneath the
+               * spread — `max: isDev ? 5 : 20`, its own retries and its own
+               * `connectTimeoutMS` — which made three different pool policies
+               * on this platform: grocery's, the helper's, and this one. A
+               * deploy that raised `DB_POOL_SIZE` moved two of them and left
+               * the gateway, wallet and location services on 20 regardless
+               * (AUD2-033). There is one now, and `DB_POOL_SIZE` moves it.
+               */
               ...databaseCredentials(cfg),
               schema,
               entities,
-              synchronize:        false,          // gateway never auto-migrates; each microservice owns its own schema
-              logging:            isDev ? ['error'] : false,
-              retryAttempts:      isDev ? 3 : 10, // 3 retries → app boots without DB in dev
-              retryDelay:         isDev ? 1500 : 3000,
+              synchronize: false, // gateway never auto-migrates; each microservice owns its own schema
+              logging: isDev ? ['error'] : false,
               keepConnectionAlive: !isDev,
-              connectTimeoutMS:   5000,
-              extra: {
-                connectionTimeoutMillis: 5000,
-                idleTimeoutMillis:       30_000,
-                max:                     isDev ? 5 : 20,
-              },
             };
           },
         }),
@@ -60,13 +62,13 @@ export class DatabaseModule {
           imports: [ConfigModule],
           inject: [ConfigService],
           useFactory: (cfg: ConfigService) => ({
-            uri:                     cfg.get<string>('MONGO_URI', 'mongodb://localhost:27017/kartseek_catalog'),
+            uri: cfg.get<string>('MONGO_URI', 'mongodb://localhost:27017/kartseek_catalog'),
             serverSelectionTimeoutMS: 5000,
-            connectTimeoutMS:         5000,
-            socketTimeoutMS:          30_000,
-            retryWrites:              true,
-            retryReads:               true,
-            maxPoolSize:              isDev ? 5 : 20,
+            connectTimeoutMS: 5000,
+            socketTimeoutMS: 30_000,
+            retryWrites: true,
+            retryReads: true,
+            maxPoolSize: isDev ? 5 : 20,
           }),
         }),
       ],

@@ -63,6 +63,20 @@ export const envValidationSchema = Joi.object({
   DB_PASSWORD: Joi.string().allow('').optional(),
   DB_PASS: Joi.string().optional(), // Alias for DB_PASSWORD
   DB_NAME: Joi.string().default('kartseek_db'),
+  /**
+   * Connection-pool and retry policy, applied by `databaseCredentials()` in
+   * @app/database — one policy for every service rather than three (AUD2-033).
+   *
+   * No defaults here on purpose: a Joi default is returned by ConfigService
+   * even when the variable is unset, which would move the real defaults out of
+   * the helper and into two schemas that could drift from it. Declared so a
+   * non-numeric value is refused at boot instead of silently becoming NaN.
+   */
+  DB_POOL_SIZE: Joi.number().integer().min(1).optional(),
+  DB_POOL_TIMEOUT_MS: Joi.number().integer().min(0).optional(),
+  DB_CONNECT_TIMEOUT_MS: Joi.number().integer().min(0).optional(),
+  DB_RETRY_ATTEMPTS: Joi.number().integer().min(0).optional(),
+  DB_RETRY_DELAY_MS: Joi.number().integer().min(0).optional(),
   // Auto-schema-sync. Defaults OFF: multiple services share one database, so
   // letting each ALTER the shared tables to match its own entities makes the
   // resulting schema depend on service boot order. Use migrations instead.

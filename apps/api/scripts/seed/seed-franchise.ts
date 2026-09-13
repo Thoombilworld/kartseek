@@ -32,11 +32,18 @@
 import { DataSource } from 'typeorm';
 import { Franchise } from '../../../../modules/franchise/backend/src/entities/franchise.entity';
 
+/**
+ * The database password comes from the environment or the script stops — there
+ * is no built-in default (AUD2-074). CommonJS `require` because the helper is
+ * shared with the plain-node scripts under `maintenance/marketplace-catalog`.
+ */
+const requireDbPassword: (...keys: string[]) => string =
+  require('../lib/db-password').requireDbPassword;
 const PG = {
   host: process.env.FRANCHISE_DB_HOST || process.env.DB_HOST || 'localhost',
   port: +(process.env.FRANCHISE_DB_PORT || process.env.DB_PORT || 5432),
   username: process.env.FRANCHISE_DB_USER || process.env.DB_USER || 'postgres',
-  password: process.env.FRANCHISE_DB_PASSWORD || process.env.DB_PASSWORD || 'kartseek123',
+  password: requireDbPassword('FRANCHISE_DB_PASSWORD'),
 };
 
 /**

@@ -187,7 +187,20 @@ export const MainDataSource = new DataSource({
   host: process.env.DB_HOST || '127.0.0.1',
   port: Number(process.env.DB_PORT || 5432),
   username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || process.env.DB_PASS || 'kartseek123',
+  // No built-in default. The literal that used to sit here was the real
+  // development password in tracked source (AUD2-074), and — worse — it meant
+  // `migration:run` against a production host with DB_PASSWORD unset did not
+  // fail, it connected. The migration CLI refuses instead.
+  password: (() => {
+    const p = process.env.DB_PASSWORD || process.env.DB_PASS;
+    if (!p) {
+      throw new Error(
+        'DB_PASSWORD is not set — the migration CLI will not use a built-in default. ' +
+          'Set DB_PASSWORD (or DB_PASS) in apps/api/.env.',
+      );
+    }
+    return p;
+  })(),
   database: process.env.DB_NAME || 'kartseek_db',
   schema: 'public',
   entities: [],

@@ -28,6 +28,7 @@
  */
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 
+const { requireDbPassword } = require('../../lib/db-password');
 const DRY_RUN = process.argv.includes('--dry-run');
 const IMAGES_PER_PRODUCT = 3;
 const CONCURRENCY = 8;
@@ -159,7 +160,7 @@ async function pool(items, fn, size) {
     host: process.env.DB_HOST || '127.0.0.1',
     port: +(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'kartseek123',
+    password: requireDbPassword(),
     database: process.env.DB_NAME || 'kartseek_db',
   });
   await client.connect();

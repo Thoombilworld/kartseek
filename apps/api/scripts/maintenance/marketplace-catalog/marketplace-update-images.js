@@ -9,6 +9,7 @@
 const { Client } = require(require.resolve('pg', { paths: [process.cwd()] }));
 const { randomUUID } = require('crypto');
 
+const { requireDbPassword } = require('../../lib/db-password');
 // ── High-quality product image URLs from Unsplash ─────────────────────────
 // Each product gets a curated, real product photo sized at 600×600.
 const PRODUCT_IMAGES = {
@@ -207,11 +208,13 @@ const PRODUCT_IMAGES = {
 
 async function updateImages() {
   const client = new Client({
-    host: '127.0.0.1',
-    port: 5432,
-    user: 'postgres',
-    password: 'kartseek123',
-    database: 'kartseek_db',
+    // Was a fully hardcoded connection, password included (AUD2-074). The
+    // target now comes from the environment like every other script's.
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: +(process.env.DB_PORT || 5432),
+    user: process.env.DB_USER || 'postgres',
+    password: requireDbPassword(),
+    database: process.env.DB_NAME || 'kartseek_db',
   });
   await client.connect();
   console.log('✅ Connected to DB');
