@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1
 #
-# Any Next workspace in the repository — the admin/customer shell (apps/web) and
-# the eight module zones (modules/<m>/frontend). Build from the repository ROOT:
+# Any Next workspace in the repository whose next.config sets
+# `output: 'standalone'`. Build from the repository ROOT:
 #
 #   docker build -f infra/docker/nextjs.Dockerfile \
 #     --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 \
 #     --build-arg HEALTH_PATH=/admin/login \
-#     --build-arg NEXT_PUBLIC_API_URL=http://nginx/api/v1 -t kartseek/web:dev .
+#     --build-arg NEXT_PUBLIC_API_URL=http://nginx/api/v1 \
+#     --build-arg API_URL=http://nginx/api/v1 -t kartseek/web:dev .
 #
 # Root context for the same reason as the API images: one lockfile, at the root,
 # installed through npm workspaces. It also has a second reason here — a Next
@@ -15,13 +16,30 @@
 # even typecheck.
 #
 # NEXT_PUBLIC_* are inlined into the client bundle at build time, so they are
-# build args and changing one means rebuilding. Server-side values (API_URL, the
-# zone rewrite targets read by next.config.mjs at request time) stay runtime env
-# and must NOT be passed here.
+# build args and changing one means rebuilding. The zone rewrite targets
+# (MARKETPLACE_ZONE_ORIGIN and friends, read by next.config.mjs at request time)
+# stay runtime env and must NOT be passed here.
 #
-# HEALTH_PATH has to be given for a module zone: every zone is served under its
-# own basePath, so `/` on a zone container is a 404 and the default below would
-# leave it `unhealthy` for ever.
+# BOTH `NEXT_PUBLIC_API_URL` AND `API_URL` ARE REQUIRED for a production build,
+# even though `api-base.ts` falls back from one to the other at run time. The
+# build itself evaluates that module while collecting page data, some route
+# handlers run on the Edge Runtime where only inlined values exist, and
+# `NODE_ENV=production` makes a missing value a thrown error rather than the
+# localhost default. Omitting API_URL fails the build with
+# "Failed to collect configuration for /api/loyalty" — a message that names the
+# route, not the variable.
+#
+# ── Precondition: the workspace must emit .next/standalone ───────────────────
+#
+# TODAY THAT IS `apps/web` AND NOTHING ELSE. The runtime stage copies
+# `.next/standalone`, which Next only produces when that workspace's own
+# next.config.mjs sets `output: 'standalone'`; none of the eight module zones
+# (modules/<m>/frontend) does yet — that is Task IN11's. Pointed at a zone now,
+# this file builds the app and then fails on the standalone COPY.
+#
+# When a zone does gain it, `--build-arg HEALTH_PATH=<basePath>/` is also
+# required: every zone is served under its own basePath, so `/` on a zone
+# container is a 404 and the default below would leave it `unhealthy` for ever.
 
 FROM node:26-alpine AS deps
 WORKDIR /repo
@@ -65,7 +83,12 @@ ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 ENV API_URL=${API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
-RUN npm run build --workspace=./${WORKSPACE_DIR}
+# Only apps/web has a public/ directory; the eight module zones have none. The
+# runtime COPY below is unconditional — Dockerfiles have no conditional copy —
+# so create it here and it succeeds empty. Same reason module-service.Dockerfile
+# creates an empty proto/ for the modules with no gRPC transport.
+RUN mkdir -p ${WORKSPACE_DIR}/public \
+  && npm run build --workspace=./${WORKSPACE_DIR}
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM node:26-alpine AS runner
@@ -75,6 +98,13 @@ ARG HEALTH_PATH=/admin/login
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 WORKDIR /repo
+# PORT has no default, and this is what enforces that — `EXPOSE ${PORT}` does
+# not. BuildKit word-splits that instruction's arguments after expansion, so an
+# empty expansion yields zero ports and EXPOSE silently does nothing; `docker
+# build --check` reports no warning either. Here an empty PORT is worse than
+# elsewhere: it is also what the server binds, so the container would listen on
+# a random port AND be unhealthy for ever.
+RUN test -n "$PORT" || { echo "build arg PORT is required (see infra/docker/README.md)" >&2; exit 1; }
 ENV NODE_ENV=production
 ENV PORT=${PORT}
 # Next's standalone server binds 127.0.0.1 unless told otherwise, which inside a

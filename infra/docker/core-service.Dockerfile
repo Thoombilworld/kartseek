@@ -12,8 +12,11 @@
 # to fall back to 3000, so every image built here reported `unhealthy` for ever
 # no matter how well the service was running, and an orchestrator that restarts
 # on a failed check never let one stay up (AUD2-020). A build that forgets the
-# argument now fails at `EXPOSE`, which is louder than an image that never goes
-# healthy. The registry-driven generator in `scripts/stack` always passes it.
+# argument now fails at the `RUN test -n "$PORT"` guard in the runtime stage,
+# which is louder than an image that never goes healthy. Note that `EXPOSE
+# ${PORT}` does NOT enforce it — an empty expansion is a silent no-op there, and
+# `docker build --check` passes on it too. The registry-driven generator in
+# `scripts/stack` always passes it.
 #
 # Root context because the repository has one lockfile, at the root, and
 # installs through npm workspaces; apps/api has no lockfile of its own, and the
@@ -56,12 +59,26 @@ FROM deps AS prod-deps
 RUN npm ci --workspace=apps/api --include-workspace-root --omit=dev \
   && mkdir -p apps/api/node_modules
 
-FROM node:26-alpine
+# Named, like the other three files, so `--target runner` can reach it.
+FROM node:26-alpine AS runner
 ARG APP
 ARG PORT
 ARG HEALTH_PATH=/health
 ENV APP_NAME=${APP}
 ENV NODE_ENV=production
+
+# PORT has no default, and this is what enforces that. `EXPOSE ${PORT}` does NOT:
+# BuildKit word-splits the instruction's arguments after expansion, so an empty
+# expansion yields zero ports and EXPOSE silently does nothing — and `docker
+# build --check` reports no warning either. Without this line a build that
+# forgot the argument would ship `HEALTHCHECK_PORT=`, whose check requests
+# `http://127.0.0.1:/health` and fails every time: unhealthy for ever, which is
+# AUD2-020's exact failure mode moved from a hard-coded 3000 to an empty string.
+#
+# BuildKit expands the argument into the command string (the build log shows
+# `RUN test -n "3014"`), so the value is part of this layer's cache key and a
+# cached success cannot be reused for a build that omits the argument.
+RUN test -n "$PORT" || { echo "build arg PORT is required (see infra/docker/README.md)" >&2; exit 1; }
 
 # Where the HEALTHCHECK looks, baked at build time from the service registry.
 # The runtime still reads `<SVC>_SERVICE_PORT` for what it binds; these two only

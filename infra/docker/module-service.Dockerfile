@@ -12,8 +12,11 @@
 #
 # PORT has no default on purpose: it is the port the HEALTHCHECK probes, not the
 # port the service binds (the service reads its own `<MODULE>_SERVICE_PORT`), so
-# a build that forgets it fails at `EXPOSE` rather than producing an image that
-# is `unhealthy` for ever. The generator in `scripts/stack` always passes it.
+# a build that forgets it fails at the `RUN test -n "$PORT"` guard in the
+# runtime stage rather than producing an image that is `unhealthy` for ever.
+# `EXPOSE ${PORT}` does NOT enforce it: an empty expansion is a silent no-op,
+# and `docker build --check` passes on it. The generator in `scripts/stack`
+# always passes it.
 #
 # The service lives in modules/<module>/backend and builds against the platform
 # libraries in apps/api/libs through the shared rspack config, so the builder
@@ -89,6 +92,13 @@ RUN addgroup --system --gid 1001 nodejs \
 WORKDIR /repo/modules/${APP}/backend
 ENV NODE_ENV=production
 ENV APP_NAME=${APP}
+
+# PORT has no default, and this is what enforces that — `EXPOSE ${PORT}` does
+# not. BuildKit word-splits that instruction's arguments after expansion, so an
+# empty expansion yields zero ports and EXPOSE silently does nothing; `docker
+# build --check` reports no warning either. Without this line a build that
+# forgot the argument would ship `HEALTHCHECK_PORT=` and be unhealthy for ever.
+RUN test -n "$PORT" || { echo "build arg PORT is required (see infra/docker/README.md)" >&2; exit 1; }
 
 # Where the HEALTHCHECK looks, baked at build time from the service registry.
 # The service still binds whatever `<MODULE>_SERVICE_PORT` says at runtime.
