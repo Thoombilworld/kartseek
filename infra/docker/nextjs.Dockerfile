@@ -34,15 +34,20 @@
 #
 # ── Precondition: the workspace must emit .next/standalone ───────────────────
 #
-# TODAY THAT IS `apps/web` AND NOTHING ELSE. The runtime stage copies
-# `.next/standalone`, which Next only produces when that workspace's own
-# next.config.mjs sets `output: 'standalone'`; none of the eight module zones
-# (modules/<m>/frontend) does yet — that is Task IN11's. Pointed at a zone now,
-# this file builds the app and then fails on the standalone COPY.
+# ALL NINE NEXT WORKSPACES DO: `apps/web` and the eight module zones
+# (modules/<m>/frontend). The runtime stage copies `.next/standalone`, which
+# Next only produces when that workspace's own next.config.mjs sets `output:
+# 'standalone'` — and each also sets `outputFileTracingRoot` to the monorepo
+# root, without which everything it imports from packages/shared-core is traced
+# from outside the workspace and silently left out. Pointed at a workspace
+# missing either key, this file builds the whole application and then fails on
+# the standalone COPY; `node --test scripts/registry/compose.test.mjs` catches
+# that in a second instead.
 #
-# When a zone does gain it, `--build-arg HEALTH_PATH=<basePath>/` is also
-# required: every zone is served under its own basePath, so `/` on a zone
-# container is a 404 and the default below would leave it `unhealthy` for ever.
+# A ZONE ALSO NEEDS `--build-arg HEALTH_PATH=<basePath>/` (the generator emits
+# it from services.yaml): every zone is served under its own basePath, so `/` on
+# a zone container is a 404 and the default below would leave it `unhealthy` for
+# ever.
 
 FROM node:26-alpine AS deps
 WORKDIR /repo

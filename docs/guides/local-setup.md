@@ -310,13 +310,14 @@ npm run stack:validate -- --keep          # leave the containers up afterwards
 npm run stack:validate -- --json          # the results array instead of the table
 ```
 
-**`--profile full` cannot succeed yet, and it is the expensive way to find
-that out.** Only `apps/web` sets `output: 'standalone'` in its
-`next.config.mjs`; each of the eight web zones builds and then fails on the
-standalone `COPY`, so the run ends in eight failed image builds after burning
-the build time for all of them. Giving the zones that output is Task IN11.
-Until then `full` means the API tier plus the console, and `admin` is the
-profile to use.
+**`--profile full` has never been run to completion, and it is the expensive
+way to find out what it does.** All nine Next workspaces now set `output:
+'standalone'`, so the eight zones can build — but no one has built them: the
+configuration landed in a session with no usable Docker daemon. Budget 45–90
+minutes and 22–28 GB for the first run, expect to find defects, and read
+[`infra/docker/README.md`](../../infra/docker/README.md), "Full profile
+status", for exactly what is proven and what is not before you start. `admin`
+is still the profile that is known to work end to end.
 
 It does the whole sequence itself, so you do not have to run `stack:up:admin`
 first: `npm run infra:up` (that is what creates the 166 Kafka topics), then
@@ -361,11 +362,31 @@ What it proves, in order:
 
 Exit 0 is a pass, 1 is a failed check, 2 is a setup error.
 
-**It does not go through nginx.** `infra/nginx/nginx.conf` still upstreams
+**It does not go through nginx.** The validator probes the gateway on
+`127.0.0.1:3001` and the console on `127.0.0.1:3000` directly — the published
+container ports — and prints a line saying so.
+
+It is now possible to put the edge in front of the containers, and it is a
+separate, manual step. `infra/nginx/nginx.conf` — the default mount — upstreams
 `host.docker.internal`, so a browser loading the containerised console through
-the proxy reaches _your own dev fleet_ rather than the containers. The
-validator probes the gateway on `127.0.0.1:3001` and the console on
-`127.0.0.1:3000` directly and prints a line saying so; the edge is Task IN11's.
+the proxy reaches _your own dev fleet_ rather than the containers.
+`infra/nginx/nginx.compose.conf` is its counterpart and upstreams
+`api-gateway:3001`, `web:3000` and each zone by compose service name:
+
+```bash
+# The container path. Rebuild the console first if a browser on THIS machine is
+# going to use it: the API origin is inlined into the bundle at build time.
+COMPOSE_API_URL=http://localhost/api/v1 COMPOSE_WS_URL=ws://localhost \
+  docker compose --profile admin build web
+NGINX_CONF=nginx.compose.conf docker compose up -d --force-recreate nginx
+```
+
+Which file is mounted, why the container config resolves its upstreams per
+request, and which origin to build the console for are all in
+[`infra/docker/README.md`](../../infra/docker/README.md), "Which nginx config
+is mounted". **Nothing in that path has been exercised against a running
+daemon**, and `docker exec kartseek-nginx nginx -t` is the first command to run
+when one is available.
 
 The first build is 20–45 minutes and needs about 12 GB of disk. It runs
 detached with its output in `.build-logs/stack-up-admin.log` — `tail -f` that

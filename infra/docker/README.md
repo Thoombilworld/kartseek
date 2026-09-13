@@ -13,12 +13,12 @@ installed through npm workspaces, and the rspack builder's own dependencies
 are declared in the root manifest. A build scoped to a single workspace
 directory cannot run `npm ci` or `nest build` at all.
 
-| Dockerfile                  | Build command                                                                                                                                                                                                              | Produces                                                                             |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `api-gateway.Dockerfile`    | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                                                                                                                      | The API gateway.                                                                     |
-| `core-service.Dockerfile`   | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service --build-arg PORT=3014 -t kartseek/order-service:2.0.0 .`                                                                               | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`. |
-| `module-service.Dockerfile` | `docker build -f infra/docker/module-service.Dockerfile --build-arg APP=grocery --build-arg PORT=3018 -t kartseek/grocery-service:2.0.0 .`                                                                                 | Any of the 8 module backends, selected by `--build-arg APP=<module>`.                |
-| `nextjs.Dockerfile`         | `docker build -f infra/docker/nextjs.Dockerfile --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 --build-arg NEXT_PUBLIC_API_URL=… --build-arg API_URL=… --build-arg NEXT_PUBLIC_WS_URL=… -t kartseek/web:2.0.0 .` | A Next workspace that emits `.next/standalone` — **`apps/web` only, today**.         |
+| Dockerfile                  | Build command                                                                                                                                                                                                              | Produces                                                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `api-gateway.Dockerfile`    | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                                                                                                                      | The API gateway.                                                                                                         |
+| `core-service.Dockerfile`   | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service --build-arg PORT=3014 -t kartseek/order-service:2.0.0 .`                                                                               | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`.                                     |
+| `module-service.Dockerfile` | `docker build -f infra/docker/module-service.Dockerfile --build-arg APP=grocery --build-arg PORT=3018 -t kartseek/grocery-service:2.0.0 .`                                                                                 | Any of the 8 module backends, selected by `--build-arg APP=<module>`.                                                    |
+| `nextjs.Dockerfile`         | `docker build -f infra/docker/nextjs.Dockerfile --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 --build-arg NEXT_PUBLIC_API_URL=… --build-arg API_URL=… --build-arg NEXT_PUBLIC_WS_URL=… -t kartseek/web:2.0.0 .` | Any of the 9 Next workspaces — the console and the eight zones; a zone also needs `--build-arg HEALTH_PATH=<basePath>/`. |
 
 Read each Dockerfile's own header comment for the full reasoning; the table
 above is a summary.
@@ -42,15 +42,30 @@ Each one you leave out fails the build with `Failed to collect configuration for
 [cause]: Error: WebSocket URL is not configured. Set NEXT_PUBLIC_WS_URL …
 ```
 
-### `nextjs.Dockerfile` builds `apps/web` and, for now, nothing else
+### `nextjs.Dockerfile` builds any of the nine Next workspaces
 
-It is written to take any Next workspace through `--build-arg WORKSPACE_DIR`,
-but it copies `.next/standalone`, and Next only emits that when the workspace's
-own `next.config.mjs` sets `output: 'standalone'`. Only `apps/web` does. Pointed
-at one of the eight module zones (`modules/<m>/frontend`) it builds the app and
-then fails on the standalone COPY. Adding that key to the zones is Task IN11;
-until it lands, a zone has no image, and IN6's generated Compose entry for one
-cannot build.
+It takes the workspace through `--build-arg WORKSPACE_DIR`, and it copies
+`.next/standalone` — which Next only emits when that workspace's own
+`next.config.mjs` sets `output: 'standalone'`. All nine now do: `apps/web`
+(Task IN5) and the eight module zones, `modules/<m>/frontend` (Task IN11).
+Each also sets `outputFileTracingRoot` to the monorepo root, without which
+everything the workspace imports from `packages/shared-core` is traced from
+outside its directory and silently left out of the image.
+
+A Next deployable added to `services.yaml` without those two keys builds — the
+whole application, in full — and then fails on the standalone `COPY`. The
+registry test `every Next deployable emits standalone output, traced from the
+monorepo root` (`scripts/registry/compose.test.mjs`) loads each config the way
+Next does and fails in under a second instead:
+
+```bash
+node --test scripts/registry/compose.test.mjs
+```
+
+A zone also needs `--build-arg HEALTH_PATH=<basePath>/`, which the generator
+emits from the registry: every zone is served under its own base path, so `/`
+on a zone container is a 404 and the image's default health path would leave it
+`unhealthy` for ever.
 
 ### `--build-arg PORT` is not optional
 
@@ -449,6 +464,96 @@ The eight module backends now connect as these roles — see
 module onto its own database role", for the per-module procedure and what to
 check after each one.
 
+## Which nginx config is mounted
+
+There are two, and the `nginx` service in `compose.infra.yml` mounts one of
+them onto `/etc/nginx/nginx.conf`:
+
+| `NGINX_CONF`         | File                                                         | Upstreams                                                                  | Use it when                                                                          |
+| -------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| unset (**default**)  | [`../nginx/nginx.conf`](../nginx/nginx.conf)                 | `host.docker.internal:3001` / `:3000`, plus the server blocks in `conf.d/` | The app tier runs as host processes — `npm run dev`. Nothing about that has changed. |
+| `nginx.compose.conf` | [`../nginx/nginx.compose.conf`](../nginx/nginx.compose.conf) | `api-gateway:3001`, `web:3000` and each zone by compose service name       | The app tier runs as containers — `--profile admin` or `--profile full`.             |
+
+```bash
+# Point the edge at the containers. Compose reads only the ROOT .env, so put it
+# there for a lasting switch; the variable on the command line is per-invocation.
+NGINX_CONF=nginx.compose.conf docker compose up -d --force-recreate nginx
+```
+
+`--force-recreate` because the variable changes a **bind mount**: an nginx
+container that is already running keeps the file it started with, and `docker
+compose up -d nginx` on its own sees no change to make.
+
+The `nginx` service carries no profile — it is infrastructure, and `npm run
+infra:up` starts it either way. Only what it proxies to changes.
+
+`nginx.compose.conf` serves the same routes as the host pair (`/api/`,
+`/docs`, `/graphql`, `/socket.io/`, `/_next/static/`, `/_next/image`,
+`/nginx-health`, `/`) and adds two locations per zone — the bare base path and
+everything under it, `/marketplace`, `/marketplace/` and so on for all eight.
+Three things about it are deliberately not copies of the host config, and each
+is a failure it would otherwise cause:
+
+- **It does not `include /etc/nginx/conf.d/*.conf`.** That directory is still
+  mounted and still holds the host-process server blocks, which proxy to the
+  `host.docker.internal` upstreams and 301 port 80 to https.
+- **It resolves upstreams per request**, through `set $x "name:port"` +
+  `proxy_pass http://$x` and Docker's embedded DNS at `127.0.0.11`, rather than
+  with `upstream { server … }`. nginx resolves an `upstream` block once at
+  startup and **exits** if a name does not resolve. The `admin` profile has no
+  zone containers, so a static upstream naming `marketplace-frontend` would
+  take the whole edge down — `/api/` and `/` included — whenever the smaller
+  profile is up. This way an absent zone is a 502 on its own path and nothing
+  else.
+- **Port 80 serves the application instead of redirecting to https**, and it
+  sends no HSTS. The console's client bundle calls the API over plain http at
+  whatever origin it was built with, and an HSTS entry for `localhost` is
+  sticky for a year across every port — it would take the developer's own
+  `http://localhost:3000` fleet down long after these containers are gone.
+
+**It routes each zone straight to the zone container, not through the
+console's rewrites, and it has to.** `apps/web` rewrites `/marketplace/*` to
+`MARKETPLACE_ZONE_ORIGIN` — but nothing reads that variable at run time. Next
+evaluates `rewrites()` and `headers()` during `next build`, freezes the
+resolved destinations into `.next/routes-manifest.json`, and the standalone
+`server.js` it emits carries the whole config **inlined as JSON**
+(`const nextConfig = {…}`, `next/dist/build/utils.js`): a standalone image never
+loads `next.config.mjs` again. So every variable that is read only inside a
+next.config — `API_GATEWAY_ORIGIN` and the eight `<M>_ZONE_ORIGIN`s, which a
+grep confirms is all of them — is **inert in the container**, and the baked
+default wins: `http://localhost:3002` for the marketplace zone, which inside
+the console container is the console itself.
+
+Two consequences, both in "Full profile status" below: reach a zone through
+nginx or on its own published port, never through the console; and treat those
+nine variables as a build-time concern that has not been converted yet.
+Variables the application code reads directly — `API_URL` for server-side
+fetches, everything in the Nest services — are unaffected.
+
+### The origin a browser is told to call
+
+`COMPOSE_API_URL` and `COMPOSE_WS_URL` become the `NEXT_PUBLIC_API_URL` and
+`NEXT_PUBLIC_WS_URL` **build args** of every Next image, so they are inlined
+into the client bundle and changing one means rebuilding that image. They must
+name an origin **the browser that loads the page can resolve**:
+
+| Where the browser is           | Set                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| On your machine, through nginx | `COMPOSE_API_URL=http://localhost/api/v1` and `COMPOSE_WS_URL=ws://localhost` |
+| Inside `kartseek-network`      | the defaults, `http://nginx/api/v1` and `ws://nginx`                          |
+
+The defaults are the container-internal spelling. A browser on the host cannot
+resolve `nginx`, so with them a console loaded at `http://localhost/` renders
+and then fails every API call on DNS — which the sign-in page reports as "We
+could not reach the sign-in service", with nothing in the gateway log. The
+`admin`/`full` port publish (`APP_BIND`, default `127.0.0.1`) is also there:
+`http://localhost:3000/admin/login` reaches the console container directly,
+bypassing the edge.
+
+The same values drive the page's own CSP. `apps/web/config/csp.cjs` builds
+`connect-src` from them, so a bundle built for one origin and served at another
+is refused by the browser even when the address does resolve.
+
 ## `compose.services.yml` — the application tier
 
 **Generated. Do not edit it.** `scripts/registry/compose.mjs` renders all 35
@@ -511,11 +616,58 @@ the infrastructure alone and nothing else.
 | `admin` | The twelve deployables an administrator needs end to end: the gateway, auth, user, admin, audit-log, notification, order, payment, marketplace, grocery, taxi and the console. |
 | `full`  | All 35.                                                                                                                                                                        |
 
-`npm run stack:up:full` **cannot build the eight web zones yet.** Only
-`apps/web` sets `output: 'standalone'` in its `next.config.mjs`; a zone builds
-and then fails on the standalone `COPY`. Giving the zones that output is Task
-IN11. Until then `full` is the API tier plus the console, with eight failed
-builds at the end — use it knowing that.
+### Full profile status
+
+The eight zones can now be built — they set `output: 'standalone'` — but
+**nothing in the list below has been run against a Docker daemon yet.** Task
+IN11 landed the configuration in a session where Docker's host→container port
+proxy was broken, so no image was built and no container was started. What is
+proven, and what is still owed:
+
+| Proven, without a daemon                                                                    | How                                             |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| All nine Next workspaces emit standalone output, traced from the monorepo root              | `node --test scripts/registry/compose.test.mjs` |
+| Every zone gets all three URL build args and its `<basePath>/` health path                  | same file                                       |
+| `nginx.compose.conf` names every deployable the registry declares, by service name and port | same file                                       |
+| `NGINX_CONF` selects the mount, and defaults to the host config                             | same file, and `docker compose config nginx`    |
+| Both profiles resolve, with and without `NGINX_CONF`                                        | `docker compose --profile full config --quiet`  |
+
+Still **REMAINING**, each with the command that settles it:
+
+```bash
+# 1. The 35 images. ~22-28 GB and 45-90 minutes cold; check `df` first.
+mkdir -p .build-logs
+docker compose --profile full build > .build-logs/stack-build-full.log 2>&1
+
+# 2. The zones answer their own base path — Next returns 200 for notFound(),
+#    so look for a zone-specific marker in the markup, not for a status code.
+docker compose --profile full up -d
+curl -s http://127.0.0.1:3002/marketplace/ | head -c 2000
+
+# 3. nginx accepts the container config, and reaches the containers.
+NGINX_CONF=nginx.compose.conf docker compose up -d --force-recreate nginx
+docker exec kartseek-nginx nginx -t
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/nginx-health
+docker exec kartseek-nginx tail -5 /var/log/nginx/access.log   # up=<container ip>
+
+# 4. The whole profile, as containers.
+npm run stack:validate -- --profile full --skip-build
+```
+
+Item 2 is the one to expect trouble from. A zone reached **through the
+console** — `http://localhost:3000/marketplace` — is not expected to work in a
+standalone image whatever the runtime environment says, for the baked-rewrite
+reason above; reach it through nginx (`http://localhost/marketplace`) or on the
+zone's own published port.
+
+Making those rewrites container-correct is a known, unstarted change:
+`API_GATEWAY_ORIGIN` and the eight `<M>_ZONE_ORIGIN`s have to become **build
+args** of `nextjs.Dockerfile` (declared `ARG` + `ENV` in the builder stage) and
+be emitted as build args rather than as `environment:` by
+`scripts/registry/compose.mjs`, exactly as the three URL variables already are.
+It is deliberately not done here: it cannot be verified without building an
+image, and an unverified change to the image contract is worse than a
+documented gap.
 
 ### What a container reads
 
