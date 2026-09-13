@@ -52,6 +52,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadRegistry, repoRoot, NEST_KINDS } from '../registry/lib.mjs';
+import { portsInUse } from '../lib/ports.mjs';
 import { downArgs } from './down.mjs';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -301,40 +302,6 @@ export function publishedPorts(entries) {
 }
 
 /**
- * Which of `ports` already has a listener, and the PID that owns it.
- *
- * Parses Windows `netstat -ano` (and the same columns from `netstat -tlnp` on
- * Linux, whose LISTEN lines carry `pid/name` in the last field). Only LISTENING
- * rows count; a TIME_WAIT on the same port does not stop a bind.
- *
- * This exists because of the failure the review found: with a host dev fleet on
- * 3001 and 3000, `compose up` cannot publish those ports, and every later probe
- * to `127.0.0.1:3001` answers — from the HOST gateway. Individual rows would
- * then attribute host evidence to containers that do not exist.
- */
-export function busyPorts(netstatText, ports) {
-  const wanted = new Map(ports.map((p) => [Number(p.port ?? p), p.service ?? null]));
-  const found = new Map();
-  for (const line of String(netstatText ?? '').split(/\r?\n/)) {
-    if (!/\bLISTEN(?:ING)?\b/.test(line)) continue;
-    const cols = line.trim().split(/\s+/);
-    // The LOCAL address is the first column that ends in `:<port>`, on either
-    // platform: Windows puts it at index 1, `netstat -tlnp` at index 3 behind
-    // the queue counters. A fixed index reads "LISTEN" on Linux and finds
-    // nothing. The foreign address always follows it and is `0.0.0.0:0` or
-    // `0.0.0.0:*`, so taking the first match cannot pick the wrong one.
-    const local = cols.find((c) => /:\d+$/.test(c));
-    if (!local) continue;
-    const port = Number(/:(\d+)$/.exec(local)[1]);
-    if (!wanted.has(port) || found.has(port)) continue;
-    const last = cols[cols.length - 1];
-    const pid = /^\d+$/.test(last) ? last : (/^(\d+)\//.exec(last)?.[1] ?? 'unknown');
-    found.set(port, { port, pid, address: local, service: wanted.get(port) });
-  }
-  return [...found.values()].sort((a, b) => a.port - b.port);
-}
-
-/**
  * Is the process answering on the host port the one inside the container?
  *
  * The review's finding: nothing tied a `127.0.0.1:<port>` answer to the
@@ -579,17 +546,6 @@ function tryDocker(args, opts = {}) {
   }
 }
 
-/** A shell one-liner whose output we want and whose exit status we do not. */
-function shOut(command) {
-  const r = spawnSync(command, {
-    cwd: root,
-    encoding: 'utf8',
-    shell: true,
-    maxBuffer: 32 * 1024 * 1024,
-  });
-  return `${r.stdout ?? ''}${r.stderr ?? ''}`;
-}
-
 /** `npm run …`. Needs a shell on Windows: npm is a .cmd, which spawn refuses. */
 function npm(args, opts = {}) {
   const r = spawnSync(`npm ${args.join(' ')}`, {
@@ -831,13 +787,22 @@ async function main() {
   // stops, because `compose up` could not have bound the port and every later
   // probe to `127.0.0.1:<port>` would have been answered by that process while
   // the row said the name of a container.
+  //
+  // The verdict is a real bind on the address compose publishes on, from
+  // `scripts/lib/ports.mjs` — not a `netstat` grep. The first version of this
+  // check shelled out, threw the exit status away, and read "no LISTENING rows"
+  // as "every port free"; on Debian 12, Ubuntu 22.04+, Fedora (no net-tools) and
+  // macOS (BSD netstat rejects -tlnp) that was a silent pass in the check added
+  // to remove silent passes, invisible from Windows where netstat is built in.
+  // The shell tools now only put a PID next to a port the bind already refused,
+  // and a missing tool costs a name, never the refusal.
   say('validate: removing any application tier left from a previous run…');
   tryDocker(downArgs(reg));
   const wantPorts = publishedPorts(inProfile);
+  const bindHost = env.APP_BIND || '127.0.0.1';
   let busy = [];
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const netstat = process.platform === 'win32' ? shOut('netstat -ano') : shOut('netstat -tlnp');
-    busy = busyPorts(netstat, wantPorts);
+    busy = await portsInUse(wantPorts, { host: bindHost });
     if (!busy.length) break;
     // docker-proxy can hold a port for a moment after `rm`; a real foreign
     // listener will still be there on the third look.
@@ -848,15 +813,24 @@ async function main() {
       `${busy.length} of the ${wantPorts.length} port(s) this profile publishes are already in ` +
         `use, so compose could not bind them and every probe would answer from the wrong ` +
         `process:\n` +
-        busy.map((b) => `    ${b.address} (${b.service}) held by PID ${b.pid}`).join('\n') +
-        `\n  Stop that process yourself — this script will not kill it. On Windows: ` +
-        `tasklist /FI "PID eq ${busy[0].pid}".`,
+        busy
+          .map(
+            (b) =>
+              `    ${bindHost}:${b.port} (${b.service ?? 'unknown service'}) held by PID ` +
+              `${b.pid ?? 'unknown'}${b.tool ? ` — per ${b.tool}` : ' — no tool on this machine could name it'}` +
+              `${b.reason && b.reason !== 'EADDRINUSE' ? ` [${b.reason}]` : ''}`,
+          )
+          .join('\n') +
+        `\n  Stop that process yourself — this script will not kill it.` +
+        (process.platform === 'win32' && busy[0].pid
+          ? ` On Windows: tasklist /FI "PID eq ${busy[0].pid}".`
+          : ''),
     );
   ok(
     'every published port of the profile is free on the host',
     true,
     '',
-    `${wantPorts.length} port(s)`,
+    `${wantPorts.length} port(s) bind-tested on ${bindHost}`,
   );
 
   const logDir = path.join(root, '.build-logs');

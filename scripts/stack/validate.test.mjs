@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   boardVerdict,
-  busyPorts,
   classifyLogLine,
   composeVersionAtLeast,
   driftCensus,
@@ -410,40 +409,10 @@ test('publishedPorts takes every port the registry declares, not just http', () 
   ]);
 });
 
-test('busyPorts finds the listener and its PID in netstat output', () => {
-  const netstat = [
-    'Active Connections',
-    '  Proto  Local Address          Foreign Address        State           PID',
-    '  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       968',
-    '  TCP    127.0.0.1:3001         0.0.0.0:0              LISTENING       24680',
-    '  TCP    127.0.0.1:3018         0.0.0.0:0              TIME_WAIT       0',
-    '  TCP    [::]:3000              [::]:0                 LISTENING       13579',
-  ].join('\n');
-  const busy = busyPorts(netstat, [
-    { port: 3000, service: 'web' },
-    { port: 3001, service: 'api-gateway' },
-    { port: 3018, service: 'grocery-service' },
-  ]);
-  assert.deepEqual(busy, [
-    { port: 3000, pid: '13579', address: '[::]:3000', service: 'web' },
-    { port: 3001, pid: '24680', address: '127.0.0.1:3001', service: 'api-gateway' },
-  ]);
-  // A TIME_WAIT does not stop a bind, so 3018 is not reported.
-  assert.ok(!busy.some((b) => b.port === 3018));
-  assert.deepEqual(busyPorts(netstat, [{ port: 9999, service: 'x' }]), []);
-});
-
-test('busyPorts reads the Linux pid/name column too', () => {
-  // `netstat -tlnp` puts the local address at index 3, behind two queue
-  // counters; a fixed column index reads "0" there and finds nothing at all.
-  const linux = [
-    'Proto Recv-Q Send-Q Local Address     Foreign Address    State   PID/Program name',
-    'tcp        0      0 127.0.0.1:3001    0.0.0.0:*          LISTEN  1234/node',
-  ].join('\n');
-  assert.deepEqual(busyPorts(linux, [{ port: 3001, service: 'api-gateway' }]), [
-    { port: 3001, pid: '1234', address: '127.0.0.1:3001', service: 'api-gateway' },
-  ]);
-});
+// The bind-based probe and the PID-naming parsers now live in
+// scripts/lib/ports.mjs, with their own suite — a netstat grep read
+// "command not found" as "every port free" on any machine without
+// net-tools. publishedPorts stays here because it is registry-derived.
 
 // ── the listener on the host port is the container ──────────────────────────
 
