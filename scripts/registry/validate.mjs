@@ -11,12 +11,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import YAML from 'yaml';
 import { loadRegistry, repoRoot, nestEntries, webEntries, NEST_KINDS } from './lib.mjs';
+import { stem } from './compose.mjs';
 
 const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 const exists = (root, rel) => fs.existsSync(path.join(root, rel));
 
-/** `process.env.NAME ?? 1234` or `process.env.NAME || 1234` → Map(NAME → 1234). */
+/**
+ * `process.env.NAME ?? 1234` or `process.env.NAME || 1234` → Map(NAME → 1234).
+ *
+ * It matches the digits of any short quoted literal, so
+ * `process.env.MARKETPLACE_HTTP_HOST ?? '127.0.0.1'` lands here as 127. Harmless
+ * where the caller looks a name up (a bind address is never a registry port),
+ * and the reason `undeclaredPortEnv` below filters on the `_PORT` suffix rather
+ * than trusting every key in this map.
+ */
 export function parseMainDefaults(text) {
   const out = new Map();
   for (const m of text.matchAll(
@@ -25,6 +35,84 @@ export function parseMainDefaults(text) {
     if (!out.has(m[1])) out.set(m[1], Number(m[2]));
   }
   return out;
+}
+
+/**
+ * The other direction: a port this service's main.ts binds that its registry
+ * entry never declares.
+ *
+ * Every other check here reads the registry's `env` map INTO main.ts, so a
+ * listener the registry has never heard of is invisible to all of them —
+ * audit-log-service bound `AUDIT_LOG_TCP_PORT` (4028) for months while the
+ * registry listed only its HTTP port, which meant Compose never published it,
+ * the Kubernetes Service never carried it, and IN9's smoke had to keep a
+ * hand-written `UNREGISTERED_PORTS` table to see it at all.
+ *
+ * Scoped to the service's OWN stem and to names ending `_PORT`: `REDIS_PORT` and
+ * `DB_PORT` belong to infrastructure, not to this entry, and `_HOST` names are
+ * bind addresses (see `parseMainDefaults` above).
+ */
+export function undeclaredPortEnv(s, mainTs) {
+  const own = `${stem(s.name)}_`;
+  const declared = new Set(Object.values(s.env ?? {}));
+  return [...parseMainDefaults(mainTs).keys()].filter(
+    (n) => n.startsWith(own) && n.endsWith('_PORT') && !declared.has(n),
+  );
+}
+
+/**
+ * The `data` block of a ConfigMap, parsed as YAML rather than matched with a
+ * regex.
+ *
+ * The regex this replaces accepted an optional DOUBLE quote — and prettier
+ * normalised `AUTH_SERVICE_PORT: "3010"` to `'3010'` when the file was first
+ * staged, so it matched 0 of 26 services. A non-match was silently skipped, so
+ * `registry:check` stayed green while checking nothing. A parser has no quote
+ * style to be wrong about.
+ */
+export function parseConfigMapData(text, name = 'kartseek-config') {
+  for (const doc of YAML.parseAllDocuments(text)) {
+    const js = doc.toJS();
+    if (js?.kind === 'ConfigMap' && js?.metadata?.name === name) return js.data ?? {};
+  }
+  return null;
+}
+
+/**
+ * Every port the ConfigMap publishes, against the registry — and an assertion
+ * that the gate looked at anything at all.
+ *
+ * The count is the point: a check that silently matches nothing is worse than
+ * no check, because it reports success. If a service's key is missing the gate
+ * fails on that key AND on the tally, so neither a rename nor a reformat can
+ * turn this green by accident.
+ */
+export function checkConfigMapPorts(reg, data) {
+  if (data === null)
+    return ['infra/k8s/config.yaml: no ConfigMap named kartseek-config — the port gate cannot run'];
+  const fail = [];
+  const entries = nestEntries(reg);
+  let servicesSeen = 0;
+  for (const s of entries) {
+    if (data[s.env.http] !== undefined) servicesSeen++;
+    for (const [kind, envName] of Object.entries(s.env)) {
+      const raw = data[envName];
+      if (raw === undefined) {
+        fail.push(
+          `infra/k8s/config.yaml: ${envName} is missing — ${s.name} binds ${kind} on ${s.ports[kind]}`,
+        );
+        continue;
+      }
+      if (Number(raw) !== s.ports[kind])
+        fail.push(`infra/k8s/config.yaml: ${envName}=${raw}, registry says ${s.ports[kind]}`);
+    }
+  }
+  if (servicesSeen < entries.length)
+    fail.push(
+      `infra/k8s/config.yaml: the port gate matched ${servicesSeen} of ${entries.length} services — ` +
+        'it is checking nothing (a renamed key, or a ConfigMap this parser did not find)',
+    );
+  return fail;
 }
 
 export function findDuplicatePorts(reg) {
@@ -81,7 +169,13 @@ export async function runChecks(reg, root) {
   // 3. main.ts defaults, zone dev ports and basePaths.
   for (const s of nestEntries(reg)) {
     if (!exists(root, `${s.path}/src/main.ts`)) continue;
-    const defaults = parseMainDefaults(read(root, `${s.path}/src/main.ts`));
+    const mainTs = read(root, `${s.path}/src/main.ts`);
+    const defaults = parseMainDefaults(mainTs);
+    for (const n of undeclaredPortEnv(s, mainTs))
+      fail.push(
+        `${s.name}: src/main.ts binds ${n}, which services.yaml does not declare — ` +
+          "add it to this entry's ports/env map (compose, k8s and the docs regenerate from it)",
+      );
     for (const [kind, envName] of Object.entries(s.env)) {
       const found = defaults.get(envName);
       if (found === undefined)
@@ -124,15 +218,9 @@ export async function runChecks(reg, root) {
         fail.push(`${d.file}: ${envName}=${d.value}, registry says ${s.ports[kind]}`);
     }
 
-  // 5. Kubernetes ConfigMap ports.
-  if (exists(root, 'infra/k8s/config.yaml')) {
-    const cm = read(root, 'infra/k8s/config.yaml');
-    for (const s of nestEntries(reg)) {
-      const m = new RegExp(`^\\s*${s.env.http}:\\s*"?(\\d+)"?\\s*$`, 'm').exec(cm);
-      if (m && Number(m[1]) !== s.ports.http)
-        fail.push(`infra/k8s/config.yaml: ${s.env.http}=${m[1]}, registry says ${s.ports.http}`);
-    }
-  }
+  // 5. Kubernetes ConfigMap ports — every http, tcp and gRPC key, both ways.
+  if (exists(root, 'infra/k8s/config.yaml'))
+    fail.push(...checkConfigMapPorts(reg, parseConfigMapData(read(root, 'infra/k8s/config.yaml'))));
 
   // 6. Uniqueness.
   fail.push(...findDuplicatePorts(reg));
