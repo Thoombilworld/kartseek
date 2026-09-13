@@ -1,15 +1,34 @@
 import {
-  Controller, Get, Post, Put, Patch, Param,
-  Body, Query, UseGuards, Req, HttpCode, HttpStatus, Inject,
-  UnauthorizedException, NotFoundException, ServiceUnavailableException,
-  HttpException, Logger,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  Req,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  UnauthorizedException,
+  NotFoundException,
+  ServiceUnavailableException,
+  HttpException,
+  Logger,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom, timeout } from 'rxjs';
 import {
-  ApiTags, ApiOperation, ApiBearerAuth,
-  ApiBody, ApiParam, ApiQuery,
-  ApiOkResponse, ApiCreatedResponse,
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiParam,
+  ApiQuery,
+  ApiOkResponse,
+  ApiCreatedResponse,
 } from '@nestjs/swagger';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService, KAFKA_TOPICS } from '@app/kafka';
@@ -37,6 +56,23 @@ import { ParseLimitPipe, ParsePagePipe, DEFAULT_PAGE_SIZE } from '../pipes/pagin
  * collapsed to 503, which tells a seller to retry a payload that will never be
  * accepted: "A product name is required." is not a temporary outage.
  */
+/**
+ * A seller product write that was refused for its content comes back as a
+ * normal reply `{ success: false, statusCode: 400, message, errors: [{ slug,
+ * message }] }` rather than as an RPC error, because the RPC error channel is
+ * flattened to one message string and the form needs the per-attribute list
+ * to mark its fields. Turn it back into the HTTP 400 it is.
+ */
+function unwrapSellerWrite<T extends Record<string, any>>(reply: T): T {
+  if (reply && reply.success === false && Number.isFinite(Number(reply.statusCode))) {
+    throw new HttpException(
+      { message: reply.message ?? 'The request could not be saved.', errors: reply.errors ?? [] },
+      Number(reply.statusCode),
+    );
+  }
+  return reply;
+}
+
 function rpcStatus(err: any): number {
   const candidate = Number(
     err?.status ?? err?.statusCode ?? err?.error?.statusCode ?? err?.response?.statusCode,
@@ -105,7 +141,8 @@ export class SellerController {
   @Get('dashboard')
   @ApiOperation({
     summary: 'Get seller dashboard stats',
-    description: 'Returns key metrics: revenue, orders, products, ratings for the authenticated seller.',
+    description:
+      'Returns key metrics: revenue, orders, products, ratings for the authenticated seller.',
   })
   @ApiOkResponse({
     description: 'Dashboard statistics',
@@ -140,7 +177,11 @@ export class SellerController {
   // ── Orders ──────────────────────────────────────────────────────────────────
   @Get('orders')
   @ApiOperation({ summary: 'Get seller orders' })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED'],
+  })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   async getOrders(
@@ -152,7 +193,10 @@ export class SellerController {
     const sellerId = await this.resolveSellerId(req);
     try {
       return await firstValueFrom(
-        this.sellerClient.send({ cmd: 'get_seller_orders' }, { sellerId, status, page: Number(page), limit: Number(limit) }),
+        this.sellerClient.send(
+          { cmd: 'get_seller_orders' },
+          { sellerId, status, page: Number(page), limit: Number(limit) },
+        ),
       );
     } catch {
       return { data: [], total: 0, page: Number(page), limit: Number(limit) };
@@ -170,8 +214,16 @@ export class SellerController {
     },
   })
   async updateOrderStatus(@Param('id') id: string, @Body() body: { status: string }) {
-    await this.kafka.publish(KAFKA_TOPICS.ORDER_STATUS_UPDATED || 'order.status.updated', { orderId: id, status: body.status });
-    return { success: true, orderId: id, status: body.status, message: `Order ${id} updated to ${body.status}` };
+    await this.kafka.publish(KAFKA_TOPICS.ORDER_STATUS_UPDATED || 'order.status.updated', {
+      orderId: id,
+      status: body.status,
+    });
+    return {
+      success: true,
+      orderId: id,
+      status: body.status,
+      message: `Order ${id} updated to ${body.status}`,
+    };
   }
 
   // ── Products / Inventory ────────────────────────────────────────────────────
@@ -179,7 +231,11 @@ export class SellerController {
   @ApiOperation({ summary: 'Get seller product inventory' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'category', required: false })
-  @ApiQuery({ name: 'status', required: false, enum: ['ACTIVE', 'DRAFT', 'OUT_OF_STOCK', 'PENDING_APPROVAL'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['ACTIVE', 'DRAFT', 'OUT_OF_STOCK', 'PENDING_APPROVAL'],
+  })
   @ApiQuery({ name: 'page', required: false })
   async getProducts(
     @Req() req: any,
@@ -191,7 +247,10 @@ export class SellerController {
     const sellerId = await this.resolveSellerId(req);
     try {
       return await firstValueFrom(
-        this.marketplaceClient.send({ cmd: 'get_products' }, { seller: sellerId, category, search, status, page: Number(page) }),
+        this.marketplaceClient.send(
+          { cmd: 'get_products' },
+          { seller: sellerId, category, search, status, page: Number(page) },
+        ),
       );
     } catch {
       return { data: [], total: 0, page: Number(page) };
@@ -215,10 +274,13 @@ export class SellerController {
     //
     // A create that did not happen has to say so.
     try {
-      return await firstValueFrom(
-        this.sellerClient.send({ cmd: 'create_seller_product' }, { sellerId, ...body }),
+      return unwrapSellerWrite(
+        await firstValueFrom(
+          this.sellerClient.send({ cmd: 'create_seller_product' }, { sellerId, ...body }),
+        ),
       );
     } catch (err: any) {
+      if (err instanceof HttpException) throw err;
       this.logger.error(
         `create_seller_product failed for seller=${sellerId}: ${err?.message ?? err}`,
       );
@@ -229,18 +291,50 @@ export class SellerController {
     }
   }
 
+  @Get('products/:id')
+  @ApiOperation({ summary: 'One of my products, with everything the edit form pre-fills' })
+  async getProduct(@Req() req: any, @Param('id') id: string) {
+    // Scoped to the caller's own seller: `get_seller_product` looks the row up
+    // by (id, seller) and answers 404 for anyone else's product. Returns the
+    // category objects, images, the seller's own offer and the typed attribute
+    // values in the public row shape.
+    const sellerId = await this.resolveSellerId(req);
+    try {
+      return await firstValueFrom(
+        this.sellerClient
+          .send({ cmd: 'get_seller_product' }, { sellerId, productId: id })
+          .pipe(timeout(8000)),
+      );
+    } catch (err: any) {
+      throw new HttpException(err?.message || 'This product could not be loaded.', rpcStatus(err));
+    }
+  }
+
   @Put('products/:id')
   @ApiOperation({ summary: 'Update product details' })
   async updateProduct(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     // Scoped to the caller's own seller: `update_seller_product` verifies the
     // product belongs to that seller before writing.
     const sellerId = await this.resolveSellerId(req);
-    return firstValueFrom(
-      this.sellerClient.send({ cmd: 'update_seller_product' }, { sellerId, productId: id, ...body }).pipe(timeout(8000)),
-    ).catch(() => {
+    try {
+      return unwrapSellerWrite(
+        await firstValueFrom(
+          this.sellerClient
+            .send({ cmd: 'update_seller_product' }, { sellerId, productId: id, ...body })
+            .pipe(timeout(8000)),
+        ),
+      );
+    } catch (err: any) {
+      if (err instanceof HttpException) throw err;
       // No more "Product updated successfully" for a write that never happened.
-      throw new ServiceUnavailableException('Product could not be updated — please try again.');
-    });
+      // A validation refusal is a 400 with the field list; an ownership miss a
+      // 404; only an unreachable service is a 503.
+      const status = rpcStatus(err);
+      if (status === HttpStatus.SERVICE_UNAVAILABLE) {
+        throw new ServiceUnavailableException('Product could not be updated — please try again.');
+      }
+      throw new HttpException(err?.message || 'Product could not be updated.', status);
+    }
   }
 
   @Patch('products/:id/stock')
@@ -261,7 +355,9 @@ export class SellerController {
           .pipe(timeout(8000)),
       );
     } catch (err: any) {
-      this.logger.error(`update_seller_inventory failed for seller=${sellerId}: ${err?.message ?? err}`);
+      this.logger.error(
+        `update_seller_inventory failed for seller=${sellerId}: ${err?.message ?? err}`,
+      );
       throw new HttpException(
         err?.message || 'Stock could not be updated — please try again.',
         rpcStatus(err),
@@ -293,10 +389,14 @@ export class SellerController {
     const sellerId = await this.resolveSellerId(req);
     try {
       return await firstValueFrom(
-        this.sellerClient.send({ cmd: 'create_seller_listing' }, { sellerId, ...body }).pipe(timeout(8000)),
+        this.sellerClient
+          .send({ cmd: 'create_seller_listing' }, { sellerId, ...body })
+          .pipe(timeout(8000)),
       );
     } catch (err: any) {
-      this.logger.error(`create_seller_listing failed for seller=${sellerId}: ${err?.message ?? err}`);
+      this.logger.error(
+        `create_seller_listing failed for seller=${sellerId}: ${err?.message ?? err}`,
+      );
       throw new HttpException(
         err?.message || 'We could not create this offer. Please try again.',
         rpcStatus(err),
@@ -321,7 +421,9 @@ export class SellerController {
           .pipe(timeout(8000)),
       );
     } catch (err: any) {
-      this.logger.error(`get_seller_listings failed for seller=${sellerId}: ${err?.message ?? err}`);
+      this.logger.error(
+        `get_seller_listings failed for seller=${sellerId}: ${err?.message ?? err}`,
+      );
       throw new HttpException('We could not load your offers right now.', rpcStatus(err));
     }
   }
@@ -337,7 +439,9 @@ export class SellerController {
           .pipe(timeout(8000)),
       );
     } catch (err: any) {
-      this.logger.error(`update_seller_listing failed for seller=${sellerId}: ${err?.message ?? err}`);
+      this.logger.error(
+        `update_seller_listing failed for seller=${sellerId}: ${err?.message ?? err}`,
+      );
       throw new HttpException(
         err?.message || 'This offer could not be updated — please try again.',
         rpcStatus(err),
@@ -350,7 +454,9 @@ export class SellerController {
   @ApiOperation({ summary: 'Get seller wallet balance (Escrow & Available)' })
   async getWallet(@Param('id') id: string) {
     try {
-      const wallet = await firstValueFrom(this.payoutClient.send({ cmd: 'get_wallet' }, { sellerId: id }));
+      const wallet = await firstValueFrom(
+        this.payoutClient.send({ cmd: 'get_wallet' }, { sellerId: id }),
+      );
       return { data: wallet };
     } catch (err: any) {
       // No fabricated balance.
@@ -396,12 +502,19 @@ export class SellerController {
 
   @Post('payouts/request')
   @ApiOperation({ summary: 'Request a payout' })
-  @ApiBody({ schema: { properties: { amount: { type: 'number' }, method: { type: 'string', enum: ['BANK'] } } } })
+  @ApiBody({
+    schema: {
+      properties: { amount: { type: 'number' }, method: { type: 'string', enum: ['BANK'] } },
+    },
+  })
   async requestPayout(@Req() req: any, @Body() body: { amount: number; method: string }) {
     const sellerId = await this.resolveSellerId(req);
     try {
       return await firstValueFrom(
-        this.payoutClient.send({ cmd: 'request_payout' }, { sellerId, amount: body.amount, method: body.method }),
+        this.payoutClient.send(
+          { cmd: 'request_payout' },
+          { sellerId, amount: body.amount, method: body.method },
+        ),
       );
     } catch {
       return {
@@ -439,7 +552,11 @@ export class SellerController {
         this.sellerClient.send({ cmd: 'update_seller_settings' }, { sellerId, ...body }),
       );
     } catch {
-      return { success: true, message: 'Settings updated successfully', updated: Object.keys(body) };
+      return {
+        success: true,
+        message: 'Settings updated successfully',
+        updated: Object.keys(body),
+      };
     }
   }
 
@@ -450,7 +567,10 @@ export class SellerController {
     const sellerId = await this.resolveSellerId(req);
     try {
       return await firstValueFrom(
-        this.marketplaceClient.send({ cmd: 'get_product_reviews' }, { sellerId, page: Number(page) }),
+        this.marketplaceClient.send(
+          { cmd: 'get_product_reviews' },
+          { sellerId, page: Number(page) },
+        ),
       );
     } catch {
       return { reviews: [], total: 0, averageRating: 0 };
@@ -468,7 +588,15 @@ export class SellerController {
         this.sellerClient.send({ cmd: 'get_seller_analytics' }, { sellerId, period }),
       );
     } catch {
-      return { period, sellerId, revenue: {}, orders: {}, visitors: {}, conversionRate: 0, topProducts: [] };
+      return {
+        period,
+        sellerId,
+        revenue: {},
+        orders: {},
+        visitors: {},
+        conversionRate: 0,
+        topProducts: [],
+      };
     }
   }
 }

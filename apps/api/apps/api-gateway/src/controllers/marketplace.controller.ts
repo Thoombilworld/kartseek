@@ -1357,11 +1357,19 @@ export class MarketplaceGatewayController {
   @ApiOperation({ summary: 'Get all offers applicable to a specific product' })
   @ApiParam({ name: 'id', example: 'PRD-001', description: 'Product ID' })
   @ApiOkResponse({ description: 'Bank and exchange offers for a product' })
-  async getOffersForProduct(@Param('id') id: string, @Query('category') category?: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_OFFERS_FOR_PRODUCT, {
-      productId: id,
-      category,
-    });
+  async getOffersForProduct(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Query('country') country?: string,
+  ) {
+    // Offers are per market and per product. The previous pattern answered
+    // with every active offer for a category *name* and ignored both the
+    // product and the market, so a Qatar page quoted Indian bank offers.
+    return this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.GET_PRODUCT_OFFERS,
+      { productId: id, country: this.region(req, country) },
+      req,
+    );
   }
 
   // ── Phase 1: Customer-Facing Discovery Routes ───────────────────────────
@@ -1533,9 +1541,19 @@ export class MarketplaceGatewayController {
   }
 
   @Get('products/:id/emi-options')
-  @ApiOperation({ summary: 'Get EMI/finance options for a product' })
-  async getEmiOptions(@Param('id') productId: string) {
-    return this.sendToMarketplace(MARKETPLACE_PATTERNS.GET_EMI_OPTIONS, { productId });
+  @ApiOperation({ summary: 'Get EMI/finance options for a product in the shopper’s market' })
+  async getEmiOptions(
+    @Req() req: any,
+    @Param('id') productId: string,
+    @Query('country') country?: string,
+  ) {
+    // Finance plans exist per market and are quoted on that market's buy-box
+    // price. A market with no configured plans answers `eligible: false`.
+    return this.sendToMarketplace(
+      MARKETPLACE_PATTERNS.GET_PRODUCT_EMI_OPTIONS,
+      { productId, country: this.region(req, country) },
+      req,
+    );
   }
 
   @Get('notifications')

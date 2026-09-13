@@ -52,5 +52,13 @@ import { applyDecorators, Header } from '@nestjs/common';
  * @param seconds  Shared-cache lifetime.
  */
 export function PublicCache(seconds: number) {
-  return applyDecorators(Header('Cache-Control', `public, max-age=0, s-maxage=${seconds}`));
+  return applyDecorators(
+    Header('Cache-Control', `public, max-age=0, s-maxage=${seconds}`),
+    // Every public catalogue response is market-specific: the market arrives
+    // as `?country=` from server components (already part of the cache key)
+    // or as `X-Region-Code` from the browser (not part of any URL). Without
+    // this header a shared cache could hand India's offers to a Qatari
+    // request for the same path.
+    Header('Vary', 'X-Region-Code, Accept-Language'),
+  );
 }

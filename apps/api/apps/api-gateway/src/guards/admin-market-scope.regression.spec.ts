@@ -384,6 +384,17 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
     owner: 'MODULES M1/CONSOLE',
     why: 'guard fails closed (denies locked admins) — real filter owned by MODULES M1/CONSOLE',
   },
+  // Same shape as the three product routes above, added with the product-page
+  // work (2026-09-13): `:id` is a product, the caller's seller comes from the
+  // JWT (`resolveSellerId`) and the backend loads the row by (id, seller_id),
+  // so another seller's product is a 404 and an admin without a seller row is
+  // refused before the lookup. The market follows the owning seller's.
+  {
+    verb: 'GET',
+    path: '/seller/products/:id',
+    owner: 'PDP (kartseekapp-1a) / MODULES M1/CONSOLE',
+    why: 'owner-scoped by construction; guard fails closed (denies locked admins) like PUT /seller/products/:id',
+  },
 ];
 
 /**
@@ -398,6 +409,7 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
  */
 const EXCEPTION_CENSUS: readonly string[] = [
   'GET /doctor/admin/appointments',
+  'GET /seller/products/:id',
   'GET /taxi/admin/audit-logs',
   'GET /taxi/admin/dashboard',
   'GET /taxi/admin/disputes',
@@ -988,11 +1000,14 @@ describe('admin market scope regression', () => {
       'PATCH /fixture/seller/products/:id/stock false',
       'PATCH /fixture/seller/listings/:id false',
     ]);
-    // And on the real tree the same four, and only those four, are the
-    // guard-bound routes this spec refuses to exempt.
+    // And on the real tree the same routes, and only those, are the
+    // guard-bound routes this spec refuses to exempt. `GET /seller/products/:id`
+    // joined them with the product-page work (2026-09-13): same shape, `:id` is
+    // a product and the owning seller comes from the JWT.
     const bound = routes.filter((r) => r.file === 'seller.controller.ts' && !r.scoped && !r.global);
     expect(bound.filter((r) => !r.guardScoped).map((r) => `${r.verb} ${r.path}`)).toEqual([
       'PUT /seller/orders/:id/status',
+      'GET /seller/products/:id',
       'PUT /seller/products/:id',
       'PATCH /seller/products/:id/stock',
       'PATCH /seller/listings/:id',
