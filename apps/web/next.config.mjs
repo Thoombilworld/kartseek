@@ -27,6 +27,20 @@ const nextConfig = {
     root: path.resolve(__dirname, '../..'),
   },
 
+  // ── Container output (infra/docker/nextjs.Dockerfile) ─────────────────────
+  // Standalone emits .next/standalone: a self-contained server.js plus only the
+  // node_modules the traced import graph actually reaches, which is what keeps
+  // the image small enough to be worth building. Purely additive — `next dev`
+  // and `next start` read .next as before and are unchanged.
+  //
+  // The tracing root is the monorepo root, not this workspace: the shell
+  // imports from packages/shared-core and modules/*/frontend, and with the
+  // default root (the nearest lockfile's directory, resolved per file) those
+  // files are traced from outside apps/web and silently left out of the bundle
+  // — the image then starts and 500s on the first page that needs one.
+  output: 'standalone',
+  outputFileTracingRoot: path.resolve(__dirname, '../..'),
+
   // ── Image Optimization ────────────────────────────────────────────────────
   images: {
     formats: ['image/avif', 'image/webp'],
