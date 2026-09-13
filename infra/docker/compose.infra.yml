@@ -301,23 +301,39 @@ services:
   # pure cache: several keys are written with no expiry at all and are the only
   # copy of what they hold —
   #
-  #   admin:counter:pending_kyc          admin-service, the KYC queue depth
+  #   loyalty:<userId>                    loyalty.service.ts:50 — a points balance,
+  #                                       the headline key of AUD2-031
+  #   admin:counter:pending_kyc           admin-service, the KYC queue depth
   #   notifications:unread:<userId>       reset to 0 by notifications.gateway.ts
   #   ride:waiting:<rideId>               taxi driver-dispatch, a ride IN FLIGHT
   #
   # Under `allkeys-lru` Redis evicts by recency across EVERY key once it reaches
-  # `--maxmemory`, so the least recently touched of those three disappears with
+  # `--maxmemory`, so the least recently touched of those four disappears with
   # no error anywhere: a ride in dispatch simply stops existing. `volatile-lru`
   # restricts eviction to keys that carry a TTL — sessions, MFA challenges, rate
   # limit buckets, the home cache — which are all re-derivable. If the store
   # ever fills with nothing but non-expiring keys the write fails loudly with
   # OOM, which is the right way round: an error a developer sees beats state
-  # that vanishes. Found by `npm run stack:validate` (Task IN7).
+  # that vanishes, and `RedisService.assertEmulatorAllowed` turns that OOM into
+  # a 503 under NODE_ENV=production rather than into invented data.
+  #
+  # `--appendonly yes --appendfsync everysec` is the other half of AUD2-031, and
+  # it is what makes the policy change worth anything. `--save 60 1` alone is an
+  # RDB snapshot every 60 seconds at best, so an unclean stop loses up to a
+  # minute of exactly the keys the eviction policy was changed to protect. The
+  # AOF is written to the same `redis_data` volume as the RDB and is replayed
+  # ahead of it on start. `everysec` rather than `always`: one second of
+  # exposure for roughly the throughput, which is the standard trade and the
+  # right one for a store that is mostly cache.
+  #
+  # Both halves are asserted live by `npm run stack:validate` (CONFIG GET
+  # maxmemory-policy, CONFIG GET appendonly), so a future edit to this line
+  # cannot silently undo either. Found by that validator (Task IN7).
   redis:
     image: redis:8.8.0-alpine
     container_name: kartseek-redis
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD in the root .env} --maxmemory 256mb --maxmemory-policy volatile-lru --rename-command FLUSHDB "" --rename-command FLUSHALL "" --rename-command DEBUG ""
+    command: redis-server --save 60 1 --appendonly yes --appendfsync everysec --loglevel warning --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD in the root .env} --maxmemory 256mb --maxmemory-policy volatile-lru --rename-command FLUSHDB "" --rename-command FLUSHALL "" --rename-command DEBUG ""
     ports:
       - '${DB_BIND:-127.0.0.1}:6379:6379'
     volumes:
