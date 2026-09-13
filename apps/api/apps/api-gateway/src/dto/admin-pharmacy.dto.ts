@@ -51,6 +51,45 @@ const MARKET = /^[A-Za-z]{2}(?:[-_][A-Za-z0-9]{1,5})?$/;
  */
 const IfPresent = (): PropertyDecorator => ValidateIf((_object, value) => value !== undefined);
 
+/**
+ * A boolean that means what the client actually sent.
+ *
+ * ── The trap, measured ──────────────────────────────────────────────────────
+ *
+ * `GatewayValidationPipe` runs `transformOptions: { enableImplicitConversion:
+ * true }`, under which class-transformer coerces a value to the property's
+ * reflected `design:type` with `Boolean(value)` — and `Boolean('false')` is
+ * `true`. Every non-empty string becomes `true`. `@IsBoolean()` then passes,
+ * because by the time it looks the value really is a boolean.
+ *
+ * This applies to ANY decorated property whose declared type is `boolean`, in a
+ * query string or a JSON body alike — a decorator is all it takes for
+ * `design:type` to be emitted. It bit two properties here:
+ *
+ *   `?available=false`               listed the products that ARE available —
+ *                                    the moderation queue, inverted, silently.
+ *   `{"verified":"false"}`           PASSED a drug licence. A decision route.
+ *
+ * ── Why `obj` and not `value` ───────────────────────────────────────────────
+ *
+ * `@Transform(({ value }) => …)` does NOT fix it, and neither does
+ * `@Type(() => Boolean)`: implicit conversion has already run by the time the
+ * transform is called, so `value` is the coerced `true` and the original is
+ * gone. `obj` is the untouched source object, so `obj[key]` is what the client
+ * really sent. Measured, all four shapes, in `admin-pharmacy.dto.spec.ts`.
+ *
+ * Anything that is not a recognised spelling is passed through unchanged so the
+ * `@IsBoolean()` below refuses it with a 400 naming the property — never
+ * silently resolved to either answer.
+ */
+const BooleanParam = (): PropertyDecorator =>
+  Transform(({ obj, key }) => {
+    const raw = (obj as Record<string, unknown> | undefined)?.[key];
+    if (raw === true || raw === 'true' || raw === 1 || raw === '1') return true;
+    if (raw === false || raw === 'false' || raw === 0 || raw === '0') return false;
+    return raw;
+  });
+
 /** Page controls plus the requested market — the base every pharmacy list read shares. */
 export class AdminPharmacyQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
@@ -154,7 +193,7 @@ export class AdminPharmacyProductsQueryDto extends AdminPharmacyQueryDto {
 
   @ApiPropertyOptional({ description: 'Only products currently available, or only those not' })
   @IsOptional()
-  @Type(() => Boolean)
+  @BooleanParam()
   @IsBoolean()
   available?: boolean;
 }
@@ -202,7 +241,19 @@ export class AdminPharmacyReportsQueryDto extends AdminPharmacyQueryDto {
   period?: string = '30d';
 }
 
-/** Just the market — for the reads that take no page and no filter. */
+/**
+ * Just the market — for the reads that take no page and no filter.
+ *
+ * It deliberately does NOT extend `AdminPharmacyQueryDto`, so
+ * `GET /admin/pharmacy/dashboard?page=1` is a 400 `property page should not
+ * exist` rather than a 200 that quietly ignores it. The dashboard, the
+ * commission rates and the settings are single objects; there is no second page
+ * of them. Reviewed as a papercut for the console (M3 review, minor 8) and kept:
+ * a parameter that is accepted and does nothing is the same shape of lie as a
+ * filter that is accepted and inverted, which is what the boolean above turned
+ * out to be. If a console legitimately needs to send them, the fix is for it to
+ * stop, not for this to start ignoring them.
+ */
 export class AdminPharmacyMarketQueryDto {
   @ApiPropertyOptional({ description: 'ISO-2 market. A locked admin may only name their own.' })
   @IsOptional()
@@ -222,6 +273,7 @@ export class SuspendPharmacyDto {
 /** A drug-licence decision. `notes` becomes the rejection reason on a refusal. */
 export class VerifyLicenceDto {
   @ApiProperty({ description: 'Whether the licence passed review' })
+  @BooleanParam()
   @IsBoolean()
   verified: boolean;
 
@@ -280,7 +332,7 @@ export class CreatePharmacyCategoryDto {
 
   @ApiPropertyOptional({ description: 'Whether items in this category need a prescription' })
   @IsOptional()
-  @Type(() => Boolean)
+  @BooleanParam()
   @IsBoolean()
   requiresPrescription?: boolean;
 }
@@ -314,7 +366,7 @@ export class UpdatePharmacySettingsDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Type(() => Boolean)
+  @BooleanParam()
   @IsBoolean()
   requirePrescriptionForScheduleH?: boolean;
 
@@ -358,13 +410,13 @@ export class UpdatePharmacySettingsDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Type(() => Boolean)
+  @BooleanParam()
   @IsBoolean()
   allowColdChainDelivery?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Type(() => Boolean)
+  @BooleanParam()
   @IsBoolean()
   autoApproveStores?: boolean;
 }
