@@ -234,9 +234,12 @@ spec:
 # them too and without this nothing could reach them at all — not the ingress
 # controller, not the shell rewriting a vertical path to its zone.
 #
-# No `ports:` restriction, for the same reason allow-microservice-mesh has none:
-# the nine listen on 3000-3009 and enumerating them is one more list to keep in
-# step with services.yaml.
+# One port per web deployable, from `services.yaml` — `web` on 3000 and the eight
+# zones on 3002-3009. This list was open, on the argument that enumerating it is
+# one more thing to keep in step with the registry; `k8s.test.mjs` keeps it in
+# step instead, failing when the registry's web ports and these ports disagree.
+# A policy that grants every port on a pod that listens on one is the only rule
+# in this file that gives away more than it needs.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -259,6 +262,25 @@ spec:
         - podSelector:
             matchLabels:
               tier: web
+      ports:
+        - protocol: TCP
+          port: 3000 # web
+        - protocol: TCP
+          port: 3002 # marketplace-frontend
+        - protocol: TCP
+          port: 3003 # grocery-frontend
+        - protocol: TCP
+          port: 3004 # restaurant-frontend
+        - protocol: TCP
+          port: 3005 # pharmacy-frontend
+        - protocol: TCP
+          port: 3006 # doctor-frontend
+        - protocol: TCP
+          port: 3007 # hotel-frontend
+        - protocol: TCP
+          port: 3008 # taxi-frontend
+        - protocol: TCP
+          port: 3009 # franchise-frontend
 
 ---
 # ── Network Policy: Allow Redis access ─────────────────────────────────────────

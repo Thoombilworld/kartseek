@@ -39,9 +39,13 @@
  *
  * Kafka is the plain `kafka:9092` listener, NOT compose's `kafka:29092`. That
  * split is a Compose artefact: the broker there advertises PLAINTEXT_HOST as
- * `localhost:9092` for the developer's own fleet. `databases.yaml` advertises
- * PLAINTEXT_HOST as the pod FQDN, so in-cluster 9092 is correct and is what the
- * ConfigMap has always said.
+ * `localhost:9092` for the developer's own fleet, so a container bootstrapping
+ * against 9092 is answered with its own loopback. `databases.yaml` advertises
+ * PLAINTEXT_HOST as the POD's FQDN instead, so 9092 is right in the cluster.
+ * The `wait-for-kafka` init container below dials `kafka…:9092` through the
+ * headless Service; the ConfigMap's `KAFKA_BROKERS` names the pod directly
+ * (`kafka-0.kafka…:9092`), which is the address the broker advertises back and
+ * therefore the one a client must bootstrap from.
  *
  * SECRETS
  *
@@ -87,6 +91,13 @@ export const HEADER = [
   '# Images are `<image>:${KARTSEEK_TAG}`; deploy.sh substitutes the tag and',
   '# defaults it to `dev`. Applying this file with plain `kubectl apply` leaves',
   '# the literal in place and the pod reports InvalidImageName.',
+  '#',
+  '# NOT EVERY IMAGE HERE CAN BE BUILT YET. No kartseek/* image is published',
+  '# anywhere, and of the nine Next deployables only `web` has an image at all:',
+  "# the eight zones need `output: 'standalone'` in their next.config.mjs, which",
+  '# is Task IN11. Their Deployments are declared here so the wiring is reviewed',
+  '# and ready; `deploy.sh` skips any Deployment whose image the local Docker',
+  '# daemon does not have, naming it, rather than leaving pods in ErrImagePull.',
   '',
 ].join('\n');
 
@@ -138,14 +149,25 @@ export function runAsUserFor(s) {
  * Per-service departures from the defaults, and the only place they belong: the
  * generated file used to carry hand-written marketplace changes that the old
  * generator silently reverted on its next run.
+ *
+ * SIZE ONLY. This map held a `postgresHost` for marketplace-service, pointing
+ * its init container and its DB_HOST at a dedicated `postgres-marketplace`
+ * instance while Compose put the same service on the shared `postgres` as a
+ * tenant role — one module running against two different databases depending on
+ * which stack you started, with no gate that could notice, because
+ * `registry:check` and `k8s.test.mjs` both import the module that defined the
+ * exception. The coordinator's ruling is the shared instance everywhere; the
+ * dedicated StatefulSet stays in databases.yaml as the documented `isolated`
+ * option, referenced by no Deployment.
+ *
+ * Nothing that decides WHERE a service connects may live here again. A host that
+ * has to differ is a field in `services.yaml`, validated by `lib.mjs`, so the
+ * drift gates can see it.
  */
 export const OVERRIDES = {
   'marketplace-service': {
-    // The highest-volume path in the platform, and the one module with a
-    // Postgres instance of its own (config.yaml's MARKETPLACE_DB_HOST, and the
-    // StatefulSet in databases.yaml).
+    // The highest-volume path in the platform.
     resources: { cpu: '300m', memory: '384Mi', cpuLimit: '1000m', memoryLimit: '1Gi' },
-    postgresHost: SVC('postgres-marketplace'),
   },
 };
 
@@ -219,16 +241,14 @@ function initContainers(s) {
     '  # containers and rejects the pod when they are unset.',
   ];
   for (const d of deps) {
-    const endpoint = INFRA_ENDPOINT[d];
-    const host =
-      d === 'postgres' ? (OVERRIDES[s.name]?.postgresHost ?? endpoint.host) : endpoint.host;
+    const { host, port } = INFRA_ENDPOINT[d];
     lines.push(
       `  - name: wait-for-${d}`,
       '    image: busybox:1.36',
       '    command:',
       '      - sh',
       '      - -c',
-      `      - ${q(`until nc -z ${host} ${endpoint.port}; do echo waiting for ${d}; sleep 2; done`)}`,
+      `      - ${q(`until nc -z ${host} ${port}; do echo waiting for ${d}; sleep 2; done`)}`,
       '    resources:',
       '      requests:',
       `        cpu: ${q('10m')}`,

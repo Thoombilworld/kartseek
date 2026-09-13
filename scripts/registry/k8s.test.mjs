@@ -266,6 +266,30 @@ test('runAsUser matches the uid the image actually runs as', () => {
   assert.equal(containerOf(d).securityContext.runAsUser, 1001);
 });
 
+test('every application container carries resources and pulls the local image', () => {
+  for (const name of ['grocery-service', 'audit-log-service', 'web', 'hotel-frontend']) {
+    const c = containerOf(find(fixture, 'Deployment', name));
+    // The 2026-08-13 quota finding is about init containers, but the
+    // ResourceQuota walks the application container first — and a limit-less
+    // container is also what the LimitRange has to invent a default for.
+    assert.ok(c.resources.requests.cpu && c.resources.requests.memory, `${name}: requests`);
+    assert.ok(c.resources.limits.cpu && c.resources.limits.memory, `${name}: limits`);
+    // Nothing publishes a kartseek/* image; the live probe and every local
+    // deploy depend on the daemon's own copy being used.
+    assert.equal(c.imagePullPolicy, 'IfNotPresent', name);
+  }
+});
+
+test('the header says the zone images cannot be built yet', () => {
+  // The nine Next Deployments are ready wiring for images that do not exist:
+  // only apps/web sets output: 'standalone' (Task IN11). An operator reading
+  // ErrImagePull deserves to find that here rather than in a task report.
+  const out = renderMicroservices(fixture);
+  assert.match(out, /NOT EVERY IMAGE HERE CAN BE BUILT YET/);
+  assert.match(out, /output: 'standalone'/);
+  assert.match(out, /IN11/);
+});
+
 test('the image tag is substituted at deploy time, never baked', () => {
   const out = renderMicroservices(fixture);
   assert.match(out, /image: kartseek\/grocery-service:\$\{KARTSEEK_TAG\}/);
@@ -331,6 +355,82 @@ test('every module database has its address keys in the ConfigMap', () => {
   }
 });
 
+test('every manifest in infra/k8s parses, and every document is addressable', () => {
+  // Not a substitute for `kubectl apply --dry-run=server`, which runs admission
+  // as well — but that needs an API server, and this runs anywhere. It is what
+  // catches the class of damage an edit does to a file nobody re-parses: a
+  // document that no longer loads, or one that loses its name or its namespace
+  // and would land in whatever namespace the operator's context happens to be.
+  const dir = path.join(root, 'infra/k8s');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.yaml'));
+  assert.ok(files.length >= 9, `only ${files.length} manifests found`);
+  let documents = 0;
+  for (const f of files) {
+    for (const doc of YAML.parseAllDocuments(read(`infra/k8s/${f}`))) {
+      assert.deepEqual(
+        doc.errors.map((e) => e.message),
+        [],
+        `infra/k8s/${f}: YAML errors`,
+      );
+      const js = doc.toJS();
+      if (js === null) continue; // a comment-only document, of which this tree has several
+      documents++;
+      assert.ok(js.apiVersion, `infra/k8s/${f}: a document with no apiVersion`);
+      assert.ok(js.kind, `infra/k8s/${f}: a document with no kind`);
+      assert.ok(js.metadata?.name, `infra/k8s/${f}: a ${js.kind} with no name`);
+      // Cluster-scoped kinds have no namespace; everything else must say
+      // kartseek rather than inherit the operator's current context.
+      if (!['StorageClass', 'Namespace', 'ClusterIssuer'].includes(js.kind))
+        assert.equal(
+          js.metadata.namespace,
+          'kartseek',
+          `infra/k8s/${f}: ${js.kind}/${js.metadata.name}`,
+        );
+    }
+  }
+  assert.ok(documents > 100, `only ${documents} documents parsed`);
+});
+
+test('allow-web-tier admits exactly the ports the registry gives the web tier', () => {
+  // The policy is hand-written and the Deployments are generated, so this is the
+  // only thing standing between the two. A zone added to services.yaml with no
+  // port here is a pod default-deny drops; a port here with no zone is a grant
+  // nothing needs.
+  const ns = YAML.parseAllDocuments(read('infra/k8s/namespace.yaml'))
+    .map((d) => d.toJS())
+    .find((d) => d?.kind === 'NetworkPolicy' && d.metadata.name === 'allow-web-tier');
+  const allowed = ns.spec.ingress[0].ports.map((p) => p.port).sort((a, b) => a - b);
+  const declared = loadRegistry(root)
+    .services.filter((s) => ['web-shell', 'web-zone'].includes(s.kind))
+    .map((s) => s.ports.http)
+    .sort((a, b) => a - b);
+  assert.deepEqual(allowed, declared);
+});
+
+test('every command documented in infra/k8s keeps its line continuations', () => {
+  // `kubectl create secret generic kartseek-secrets #     --from-env-file=…`:
+  // a multi-line command in a YAML comment lost its backslashes in an edit, and
+  // pasted it created an EMPTY Secret that the next deploy then left untouched.
+  // The signature is a `#` appearing inside a command line rather than starting
+  // one, and a continued line that continues into nothing.
+  for (const rel of ['infra/k8s/config.yaml', 'infra/k8s/README.md', 'infra/k8s/databases.yaml']) {
+    const lines = read(rel).split('\n');
+    lines.forEach((line, i) => {
+      const command = /^\s*#?\s{0,3}((?:kubectl|docker|grep|node|npm|bash)\s.*)$/.exec(line);
+      if (command)
+        assert.ok(
+          !/\S\s+#\s/.test(command[1]),
+          `${rel}:${i + 1}: a '#' inside a documented command — a lost line continuation\n  ${line}`,
+        );
+      if (/\\$/.test(line))
+        assert.ok(
+          (lines[i + 1] ?? '').trim().length > 0,
+          `${rel}:${i + 1}: continues into nothing`,
+        );
+    });
+  }
+});
+
 test('no manifest in infra/k8s holds a secret value', () => {
   for (const f of fs.readdirSync(path.join(root, 'infra/k8s')).filter((f) => f.endsWith('.yaml'))) {
     const text = read(`infra/k8s/${f}`);
@@ -344,8 +444,10 @@ test('no manifest in infra/k8s holds a secret value', () => {
       // *_PASSWORD / *_SECRET key is a literal in a manifest.
       const m = /^\s*([A-Z0-9_]*(?:PASSWORD|SECRET|_KEY)):\s*(.+)$/.exec(line);
       if (!m) continue;
+      // A trailing `# optional` marks a third-party key deploy.sh may skip; the
+      // value in front of it still has to be empty.
       assert.match(
-        m[2].trim(),
+        m[2].replace(/\s+#.*$/, '').trim(),
         /^(''|""|\|)$/,
         `${f}: ${m[1]} carries a value — fill it from the deploy pipeline instead`,
       );

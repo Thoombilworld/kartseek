@@ -13,6 +13,13 @@
 # Images are `<image>:${KARTSEEK_TAG}`; deploy.sh substitutes the tag and
 # defaults it to `dev`. Applying this file with plain `kubectl apply` leaves
 # the literal in place and the pod reports InvalidImageName.
+#
+# NOT EVERY IMAGE HERE CAN BE BUILT YET. No kartseek/* image is published
+# anywhere, and of the nine Next deployables only `web` has an image at all:
+# the eight zones need `output: 'standalone'` in their next.config.mjs, which
+# is Task IN11. Their Deployments are declared here so the wiring is reviewed
+# and ready; `deploy.sh` skips any Deployment whose image the local Docker
+# daemon does not have, naming it, rather than leaving pods in ErrImagePull.
 ---
 apiVersion: v1
 kind: Service
@@ -211,6 +218,10 @@ spec:
       protocol: TCP
       port: 3028
       targetPort: 3028
+    - name: tcp
+      protocol: TCP
+      port: 4028
+      targetPort: 4028
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -322,6 +333,9 @@ spec:
           ports:
             - name: http
               containerPort: 3028
+              protocol: TCP
+            - name: tcp
+              containerPort: 4028
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -3818,7 +3832,7 @@ spec:
           command:
             - sh
             - -c
-            - 'until nc -z postgres-marketplace.kartseek.svc.cluster.local 5432; do echo waiting for postgres; sleep 2; done'
+            - 'until nc -z postgres.kartseek.svc.cluster.local 5432; do echo waiting for postgres; sleep 2; done'
           resources:
             requests:
               cpu: '10m'

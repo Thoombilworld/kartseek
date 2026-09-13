@@ -155,6 +155,7 @@ data:
   LOCATION_TCP_PORT: '4013'
   WALLET_TCP_PORT: '4014'
   ADMIN_TCP_PORT: '4017'
+  AUDIT_LOG_TCP_PORT: '4028'
   RESTAURANT_TCP_PORT: '4018'
   COMMISSION_TCP_PORT: '4020'
   PAYOUT_TCP_PORT: '4021'
@@ -218,14 +219,17 @@ data:
   # `kartseek_<module>` names in the root .env belong to Compose's `isolated`
   # profile, where each module gets an instance of its own.
   #
-  # Marketplace is the one exception and predates this: it has a Postgres of its
-  # own (`postgres-marketplace`, a StatefulSet in databases.yaml), so its role is
-  # that instance's owner rather than a tenant of the shared one. Compose points
-  # it at the shared instance; if that divergence is ever settled in the shared
-  # instance's favour, this is the block to change and the StatefulSet to delete.
-  MARKETPLACE_DB_HOST: 'postgres-marketplace.kartseek.svc.cluster.local'
+  # Marketplace included, now. It used to point at a dedicated
+  # `postgres-marketplace` instance and `kartseek_marketplace`, while Compose put
+  # the same service on the shared `postgres` as a tenant role — the platform's
+  # highest-volume module running against a different database depending on which
+  # stack you started, and nothing that could notice if the two schemas drifted.
+  # The ruling is one topology: shared instance, `marketplace_user`, everywhere.
+  # The dedicated StatefulSet stays in databases.yaml as the documented
+  # `isolated` option and is referenced by no Deployment.
+  MARKETPLACE_DB_HOST: 'postgres.kartseek.svc.cluster.local'
   MARKETPLACE_DB_PORT: '5432'
-  MARKETPLACE_DB_NAME: 'kartseek_marketplace'
+  MARKETPLACE_DB_NAME: 'kartseek_db'
   MARKETPLACE_DB_USER: 'marketplace_user'
 
   GROCERY_DB_HOST: 'postgres.kartseek.svc.cluster.local'
@@ -308,30 +312,38 @@ data:
 # ── Secret: the names, and nothing else ───────────────────────────────────────
 #
 # EVERY VALUE HERE IS EMPTY, AND MUST STAY EMPTY. This document is the list of
-# credential NAMES the platform reads — the same names the repository-root
-# `.env.example` documents — so that a missing one is a visible gap rather than
-# a service that boots and fails later. The values are filled by the deploy
-# pipeline, from a secret store, and never by editing this file.
+# credential NAMES the platform reads, so that a missing one is a visible gap
+# rather than a service that boots and fails later. The values are filled by the
+# deploy pipeline, from a secret store, and never by editing this file.
 #
-# It used to hold literals: one shouting "use a secrets manager" placeholder
-# for four passwords, a JWT secret containing the word `change` (which the
-# gateway's own Joi schema then refuses under NODE_ENV=production), an
-# all-zero ENCRYPTION_KEY and a set of plausible-looking payment keys. A
-# placeholder in tracked source is
-# a password everyone reading this repository already knows, and the manifests
-# are the last place one belongs (AUD2-022 said the same of Compose).
+# It used to hold literals: one shouting "use a secrets manager" placeholder for
+# four passwords, a JWT secret containing the word `change` (which the gateway's
+# own Joi schema then refuses under NODE_ENV=production), an all-zero
+# ENCRYPTION_KEY and a set of plausible-looking payment keys. A placeholder in
+# tracked source is a password everyone reading this repository already knows,
+# and the manifests are the last place one belongs (AUD2-022 said the same of
+# Compose).
 #
-# Filling it, from the root .env that `npm run env:init` generated:
+# ── Filling it: one way, and it is a script ──────────────────────────────────
 #
-#   grep -E '^[A-Z0-9_]+(PASSWORD|SECRET|KEY)=' .env > /tmp/kartseek-secrets.env
-#   kubectl create secret generic kartseek-secrets #     --from-env-file=/tmp/kartseek-secrets.env --namespace=kartseek #     --dry-run=client -o yaml | kubectl apply -f -
-#   rm /tmp/kartseek-secrets.env
+#   ./infra/k8s/deploy.sh dev
 #
-# The grep matters: `--from-env-file=.env` on the whole file would also load
-# POSTGRES_DB and the eight `<MODULE>_DB_NAME` entries, and a Secret beats the
-# ConfigMap in `envFrom` — so every module would be sent to the
-# `kartseek_<module>` database of Compose's `isolated` profile, which does not
-# exist on this cluster. infra/k8s/README.md has the same commands.
+# `deploy.sh` reads the repository-root `.env` (and `apps/api/.env` for the
+# integration keys), takes the NAMES from this document, builds the Secret from
+# the two, and refuses to go on if a required one is missing or empty — naming
+# it. There is deliberately no copy-pasteable `kubectl create secret` here any
+# more: the one that was here lost its line continuations in an edit, and pasted
+# it created an EMPTY kartseek-secrets that the deploy then found and left alone,
+# which is a whole cluster running on blank credentials. A script cannot be
+# half-pasted. `SECRETS_ENV_FILE=<file>` overrides where the values come from.
+#
+# ── Required, and optional ───────────────────────────────────────────────────
+#
+# A key marked `# optional` below is a third-party integration whose absence
+# fails at that integration's own boundary; `deploy.sh` names the absent ones and
+# continues. Everything else is the platform's own and the deploy stops without
+# it. The required names are the ones the repository-root `.env.example`
+# documents; the optional ones are documented in `apps/api/.env.example`.
 #
 # In production, use the External Secrets Operator (https://external-secrets.io/)
 # with a SecretStore pointing at AWS Secrets Manager / Vault, and let it own this
@@ -376,22 +388,25 @@ stringData:
   ENCRYPTION_KEY: ''
 
   # ── Third-party integrations ─────────────────────────────────────────────
-  # Names only, as above. A service that needs one and is given an empty string
-  # fails at its own boundary, which is where the failure is legible.
-  RAZORPAY_KEY_ID: ''
-  RAZORPAY_KEY_SECRET: ''
-  RAZORPAY_WEBHOOK_SECRET: ''
-  STRIPE_SECRET_KEY: ''
-  STRIPE_WEBHOOK_SECRET: ''
-  AWS_ACCESS_KEY_ID: ''
-  AWS_SECRET_ACCESS_KEY: ''
-  S3_BUCKET: ''
-  SMTP_USER: ''
-  SMTP_PASS: ''
-  TWILIO_ACCOUNT_SID: ''
-  TWILIO_AUTH_TOKEN: ''
-  TWILIO_PHONE_NUMBER: ''
-  FIREBASE_SERVICE_ACCOUNT_KEY: ''
+  # Names only, as above, and every one marked optional: a service that needs one
+  # and is given an empty string fails at its own boundary, which is where that
+  # failure is legible. `deploy.sh` lists the absent ones and carries on, rather
+  # than blocking a dev cluster on a Twilio account nobody has. These names are
+  # documented in apps/api/.env.example, not the repository-root one.
+  RAZORPAY_KEY_ID: '' # optional
+  RAZORPAY_KEY_SECRET: '' # optional
+  RAZORPAY_WEBHOOK_SECRET: '' # optional
+  STRIPE_SECRET_KEY: '' # optional
+  STRIPE_WEBHOOK_SECRET: '' # optional
+  AWS_ACCESS_KEY_ID: '' # optional
+  AWS_SECRET_ACCESS_KEY: '' # optional
+  S3_BUCKET: '' # optional
+  SMTP_USER: '' # optional
+  SMTP_PASS: '' # optional
+  TWILIO_ACCOUNT_SID: '' # optional
+  TWILIO_AUTH_TOKEN: '' # optional
+  TWILIO_PHONE_NUMBER: '' # optional
+  FIREBASE_SERVICE_ACCOUNT_KEY: '' # optional
 ---
 # ── Secret: Docker Registry (for pulling images from private registry) ────────
 # Create via:

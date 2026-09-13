@@ -686,11 +686,25 @@ spec:
 
 ---
 # ══════════════════════════════════════════════════════════════════════════════
-# PostgreSQL — Marketplace (dedicated instance)
+# PostgreSQL — Marketplace (the `isolated` option; NO Deployment uses it)
 # ══════════════════════════════════════════════════════════════════════════════
-# config.yaml has pointed MARKETPLACE_DB_HOST at postgres-marketplace since the
-# Marketplace module was isolated, but nothing in infra/k8s/ ever created it: the
-# service resolved NXDOMAIN and every catalogue query failed at connect.
+# Referenced by nothing. marketplace-service connects to the SHARED instance as
+# the `marketplace_user` tenant role, exactly as it does under Compose —
+# config.yaml's MARKETPLACE_DB_HOST/NAME say so, and the generated Deployment
+# reads them. It used to be the other way round here and only here, which meant
+# the platform's highest-volume module ran against `kartseek_marketplace` on this
+# instance under Kubernetes and against `kartseek_db` on the shared one under
+# Compose, with nothing that could notice if the two schemas drifted.
+#
+# It stays because moving a module onto a Postgres of its own is a supported
+# topology (compose.infra.yml's `isolated` profile does the same thing with nine
+# containers), and this is what it looks like in the cluster. To use it, point
+# MARKETPLACE_DB_HOST at `postgres-marketplace.kartseek.svc.cluster.local` and
+# MARKETPLACE_DB_NAME at `kartseek_marketplace`; the credential does not change,
+# because the role name is the same in both topologies.
+#
+# Applying it costs a 100Gi PVC and an idle Postgres. Delete this document if
+# that is not wanted — nothing points at it.
 # ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
@@ -749,11 +763,13 @@ spec:
                 configMapKeyRef:
                   name: kartseek-config
                   key: MARKETPLACE_DB_USER
+            # Not from the ConfigMap. MARKETPLACE_DB_NAME there is the SHARED
+            # database this module is a tenant of; this instance exists to hold
+            # the module's own, and `kartseek_marketplace` is the name Compose's
+            # `isolated` profile and the root .env both use for it. A database
+            # name is not a credential.
             - name: POSTGRES_DB
-              valueFrom:
-                configMapKeyRef:
-                  name: kartseek-config
-                  key: MARKETPLACE_DB_NAME
+              value: 'kartseek_marketplace'
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
