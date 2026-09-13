@@ -242,7 +242,7 @@ const es: TranslationKeys = {
     errResetLinkFailed:
       'No pudimos enviar el enlace de restablecimiento. Inténtalo de nuevo en un momento.',
     errPasswordRule:
-      'La contraseña debe tener entre 8 y 128 caracteres e incluir una mayúscula, una minúscula, un dígito y un carácter especial (@$!%*?&^#).',
+      'La contraseña debe tener entre 8 y 128 caracteres e incluir una mayúscula, una minúscula, un dígito y un carácter especial (por ejemplo ! @ # _ -).',
     errPasswordMismatch: 'Las dos contraseñas no coinciden.',
     errMustAgreeTerms: 'Debes aceptar los Términos y Condiciones.',
     errCheckEmailPassword: 'Comprueba tu correo y tu contraseña.',

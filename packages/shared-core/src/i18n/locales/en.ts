@@ -242,7 +242,7 @@ const en: TranslationKeys = {
     errInvalidEmail: 'Please enter a valid email address.',
     errResetLinkFailed: 'We could not send the reset link. Please try again in a moment.',
     errPasswordRule:
-      'Password must be 8–128 characters and include an uppercase letter, a lowercase letter, a digit and a special character (@$!%*?&^#).',
+      'Password must be 8–128 characters and include an uppercase letter, a lowercase letter, a digit and a symbol, for example ! @ # _ -.',
     errPasswordMismatch: 'The two passwords do not match.',
     errMustAgreeTerms: 'You must agree to the Terms & Conditions.',
     errCheckEmailPassword: 'Please check your email and password.',
