@@ -179,8 +179,50 @@ export async function getRefunds(sellerId?: string) {
 }
 
 // ── Reviews ─────────────────────────────────────────────────────────────────
-export async function getProductReviews(productId: string) {
-  return api.get<any>(`/marketplace/products/${productId}/reviews`);
+
+/** One published review as `GET /marketplace/products/:id/reviews` returns it. */
+export interface ProductReviewRow {
+  id: string;
+  productId: string;
+  customerName: string | null;
+  rating: number;
+  title: string | null;
+  comment: string | null;
+  imageUrls?: string[] | null;
+  isVerifiedPurchase: boolean;
+  helpfulCount: number;
+  sellerReply?: string | null;
+  sellerRepliedAt?: string | null;
+  createdAt: string;
+}
+
+export interface ProductReviewsPage {
+  productId: string;
+  reviews: ProductReviewRow[];
+  /** Mean of every PUBLISHED review, not only this page; null when there are none. */
+  averageRating: number | null;
+  total: number;
+  page: number;
+  limit: number;
+  /** Count per star across every PUBLISHED review; absent on older services. */
+  ratingDistribution?: Record<'1' | '2' | '3' | '4' | '5', number> | Record<string, number>;
+}
+
+/**
+ * Published reviews for a product, one page at a time.
+ *
+ * Paged rather than fetched whole: a popular product carries thousands and the
+ * page only ever shows a handful before "load more".
+ */
+export async function getProductReviews(
+  productId: string,
+  params?: {
+    page?: number;
+    limit?: number;
+    sort?: 'helpful' | 'recent' | 'rating_desc' | 'rating_asc';
+  },
+) {
+  return api.get<ProductReviewsPage>(`/marketplace/products/${productId}/reviews`, params as any);
 }
 
 export async function addProductReview(productId: string, review: any) {
@@ -477,8 +519,24 @@ export async function createQuestion(
   return api.post<any>(`/marketplace/products/${productId}/questions`, payload);
 }
 
+/** `GET /marketplace/questions/:id/answers` — the rows sit under `answers`, not `data`. */
+export interface QuestionAnswersResponse {
+  questionId: string;
+  answers: Array<{
+    id: string;
+    answerText: string;
+    authorName: string | null;
+    /** SELLER | CUSTOMER | ADMIN, as the service spells it. */
+    authorRole: string | null;
+    helpfulCount: number;
+    isAccepted: boolean;
+    createdAt: string;
+  }>;
+  total: number;
+}
+
 export async function getAnswers(questionId: string) {
-  return api.get<any>(`/marketplace/questions/${questionId}/answers`);
+  return api.get<QuestionAnswersResponse>(`/marketplace/questions/${questionId}/answers`);
 }
 
 export async function createAnswer(
@@ -587,6 +645,75 @@ export interface ProductBundle {
 }
 
 /** Every active bundle. The endpoint is not per-product; callers filter. */
-export async function getProductBundles() {
-  return api.get<{ data: ProductBundle[] } | ProductBundle[]>('/marketplace/bundles');
+export async function getProductBundles(country?: string) {
+  return api.get<{ data: ProductBundle[] } | ProductBundle[]>(
+    '/marketplace/bundles',
+    country ? { country } : undefined,
+  );
+}
+
+// ── Product detail satellites ───────────────────────────────────────────────
+
+/** One instalment plan as `GET /marketplace/products/:id/emi-options` quotes it. */
+export interface EmiPlan {
+  tenure: number;
+  bank: string;
+  interestRate: number;
+  monthlyEmi: number;
+  totalCost?: number;
+  label?: string;
+}
+
+export interface EmiOptionsResponse {
+  productId: string;
+  eligible: boolean;
+  reason?: string;
+  plans?: EmiPlan[];
+  /** The price the plans were computed from — the market's buy-box price. */
+  price?: number;
+  currency?: string;
+}
+
+/**
+ * Finance plans for a product in the market being browsed.
+ *
+ * `eligible: false` is a real answer (no configured lender in this market, or
+ * the price is under the market's floor) and the page shows nothing for it.
+ */
+export async function getEmiOptions(productId: string, country?: string) {
+  return api.get<EmiOptionsResponse>(
+    `/marketplace/products/${productId}/emi-options`,
+    country ? { country } : undefined,
+  );
+}
+
+export interface ProductOffersResponse {
+  bankOffers: Array<{
+    id: string;
+    title: string | null;
+    description?: string | null;
+    bankName?: string | null;
+    cardType?: string;
+    discountType?: string;
+    discountValue?: number | string | null;
+    maxDiscount?: number | string | null;
+    minOrderValue?: number | string;
+    termsAndConditions?: string | null;
+    expiresAt?: string;
+  }>;
+  exchangeOffers: Array<{
+    id: string;
+    title: string | null;
+    description?: string | null;
+    maxExchangeValue?: number | string | null;
+    expiresAt?: string;
+  }>;
+}
+
+/** Bank and exchange offers that apply to this product in this market. */
+export async function getProductOffers(productId: string, country?: string) {
+  return api.get<ProductOffersResponse>(
+    `/marketplace/products/${productId}/offers`,
+    country ? { country } : undefined,
+  );
 }

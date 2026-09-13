@@ -22,22 +22,32 @@ export function organizationSchema() {
     // unfetchable Organization logo as a rich-result error and drops the
     // knowledge-panel image, so this points at an asset that is actually built.
     logo: `${SITE_URL}/apple-touch-icon.png`,
-    description: 'KARTSEEK is the ultimate super app for marketplace shopping, grocery delivery, food ordering, pharmacy, doctor appointments, and taxi booking.',
+    description:
+      'KARTSEEK is the ultimate super app for marketplace shopping, grocery delivery, food ordering, pharmacy, doctor appointments, and taxi booking.',
     // Shared with the footer's clickable icons — see lib/config/social-links.ts.
     sameAs: SOCIAL_URLS,
     contactPoint: [
-      { '@type': 'ContactPoint', telephone: '+974-4000-0000', contactType: 'customer service', availableLanguage: ['English', 'Arabic', 'Hindi'] },
+      {
+        '@type': 'ContactPoint',
+        telephone: '+974-4000-0000',
+        contactType: 'customer service',
+        availableLanguage: ['English', 'Arabic', 'Hindi'],
+      },
     ],
     address: { '@type': 'PostalAddress', addressCountry: 'QA', addressLocality: 'Doha' },
     // One entry per market in COUNTRY_SUBDOMAINS. "India" appeared twice here;
     // a duplicate in areaServed is not merged, it is published as a repeated
     // claim about the same country.
     areaServed: [
-      { '@type': 'Country', name: 'Qatar' }, { '@type': 'Country', name: 'India' },
-      { '@type': 'Country', name: 'United Arab Emirates' }, { '@type': 'Country', name: 'Saudi Arabia' },
-      { '@type': 'Country', name: 'Bahrain' }, { '@type': 'Country', name: 'Kuwait' },
+      { '@type': 'Country', name: 'Qatar' },
+      { '@type': 'Country', name: 'India' },
+      { '@type': 'Country', name: 'United Arab Emirates' },
+      { '@type': 'Country', name: 'Saudi Arabia' },
+      { '@type': 'Country', name: 'Bahrain' },
+      { '@type': 'Country', name: 'Kuwait' },
       { '@type': 'Country', name: 'Oman' },
-      { '@type': 'Country', name: 'United Kingdom' }, { '@type': 'Country', name: 'United States' },
+      { '@type': 'Country', name: 'United Kingdom' },
+      { '@type': 'Country', name: 'United States' },
     ],
   });
 }
@@ -60,12 +70,34 @@ export function websiteSchema() {
 // ─── Product Schema ─────────────────────────────────────────────────────────
 
 interface ProductSchemaInput {
-  name: string; description: string; slug: string;
+  name: string;
+  description: string;
+  slug: string;
   /** Every image the catalogue holds, primary first. A single URL also works. */
   image?: string | string[];
-  price: number; currency: string; brand?: string; sku?: string;
-  rating?: number; reviewCount?: number; inStock?: boolean;
-  category?: string; seller?: string;
+  price: number;
+  currency: string;
+  brand?: string;
+  sku?: string;
+  rating?: number;
+  reviewCount?: number;
+  inStock?: boolean;
+  /**
+   * Precise availability, when the caller knows it. Wins over `inStock`.
+   * `LimitedAvailability` is what a "only 3 left" badge means to a crawler.
+   */
+  availability?: 'InStock' | 'OutOfStock' | 'LimitedAvailability' | 'PreOrder';
+  /** The offer's condition; defaults to new, which is what unmarked offers are. */
+  condition?: 'NewCondition' | 'RefurbishedCondition' | 'UsedCondition';
+  /** How many sellers offer it — `offers` becomes an AggregateOffer when > 1. */
+  offerCount?: number;
+  /** The cheapest and dearest offer prices when several sellers compete. */
+  lowPrice?: number;
+  highPrice?: number;
+  /** Product identifier for the merchant feed: a GTIN/EAN/UPC when the catalogue has one. */
+  gtin?: string;
+  category?: string;
+  seller?: string;
   /**
    * Canonical URL for this product, when it does not live under
    * `/marketplace/product`. Grocery items are sold on their own route, and a
@@ -88,42 +120,73 @@ export function productSchema(p: ProductSchemaInput) {
     description: p.description,
     ...(images.length > 0 && { image: images }),
     url,
-    sku: p.sku || p.slug,
+    // Only a real identifier. The slug used to stand in for a missing SKU,
+    // which published a URL fragment as a merchant SKU.
+    ...(p.sku && { sku: p.sku }),
+    ...(p.gtin && { gtin: p.gtin }),
     brand: p.brand ? { '@type': 'Brand', name: p.brand } : undefined,
     category: p.category,
-    offers: {
-      '@type': 'Offer',
-      // A string with two decimals is what the Merchant feed spec asks for;
-      // a float renders as "1299" and is read as a different price.
-      price: p.price.toFixed(2),
-      priceCurrency: p.currency,
-      availability: p.inStock !== false ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-      itemCondition: 'https://schema.org/NewCondition',
-      seller: p.seller ? { '@type': 'Organization', name: p.seller } : undefined,
-      url,
-    },
+    offers: (() => {
+      const availability = p.availability ?? (p.inStock !== false ? 'InStock' : 'OutOfStock');
+      const base = {
+        priceCurrency: p.currency,
+        availability: `https://schema.org/${availability}`,
+        itemCondition: `https://schema.org/${p.condition ?? 'NewCondition'}`,
+        seller: p.seller ? { '@type': 'Organization', name: p.seller } : undefined,
+        url,
+      };
+      // Several sellers: the markup states the range, the page states the buy box.
+      if ((p.offerCount ?? 0) > 1) {
+        return {
+          '@type': 'AggregateOffer',
+          offerCount: p.offerCount,
+          lowPrice: (p.lowPrice ?? p.price).toFixed(2),
+          highPrice: (p.highPrice ?? p.price).toFixed(2),
+          ...base,
+        };
+      }
+      return {
+        '@type': 'Offer',
+        // A string with two decimals is what the Merchant feed spec asks for;
+        // a float renders as "1299" and is read as a different price.
+        price: p.price.toFixed(2),
+        ...base,
+      };
+    })(),
     // Only when there is a real review behind it. `reviewCount: 0` alongside a
     // rating is rejected outright — Google reports "aggregateRating is missing
     // reviewCount" and discards the whole Product block with it.
-    ...(p.rating && p.rating > 0 && (p.reviewCount ?? 0) > 0 && {
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: p.rating,
-        reviewCount: p.reviewCount,
-        bestRating: 5,
-        worstRating: 1,
-      },
-    }),
+    ...(p.rating &&
+      p.rating > 0 &&
+      (p.reviewCount ?? 0) > 0 && {
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: p.rating,
+          reviewCount: p.reviewCount,
+          bestRating: 5,
+          worstRating: 1,
+        },
+      }),
   });
 }
 
 // ─── Restaurant Schema ──────────────────────────────────────────────────────
 
 interface RestaurantSchemaInput {
-  name: string; description: string; slug: string; image?: string;
-  cuisine?: string; city: string; address?: string; phone?: string;
-  rating?: number; reviewCount?: number; priceRange?: string;
-  openingHours?: string; lat?: number; lng?: number;
+  name: string;
+  description: string;
+  slug: string;
+  image?: string;
+  cuisine?: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  rating?: number;
+  reviewCount?: number;
+  priceRange?: string;
+  openingHours?: string;
+  lat?: number;
+  lng?: number;
   menuItems?: { name: string; price: number; currency: string }[];
 }
 
@@ -139,17 +202,25 @@ export function restaurantSchema(r: RestaurantSchemaInput) {
     address: { '@type': 'PostalAddress', addressLocality: r.city, addressCountry: r.city },
     telephone: r.phone,
     openingHours: r.openingHours || 'Mo-Su 08:00-23:00',
-    ...(r.lat && r.lng && { geo: { '@type': 'GeoCoordinates', latitude: r.lat, longitude: r.lng } }),
+    ...(r.lat &&
+      r.lng && { geo: { '@type': 'GeoCoordinates', latitude: r.lat, longitude: r.lng } }),
     ...(r.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: r.rating, reviewCount: r.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: r.rating,
+        reviewCount: r.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
     ...(r.menuItems && {
       hasMenu: {
         '@type': 'Menu',
         hasMenuSection: {
-          '@type': 'MenuSection', name: 'Popular Items',
-          hasMenuItem: r.menuItems.map(m => ({
-            '@type': 'MenuItem', name: m.name,
+          '@type': 'MenuSection',
+          name: 'Popular Items',
+          hasMenuItem: r.menuItems.map((m) => ({
+            '@type': 'MenuItem',
+            name: m.name,
             offers: { '@type': 'Offer', price: m.price, priceCurrency: m.currency },
           })),
         },
@@ -161,10 +232,19 @@ export function restaurantSchema(r: RestaurantSchemaInput) {
 // ─── Doctor / Physician Schema ──────────────────────────────────────────────
 
 interface DoctorSchemaInput {
-  name: string; speciality: string; slug: string; image?: string;
-  city: string; hospital?: string; phone?: string; qualifications?: string[];
-  rating?: number; reviewCount?: number; consultationFee?: number;
-  currency?: string; availableOnline?: boolean;
+  name: string;
+  speciality: string;
+  slug: string;
+  image?: string;
+  city: string;
+  hospital?: string;
+  phone?: string;
+  qualifications?: string[];
+  rating?: number;
+  reviewCount?: number;
+  consultationFee?: number;
+  currency?: string;
+  availableOnline?: boolean;
 }
 
 export function doctorSchema(d: DoctorSchemaInput) {
@@ -177,23 +257,43 @@ export function doctorSchema(d: DoctorSchemaInput) {
     medicalSpecialty: d.speciality,
     telephone: d.phone,
     address: { '@type': 'PostalAddress', addressLocality: d.city },
-    ...(d.qualifications && { hasCredential: d.qualifications.map(q => ({ '@type': 'EducationalOccupationalCredential', credentialCategory: q })) }),
+    ...(d.qualifications && {
+      hasCredential: d.qualifications.map((q) => ({
+        '@type': 'EducationalOccupationalCredential',
+        credentialCategory: q,
+      })),
+    }),
     ...(d.hospital && {
       worksFor: { '@type': 'MedicalOrganization', name: d.hospital, '@additionalType': 'Hospital' },
     }),
     ...(d.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: d.rating, reviewCount: d.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: d.rating,
+        reviewCount: d.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
-    ...(d.availableOnline && { availableService: { '@type': 'MedicalProcedure', name: 'Online Consultation' } }),
+    ...(d.availableOnline && {
+      availableService: { '@type': 'MedicalProcedure', name: 'Online Consultation' },
+    }),
   });
 }
 
 // ─── Hospital / Medical Organization ────────────────────────────────────────
 
 interface HospitalSchemaInput {
-  name: string; slug: string; city: string; address?: string;
-  phone?: string; image?: string; specialities?: string[];
-  rating?: number; reviewCount?: number; lat?: number; lng?: number;
+  name: string;
+  slug: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  image?: string;
+  specialities?: string[];
+  rating?: number;
+  reviewCount?: number;
+  lat?: number;
+  lng?: number;
 }
 
 export function hospitalSchema(h: HospitalSchemaInput) {
@@ -205,9 +305,15 @@ export function hospitalSchema(h: HospitalSchemaInput) {
     address: { '@type': 'PostalAddress', addressLocality: h.city, streetAddress: h.address },
     telephone: h.phone,
     medicalSpecialty: h.specialities,
-    ...(h.lat && h.lng && { geo: { '@type': 'GeoCoordinates', latitude: h.lat, longitude: h.lng } }),
+    ...(h.lat &&
+      h.lng && { geo: { '@type': 'GeoCoordinates', latitude: h.lat, longitude: h.lng } }),
     ...(h.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: h.rating, reviewCount: h.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: h.rating,
+        reviewCount: h.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
   });
 }
@@ -215,9 +321,17 @@ export function hospitalSchema(h: HospitalSchemaInput) {
 // ─── Pharmacy Schema ────────────────────────────────────────────────────────
 
 interface PharmacySchemaInput {
-  name: string; slug: string; city: string; address?: string;
-  phone?: string; image?: string; rating?: number; reviewCount?: number;
-  deliveryAvailable?: boolean; lat?: number; lng?: number;
+  name: string;
+  slug: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  image?: string;
+  rating?: number;
+  reviewCount?: number;
+  deliveryAvailable?: boolean;
+  lat?: number;
+  lng?: number;
 }
 
 export function pharmacySchema(p: PharmacySchemaInput) {
@@ -228,12 +342,22 @@ export function pharmacySchema(p: PharmacySchemaInput) {
     image: p.image,
     address: { '@type': 'PostalAddress', addressLocality: p.city, streetAddress: p.address },
     telephone: p.phone,
-    ...(p.lat && p.lng && { geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng } }),
+    ...(p.lat &&
+      p.lng && { geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng } }),
     ...(p.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: p.rating, reviewCount: p.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: p.rating,
+        reviewCount: p.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
     ...(p.deliveryAvailable && {
-      availableChannel: { '@type': 'ServiceChannel', serviceType: 'Home Delivery', name: 'Medicine Delivery' },
+      availableChannel: {
+        '@type': 'ServiceChannel',
+        serviceType: 'Home Delivery',
+        name: 'Medicine Delivery',
+      },
     }),
   });
 }
@@ -241,7 +365,10 @@ export function pharmacySchema(p: PharmacySchemaInput) {
 // ─── Taxi / Transport Service Schema ────────────────────────────────────────
 
 interface TaxiSchemaInput {
-  city: string; countryName: string; baseFare?: number; currency?: string;
+  city: string;
+  countryName: string;
+  baseFare?: number;
+  currency?: string;
   vehicleTypes?: string[];
 }
 
@@ -255,7 +382,9 @@ export function taxiServiceSchema(t: TaxiSchemaInput) {
     areaServed: { '@type': 'City', name: t.city },
     ...(t.baseFare && {
       offers: {
-        '@type': 'Offer', price: t.baseFare, priceCurrency: t.currency || 'QAR',
+        '@type': 'Offer',
+        price: t.baseFare,
+        priceCurrency: t.currency || 'QAR',
         description: 'Starting fare',
       },
     }),
@@ -265,11 +394,18 @@ export function taxiServiceSchema(t: TaxiSchemaInput) {
 // ─── Local Business (Grocery Store) ─────────────────────────────────────────
 
 interface GroceryStoreSchemaInput {
-  name: string; url: string;
-  image?: string; logo?: string; telephone?: string;
-  streetAddress?: string; city?: string; countryCode?: string;
-  latitude?: number; longitude?: number;
-  rating?: number; reviewCount?: number;
+  name: string;
+  url: string;
+  image?: string;
+  logo?: string;
+  telephone?: string;
+  streetAddress?: string;
+  city?: string;
+  countryCode?: string;
+  latitude?: number;
+  longitude?: number;
+  rating?: number;
+  reviewCount?: number;
 }
 
 /**
@@ -302,15 +438,16 @@ export function groceryStoreSchema(s: GroceryStoreSchemaInput) {
     }),
     // Only with real orders behind it: a rating alongside `reviewCount: 0` makes
     // Google discard the whole block, not just the rating.
-    ...((s.rating ?? 0) > 0 && (s.reviewCount ?? 0) > 0 && {
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: s.rating,
-        reviewCount: s.reviewCount,
-        bestRating: 5,
-        worstRating: 1,
-      },
-    }),
+    ...((s.rating ?? 0) > 0 &&
+      (s.reviewCount ?? 0) > 0 && {
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: s.rating,
+          reviewCount: s.reviewCount,
+          bestRating: 5,
+          worstRating: 1,
+        },
+      }),
   });
 }
 
@@ -375,9 +512,10 @@ export function itemListSchema(items: ItemListEntry[], listName?: string) {
                 '@type': 'Offer',
                 price: item.price,
                 priceCurrency: item.currency || 'INR',
-                availability: item.inStock === false
-                  ? 'https://schema.org/OutOfStock'
-                  : 'https://schema.org/InStock',
+                availability:
+                  item.inStock === false
+                    ? 'https://schema.org/OutOfStock'
+                    : 'https://schema.org/InStock',
               },
             }
           : {}),
@@ -391,7 +529,7 @@ export function itemListSchema(items: ItemListEntry[], listName?: string) {
 export function faqSchema(questions: { question: string; answer: string }[]) {
   return wrapSchema({
     '@type': 'FAQPage',
-    mainEntity: questions.map(q => ({
+    mainEntity: questions.map((q) => ({
       '@type': 'Question',
       name: q.question,
       acceptedAnswer: { '@type': 'Answer', text: q.answer },
@@ -401,29 +539,43 @@ export function faqSchema(questions: { question: string; answer: string }[]) {
 
 // ─── Review Schema ──────────────────────────────────────────────────────────
 
-export function reviewSchema(reviews: { author: string; rating: number; body: string; date: string }[]) {
-  return reviews.map(r => wrapSchema({
-    '@type': 'Review',
-    author: { '@type': 'Person', name: r.author },
-    reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 },
-    reviewBody: r.body,
-    datePublished: r.date,
-  }));
+export function reviewSchema(
+  reviews: { author: string; rating: number; body: string; date: string }[],
+) {
+  return reviews.map((r) =>
+    wrapSchema({
+      '@type': 'Review',
+      author: { '@type': 'Person', name: r.author },
+      reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 },
+      reviewBody: r.body,
+      datePublished: r.date,
+    }),
+  );
 }
 
 // ─── Script Tag Renderer ────────────────────────────────────────────────────
 
 export function schemaToScript(schema: Record<string, any> | Record<string, any>[]): string {
   const schemas = Array.isArray(schema) ? schema : [schema];
-  return schemas.map(s => `<script type="application/ld+json">${JSON.stringify(s)}</script>`).join('\n');
+  return schemas
+    .map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</script>`)
+    .join('\n');
 }
 
 // ─── Medical Clinic Schema ──────────────────────────────────────────────────
 
 interface MedicalClinicSchemaInput {
-  name: string; slug: string; city: string; address?: string;
-  phone?: string; image?: string; specialities?: string[];
-  rating?: number; reviewCount?: number; lat?: number; lng?: number;
+  name: string;
+  slug: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  image?: string;
+  specialities?: string[];
+  rating?: number;
+  reviewCount?: number;
+  lat?: number;
+  lng?: number;
   doctors?: { name: string; speciality: string }[];
 }
 
@@ -436,12 +588,18 @@ export function medicalClinicSchema(c: MedicalClinicSchemaInput) {
     address: { '@type': 'PostalAddress', addressLocality: c.city, streetAddress: c.address },
     telephone: c.phone,
     medicalSpecialty: c.specialities,
-    ...(c.lat && c.lng && { geo: { '@type': 'GeoCoordinates', latitude: c.lat, longitude: c.lng } }),
+    ...(c.lat &&
+      c.lng && { geo: { '@type': 'GeoCoordinates', latitude: c.lat, longitude: c.lng } }),
     ...(c.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: c.rating, reviewCount: c.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: c.rating,
+        reviewCount: c.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
     ...(c.doctors && {
-      employee: c.doctors.map(d => ({
+      employee: c.doctors.map((d) => ({
         '@type': 'Physician',
         name: d.name,
         medicalSpecialty: d.speciality,
@@ -453,10 +611,18 @@ export function medicalClinicSchema(c: MedicalClinicSchemaInput) {
 // ─── Food Establishment Schema ──────────────────────────────────────────────
 
 interface FoodEstablishmentSchemaInput {
-  name: string; slug: string; city: string; address?: string;
-  servesCuisine?: string[]; image?: string; phone?: string;
-  rating?: number; reviewCount?: number; priceRange?: string;
-  acceptsReservations?: boolean; deliveryAvailable?: boolean;
+  name: string;
+  slug: string;
+  city: string;
+  address?: string;
+  servesCuisine?: string[];
+  image?: string;
+  phone?: string;
+  rating?: number;
+  reviewCount?: number;
+  priceRange?: string;
+  acceptsReservations?: boolean;
+  deliveryAvailable?: boolean;
 }
 
 export function foodEstablishmentSchema(f: FoodEstablishmentSchemaInput) {
@@ -471,10 +637,18 @@ export function foodEstablishmentSchema(f: FoodEstablishmentSchemaInput) {
     priceRange: f.priceRange || '$$',
     acceptsReservations: f.acceptsReservations ?? true,
     ...(f.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: f.rating, reviewCount: f.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: f.rating,
+        reviewCount: f.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
     ...(f.deliveryAvailable && {
-      potentialAction: { '@type': 'OrderAction', target: { '@type': 'EntryPoint', urlTemplate: `${SITE_URL}/restaurant/${f.slug}/order` } },
+      potentialAction: {
+        '@type': 'OrderAction',
+        target: { '@type': 'EntryPoint', urlTemplate: `${SITE_URL}/restaurant/${f.slug}/order` },
+      },
     }),
   });
 }
@@ -482,10 +656,18 @@ export function foodEstablishmentSchema(f: FoodEstablishmentSchemaInput) {
 // ─── Medical Business (Pharmacy) Schema ─────────────────────────────────────
 
 interface MedicalBusinessSchemaInput {
-  name: string; slug: string; city: string; address?: string;
-  phone?: string; image?: string; services?: string[];
-  rating?: number; reviewCount?: number;
-  openingHours?: string; lat?: number; lng?: number;
+  name: string;
+  slug: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  image?: string;
+  services?: string[];
+  rating?: number;
+  reviewCount?: number;
+  openingHours?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export function medicalBusinessSchema(m: MedicalBusinessSchemaInput) {
@@ -497,16 +679,25 @@ export function medicalBusinessSchema(m: MedicalBusinessSchemaInput) {
     address: { '@type': 'PostalAddress', addressLocality: m.city, streetAddress: m.address },
     telephone: m.phone,
     openingHours: m.openingHours,
-    ...(m.lat && m.lng && { geo: { '@type': 'GeoCoordinates', latitude: m.lat, longitude: m.lng } }),
+    ...(m.lat &&
+      m.lng && { geo: { '@type': 'GeoCoordinates', latitude: m.lat, longitude: m.lng } }),
     ...(m.services && {
       hasOfferCatalog: {
         '@type': 'OfferCatalog',
         name: 'Services',
-        itemListElement: m.services.map(s => ({ '@type': 'Offer', itemOffered: { '@type': 'Service', name: s } })),
+        itemListElement: m.services.map((s) => ({
+          '@type': 'Offer',
+          itemOffered: { '@type': 'Service', name: s },
+        })),
       },
     }),
     ...(m.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: m.rating, reviewCount: m.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: m.rating,
+        reviewCount: m.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
   });
 }
@@ -514,9 +705,17 @@ export function medicalBusinessSchema(m: MedicalBusinessSchemaInput) {
 // ─── Local Business (General Store) Schema ──────────────────────────────────
 
 interface LocalBusinessSchemaInput {
-  name: string; slug: string; city: string; address?: string;
-  phone?: string; image?: string; type?: string;
-  rating?: number; reviewCount?: number; lat?: number; lng?: number;
+  name: string;
+  slug: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  image?: string;
+  type?: string;
+  rating?: number;
+  reviewCount?: number;
+  lat?: number;
+  lng?: number;
   priceRange?: string;
   /**
    * Site-relative path of the page this describes, e.g.
@@ -539,9 +738,15 @@ export function localBusinessSchema(b: LocalBusinessSchemaInput) {
     address: { '@type': 'PostalAddress', addressLocality: b.city, streetAddress: b.address },
     telephone: b.phone,
     priceRange: b.priceRange || '$$',
-    ...(b.lat && b.lng && { geo: { '@type': 'GeoCoordinates', latitude: b.lat, longitude: b.lng } }),
+    ...(b.lat &&
+      b.lng && { geo: { '@type': 'GeoCoordinates', latitude: b.lat, longitude: b.lng } }),
     ...(b.rating && {
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: b.rating, reviewCount: b.reviewCount || 0, bestRating: 5 },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: b.rating,
+        reviewCount: b.reviewCount || 0,
+        bestRating: 5,
+      },
     }),
   });
 }
@@ -549,8 +754,11 @@ export function localBusinessSchema(b: LocalBusinessSchemaInput) {
 // ─── Service Schema (Taxi) ──────────────────────────────────────────────────
 
 interface ServiceSchemaInput {
-  name: string; description: string; city: string;
-  provider?: string; serviceType?: string;
+  name: string;
+  description: string;
+  city: string;
+  provider?: string;
+  serviceType?: string;
   areaServed?: string[];
 }
 
@@ -561,7 +769,8 @@ export function serviceSchema(s: ServiceSchemaInput) {
     description: s.description,
     serviceType: s.serviceType || 'Transportation',
     provider: { '@type': 'Organization', name: s.provider || 'KARTSEEK' },
-    areaServed: s.areaServed?.map(a => ({ '@type': 'City', name: a })) || [{ '@type': 'City', name: s.city }],
+    areaServed: s.areaServed?.map((a) => ({ '@type': 'City', name: a })) || [
+      { '@type': 'City', name: s.city },
+    ],
   });
 }
-

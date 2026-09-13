@@ -58,6 +58,81 @@ export interface SellerProduct {
   gst?: string | null;
 }
 
+/** One attribute value as the seller form submits it. */
+export interface SellerAttributeInput {
+  /** The definition's id, or its slug — either identifies it within the category. */
+  attributeId?: string;
+  slug?: string;
+  value: string | number | boolean | string[] | null;
+}
+
+/** The body of `POST /seller/products` and `PUT /seller/products/:id`. */
+export interface SellerProductWrite {
+  name: string;
+  description?: string;
+  longDescription?: string;
+  categoryId?: string;
+  subcategoryId?: string;
+  brandId?: string;
+  /** List price; never below `sellingPrice`. */
+  mrp?: number;
+  sellingPrice?: number;
+  stock?: number;
+  sku?: string;
+  condition?: 'NEW' | 'REFURBISHED' | 'USED';
+  gtin?: string;
+  attributes?: SellerAttributeInput[];
+  status?: 'DRAFT' | 'ACTIVE';
+}
+
+/** `GET /seller/products/:id` — what the edit form prefills from. */
+export interface SellerProductDetail {
+  id: string;
+  name: string;
+  slug: string;
+  short_description?: string | null;
+  long_description?: string | null;
+  mrp?: number | string | null;
+  brand?: { id: string; name: string; slug?: string } | null;
+  category?: { id: string; name: string; slug?: string } | null;
+  subcategory?: { id: string; name: string; slug?: string } | null;
+  images?: Array<{
+    id: string;
+    url: string;
+    altText?: string | null;
+    isPrimary?: boolean;
+    sortOrder?: number;
+  }>;
+  listing?: {
+    id: string;
+    sellingPrice: number | string;
+    mrp?: number | string | null;
+    stockQuantity: number;
+    sellerSku?: string | null;
+    condition?: string;
+    isActive?: boolean;
+    approvalStatus?: string;
+  } | null;
+  attributes?: Array<{
+    id?: string;
+    slug: string;
+    name: string;
+    group?: string;
+    type?: string;
+    value: unknown;
+    unit?: string | null;
+    displayValue?: string;
+  }>;
+  approvalStatus?: string;
+  approval_status?: string;
+  status?: string;
+  isActive?: boolean;
+  is_active?: boolean;
+  gtin?: string | null;
+  globalTradeItemNumber?: string | null;
+  rejectionReason?: string | null;
+}
+
 export interface SellerOrder {
   id: string;
   product: string;
@@ -361,8 +436,14 @@ export const sellerApi = {
     api.get<{ data: Campaign[] }>(`/sellers/${sellerId}/campaigns`, { limit: 5 }),
 
   // ── Products / Catalog ───────────────────────────────────────────
-  getProducts: (sellerId: string, params?: { page?: number; limit?: number; status?: string; search?: string; category?: string }) =>
-    api.get<{ data: SellerProduct[]; total: number }>(`/sellers/${sellerId}/products`, params as any),
+  getProducts: (
+    sellerId: string,
+    params?: { page?: number; limit?: number; status?: string; search?: string; category?: string },
+  ) =>
+    api.get<{ data: SellerProduct[]; total: number }>(
+      `/sellers/${sellerId}/products`,
+      params as any,
+    ),
 
   getProductById: (sellerId: string, productId: string) =>
     api.get<{ data: SellerProduct }>(`/sellers/${sellerId}/products/${productId}`),
@@ -377,12 +458,55 @@ export const sellerApi = {
     api.post<{ data: { productId: string } }>(`/sellers/${sellerId}/products/draft`, payload),
 
   bulkUpload: (sellerId: string, products: object[]) =>
-    api.post<{ data: { uploaded: number; errors: number; errorDetails: { row: number; message: string }[] } }>(
-      `/sellers/${sellerId}/products/bulk`, { products },
-    ),
+    api.post<{
+      data: { uploaded: number; errors: number; errorDetails: { row: number; message: string }[] };
+    }>(`/sellers/${sellerId}/products/bulk`, { products }),
 
   deleteProduct: (sellerId: string, productId: string) =>
     api.delete(`/sellers/${sellerId}/products/${productId}`),
+
+  // ── The seller's own products, at /seller/products (identity from the token) ──
+
+  /**
+   * One of the signed-in seller's products with everything an edit form needs:
+   * the catalogue fields, the category/brand objects, the images, the seller's
+   * own offer and the product's attribute values. Any approval state.
+   */
+  getOwnProduct: (productId: string) =>
+    api.get<SellerProductDetail>(`/seller/products/${encodeURIComponent(productId)}`),
+
+  /**
+   * Create a product from the seller form. The server validates every
+   * attribute against the category's definition and answers 400 with
+   * `errors: [{ slug, message }]` for anything it refuses.
+   */
+  createOwnProduct: (payload: SellerProductWrite) =>
+    api.post<{
+      success: boolean;
+      productId: string;
+      listingId?: string;
+      status: string;
+      message?: string;
+    }>('/seller/products', payload),
+
+  /**
+   * Edit catalogue content. A content edit on an APPROVED product sends it
+   * back for re-review (`reReview: true`); price and stock never do.
+   */
+  updateOwnProduct: (productId: string, payload: Partial<SellerProductWrite>) =>
+    api.put<{
+      success: boolean;
+      productId: string;
+      updated?: string[];
+      reReview?: boolean;
+      approvalStatus?: string;
+      message?: string;
+    }>(`/seller/products/${encodeURIComponent(productId)}`, payload),
+
+  updateOwnStock: (productId: string, stock: number) =>
+    api.patch<{ success: boolean }>(`/seller/products/${encodeURIComponent(productId)}/stock`, {
+      stock,
+    }),
 
   // ── Listings (offers on products already in the catalogue) ───────
   //
@@ -400,19 +524,27 @@ export const sellerApi = {
     condition?: string;
     sku?: string;
     isFulfilledByKartseek?: boolean;
-  }) => api.post<{ listingId: string; productId: string; productName: string; status: string; message: string }>(
-    '/seller/listings', payload,
-  ),
+  }) =>
+    api.post<{
+      listingId: string;
+      productId: string;
+      productName: string;
+      status: string;
+      message: string;
+    }>('/seller/listings', payload),
 
   getListings: (params?: { status?: string; page?: number; limit?: number }) =>
     api.get<{ data: SellerListing[]; total: number }>('/seller/listings', params as any),
 
-  updateListing: (listingId: string, payload: {
-    sellingPrice?: number;
-    stock?: number;
-    condition?: string;
-    isActive?: boolean;
-  }) => api.patch<{ success: boolean; listingId: string }>(`/seller/listings/${listingId}`, payload),
+  updateListing: (
+    listingId: string,
+    payload: {
+      sellingPrice?: number;
+      stock?: number;
+      condition?: string;
+      isActive?: boolean;
+    },
+  ) => api.patch<{ success: boolean; listingId: string }>(`/seller/listings/${listingId}`, payload),
 
   /** Find a catalogue product to offer on, by name or barcode. */
   searchCatalogue: (query: string) =>
@@ -420,7 +552,10 @@ export const sellerApi = {
 
   // ── Inventory ────────────────────────────────────────────────────
   getInventory: (sellerId: string, params?: { page?: number; search?: string; sort?: string }) =>
-    api.get<{ data: SellerProduct[]; total: number }>(`/sellers/${sellerId}/inventory`, params as any),
+    api.get<{ data: SellerProduct[]; total: number }>(
+      `/sellers/${sellerId}/inventory`,
+      params as any,
+    ),
 
   updateStock: (sellerId: string, productId: string, quantity: number) =>
     api.put(`/sellers/${sellerId}/inventory/${productId}`, { stock: quantity }),
@@ -432,7 +567,10 @@ export const sellerApi = {
     api.put(`/sellers/${sellerId}/inventory/${productId}/threshold`, { threshold }),
 
   // ── Orders ───────────────────────────────────────────────────────
-  getOrders: (sellerId: string, params?: { status?: string; page?: number; limit?: number; search?: string }) =>
+  getOrders: (
+    sellerId: string,
+    params?: { status?: string; page?: number; limit?: number; search?: string },
+  ) =>
     api.get<{ data: SellerOrder[]; total: number }>(`/sellers/${sellerId}/orders`, params as any),
 
   getOrderById: (sellerId: string, orderId: string) =>
@@ -464,11 +602,16 @@ export const sellerApi = {
     api.get<{ data: any[]; total: number }>(`/sellers/${sellerId}/refunds`, params as any),
 
   // ── Finance: Wallet ──────────────────────────────────────────────
-  getWallet: (sellerId: string) =>
-    api.get<{ data: WalletData }>(`/sellers/${sellerId}/wallet`),
+  getWallet: (sellerId: string) => api.get<{ data: WalletData }>(`/sellers/${sellerId}/wallet`),
 
-  getWalletTransactions: (sellerId: string, params?: { type?: string; page?: number; search?: string }) =>
-    api.get<{ data: WalletTransaction[]; total: number }>(`/sellers/${sellerId}/wallet/transactions`, params as any),
+  getWalletTransactions: (
+    sellerId: string,
+    params?: { type?: string; page?: number; search?: string },
+  ) =>
+    api.get<{ data: WalletTransaction[]; total: number }>(
+      `/sellers/${sellerId}/wallet/transactions`,
+      params as any,
+    ),
 
   // ── Finance: Payouts ─────────────────────────────────────────────
   getPayouts: (sellerId: string, params?: { status?: string; page?: number; search?: string }) =>
@@ -478,12 +621,24 @@ export const sellerApi = {
     api.post<{ data: Payout }>(`/sellers/${sellerId}/payouts`, { amount, bankAccountId }),
 
   // ── Finance: Transactions ────────────────────────────────────────
-  getTransactions: (sellerId: string, params?: { type?: string; page?: number; search?: string; dateFrom?: string; dateTo?: string }) =>
-    api.get<{ data: WalletTransaction[]; total: number }>(`/sellers/${sellerId}/transactions`, params as any),
+  getTransactions: (
+    sellerId: string,
+    params?: { type?: string; page?: number; search?: string; dateFrom?: string; dateTo?: string },
+  ) =>
+    api.get<{ data: WalletTransaction[]; total: number }>(
+      `/sellers/${sellerId}/transactions`,
+      params as any,
+    ),
 
   // ── Finance: Commissions ─────────────────────────────────────────
-  getCommissions: (sellerId: string, params?: { page?: number; category?: string; dateFrom?: string; dateTo?: string }) =>
-    api.get<{ data: Commission[]; total: number }>(`/sellers/${sellerId}/commissions`, params as any),
+  getCommissions: (
+    sellerId: string,
+    params?: { page?: number; category?: string; dateFrom?: string; dateTo?: string },
+  ) =>
+    api.get<{ data: Commission[]; total: number }>(
+      `/sellers/${sellerId}/commissions`,
+      params as any,
+    ),
 
   // ── Marketing: Campaigns ─────────────────────────────────────────
   getCampaigns: (sellerId: string, params?: { status?: string; page?: number }) =>
@@ -518,11 +673,19 @@ export const sellerApi = {
     api.delete(`/sellers/${sellerId}/promotions/${promoId}`),
 
   // ── Marketing: Sponsored Products ────────────────────────────────
-  getSponsoredProducts: (sellerId: string, params?: { status?: string; page?: number; search?: string }) =>
-    api.get<{ data: SponsoredProduct[]; total: number }>(`/sellers/${sellerId}/sponsored`, params as any),
+  getSponsoredProducts: (
+    sellerId: string,
+    params?: { status?: string; page?: number; search?: string },
+  ) =>
+    api.get<{ data: SponsoredProduct[]; total: number }>(
+      `/sellers/${sellerId}/sponsored`,
+      params as any,
+    ),
 
-  sponsorProduct: (sellerId: string, payload: { productId: string; dailyBudget: number; maxCpc: number }) =>
-    api.post<{ data: SponsoredProduct }>(`/sellers/${sellerId}/sponsored`, payload),
+  sponsorProduct: (
+    sellerId: string,
+    payload: { productId: string; dailyBudget: number; maxCpc: number },
+  ) => api.post<{ data: SponsoredProduct }>(`/sellers/${sellerId}/sponsored`, payload),
 
   pauseSponsored: (sellerId: string, sponsoredId: string) =>
     api.post(`/sellers/${sellerId}/sponsored/${sponsoredId}/pause`),
@@ -531,8 +694,7 @@ export const sellerApi = {
     api.post(`/sellers/${sellerId}/sponsored/${sponsoredId}/resume`),
 
   // ── Marketing: Brand Center ──────────────────────────────────────
-  getBrandInfo: (sellerId: string) =>
-    api.get<{ data: BrandInfo }>(`/sellers/${sellerId}/brand`),
+  getBrandInfo: (sellerId: string) => api.get<{ data: BrandInfo }>(`/sellers/${sellerId}/brand`),
 
   updateBrand: (sellerId: string, payload: object) =>
     api.put(`/sellers/${sellerId}/brand`, payload),
@@ -545,7 +707,10 @@ export const sellerApi = {
     api.put(`/sellers/${sellerId}/storefront`, payload),
 
   // ── Store: Reviews ───────────────────────────────────────────────
-  getReviews: (sellerId: string, params?: { rating?: number; status?: string; page?: number; search?: string }) =>
+  getReviews: (
+    sellerId: string,
+    params?: { rating?: number; status?: string; page?: number; search?: string },
+  ) =>
     api.get<{ data: SellerReview[]; total: number }>(`/sellers/${sellerId}/reviews`, params as any),
 
   replyToReview: (sellerId: string, reviewId: string, reply: string) =>
@@ -559,8 +724,14 @@ export const sellerApi = {
     api.get<Blob>(`/sellers/${sellerId}/reports/export`, { type, format }),
 
   // ── Account: Notifications ───────────────────────────────────────
-  getNotifications: (sellerId: string, params?: { type?: string; page?: number; unreadOnly?: boolean }) =>
-    api.get<{ data: SellerNotification[]; total: number; unread: number }>(`/sellers/${sellerId}/notifications`, params as any),
+  getNotifications: (
+    sellerId: string,
+    params?: { type?: string; page?: number; unreadOnly?: boolean },
+  ) =>
+    api.get<{ data: SellerNotification[]; total: number; unread: number }>(
+      `/sellers/${sellerId}/notifications`,
+      params as any,
+    ),
 
   markNotificationRead: (sellerId: string, notificationId: string) =>
     api.post(`/sellers/${sellerId}/notifications/${notificationId}/read`),
@@ -569,8 +740,7 @@ export const sellerApi = {
     api.post(`/sellers/${sellerId}/notifications/read-all`),
 
   // ── Account: Staff ───────────────────────────────────────────────
-  getStaff: (sellerId: string) =>
-    api.get<{ data: StaffMember[] }>(`/sellers/${sellerId}/staff`),
+  getStaff: (sellerId: string) => api.get<{ data: StaffMember[] }>(`/sellers/${sellerId}/staff`),
 
   addStaff: (sellerId: string, payload: Omit<StaffMember, 'id' | 'lastActive' | 'status'>) =>
     api.post<{ data: StaffMember }>(`/sellers/${sellerId}/staff`, payload),
@@ -593,20 +763,31 @@ export const sellerApi = {
 
   // ── Account: Help & Support ──────────────────────────────────────
   getSupportTickets: (sellerId: string, params?: { status?: string; page?: number }) =>
-    api.get<{ data: SupportTicket[]; total: number }>(`/sellers/${sellerId}/support`, params as any),
+    api.get<{ data: SupportTicket[]; total: number }>(
+      `/sellers/${sellerId}/support`,
+      params as any,
+    ),
 
-  createSupportTicket: (sellerId: string, payload: { subject: string; category: string; priority: string; message: string }) =>
-    api.post<{ data: SupportTicket }>(`/sellers/${sellerId}/support`, payload),
+  createSupportTicket: (
+    sellerId: string,
+    payload: { subject: string; category: string; priority: string; message: string },
+  ) => api.post<{ data: SupportTicket }>(`/sellers/${sellerId}/support`, payload),
 
   replySupportTicket: (sellerId: string, ticketId: string, message: string) =>
     api.post(`/sellers/${sellerId}/support/${ticketId}/reply`, { message }),
 
   // ── Brand Center ──────────────────────────────────────────────────
-  getBrand: (sellerId: string) =>
-    api.get<{ data: any }>(`/sellers/${sellerId}/brand`),
+  getBrand: (sellerId: string) => api.get<{ data: any }>(`/sellers/${sellerId}/brand`),
 
-  registerBrand: (sellerId: string, payload: { brandName: string; trademarkNumber?: string; category?: string; description?: string }) =>
-    api.post(`/sellers/${sellerId}/brand`, payload),
+  registerBrand: (
+    sellerId: string,
+    payload: {
+      brandName: string;
+      trademarkNumber?: string;
+      category?: string;
+      description?: string;
+    },
+  ) => api.post(`/sellers/${sellerId}/brand`, payload),
 
   getBrandAnalytics: (sellerId: string, period?: string) =>
     api.get<{ data: any }>(`/sellers/${sellerId}/brand/analytics`, { period }),
@@ -615,8 +796,11 @@ export const sellerApi = {
   getShippingZones: (sellerId: string) =>
     api.get<{ data: any[] }>(`/sellers/${sellerId}/shipping/zones`),
 
-  updateShippingZone: (sellerId: string, zoneId: string, payload: { isActive?: boolean; baseRate?: number; perKgRate?: number; freeAbove?: number }) =>
-    api.put(`/sellers/${sellerId}/shipping/zones/${zoneId}`, payload),
+  updateShippingZone: (
+    sellerId: string,
+    zoneId: string,
+    payload: { isActive?: boolean; baseRate?: number; perKgRate?: number; freeAbove?: number },
+  ) => api.put(`/sellers/${sellerId}/shipping/zones/${zoneId}`, payload),
 
   getShippingRates: (sellerId: string) =>
     api.get<{ data: any[] }>(`/sellers/${sellerId}/shipping/rates`),
@@ -624,14 +808,18 @@ export const sellerApi = {
   getShippingCouriers: (sellerId: string) =>
     api.get<{ data: any[] }>(`/sellers/${sellerId}/shipping/couriers`),
 
-  updateShippingCouriers: (sellerId: string, payload: { defaultCourier?: string; enabledCouriers?: string[] }) =>
-    api.put(`/sellers/${sellerId}/shipping/couriers`, payload),
+  updateShippingCouriers: (
+    sellerId: string,
+    payload: { defaultCourier?: string; enabledCouriers?: string[] },
+  ) => api.put(`/sellers/${sellerId}/shipping/couriers`, payload),
 
   getShipmentTracking: (sellerId: string, params?: { status?: string; page?: number }) =>
-    api.get<{ data: any[]; total: number }>(`/sellers/${sellerId}/shipping/tracking`, params as any),
+    api.get<{ data: any[]; total: number }>(
+      `/sellers/${sellerId}/shipping/tracking`,
+      params as any,
+    ),
 
-  getShippingSettings: (sellerId: string) =>
-    api.get<any>(`/sellers/${sellerId}/shipping/settings`),
+  getShippingSettings: (sellerId: string) => api.get<any>(`/sellers/${sellerId}/shipping/settings`),
 
   updateShippingSettings: (sellerId: string, payload: object) =>
     api.put(`/sellers/${sellerId}/shipping/settings`, payload),
@@ -644,8 +832,17 @@ export const sellerApi = {
   getAvailableDeals: (sellerId: string) =>
     api.get<{ data: any[]; total: number }>(`/sellers/${sellerId}/flash-deals/available`),
 
-  nominateProduct: (sellerId: string, dto: { dealId: string; productId: string; productName: string; proposedDiscount: number; stockAllocated: number; note?: string }) =>
-    api.post(`/sellers/${sellerId}/flash-deals/nominate`, dto),
+  nominateProduct: (
+    sellerId: string,
+    dto: {
+      dealId: string;
+      productId: string;
+      productName: string;
+      proposedDiscount: number;
+      stockAllocated: number;
+      note?: string;
+    },
+  ) => api.post(`/sellers/${sellerId}/flash-deals/nominate`, dto),
 
   getNominations: (sellerId: string) =>
     api.get<{ data: any[]; total: number }>(`/sellers/${sellerId}/flash-deals/nominations`),
@@ -673,8 +870,7 @@ export const sellerApi = {
   // Re-add it alongside a real messaging store, not before.
 
   // ── Warehouses ────────────────────────────────────────────────────────
-  getWarehouses: (sellerId: string) =>
-    api.get<{ data: any[] }>(`/sellers/${sellerId}/warehouses`),
+  getWarehouses: (sellerId: string) => api.get<{ data: any[] }>(`/sellers/${sellerId}/warehouses`),
 
   createWarehouse: (sellerId: string, payload: object) =>
     api.post<{ data: any }>(`/sellers/${sellerId}/warehouses`, payload),
@@ -690,8 +886,7 @@ export const sellerApi = {
     api.post<{ data: any }>(`/sellers/${sellerId}/bundles`, payload),
 
   // ── GST ───────────────────────────────────────────────────────────────
-  getGstInfo: (sellerId: string) =>
-    api.get<{ data: any }>(`/sellers/${sellerId}/gst`),
+  getGstInfo: (sellerId: string) => api.get<{ data: any }>(`/sellers/${sellerId}/gst`),
 
   // ── Performance ───────────────────────────────────────────────────────
   getPerformanceMetrics: (sellerId: string, period?: string) =>
@@ -721,8 +916,11 @@ export const sellerApi = {
    * pipeline in this service — images are referenced by URL, so that is what the
    * endpoint takes.
    */
-  addProductImage: (sellerId: string, productId: string, payload: { url: string; altText?: string; isPrimary?: boolean }) =>
-    api.post<{ image: any }>(`/sellers/${sellerId}/products/${productId}/images`, payload),
+  addProductImage: (
+    sellerId: string,
+    productId: string,
+    payload: { url: string; altText?: string; isPrimary?: boolean },
+  ) => api.post<{ image: any }>(`/sellers/${sellerId}/products/${productId}/images`, payload),
 
   /**
    * Upload a brand logo or banner and get its stored URL back.
@@ -732,7 +930,10 @@ export const sellerApi = {
    * file. See `api.upload`.
    */
   uploadBrandImage: (sellerId: string, file: File, type: 'logo' | 'banner') =>
-    api.upload<{ url: string; size: number }>('/upload/brand-image', file, { brandId: sellerId, type }),
+    api.upload<{ url: string; size: number }>('/upload/brand-image', file, {
+      brandId: sellerId,
+      type,
+    }),
 
   setPrimaryProductImage: (sellerId: string, productId: string, imageId: string) =>
     api.post(`/sellers/${sellerId}/products/${productId}/images/${imageId}/primary`),
@@ -759,7 +960,10 @@ export const sellerApi = {
     api.get<{ data: any[] }>(`/sellers/${sellerId}/products/${productId}/variants`),
 
   createProductVariant: (sellerId: string, productId: string, payload: object) =>
-    api.post<{ variantId: string; variant: any }>(`/sellers/${sellerId}/products/${productId}/variants`, payload),
+    api.post<{ variantId: string; variant: any }>(
+      `/sellers/${sellerId}/products/${productId}/variants`,
+      payload,
+    ),
 
   updateProductVariant: (sellerId: string, productId: string, variantId: string, payload: object) =>
     api.put(`/sellers/${sellerId}/products/${productId}/variants/${variantId}`, payload),
@@ -775,15 +979,24 @@ export const sellerApi = {
    * matching `SellerService.bulkEditProducts`, and reports per-row failures
    * rather than a single error count.
    */
-  bulkEditProducts: (sellerId: string, edits: { productId: string; price?: number; stock?: number }[]) =>
-    api.post<{ success: boolean; updated: number; failed: { productId: string; reason: string }[] }>(
-      `/sellers/${sellerId}/products/bulk-edit`, { edits }),
+  bulkEditProducts: (
+    sellerId: string,
+    edits: { productId: string; price?: number; stock?: number }[],
+  ) =>
+    api.post<{
+      success: boolean;
+      updated: number;
+      failed: { productId: string; reason: string }[];
+    }>(`/sellers/${sellerId}/products/bulk-edit`, { edits }),
 
   exportProducts: (sellerId: string, format: 'csv' | 'xlsx') =>
     api.get<Blob>(`/sellers/${sellerId}/products/export`, { format }),
 
   importProducts: (sellerId: string, payload: FormData) =>
-    api.post<{ data: { imported: number; errors: number } }>(`/sellers/${sellerId}/products/import`, payload),
+    api.post<{ data: { imported: number; errors: number } }>(
+      `/sellers/${sellerId}/products/import`,
+      payload,
+    ),
 
   // ── Return Policy ─────────────────────────────────────────────────────
   getReturnPolicy: (sellerId: string) =>
@@ -841,8 +1054,10 @@ export const sellerApi = {
     api.post(`/sellers/${sellerId}/questions/${questionId}/answer`, { answer }),
 
   // ── Brand Center: Follower Updates ────────────────────────────────────
-  sendFollowerUpdate: (sellerId: string, payload: { type: string; title: string; body: string; imageUrl?: string }) =>
-    api.post(`/sellers/${sellerId}/brand/follower-update`, payload),
+  sendFollowerUpdate: (
+    sellerId: string,
+    payload: { type: string; title: string; body: string; imageUrl?: string },
+  ) => api.post(`/sellers/${sellerId}/brand/follower-update`, payload),
 
   getFollowerUpdates: (sellerId: string) =>
     api.get<{ data: any[] }>(`/sellers/${sellerId}/brand/follower-updates`),
@@ -861,11 +1076,12 @@ export const sellerApi = {
   revokeSession: (sellerId: string, sessionId: string) =>
     api.delete(`/sellers/${sellerId}/settings/sessions/${sessionId}`),
 
-  get2FAStatus: (sellerId: string) =>
-    api.get<{ data: any }>(`/sellers/${sellerId}/settings/2fa`),
+  get2FAStatus: (sellerId: string) => api.get<{ data: any }>(`/sellers/${sellerId}/settings/2fa`),
 
   enable2FA: (sellerId: string) =>
-    api.post<{ data: { qrCode: string; secret: string } }>(`/sellers/${sellerId}/settings/2fa/enable`),
+    api.post<{ data: { qrCode: string; secret: string } }>(
+      `/sellers/${sellerId}/settings/2fa/enable`,
+    ),
 
   disable2FA: (sellerId: string, code: string) =>
     api.post(`/sellers/${sellerId}/settings/2fa/disable`, { code }),
@@ -882,7 +1098,10 @@ export const sellerApi = {
     api.get<{ data: any[] }>(`/sellers/${sellerId}/developer/api-keys`),
 
   createApiKey: (sellerId: string, payload: { name: string; scopes: string[] }) =>
-    api.post<{ data: { key: string; secret: string } }>(`/sellers/${sellerId}/developer/api-keys`, payload),
+    api.post<{ data: { key: string; secret: string } }>(
+      `/sellers/${sellerId}/developer/api-keys`,
+      payload,
+    ),
 
   revokeApiKey: (sellerId: string, keyId: string) =>
     api.delete(`/sellers/${sellerId}/developer/api-keys/${keyId}`),
@@ -904,13 +1123,15 @@ export const sellerApi = {
     api.post<{ data: any }>(`/sellers/${sellerId}/shipping/labels`, { orderId }),
 
   getManifests: (sellerId: string, params?: { page?: number }) =>
-    api.get<{ data: any[]; total: number }>(`/sellers/${sellerId}/shipping/manifests`, params as any),
+    api.get<{ data: any[]; total: number }>(
+      `/sellers/${sellerId}/shipping/manifests`,
+      params as any,
+    ),
 
   createManifest: (sellerId: string, orderIds: string[]) =>
     api.post<{ data: any }>(`/sellers/${sellerId}/shipping/manifests`, { orderIds }),
 
-  getFbkInventory: (sellerId: string) =>
-    api.get<{ data: any[] }>(`/sellers/${sellerId}/fbk`),
+  getFbkInventory: (sellerId: string) => api.get<{ data: any[] }>(`/sellers/${sellerId}/fbk`),
 
   createFbkShipment: (sellerId: string, payload: object) =>
     api.post<{ data: any }>(`/sellers/${sellerId}/fbk/shipments`, payload),
