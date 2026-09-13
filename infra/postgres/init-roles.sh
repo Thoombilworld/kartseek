@@ -237,6 +237,20 @@ WHERE to_regclass('public.' || quote_ident(:'schema' || '_migrations_id_seq')) I
 -- a column.
 --
 -- Idempotent, and it does nothing on a schema the role already owns.
+--
+-- Enums matter as much as tables here and are easy to miss: every `status`
+-- column in these schemas is one, and `ALTER TYPE … ADD VALUE` — what a
+-- migration does to add a new status — is owner-only. On the live cluster 71
+-- enum types across six schemas were still owned by `postgres` after the tables
+-- had been transferred, so the flip looked complete and the first status change
+-- would have failed.
+--
+-- LIMIT: tables, sequences, views, materialized views, enums and domains. A
+-- function or procedure created in a module schema by another role stays owned
+-- by that role (none exists in any of the eight today — checked against
+-- pg_proc); add an `ALTER FUNCTION` loop the day one appears. Composite types
+-- are deliberately absent: a table's row type cannot be altered directly, and
+-- it follows the table's owner anyway.
 SELECT format('ALTER TABLE %I.%I OWNER TO %I', schemaname, tablename, :'role')
 FROM pg_tables WHERE schemaname = :'schema'
 \gexec
@@ -245,6 +259,16 @@ FROM pg_sequences WHERE schemaname = :'schema'
 \gexec
 SELECT format('ALTER VIEW %I.%I OWNER TO %I', schemaname, viewname, :'role')
 FROM pg_views WHERE schemaname = :'schema'
+\gexec
+SELECT format('ALTER MATERIALIZED VIEW %I.%I OWNER TO %I', schemaname, matviewname, :'role')
+FROM pg_matviews WHERE schemaname = :'schema'
+\gexec
+-- Enums and domains. `t.typtype` 'e' and 'd' only: a table's row type ('c')
+-- cannot be altered directly and follows its table, and the array type
+-- PostgreSQL creates alongside every one of these follows its element type.
+SELECT format('ALTER TYPE %I.%I OWNER TO %I', n.nspname, t.typname, :'role')
+FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+WHERE n.nspname = :'schema' AND t.typtype IN ('e', 'd')
 \gexec
 SQL
 }
