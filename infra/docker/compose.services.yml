@@ -5720,9 +5720,29 @@ services:
         WORKSPACE_DIR: apps/web
         PORT: '3000'
         HEALTH_PATH: /admin/login
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: ''
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
+        MARKETPLACE_ZONE_ORIGIN: http://marketplace-frontend:3002
+        GROCERY_ZONE_ORIGIN: http://grocery-frontend:3003
+        RESTAURANT_ZONE_ORIGIN: http://restaurant-frontend:3004
+        PHARMACY_ZONE_ORIGIN: http://pharmacy-frontend:3005
+        DOCTOR_ZONE_ORIGIN: http://doctor-frontend:3006
+        HOTEL_ZONE_ORIGIN: http://hotel-frontend:3007
+        TAXI_ZONE_ORIGIN: http://taxi-frontend:3008
+        FRANCHISE_ZONE_ORIGIN: http://franchise-frontend:3009
     image: kartseek/web:${KARTSEEK_TAG:-dev}
     container_name: kartseek-web
     restart: unless-stopped
@@ -5730,34 +5750,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
-      # Where the shell WOULD rewrite each vertical path — same build-time story
-      # as API_GATEWAY_ORIGIN above: next.config.mjs reads these, and a
-      # standalone image has already frozen its rewrites, so setting them here
-      # changes nothing. A zone is reachable through nginx.compose.conf, which
-      # routes each basePath straight to the zone container, or on the zone’s
-      # own published port — not through the console. See infra/docker/README.md,
-      # “Which nginx config is mounted”.
-      MARKETPLACE_ZONE_ORIGIN: http://marketplace-frontend:3002
-      GROCERY_ZONE_ORIGIN: http://grocery-frontend:3003
-      RESTAURANT_ZONE_ORIGIN: http://restaurant-frontend:3004
-      PHARMACY_ZONE_ORIGIN: http://pharmacy-frontend:3005
-      DOCTOR_ZONE_ORIGIN: http://doctor-frontend:3006
-      HOTEL_ZONE_ORIGIN: http://hotel-frontend:3007
-      TAXI_ZONE_ORIGIN: http://taxi-frontend:3008
-      FRANCHISE_ZONE_ORIGIN: http://franchise-frontend:3009
     ports:
       - '${APP_BIND:-127.0.0.1}:3000:3000'
     healthcheck:
@@ -5775,9 +5779,21 @@ services:
         WORKSPACE_DIR: modules/marketplace/frontend
         PORT: '3002'
         HEALTH_PATH: /marketplace/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/marketplace'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/marketplace-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-marketplace-frontend
     restart: unless-stopped
@@ -5785,19 +5801,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3002:3002'
     healthcheck:
@@ -5815,9 +5830,21 @@ services:
         WORKSPACE_DIR: modules/grocery/frontend
         PORT: '3003'
         HEALTH_PATH: /grocery/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/grocery'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/grocery-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-grocery-frontend
     restart: unless-stopped
@@ -5825,19 +5852,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3003:3003'
     healthcheck:
@@ -5855,9 +5881,21 @@ services:
         WORKSPACE_DIR: modules/restaurant/frontend
         PORT: '3004'
         HEALTH_PATH: /restaurant/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/restaurant'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/restaurant-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-restaurant-frontend
     restart: unless-stopped
@@ -5865,19 +5903,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3004:3004'
     healthcheck:
@@ -5895,9 +5932,21 @@ services:
         WORKSPACE_DIR: modules/pharmacy/frontend
         PORT: '3005'
         HEALTH_PATH: /pharmacy/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/pharmacy'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/pharmacy-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-pharmacy-frontend
     restart: unless-stopped
@@ -5905,19 +5954,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3005:3005'
     healthcheck:
@@ -5935,9 +5983,21 @@ services:
         WORKSPACE_DIR: modules/doctor/frontend
         PORT: '3006'
         HEALTH_PATH: /doctor/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/doctor'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/doctor-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-doctor-frontend
     restart: unless-stopped
@@ -5945,19 +6005,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3006:3006'
     healthcheck:
@@ -5975,9 +6034,21 @@ services:
         WORKSPACE_DIR: modules/hotel/frontend
         PORT: '3007'
         HEALTH_PATH: /hotel-booking/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/hotel-booking'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/hotel-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-hotel-frontend
     restart: unless-stopped
@@ -5985,19 +6056,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3007:3007'
     healthcheck:
@@ -6015,9 +6085,21 @@ services:
         WORKSPACE_DIR: modules/taxi/frontend
         PORT: '3008'
         HEALTH_PATH: /taxi/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/taxi'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/taxi-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-taxi-frontend
     restart: unless-stopped
@@ -6025,19 +6107,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3008:3008'
     healthcheck:
@@ -6055,9 +6136,21 @@ services:
         WORKSPACE_DIR: modules/franchise/frontend
         PORT: '3009'
         HEALTH_PATH: /franchise/
-        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}
-        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}
+        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}
         API_URL: http://api-gateway:3001/api/v1
+        API_GATEWAY_ORIGIN: http://api-gateway:3001
+        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}
+        NEXT_PUBLIC_ZONE_BASE_PATH: '/franchise'
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}
+        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}
     image: kartseek/franchise-frontend:${KARTSEEK_TAG:-dev}
     container_name: kartseek-franchise-frontend
     restart: unless-stopped
@@ -6065,19 +6158,18 @@ services:
     environment:
       # The image already sets this; nothing here may put it back.
       NODE_ENV: production
-      # API_URL is read by application code at request time, so server-side
-      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is
-      # NOT: it is read only inside next.config.mjs, and a standalone image
-      # never loads that file again — `next build` materialises the two
-      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole
-      # config into server.js as JSON. So the value below cannot move those
-      # rewrites; the one compiled in at build time wins (http://localhost:3001,
-      # which inside this container is this container). It is emitted anyway
-      # because a non-standalone `next start` does read it, and because the fix
-      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The
-      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.
+      # API_URL is read by application code at REQUEST time, so a server-side fetch
+      # does go straight to the gateway container — this entry is live.
+      #
+      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted
+      # here too, under a comment admitting they were inert: next.config.mjs
+      # reads them to build rewrites(), and `next build` materialises those into
+      # .next/routes-manifest.json and bakes the config into server.js, so a
+      # standalone image never loads that file again. They are BUILD ARGS now
+      # (see build.args above), with the same container names — which is what
+      # makes the full profile route server-side at all. Nothing settable was
+      # lost by removing them: there was nothing to set.
       API_URL: http://api-gateway:3001/api/v1
-      API_GATEWAY_ORIGIN: http://api-gateway:3001
     ports:
       - '${APP_BIND:-127.0.0.1}:3009:3009'
     healthcheck:

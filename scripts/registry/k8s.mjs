@@ -357,23 +357,35 @@ const POD_METADATA_ENV = [
   { name: 'POD_IP', valueFrom: { fieldRef: 'status.podIP' } },
 ];
 
-export function containerEnv(s, reg) {
+/**
+ * The pod environment for one service.
+ *
+ * No `reg` parameter any more: the only thing that needed the whole registry
+ * here was the web branch's list of zone origins, and those became build args
+ * when items 20/21 established that a standalone Next image freezes its
+ * rewrites and cannot read them at runtime.
+ */
+export function containerEnv(s) {
   if (WEB_KINDS.includes(s.kind)) {
-    const env = [
+    // ONLY what a Next server reads at REQUEST time.
+    //
+    // `API_URL` is read by application code per request, so it is live.
+    // `API_GATEWAY_ORIGIN` and the eight `<M>_ZONE_ORIGIN`s were emitted here
+    // too and were inert: `next.config.mjs` reads them to build `rewrites()`,
+    // and a standalone build freezes those into `server.js` — so the value in a
+    // pod spec moves nothing. Worse than useless, because a manifest that
+    // carries a setting implies the setting takes effect. They belong to the
+    // IMAGE, together with every `NEXT_PUBLIC_*` (`NEXT_PUBLIC_ACTIVE_REGIONS`
+    // above all: without it every page in the image trades in one market —
+    // whole-branch review N3), and `infra/docker/nextjs.Dockerfile` takes them
+    // as build args. A cluster pointing at Services rather than at compose
+    // service names therefore needs its own build of the web images, with those
+    // args — there is no runtime override, and pretending otherwise here is how
+    // the compose stack came to route server-side traffic to itself.
+    return [
       ...POD_METADATA_ENV,
-      // Server-side fetches and the `/api/*` rewrites in next.config.mjs go
-      // straight to the gateway Service. The browser uses the build-time
-      // NEXT_PUBLIC_API_URL baked into the image.
       { name: 'API_URL', value: `http://${SVC('api-gateway')}:3001/api/v1` },
-      { name: 'API_GATEWAY_ORIGIN', value: `http://${SVC('api-gateway')}:3001` },
     ];
-    if (s.kind === 'web-shell')
-      for (const z of reg.services.filter((x) => x.kind === 'web-zone'))
-        env.push({
-          name: `${stem(z.name)}_ZONE_ORIGIN`,
-          value: `http://${SVC(z.name)}:${z.ports.http}`,
-        });
-    return env;
   }
 
   const env = [...POD_METADATA_ENV];
@@ -489,7 +501,12 @@ export function renderService(s) {
  */
 export const tierOf = (s) => (WEB_KINDS.includes(s.kind) ? 'web' : 'microservice');
 
-export function renderDeployment(s, reg) {
+/**
+ * One Deployment. No `reg`: `containerEnv` stopped needing the registry when
+ * the web zone origins became build args (items 20/21), and nothing else in
+ * here reads it.
+ */
+export function renderDeployment(s) {
   const r = resourcesFor(s);
   const uid = runAsUserFor(s);
   const containerPorts = Object.entries(s.ports).flatMap(([kind, port]) => [
@@ -545,7 +562,7 @@ export function renderDeployment(s, reg) {
       // are inlined at build time and everything else it reads is below — and a
       // Secret it never receives is a Secret its image cannot leak.
       ...(WEB_KINDS.includes(s.kind) ? [] : ['    - secretRef:', '        name: kartseek-secrets']),
-      ...indent(2, envBlock(containerEnv(s, reg))),
+      ...indent(2, envBlock(containerEnv(s))),
       '  ports:',
       ...indent(4, containerPorts),
       ...indent(2, probeBlocks(s)),
@@ -585,6 +602,6 @@ export function renderDeployment(s, reg) {
 
 export function renderMicroservices(reg) {
   const entries = reg.services.filter((s) => s.kind !== 'gateway');
-  const body = entries.map((s) => `${renderService(s)}\n${renderDeployment(s, reg)}`).join('\n');
+  const body = entries.map((s) => `${renderService(s)}\n${renderDeployment(s)}`).join('\n');
   return `${HEADER}${body}\n`;
 }

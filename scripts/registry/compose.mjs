@@ -373,37 +373,20 @@ export function envGroups(s, reg) {
     const groups = [
       ['The image already sets this; nothing here may put it back.', [['NODE_ENV', 'production']]],
       [
-        'API_URL is read by application code at request time, so server-side' +
-          '\n      # fetches do go straight to the gateway container. API_GATEWAY_ORIGIN is' +
-          '\n      # NOT: it is read only inside next.config.mjs, and a standalone image' +
-          '\n      # never loads that file again — `next build` materialises the two' +
-          '\n      # `/api/*` rewrites into .next/routes-manifest.json and bakes the whole' +
-          '\n      # config into server.js as JSON. So the value below cannot move those' +
-          '\n      # rewrites; the one compiled in at build time wins (http://localhost:3001,' +
-          '\n      # which inside this container is this container). It is emitted anyway' +
-          '\n      # because a non-standalone `next start` does read it, and because the fix' +
-          '\n      # is to pass it as a BUILD ARG — the fix-wave item that follows IN11. The' +
-          '\n      # browser uses the build-time NEXT_PUBLIC_API_URL above, through nginx.',
-        [
-          ['API_URL', 'http://api-gateway:3001/api/v1'],
-          ['API_GATEWAY_ORIGIN', 'http://api-gateway:3001'],
-        ],
+        'API_URL is read by application code at REQUEST time, so a server-side fetch' +
+          '\n      # does go straight to the gateway container — this entry is live.' +
+          '\n      #' +
+          '\n      # API_GATEWAY_ORIGIN and the eight <M>_ZONE_ORIGINs used to be emitted' +
+          '\n      # here too, under a comment admitting they were inert: next.config.mjs' +
+          '\n      # reads them to build rewrites(), and `next build` materialises those into' +
+          '\n      # .next/routes-manifest.json and bakes the config into server.js, so a' +
+          '\n      # standalone image never loads that file again. They are BUILD ARGS now' +
+          '\n      # (see build.args above), with the same container names — which is what' +
+          '\n      # makes the full profile route server-side at all. Nothing settable was' +
+          '\n      # lost by removing them: there was nothing to set.',
+        [['API_URL', 'http://api-gateway:3001/api/v1']],
       ],
     ];
-    if (s.kind === 'web-shell') {
-      const zones = reg.services.filter((z) => z.kind === 'web-zone');
-      if (zones.length)
-        groups.push([
-          'Where the shell WOULD rewrite each vertical path — same build-time story' +
-            '\n      # as API_GATEWAY_ORIGIN above: next.config.mjs reads these, and a' +
-            '\n      # standalone image has already frozen its rewrites, so setting them here' +
-            '\n      # changes nothing. A zone is reachable through nginx.compose.conf, which' +
-            '\n      # routes each basePath straight to the zone container, or on the zone’s' +
-            '\n      # own published port — not through the console. See infra/docker/README.md,' +
-            '\n      # “Which nginx config is mounted”.',
-          zones.map((z) => [`${stem(z.name)}_ZONE_ORIGIN`, `http://${z.name}:${z.ports.http}`]),
-        ]);
-    }
     return groups;
   }
 
@@ -506,7 +489,7 @@ export function envFilesFor(s) {
   return files;
 }
 
-function buildBlock(s) {
+function buildBlock(s, reg) {
   const out = ['    build:', '      context: .', `      dockerfile: ${dockerfileFor(s)}`];
   if (s.kind === 'gateway') {
     // api-gateway.Dockerfile declares no ARG at all: its port, its health route
@@ -522,13 +505,52 @@ function buildBlock(s) {
       `        WORKSPACE_DIR: ${s.path}`,
       `        PORT: ${q(s.ports.http)}`,
       `        HEALTH_PATH: ${healthPathFor(s)}`,
-      // NEXT_PUBLIC_* are inlined into the client bundle at build time, so they
-      // are build args and changing one means rebuilding. All three are
-      // required: each omission fails the build naming a route, not a variable.
-      '        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://nginx/api/v1}',
-      '        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://nginx}',
+      // EVERYTHING Next reads at build time is a build arg, for two separate
+      // reasons. `NEXT_PUBLIC_*` is INLINED into the client bundle by
+      // `next build` and never read again, and `next.config.mjs`'s rewrites are
+      // FROZEN into `server.js` by a standalone build — so an origin handed to
+      // the container as `environment:` moves nothing. `.dockerignore` keeps
+      // `.env`/`.env.*` out of the build context, so what is listed here is
+      // literally all the build sees.
+      //
+      // The browser's two origins must be resolvable BY THE READER, so they
+      // default to the published nginx edge on this machine rather than to the
+      // compose service name `nginx`, which a host browser cannot resolve. A
+      // deployed stack sets COMPOSE_API_URL / COMPOSE_WS_URL to its own origin.
+      '        NEXT_PUBLIC_API_URL: ${COMPOSE_API_URL:-http://localhost/api/v1}',
+      '        NEXT_PUBLIC_WS_URL: ${COMPOSE_WS_URL:-ws://localhost}',
+      // Server side, inside the compose network: container names.
       '        API_URL: http://api-gateway:3001/api/v1',
+      '        API_GATEWAY_ORIGIN: http://api-gateway:3001',
+      // `:?` and not a default. Without the market list every page in the image
+      // trades in one country whatever cookie the reader carries, and nothing
+      // about the running container says so (whole-branch review N3). It is a
+      // plain value in the root .env, documented in .env.example; `env:init`
+      // does not generate it.
+      '        NEXT_PUBLIC_ACTIVE_REGIONS: ${NEXT_PUBLIC_ACTIVE_REGIONS:?set NEXT_PUBLIC_ACTIVE_REGIONS in the root .env (e.g. QA,IN,AE,SA) — a web image built without it offers one market}',
+      '        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-}',
+      // A zone prefixes its own links with this; the shell has no base path.
+      `        NEXT_PUBLIC_ZONE_BASE_PATH: ${q(s.basePath ?? '')}`,
+      // Canonical URLs, the map key, and the analytics/verification ids. Empty
+      // is legitimate for every one of them — the tag is simply omitted — but a
+      // deployment that sets one in the root .env must reach the image.
+      '        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}',
+      '        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}',
+      '        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}',
+      '        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}',
+      '        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}',
+      '        NEXT_PUBLIC_FB_APP_ID: ${NEXT_PUBLIC_FB_APP_ID:-}',
+      '        NEXT_PUBLIC_GOOGLE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_VERIFICATION:-}',
+      '        NEXT_PUBLIC_BING_VERIFICATION: ${NEXT_PUBLIC_BING_VERIFICATION:-}',
     );
+    // The shell rewrites each vertical path to a zone, and a standalone build
+    // freezes those rewrites — so the zone origins are build args too, by
+    // container name.
+    if (s.kind === 'web-shell') {
+      for (const z of (reg?.services ?? []).filter((x) => x.kind === 'web-zone')) {
+        out.push(`        ${stem(z.name)}_ZONE_ORIGIN: http://${z.name}:${z.ports.http}`);
+      }
+    }
   } else {
     out.push(
       `        APP: ${appArg(s)}`,
@@ -603,7 +625,7 @@ function healthcheckBlock(s) {
 export function renderService(s, reg) {
   const parts = [
     `  ${s.name}:`,
-    buildBlock(s),
+    buildBlock(s, reg),
     `    image: ${s.image}:\${KARTSEEK_TAG:-dev}`,
     `    container_name: kartseek-${s.name}`,
     '    restart: unless-stopped',

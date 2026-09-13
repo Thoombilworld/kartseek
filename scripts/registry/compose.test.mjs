@@ -119,6 +119,12 @@ test('the only host addressing is the published port and the in-container probe'
         !l.trim().startsWith('#') &&
         !l.includes('${APP_BIND:-127.0.0.1}') &&
         !/^\s*DDOS_TRUSTED_PROXIES:/.test(l) &&
+        // The fourth: NEXT_PUBLIC_API_URL / NEXT_PUBLIC_WS_URL are baked into
+        // the browser bundle, so they must name an origin the READER can
+        // resolve. A compose service name cannot be one — `http://nginx/api/v1`
+        // was the default and it is unreachable from a host browser (item 21).
+        // Overridable with COMPOSE_API_URL / COMPOSE_WS_URL for a deployment.
+        !/^\s*NEXT_PUBLIC_(API|WS)_URL:/.test(l) &&
         !/wget -qO-|nc -z/.test(l),
     )
     .join('\n');
@@ -315,17 +321,72 @@ test('env_file is the root .env plus the untracked workspace files', () => {
   assert.match(out, /- path: \.env\n\s*required: true/);
 });
 
-test('a Next image gets all three URL build args and its workspace', () => {
+test('everything a Next build reads is a build arg, not runtime environment', () => {
   const out = renderComposeServices(reg);
   assert.match(out, /WORKSPACE_DIR: apps\/web/);
-  assert.match(out, /NEXT_PUBLIC_API_URL: \$\{COMPOSE_API_URL:-http:\/\/nginx\/api\/v1\}/);
-  assert.match(out, /NEXT_PUBLIC_WS_URL: \$\{COMPOSE_WS_URL:-ws:\/\/nginx\}/);
+  // The browser's origins must be resolvable BY THE READER. The default was
+  // `http://nginx/api/v1`, a compose service name a host browser cannot resolve
+  // — baked into the bundle, so the console could not reach its own API from a
+  // browser at all (item 21).
+  assert.match(out, /NEXT_PUBLIC_API_URL: \$\{COMPOSE_API_URL:-http:\/\/localhost\/api\/v1\}/);
+  assert.match(out, /NEXT_PUBLIC_WS_URL: \$\{COMPOSE_WS_URL:-ws:\/\/localhost\}/);
   assert.match(out, /API_URL: http:\/\/api-gateway:3001\/api\/v1/);
-  // next.config.mjs rewrites /api/* to API_GATEWAY_ORIGIN, which defaults to
-  // http://localhost:3001 — inside the container, the container itself.
-  assert.match(out, /API_GATEWAY_ORIGIN: http:\/\/api-gateway:3001$/m);
-  // The shell rewrites each vertical path to its zone container.
-  assert.match(out, /HOTEL_ZONE_ORIGIN: http:\/\/hotel-frontend:3007/);
+
+  // The origins next.config.mjs freezes into server.js, now where they can
+  // reach it. `build.args`, and NOT `environment` — the previous version
+  // emitted them at runtime with a comment saying they were inert (item 20).
+  const web = serviceBlock(out, 'web');
+  const [args, env] = [section(web, 'args:'), section(web, 'environment:')];
+  for (const name of ['API_GATEWAY_ORIGIN', 'HOTEL_ZONE_ORIGIN']) {
+    assert.match(args, new RegExp(`^[ ]+${name}: http://`, 'm'), `${name} is not a build arg`);
+    assert.ok(!new RegExp(`^[ ]+${name}:`, 'm').test(env), `${name} is still runtime environment`);
+  }
+  assert.match(args, /HOTEL_ZONE_ORIGIN: http:\/\/hotel-frontend:3007/);
+  // A zone has no zones of its own to rewrite to.
+  const zoneArgs = section(serviceBlock(out, 'hotel-frontend'), 'args:');
+  assert.ok(!/ZONE_ORIGIN/.test(zoneArgs), 'only the shell rewrites to zones');
+  assert.match(zoneArgs, /NEXT_PUBLIC_ZONE_BASE_PATH: '\/hotel-booking'/);
+
+  // N3: without the market list every page in the image trades in one country,
+  // and nothing about the running container says so. `:?`, not a default.
+  assert.match(args, /NEXT_PUBLIC_ACTIVE_REGIONS: \$\{NEXT_PUBLIC_ACTIVE_REGIONS:\?/);
+  assert.ok(!/NEXT_PUBLIC_ACTIVE_REGIONS:-/.test(args), 'a default would hide the omission');
+});
+
+test('every NEXT_PUBLIC_ the application reads is declared as a build arg', () => {
+  // The list is whatever the source actually reads, not a list somebody
+  // remembered to update: a `NEXT_PUBLIC_*` that is not a build arg is absent
+  // from every image, silently, because .dockerignore keeps .env out of the
+  // build context and next build inlines these.
+  const root = repoRoot();
+  const sources = [];
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (['node_modules', '.next', 'dist', '__tests__'].includes(e.name)) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (/\.(ts|tsx|mjs|js)$/.test(e.name) && !/\.(spec|test)\./.test(e.name))
+        sources.push(fs.readFileSync(full, 'utf8'));
+    }
+  };
+  walk(path.join(root, 'apps/web/src'));
+  walk(path.join(root, 'packages/shared-core/src'));
+  for (const m of fs.readdirSync(path.join(root, 'modules')))
+    walk(path.join(root, 'modules', m, 'frontend', 'src'));
+
+  const read = new Set();
+  for (const src of sources)
+    for (const m of src.matchAll(/process\.env\.(NEXT_PUBLIC_[A-Z0-9_]+)/g)) read.add(m[1]);
+  assert.ok(read.size >= 8, `found only ${read.size} NEXT_PUBLIC_ reads — the scan is broken`);
+
+  const args = section(serviceBlock(renderComposeServices(reg), 'web'), 'args:');
+  const dockerfile = fs.readFileSync(path.join(root, 'infra/docker/nextjs.Dockerfile'), 'utf8');
+  for (const name of [...read].sort()) {
+    assert.match(args, new RegExp(`^[ ]+${name}:`, 'm'), `${name} is read but never built in`);
+    assert.match(dockerfile, new RegExp(`^ARG ${name}$`, 'm'), `${name} has no ARG`);
+    assert.match(dockerfile, new RegExp(`^ENV ${name}=`, 'm'), `${name} has no ENV`);
+  }
 });
 
 test('the gateway image takes no build args', () => {
@@ -415,6 +476,32 @@ test('every Next deployable emits standalone output, traced from the monorepo ro
   }
 });
 
+/** One service's block out of the rendered file, by name. */
+function serviceBlock(out, name) {
+  const block = serviceBlocks(out).get(name);
+  assert.ok(block, `${name} is not in the rendered file`);
+  return block;
+}
+
+/**
+ * One indented sub-block of a service — `args:`, `environment:` — so an
+ * assertion about a build arg cannot be satisfied by a runtime entry with the
+ * same name, which is precisely the confusion items 20/21 were made of.
+ */
+function section(block, header) {
+  const lines = block.split(/\r?\n/);
+  const start = lines.findIndex((l) => l.trim() === header);
+  if (start === -1) return '';
+  const indent = lines[start].length - lines[start].trimStart().length;
+  const out = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim() === '') continue;
+    if (line.length - line.trimStart().length <= indent) break;
+    out.push(line);
+  }
+  return out.join(String.fromCharCode(10));
+}
+
 /**
  * Splits the rendered file into `service name -> its block`, so a per-service
  * assertion cannot be satisfied by some OTHER service's line further down.
@@ -451,10 +538,10 @@ test('every Next deployable gets all three URL build args, not just the console'
     for (const arg of ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_WS_URL', 'API_URL']) {
       assert.match(block, new RegExp(`^\\s+${arg}: \\S`, 'm'), `${s.name} is missing ${arg}`);
     }
-    // The browser-facing pair is overridable, because through nginx from a HOST
-    // browser the origin is http://localhost/… and not http://nginx/… .
-    assert.match(block, /NEXT_PUBLIC_API_URL: \$\{COMPOSE_API_URL:-http:\/\/nginx\/api\/v1\}/);
-    assert.match(block, /NEXT_PUBLIC_WS_URL: \$\{COMPOSE_WS_URL:-ws:\/\/nginx\}/);
+    // The browser-facing pair defaults to the PUBLISHED edge, because it is
+    // baked into the bundle and a host browser cannot resolve `http://nginx/`.
+    assert.match(block, /NEXT_PUBLIC_API_URL: \$\{COMPOSE_API_URL:-http:\/\/localhost\/api\/v1\}/);
+    assert.match(block, /NEXT_PUBLIC_WS_URL: \$\{COMPOSE_WS_URL:-ws:\/\/localhost\}/);
     // The server-side one is not: a Next server talks to the gateway container
     // directly, never back out through the edge.
     assert.match(block, /API_URL: http:\/\/api-gateway:3001\/api\/v1/);

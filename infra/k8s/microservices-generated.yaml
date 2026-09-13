@@ -4647,24 +4647,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
-            - name: MARKETPLACE_ZONE_ORIGIN
-              value: 'http://marketplace-frontend.kartseek.svc.cluster.local:3002'
-            - name: GROCERY_ZONE_ORIGIN
-              value: 'http://grocery-frontend.kartseek.svc.cluster.local:3003'
-            - name: RESTAURANT_ZONE_ORIGIN
-              value: 'http://restaurant-frontend.kartseek.svc.cluster.local:3004'
-            - name: PHARMACY_ZONE_ORIGIN
-              value: 'http://pharmacy-frontend.kartseek.svc.cluster.local:3005'
-            - name: DOCTOR_ZONE_ORIGIN
-              value: 'http://doctor-frontend.kartseek.svc.cluster.local:3006'
-            - name: HOTEL_ZONE_ORIGIN
-              value: 'http://hotel-frontend.kartseek.svc.cluster.local:3007'
-            - name: TAXI_ZONE_ORIGIN
-              value: 'http://taxi-frontend.kartseek.svc.cluster.local:3008'
-            - name: FRANCHISE_ZONE_ORIGIN
-              value: 'http://franchise-frontend.kartseek.svc.cluster.local:3009'
           ports:
             - name: http
               containerPort: 3000
@@ -4788,8 +4770,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3002
@@ -4913,8 +4893,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3003
@@ -5038,8 +5016,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3004
@@ -5163,8 +5139,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3005
@@ -5288,8 +5262,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3006
@@ -5413,8 +5385,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3007
@@ -5538,8 +5508,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3008
@@ -5663,8 +5631,6 @@ spec:
                   fieldPath: status.podIP
             - name: API_URL
               value: 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1'
-            - name: API_GATEWAY_ORIGIN
-              value: 'http://api-gateway.kartseek.svc.cluster.local:3001'
           ports:
             - name: http
               containerPort: 3009

@@ -83,13 +83,89 @@ RUN npm ci
 # ── Build ────────────────────────────────────────────────────────────────────
 FROM deps AS builder
 ARG WORKSPACE_DIR
+#
+# EVERYTHING NEXT READS AT BUILD TIME IS A BUILD ARG.
+#
+# Two separate reasons, and neither is negotiable for an image that has to work:
+#
+#  1. `NEXT_PUBLIC_*` is INLINED into the client bundle by `next build`. It is
+#     not read at runtime and never will be, so a value handed to the container
+#     as `environment:` changes nothing. `.dockerignore` excludes `.env` and
+#     `.env.*` (keeping only `.env.example`, which Next does not read), so the
+#     build sees whatever is declared here and nothing else. That is how every
+#     console and zone image came to trade in one market: without
+#     `NEXT_PUBLIC_ACTIVE_REGIONS`, `packages/shared-core/src/localization/
+#     countries.ts` falls back to `[DEFAULT_COUNTRY]` alone and the region
+#     picker holds one entry (whole-branch review N3).
+#
+#  2. `next.config.mjs` reads `API_GATEWAY_ORIGIN` and the eight
+#     `<M>_ZONE_ORIGIN`s to build its `rewrites()`, and a standalone build
+#     FREEZES those rewrites into `server.js`. The compose renderer used to emit
+#     them as runtime `environment:` and say in a comment that they were inert;
+#     they are build args now, with the container service names, so a
+#     server-side fetch and every `/api/*` rewrite reach the gateway on the
+#     compose network instead of `localhost:3001` inside the container.
+#
+# The list is `grep -rhoE 'process\.env\.NEXT_PUBLIC_[A-Z0-9_]+'` over apps/web,
+# modules/*/frontend and packages/shared-core. A NEW `NEXT_PUBLIC_*` that is not
+# added here is silently absent from every image.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_WS_URL
 ARG API_URL
+# The market list and the home market — N3. Without the first, every container
+# trades in one country whatever cookie the reader carries.
+ARG NEXT_PUBLIC_ACTIVE_REGIONS
+ARG NEXT_PUBLIC_DEFAULT_REGION
+# A zone's own base path (`zone-href.ts`); empty for the shell.
+ARG NEXT_PUBLIC_ZONE_BASE_PATH
+# Canonical URLs and the verification/analytics ids. Empty is a legitimate
+# value for all of these — the tags are omitted — but they must be declarable.
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+ARG NEXT_PUBLIC_GA_ID
+ARG NEXT_PUBLIC_GTM_ID
+ARG NEXT_PUBLIC_CLARITY_ID
+ARG NEXT_PUBLIC_FB_APP_ID
+ARG NEXT_PUBLIC_GOOGLE_VERIFICATION
+ARG NEXT_PUBLIC_BING_VERIFICATION
+# Server-side rewrites: the gateway and the eight zones, by container name.
+ARG API_GATEWAY_ORIGIN
+ARG MARKETPLACE_ZONE_ORIGIN
+ARG GROCERY_ZONE_ORIGIN
+ARG RESTAURANT_ZONE_ORIGIN
+ARG PHARMACY_ZONE_ORIGIN
+ARG DOCTOR_ZONE_ORIGIN
+ARG HOTEL_ZONE_ORIGIN
+ARG TAXI_ZONE_ORIGIN
+ARG FRANCHISE_ZONE_ORIGIN
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 ENV API_URL=${API_URL}
+ENV NEXT_PUBLIC_ACTIVE_REGIONS=${NEXT_PUBLIC_ACTIVE_REGIONS}
+ENV NEXT_PUBLIC_DEFAULT_REGION=${NEXT_PUBLIC_DEFAULT_REGION}
+ENV NEXT_PUBLIC_ZONE_BASE_PATH=${NEXT_PUBLIC_ZONE_BASE_PATH}
+ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
+ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+ENV NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID}
+ENV NEXT_PUBLIC_GTM_ID=${NEXT_PUBLIC_GTM_ID}
+ENV NEXT_PUBLIC_CLARITY_ID=${NEXT_PUBLIC_CLARITY_ID}
+ENV NEXT_PUBLIC_FB_APP_ID=${NEXT_PUBLIC_FB_APP_ID}
+ENV NEXT_PUBLIC_GOOGLE_VERIFICATION=${NEXT_PUBLIC_GOOGLE_VERIFICATION}
+ENV NEXT_PUBLIC_BING_VERIFICATION=${NEXT_PUBLIC_BING_VERIFICATION}
+ENV API_GATEWAY_ORIGIN=${API_GATEWAY_ORIGIN}
+ENV MARKETPLACE_ZONE_ORIGIN=${MARKETPLACE_ZONE_ORIGIN}
+ENV GROCERY_ZONE_ORIGIN=${GROCERY_ZONE_ORIGIN}
+ENV RESTAURANT_ZONE_ORIGIN=${RESTAURANT_ZONE_ORIGIN}
+ENV PHARMACY_ZONE_ORIGIN=${PHARMACY_ZONE_ORIGIN}
+ENV DOCTOR_ZONE_ORIGIN=${DOCTOR_ZONE_ORIGIN}
+ENV HOTEL_ZONE_ORIGIN=${HOTEL_ZONE_ORIGIN}
+ENV TAXI_ZONE_ORIGIN=${TAXI_ZONE_ORIGIN}
+ENV FRANCHISE_ZONE_ORIGIN=${FRANCHISE_ZONE_ORIGIN}
 ENV NEXT_TELEMETRY_DISABLED=1
+# The market list is what N3 was about, so it is the one that fails the build
+# rather than producing a single-market image nobody notices until a reader in
+# another country sees the wrong currency.
+RUN test -n "$NEXT_PUBLIC_ACTIVE_REGIONS" || { echo "build arg NEXT_PUBLIC_ACTIVE_REGIONS is required — without it every page in this image trades in one market (see infra/docker/README.md)" >&2; exit 1; }
 COPY . .
 # Only apps/web has a public/ directory; the eight module zones have none. The
 # runtime COPY below is unconditional — Dockerfiles have no conditional copy —

@@ -175,12 +175,20 @@ test('a web entry is probed on a page it must be able to render', () => {
   assert.deepEqual(probePaths(zone), { live: '/hotel-booking/', ready: '/hotel-booking/' });
 });
 
-test('a web pod is told where the gateway is, and the shell where each zone is', () => {
+test('a web pod carries only what a Next server reads at request time', () => {
   const shell = envOf(find(fixture, 'Deployment', 'web'));
+  // Live: application code reads it per request.
   assert.equal(shell.API_URL.value, 'http://api-gateway.kartseek.svc.cluster.local:3001/api/v1');
-  assert.equal(
-    shell.HOTEL_ZONE_ORIGIN.value,
-    'http://hotel-frontend.kartseek.svc.cluster.local:3007',
+  // Inert, and therefore gone. next.config.mjs reads these to build rewrites()
+  // and a standalone build freezes those into server.js, so a value in a pod
+  // spec moves nothing — while implying it does. They are build args on
+  // infra/docker/nextjs.Dockerfile (items 20/21, N3): a cluster needs its own
+  // build of the web images with the Service names in them.
+  assert.equal(shell.API_GATEWAY_ORIGIN, undefined);
+  assert.equal(shell.HOTEL_ZONE_ORIGIN, undefined);
+  assert.ok(
+    !Object.keys(shell).some((k) => k.startsWith('NEXT_PUBLIC_')),
+    'NEXT_PUBLIC_* is inlined at build time; a pod cannot set one',
   );
   // No secretRef: a Next server needs none of the platform's credentials, and a
   // Secret it never receives is one its image cannot leak.

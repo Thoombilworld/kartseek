@@ -13,17 +13,17 @@ installed through npm workspaces, and the rspack builder's own dependencies
 are declared in the root manifest. A build scoped to a single workspace
 directory cannot run `npm ci` or `nest build` at all.
 
-| Dockerfile                  | Build command                                                                                                                                                                                                              | Produces                                                                                                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `api-gateway.Dockerfile`    | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                                                                                                                      | The API gateway.                                                                                                         |
-| `core-service.Dockerfile`   | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service --build-arg PORT=3014 -t kartseek/order-service:2.0.0 .`                                                                               | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`.                                     |
-| `module-service.Dockerfile` | `docker build -f infra/docker/module-service.Dockerfile --build-arg APP=grocery --build-arg PORT=3018 -t kartseek/grocery-service:2.0.0 .`                                                                                 | Any of the 8 module backends, selected by `--build-arg APP=<module>`.                                                    |
-| `nextjs.Dockerfile`         | `docker build -f infra/docker/nextjs.Dockerfile --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 --build-arg NEXT_PUBLIC_API_URL=… --build-arg API_URL=… --build-arg NEXT_PUBLIC_WS_URL=… -t kartseek/web:2.0.0 .` | Any of the 9 Next workspaces — the console and the eight zones; a zone also needs `--build-arg HEALTH_PATH=<basePath>/`. |
+| Dockerfile                  | Build command                                                                                                                                                                                       | Produces                                                                                                                 |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `api-gateway.Dockerfile`    | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                                                                                               | The API gateway.                                                                                                         |
+| `core-service.Dockerfile`   | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service --build-arg PORT=3014 -t kartseek/order-service:2.0.0 .`                                                        | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`.                                     |
+| `module-service.Dockerfile` | `docker build -f infra/docker/module-service.Dockerfile --build-arg APP=grocery --build-arg PORT=3018 -t kartseek/grocery-service:2.0.0 .`                                                          | Any of the 8 module backends, selected by `--build-arg APP=<module>`.                                                    |
+| `nextjs.Dockerfile`         | `docker build -f infra/docker/nextjs.Dockerfile --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 …` — **and every value Next reads at build time**; the full command is in the next section | Any of the 9 Next workspaces — the console and the eight zones; a zone also needs `--build-arg HEALTH_PATH=<basePath>/`. |
 
 Read each Dockerfile's own header comment for the full reasoning; the table
 above is a summary.
 
-### `nextjs.Dockerfile` needs three URL arguments, not one
+### `nextjs.Dockerfile` needs every value Next reads at build time
 
 `--build-arg NEXT_PUBLIC_API_URL=…`, `--build-arg API_URL=…` **and**
 `--build-arg NEXT_PUBLIC_WS_URL=…` — all three, even though
@@ -41,6 +41,58 @@ Each one you leave out fails the build with `Failed to collect configuration for
 [cause]: Error: API base URL is not configured. Set API_URL (server) and …
 [cause]: Error: WebSocket URL is not configured. Set NEXT_PUBLIC_WS_URL …
 ```
+
+And those three are not the whole list. Two kinds of value are frozen into a
+Next image and can never be set on the container:
+
+- **every `NEXT_PUBLIC_*`**, because `next build` inlines it into the client
+  bundle;
+- **`API_GATEWAY_ORIGIN` and the eight `<M>_ZONE_ORIGIN`s**, because
+  `next.config.mjs` reads them to build `rewrites()` and a standalone build
+  materialises those into `.next/routes-manifest.json` and `server.js`.
+
+`.dockerignore` excludes `.env` and `.env.*` (it keeps only `.env.example`,
+which Next does not read), so a build sees exactly the args it was given and
+nothing else. The compose renderer passes all of them from `build.args`; the
+whole list is the `ARG` block in the builder stage of `nextjs.Dockerfile`, and
+`scripts/registry/compose.test.mjs` fails when a `NEXT_PUBLIC_*` that the source
+actually reads is missing from either.
+
+`NEXT_PUBLIC_ACTIVE_REGIONS` is the one that fails the build outright rather
+than defaulting. It drives `ACTIVE_COUNTRY_CODES`
+(`packages/shared-core/src/localization/countries.ts`), which is every currency,
+language, address form and payment method the console and the zones offer —
+and without it that list falls back to the home market alone, so every reader in
+every country sees one market and nothing about the running container says so
+(whole-branch review N3). It is a plain value in the ROOT `.env`, documented in
+`.env.example`; `npm run env:init` does not generate it, and Compose refuses to
+build without it:
+
+```
+NEXT_PUBLIC_ACTIVE_REGIONS=QA,IN,AE,SA
+NEXT_PUBLIC_DEFAULT_REGION=QA
+```
+
+Building one image by hand, for the same reason, takes the whole set:
+
+```bash
+docker build -f infra/docker/nextjs.Dockerfile \
+  --build-arg WORKSPACE_DIR=apps/web \
+  --build-arg PORT=3000 \
+  --build-arg NEXT_PUBLIC_API_URL=http://localhost/api/v1 \
+  --build-arg NEXT_PUBLIC_WS_URL=ws://localhost \
+  --build-arg API_URL=http://api-gateway:3001/api/v1 \
+  --build-arg API_GATEWAY_ORIGIN=http://api-gateway:3001 \
+  --build-arg NEXT_PUBLIC_ACTIVE_REGIONS=QA,IN,AE,SA \
+  --build-arg NEXT_PUBLIC_DEFAULT_REGION=QA \
+  --build-arg MARKETPLACE_ZONE_ORIGIN=http://marketplace-frontend:3002 \
+  -t kartseek/web:dev .
+```
+
+A KUBERNETES cluster needs its own build. Its Services are not the compose
+service names, and `scripts/registry/k8s.mjs` deliberately emits no origin in
+the pod spec any more — a manifest that carries a setting implies the setting
+takes effect, and this one never did.
 
 ### `nextjs.Dockerfile` builds any of the nine Next workspaces
 
@@ -549,16 +601,19 @@ fetches, everything in the Nest services — are unaffected.
 into the client bundle and changing one means rebuilding that image. They must
 name an origin **the browser that loads the page can resolve**:
 
-| Where the browser is           | Set                                                                           |
-| ------------------------------ | ----------------------------------------------------------------------------- |
-| On your machine, through nginx | `COMPOSE_API_URL=http://localhost/api/v1` and `COMPOSE_WS_URL=ws://localhost` |
-| Inside `kartseek-network`      | the defaults, `http://nginx/api/v1` and `ws://nginx`                          |
+| Where the browser is           | Set                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| On your machine, through nginx | the defaults, `http://localhost/api/v1` and `ws://localhost`              |
+| A deployed stack               | `COMPOSE_API_URL=https://<host>/api/v1` and `COMPOSE_WS_URL=wss://<host>` |
 
-The defaults are the container-internal spelling. A browser on the host cannot
-resolve `nginx`, so with them a console loaded at `http://localhost/` renders
-and then fails every API call on DNS — which the sign-in page reports as "We
-could not reach the sign-in service", with nothing in the gateway log. The
-`admin`/`full` port publish (`APP_BIND`, default `127.0.0.1`) is also there:
+The defaults used to be `http://nginx/api/v1` and `ws://nginx` — the
+CONTAINER-internal spelling, baked into a bundle that runs in a browser on the
+host, which cannot resolve `nginx`. A console loaded at `http://localhost/`
+rendered and then failed every API call on DNS, which the sign-in page reports
+as "We could not reach the sign-in service" with nothing in the gateway log
+(item 21). The published edge is the honest default; a deployed stack overrides
+both with its own public origin before building. The `admin`/`full` port publish
+(`APP_BIND`, default `127.0.0.1`) is the other way in:
 `http://localhost:3000/admin/login` reaches the console container directly,
 bypassing the edge.
 
