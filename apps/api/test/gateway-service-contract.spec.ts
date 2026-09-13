@@ -107,47 +107,91 @@ const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   // implementation — several were deliberately left unwired rather than pointed
   // at a franchise- or geo-scoped method, which would have returned a confident
   // empty list instead of admitting the command is not built.
+  //
+  // ── Why this section GREW on 2026-09-13, when the list may only shrink ─────
+  //
+  // It grew by 31 entries that were always orphans and had simply never been
+  // visible. `readSentCommands`'s pattern for the `this.send('<cmd>', …)` form
+  // matched `[a-z0-9_.]+` — no capital letters — so every camelCase command in
+  // the six admin controllers was invisible to this gate: `storeDetail`,
+  // `approveProduct`, `verifyLicense`, `updateSettings`, `createCategory`,
+  // `approveDriver` and 42 others were neither checked for a handler nor listed
+  // here. The gate read as coverage over routes it could not see, which its own
+  // docstring calls worse than no gate at all.
+  //
+  // The character class is `[A-Za-z0-9_.]+` as of M3, so the extractor sees all
+  // 611 sent commands rather than 564. The 31 additions below are what that
+  // revealed in doctor, hotel, restaurant and taxi — each one a route the
+  // console can call today and get a 503 from — and they leave this list as
+  // M4-M7 implement them. The rule stands: nothing may be added for a NEW
+  // orphan; these are old ones, finally in view.
   'admin.doctor.appointments',
+  'admin.doctor.approveClinic',
+  'admin.doctor.clinicDetail',
+  'admin.doctor.createSpecialty',
   'admin.doctor.dashboard',
+  'admin.doctor.doctorDetail',
   'admin.doctor.prescriptions',
   'admin.doctor.reports',
   'admin.doctor.settings',
+  'admin.doctor.suspendDoctor',
+  'admin.doctor.updateSettings',
+  'admin.doctor.verifyDoctor',
   'admin.hotel.amenities',
+  'admin.hotel.bookingDetail',
   'admin.hotel.bookings',
+  'admin.hotel.createAmenity',
   'admin.hotel.dashboard',
   'admin.hotel.get',
   'admin.hotel.list',
+  'admin.hotel.moderateReview',
   'admin.hotel.pricing',
   'admin.hotel.reports',
   'admin.hotel.reviews',
   'admin.hotel.rooms',
   'admin.hotel.settings',
-  'admin.pharmacy.approve',
-  'admin.pharmacy.commissions',
-  'admin.pharmacy.dashboard',
-  'admin.pharmacy.orders',
-  'admin.pharmacy.prescriptions',
-  'admin.pharmacy.products',
-  'admin.pharmacy.reports',
-  'admin.pharmacy.settings',
-  'admin.pharmacy.settlements',
-  'admin.pharmacy.suspend',
-  'admin.pharmacy.verifications',
+  'admin.hotel.updatePricing',
+  'admin.hotel.updateSettings',
+  // The eleven `admin.pharmacy.*` entries that stood here are gone: M3 gave all
+  // nineteen of this module's commands a `@MessagePattern` in
+  // `modules/pharmacy/backend/src/admin/admin.controller.ts`, and the six
+  // camelCase ones the widened extractor now also sees are handled by the same
+  // controller. `keeps the unimplemented baseline honest` below is what would
+  // have failed had they been left.
   'admin.restaurant.analytics',
+  'admin.restaurant.approveMenu',
   'admin.restaurant.commissions',
   'admin.restaurant.complaints',
+  'admin.restaurant.createCuisine',
+  'admin.restaurant.createZone',
   'admin.restaurant.dashboard',
   'admin.restaurant.get',
+  'admin.restaurant.menuApprovals',
   'admin.restaurant.orders',
+  'admin.restaurant.resolveComplaint',
+  'admin.restaurant.updateCommissions',
   'admin.restaurant.zones',
+  'admin.taxi.approveDriver',
+  'admin.taxi.approvePayout',
+  'admin.taxi.approveVendor',
   'admin.taxi.complaints',
   'admin.taxi.compliance',
+  'admin.taxi.createRoute',
   'admin.taxi.dashboard',
+  'admin.taxi.driverDetail',
   'admin.taxi.fleet',
+  'admin.taxi.pendingApprovals',
   'admin.taxi.pricing',
+  'admin.taxi.resolveComplaint',
+  'admin.taxi.rideDetail',
   'admin.taxi.rides',
   'admin.taxi.routes',
   'admin.taxi.settings',
+  'admin.taxi.suspendVendor',
+  'admin.taxi.updatePricing',
+  'admin.taxi.updateSettings',
+  'admin.taxi.updateSurge',
+  'admin.taxi.vendorDetail',
 ]);
 
 // Removed 2026-09-01: implemented in the extracted module backends, and only
@@ -239,8 +283,16 @@ function readSentCommands(constants: Map<string, string>): Map<string, string> {
     // `get_pending_refunds` — was invisible to this gate, which stayed green
     // while proving nothing about those routes. A gate that cannot see a call
     // is worse than no gate: it reads as coverage.
+    //
+    // `[A-Za-z0-9_.]+`, not `[a-z0-9_.]+`. The lower-case-only class could not
+    // see a single camelCase command — `admin.pharmacy.storeDetail`,
+    // `admin.taxi.approveDriver`, `admin.grocery.updateSettings` and 45 others
+    // — so 47 of the 611 commands the gateway sends were absent from `sent`
+    // entirely and "no orphans" said nothing whatever about them. Same class of
+    // blind spot as the service label above, found the same way: by counting
+    // what the extractor saw against what the controllers actually send (M3).
     for (const [, cmd] of source.matchAll(
-      /this\.send(?:To\w*)?(?:<[^>]*>)?\(\s*(?:this\.\w+\s*,\s*)?(?:['"`][^'"`]*['"`]\s*,\s*)?['"`]([a-z0-9_.]+)['"`]/g,
+      /this\.send(?:To\w*)?(?:<[^>]*>)?\(\s*(?:this\.\w+\s*,\s*)?(?:['"`][^'"`]*['"`]\s*,\s*)?['"`]([A-Za-z0-9_.]+)['"`]/g,
     ))
       record(cmd, file);
     for (const [, key] of source.matchAll(/[A-Z_]*PATTERNS\.([A-Z0-9_]+)/g)) {
