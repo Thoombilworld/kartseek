@@ -14,6 +14,7 @@ import { Prescription } from './src/entities/prescription.entity';
 import { PrescriptionItem } from './src/entities/prescription-item.entity';
 import { FamilyMember } from './src/entities/family-member.entity';
 import { IntakeForm } from './src/entities/intake-form.entity';
+import { DoctorMarketSettings } from './src/entities/doctor-market-settings.entity';
 
 /**
  * The TypeORM CLI's DataSource for the **doctor module's own** database.
@@ -95,8 +96,12 @@ export const DoctorDataSource = new DataSource({
     PrescriptionItem,
     FamilyMember,
     IntakeForm,
+    DoctorMarketSettings,
   ],
-  migrations: ['migrations/1786498400000-InitialDoctorSchema.ts'],
+  migrations: [
+    'migrations/1786498400000-InitialDoctorSchema.ts',
+    'migrations/1786502800000-DoctorAdminSurfaces.ts',
+  ],
   migrationsTableName: DOCTOR_MIGRATIONS_TABLE,
   // One transaction per migration: a failure rolls that migration back and
   // leaves every earlier one applied.

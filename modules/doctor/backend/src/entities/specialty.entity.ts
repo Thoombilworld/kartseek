@@ -35,6 +35,17 @@ export class Specialty {
   @Column({ type: 'int', default: 0 })
   doctorCount: number;
 
+  /**
+   * The administrator who added this specialty, from the verified token.
+   *
+   * The taxonomy is GLOBAL — "Hepatology" is the same specialty in every market
+   * — so the row carries no market. Who added it is worth keeping precisely
+   * because the write changes every market's directory at once, which is why a
+   * region-locked administrator is refused on both sides of the wire.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  createdBy: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

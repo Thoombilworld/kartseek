@@ -103,6 +103,62 @@ export class Doctor {
   @Index()
   providerType: 'hospital' | 'clinic' | 'independent';
 
+  // ── Market attribution ────────────────────────────────────────────────────
+
+  /**
+   * The market this practitioner works in, copied from the CLINIC they are
+   * attached to. Denormalised on purpose — see
+   * `migrations/1786502800000-DoctorAdminSurfaces.ts`.
+   *
+   * A practitioner had no market at all, so the admin directory failed closed
+   * for every regional administrator: `clinicId` and `hospitalId` are both
+   * nullable and `hospitals` carries no market column of its own, and a
+   * three-way LEFT JOIN that can produce NULL is not a predicate a reviewer can
+   * check.
+   *
+   * NULL means UNATTRIBUTED, never "every market": a practitioner with no clinic
+   * is invisible to a region-locked administrator and refused on detail. It is
+   * not widened, because widening is the direction that leaks.
+   *
+   * The `T | null` union needs the explicit `type:` — TypeScript reflects a
+   * union as `Object` and TypeORM cannot infer a column type from it, which is a
+   * boot failure (`project_typeorm_nullable_reflection`). Plain `varchar` with
+   * no length, matching `clinics.region_code`, the column it is copied from.
+   */
+  @Column({ type: 'varchar', name: 'region_code', nullable: true })
+  @Index()
+  regionCode: string | null;
+
+  // ── Credential verification, and who decided ──────────────────────────────
+  //
+  // `admin.doctor.verifyDoctor` is a decision about a person's licence and this
+  // table had nowhere to record it: before M6 a practitioner was verified by
+  // moving `status`, which is the same column a suspension moves, so the two
+  // decisions overwrote one another and neither left a trace of who took it.
+
+  @Column({ type: 'boolean', default: false })
+  isVerified: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  verifiedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  verifiedAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  verificationNotes: string | null;
+
+  // ── Suspension, and why ───────────────────────────────────────────────────
+
+  @Column({ type: 'varchar', nullable: true })
+  suspendedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  suspensionReason: string | null;
+
   @Column({ type: 'int', default: 0 })
   complaints: number;
 

@@ -91,6 +91,18 @@ export class Clinic {
   @Column({ type: 'varchar', name: 'region_code', nullable: true })
   regionCode: string | null;
 
+  /**
+   * Who approved this clinic, and when.
+   *
+   * `admin.doctor.approveClinic` moved `status` and recorded nothing else, so a
+   * clinic went live with the same trace a cron job would leave.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  approvedBy: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  approvedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
