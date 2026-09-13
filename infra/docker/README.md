@@ -475,14 +475,26 @@ them onto `/etc/nginx/nginx.conf`:
 | `nginx.compose.conf` | [`../nginx/nginx.compose.conf`](../nginx/nginx.compose.conf) | `api-gateway:3001`, `web:3000` and each zone by compose service name       | The app tier runs as containers — `--profile admin` or `--profile full`.             |
 
 ```bash
-# Point the edge at the containers. Compose reads only the ROOT .env, so put it
-# there for a lasting switch; the variable on the command line is per-invocation.
+# Point the edge at the containers, for this invocation only.
 NGINX_CONF=nginx.compose.conf docker compose up -d --force-recreate nginx
 ```
 
 `--force-recreate` because the variable changes a **bind mount**: an nginx
 container that is already running keeps the file it started with, and `docker
 compose up -d nginx` on its own sees no change to make.
+
+**Prefer the per-invocation form above to putting `NGINX_CONF` in the root
+`.env`.** Compose reads that file for every command, including `npm run
+infra:up`, so a value left there points the edge at containers that may not be
+running and answers the developer's own dev fleet with 502s — with nothing in
+the output naming the variable. `.env.example` carries it commented out, with
+the same warning.
+
+**Those two file names are the only legal values.** It interpolates into a bind
+mount path, so a typo is not an error Compose can catch: `NGINX_CONF=nginx.compose.con`
+makes Docker **create an empty directory** at `infra/nginx/nginx.compose.con`
+and mount it over `/etc/nginx/nginx.conf`. nginx then exits with "is a
+directory", and the repository has gained a stray folder to delete.
 
 The `nginx` service carries no profile — it is infrastructure, and `npm run
 infra:up` starts it either way. Only what it proxies to changes.
@@ -624,13 +636,13 @@ IN11 landed the configuration in a session where Docker's host→container port
 proxy was broken, so no image was built and no container was started. What is
 proven, and what is still owed:
 
-| Proven, without a daemon                                                                    | How                                             |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| All nine Next workspaces emit standalone output, traced from the monorepo root              | `node --test scripts/registry/compose.test.mjs` |
-| Every zone gets all three URL build args and its `<basePath>/` health path                  | same file                                       |
-| `nginx.compose.conf` names every deployable the registry declares, by service name and port | same file                                       |
-| `NGINX_CONF` selects the mount, and defaults to the host config                             | same file, and `docker compose config nginx`    |
-| Both profiles resolve, with and without `NGINX_CONF`                                        | `docker compose --profile full config --quiet`  |
+| Proven, without a daemon                                                                                                                                                                   | How                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| All nine Next workspaces emit standalone output, traced from the monorepo root                                                                                                             | `node --test scripts/registry/compose.test.mjs` |
+| Every zone gets all three URL build args and its `<basePath>/` health path                                                                                                                 | same file                                       |
+| `nginx.compose.conf` routes all ten browser-facing deployables — the gateway, the console and the eight zones — by service name and port, and the 25 backend services correctly not at all | same file                                       |
+| `NGINX_CONF` selects the mount, and defaults to the host config                                                                                                                            | same file, and `docker compose config nginx`    |
+| Both profiles resolve, with and without `NGINX_CONF`                                                                                                                                       | `docker compose --profile full config --quiet`  |
 
 Still **REMAINING**, each with the command that settles it:
 
