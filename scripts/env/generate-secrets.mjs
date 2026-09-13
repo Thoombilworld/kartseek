@@ -7,13 +7,14 @@
  *
  * ── Why this exists ──────────────────────────────────────────────────────────
  *
- * `.env.example` used to ship `POSTGRES_PASSWORD=change_me_in_development` and
- * thirteen more like it, and `docs/guides/local-setup.md` said `cp .env.example
- * .env`. Compose's `${VAR:?…}` only refuses a variable that is unset or EMPTY,
- * so the documented first run brought the whole stack up on a password anyone
- * reading the repository already knew (AUD2-022). Making those values empty is
- * what turns `:?` into a real gate — and then someone has to fill them in, or
- * nothing starts at all. This is that someone.
+ * `.env.example` used to ship a literal placeholder password for
+ * `POSTGRES_PASSWORD` and thirteen more like it, and `docs/guides/local-setup.md`
+ * said `cp .env.example .env`. Compose's `${VAR:?…}` only refuses a variable that
+ * is unset or EMPTY — never a placeholder — so the documented first run brought
+ * the whole stack up on a password anyone reading the repository already knew
+ * (AUD2-022). Making those values empty is what turns `:?` into a real gate —
+ * and then someone has to fill them in, or nothing starts at all. This is that
+ * someone.
  *
  * ── What counts as a secret ──────────────────────────────────────────────────
  *

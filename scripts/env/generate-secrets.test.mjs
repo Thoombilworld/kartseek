@@ -85,10 +85,19 @@ test('the real .env.example leaves every secret empty, and all of them get fille
   const examplePath = path.join(repoRoot, '.env.example');
   const example = fs.readFileSync(examplePath, 'utf8');
 
-  assert.equal(
-    example.includes('change_me_in_development'),
-    false,
-    '.env.example still carries the published placeholder',
+  // Any key that names itself a secret must have NO value. Written as a shape
+  // rather than a match on one placeholder string, so the next well-meant
+  // `POSTGRES_PASSWORD=dev-only-really` fails here too.
+  const withValues = example
+    .split('\n')
+    .map((l) => /^([A-Za-z_][A-Za-z0-9_]*(?:PASSWORD|SECRET|TOKEN|_KEY))=(.+)$/.exec(l))
+    .filter(Boolean)
+    .map((m) => m[1]);
+
+  assert.deepEqual(
+    withValues,
+    [],
+    `.env.example ships a value for: ${withValues.join(', ')} — secrets must be empty`,
   );
 
   const { text, filled } = fillSecrets(example);
