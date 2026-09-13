@@ -492,6 +492,42 @@ export class TaxiConfigUpsertDto {
   autoCancelTimeoutSeconds?: number;
 }
 
+/**
+ * `GET /admin/taxi/pending-approvals` — the onboarding queue's query.
+ *
+ * The route used to take a bare `@Query('countryCode') countryCode?: string`,
+ * which no pipe validates: `?countryCode=NOT-A-COUNTRY` travelled to the RPC
+ * unexamined, and an unrecognised value there is a market predicate that does
+ * not get added. `resolveScope` and `requireMarket` both refuse such a value
+ * now, but the 400 belongs HERE, at the surface a client can actually reach,
+ * naming the parameter it refused.
+ *
+ * `limit` is new and deliberately capped rather than clamped, the same ruling as
+ * the other admin reads on this branch: an export script asking for 5000 rows
+ * should be told it cannot have them, not handed 100 with no indication that the
+ * rest exist. Without it the queue was an unbounded read of two tables.
+ *
+ * There is no `page`: this is a queue, ordered oldest-first, and the work is to
+ * empty it. A second page of an approvals backlog is a filter nobody asked for.
+ */
+export class TaxiPendingApprovalsQueryDto {
+  @ApiPropertyOptional({
+    example: 'QA',
+    description: 'ISO-2 market. A locked admin may only name their own.',
+  })
+  @IsOptional()
+  @Matches(ISO2, { message: 'countryCode must be a two-letter ISO country code' })
+  countryCode?: string;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+}
+
 /** A batch settlement. The ids are `taxi_payout_records.id`, generated UUIDs. */
 export class PayoutBatchDto {
   @ApiProperty({ type: [String], description: 'taxi_payout_records.id values' })

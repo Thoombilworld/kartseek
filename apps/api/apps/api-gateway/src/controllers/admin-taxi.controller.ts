@@ -35,6 +35,7 @@ import {
   SettingsUpdateDto,
   SurgeUpdateDto,
   TaxiConfigUpsertDto,
+  TaxiPendingApprovalsQueryDto,
 } from '../dto/admin-taxi.dto';
 
 /**
@@ -42,7 +43,48 @@ import {
  *
  * Admin endpoints for managing taxi vendors, drivers, rides,
  * pricing, complaints, and surge settings.
- * All endpoints require SUPER_ADMIN role.
+ *
+ * ── Thirty-seven commands, three owners ──────────────────────────────────────
+ *
+ * This controller sends THIRTY-SEVEN distinct commands to taxi-service.
+ *
+ *   • SIXTEEN already had a `@MessagePattern` on `taxi.controller.ts` — the
+ *     vendor and driver lists, documents, rate cards, country configs, the
+ *     payout list/process/summary, nearby drivers and surge.
+ *   • SEVEN are M7's, implemented as of this commit in
+ *     `modules/taxi/backend/src/admin/admin.controller.ts`: `vendorDetail`,
+ *     `approveVendor`, `suspendVendor`, `driverDetail`, `approveDriver`,
+ *     `approvePayout`, `pendingApprovals`. Their implementations already existed
+ *     in `VendorManagementService`, `DriverOnboardingService` and
+ *     `TaxiPayoutService`; only the patterns and the market checks were missing.
+ *   • FOURTEEN are the TAXI plan's operations console — `dashboard`, `rides`,
+ *     `rideDetail`, `fleet`, `pricing`, `updatePricing`, `updateSurge`,
+ *     `complaints`, `resolveComplaint`, `routes`, `createRoute`, `compliance`,
+ *     `settings`, `updateSettings` — and they are still unhandled ON PURPOSE.
+ *     They depend on entities this module does not have yet (vehicles, surge
+ *     zones) or on the fare/zone rework. Pointing them at a near-enough method
+ *     would answer with another market's fleet, which is worse than a 503 that
+ *     names the command. The two census baselines in `apps/api/test` hold
+ *     exactly those fourteen under taxi and nothing else.
+ *
+ * ── `@Roles` on a method REPLACES the class-level one ─────────────────────────
+ *
+ * So each of the seven routes below restates `UserRole.ADMIN,
+ * UserRole.SUPER_ADMIN` beside its permission key. Omitting them does not "add a
+ * key to the existing roles" — it removes the roles (documented at
+ * `admin-marketplace.controller.ts:60-66`). Every key used here exists in
+ * `libs/common/src/admin/permissions.ts` and is held by both the `admin` and
+ * `regional_admin` system roles, so it is a second gate on WHICH administrator,
+ * not a change to which of them can reach the module at all. The other thirty
+ * routes keep the class-level `@Roles` until their owning plan implements them.
+ *
+ * ── The actor's spelling ─────────────────────────────────────────────────────
+ *
+ * The seven send `actorId`, which is the platform's name for it and what the
+ * other five module admin surfaces already receive. The commands that were
+ * already handled keep sending `adminId`, because that is what the handlers on
+ * `taxi.controller.ts` read; renaming those is the taxi plan's to do when it
+ * moves them.
  */
 @ApiTags('👑 Admin — Taxi')
 @ApiBearerAuth('JWT')
@@ -141,6 +183,7 @@ export class AdminTaxiController {
   }
 
   @Get('vendors/:id')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.taxi', 'perm:sellers.view')
   @ApiOperation({ summary: 'Get vendor detail' })
   async getVendorById(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const { scope } = this.scopeOf(req, undefined, 'that vendor');
@@ -148,15 +191,17 @@ export class AdminTaxiController {
   }
 
   @Patch('vendors/:id/approve')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.taxi', 'perm:sellers.approve')
   @ApiOperation({ summary: 'Approve a vendor' })
   async approveVendor(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const { scope } = this.scopeOf(req, undefined, 'that vendor');
     return {
-      data: await this.send('admin.taxi.approveVendor', { id, scope, adminId: this.actorId(req) }),
+      data: await this.send('admin.taxi.approveVendor', { id, scope, actorId: this.actorId(req) }),
     };
   }
 
   @Patch('vendors/:id/suspend')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.taxi', 'perm:sellers.manage')
   @ApiOperation({ summary: 'Suspend a vendor' })
   async suspendVendor(
     @Req() req: any,
@@ -169,7 +214,7 @@ export class AdminTaxiController {
         id,
         reason: dto.reason,
         scope,
-        adminId: this.actorId(req),
+        actorId: this.actorId(req),
       }),
     };
   }
@@ -227,6 +272,7 @@ export class AdminTaxiController {
   }
 
   @Get('drivers/:id')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.taxi', 'perm:sellers.view')
   @ApiOperation({ summary: 'Get driver detail' })
   async getDriverById(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const { scope } = this.scopeOf(req, undefined, 'that driver');
@@ -234,11 +280,12 @@ export class AdminTaxiController {
   }
 
   @Patch('drivers/:id/approve')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.taxi', 'perm:sellers.approve')
   @ApiOperation({ summary: 'Approve a driver' })
   async approveDriver(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const { scope } = this.scopeOf(req, undefined, 'that driver');
     return {
-      data: await this.send('admin.taxi.approveDriver', { id, scope, adminId: this.actorId(req) }),
+      data: await this.send('admin.taxi.approveDriver', { id, scope, actorId: this.actorId(req) }),
     };
   }
 
@@ -432,11 +479,12 @@ export class AdminTaxiController {
   }
 
   @Post('payouts/:id/approve')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.taxi', 'perm:finance.payouts')
   @ApiOperation({ summary: 'Approve a payout' })
   async approvePayout(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const { scope } = this.scopeOf(req, undefined, 'that payout');
     return {
-      data: await this.send('admin.taxi.approvePayout', { id, scope, adminId: this.actorId(req) }),
+      data: await this.send('admin.taxi.approvePayout', { id, scope, actorId: this.actorId(req) }),
     };
   }
 
@@ -463,11 +511,26 @@ export class AdminTaxiController {
   }
 
   // ── Pending Approvals ─────────────────────────────────────────
+  /**
+   * The onboarding queue: vendors and drivers awaiting a decision, and the count
+   * of documents still to review, all in the caller's market.
+   *
+   * A single object rather than a list envelope, and so wrapped in `{ data }`:
+   * it is three queues at once, not one page of rows, and it carries no `total`
+   * for a client to page on. The counts it does carry are named.
+   */
   @Get('pending-approvals')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, 'perm:modules.taxi', 'perm:sellers.view')
   @ApiOperation({ summary: 'List all pending driver/vendor approvals' })
-  async getPendingApprovals(@Req() req: any, @Query('countryCode') countryCode?: string) {
-    const { scope, market } = this.scopeOf(req, countryCode, 'that queue');
-    return { data: await this.send('admin.taxi.pendingApprovals', { countryCode: market, scope }) };
+  async getPendingApprovals(@Req() req: any, @Query() query: TaxiPendingApprovalsQueryDto) {
+    const { scope, market } = this.scopeOf(req, query.countryCode, 'that queue');
+    return {
+      data: await this.send('admin.taxi.pendingApprovals', {
+        countryCode: market,
+        limit: query.limit,
+        scope,
+      }),
+    };
   }
 
   // ── Compliance ────────────────────────────────────────────────
