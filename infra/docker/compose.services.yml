@@ -39,6 +39,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      API_GATEWAY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -233,6 +242,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      ADMIN_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -426,6 +444,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      AUDIT_LOG_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -617,6 +644,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      AUTH_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -803,6 +839,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      CART_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -991,6 +1036,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      COMMISSION_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1179,6 +1233,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      DELIVERY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1367,6 +1430,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      LOCATION_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1558,6 +1630,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      LOYALTY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1746,6 +1827,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      NOTIFICATION_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -1936,6 +2026,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      ORDER_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2130,6 +2229,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      PAYMENT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2324,6 +2432,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      PAYOUT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2517,6 +2634,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      REFUND_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2705,6 +2831,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      REPORT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -2893,6 +3028,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      SEARCH_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3085,6 +3229,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      USER_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3276,6 +3429,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      WALLET_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3471,6 +3633,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      DOCTOR_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3668,6 +3839,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      FRANCHISE_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -3865,6 +4045,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      GROCERY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4063,6 +4252,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      HOTEL_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4260,6 +4458,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      MARKETPLACE_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4458,6 +4665,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      PHARMACY_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4655,6 +4871,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      RESTAURANT_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing
@@ -4853,6 +5078,15 @@ services:
       # dev values are exactly what NODE_ENV=production refuses.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the root .env — run npm run env:init}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the root .env — run npm run env:init}
+      # This service's own HTTP bind address. marketplace-service reads
+      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a
+      # health-only surface — so without this its published port accepts the
+      # connection and answers nothing, while its own HEALTHCHECK (which runs
+      # INSIDE the container, on that same loopback) still reports healthy.
+      # Emitted for every Nest service under its own stem rather than for the
+      # one that reads it today, so the next service to adopt the pattern is
+      # container-correct by default; it is inert for the other twenty-five.
+      TAXI_HTTP_HOST: '0.0.0.0'
       # Infrastructure, by its compose service name — the whole set, whether or not
       # this service declares the dependency: depends_on below is what expresses
       # one, and apps/api/.env would otherwise leave the unclaimed ones pointing

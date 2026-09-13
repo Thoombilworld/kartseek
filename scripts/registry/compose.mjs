@@ -364,6 +364,17 @@ export function envGroups(s, reg) {
         '\n      # dev values are exactly what NODE_ENV=production refuses.',
       SECRET_ENV,
     ],
+    [
+      "This service's own HTTP bind address. marketplace-service reads" +
+        '\n      # MARKETPLACE_HTTP_HOST and defaults to LOOPBACK — defence in depth for a' +
+        '\n      # health-only surface — so without this its published port accepts the' +
+        '\n      # connection and answers nothing, while its own HEALTHCHECK (which runs' +
+        '\n      # INSIDE the container, on that same loopback) still reports healthy.' +
+        '\n      # Emitted for every Nest service under its own stem rather than for the' +
+        '\n      # one that reads it today, so the next service to adopt the pattern is' +
+        '\n      # container-correct by default; it is inert for the other twenty-five.',
+      [[`${stem(s.name)}_HTTP_HOST`, "'0.0.0.0'"]],
+    ],
   ];
 
   groups.push([

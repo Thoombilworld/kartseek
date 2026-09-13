@@ -199,6 +199,25 @@ test('DEV_AUTH_BYPASS is pinned off rather than left to a second gate', () => {
   assert.equal((out.match(/DEV_AUTH_BYPASS: 'false'/g) ?? []).length, 3);
 });
 
+test('every nest service is told to bind its HTTP port on all interfaces', () => {
+  // marketplace-service defaults MARKETPLACE_HTTP_HOST to 127.0.0.1. Inside a
+  // container that makes the published port answer nothing while the container
+  // still reports `healthy` — its HEALTHCHECK runs on the same loopback. Found
+  // by `npm run stack:validate`, which could not reach 127.0.0.1:3012 at all.
+  const out = renderComposeServices(reg);
+  assert.match(out, /API_GATEWAY_HTTP_HOST: '0\.0\.0\.0'/);
+  assert.match(out, /SEARCH_HTTP_HOST: '0\.0\.0\.0'/);
+  assert.match(out, /GROCERY_HTTP_HOST: '0\.0\.0\.0'/);
+  assert.equal((out.match(/_HTTP_HOST: '0\.0\.0\.0'/g) ?? []).length, 3, 'one per nest service');
+  // The console is a Next server; it has no such variable to read.
+  assert.ok(!/_HTTP_HOST/.test(renderComposeServices({ services: [web] })));
+});
+
+test('the real registry gives marketplace-service the variable its main.ts reads', () => {
+  const out = renderComposeServices(loadRegistry());
+  assert.match(out, /MARKETPLACE_HTTP_HOST: '0\.0\.0\.0'/);
+});
+
 test('env_file is the root .env plus the untracked workspace files', () => {
   assert.deepEqual(envFilesFor(gateway), [
     ['.env', true],
