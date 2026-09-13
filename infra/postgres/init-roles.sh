@@ -55,12 +55,28 @@
 #   INDEX are owner-only: a role with every grant PostgreSQL can express still
 #   cannot run a migration against a table someone else owns.
 #
-# NOTE: this revokes `public` from the role by name. PostgreSQL also grants
-# USAGE on `public` to PUBLIC, which no per-role REVOKE removes — so a module
-# role can still *see* that the schema exists. It has no privilege on any table
-# in it, which is what matters here; tightening `PUBLIC` itself is a change to
-# every consumer of the shared database and belongs with the flip of the first
-# service onto its role, not with creating them.
+# ── What the ownership transfer does and does not guarantee ──────────────────
+#
+#   GUARANTEED, from the moment this script last ran: the role owns its schema
+#   and every table, sequence and view that was in it at that point, plus its
+#   migration ledger — so its migrations may ALTER, DROP and index them, and
+#   `ALTER DEFAULT PRIVILEGES` covers whatever the role itself creates later.
+#
+#   NOT GUARANTEED: anything added to a module schema afterwards *by another
+#   role*. A `migration:run` executed as `postgres`, a seed script still using
+#   `DB_USER=postgres`, a `CREATE TABLE` typed into psql or pgAdmin — each
+#   leaves an object owned by `postgres` inside a schema the module role owns.
+#   Reads and writes keep working (the GRANTs above cover DML), so nothing looks
+#   wrong until the next migration tries to alter that one table and is refused
+#   as non-owner. `ALTER DEFAULT PRIVILEGES` does not help: without `FOR ROLE`
+#   it only describes what the role grants on its *own* future objects.
+#
+#   The fix is to re-run this script, which is why it is idempotent and why the
+#   line at the top says to run it after anything that adds objects as another
+#   role. To find out whether you need to:
+#
+#     SELECT schemaname, tablename, tableowner FROM pg_tables
+#      WHERE schemaname = '<module>' AND tableowner <> '<module>_user';
 
 set -euo pipefail
 
@@ -92,8 +108,20 @@ psql_run() {
 }
 
 db_exists() {
-  [ "$(psql_run --dbname "$SHARED_DB" -tAc \
-    "SELECT 1 FROM pg_database WHERE datname = '$1'")" = "1" ]
+  # The name goes through a psql variable rather than into the SQL text, like
+  # every other identifier here. Operator-controlled input either way, but a
+  # `<MODULE>_DB_NAME` containing a quote should be a failed lookup, not a
+  # rewritten statement.
+  #
+  # On stdin, not `-c`: psql performs no `:variable` interpolation on a `-c`
+  # argument, so `:'name'` there reaches the server verbatim and every lookup
+  # fails with "syntax error at or near \":\"" — silently, because the result is
+  # only compared to "1". That is how the dedicated-database branch below would
+  # stop running without anything reporting it.
+  [ "$(psql_run --dbname "$SHARED_DB" -v name="$1" -tA <<'SQL'
+SELECT 1 FROM pg_database WHERE datname = :'name';
+SQL
+  )" = "1" ]
 }
 
 # ── The roles themselves. Cluster-global, so once is enough. ─────────────────
@@ -104,7 +132,14 @@ for m in "${MODULES[@]}"; do
   role="${!user_var:-${m}_user}"
   pass="${!pass_var}"
 
-  psql_run --dbname "$SHARED_DB" -v role="$role" -v pass="$pass" <<'SQL'
+  # The password reaches psql through the environment, not `-v pass=…` on its
+  # argv: argv is world-readable in `ps` for the life of the call, inside a
+  # container that may well have another process in it. `\getenv` (psql 13+)
+  # loads it into a psql variable, and `:'pass'` still does the SQL quoting, so
+  # a password containing quotes or backslashes is as safe as it was before.
+  export KARTSEEK_ROLE_PASSWORD="$pass"
+  psql_run --dbname "$SHARED_DB" -v role="$role" <<'SQL'
+\getenv pass KARTSEEK_ROLE_PASSWORD
 SELECT format('CREATE ROLE %I LOGIN', :'role')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role')
 \gexec
@@ -112,6 +147,7 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role')
 -- than leaving the database on the old one while .env says otherwise.
 ALTER ROLE :"role" WITH LOGIN PASSWORD :'pass';
 SQL
+  unset KARTSEEK_ROLE_PASSWORD
   echo "init-roles: role $role ready"
 done
 

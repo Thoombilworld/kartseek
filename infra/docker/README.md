@@ -90,9 +90,28 @@ sequences and views — and gets `ALL` by default on whatever it creates later.
 Ownership rather than grants, because `ALTER TABLE`, `DROP TABLE` and
 `CREATE INDEX` are owner-only: a role holding every grant PostgreSQL can
 express still cannot run a migration against a table `postgres` owns. The
-transfer runs over `pg_tables` / `pg_sequences` / `pg_views` and is idempotent,
-so re-run the script after anything adds objects to a module schema as another
-role (a `migration:run` executed as `postgres`, a seed script).
+transfer runs over `pg_tables` / `pg_sequences` / `pg_views` and is idempotent.
+
+**What that guarantees, and what it does not.** Guaranteed as of the last run:
+the role owns its schema and every table, sequence and view that was in it then,
+plus its migration ledger, so its migrations may `ALTER`, `DROP` and index them,
+and `ALTER DEFAULT PRIVILEGES` covers whatever the role creates afterwards. Not
+guaranteed: anything added to a module schema later **by another role** — a
+`migration:run` executed as `postgres`, a seed script still on
+`DB_USER=postgres`, a `CREATE TABLE` typed into psql or pgAdmin. Each leaves an
+object `postgres` owns inside a schema the module role owns. Reads and writes
+keep working, because the GRANTs cover DML, so nothing looks wrong until the
+next migration tries to alter that one table and is refused as non-owner.
+`ALTER DEFAULT PRIVILEGES` does not help: without `FOR ROLE` it only describes
+what the role grants on its _own_ future objects.
+
+Re-run the script after anything of that kind — it is idempotent, and that is
+what it is for. To check whether you need to:
+
+```sql
+SELECT schemaname, tablename, tableowner FROM pg_tables
+ WHERE schemaname = '<module>' AND tableowner <> '<module>_user';
+```
 
 It gets nothing on another module's schema and no `CREATE` on `public`, where
 `users`, `orders` and the gateway's own tables live — so a module cannot create
@@ -117,6 +136,15 @@ Two things sit outside the schema and are deliberate:
   with the three columns TypeORM's Postgres driver expects, and hands it to the
   role. That removes what used to be a superuser bootstrap step: a module role
   can now build its whole schema from empty and record that it did.
+
+`init-roles.sh` is committed **mode 755**, and that is load-bearing rather than
+cosmetic. The Postgres entrypoint executes a `*.sh` init file as a subprocess
+only when it is executable; otherwise it `source`s it into its own shell, which
+would leak this script's `set -euo pipefail` — `-u` especially — into the rest
+of `docker-entrypoint.sh`. The image's own `10_postgis.sh` ships non-executable
+and is sourced, so both branches are visible in one container's log: look for
+`running /docker-entrypoint-initdb.d/20-roles.sh`, not `sourcing`. If you copy
+this script somewhere else, copy the mode with it.
 
 **Init scripts run only on an empty data directory.** An existing volume — any
 machine that ran `npm run infra:up` before this file existed — needs it applying
