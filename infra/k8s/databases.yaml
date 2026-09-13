@@ -1,8 +1,51 @@
 # ══════════════════════════════════════════════════════════════════════════════
-# KARTSEEK StatefulSets for Databases (PostgreSQL, Redis, Kafka)
+# KARTSEEK StatefulSets for Databases
 # Deploy: kubectl apply -f infra/k8s/databases.yaml
-# Note: For production, use managed services (RDS, ElastiCache, MSK)
+# Note: For production, use managed services (RDS, ElastiCache, MSK, Atlas)
 # ══════════════════════════════════════════════════════════════════════════════
+#
+# Every datastore the registry's `dependsOn` union names: postgres, redis,
+# kafka, mongodb, elasticsearch — plus the dedicated marketplace Postgres that
+# predates the shared-instance arrangement. Mongo and Elasticsearch were absent
+# entirely: audit-log-service and search-service were deployed against
+# datastores that existed nowhere in this directory, so each fell back to a
+# localhost which, in a pod, is the pod (AUD2-028, AUD2-029).
+#
+# ── The seven "missing module databases" are roles and schemas ───────────────
+#
+# config.yaml defined MARKETPLACE_DB_* and nothing else, so grocery, restaurant,
+# pharmacy, doctor, hotel, taxi and franchise all fell back to DB_HOST/DB_NAME —
+# the shared kartseek_db, as the superuser (AUD2-027).
+#
+# What answers that is NOT seven more StatefulSets. A module owns a SCHEMA in
+# the shared database and connects as its own login role, exactly as it does
+# under Compose: `infra/postgres/init-roles.sh` creates the eight roles, gives
+# each ownership of its own schema and its migration ledger, and closes `public`
+# to everyone else. The Postgres StatefulSet below mounts that script and
+# `infra/postgres/init-extensions.sql` — the same two files, from the same
+# place — through a ConfigMap, so the cluster and the laptop get the same eight
+# roles from the same source.
+#
+# That ConfigMap is built FROM the files rather than pasted into this manifest,
+# which would be a copy of a 250-line script, drifting from the original:
+#
+#   kubectl create configmap kartseek-postgres-init \
+#     --from-file=infra/postgres/init-extensions.sql \
+#     --from-file=infra/postgres/init-roles.sh \
+#     --namespace=kartseek --dry-run=client -o yaml | kubectl apply -f -
+#
+# `deploy.sh` does that before applying this file, and infra/k8s/README.md has
+# the command on its own. Without it the Postgres pod stays in
+# ContainerCreating with `configmap "kartseek-postgres-init" not found` — a
+# visible failure rather than a database quietly missing its roles.
+#
+# Init scripts run ONCE, when the data directory is first created. Against a
+# volume that already exists, run it by hand:
+#
+#   kubectl exec -n kartseek postgres-0 -- bash /docker-entrypoint-initdb.d/20-roles.sh
+#
+# It is idempotent, and re-running it is how a role picks up ownership of
+# anything a migration created as `postgres`.
 
 ---
 # NOTE: there are no standalone PVCs here. The StatefulSets below own their
@@ -83,7 +126,134 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: kartseek-secrets
-                  key: DB_PASSWORD
+                  key: POSTGRES_PASSWORD
+            # ── The eight module roles ───────────────────────────────────
+            # Read by 20-roles.sh below, which creates one login role per module
+            # schema so a service need not connect as the superuser (AUD2-073).
+            # The same pairs Compose passes this image. There is no default
+            # password: the script exits non-zero naming the variable, so a pod
+            # whose Secret is incomplete fails loudly on its first start rather
+            # than creating a role anyone could guess the password for.
+            - name: MARKETPLACE_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: MARKETPLACE_DB_USER
+            - name: MARKETPLACE_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: MARKETPLACE_DB_NAME
+            - name: MARKETPLACE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: MARKETPLACE_DB_PASSWORD
+            - name: GROCERY_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: GROCERY_DB_USER
+            - name: GROCERY_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: GROCERY_DB_NAME
+            - name: GROCERY_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: GROCERY_DB_PASSWORD
+            - name: RESTAURANT_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: RESTAURANT_DB_USER
+            - name: RESTAURANT_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: RESTAURANT_DB_NAME
+            - name: RESTAURANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: RESTAURANT_DB_PASSWORD
+            - name: PHARMACY_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: PHARMACY_DB_USER
+            - name: PHARMACY_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: PHARMACY_DB_NAME
+            - name: PHARMACY_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: PHARMACY_DB_PASSWORD
+            - name: DOCTOR_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: DOCTOR_DB_USER
+            - name: DOCTOR_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: DOCTOR_DB_NAME
+            - name: DOCTOR_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: DOCTOR_DB_PASSWORD
+            - name: HOTEL_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: HOTEL_DB_USER
+            - name: HOTEL_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: HOTEL_DB_NAME
+            - name: HOTEL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: HOTEL_DB_PASSWORD
+            - name: TAXI_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: TAXI_DB_USER
+            - name: TAXI_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: TAXI_DB_NAME
+            - name: TAXI_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: TAXI_DB_PASSWORD
+            - name: FRANCHISE_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: FRANCHISE_DB_USER
+            - name: FRANCHISE_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: FRANCHISE_DB_NAME
+            - name: FRANCHISE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: FRANCHISE_DB_PASSWORD
             # PGDATA must be a SUBDIRECTORY of the mount, never the mount itself.
             # initdb chmods its data directory to 0700, and chmod needs
             # ownership — write permission is not enough. A mounted volume's root
@@ -160,6 +330,26 @@ spec:
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: kartseek-postgres-init
+            # 0755, because the entrypoint EXECUTES a *.sh it can execute and
+            # SOURCES one it cannot — and 20-roles.sh sets `-euo pipefail` and
+            # calls `exit 1` on a missing password, which sourced would kill the
+            # entrypoint itself rather than the script.
+            defaultMode: 0755
+            items:
+              # Numbered: the entrypoint runs them in lexical order, and the
+              # roles script needs the extensions to exist first.
+              - key: init-extensions.sql
+                path: 10-extensions.sql
+              - key: init-roles.sh
+                path: 20-roles.sh
 
   volumeClaimTemplates:
     - metadata:
@@ -645,6 +835,21 @@ spec:
           volumeMounts:
             - name: marketplace-storage
               mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: kartseek-postgres-init
+            defaultMode: 0755
+            items:
+              # The extensions only. This instance's own superuser IS
+              # marketplace_user, so there is no role to create — the
+              # arrangement compose.infra.yml gives the `isolated` profile.
+              - key: init-extensions.sql
+                path: 10-extensions.sql
 
   volumeClaimTemplates:
     - metadata:
@@ -656,3 +861,324 @@ spec:
         resources:
           requests:
             storage: 100Gi
+
+---
+# ══════════════════════════════════════════════════════════════════════════════
+# MongoDB
+# ══════════════════════════════════════════════════════════════════════════════
+# audit-log-service was deployed with no Mongo anywhere in infra/k8s, and
+# `resolveAuditUri` falls back to mongodb://localhost:27017/kartseek_audit — in
+# a pod, the pod. The admin audit trail had no datastore in the deployment
+# target at all (AUD2-028). The service now refuses to start in production
+# without MONGO_URI rather than writing into a Mongo that is not there.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: kartseek
+  labels:
+    app: mongodb
+spec:
+  type: ClusterIP
+  selector:
+    app: mongodb
+  ports:
+    - name: mongodb
+      protocol: TCP
+      port: 27017
+      targetPort: 27017
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: kartseek
+  labels:
+    app: mongodb
+    critical: 'true'
+spec:
+  serviceName: mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        critical: 'true'
+    spec:
+      # The official mongo image runs as uid/gid 999 (`mongodb`), and /data/db
+      # must be writable by it.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: mongodb
+          image: mongo:8.3
+          imagePullPolicy: IfNotPresent
+
+          env:
+            # Authentication is ON. The audit trail is the record of who did
+            # what to the platform; an unauthenticated Mongo on the pod network
+            # is a record anything in the namespace could rewrite.
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: MONGO_ROOT_USER
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: MONGO_ROOT_PASSWORD
+            - name: MONGO_INITDB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: kartseek-config
+                  key: MONGO_DB_NAME
+
+          ports:
+            - name: mongodb
+              containerPort: 27017
+              protocol: TCP
+
+          # `ping` is one of the few commands a secured mongod answers before
+          # authentication, which is why no credential is needed here — and why
+          # this says the server is up rather than that any particular database
+          # is reachable. Journal replay after an unclean stop can outlast the
+          # liveness budget, so the startup probe holds it off for up to 10 min.
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - mongosh --quiet --eval 'db.adminCommand("ping").ok' | grep -q 1
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - mongosh --quiet --eval 'db.adminCommand("ping").ok' | grep -q 1
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - mongosh --quiet --eval 'db.adminCommand("ping").ok' | grep -q 1
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: '250m'
+              memory: '512Mi'
+            limits:
+              cpu: '1000m'
+              memory: '2Gi'
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 999
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: mongodb-storage
+              mountPath: /data/db
+
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 50Gi
+
+---
+# ══════════════════════════════════════════════════════════════════════════════
+# Elasticsearch
+# ══════════════════════════════════════════════════════════════════════════════
+# Same shape as Mongo: search-service was deployed with no cluster anywhere in
+# these manifests, so it fell back to http://localhost:9200 and sat permanently
+# on its Redis fallback while reporting `elasticsearch: down` (AUD2-029).
+#
+# Single node, because that is what one search index of one catalogue needs; a
+# production deployment points ELASTICSEARCH_* at a managed cluster and deletes
+# this StatefulSet.
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: kartseek
+  labels:
+    app: elasticsearch
+spec:
+  type: ClusterIP
+  selector:
+    app: elasticsearch
+  ports:
+    - name: http
+      protocol: TCP
+      port: 9200
+      targetPort: 9200
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: kartseek
+  labels:
+    app: elasticsearch
+    critical: 'true'
+spec:
+  serviceName: elasticsearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+        critical: 'true'
+    spec:
+      # The official image runs as uid/gid 1000 (`elasticsearch`).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: discovery.type
+              value: 'single-node'
+            # Authentication ON (AUD2-075): the search index is a denormalised
+            # copy of the whole catalogue, so an open 9200 is a read of the
+            # entire product corpus and a way to poison every search result the
+            # storefront renders.
+            - name: xpack.security.enabled
+              value: 'true'
+            # Enrollment tokens join nodes and auto-configure Kibana in a TLS
+            # cluster; this is one node on a private network.
+            - name: xpack.security.enrollment.enabled
+              value: 'false'
+            # Bootstraps the built-in `elastic` superuser ONCE, when the
+            # security index is first created. Changing it later does not
+            # rotate the password — use the _security/user API, or delete the
+            # PVC.
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kartseek-secrets
+                  key: ELASTIC_PASSWORD
+            # Half the container's memory limit, which is what Elasticsearch
+            # asks for: the JVM heap plus off-heap Lucene buffers must fit
+            # inside the cgroup or the kernel kills the node mid-query.
+            - name: ES_JAVA_OPTS
+              value: '-Xms1g -Xmx1g'
+            - name: cluster.name
+              value: 'kartseek-search'
+            - name: node.name
+              value: 'kartseek-es-01'
+
+          ports:
+            - name: http
+              containerPort: 9200
+              protocol: TCP
+
+          # Credentials on the check: with security on, an unauthenticated
+          # request gets 401 and the pod would never be ready. `yellow` counts —
+          # a single node cannot allocate replicas, so a healthy one-node
+          # cluster is yellow for ever and `green` would mean never ready.
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >-
+                  curl -fsS -u "elastic:$ELASTIC_PASSWORD"
+                  http://127.0.0.1:9200/_cluster/health | grep -qE '"status":"(green|yellow)"'
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 60
+
+          livenessProbe:
+            tcpSocket:
+              port: 9200
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >-
+                  curl -fsS -u "elastic:$ELASTIC_PASSWORD"
+                  http://127.0.0.1:9200/_cluster/health | grep -qE '"status":"(green|yellow)"'
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: '500m'
+              memory: '2Gi'
+            limits:
+              cpu: '2000m'
+              memory: '2Gi'
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: elasticsearch-storage
+              mountPath: /usr/share/elasticsearch/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 50Gi

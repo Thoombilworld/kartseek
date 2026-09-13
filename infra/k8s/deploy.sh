@@ -11,6 +11,24 @@ ENVIRONMENT=${1:-dev}
 NAMESPACE="kartseek"
 KUBECONFIG=${KUBECONFIG:-~/.kube/config}
 
+# The image tag the manifests carry as the literal `${KARTSEEK_TAG}`. The
+# generated Deployments and api-gateway.yaml are written with the placeholder so
+# that no tag is baked into tracked source (they used to say 2.0.0, and no image
+# with that tag has ever been built); this is where it becomes a real reference.
+# `dev` is what infra/docker builds locally.
+KARTSEEK_TAG=${KARTSEEK_TAG:-dev}
+
+# Where the credentials come from. config.yaml's Secret is a list of NAMES with
+# empty values, on purpose — see its header. Point this at a file of KEY=value
+# lines (the root .env filtered down to its secrets) and the Secret is created
+# from it; leave it unset and an existing kartseek-secrets is left alone.
+SECRETS_ENV_FILE=${SECRETS_ENV_FILE:-}
+
+# Applies a manifest with the image tag substituted.
+apply_manifest() {
+  sed "s|\${KARTSEEK_TAG}|${KARTSEEK_TAG}|g" "$1" | kubectl apply -f - --namespace=$NAMESPACE
+}
+
 # Manifests live beside this script; run it from anywhere.
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -49,24 +67,53 @@ kubectl create secret docker-registry regcred \
   --dry-run=client -o yaml | kubectl apply -f -
 log_success "Image pull secret configured"
 
-# ── Step 4: Preflight — refuse to ship placeholder credentials ────────────
-# The gateway's own Joi schema rejects a JWT_SECRET containing change/example/
-# dev/test/placeholder when NODE_ENV=production, and requires ENCRYPTION_KEY.
-# Catching that here costs a second; missing it costs a CrashLoopBackOff that
-# looks like a networking problem.
-if [ "$ENVIRONMENT" = "production" ]; then
-  log_info "Preflighting secrets..."
-  if grep -qE 'CHANGE_IN_PRODUCTION|change-in-production|xxxxxxxx|^\s*ENCRYPTION_KEY: "0{64}"' ./config.yaml; then
-    log_error "infra/k8s/config.yaml still holds placeholder secrets. Replace them (or
-  switch to the External Secrets Operator) before deploying to production."
-  fi
-  log_success "No placeholder secrets found"
+# ── Step 4: Apply the ConfigMap ───────────────────────────────────────────
+# The ConfigMap document only. config.yaml's second document is the Secret, and
+# every value in it is empty by design — applying it over a Secret the pipeline
+# has already filled would blank every credential on the platform. The
+# ConfigMap is everything up to the second `---`.
+log_info "Deploying the ConfigMap..."
+awk '/^---$/ { d++ } d < 2 { print }' ./config.yaml | kubectl apply -f - --namespace=$NAMESPACE
+log_success "ConfigMap deployed"
+
+# ── Step 5: The Secret ────────────────────────────────────────────────────
+# From SECRETS_ENV_FILE when given; otherwise whatever is already in the
+# cluster. The name template in config.yaml is applied only when there is no
+# Secret at all, so that a first deploy fails loudly on an empty JWT_SECRET
+# (the gateway's Joi schema refuses it under NODE_ENV=production) rather than
+# on a missing Secret, which reads as a mounting problem.
+if [ -n "$SECRETS_ENV_FILE" ]; then
+  log_info "Creating kartseek-secrets from $SECRETS_ENV_FILE..."
+  kubectl create secret generic kartseek-secrets \
+    --from-env-file="$SECRETS_ENV_FILE" --namespace=$NAMESPACE \
+    --dry-run=client -o yaml | kubectl apply -f -
+  log_success "Secret created"
+elif kubectl get secret kartseek-secrets --namespace=$NAMESPACE &> /dev/null; then
+  log_info "kartseek-secrets already exists — left untouched"
+else
+  log_warning "No SECRETS_ENV_FILE and no kartseek-secrets in the cluster."
+  log_warning "Applying the empty name template from config.yaml; every pod that"
+  log_warning "needs a credential will refuse to start until it is filled:"
+  log_warning "  grep -E '^[A-Z0-9_]+(PASSWORD|SECRET|KEY)=' .env > secrets.env"
+  log_warning "  SECRETS_ENV_FILE=secrets.env ./infra/k8s/deploy.sh $ENVIRONMENT"
+  awk '/^---$/ { d++ } d == 2 { print }' ./config.yaml | kubectl apply -f - --namespace=$NAMESPACE
 fi
 
-# ── Step 5: Apply ConfigMaps and Secrets ──────────────────────────────────
-log_info "Deploying ConfigMaps and Secrets..."
-kubectl apply -f ./config.yaml --namespace=$NAMESPACE
-log_success "ConfigMaps and Secrets deployed"
+# ── Step 5b: Preflight — refuse to ship an unfilled credential ────────────
+# The gateway's own Joi schema rejects a JWT_SECRET containing change/example/
+# dev/test/placeholder when NODE_ENV=production, and requires a 64-hex
+# ENCRYPTION_KEY. Catching that here costs a second; missing it costs a
+# CrashLoopBackOff that looks like a networking problem.
+if [ "$ENVIRONMENT" = "production" ]; then
+  log_info "Preflighting secrets..."
+  for key in JWT_SECRET ENCRYPTION_KEY POSTGRES_PASSWORD; do
+    value="$(kubectl get secret kartseek-secrets --namespace=$NAMESPACE \
+      -o "jsonpath={.data.$key}" 2>/dev/null || true)"
+    [ -n "$value" ] || log_error "kartseek-secrets.$key is empty. Fill the Secret
+  (SECRETS_ENV_FILE=..., or the External Secrets Operator) before deploying to production."
+  done
+  log_success "Credentials are present"
+fi
 
 # ── Step 6: Apply RBAC, Network Policies, LimitRange and Quota ────────────
 # Must precede every workload: the ResourceQuota rejects pods that omit
@@ -83,11 +130,23 @@ log_info "Deploying StorageClasses..."
 kubectl apply -f ./storage.yaml
 log_success "StorageClasses deployed"
 
-# ── Step 8: Deploy Databases (PostgreSQL, Redis, Kafka) ───────────────────
+# ── Step 8: Deploy Databases ──────────────────────────────────────────────
+# The Postgres StatefulSet mounts infra/postgres/init-extensions.sql and
+# init-roles.sh — the same two files Compose mounts — so the eight module login
+# roles exist in the cluster too. Built from the files rather than pasted into
+# databases.yaml, where a 250-line copy would drift from the original. Without
+# it the Postgres pod stays in ContainerCreating naming this ConfigMap.
+log_info "Building the Postgres init-script ConfigMap..."
+kubectl create configmap kartseek-postgres-init \
+  --from-file=../postgres/init-extensions.sql \
+  --from-file=../postgres/init-roles.sh \
+  --namespace=$NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+log_success "Init scripts loaded"
+
 log_info "Deploying databases..."
 kubectl apply -f ./databases.yaml --namespace=$NAMESPACE
 
-for sts in postgres postgres-marketplace redis kafka; do
+for sts in postgres postgres-marketplace redis kafka mongodb elasticsearch; do
   log_info "Waiting for $sts to be ready..."
   kubectl rollout status statefulset/$sts --namespace=$NAMESPACE --timeout=5m || \
     log_warning "$sts did not become ready in time — check 'kubectl describe statefulset/$sts -n $NAMESPACE'"
@@ -98,9 +157,11 @@ log_success "Databases deployed"
 # ── Step 9: Deploy Microservices ─────────────────────────────────────────
 # Before the gateway, not after: the gateway opens a TCP client to every service
 # at boot, so bringing it up first guarantees a round of connection errors.
-log_info "Deploying Microservices..."
-kubectl apply -f ./microservices.yaml --namespace=$NAMESPACE
-kubectl apply -f ./microservices-generated.yaml --namespace=$NAMESPACE
+# microservices.yaml is gone: it held hand-written copies of auth/order/payment
+# that the generated file now covers, and two definitions of one Deployment in
+# one directory is a `kubectl apply` where the last file read wins.
+log_info "Deploying Microservices (tag: $KARTSEEK_TAG)..."
+apply_manifest ./microservices-generated.yaml
 kubectl apply -f ./marketplace-hpa.yaml --namespace=$NAMESPACE
 log_info "Waiting for all microservice deployments..."
 kubectl wait --for=condition=Available deployment --all \
@@ -109,8 +170,8 @@ kubectl wait --for=condition=Available deployment --all \
 log_success "Microservices deployed"
 
 # ── Step 10: Deploy API Gateway ───────────────────────────────────────────
-log_info "Deploying API Gateway..."
-kubectl apply -f ./api-gateway.yaml --namespace=$NAMESPACE
+log_info "Deploying API Gateway (tag: $KARTSEEK_TAG)..."
+apply_manifest ./api-gateway.yaml
 kubectl rollout status deployment/api-gateway --namespace=$NAMESPACE --timeout=10m
 log_success "API Gateway deployed"
 

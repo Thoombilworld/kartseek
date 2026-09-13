@@ -11,7 +11,7 @@ metadata:
   name: kartseek
   labels:
     app.kubernetes.io/name: kartseek
-    app.kubernetes.io/version: "2.0.0"
+    app.kubernetes.io/version: '2.0.0'
 
 ---
 # ── Service Account for API Gateway ────────────────────────────────────────────
@@ -38,13 +38,13 @@ metadata:
   namespace: kartseek
 rules:
   # Read ConfigMaps & Secrets (environment config)
-  - apiGroups: [""]
-    resources: ["configmaps", "secrets"]
-    verbs: ["get", "list", "watch"]
+  - apiGroups: ['']
+    resources: ['configmaps', 'secrets']
+    verbs: ['get', 'list', 'watch']
   # Read Pods (for service discovery)
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
+  - apiGroups: ['']
+    resources: ['pods']
+    verbs: ['get', 'list', 'watch']
 
 ---
 # ── RoleBinding: Attach role to service account ────────────────────────────────
@@ -97,6 +97,13 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
+        # The console and the eight zones render server-side: every page that
+        # needs data fetches it from this Service before the browser sees HTML,
+        # so without this default-deny-ingress drops the console's own API calls
+        # and every page renders empty.
+        - podSelector:
+            matchLabels:
+              tier: web
       ports:
         - protocol: TCP
           port: 3001
@@ -187,7 +194,9 @@ metadata:
 spec:
   # matchExpressions, not matchLabels: the dedicated marketplace instance is
   # labelled app: postgres-marketplace and an exact `app: postgres` match left it
-  # covered by default-deny with nothing granting access.
+  # covered by default-deny with nothing granting access. Mongo and
+  # Elasticsearch joined the namespace with databases.yaml and would have been
+  # in the same position.
   podSelector:
     matchExpressions:
       - key: app
@@ -195,10 +204,14 @@ spec:
         values:
           - postgres
           - postgres-marketplace
+          - mongodb
+          - elasticsearch
   policyTypes:
     - Ingress
   ingress:
-    # Only allow from microservices
+    # Only allow from microservices. One rule for all four rather than one
+    # policy each: a port a pod does not listen on grants nothing, and four
+    # near-identical policies is how one of them ends up forgotten.
     - from:
         - podSelector:
             matchLabels:
@@ -209,6 +222,43 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+        - protocol: TCP
+          port: 27017
+        - protocol: TCP
+          port: 9200
+
+---
+# ── Network Policy: Allow the web tier to be reached ──────────────────────────
+# The console and the eight zones are Deployments in this namespace like any
+# other (infra/k8s/microservices-generated.yaml), so default-deny-ingress covers
+# them too and without this nothing could reach them at all — not the ingress
+# controller, not the shell rewriting a vertical path to its zone.
+#
+# No `ports:` restriction, for the same reason allow-microservice-mesh has none:
+# the nine listen on 3000-3009 and enumerating them is one more list to keep in
+# step with services.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-tier
+  namespace: kartseek
+spec:
+  podSelector:
+    matchLabels:
+      tier: web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # The public edge.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        # The shell rewrites /grocery, /marketplace and the rest to the zone
+        # that serves them, server-side.
+        - podSelector:
+            matchLabels:
+              tier: web
 
 ---
 # ── Network Policy: Allow Redis access ─────────────────────────────────────────
@@ -253,12 +303,12 @@ metadata:
 spec:
   limits:
     - type: Container
-      default:              # applied as limits when unset
-        cpu: "500m"
-        memory: "512Mi"
-      defaultRequest:       # applied as requests when unset
-        cpu: "50m"
-        memory: "64Mi"
+      default: # applied as limits when unset
+        cpu: '500m'
+        memory: '512Mi'
+      defaultRequest: # applied as requests when unset
+        cpu: '50m'
+        memory: '64Mi'
 
 ---
 # ── Resource Quota: Prevent runaway resource consumption ───────────────────────
@@ -269,12 +319,12 @@ metadata:
   namespace: kartseek
 spec:
   hard:
-    requests.cpu: "100"
-    requests.memory: "200Gi"
-    limits.cpu: "200"
-    limits.memory: "400Gi"
-    pods: "500"
-    persistentvolumeclaims: "50"
+    requests.cpu: '100'
+    requests.memory: '200Gi'
+    limits.cpu: '200'
+    limits.memory: '400Gi'
+    pods: '500'
+    persistentvolumeclaims: '50'
 
 ---
 # ── Pod Disruption Budget: Maintain availability during node maintenance ───────
@@ -290,4 +340,4 @@ spec:
   maxUnavailable: 1
   selector:
     matchLabels:
-      critical: "true"
+      critical: 'true'
