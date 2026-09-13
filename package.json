@@ -47,6 +47,7 @@
     "db:seed:restaurant": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed/seed-restaurant.ts",
     "db:seed:pharmacy": "npx ts-node --transpile-only -r tsconfig-paths/register apps/api/scripts/seed/seed-pharmacy.ts",
     "prepare": "node -e \"import('husky').then((m) => { const out = m.default(); if (out) console.log('husky:', out); }, (e) => { if (e && e.code !== 'ERR_MODULE_NOT_FOUND') throw e; })\"",
+    "env:init": "node scripts/env/generate-secrets.mjs",
     "kafka:topics": "node apps/api/scripts/create-kafka-topics.js",
     "registry:check": "node scripts/registry/validate.mjs",
     "registry:generate": "node scripts/registry/generate.mjs",
