@@ -6,13 +6,31 @@ import { useRouter } from 'next/navigation';
 import { useAuth, toAuthUser } from '@/lib/contexts/auth-context';
 import { useRegion } from '@/lib/contexts/region-context';
 import { authApi, ApiError } from '@/lib/api-endpoints';
-import { Eye, EyeOff, Mail, Lock, UserPlus, Phone, ArrowRight, ShoppingBag, Truck, Shield, Hotel } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  UserPlus,
+  Phone,
+  ArrowRight,
+  ShoppingBag,
+  Truck,
+  Shield,
+  Hotel,
+} from 'lucide-react';
 import { KartseekLoader } from '@/components/kartseek-loader';
 import { useTranslation } from '@/i18n';
 import type { TranslationKeys } from '@/i18n';
 
-/** Kept in step with PASSWORD_REGEX on the gateway's RegisterDto. */
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#])[A-Za-z\d@$!%*?&^#]{8,128}$/;
+/**
+ * Kept in step with PASSWORD_REGEX on the gateway's RegisterDto: 8–128
+ * characters, at least one lowercase, one uppercase, one digit and one
+ * symbol — any symbol. The previous rule allowed only `@$!%*?&^#`, so a
+ * password with `_`, `.`, `-` or `+` was refused with a message claiming it
+ * had no special character, and those customers could not register.
+ */
+const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d\s])\S{8,128}$/;
 
 /** See the note on `describeLoginError` — returns a key, not a sentence. */
 type SignupFailure = { key: keyof TranslationKeys['auth']; serverMessage?: string };
@@ -108,11 +126,10 @@ export default function SignupPage() {
           </Link>
 
           <h2 className="text-4xl font-black leading-tight mb-4">
-            {t('signUpHeadline')}<span className="text-emerald-200">.</span>
+            {t('signUpHeadline')}
+            <span className="text-emerald-200">.</span>
           </h2>
-          <p className="text-emerald-200 text-lg max-w-sm">
-            {t('signUpSubtitle')}
-          </p>
+          <p className="text-emerald-200 text-lg max-w-sm">{t('signUpSubtitle')}</p>
         </div>
 
         <div className="relative z-10 space-y-4">
@@ -130,7 +147,9 @@ export default function SignupPage() {
             <div className="w-8 h-8 rounded-lg bg-linear-to-br from-emerald-600 to-teal-600 flex items-center justify-center">
               <span className="text-white font-black text-sm">K</span>
             </div>
-            <span className="text-xl font-black tracking-tight text-emerald-700">KART<span className="text-slate-900">SEEK</span></span>
+            <span className="text-xl font-black tracking-tight text-emerald-700">
+              KART<span className="text-slate-900">SEEK</span>
+            </span>
           </Link>
 
           <h1 className="text-2xl font-bold text-slate-900 mb-1">{t('createAccount')}</h1>
@@ -149,7 +168,10 @@ export default function SignupPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="signup-name" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="signup-name"
+                className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
                 {t('nameLabel')} *
               </label>
               <div className="relative">
@@ -168,7 +190,10 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="signup-email" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="signup-email"
+                className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
                 {t('emailLabel')} *
               </label>
               <div className="relative">
@@ -187,8 +212,12 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="signup-phone" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                {t('phoneLabel')} <span className="text-slate-400 normal-case">{t('optional')}</span>
+              <label
+                htmlFor="signup-phone"
+                className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
+                {t('phoneLabel')}{' '}
+                <span className="text-slate-400 normal-case">{t('optional')}</span>
               </label>
               <div className="relative">
                 <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -205,7 +234,10 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="signup-password" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="signup-password"
+                className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
                 {t('passwordLabel')} *
               </label>
               <div className="relative">
@@ -242,9 +274,13 @@ export default function SignupPage() {
               />
               <span className="text-xs text-slate-500 leading-relaxed">
                 {t('agreeToThe')}{' '}
-                <Link href="/terms" className="text-blue-600 font-semibold hover:underline">{tCommon('termsOfService')}</Link>{' '}
+                <Link href="/terms" className="text-blue-600 font-semibold hover:underline">
+                  {tCommon('termsOfService')}
+                </Link>{' '}
                 {tCommon('and')}{' '}
-                <Link href="/privacy" className="text-blue-600 font-semibold hover:underline">{tCommon('privacyPolicy')}</Link>
+                <Link href="/privacy" className="text-blue-600 font-semibold hover:underline">
+                  {tCommon('privacyPolicy')}
+                </Link>
               </span>
             </label>
 
@@ -252,18 +288,27 @@ export default function SignupPage() {
               type="submit"
               disabled={loading}
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-sm"
-             aria-label={t('createAccount')}>{loading ? (
+              aria-label={t('createAccount')}
+            >
+              {loading ? (
                 <KartseekLoader size="sm" />
               ) : (
                 <>
                   {t('createAccount')} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                 </>
-              )}</button>
+              )}
+            </button>
           </form>
 
           <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
-            <div className="relative flex justify-center"><span className="bg-slate-50 px-3 text-xs text-slate-400 font-medium">{t('orSignUpWith')}</span></div>
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-slate-50 px-3 text-xs text-slate-400 font-medium">
+                {t('orSignUpWith')}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
