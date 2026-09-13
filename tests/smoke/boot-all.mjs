@@ -88,19 +88,19 @@ const logDir = path.join(root, 'tests/smoke/logs');
 /**
  * Ports a service really binds that `services.yaml` does not declare.
  *
- * audit-log-service's `main.ts` defaults `AUDIT_LOG_TCP_PORT` to 4028 and the
- * gateway's `AUDIT_LOG_SERVICE` client dials the same variable, but the registry
- * lists only its HTTP port — and `registry:check` reads the registry's `env` map
- * into main.ts, never the other way round, so nothing notices. Left out of this
- * list the port would be invisible to the pre-flight and to the teardown sweep,
- * and under an offset the child would bind the developer's real 4028.
+ * Empty, and meant to stay that way. It held audit-log-service's
+ * `AUDIT_LOG_TCP_PORT` (4028): bound by its `main.ts`, dialled by the gateway,
+ * and absent from the registry, so the pre-flight and the teardown sweep could
+ * not see it and an offset run would have bound the developer's real 4028.
+ * IN8 added `tcp: 4028` to that registry entry — which regenerates the compose
+ * file, the Kubernetes manifests and the docs — so `portPlan` gets it from
+ * `s.ports` now, and leaving the row here would count the port twice.
  *
- * The registry is still the place this belongs; adding it there regenerates the
- * compose file and the Kubernetes manifests, which is not this task's to change.
+ * `registry:check` also reads main.ts in the other direction now: a
+ * `<SERVICE>_*_PORT` a service binds without declaring fails the build, which is
+ * what this list existed to work around.
  */
-export const UNREGISTERED_PORTS = [
-  { service: 'audit-log-service', kind: 'tcp', env: 'AUDIT_LOG_TCP_PORT', port: 4028 },
-];
+export const UNREGISTERED_PORTS = [];
 
 /**
  * TCP client hosts that do not follow `<that service's env prefix>_SERVICE_HOST`.

@@ -113,8 +113,8 @@ const entries = [
   },
   {
     name: 'audit-log-service',
-    ports: { http: 3028 },
-    env: { http: 'AUDIT_LOG_SERVICE_PORT' },
+    ports: { http: 3028, tcp: 4028 },
+    env: { http: 'AUDIT_LOG_SERVICE_PORT', tcp: 'AUDIT_LOG_TCP_PORT' },
   },
 ];
 
@@ -124,7 +124,7 @@ test('shiftPort refuses an offset that leaves the port range', () => {
   assert.throws(() => shiftPort(3001, 70_000), /outside 1-65535/);
 });
 
-test('portPlan covers every declared port plus the ones the registry misses', () => {
+test('portPlan covers every port the registry declares', () => {
   const plan = portPlan(entries, 10_000);
   assert.deepEqual(
     plan.map((r) => `${r.service}:${r.kind}:${r.base}->${r.port}`),
@@ -137,11 +137,11 @@ test('portPlan covers every declared port plus the ones the registry misses', ()
       'audit-log-service:tcp:4028->14028',
     ],
   );
-  // audit-log-service binds 4028 from main.ts; services.yaml does not say so.
-  assert.equal(
-    UNREGISTERED_PORTS.some((x) => x.port === 4028),
-    true,
-  );
+  // 4028 comes from the registry now — IN8 added `tcp: 4028` to
+  // audit-log-service after this list flagged it — so the workaround is empty
+  // and `portPlan` must not count a port twice.
+  assert.deepEqual(UNREGISTERED_PORTS, []);
+  assert.equal(plan.filter((r) => r.base === 4028).length, 1);
 });
 
 test('offset 0 changes no environment at all', () => {

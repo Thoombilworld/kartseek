@@ -55,8 +55,15 @@ services:
     path: apps/api/apps/audit-log-service
     build: { workspace: kartseek-api, nestProject: audit-log-service }
     image: kartseek/audit-log-service
-    ports: { http: 3028 }
-    env: { http: AUDIT_LOG_SERVICE_PORT }
+    # The TCP transport was bound by main.ts and declared nowhere: the gateway's
+    # AUDIT_LOG_SERVICE client dials AUDIT_LOG_TCP_PORT, env.validation.ts
+    # defaults it to 4028, and apps/api/.env.example sets it — but the registry
+    # listed only the HTTP port, so Compose never published it, the Kubernetes
+    # Service never carried it, and IN9's smoke needed a hand-written
+    # UNREGISTERED_PORTS row to see it. `registry:check` now reads main.ts in
+    # this direction too, so the next one fails the build instead.
+    ports: { http: 3028, tcp: 4028 }
+    env: { http: AUDIT_LOG_SERVICE_PORT, tcp: AUDIT_LOG_TCP_PORT }
     health: { live: /health, ready: /health/ready }
     database: null
     dependsOn: [mongodb, redis, kafka]
