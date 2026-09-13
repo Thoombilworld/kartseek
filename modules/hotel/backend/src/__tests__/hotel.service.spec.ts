@@ -295,6 +295,20 @@ describe('HotelService', () => {
       );
     });
 
+    it('renames the property without handing TypeORM the transport keys', async () => {
+      // The gateway forwards `{ ...dto, hotelId, ownerId }`, and the old
+      // `update(id, dto)` spread all of it at the entity — so Postgres answered
+      // `Property "hotelId" was not found in "Hotel"` and every owner renaming
+      // their OWN hotel got a 500. Found live in round 1c.
+      hotelOwnedBy(OWNER_A);
+      await service.updateHotel(
+        HOTEL_A,
+        { name: 'Renamed', hotelId: HOTEL_A, ownerId: OWNER_A, scope: 'IN' } as any,
+        OWNER_A,
+      );
+      expect(hotelRepo.update).toHaveBeenCalledWith(HOTEL_A, { name: 'Renamed' });
+    });
+
     it('lets the owner act on their own property', async () => {
       hotelOwnedBy(OWNER_A);
       await expect(

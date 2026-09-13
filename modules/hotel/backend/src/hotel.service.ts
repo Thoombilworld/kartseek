@@ -947,7 +947,7 @@ export class HotelService {
    * one would put a wrong fact on a storefront filter.
    */
   private mapHotelFields(dto: Partial<CreateHotelDto>): Record<string, unknown> {
-    const patch: Record<string, unknown> = {};
+    const patch: Record<string, unknown> = this.pickHotelColumns(dto);
     if (dto.contactPhone !== undefined) patch.phone = dto.contactPhone;
     if (dto.contactEmail !== undefined) patch.email = dto.contactEmail;
 
@@ -963,6 +963,40 @@ export class HotelService {
     if (Object.keys(extra).length) patch.additionalPolicies = extra;
 
     return patch;
+  }
+
+  /**
+   * The DTO fields that ARE columns, named one by one.
+   *
+   * Both paths used to spread the payload — `{ ...dto }` — straight into
+   * TypeORM. On the create path that silently dropped whatever was not a column;
+   * on the update path it was worse, because the RPC payload also carries the
+   * transport's own keys, so `update_hotel` handed TypeORM `hotelId` and
+   * `ownerId` and Postgres answered
+   * `Property "hotelId" was not found in "Hotel"` — a 500 on every owner's
+   * attempt to rename their own property. Found live in round 1c; it predates
+   * this round, because the old `update(id, dto)` had the same spread.
+   *
+   * An allow-list rather than a longer deny-list: the set of things a hotel owner
+   * may edit is small and knowable, and a new key on the wire should not be able
+   * to reach a column by accident.
+   */
+  private pickHotelColumns(dto: Partial<CreateHotelDto>): Record<string, unknown> {
+    const picked: Record<string, unknown> = {};
+    for (const key of [
+      'name',
+      'description',
+      'address',
+      'city',
+      'starRating',
+      'type',
+      'amenities',
+      'currency',
+    ] as const) {
+      const value = (dto as Record<string, unknown>)[key];
+      if (value !== undefined) picked[key] = value;
+    }
+    return picked;
   }
 
   /**
@@ -1040,29 +1074,20 @@ export class HotelService {
     // shapes with no column of their own; the old spread handed them all to
     // TypeORM, which silently discarded them. `mapHotelFields` puts the six that
     // have a home into it, and the market and coordinates are resolved above.
-    const {
-      country: _country,
-      location,
-      policies: _policies,
-      contactPhone: _contactPhone,
-      contactEmail: _contactEmail,
-      ...rest
-    } = dto;
-    void _country;
-    void _policies;
-    void _contactPhone;
-    void _contactEmail;
-    const { lat, lng } = this.requireCoordinates(location);
+    const { lat, lng } = this.requireCoordinates(dto.location);
 
     const hotel = this.hotelRepo.create({
-      ...rest,
+      // `mapHotelFields` is the ONLY thing that reaches the entity: it picks the
+      // eight column-backed DTO fields and maps the six that need renaming. The
+      // payload is never spread, so nothing on the wire can reach a column by
+      // accident and nothing the owner typed is silently discarded.
       ...this.mapHotelFields(dto),
       ownerId,
       countryCode: market,
       slug: await this.uniqueHotelSlug(dto.name),
       latitude: lat,
       longitude: lng,
-      landmark: location?.landmark ?? null,
+      landmark: dto.location?.landmark ?? null,
       status: autoApprove ? HotelStatus.ACTIVE : HotelStatus.PENDING_APPROVAL,
       isAcceptingBookings: autoApprove,
       approvedBy: autoApprove ? SYSTEM_AUTO_APPROVE + ':' + market : null,
@@ -1124,18 +1149,8 @@ export class HotelService {
   async updateHotel(id: string, dto: Partial<CreateHotelDto>, ownerId: string) {
     const hotel = await this.hotelOwnedBy(id, ownerId);
 
-    const {
-      country,
-      location,
-      policies: _policies,
-      contactPhone: _contactPhone,
-      contactEmail: _contactEmail,
-      ...rest
-    } = dto;
-    void _policies;
-    void _contactPhone;
-    void _contactEmail;
-    const patch: Record<string, unknown> = { ...rest, ...this.mapHotelFields(dto) };
+    const { country, location } = dto;
+    const patch: Record<string, unknown> = this.mapHotelFields(dto);
     if (country !== undefined) {
       const market = requireMarket(country, 'hotel', this.logger);
       if (!market) {
