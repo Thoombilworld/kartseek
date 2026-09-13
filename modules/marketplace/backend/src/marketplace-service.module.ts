@@ -184,8 +184,14 @@ const ENTITIES = [
            *
            * Spread first, then overridden: everything except the five values
            * below comes from the one helper.
+           *
+           * The prefix matters: this module reads `MARKETPLACE_DB_PASSWORD`, not
+           * `DB_PASSWORD`, and its .env.example declares only the former.
+           * Without it the helper refused to boot on a variable this service
+           * never uses — masked in-repo by the fallback to apps/api/.env, fatal
+           * for a module lifted out of this repository into an image of its own.
            */
-          ...databaseCredentials(cfg),
+          ...databaseCredentials(cfg, { envPrefix: 'MARKETPLACE_DB' }),
           // One resolver, shared with data-source.ts — see ./db-config.ts. The
           // two used to resolve these five values separately, with different
           // last resorts, so without a module .env the CLI and the service
