@@ -363,6 +363,22 @@ export const PUBLISHED_TOPICS = {
   DELIVERY_PARTNER_STATUS_CHANGED: 'delivery.partner.status_changed',
   DELIVERY_PROOF_SUBMITTED: 'delivery.proof-submitted',
   DELIVERY_STATUS_UPDATED: 'delivery.status-updated',
+  // ── doctor ──
+  // The three admin decisions M6 gave a handler that had nowhere to announce
+  // themselves. Approving a clinic, adding to the global specialty taxonomy and
+  // reconfiguring a market each change something a provider or another service
+  // is waiting on, and none of those queues existed at all before M6. Here
+  // rather than in KAFKA_TOPICS because nothing consumes them yet: this half of
+  // the registry is the producer-only names, and the provisioner creates both.
+  //
+  // There is deliberately NO `doctor.suspended`. A suspension is a status
+  // change, and `doctor.status_changed` (KAFKA_TOPICS) has carried that event
+  // since before M6 — a second spelling of one event is how two consumers come
+  // to disagree about whether a practitioner is live.
+  DOCTOR_CLINIC_APPROVED: 'doctor.clinic.approved',
+  DOCTOR_SETTINGS_UPDATED: 'doctor.settings.updated',
+  DOCTOR_SPECIALTY_CREATED: 'doctor.specialty.created',
+  DOCTOR_VERIFIED: 'doctor.verified',
   // ── exchange ──
   EXCHANGE_OFFER_CREATED: 'exchange-offer.created',
   EXCHANGE_OFFER_DELETED: 'exchange-offer.deleted',

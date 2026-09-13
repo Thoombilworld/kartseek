@@ -248,8 +248,14 @@ const GLOBAL_ROUTES: Array<[RegExp, string]> = [
  *     global by definition. They are listed anyway because the rule is that a
  *     route proves it considered the market, and a locked super admin would
  *     otherwise leak silently. Owner: TAXI plan (D2).
- *   • **1 is handler-less** — `GET /doctor/admin/appointments` 503s today and
- *     must send a scope when doctor-service grows the handler. Owner: MODULES.
+ *   • **1 is superseded** — `GET /doctor/admin/appointments`, SUPER_ADMIN-only,
+ *     on the storefront `doctor.controller.ts` rather than the admin one. M6
+ *     built the scoped equivalent (`GET /admin/doctor/appointments`, market
+ *     resolved from the token and filtered through
+ *     `appointment → doctor → region_code`), so the disposition here is to
+ *     RETIRE this route rather than scope it — two admin reads of one queue is
+ *     how two answers to "whose appointments are these" come about. Owner:
+ *     MODULES / CONSOLE.
  *   • **4 are reachable but fail closed** — the `seller.controller.ts` routes
  *     whose `:id` SellerOwnershipGuard reads as a seller id and does not find,
  *     so a locked admin is refused rather than filtered. Nothing leaks; the
@@ -348,7 +354,7 @@ const DEFERRED: Array<{ verb: string; path: string; owner: string; why: string }
     verb: 'GET',
     path: '/doctor/admin/appointments',
     owner: 'MODULES plan',
-    why: 'no handler exists in doctor-service (plan §2(a) row 37) — the route 503s; it must still send scope when the handler lands',
+    why: "superseded by M6's scoped GET /admin/doctor/appointments; SUPER_ADMIN-only and on the storefront controller, so it is to be retired rather than scoped. The command it sends (get_all_appointments) has always had a handler — the 503 this entry claimed was never the reason it is here",
   },
 
   // ── MODULES M1 / CONSOLE ──────────────────────────────────────────────────

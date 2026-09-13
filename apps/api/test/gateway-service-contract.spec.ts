@@ -130,11 +130,13 @@ const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
   // platform that no longer exists — the rot this list's one rule exists to
   // prevent. (`dashboard`, `get` and `list` had already stopped being sent by
   // the R-task rewiring; they were simply never taken out.)
-  'admin.doctor.appointments',
-  'admin.doctor.dashboard',
-  'admin.doctor.prescriptions',
-  'admin.doctor.reports',
-  'admin.doctor.settings',
+  //
+  // The five `admin.doctor.*` entries are gone as well: M6 gave all fifteen of
+  // that module's commands a `@MessagePattern` in
+  // `modules/doctor/backend/src/admin/admin.controller.ts` — twelve written,
+  // three moved out of `doctor.controller.ts`, none renamed, because doctor
+  // never adopted a second convention. `has no doctor command left in either
+  // baseline` below is what would have failed had they been left.
   'admin.taxi.complaints',
   'admin.taxi.compliance',
   'admin.taxi.dashboard',
@@ -176,14 +178,23 @@ const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set([
  * Nothing may EVER be added here either: a new orphan is a new broken route.
  */
 const NEWLY_VISIBLE_ORPHANS: ReadonlySet<string> = new Set([
-  // ── doctor → M6 ───────────────────────────────────────────────────────────
-  'admin.doctor.approveClinic',
-  'admin.doctor.clinicDetail',
-  'admin.doctor.createSpecialty',
-  'admin.doctor.doctorDetail',
-  'admin.doctor.suspendDoctor',
-  'admin.doctor.updateSettings',
-  'admin.doctor.verifyDoctor',
+  // ── doctor → M6: EMPTY, and an `it` below keeps it that way ────────────
+  //
+  // All seven of this module's newly visible commands — `approveClinic`,
+  // `clinicDetail`, `createSpecialty`, `doctorDetail`, `suspendDoctor`,
+  // `updateSettings`, `verifyDoctor` — are served by
+  // `modules/doctor/backend/src/admin/admin.controller.ts`, together with the
+  // five that were visible all along and the three that already had a handler.
+  // Fifteen commands, fifteen handlers, one spelling each: nothing was renamed,
+  // because this module never adopted a second convention.
+  //
+  // Seven of the fifteen depend on `doctors.region_code`, which did not exist
+  // when this group was written: the practitioner directory, its detail read and
+  // both of its decisions failed CLOSED for every regional administrator, and
+  // the appointments and prescriptions queues are attributable only through
+  // `appointment → doctor → region_code`. AUD2-119's ruling and
+  // `modules/doctor/backend/migrations/1786502800000-DoctorAdminSurfaces.ts` are
+  // what made emptying this group possible rather than merely overdue.
 
   // ── hotel → M5: EMPTY, and an `it` below keeps it that way ────────────────
   //
@@ -478,6 +489,17 @@ describe('gateway ↔ service contract', () => {
     const hotelEntries = [...KNOWN_ORPHANS].filter((cmd) => cmd.startsWith('admin.hotel.'));
 
     expect(hotelEntries).toEqual([]);
+  });
+
+  it('has no doctor command left in either baseline', () => {
+    // M6 gave all fifteen doctor admin commands one spelling and one handler.
+    // This is the assertion that keeps that true: a doctor command reappearing
+    // in either list would mean a handler was removed and excused rather than
+    // replaced — or that the practitioner directory had gone back to refusing
+    // every regional administrator, which is what five of these entries were.
+    const doctorEntries = [...KNOWN_ORPHANS].filter((cmd) => cmd.startsWith('admin.doctor.'));
+
+    expect(doctorEntries).toEqual([]);
   });
 
   it('declares literal routes before parameterised siblings', () => {
