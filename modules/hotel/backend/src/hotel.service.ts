@@ -1,5 +1,18 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
-import { applyMarketFilter, assertInMarket, normaliseMarket, requireMarket } from '@app/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
+import {
+  applyMarketFilter,
+  assertInMarket,
+  normaliseMarket,
+  requireId,
+  requireMarket,
+  requireUuid,
+} from '@app/common';
 
 /** Who is asking, as forwarded by the gateway from the verified token. */
 export interface HotelRequester {
@@ -806,8 +819,43 @@ export class HotelService {
 
   // ── Hotel Owner ───────────────────────────────────────────────────────────
 
-  async registerHotelOwner(dto: RegisterOwnerDto) {
-    const owner = this.ownerRepo.create({
+  /**
+   * Apply to become a hotel owner.
+   *
+   * -- `userId` comes from the verified token, never from the body (round 1c) --
+   *
+   * `hotel_owners.userId` is NOT NULL and this method never set it, so every
+   * registration died on the insert: `POST /hotels/owner/register` answered 400
+   * with a Postgres NOT NULL violation and NOBODY could become a hotel owner
+   * through the platform's own route. Found by round 1b's live guard check.
+   *
+   * The fix is the ruling `PublicSellersController` already documents for
+   * `POST /sellers/register`: the owner is the signed-in user, taken from the
+   * JWT subject the gateway forwards, and a body-supplied `userId` (or
+   * `ownerId`) is refused by the gateway DTO rather than trusted. A registration
+   * surface that takes its own subject from the request body is a way to create
+   * a business account for somebody else.
+   *
+   * -- Registering twice returns the EXISTING row ----------------------------
+   *
+   * One user owns one owner record. A second registration is not an error the
+   * caller can act on — the application is already in, awaiting an
+   * administrator — so it returns that row with `alreadyRegistered: true` and
+   * creates nothing, rather than a 409 the portal would have to special-case or
+   * a duplicate row two admins could approve separately. Nothing is overwritten:
+   * a resubmission with different details does NOT edit an application already
+   * under review.
+   */
+  async registerHotelOwner(dto: RegisterOwnerDto, userId: string) {
+    const owner = requireId(userId, 'user');
+
+    const existing = await this.ownerRepo.findOne({ where: { userId: owner } });
+    if (existing) {
+      return { success: true, owner: existing, alreadyRegistered: true };
+    }
+
+    const created = this.ownerRepo.create({
+      userId: owner,
       name: dto.name,
       email: dto.email,
       phone: dto.phone,
@@ -817,10 +865,49 @@ export class HotelService {
       status: 'PENDING_VERIFICATION',
     } as any);
 
-    const saved = await this.ownerRepo.save(owner);
+    const saved = await this.ownerRepo.save(created);
     const savedOwnerId = (saved as any).id;
-    await this.kafka.publish('hotel.owner.registered', { id: savedOwnerId });
-    return { success: true, owner: saved };
+    await this.kafka.publish('hotel.owner.registered', { id: savedOwnerId, userId: owner });
+    return { success: true, owner: saved, alreadyRegistered: false };
+  }
+
+  /**
+   * The property, proved to belong to the caller.
+   *
+   * -- Why the OWNER routes need this and the market checks do not ------------
+   *
+   * `hotels.ownerId` holds the auth-service user id (its own column comment says
+   * so), so the owner LISTS are scoped simply by filtering on it — owner A's
+   * token yields owner A's hotel ids and nothing else, which is fail-closed by
+   * construction. The five routes that address a record BY ID have no such
+   * filter: `updateHotel`, `updateRoomPricing`, `bulkUpdatePricing`,
+   * `markNoShow` and `replyToReview` each took an id and wrote, with nothing
+   * anywhere asking whose record it was. Any hotel owner could reprice another
+   * owner's rooms, void their bookings or answer their guests' reviews.
+   *
+   * 404 and 403 are kept apart for the same reason `assertRecordMarket` keeps
+   * them apart: a missing id is a typo, not a permission problem, and reporting
+   * one as the other sends an operator hunting for the wrong thing.
+   *
+   * `SellerOwnershipGuard` was not reused: it resolves `marketplace.sellers`
+   * from a `:sellerId`/`:id` route param, and every `:id` on this surface is a
+   * hotel, room, booking or review id — the trap that guard's own docstring
+   * names. Identity from the token, enforced where the row is loaded.
+   */
+  private async hotelOwnedBy(hotelId: string, ownerId: string, what = 'hotel'): Promise<Hotel> {
+    const owner = requireId(ownerId, 'owner');
+    const hotel = await this.hotelRepo.findOne({
+      where: { id: requireUuid(hotelId, what) },
+      select: { id: true, ownerId: true, countryCode: true },
+    });
+    if (!hotel) throw new NotFoundException(`No ${what} with that id`);
+    if (hotel.ownerId !== owner) {
+      this.logger.warn(
+        `[owner-scope-denied] ${what} ${hotel.id} belongs to ${hotel.ownerId}; refused for ${owner}`,
+      );
+      throw new ForbiddenException('You do not have access to this hotel account.');
+    }
+    return hotel;
   }
 
   /**
@@ -838,6 +925,68 @@ export class HotelService {
     const qb = this.settingsRepo.createQueryBuilder('s');
     applyMarketFilter(qb, 's.countryCode', market);
     return qb.getOne();
+  }
+
+  /**
+   * The six DTO fields that used to reach no column, mapped to the ones that
+   * exist (M5 round 1c, review Minor).
+   *
+   * `contactPhone`, `contactEmail` and the four free-text `policies` entries
+   * were declared on `CreateHotelDto`, validated, spread into `create()` and
+   * then DISCARDED by TypeORM, because none of them is a column name. A field a
+   * form collects and the database never sees is worse than one that was never
+   * offered: the owner fills it in, the save succeeds, and nothing they typed is
+   * anywhere.
+   *
+   * They are PERSISTED rather than dropped from the DTO, because every one has a
+   * column already: `phone`, `email` and `childrenPolicy` directly, and
+   * `cancellation`/`pets`/`smoking` in `additionalPolicies`, the jsonb column
+   * whose own comment is "Additional policies as key-value pairs". The
+   * `petsAllowed`/`smokingAllowed` BOOLEANS are deliberately not inferred from
+   * that free text — "Pets allowed on request" is not a boolean, and guessing
+   * one would put a wrong fact on a storefront filter.
+   */
+  private mapHotelFields(dto: Partial<CreateHotelDto>): Record<string, unknown> {
+    const patch: Record<string, unknown> = {};
+    if (dto.contactPhone !== undefined) patch.phone = dto.contactPhone;
+    if (dto.contactEmail !== undefined) patch.email = dto.contactEmail;
+
+    const policies = dto.policies;
+    if (policies?.checkIn !== undefined) patch.checkInTime = policies.checkIn;
+    if (policies?.checkOut !== undefined) patch.checkOutTime = policies.checkOut;
+    if (policies?.children !== undefined) patch.childrenPolicy = policies.children;
+
+    const extra: Record<string, string> = {};
+    if (policies?.cancellation !== undefined) extra.cancellation = policies.cancellation;
+    if (policies?.pets !== undefined) extra.pets = policies.pets;
+    if (policies?.smoking !== undefined) extra.smoking = policies.smoking;
+    if (Object.keys(extra).length) patch.additionalPolicies = extra;
+
+    return patch;
+  }
+
+  /**
+   * Where the property actually is, or a refusal.
+   *
+   * `latitude`/`longitude` are NOT NULL and the create path defaulted a missing
+   * `location` to `0, 0` — Null Island, in the Gulf of Guinea, which is a real
+   * coordinate the distance search will happily rank (M5 round 1c, review
+   * Minor). There is no honest default for "where is this hotel", so a
+   * registration without one is refused.
+   */
+  private requireCoordinates(location?: { lat?: number; lng?: number }): {
+    lat: number;
+    lng: number;
+  } {
+    const lat = Number(location?.lat);
+    const lng = Number(location?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new BadRequestException('A hotel needs its location: latitude and longitude.');
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new BadRequestException('latitude must be -90..90 and longitude -180..180.');
+    }
+    return { lat, lng };
   }
 
   /**
@@ -887,21 +1036,33 @@ export class HotelService {
     const defaultCommission =
       settings?.defaultCommissionRate == null ? undefined : Number(settings.defaultCommissionRate);
 
-    // `country` and `policies` are DTO shapes with no column of their own; the
-    // old spread handed both to TypeORM, which silently discarded them.
-    const { country: _country, location, policies, ...rest } = dto;
+    // `country`, `location`, `policies` and the two `contact*` fields are DTO
+    // shapes with no column of their own; the old spread handed them all to
+    // TypeORM, which silently discarded them. `mapHotelFields` puts the six that
+    // have a home into it, and the market and coordinates are resolved above.
+    const {
+      country: _country,
+      location,
+      policies: _policies,
+      contactPhone: _contactPhone,
+      contactEmail: _contactEmail,
+      ...rest
+    } = dto;
     void _country;
+    void _policies;
+    void _contactPhone;
+    void _contactEmail;
+    const { lat, lng } = this.requireCoordinates(location);
 
     const hotel = this.hotelRepo.create({
       ...rest,
+      ...this.mapHotelFields(dto),
       ownerId,
       countryCode: market,
       slug: await this.uniqueHotelSlug(dto.name),
-      latitude: location?.lat ?? 0,
-      longitude: location?.lng ?? 0,
+      latitude: lat,
+      longitude: lng,
       landmark: location?.landmark ?? null,
-      checkInTime: policies?.checkIn ?? '14:00',
-      checkOutTime: policies?.checkOut ?? '12:00',
       status: autoApprove ? HotelStatus.ACTIVE : HotelStatus.PENDING_APPROVAL,
       isAcceptingBookings: autoApprove,
       approvedBy: autoApprove ? SYSTEM_AUTO_APPROVE + ':' + market : null,
@@ -951,10 +1112,53 @@ export class HotelService {
     return base + '-' + Date.now().toString(36);
   }
 
-  async updateHotel(id: string, dto: Partial<CreateHotelDto>) {
-    await this.hotelRepo.update(id, dto as any);
-    await this.redis.del(`hotel:detail:${id}`);
-    return { success: true, hotelId: id };
+  /**
+   * `ownerId` is the verified JWT subject, forwarded by the gateway. Without it
+   * this method updated any hotel by id for any caller who reached the route.
+   *
+   * `country`, `location` and `policies` are DTO shapes, not columns — the old
+   * `update(id, dto)` handed all three to TypeORM, which discards them, so a
+   * caller "changing the country" silently changed nothing. They are mapped
+   * here, exactly as `createHotel` maps them.
+   */
+  async updateHotel(id: string, dto: Partial<CreateHotelDto>, ownerId: string) {
+    const hotel = await this.hotelOwnedBy(id, ownerId);
+
+    const {
+      country,
+      location,
+      policies: _policies,
+      contactPhone: _contactPhone,
+      contactEmail: _contactEmail,
+      ...rest
+    } = dto;
+    void _policies;
+    void _contactPhone;
+    void _contactEmail;
+    const patch: Record<string, unknown> = { ...rest, ...this.mapHotelFields(dto) };
+    if (country !== undefined) {
+      const market = requireMarket(country, 'hotel', this.logger);
+      if (!market) {
+        throw new BadRequestException('A hotel needs a country this platform operates in.');
+      }
+      patch.countryCode = market;
+    }
+    if (location !== undefined) {
+      // An update that names a location must name a usable one; leaving it out
+      // entirely keeps whatever the property already has.
+      const { lat, lng } = this.requireCoordinates(location);
+      patch.latitude = lat;
+      patch.longitude = lng;
+    }
+    if (location?.landmark !== undefined) patch.landmark = location.landmark;
+
+    if (Object.keys(patch).length === 0) {
+      throw new BadRequestException('Nothing to update: name at least one field.');
+    }
+
+    await this.hotelRepo.update(hotel.id, patch as any);
+    await this.redis.del(`hotel:detail:${hotel.id}`);
+    return { success: true, hotelId: hotel.id };
   }
 
   async addRoom(hotelId: string, dto: any) {
@@ -964,9 +1168,11 @@ export class HotelService {
     return { success: true, room: saved };
   }
 
-  async updateRoomPricing(roomId: string, dto: UpdatePricingDto) {
-    const room = await this.roomRepo.findOne({ where: { id: roomId } });
-    if (!room) throw new NotFoundException(`Room ${roomId} not found`);
+  /** `ownerId` is the verified JWT subject — the room's hotel must be theirs. */
+  async updateRoomPricing(roomId: string, dto: UpdatePricingDto, ownerId: string) {
+    const room = await this.roomRepo.findOne({ where: { id: requireUuid(roomId, 'room') } });
+    if (!room) throw new NotFoundException('No room with that id');
+    await this.hotelOwnedBy(room.hotelId, ownerId);
 
     if (dto.basePrice != null) room.pricePerNight = dto.basePrice;
     if (dto.rackPrice != null) room.rackRate = dto.rackPrice;
@@ -993,11 +1199,33 @@ export class HotelService {
     return { success: true, roomId, basePrice: room.pricePerNight, rackPrice: room.rackRate };
   }
 
-  async bulkUpdatePricing(hotelId: string, roomIds: string[], dto: UpdatePricingDto) {
+  /**
+   * `ownerId` is the verified JWT subject. The property is proved first and each
+   * room is then checked to belong to THAT property, so a list of room ids
+   * cannot reach across to another owner's hotel through a hotel the caller does
+   * own.
+   */
+  async bulkUpdatePricing(
+    hotelId: string,
+    roomIds: string[],
+    dto: UpdatePricingDto,
+    ownerId: string,
+  ) {
+    const hotel = await this.hotelOwnedBy(hotelId, ownerId);
+    const ids = Array.isArray(roomIds) ? roomIds : [];
+    if (!ids.length) throw new BadRequestException('At least one room id is required.');
+
     const results: any[] = [];
-    for (const roomId of roomIds) {
-      const result = await this.updateRoomPricing(roomId, dto);
-      results.push(result);
+    for (const roomId of ids) {
+      const room = await this.roomRepo.findOne({ where: { id: requireUuid(roomId, 'room') } });
+      if (!room) throw new NotFoundException('No room with that id');
+      if (room.hotelId !== hotel.id) {
+        this.logger.warn(
+          `[owner-scope-denied] room ${room.id} belongs to hotel ${room.hotelId}, not ${hotel.id}`,
+        );
+        throw new ForbiddenException('You do not have access to this hotel account.');
+      }
+      results.push(await this.updateRoomPricing(roomId, dto, ownerId));
     }
     return { success: true, updated: results.length, results };
   }
@@ -1009,8 +1237,15 @@ export class HotelService {
     return { success: true, roomId, date: dto.date, available: dto.available };
   }
 
+  /**
+   * `ownerId` is the verified JWT subject, forwarded by the gateway — never a
+   * query parameter. `hotels.ownerId` holds the auth-service user id, so this
+   * filter IS the ownership boundary: owner A's token yields owner A's hotels
+   * and an empty set for anyone else's, which is fail-closed by construction.
+   */
   async getOwnerDashboard(ownerId: string) {
-    const hotels = await this.hotelRepo.find({ where: { ownerId } });
+    const owner = requireId(ownerId, 'owner');
+    const hotels = await this.hotelRepo.find({ where: { ownerId: owner } });
     const hotelIds = hotels.map((h) => h.id);
 
     if (hotelIds.length === 0) {
@@ -1057,8 +1292,10 @@ export class HotelService {
     };
   }
 
+  /** @see getOwnerDashboard — `ownerId` is the verified subject, not a filter. */
   async getOwnerPayouts(ownerId: string, page = 1, limit = 10) {
-    const hotels = await this.hotelRepo.find({ where: { ownerId }, select: { id: true } });
+    const owner = requireId(ownerId, 'owner');
+    const hotels = await this.hotelRepo.find({ where: { ownerId: owner }, select: { id: true } });
     const hotelIds = hotels.map((h) => h.id);
 
     if (hotelIds.length === 0) return { ownerId, data: [], total: 0, page, limit };
@@ -1073,8 +1310,10 @@ export class HotelService {
     return { ownerId, data, total, page, limit };
   }
 
+  /** @see getOwnerDashboard — `ownerId` is the verified subject, not a filter. */
   async getOwnerBookings(ownerId: string, page = 1, limit = 20) {
-    const hotels = await this.hotelRepo.find({ where: { ownerId }, select: { id: true } });
+    const owner = requireId(ownerId, 'owner');
+    const hotels = await this.hotelRepo.find({ where: { ownerId: owner }, select: { id: true } });
     const hotelIds = hotels.map((h) => h.id);
 
     if (hotelIds.length === 0) return { data: [], total: 0, page, limit };
@@ -1090,8 +1329,10 @@ export class HotelService {
     return { data, total, page, limit };
   }
 
+  /** @see getOwnerDashboard — `ownerId` is the verified subject, not a filter. */
   async getOwnerReviews(ownerId: string) {
-    const hotels = await this.hotelRepo.find({ where: { ownerId }, select: { id: true } });
+    const owner = requireId(ownerId, 'owner');
+    const hotels = await this.hotelRepo.find({ where: { ownerId: owner }, select: { id: true } });
     const hotelIds = hotels.map((h) => h.id);
     if (hotelIds.length === 0) return { data: [], total: 0 };
 
@@ -1103,9 +1344,13 @@ export class HotelService {
     return { data, total };
   }
 
-  async replyToReview(reviewId: string, reply: string) {
-    const review = await this.reviewRepo.findOne({ where: { id: reviewId } });
-    if (!review) throw new NotFoundException(`Review ${reviewId} not found`);
+  /** `ownerId` is the verified JWT subject — the review's hotel must be theirs. */
+  async replyToReview(reviewId: string, reply: string, ownerId: string) {
+    const review = await this.reviewRepo.findOne({
+      where: { id: requireUuid(reviewId, 'review') },
+    });
+    if (!review) throw new NotFoundException('No review with that id');
+    await this.hotelOwnedBy(review.hotelId, ownerId);
 
     review.hotelReply = reply;
     review.repliedAt = new Date();
@@ -1115,9 +1360,13 @@ export class HotelService {
 
   // ── No-Show Management ────────────────────────────────────────────────────
 
-  async markNoShow(bookingId: string) {
-    const booking = await this.bookingRepo.findOne({ where: { id: bookingId } });
-    if (!booking) throw new NotFoundException(`Booking ${bookingId} not found`);
+  /** `ownerId` is the verified JWT subject — the booking's hotel must be theirs. */
+  async markNoShow(bookingId: string, ownerId: string) {
+    const booking = await this.bookingRepo.findOne({
+      where: { id: requireUuid(bookingId, 'booking') },
+    });
+    if (!booking) throw new NotFoundException('No booking with that id');
+    await this.hotelOwnedBy(booking.hotelId, ownerId);
 
     booking.status = 'NO_SHOW' as any;
     await this.bookingRepo.save(booking);
