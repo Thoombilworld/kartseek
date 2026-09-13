@@ -7,7 +7,8 @@
 #     --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 \
 #     --build-arg HEALTH_PATH=/admin/login \
 #     --build-arg NEXT_PUBLIC_API_URL=http://nginx/api/v1 \
-#     --build-arg API_URL=http://nginx/api/v1 -t kartseek/web:dev .
+#     --build-arg API_URL=http://nginx/api/v1 \
+#     --build-arg NEXT_PUBLIC_WS_URL=http://nginx -t kartseek/web:dev .
 #
 # Root context for the same reason as the API images: one lockfile, at the root,
 # installed through npm workspaces. It also has a second reason here — a Next
@@ -20,14 +21,16 @@
 # (MARKETPLACE_ZONE_ORIGIN and friends, read by next.config.mjs at request time)
 # stay runtime env and must NOT be passed here.
 #
-# BOTH `NEXT_PUBLIC_API_URL` AND `API_URL` ARE REQUIRED for a production build,
-# even though `api-base.ts` falls back from one to the other at run time. The
-# build itself evaluates that module while collecting page data, some route
-# handlers run on the Edge Runtime where only inlined values exist, and
-# `NODE_ENV=production` makes a missing value a thrown error rather than the
-# localhost default. Omitting API_URL fails the build with
-# "Failed to collect configuration for /api/loyalty" — a message that names the
-# route, not the variable.
+# ALL THREE OF `NEXT_PUBLIC_API_URL`, `API_URL` AND `NEXT_PUBLIC_WS_URL` ARE
+# REQUIRED for a production build, even though `api-base.ts` falls back from the
+# first to the second at run time. The build itself evaluates that module while
+# collecting page data, some route handlers run on the Edge Runtime where only
+# inlined values exist, and `NODE_ENV=production` makes a missing value a thrown
+# error rather than the localhost default.
+#
+# Each one omitted fails the build with a message that names a ROUTE, not the
+# variable — "Failed to collect configuration for /api/loyalty" — with the real
+# cause one `[cause]:` line further down. Read that line.
 #
 # ── Precondition: the workspace must emit .next/standalone ───────────────────
 #

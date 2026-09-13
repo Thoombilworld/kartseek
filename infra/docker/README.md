@@ -13,26 +13,34 @@ installed through npm workspaces, and the rspack builder's own dependencies
 are declared in the root manifest. A build scoped to a single workspace
 directory cannot run `npm ci` or `nest build` at all.
 
-| Dockerfile                  | Build command                                                                                                                                                                             | Produces                                                                             |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `api-gateway.Dockerfile`    | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                                                                                     | The API gateway.                                                                     |
-| `core-service.Dockerfile`   | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service --build-arg PORT=3014 -t kartseek/order-service:2.0.0 .`                                              | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`. |
-| `module-service.Dockerfile` | `docker build -f infra/docker/module-service.Dockerfile --build-arg APP=grocery --build-arg PORT=3018 -t kartseek/grocery-service:2.0.0 .`                                                | Any of the 8 module backends, selected by `--build-arg APP=<module>`.                |
-| `nextjs.Dockerfile`         | `docker build -f infra/docker/nextjs.Dockerfile --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 --build-arg NEXT_PUBLIC_API_URL=… --build-arg API_URL=… -t kartseek/web:2.0.0 .` | A Next workspace that emits `.next/standalone` — **`apps/web` only, today**.         |
+| Dockerfile                  | Build command                                                                                                                                                                                                              | Produces                                                                             |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `api-gateway.Dockerfile`    | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                                                                                                                      | The API gateway.                                                                     |
+| `core-service.Dockerfile`   | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service --build-arg PORT=3014 -t kartseek/order-service:2.0.0 .`                                                                               | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`. |
+| `module-service.Dockerfile` | `docker build -f infra/docker/module-service.Dockerfile --build-arg APP=grocery --build-arg PORT=3018 -t kartseek/grocery-service:2.0.0 .`                                                                                 | Any of the 8 module backends, selected by `--build-arg APP=<module>`.                |
+| `nextjs.Dockerfile`         | `docker build -f infra/docker/nextjs.Dockerfile --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 --build-arg NEXT_PUBLIC_API_URL=… --build-arg API_URL=… --build-arg NEXT_PUBLIC_WS_URL=… -t kartseek/web:2.0.0 .` | A Next workspace that emits `.next/standalone` — **`apps/web` only, today**.         |
 
 Read each Dockerfile's own header comment for the full reasoning; the table
 above is a summary.
 
-### `nextjs.Dockerfile` needs both API URL arguments
+### `nextjs.Dockerfile` needs three URL arguments, not one
 
-`--build-arg NEXT_PUBLIC_API_URL=…` **and** `--build-arg API_URL=…`, even though
-`packages/shared-core/src/config/api-base.ts` falls back from one to the other at
-run time. The build evaluates that module while collecting page data, some route
-handlers run on the Edge Runtime where only inlined values exist, and
+`--build-arg NEXT_PUBLIC_API_URL=…`, `--build-arg API_URL=…` **and**
+`--build-arg NEXT_PUBLIC_WS_URL=…` — all three, even though
+`packages/shared-core/src/config/api-base.ts` falls back from the first to the
+second at run time. The build evaluates that module while collecting page data,
+some route handlers run on the Edge Runtime where only inlined values exist, and
 `NODE_ENV=production` turns a missing value into a thrown error rather than the
-localhost default. Leaving `API_URL` out fails the build with
-`Failed to collect configuration for /api/loyalty` — which names a route, not the
-variable you forgot.
+localhost default.
+
+Each one you leave out fails the build with `Failed to collect configuration for
+/api/loyalty` — which names a **route**, not the variable. The real cause is one
+`[cause]:` line further down:
+
+```
+[cause]: Error: API base URL is not configured. Set API_URL (server) and …
+[cause]: Error: WebSocket URL is not configured. Set NEXT_PUBLIC_WS_URL …
+```
 
 ### `nextjs.Dockerfile` builds `apps/web` and, for now, nothing else
 
