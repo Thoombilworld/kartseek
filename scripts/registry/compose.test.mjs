@@ -9,6 +9,7 @@ import {
   stem,
 } from './compose.mjs';
 import { loadRegistry, repoRoot, webEntries } from './lib.mjs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -352,4 +353,108 @@ test('every Next deployable emits standalone output, traced from the monorepo ro
     // A zone is mounted under its base path and the healthcheck probes it.
     if (s.kind === 'web-zone') assert.equal(cfg.basePath, s.basePath, `${s.path} basePath`);
   }
+});
+
+/**
+ * Splits the rendered file into `service name -> its block`, so a per-service
+ * assertion cannot be satisfied by some OTHER service's line further down.
+ */
+function serviceBlocks(out) {
+  const blocks = new Map();
+  let name = null;
+  let lines = [];
+  for (const line of out.split('\n')) {
+    const m = /^ {2}([a-z][a-z0-9-]*):$/.exec(line);
+    if (m) {
+      if (name) blocks.set(name, lines.join('\n'));
+      [name, lines] = [m[1], []];
+    } else if (name) lines.push(line);
+  }
+  if (name) blocks.set(name, lines.join('\n'));
+  return blocks;
+}
+
+test('every Next deployable gets all three URL build args, not just the console', () => {
+  const real = loadRegistry();
+  const blocks = serviceBlocks(renderComposeServices(real));
+  const webs = webEntries(real);
+  assert.equal(webs.length, 9);
+  for (const s of webs) {
+    const block = blocks.get(s.name);
+    assert.ok(block, `${s.name} is not in the rendered file`);
+    // All three, every time. api-base.ts falls back from the first to the
+    // second at run time, but the BUILD evaluates that module while collecting
+    // page data and NODE_ENV=production makes a missing one a thrown error —
+    // reported against a route ("Failed to collect configuration for
+    // /api/loyalty"), not against the variable. A zone that inherited only two
+    // would fail that way after building the whole application.
+    for (const arg of ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_WS_URL', 'API_URL']) {
+      assert.match(block, new RegExp(`^\\s+${arg}: \\S`, 'm'), `${s.name} is missing ${arg}`);
+    }
+    // The browser-facing pair is overridable, because through nginx from a HOST
+    // browser the origin is http://localhost/… and not http://nginx/… .
+    assert.match(block, /NEXT_PUBLIC_API_URL: \$\{COMPOSE_API_URL:-http:\/\/nginx\/api\/v1\}/);
+    assert.match(block, /NEXT_PUBLIC_WS_URL: \$\{COMPOSE_WS_URL:-ws:\/\/nginx\}/);
+    // The server-side one is not: a Next server talks to the gateway container
+    // directly, never back out through the edge.
+    assert.match(block, /API_URL: http:\/\/api-gateway:3001\/api\/v1/);
+    assert.match(block, new RegExp(`HEALTH_PATH: ${healthPathFor(s)}$`, 'm'));
+  }
+});
+
+test('the nginx main config is selected by NGINX_CONF, defaulting to the host one', () => {
+  const infra = fs.readFileSync(path.join(repoRoot(), 'infra/docker/compose.infra.yml'), 'utf8');
+  // The default is the host-process config, so `npm run dev` + `npm run
+  // infra:up` behave exactly as before this existed.
+  assert.match(infra, /- \.\.\/nginx\/\$\{NGINX_CONF:-nginx\.conf\}:\/etc\/nginx\/nginx\.conf:ro/);
+  assert.ok(
+    !/- \.\.\/nginx\/nginx\.conf:\/etc\/nginx/.test(infra),
+    'the fixed mount is what the selector replaces',
+  );
+});
+
+test('nginx.compose.conf routes the whole app tier by compose service name', () => {
+  const real = loadRegistry();
+  // Directives only. The file's header explains what it does NOT do by naming
+  // `host.docker.internal` and the conf.d include, so asserting their absence
+  // over the raw text would fail on the explanation rather than on a route.
+  const conf = fs
+    .readFileSync(path.join(repoRoot(), 'infra/nginx/nginx.compose.conf'), 'utf8')
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('#'))
+    .join('\n');
+  const gw = real.services.find((s) => s.kind === 'gateway');
+  const shell = real.services.find((s) => s.kind === 'web-shell');
+  assert.match(conf, new RegExp(`"${gw.name}:${gw.ports.http}"`), 'the gateway, by service name');
+  assert.match(conf, new RegExp(`"${shell.name}:${shell.ports.http}"`), 'the console');
+  for (const z of real.services.filter((s) => s.kind === 'web-zone')) {
+    assert.match(conf, new RegExp(`"${z.name}:${z.ports.http}"`), `${z.name} upstream`);
+    // Two locations per zone, the same pair the shell's rewrites use: the bare
+    // base path, and everything under it (the zone's own /_next/* assets
+    // included — it emits them under its assetPrefix).
+    assert.match(conf, new RegExp(`location = ${z.basePath}\\s`), `${z.basePath} exact`);
+    assert.match(conf, new RegExp(`location\\s+${z.basePath}/\\s`), `${z.basePath}/ prefix`);
+  }
+  // The routes the host config serves, served here too.
+  for (const route of ['/api/', '/socket.io/', '/docs', '/graphql', '/nginx-health']) {
+    assert.match(conf, new RegExp(`location[^\\n]*${route}`), route);
+  }
+  // The two things that would put the developer's own fleet back in the path.
+  assert.ok(!/host\.docker\.internal/.test(conf), 'no host upstream in the container config');
+  assert.ok(
+    !/include\s+\/etc\/nginx\/conf\.d/.test(conf),
+    "conf.d/default.conf is the host config's server blocks — including it would 301 port 80 to https and proxy to host.docker.internal",
+  );
+  // A static `upstream` block is resolved once at startup and nginx EXITS when
+  // a name does not resolve; the `admin` profile has no zone containers, so the
+  // whole edge would be down whenever the smaller profile is up.
+  assert.ok(!/^\s*upstream\s/m.test(conf), 'upstreams are per-request variables, not blocks');
+  assert.match(conf, /resolver\s+127\.0\.0\.11/, 'which needs Docker’s embedded DNS');
+});
+
+test('the host nginx config is untouched and still fronts the dev fleet', () => {
+  const host = fs.readFileSync(path.join(repoRoot(), 'infra/nginx/nginx.conf'), 'utf8');
+  assert.match(host, /server host\.docker\.internal:3001/);
+  assert.match(host, /server host\.docker\.internal:3000/);
+  assert.match(host, /include \/etc\/nginx\/conf\.d\/\*\.conf/);
 });

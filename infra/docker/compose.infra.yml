@@ -568,8 +568,29 @@ services:
     ports:
       - '${NGINX_BIND:-127.0.0.1}:80:80'
       - '${NGINX_BIND:-127.0.0.1}:443:443'
+    # Which main config is mounted, and it is the ONE switch between the two
+    # worlds this edge can front (infra/docker/README.md, "Which nginx config
+    # is mounted"):
+    #
+    #   unset / nginx.conf          the host-process fleet — `npm run dev` —
+    #                               through host.docker.internal. The default,
+    #                               so nothing about `npm run dev` changes.
+    #   NGINX_CONF=nginx.compose.conf   the containerised app tier, by compose
+    #                               service name: api-gateway:3001, web:3000 and
+    #                               each zone. Set it in the root .env (Compose
+    #                               reads no other) alongside `--profile admin`
+    #                               or `--profile full`.
+    #
+    # The nginx service itself carries no profile — it is infrastructure and
+    # comes up with `npm run infra:up` either way. Changing the variable changes
+    # a bind mount, so the container has to be recreated for it to take:
+    # `NGINX_CONF=nginx.compose.conf docker compose up -d --force-recreate nginx`.
     volumes:
-      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/${NGINX_CONF:-nginx.conf}:/etc/nginx/nginx.conf:ro
+      # Still mounted under both configs, and read by only one of them:
+      # nginx.conf includes conf.d/*.conf, nginx.compose.conf deliberately does
+      # not (default.conf's server blocks proxy to the host upstreams and 301
+      # port 80 to https, which would undo both halves of the container path).
       - ../nginx/conf.d:/etc/nginx/conf.d:ro
       - ../nginx/ssl:/etc/nginx/ssl:ro
     extra_hosts:
