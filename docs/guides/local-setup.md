@@ -53,9 +53,28 @@ cp .env.example .env
 cp apps/api/.env.example apps/api/.env
 ```
 
+Fill in **every** variable the root `.env.example` lists before going any
+further. Compose treats all of them as required: it refuses to start and names
+the one that is missing, rather than falling back to the
+`change_me_in_development` default it used to carry in tracked source
+(AUD2-022). Generate a distinct value per line:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+```
+
 Each of the eight module backends (`modules/<vertical>/backend/`) also ships
-its own `.env.example`, for when you run that module outside the default
-setup — copy it the same way if you need it.
+its own `.env.example`. Those now point at the **shared** Postgres — port
+5432, database `kartseek_db`, the module's own login role — because that is
+what `npm run infra:up` actually starts. They used to default to the module's
+dedicated instance on 5433–5440, which the default profile does **not** start,
+so a fresh clone's first boot failed with `ECONNREFUSED` on a port nothing was
+listening on (AUD2-021). The dedicated-instance values are still there,
+commented out, at the end of each file's database block.
+
+If you already have `modules/<vertical>/backend/.env` files of your own they
+are untouched by any of this — they are yours, and untracked. See "Moving a
+module onto its own database role" below for what to change in them.
 
 Who reads which file matters, because it is not "everyone reads the same
 `.env`":
@@ -98,7 +117,78 @@ dedicated Postgres instance per module (see
 is the narrower version of that, bringing up only the marketplace module's
 own Postgres instance; and `tools` starts pgAdmin, RedisInsight, and Kibana.
 None is needed for a first run — `npm run infra:tools` starts the `tools`
-profile if you want them.
+profile if you want them. **`npm run infra:up` does not start the isolated
+instances**, which is why the module `.env.example` files point at the shared
+one.
+
+Every datastore port above publishes on `127.0.0.1` by default, not on all
+interfaces (`DB_BIND` in the root `.env`, AUD2-140). The gateway in front of
+them may be running with `DEV_AUTH_BYPASS=true`, which treats an anonymous
+caller as a super-admin, so these are not ports to expose to a network by
+accident. Set `DB_BIND=0.0.0.0` if another machine genuinely needs them, and
+set it back afterwards.
+
+Elasticsearch requires authentication. `ELASTIC_PASSWORD` from the root `.env`
+bootstraps the built-in `elastic` user the first time the cluster starts;
+search-service needs it too, as `ELASTICSEARCH_NODE` in `apps/api/.env`:
+
+```dotenv
+ELASTICSEARCH_NODE=http://elastic:<ELASTIC_PASSWORD>@localhost:9200
+```
+
+Kibana (the `tools` profile) cannot log in as `elastic` — it refuses that
+account — so it uses `kibana_system`, whose password has to be set once
+through the API after the cluster is up. The command is in `.env.example`
+beside `KIBANA_SYSTEM_PASSWORD`.
+
+## Moving a module onto its own database role
+
+Every service used to connect to Postgres as the cluster superuser, so one
+compromised service meant read and write on all 25 schemas — plus
+`COPY … FROM PROGRAM`, which is shell access on the database host (AUD2-073).
+`infra/postgres/init-roles.sh` creates one login role per module schema, and
+the eight module backends now connect as those roles rather than as `postgres`.
+
+The whole change, per module, is four lines in
+`modules/<vertical>/backend/.env`:
+
+```dotenv
+TAXI_DB_HOST=127.0.0.1
+TAXI_DB_PORT=5432
+TAXI_DB_NAME=kartseek_db
+TAXI_DB_USER=taxi_user
+TAXI_DB_PASSWORD=<the TAXI_DB_PASSWORD from the repository-root .env>
+```
+
+One credential per module, valid in either topology: the same pair is the
+dedicated instance's own superuser under the `isolated` profile, so moving a
+module between the two does not change what it presents.
+
+Do them **one at a time**, and after each one:
+
+```bash
+cd modules/taxi/backend
+npm run migration:run     # builds the schema as the module's own role
+npm run build && npm test
+node dist/main.js         # then read one route that reaches this service
+```
+
+The order matters. Start with a module that references no schema but its own —
+`taxi`, `doctor` and `hotel` reach nothing outside theirs; `marketplace` and
+`franchise` have the most cross-schema references and should be last, since
+they may need explicit grants rather than a plain flip.
+
+### If the role cannot do something
+
+Re-run `infra/postgres/init-roles.sh` (the one-liner is in
+[`infra/docker/README.md`](../../infra/docker/README.md)) before assuming the
+role is wrong. It is idempotent, and it is what grants the role ownership of
+objects that appeared in its schema afterwards — a `migration:run` executed as
+`postgres`, or a seed script. Grants alone are not enough there: `ALTER TABLE`,
+`DROP TABLE` and `CREATE INDEX` are owner-only, so a role with every grant
+PostgreSQL can express still cannot run a migration against a table `postgres`
+owns, and the failure does not appear until the first migration that changes a
+column.
 
 ## Run
 

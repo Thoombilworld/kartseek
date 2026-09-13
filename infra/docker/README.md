@@ -5,7 +5,7 @@ used for local infrastructure. This is for anyone building a `kartseek/*`
 image or running the local Postgres/Redis/Kafka/Elasticsearch stack outside
 of `npm run infra:up`'s defaults.
 
-## The three Dockerfiles
+## The four Dockerfiles
 
 Each is built from the **repository root**, not from `infra/docker/` or the
 workspace it packages — the repository has one lockfile, at the root,
@@ -13,14 +13,37 @@ installed through npm workspaces, and the rspack builder's own dependencies
 are declared in the root manifest. A build scoped to a single workspace
 directory cannot run `npm ci` or `nest build` at all.
 
-| Dockerfile                       | Build command                                                                                                          | Produces                                                                                                                                                                                                                             |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `core-service.Dockerfile`        | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service -t kartseek/order-service:2.0.0 .` | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`.                                                                                                                                                 |
-| `api-gateway.Dockerfile`         | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                  | The API gateway.                                                                                                                                                                                                                     |
-| `marketplace-service.Dockerfile` | `docker build -f infra/docker/marketplace-service.Dockerfile -t kartseek/marketplace-service:2.0.0 .`                  | The marketplace module service — the one module image that exists today. It builds against `apps/api/libs` through the shared rspack config, so its builder stage needs both the `apps/api` and `modules/marketplace/backend` trees. |
+| Dockerfile                  | Build command                                                                                                                                | Produces                                                                                         |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `api-gateway.Dockerfile`    | `docker build -f infra/docker/api-gateway.Dockerfile -t kartseek/api-gateway:2.0.0 .`                                                        | The API gateway.                                                                                 |
+| `core-service.Dockerfile`   | `docker build -f infra/docker/core-service.Dockerfile --build-arg APP=order-service --build-arg PORT=3014 -t kartseek/order-service:2.0.0 .` | Any of the 17 `apps/api` core services, selected by `--build-arg APP=<nestProject>`.             |
+| `module-service.Dockerfile` | `docker build -f infra/docker/module-service.Dockerfile --build-arg APP=grocery --build-arg PORT=3018 -t kartseek/grocery-service:2.0.0 .`   | Any of the 8 module backends, selected by `--build-arg APP=<module>`.                            |
+| `nextjs.Dockerfile`         | `docker build -f infra/docker/nextjs.Dockerfile --build-arg WORKSPACE_DIR=apps/web --build-arg PORT=3000 -t kartseek/web:2.0.0 .`            | Any Next workspace: the web shell, or a module zone (add `--build-arg HEALTH_PATH=<basePath>/`). |
 
 Read each Dockerfile's own header comment for the full reasoning; the table
 above is a summary.
+
+### `--build-arg PORT` is not optional
+
+`PORT` is not the port the service binds — every core service reads its own
+`<SVC>_SERVICE_PORT`, every module backend its `<MODULE>_SERVICE_PORT` — it is
+the port the image's `HEALTHCHECK` probes, and it has to be told.
+
+`core-service.Dockerfile` used to fall back to `process.env.PORT || 3000`,
+which nothing sets, so every image built from it reported `unhealthy` for ever
+regardless of how well the service was running; an orchestrator that restarts
+on a failed check would never have let one stay up (AUD2-020).
+`marketplace-service.Dockerfile` had the port right but only because it was
+hard-coded to the one module it built.
+
+There is deliberately **no default**, so a build that forgets the argument
+fails at `EXPOSE` — louder than an image that is quietly never healthy. Pass
+`--build-arg HEALTH_PATH=<path>` too wherever `/health` is not the right path:
+a Next module zone serves under its own `basePath`, so `/` on one is a 404.
+
+`module-service.Dockerfile` replaced `marketplace-service.Dockerfile`, which
+hard-coded a single module and baked its three transport ports as `ENV`. The
+ports now come from Compose and Kubernetes, which is where they are declared.
 
 ## `compose.infra.yml`
 
@@ -62,21 +85,38 @@ in every database it touches, because IN3's initial migrations open with
 `CREATE EXTENSION IF NOT EXISTS` and that needs superuser — doing it here once
 means a module role never does.
 
-Each role gets `USAGE, CREATE` on its own schema and `ALL` on that schema's
-tables and sequences (including, by default privileges, ones it creates later).
+Each role **owns** its own schema and everything already in it — tables,
+sequences and views — and gets `ALL` by default on whatever it creates later.
+Ownership rather than grants, because `ALTER TABLE`, `DROP TABLE` and
+`CREATE INDEX` are owner-only: a role holding every grant PostgreSQL can
+express still cannot run a migration against a table `postgres` owns. The
+transfer runs over `pg_tables` / `pg_sequences` / `pg_views` and is idempotent,
+so re-run the script after anything adds objects to a module schema as another
+role (a `migration:run` executed as `postgres`, a seed script).
+
 It gets nothing on another module's schema and no `CREATE` on `public`, where
 `users`, `orders` and the gateway's own tables live — so a module cannot create
 a table there that shadows one of them.
 
-The one exception is the module's own migration ledger. IN3 put it at
-`public.<module>_migrations` (TypeORM builds the ledger before the first
-migration runs, and a schema that does not exist yet cannot hold it), so the
-script grants the role `ALL` on that table and its sequence — **where the table
-already exists**. Without it `migration:run` would build the whole schema and
-then fail to record that it had, and re-run everything on the next deploy.
-Because the role has no `CREATE` on `public`, the first migration run against a
-genuinely empty database is still a superuser job; run it as `postgres` once,
-then re-run this script to pick up the ledger grant.
+Two things sit outside the schema and are deliberate:
+
+- **`CREATE` on the database.** Every module's initial migration opens with
+  `CREATE SCHEMA IF NOT EXISTS "<module>"`, and PostgreSQL checks the CREATE
+  privilege on the database _before_ it checks whether the schema exists — so
+  that statement fails with `permission denied for database kartseek_db` for a
+  role without it, even though the script has already created the schema and
+  the statement would do nothing. Without this grant a module role cannot run
+  `migration:run` at all. What it actually permits is creating _new_ schemas;
+  it confers nothing on any schema that already exists, and `CREATE SCHEMA` on
+  a name already taken is an error, so it is not a route to another module's
+  data.
+- **The migration ledger**, `public.<module>_migrations`. IN3 put it there
+  because TypeORM builds the ledger before the first migration's `up()` runs
+  and a schema that does not exist yet cannot hold it. The role has no `CREATE`
+  on `public`, so TypeORM cannot create it — the script creates it instead,
+  with the three columns TypeORM's Postgres driver expects, and hands it to the
+  role. That removes what used to be a superuser bootstrap step: a module role
+  can now build its whole schema from empty and record that it did.
 
 **Init scripts run only on an empty data directory.** An existing volume — any
 machine that ran `npm run infra:up` before this file existed — needs it applying
@@ -103,9 +143,10 @@ Re-running is safe: every statement is idempotent, and `ALTER ROLE … PASSWORD`
 is unconditional, so a password changed in `.env` is rotated in the database by
 running the script again.
 
-Nothing connects as these roles yet — the services still use `DB_USER`. Moving
-a service onto its own role is one `<MODULE>_DB_USER` change at a time, with
-that module's suite run after each, and is tracked as IN5.
+The eight module backends now connect as these roles — see
+[`docs/guides/local-setup.md`](../../docs/guides/local-setup.md), "Moving a
+module onto its own database role", for the per-module procedure and what to
+check after each one.
 
 ## The root `docker-compose.yml`
 

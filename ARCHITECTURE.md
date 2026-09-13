@@ -300,12 +300,18 @@ Module-specific Postgres containers exist in that same compose file but only
 start under its `isolated` profile; otherwise every module shares the one
 platform Postgres instance, as described in section 7.
 
-Application images are not yet generated per deployable: `infra/docker/`
-today holds 3 hand-written Dockerfiles (`api-gateway.Dockerfile`,
-`core-service.Dockerfile`, `marketplace-service.Dockerfile`), all built from
-the repository root so every image shares the one root lockfile.
+Application images are not yet generated per deployable, but 4 hand-written
+Dockerfiles in `infra/docker/` now cover every kind of deployable between
+them: `api-gateway.Dockerfile` (the gateway), `core-service.Dockerfile`
+(`--build-arg APP=<nestProject>` → any of the 17 core services),
+`module-service.Dockerfile` (`--build-arg APP=<module>` → any of the 8 module
+backends) and `nextjs.Dockerfile` (`--build-arg WORKSPACE_DIR=<path>` → the
+web shell or any of the 8 module zones). All are built from the repository
+root so every image shares the one root lockfile, and all take
+`--build-arg PORT=<port>` so the image's HEALTHCHECK probes the port the
+service registry says that deployable listens on.
 
-<!-- counted with: git ls-files infra/docker | grep -c '\.Dockerfile$' → 3 -->
+<!-- counted with: git ls-files infra/docker | grep -c '\.Dockerfile$' → 4 -->
 
 A Dockerfile and Compose entry for every remaining deployable is Phase 3 of
 the reorganization spec (see below).

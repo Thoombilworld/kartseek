@@ -13,8 +13,8 @@ Real values live only in `.env` files, and `.env` files are never committed.
 turned out not to be enough:
 
 - `.env`, `.env.local`, `.env.*.local`, and the broader `.env.*` all match —
-  the broad `.env.*` rule was added after `apps/api/.env.docker` (a file the
-  narrower `.env` rule does not match) was found tracked.
+  the broad `.env.*` rule was added after a file the narrower `.env` rule does
+  not match (`apps/api/.env.docker`, since deleted) was found tracked.
 - `!.env.example` and `!.env.*.example` re-include the example files, which
   hold **names and safe placeholder defaults only** — never a real credential.
   `apps/api/.env.example` and each module backend's own `.env.example` are
