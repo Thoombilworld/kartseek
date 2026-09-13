@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 // @ts-expect-error — plain ESM beside the CLI that uses it; there are no types.
-import { runReindex, toDocument, MAPPING, bulkBody } from './search-reindex.lib.mjs';
+import { runReindex, toDocument, MAPPING, bulkBody, COUNTRY_KEY, COUNTRY_ANY } from './search-reindex.lib.mjs'; // prettier-ignore
+import {
+  SEARCH_COUNTRY_KEY,
+  SEARCH_COUNTRY_FIELD,
+  SEARCH_COUNTRY_ANY,
+  normaliseSearchCountries,
+} from '@app/common';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * AUD2-032 — the reindex has to be able to say it succeeded, and has to be safe
@@ -246,5 +254,86 @@ describe('the document it writes is the one search-service reads', () => {
     const body = bulkBody(rows, NEW);
     expect(body).toContain(`{"index":{"_index":"${NEW}","_id":"p-1"}}`);
     expect(body.endsWith('\n')).toBe(true);
+  });
+});
+
+/**
+ * The writer, the reindex and the filter have to mean the same field.
+ *
+ * They did not. `MAPPING` declared `metadata.country` and `toDocument` emitted
+ * no such key; `search.service.ts`'s incremental writer wrote
+ * `metadata.countryCode`, from a `product.country_code` column that does not
+ * exist on `marketplace.products`; and the ES filter queried
+ * `metadata.country`. `GET /search?q=…&country=QA` therefore matched zero
+ * documents, in every market, always (whole-branch review item 18).
+ *
+ * One canonical declaration now lives in
+ * `apps/api/libs/common/src/search/search-fields.ts`. This script is plain ESM
+ * run by `node` and cannot import it, so it keeps a copy — and these cases are
+ * what make a copy safe: they read the actual source of the writer and the
+ * filter, so a rename in any one of the four places fails here and names it.
+ */
+describe('one field name, across the writer, the reindex and the filter', () => {
+  const SERVICE = fs.readFileSync(
+    path.join(__dirname, '..', 'apps', 'search-service', 'src', 'search.service.ts'),
+    'utf8',
+  );
+
+  it('the reindex copy equals the canonical constant', () => {
+    expect(COUNTRY_KEY).toBe(SEARCH_COUNTRY_KEY);
+    expect(COUNTRY_ANY).toBe(SEARCH_COUNTRY_ANY);
+    expect(SEARCH_COUNTRY_FIELD).toBe(`metadata.${SEARCH_COUNTRY_KEY}`);
+  });
+
+  it('the mapping declares exactly the key the document carries', () => {
+    expect(MAPPING.mappings.properties.metadata.properties[SEARCH_COUNTRY_KEY].type).toBe(
+      'keyword',
+    );
+    const doc = toDocument({ id: 'p-1', name: 'K', countries: ['QA', 'IN'] });
+    expect(doc.metadata[SEARCH_COUNTRY_KEY]).toEqual(['QA', 'IN']);
+    // And nothing under the old spelling, which is what the writer used to use.
+    expect(doc.metadata).not.toHaveProperty('countryCode');
+  });
+
+  it('the search service reads the constants rather than typing the name again', () => {
+    // The three strings this replaced were `'metadata.country'` in the filter,
+    // `countryCode:` in the writer and nothing at all in the reindex.
+    expect(SERVICE).toContain('SEARCH_COUNTRY_FIELD');
+    expect(SERVICE).toContain('SEARCH_COUNTRY_KEY');
+    const code = SERVICE.split(/\r?\n/)
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+      .join(' ');
+    expect(code).not.toMatch(/['"`]metadata\.country['"`]/);
+    expect(code).not.toMatch(/countryCode:\s/);
+  });
+
+  it('a product with no market indexes no key, rather than an empty list', () => {
+    // `[]` is a value Elasticsearch stores and a `terms` filter never matches;
+    // absent says the same thing without pretending to be data.
+    expect(toDocument({ id: 'p-3', name: 'K' }).metadata[SEARCH_COUNTRY_KEY]).toBeUndefined();
+    expect(
+      toDocument({ id: 'p-4', name: 'K', countries: [] }).metadata[SEARCH_COUNTRY_KEY],
+    ).toBeUndefined();
+  });
+
+  it('carries the everywhere sentinel through, because a NULL region means it', () => {
+    // `marketplace.sellers.region_code` is nullable pending backfill, and
+    // CatalogService.regionPredicate() treats NULL as available everywhere. The
+    // reindex SQL COALESCEs it to `*`; the filter asks for [wanted, '*'].
+    const doc = toDocument({ id: 'p-5', name: 'K', countries: ['QA', COUNTRY_ANY] });
+    expect(doc.metadata[SEARCH_COUNTRY_KEY]).toContain(COUNTRY_ANY);
+    const sql = fs.readFileSync(path.join(__dirname, 'search-reindex.mjs'), 'utf8');
+    expect(sql).toContain('COALESCE(code,');
+    expect(sql).toContain('AS countries');
+  });
+
+  it('normalises whatever an event carried into a list of ISO-2 codes', () => {
+    // The payload comes off Kafka and nothing validates it.
+    expect(normaliseSearchCountries('qa')).toEqual(['QA']);
+    expect(normaliseSearchCountries('qa, in ,QA')).toEqual(['QA', 'IN']);
+    expect(normaliseSearchCountries(['qa', 'IN'])).toEqual(['QA', 'IN']);
+    expect(normaliseSearchCountries(undefined)).toBeUndefined();
+    expect(normaliseSearchCountries('')).toBeUndefined();
+    expect(normaliseSearchCountries([])).toBeUndefined();
   });
 });

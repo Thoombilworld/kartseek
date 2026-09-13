@@ -26,6 +26,9 @@ export * from './config';
 
 // ─── Staff market scope (backend half) ───────────────────────────────────────
 export * from './market/market-scope';
+
+// ─── Search document field names, shared by the writer and the filter ────────
+export * from './search/search-fields';
 // The HTTP half, which reads the request rather than a record. It was declared
 // in `apps/api-gateway/src/guards`, where `libs/gdpr` had to reach up into the
 // application to import it (dispatch addendum item 5).

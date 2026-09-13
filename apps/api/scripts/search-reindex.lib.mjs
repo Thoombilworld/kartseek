@@ -35,12 +35,27 @@ export function esEndpoint(env = process.env) {
 /**
  * The mapping the query needs.
  *
- * `queryElasticsearch` runs `term` filters on `metadata.country` and
- * `metadata.category` and sorts on `price`, `rating` and `metadata.createdAt`.
+ * `queryElasticsearch` runs a `terms` filter on `metadata.country`, a `term` on
+ * `metadata.category`, and sorts on `price`, `rating` and `metadata.createdAt`.
  * Under a dynamic mapping those first two become `text` and every `term` filter
  * silently matches nothing — a market filter that quietly returns the whole
  * catalogue. Stating the mapping is the point of building a fresh index.
  */
+/**
+ * The market field, and the sentinel for "offered everywhere".
+ *
+ * A COPY of `SEARCH_COUNTRY_KEY` / `SEARCH_COUNTRY_ANY` in
+ * `apps/api/libs/common/src/search/search-fields.ts`, which is the canonical
+ * declaration — this file is plain ESM run by `node` and cannot import a
+ * TypeScript module. `search-reindex.spec.ts` imports both and asserts they are
+ * the same string, so the copy cannot drift silently. Three places used three
+ * different names before that gate existed, and a country-filtered search
+ * matched zero documents in every market as a result (whole-branch review
+ * item 18).
+ */
+export const COUNTRY_KEY = 'country';
+export const COUNTRY_ANY = '*';
+
 export const MAPPING = {
   mappings: {
     properties: {
@@ -57,7 +72,10 @@ export const MAPPING = {
           brand: { type: 'keyword' },
           category: { type: 'keyword' },
           subcategory: { type: 'keyword' },
-          country: { type: 'keyword' },
+          // An ARRAY of ISO-2 codes (plus `*`): a product is offered in every
+          // market whose sellers list it. `keyword` indexes an array element by
+          // element, so a `terms` filter matches any of them.
+          [COUNTRY_KEY]: { type: 'keyword' },
           mrp: { type: 'double' },
           reviewCount: { type: 'integer' },
           createdAt: { type: 'date' },
@@ -84,6 +102,11 @@ export const toDocument = (r) => ({
     brand: r.brand ?? undefined,
     category: r.category ?? undefined,
     subcategory: r.subcategory ?? undefined,
+    // The markets this product is offered in, from the same two paths
+    // `CatalogService.regionPredicate()` uses: a seller with an approved live
+    // listing on it, or the product's own seller. `*` when one of those sellers
+    // has no `region_code`, which the catalogue treats as everywhere.
+    [COUNTRY_KEY]: Array.isArray(r.countries) && r.countries.length ? r.countries : undefined,
     mrp: r.mrp == null ? undefined : Number(r.mrp),
     reviewCount: r.review_count ?? 0,
     createdAt: r.created_at,

@@ -48,7 +48,7 @@
  */
 import 'dotenv/config';
 import { Client } from 'pg';
-import { ALIAS, esEndpoint, runReindex } from './search-reindex.lib.mjs';
+import { ALIAS, esEndpoint, runReindex, COUNTRY_ANY } from './search-reindex.lib.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
 const alias = ALIAS();
@@ -138,7 +138,8 @@ const { rows } = await pg.query(`
          c.name                                                      AS category,
          sc.name                                                     AS subcategory,
          img.url                                                     AS image_url,
-         price.selling_price                                         AS price
+         price.selling_price                                         AS price,
+         markets.codes                                               AS countries
   FROM marketplace.products p
   LEFT JOIN marketplace.brands     b  ON b.id  = p.brand_id
   LEFT JOIN marketplace.categories c  ON c.id  = p.category_id
@@ -161,6 +162,26 @@ const { rows } = await pg.query(`
     ORDER BY l."isBuyBoxWinner" DESC, l."sellingPrice" ASC
     LIMIT 1
   ) price ON true
+  LEFT JOIN LATERAL (
+    -- The markets this product is offered in, by the same two paths
+    -- CatalogService.regionPredicate() uses: a seller with an approved live
+    -- listing on it, or the product's own seller (the single-seller case, where
+    -- no listing row exists). A seller with a NULL region_code is available
+    -- everywhere, and there is no way to say that in a term filter — so it is
+    -- written down as '*', which the search filter asks for alongside the
+    -- market the shopper is in.
+    SELECT array_agg(DISTINCT COALESCE(code, '${COUNTRY_ANY}')) AS codes
+    FROM (
+      SELECT sl.region_code AS code
+      FROM marketplace.product_listings pl
+      JOIN marketplace.sellers sl ON sl.id = pl.seller_id
+      WHERE pl.product_id = p.id AND pl."isActive" AND pl."approvalStatus" = 'APPROVED'
+      UNION
+      SELECT sp.region_code AS code
+      FROM marketplace.sellers sp
+      WHERE sp.id = p.seller_id
+    ) m
+  ) markets ON true
   WHERE p.status = 'ACTIVE' AND p.is_active
   ORDER BY p.created_at`);
 

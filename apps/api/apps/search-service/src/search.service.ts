@@ -3,6 +3,12 @@ import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { ConfigService } from '@nestjs/config';
 import { resolveElasticsearchEndpoint } from './elasticsearch-endpoint';
+import {
+  SEARCH_COUNTRY_KEY,
+  SEARCH_COUNTRY_FIELD,
+  SEARCH_COUNTRY_ANY,
+  normaliseSearchCountries,
+} from '@app/common';
 
 // ─── Search Index Types ──────────────────────────────────────────────────────
 export enum SearchableModule {
@@ -287,7 +293,20 @@ export class SearchService {
     ];
 
     const filter: any[] = [];
-    if (filters.country) filter.push({ term: { 'metadata.country': filters.country } });
+    // `terms`, not `term`, and two values: a product is offered in every market
+    // whose sellers list it (so the field is an array), and `*` is how a seller
+    // with no `region_code` is written down — `CatalogService.regionPredicate()`
+    // treats that as available everywhere, and search has to agree or the two
+    // answer differently for the same shopper.
+    //
+    // The field NAME comes from @app/common, not from a string typed here. It
+    // was `metadata.country` in this filter, `metadata.countryCode` in the
+    // writer below and absent from the reindex, so this filter matched zero
+    // documents in every market (whole-branch review item 18).
+    if (filters.country) {
+      const wanted = String(filters.country).trim().toUpperCase();
+      filter.push({ terms: { [SEARCH_COUNTRY_FIELD]: [wanted, SEARCH_COUNTRY_ANY] } });
+    }
     if (filters.category) filter.push({ term: { 'metadata.category': filters.category } });
     if (filters.minPrice || filters.maxPrice) {
       filter.push({
@@ -370,12 +389,13 @@ export class SearchService {
           // worse than one that errors (audit C leak 4).
           if (filters.country) {
             const wanted = String(filters.country).trim().toUpperCase();
-            const owner = String(
-              (doc as any).metadata?.countryCode ?? (doc as any).metadata?.country ?? '',
-            )
-              .trim()
-              .toUpperCase();
-            if (owner !== wanted) continue;
+            // A list, matching the ES `terms` filter: a document carries every
+            // market it is offered in, plus `*` when a seller with no
+            // `region_code` reaches it.
+            const owned = normaliseSearchCountries(
+              (doc as any).metadata?.[SEARCH_COUNTRY_KEY] ?? (doc as any).metadata?.countryCode,
+            );
+            if (!owned?.some((c) => c === wanted || c === SEARCH_COUNTRY_ANY)) continue;
           }
 
           allResults.push({ ...doc, _score: matchTitle ? 10 : 5 } as any);
@@ -591,7 +611,12 @@ export class SearchService {
         brand: data.brand,
         category: data.category,
         sellerId: data.sellerId ?? data.seller_id,
-        countryCode: data.countryCode ?? data.country,
+        // ONE key, the one the filter reads and the reindex writes. This was
+        // `countryCode`, fed from a `product.country_code` column that does
+        // not exist on `marketplace.products` — so it was `undefined` on every
+        // event, and the filter above (which looks at `country`) matched
+        // nothing even when it did fire.
+        [SEARCH_COUNTRY_KEY]: normaliseSearchCountries(data.country ?? data.countryCode),
       } as Record<string, unknown>,
     };
   }
