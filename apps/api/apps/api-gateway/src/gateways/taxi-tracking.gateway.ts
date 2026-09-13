@@ -24,11 +24,7 @@ const ACK_MAX_RETRIES = 3;
 
 @WebSocketGateway({
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://*.kartseek.com',
-    ],
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'https://*.kartseek.com'],
     credentials: true,
   },
   namespace: '/taxi',
@@ -126,17 +122,29 @@ export class TaxiTrackingGateway implements OnGatewayConnection, OnGatewayDiscon
   @SubscribeMessage('updateDriverLocation')
   async handleDriverLocationUpdate(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { driverId: string; lat: number; lng: number; heading: number; sequenceNumber?: number; rideId?: string },
+    @MessageBody()
+    data: {
+      driverId: string;
+      lat: number;
+      lng: number;
+      heading: number;
+      sequenceNumber?: number;
+      rideId?: string;
+    },
   ) {
     // 1. Store driver location in Redis GEO set
     await this.redis.geoadd(DRIVER_GEO_KEY, data.lng, data.lat, data.driverId);
 
     // 2. Store driver metadata (heading, timestamp) in Redis hash
-    await this.redis.hset(DRIVER_META_KEY, data.driverId, JSON.stringify({
-      heading: data.heading,
-      timestamp: new Date().toISOString(),
-      rideId: data.rideId || null,
-    }));
+    await this.redis.hset(
+      DRIVER_META_KEY,
+      data.driverId,
+      JSON.stringify({
+        heading: data.heading,
+        timestamp: new Date().toISOString(),
+        rideId: data.rideId || null,
+      }),
+    );
 
     // 3. Map socket ID → driver ID for cleanup on disconnect
     await this.redis.hset('socket:driver', client.id, data.driverId);
@@ -171,12 +179,15 @@ export class TaxiTrackingGateway implements OnGatewayConnection, OnGatewayDiscon
     // 6. Broadcast nearby drivers to the home screen
     try {
       const nearbyDrivers = await this.redis.georadius(DRIVER_GEO_KEY, data.lng, data.lat, 10);
-      this.server.emit('nearbyDrivers', nearbyDrivers.map(d => ({
-        driverId: d.member,
-        lat: d.lat,
-        lng: d.lng,
-        dist: d.dist,
-      })));
+      this.server.emit(
+        'nearbyDrivers',
+        nearbyDrivers.map((d) => ({
+          driverId: d.member,
+          lat: d.lat,
+          lng: d.lng,
+          dist: d.dist,
+        })),
+      );
     } catch {
       // Redis GEO not available — skip broadcast
     }
@@ -206,8 +217,10 @@ export class TaxiTrackingGateway implements OnGatewayConnection, OnGatewayDiscon
     }
 
     const STAFF = ['admin', 'super_admin', 'driver', 'delivery', 'vendor'];
-    if (!STAFF.includes(String(user.role ?? '').toLowerCase())
-      && !(await this.trackingGrants.has(rideId, user.id))) {
+    if (
+      !STAFF.includes(String(user.role ?? '').toLowerCase()) &&
+      !(await this.trackingGrants.has(rideId, user.id))
+    ) {
       client.emit('error', { message: 'You may only track your own rides' });
       return;
     }
@@ -231,10 +244,8 @@ export class TaxiTrackingGateway implements OnGatewayConnection, OnGatewayDiscon
 
     // FIX 2: Batch-fetch all driver metadata in 1 Redis call (HMGET)
     // instead of N individual hget() calls.
-    const driverIds = nearby.map(d => d.member);
-    const metaRaw = driverIds.length > 0
-      ? await this.redis.hmget(DRIVER_META_KEY, driverIds)
-      : [];
+    const driverIds = nearby.map((d) => d.member);
+    const metaRaw = driverIds.length > 0 ? await this.redis.hmget(DRIVER_META_KEY, driverIds) : [];
 
     const enriched = nearby.map((d, i) => {
       const meta = metaRaw[i] ? JSON.parse(metaRaw[i]!) : {};
@@ -308,7 +319,12 @@ export class TaxiTrackingGateway implements OnGatewayConnection, OnGatewayDiscon
     };
 
     if (ACK_REQUIRED_STATUSES.has(status)) {
-      this.emitWithAck(`ride_${rideId}`, 'ride_status_changed', payload, `ride_status:${rideId}:${status}`);
+      this.emitWithAck(
+        `ride_${rideId}`,
+        'ride_status_changed',
+        payload,
+        `ride_status:${rideId}:${status}`,
+      );
     } else {
       this.server.to(`ride_${rideId}`).emit('ride_status_changed', payload);
     }
@@ -372,13 +388,21 @@ export class TaxiTrackingGateway implements OnGatewayConnection, OnGatewayDiscon
         if (acked) {
           this.logger.log(`📩 Ack received for ${logLabel} from ${s.id}`);
         } else if (attempt < ACK_MAX_RETRIES) {
-          this.logger.warn(`⏱️ Ack timeout for ${logLabel} from ${s.id} — retry ${attempt + 1}/${ACK_MAX_RETRIES}`);
+          this.logger.warn(
+            `⏱️ Ack timeout for ${logLabel} from ${s.id} — retry ${attempt + 1}/${ACK_MAX_RETRIES}`,
+          );
           // Retry only this specific socket
           s.emit(event, payload);
         } else {
-          this.logger.error(`🚨 Ack failed for ${logLabel} from ${s.id} after ${ACK_MAX_RETRIES} retries`);
+          this.logger.error(
+            `🚨 Ack failed for ${logLabel} from ${s.id} after ${ACK_MAX_RETRIES} retries`,
+          );
           // Track delivery failures in Redis for monitoring
-          await this.redis.incr(`stats:ws:ack_failures:${new Date().toISOString().slice(0, 10)}`);
+          // Bounded at 35 days: read back for today by the gateway's own
+          // metrics board, and `volatile-lru` may evict nothing that has no
+          // expiry (AUD2-031).
+          const ackStat = `stats:ws:ack_failures:${new Date().toISOString().slice(0, 10)}`;
+          if ((await this.redis.incr(ackStat)) === 1) await this.redis.expire(ackStat, 3_024_000);
         }
       }
     } catch (err: any) {

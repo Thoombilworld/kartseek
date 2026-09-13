@@ -207,41 +207,114 @@ IN10's money workstream); do not put `allkeys-lru` back.
 
 `volatile-lru` protects exactly these keys from eviction, and they are also the
 keys that fill `--maxmemory` and eventually cause the OOM above, so the list is
-worth keeping short and worth knowing. Counted by walking every
-`redis.set` / `setJson` / `setJSON` call in `apps/api/apps`, `apps/api/libs` and
-`modules` and checking whether a TTL argument was passed: **277 writes, 266 with
-a TTL, 11 without** (IN10, dispatch addendum item 11).
+worth keeping short and worth knowing.
+
+**Regenerate it — do not hand-count:**
+
+```bash
+node apps/api/scripts/verification/redis-ttl-inventory.mjs          # this table
+node apps/api/scripts/verification/redis-ttl-inventory.mjs --json   # machine-readable
+```
+
+The first version of this inventory was hand-taken with a regex that asked "was
+a third argument passed?", and it was wrong by a factor of four. Three things
+defeat that question, and the script exists because of them:
+
+1. `RedisService.set` (`apps/api/libs/redis/src/redis.service.ts:174`) is
+   `if (ttlSeconds) setex(...) else set(...)`, so **`setJson(key, value, 0)`
+   passes a TTL argument and writes a key with no expiry**. That idiom is used
+   deliberately — `admin-marketplace.controller.ts:2805` comments it "No TTL —
+   persistent config" — and 23 writes use it.
+2. Most write methods on `RedisService` take **no TTL parameter at all**
+   (`hset`, `hmset`, `sadd`, `lpush`, `rpush`, `zadd`, `zincrby`, `incr`,
+   `incrBy`, `decr`, `geoadd`). Every key they create is permanent unless
+   something calls `expire()` on it separately — a different statement, often a
+   different line, which the script looks for.
+3. A TTL passed as a variable cannot be classified by reading the call, so those
+   are reported separately rather than guessed at.
+
+Current counts: **343 write calls · 216 with a TTL (literal, or expired in a
+second statement) · 51 with a TTL from a variable · 76 with none, across 47 key
+shapes.**
 
 "Rebuildable" means: if this key vanished, could the owning service reconstruct
-it from a durable source? That is the property that decides whether living
-without a TTL is safe or is an unbacked record.
+it from a durable source? That is what decides whether living without a TTL is
+safe or is an unbacked record.
 
-| Key                             | Written at                                                         | Why no TTL                                         | Rebuildable                                              | Owner   |
-| ------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------- | ------- |
-| `admin:kyc:pending:<type>:<id>` | `apps/admin-service/src/admin.service.ts:644`                      | An approval queue entry waits as long as it waits. | **No** — this key _is_ the queue. Nothing else holds it. | INFRA   |
-| `loyalty:<userId>`              | `apps/loyalty-service/src/loyalty.service.ts:50,78,103,140,224`    | A points balance is a record, not a cache.         | **No** — AUD2-031; belongs in Postgres.                  | MONEY   |
-| `wallet:frozen:<userId>`        | `apps/wallet-service/src/wallet.service.ts:252`                    | A fraud freeze that expires is not a freeze.       | **No** — the flag exists only here.                      | MONEY   |
-| `notifications:unread:<userId>` | `apps/api-gateway/src/gateways/notifications.gateway.ts:176`       | A badge count with no natural expiry.              | **Yes, in principle** — derivable from the stored queue. | MODULES |
-| `seller:<sellerId>:couriers`    | `modules/marketplace/backend/src/seller/seller.service.ts:3157`    | Seller courier configuration, not a cache.         | **No** — configuration with no row behind it.            | MODULES |
-| `ride:waiting:<rideId>`         | `modules/taxi/backend/src/services/driver-dispatch.service.ts:169` | Start of the waiting-time charge.                  | **No** — and a lost one under-charges the rider.         | TAXI    |
+##### Records with no other home — the ones that matter
 
-Two notes on that table:
+| Key                                                                                                                      | Written at                                                                                                  | Rebuildable                                                                                                                  | Owner       |
+| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `admin:kyc:pending:<type>:<id>`                                                                                          | `apps/admin-service/src/admin.service.ts:644`                                                               | **No** — this key _is_ the approval queue                                                                                    | INFRA       |
+| `loyalty:<userId>`                                                                                                       | `apps/loyalty-service/src/loyalty.service.ts:50,78,103,140,224`                                             | **No** — AUD2-031; belongs in Postgres                                                                                       | MONEY       |
+| `wallet:frozen:<userId>`                                                                                                 | `apps/wallet-service/src/wallet.service.ts:252`                                                             | **No** — a fraud freeze that exists only here                                                                                | MONEY       |
+| `gdpr:consent:<userId>:<type>`, `gdpr:consent:log:<userId>`                                                              | `libs/gdpr/src/gdpr.service.ts:87,90,120,122`                                                               | **No** — a consent record, and the evidence for it                                                                           | INFRA/LEGAL |
+| `gdpr:exports:<id>`, `gdpr:erasures:<id>`                                                                                | `libs/gdpr/src/gdpr.service.ts:194,278`                                                                     | **No** — the record that a subject-access request was served                                                                 | INFRA/LEGAL |
+| `user:<id>`, `addresses:<id>`, `partner:<id>`                                                                            | `apps/api-gateway/src/controllers/user.controller.ts:72,97,113,123,145,164,218`                             | **Unclear** — written with `setJson(..., 0)`; if these are caches they want a TTL, if they are the record they want Postgres | MODULES     |
+| `seller:<sellerId>:couriers`, `seller:<id>:threshold:<x>`                                                                | `modules/marketplace/backend/src/seller/seller.service.ts:3157,2151`                                        | **No** — seller configuration with no row behind it                                                                          | MODULES     |
+| `ride:waiting:<rideId>`, `ride:trail:<rideId>`                                                                           | `modules/taxi/backend/src/services/driver-dispatch.service.ts:169,139`                                      | **No** — a lost waiting-time start under-charges the rider                                                                   | TAXI        |
+| `driver:status:<id>`, `driver:profile:<id>`, `driver:<id>:profile`, `driver:earnings:<id>:<d>`, `driver:rejections:<id>` | `taxi.controller.ts:972,978,998`; `driver-dispatch.service.ts:49,62,84,292`; `ride-matching.service.ts:361` | **Partly** — profile and status come from the taxi database; earnings do not                                                 | TAXI        |
 
-- `admin:counter:pending_kyc` used to be a twelfth entry — a bare
+##### Configuration written deliberately with `setJson(key, value, 0)`
+
+Persistent by design; each is the live copy of a setting an administrator
+edited. They are small, bounded in number, and the `0` is intentional — but
+none of them has a row behind it, so a `FLUSHDB` loses the configuration.
+
+`admin:settings`, `admin:seo`, `admin:india-ops`, `admin:page-layout:<country>`
+(`modules/marketplace/backend/src/admin/admin.service.ts:1608,1628,1651,2342`) ·
+`admin:loyalty:config` (`admin-marketplace.controller.ts:2805`) ·
+`marketplace:<market>-banners` (`admin-marketplace.controller.ts:1672,1737`,
+`home-cache.service.ts:134,151`) · `ddos:whitelist`
+(`libs/security/src/ddos-monitor.service.ts:283`) — MODULES, except the last,
+which is INFRA.
+
+##### Live operational state — permanent by accident, not by design
+
+Geospatial sets and session hashes that nothing ever expires or prunes: an entry
+per driver or socket, added on connect and removed only if the matching cleanup
+path runs.
+
+`drivers:locations`, `drivers:meta`, `delivery:locations`, `delivery:meta`,
+`delivery:partners:locations`, `region:<country>:{drivers|delivery}:{locations|meta}`
+(`location.service.ts:109,110` via `regionGeoKey`/`regionMetaKey`),
+`zone:demand:<zone>` · `ws:sessions`, `ws:user:<id>`, `ws:chat:sessions`,
+`ws:doctor-queue:sessions`, `ws:reco:sessions`, `ws:socket:ip`, `socket:driver`,
+`chat:last_seen` — MODULES/TAXI.
+
+##### Console counters
+
+The rule (dispatch addendum item 13): a figure the console displays is derived
+from the rows that are its source of truth — cached with a short TTL if it needs
+to be — never accumulated in a key that can only drift.
+
+- **`admin:counter:pending_kyc` is gone.** It was a bare
   `set(get() + 1)` / `set(get() - 1)` with no source and no rebuild path, which
-  read `0` for ever after the AOF transition emptied the development instance
-  and which the console displayed. It is gone: the dashboard COUNTs
-  `admin:kyc:pending:*` instead (`admin.service.ts` `countPendingKyc`). **The
-  rule it established:** a figure the console displays is derived from the rows
-  that are its source of truth, cached with a short TTL if it needs to be —
-  never accumulated in a key that can only drift.
-- `order.service.ts:118` looks like a twelfth match to a naive grep. It is prose
-  in a comment recording that orders _used_ to live in
-  `redis.setJson(..., 86400)` and now go to Postgres first.
+  read `0` for ever after the AOF transition emptied the development instance,
+  and the console displayed it. The dashboard now COUNTs `admin:kyc:pending:*`
+  (`admin.service.ts` `countPendingKyc`).
+- **The security counters are now bounded.** `stats:ep:<method>:<path>:<hour>`,
+  `stats:bans:<date>`, `stats:ws:bans:<date>`, `geo:stats:{vpn,proxy,tor,mismatch,blocked}:<date>`
+  and `stats:ws:ack_failures:<date>` are read back by the DDoS, geo-security and
+  health boards. They cannot be derived — there is no ban table, and the geo
+  events are only persisted when a database is bound — so they stay tallies, but
+  each now takes an expiry on its first increment (`incr` returns 1 exactly
+  once): 48 hours for the hourly endpoint counters, 35 days for the daily ones.
+  Without that, `stats:ep:` alone added one permanent key per distinct path per
+  hour, for ever.
+- **Still unbounded, and nothing reads them**: `stats:broadcasts:<type>:<date>`
+  (`notifications.gateway.ts:266`) and `stats:taxi:updates:<date>`
+  (`socket.gateway.ts:178`) are incremented and never read anywhere in the
+  repository. Either surface them or delete them — MODULES/TAXI.
+- **Badge counters, derivable but accumulated**: `notifications:unread:<id>`
+  (`notifications.gateway.ts:176,229`, with `notifications:read:<id>`) and
+  `chat:unread:<id>:total` (`chat.gateway.ts:307`). Both are derivable from the
+  stored queue/messages, so both are `pending_kyc`'s defect in a smaller place —
+  MODULES.
 
-The three rows marked MONEY and TAXI are recorded here rather than fixed by
-IN10: moving a balance, a freeze flag or a fare component into Postgres is a
-money-path schema change and belongs to those workstreams.
+The MONEY, TAXI and MODULES rows are recorded here rather than fixed by IN10:
+moving a balance, a freeze flag, a fare component or a module's operational state
+into Postgres is a schema change those workstreams own.
 
 ### Per-module database roles
 

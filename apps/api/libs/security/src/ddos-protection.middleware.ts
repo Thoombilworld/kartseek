@@ -274,8 +274,21 @@ export class DdosProtectionMiddleware implements NestMiddleware {
       }
 
       // ── Track per-endpoint stats for admin dashboard ──────────────────────
+      //
+      // One key per endpoint PER HOUR, incremented on every request and read
+      // back by `DdosMonitorService.getEndpointStats()` for the last 24 hours —
+      // so without an expiry this is the fastest-growing TTL-less key family on
+      // the platform, one new permanent key per distinct path per hour, for
+      // ever. Under `volatile-lru` nothing may evict them (AUD2-031), so they
+      // accumulate until `maxmemory` is reached and every write starts failing
+      // with OOM.
+      //
+      // `incr` does not take a TTL, so the expiry goes on the first write —
+      // `incr` returns 1 exactly once per key — which is the idiom
+      // `recordStrike` below already uses. 48 hours, because the dashboard
+      // reads 24.
       const statKey = `stats:ep:${req.method}:${path.split('?')[0]}:${new Date().toISOString().slice(0, 13)}`;
-      await this.redis.incr(statKey);
+      if ((await this.redis.incr(statKey)) === 1) await this.redis.expire(statKey, 172_800);
 
       // Add security context to request for downstream use
       (req as any).ddos = { ip: clientIp, requestCount, burstCount, suspicionScore };
@@ -339,7 +352,13 @@ export class DdosProtectionMiddleware implements NestMiddleware {
         `🚨 IP BANNED: ${ip} for ${Math.round(banDuration / 60)}min (level ${multiplierIndex + 1}, ${strikes} strikes, reason: ${reason})`,
       );
 
-      await this.redis.incr(`stats:bans:${new Date().toISOString().slice(0, 10)}`);
+      // A daily ban tally, read back for TODAY by `DdosMonitorService` and shown
+      // on the security board. 35 days, so a month of history survives and the
+      // key family does not grow without bound — there is no ban table to
+      // recompute this from, so the number is accumulated by necessity, and a
+      // bounded accumulation is the honest version of that.
+      const banStat = `stats:bans:${new Date().toISOString().slice(0, 10)}`;
+      if ((await this.redis.incr(banStat)) === 1) await this.redis.expire(banStat, 3_024_000);
     } else {
       this.logger.warn(`⚡ Strike ${strikes}/${this.STRIKE_THRESHOLD} for ${ip}: ${reason}`);
     }

@@ -297,7 +297,13 @@ export class WsDdosGuard implements CanActivate {
       });
       client.disconnect(true);
 
-      await this.redis.incr(`stats:ws:bans:${new Date().toISOString().slice(0, 10)}`);
+      // Same shape and same reason as `stats:bans:<date>` in the HTTP
+      // middleware: read back for today by the security board, accumulated
+      // because no ban table exists to recompute it from, and bounded at 35
+      // days so the family cannot grow for ever under `volatile-lru`, which may
+      // evict nothing that has no expiry (AUD2-031).
+      const banStat = `stats:ws:bans:${new Date().toISOString().slice(0, 10)}`;
+      if ((await this.redis.incr(banStat)) === 1) await this.redis.expire(banStat, 3_024_000);
     }
   }
 

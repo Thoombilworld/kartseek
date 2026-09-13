@@ -32,11 +32,7 @@ const ACK_MAX_RETRIES = 3;
  */
 @WebSocketGateway({
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://*.kartseek.com',
-    ],
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'https://*.kartseek.com'],
     credentials: true,
   },
   namespace: '/doctor-queue',
@@ -80,14 +76,20 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
 
     if (userId) {
       client.join(`user_${userId}`);
-      await this.redis.hset('ws:doctor-queue:sessions', client.id, JSON.stringify({
-        userId,
-        userType,
-        connectedAt: new Date().toISOString(),
-      }));
+      await this.redis.hset(
+        'ws:doctor-queue:sessions',
+        client.id,
+        JSON.stringify({
+          userId,
+          userType,
+          connectedAt: new Date().toISOString(),
+        }),
+      );
     }
 
-    this.logger.log(`🩺 Connected to doctor-queue: ${client.id} [user=${userId || 'anonymous'}, type=${userType}]`);
+    this.logger.log(
+      `🩺 Connected to doctor-queue: ${client.id} [user=${userId || 'anonymous'}, type=${userType}]`,
+    );
 
     client.emit('connected', {
       socketId: client.id,
@@ -99,12 +101,12 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
   async handleDisconnect(client: Socket) {
     await this.wsDdosGuard.handleDisconnection(client);
     await this.redis.hdel('ws:doctor-queue:sessions', client.id);
-    
+
     // 🔧 FIX: Clean up all event listeners to prevent memory leaks
     client.removeAllListeners();
     // Force disconnect to free socket resources
     client.disconnect(true);
-    
+
     this.logger.log(`👋 Disconnected from doctor-queue: ${client.id}`);
   }
 
@@ -198,7 +200,9 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
     };
 
     this.server.to(room).emit('queue_updated', payload);
-    this.logger.log(`📊 Queue update broadcast to ${room}: ${queueData.totalTokens} tokens, now serving #${queueData.currentToken}`);
+    this.logger.log(
+      `📊 Queue update broadcast to ${room}: ${queueData.totalTokens} tokens, now serving #${queueData.currentToken}`,
+    );
   }
 
   /**
@@ -224,7 +228,9 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
 
     // Push to user's personal room (all connected devices)
     this.server.to(`user_${userId}`).emit('appointment_reminder', payload);
-    this.logger.log(`⏰ Reminder sent to user ${userId} for appointment ${reminderData.appointmentId}`);
+    this.logger.log(
+      `⏰ Reminder sent to user ${userId} for appointment ${reminderData.appointmentId}`,
+    );
   }
 
   /**
@@ -247,7 +253,12 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
       timestamp: new Date().toISOString(),
     };
 
-    await this.emitWithAck(`user_${userId}`, 'consultation_update', payload, `consultation:${data.status}:${userId}`);
+    await this.emitWithAck(
+      `user_${userId}`,
+      'consultation_update',
+      payload,
+      `consultation:${data.status}:${userId}`,
+    );
     this.logger.log(`🩺 Consultation update → ${userId}: ${data.status}`);
   }
 
@@ -284,7 +295,9 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
         if (ackReceived) {
           this.logger.debug(`✅ Ack received for ${logLabel} on socket ${s.id}`);
         } else {
-          this.logger.warn(`❌ No ack for ${logLabel} on socket ${s.id} (Attempt ${attempt}/${ACK_MAX_RETRIES})`);
+          this.logger.warn(
+            `❌ No ack for ${logLabel} on socket ${s.id} (Attempt ${attempt}/${ACK_MAX_RETRIES})`,
+          );
           if (attempt < ACK_MAX_RETRIES) {
             // Wait 1s before retrying
             await new Promise((r) => setTimeout(r, 1000));
@@ -293,7 +306,11 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
             await this.emitWithAck(s.id, event, payload, logLabel, attempt + 1);
           } else {
             // Track failure in Redis for metrics
-            await this.redis.incr(`stats:ws:ack_failures:${new Date().toISOString().slice(0, 10)}`);
+            // Bounded at 35 days: read back for today by the gateway's own
+            // metrics board, and `volatile-lru` may evict nothing that has no
+            // expiry (AUD2-031).
+            const ackStat = `stats:ws:ack_failures:${new Date().toISOString().slice(0, 10)}`;
+            if ((await this.redis.incr(ackStat)) === 1) await this.redis.expire(ackStat, 3_024_000);
           }
         }
       }
@@ -332,5 +349,4 @@ export class DoctorQueueGateway implements OnGatewayConnection, OnGatewayDisconn
       // ignore
     }
   }
-
 }

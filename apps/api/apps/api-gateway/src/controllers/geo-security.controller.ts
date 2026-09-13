@@ -709,14 +709,28 @@ export class GeoSecurityController {
   }
 
   private async logEvent(data: Partial<GeoSecurityEvent>): Promise<void> {
-    // Increment daily counters
+    // Increment daily counters.
+    //
+    // These five are read back for TODAY by `getStats()` above and rendered on
+    // the geo-security board. They were `incr` with no expiry, so every day
+    // added five permanent keys — and `volatile-lru` may evict nothing that has
+    // no expiry (AUD2-031), so the family grew toward the `maxmemory` OOM for
+    // ever. Bounded at 35 days: a month of history, and no unbounded growth.
+    //
+    // Accumulated rather than derived, unlike `admin:counter:pending_kyc`: the
+    // events they count are written to `geo_security_events` only when a
+    // database is bound, and a counter that is sometimes derivable and
+    // sometimes not would be worse than one that is honestly a tally.
     const today = new Date().toISOString().split('T')[0];
-    if (data.isVpn) await this.redis.incr(`geo:stats:vpn:${today}`);
-    if (data.isProxy) await this.redis.incr(`geo:stats:proxy:${today}`);
-    if (data.isTor) await this.redis.incr(`geo:stats:tor:${today}`);
-    if (data.eventType === 'location_mismatch')
-      await this.redis.incr(`geo:stats:mismatch:${today}`);
-    if (data.action === 'blocked') await this.redis.incr(`geo:stats:blocked:${today}`);
+    const bump = async (name: string) => {
+      const key = `geo:stats:${name}:${today}`;
+      if ((await this.redis.incr(key)) === 1) await this.redis.expire(key, 3_024_000);
+    };
+    if (data.isVpn) await bump('vpn');
+    if (data.isProxy) await bump('proxy');
+    if (data.isTor) await bump('tor');
+    if (data.eventType === 'location_mismatch') await bump('mismatch');
+    if (data.action === 'blocked') await bump('blocked');
 
     // Persist to DB
     if (this.isDb()) {
