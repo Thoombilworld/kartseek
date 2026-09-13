@@ -44,11 +44,39 @@ export class ProductListingMrp1786502700000 implements MigrationInterface {
     );
   }
 
+  /**
+   * Deliberately a no-op, and `IF EXISTS` would not have made it safe.
+   *
+   * `up()` is `ADD COLUMN IF NOT EXISTS`, so on a database built from
+   * `1786498000000-InitialMarketplaceSchema` it adds nothing — the initial
+   * migration already created `"mrp" numeric(10,2)` — and the runner records
+   * this migration as applied regardless. A `DROP COLUMN` here would therefore
+   * drop a column **the initial migration owns**, on the majority of databases,
+   * and leave behind exactly the drift this file exists to fix: the column gone,
+   * `1786498000000` still `[X]`, and nothing in the ledger that says why.
+   *
+   * A `down()` cannot tell those two cases apart — nothing records whether this
+   * migration's `ADD COLUMN` was the one that took effect — so it declines to
+   * guess. Reverting this migration is a ledger change and nothing else.
+   *
+   * If the column genuinely has to go, it goes by reverting the initial schema
+   * or by a migration written to drop it, where that intent is explicit.
+   */
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // `IF EXISTS`, because a database built from the initial migration alone
-    // already has the column and never ran this file's `up()`.
-    await queryRunner.query(
-      `ALTER TABLE "marketplace"."product_listings" DROP COLUMN IF EXISTS "mrp"`,
+    const [{ present }]: Array<{ present: boolean }> = await queryRunner.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'marketplace'
+            AND table_name = 'product_listings'
+            AND column_name = 'mrp'
+       ) AS present`,
     );
+    if (present) {
+      console.warn(
+        '[ProductListingMrp] reverted, and "marketplace"."product_listings"."mrp" is left in ' +
+          'place: the initial schema migration declares that column, so dropping it here would ' +
+          'destroy something this migration may never have created.',
+      );
+    }
   }
 }
