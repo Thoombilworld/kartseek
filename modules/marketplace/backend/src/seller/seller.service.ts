@@ -1429,15 +1429,55 @@ export class SellerService {
     const qb = this.productRepo
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.brand', 'brand')
+      .leftJoinAndSelect('p.category', 'category')
       .where('p.seller_id = :sellerId', { sellerId });
 
     if (status) qb.andWhere('p.status = :status', { status });
     if (search) qb.andWhere('p.name ILIKE :search', { search: `%${search}%` });
-    qb.orderBy('p.created_at', 'DESC')
+    qb.orderBy({ 'p.created_at': 'DESC', 'p.id': 'ASC' })
       .skip((page - 1) * limit)
       .take(limit);
 
-    const [data, total] = await qb.getManyAndCount();
+    const [rows, total] = await qb.getManyAndCount();
+
+    // The seller's own offer on each row. The portal's list read
+    // `p.price` / `p.stock` / `p.sku` off the bare catalogue row and rendered
+    // NaN; price, stock and SKU live on the seller's listing, which is one
+    // query for the page rather than one per row.
+    const listings = rows.length
+      ? ((await this.listingRepo.find({
+          where: { product: { id: In(rows.map((p) => p.id)) }, seller: { id: sellerId } },
+          relations: { product: true },
+        })) ?? [])
+      : [];
+    const listingByProduct = new Map<string, ProductListing>();
+    for (const l of listings) {
+      const pid = (l as any).product?.id;
+      if (pid && !listingByProduct.has(pid)) listingByProduct.set(pid, l);
+    }
+    const data = rows.map((p) => {
+      const l = listingByProduct.get(p.id);
+      return {
+        ...p,
+        category: p.category
+          ? { id: p.category.id, name: p.category.name, slug: p.category.slug }
+          : null,
+        approvalStatus: p.approval_status,
+        isActive: p.is_active,
+        listing: l
+          ? {
+              id: l.id,
+              sellingPrice: l.sellingPrice,
+              mrp: l.mrp,
+              stockQuantity: l.stockQuantity,
+              sellerSku: l.sellerSku,
+              condition: l.condition,
+              isActive: l.isActive,
+              approvalStatus: l.approvalStatus,
+            }
+          : null,
+      };
+    });
     return { sellerId, countryCode, data, total, page, limit };
   }
 
