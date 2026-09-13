@@ -254,6 +254,9 @@ export class MarketplaceService {
     // The new offer may be the cheapest one on the product, in which case it
     // takes the buy box the moment it goes live.
     const buyBox = await this.catalog.recomputeBuyBox(product.id);
+    // The listing row and the buy box are committed; every cached list and
+    // detail that embeds this product is now stale, in every market.
+    await this.invalidateCatalogueCaches(product.id);
 
     await this.kafka.publish('listing.approved', {
       listingId,
@@ -283,7 +286,12 @@ export class MarketplaceService {
 
     // A rejected offer cannot hold the buy box.
     const productId = (listing as any).product?.id;
-    if (productId) await this.catalog.recomputeBuyBox(productId);
+    if (productId) {
+      await this.catalog.recomputeBuyBox(productId);
+      // Same as approval: the cached category listing kept showing the
+      // rejected offer (and its price) until the TTL ran out.
+      await this.invalidateCatalogueCaches(productId);
+    }
 
     await this.kafka.publish('listing.rejected', {
       listingId,
