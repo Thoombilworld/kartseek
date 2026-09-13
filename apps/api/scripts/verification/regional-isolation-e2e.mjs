@@ -2,6 +2,14 @@
 import fs from 'node:fs';
 import pg from 'pg';
 import Redis from 'ioredis';
+
+import { createRequire } from 'node:module';
+
+// The database password comes from the environment (or apps/api/.env, which
+// this helper loads) or the script stops — there is no built-in default
+// (AUD2-074). `createRequire` because the helper is CommonJS, shared with the
+// CommonJS maintenance and seed scripts.
+const { requireDbPassword } = createRequire(import.meta.url)('../lib/db-password.js');
 for (const line of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, '');
@@ -133,12 +141,14 @@ const rows = (j) => {
 };
 const near = (a, b) => Math.abs(Number(a) - Number(b)) < 0.02;
 
+// The marketplace database, from the environment like every other script's —
+// it used to be a fully hardcoded connection, password included.
 const c = new pg.Client({
-  host: '127.0.0.1',
-  port: 5433,
-  user: 'marketplace_user',
-  password: 'change_me_in_development',
-  database: 'kartseek_marketplace',
+  host: process.env.MARKETPLACE_DB_HOST || '127.0.0.1',
+  port: Number(process.env.MARKETPLACE_DB_PORT || 5433),
+  user: process.env.MARKETPLACE_DB_USER || 'marketplace_user',
+  password: requireDbPassword('MARKETPLACE_DB_PASSWORD'),
+  database: process.env.MARKETPLACE_DB_NAME || 'kartseek_marketplace',
 });
 await c.connect();
 const redis = new Redis({

@@ -39,7 +39,14 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import pg from 'pg';
+
+// The one place a script's database password comes from, shared with the
+// CommonJS scripts beside this one. `createRequire` because that helper is
+// CommonJS and this file is ESM. It reads the environment or throws — there
+// is no built-in default (AUD2-074).
+const { requireDbPassword } = createRequire(import.meta.url)('../../lib/db-password.js');
 
 const { Client } = pg;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,7 +65,7 @@ const DB = {
   host: process.env.MARKETPLACE_DB_HOST || '127.0.0.1',
   port: Number(process.env.MARKETPLACE_DB_PORT || 5433),
   user: process.env.MARKETPLACE_DB_USER || 'marketplace_user',
-  password: process.env.MARKETPLACE_DB_PASSWORD || 'change_me_in_development',
+  password: requireDbPassword('MARKETPLACE_DB_PASSWORD'),
   database: process.env.MARKETPLACE_DB_NAME || 'kartseek_marketplace',
 };
 

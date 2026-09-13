@@ -144,7 +144,7 @@ const db = new DataSource({
   host: process.env.DB_HOST || 'localhost',
   port: +(process.env.DB_PORT || 5432),
   username: process.env.DB_USER || 'postgres',
-  password: requireDbPassword(),
+  password: requireDbPassword('MARKETPLACE_DB_PASSWORD'),
   database: process.env.MARKETPLACE_DB_NAME ?? 'kartseek_marketplace',
   schema: 'marketplace',
   synchronize: false,

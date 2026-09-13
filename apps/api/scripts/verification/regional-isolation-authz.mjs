@@ -1,5 +1,13 @@
 /* global process, console, fetch */
 import pg from 'pg';
+
+import { createRequire } from 'node:module';
+
+// The database password comes from the environment (or apps/api/.env, which
+// this helper loads) or the script stops — there is no built-in default
+// (AUD2-074). `createRequire` because the helper is CommonJS, shared with the
+// CommonJS maintenance and seed scripts.
+const { requireDbPassword } = createRequire(import.meta.url)('../lib/db-password.js');
 // Overridable so the checks can be pointed at a gateway on another port, the
 // way admin-scope-authz.mjs already allows.
 const API = process.env.API_BASE ?? 'http://127.0.0.1:3001/api/v1';
@@ -57,12 +65,14 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
 };
 
+// The marketplace database, from the environment like every other script's —
+// it used to be a fully hardcoded connection, password included.
 const c = new pg.Client({
-  host: '127.0.0.1',
-  port: 5433,
-  user: 'marketplace_user',
-  password: 'change_me_in_development',
-  database: 'kartseek_marketplace',
+  host: process.env.MARKETPLACE_DB_HOST || '127.0.0.1',
+  port: Number(process.env.MARKETPLACE_DB_PORT || 5433),
+  user: process.env.MARKETPLACE_DB_USER || 'marketplace_user',
+  password: requireDbPassword('MARKETPLACE_DB_PASSWORD'),
+  database: process.env.MARKETPLACE_DB_NAME || 'kartseek_marketplace',
 });
 await c.connect();
 const deals = Object.fromEntries(

@@ -72,7 +72,11 @@ function creds(m: (typeof MODULES)[number]) {
   return {
     container: `kartseek-postgres-${m.name}`,
     user: process.env[`${U}_DB_USER`] || `${m.name}_user`,
-    pass: process.env[`${U}_DB_PASSWORD`] || 'change_me_in_development',
+    // The destination, and it is the half that does the damage: the restore
+    // below runs a dump taken with `--clean --if-exists`, so a silent default
+    // here is a drop-and-recreate against whatever database that password does
+    // open. Refused like the source side (AUD2-074).
+    pass: requireDbPassword(`${U}_DB_PASSWORD`),
     db: process.env[`${U}_DB_NAME`] || `kartseek_${m.name}`,
   };
 }
