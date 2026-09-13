@@ -61,7 +61,13 @@ export function resolveElasticsearchEndpoint(
   // builds `${origin}/path`, so strip it rather than emit `//path`.
   const origin = url.toString().replace(/\/$/, '');
 
-  if (!username && !password) return { origin, authHeaders: {} };
+  // Both or neither. A password with no username would otherwise be sent as
+  // `Basic base64(":password")` — a header that is always rejected, turning a
+  // half-finished configuration into "Elasticsearch is down" rather than
+  // "Elasticsearch has no credentials configured". Sending nothing gets the
+  // same 401 from a secured cluster, but keeps working against an unsecured
+  // one, which is what a half-set variable most often means.
+  if (!username || !password) return { origin, authHeaders: {} };
 
   const basic = Buffer.from(`${username}:${password}`, 'utf8').toString('base64');
   return { origin, authHeaders: { Authorization: `Basic ${basic}` } };

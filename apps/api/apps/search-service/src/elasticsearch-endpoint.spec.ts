@@ -72,6 +72,40 @@ describe('resolveElasticsearchEndpoint', () => {
     );
   });
 
+  it('sends nothing when only half the credential is configured', () => {
+    // `Basic base64(":password")` is always rejected, so half a configuration
+    // would read as "Elasticsearch is down" rather than "no credentials set".
+    for (const half of [
+      { ELASTICSEARCH_PASSWORD: 's3cret' },
+      { ELASTICSEARCH_USERNAME: 'elastic' },
+    ]) {
+      const { authHeaders } = resolveElasticsearchEndpoint({
+        ELASTICSEARCH_NODE: 'http://elasticsearch:9200',
+        ...half,
+      } as NodeJS.ProcessEnv);
+      expect(authHeaders).toEqual({});
+    }
+  });
+
+  it('keeps the password out of anything that gets logged or reported', () => {
+    // The whole point of splitting the URL: `origin` is assigned to
+    // SearchService.esNode, which healthCheck() returns and the boot log
+    // prints. The password must not survive into it.
+    const password = 'sup3r-s3cret-value';
+    const { origin, authHeaders } = resolveElasticsearchEndpoint({
+      ELASTICSEARCH_NODE: `http://elastic:${password}@elasticsearch:9200`,
+    } as NodeJS.ProcessEnv);
+
+    expect(origin).not.toContain(password);
+    expect(origin).not.toContain('elastic:');
+    expect(origin).toBe('http://elasticsearch:9200');
+    // It survives only where it is meant to: base64 inside the header.
+    expect(authHeaders.Authorization).not.toContain(password);
+    expect(Buffer.from(authHeaders.Authorization.split(' ')[1], 'base64').toString()).toContain(
+      password,
+    );
+  });
+
   it('sends no Authorization header when nothing is configured', () => {
     const { origin, authHeaders } = resolveElasticsearchEndpoint({} as NodeJS.ProcessEnv);
     expect(origin).toBe('http://localhost:9200');
