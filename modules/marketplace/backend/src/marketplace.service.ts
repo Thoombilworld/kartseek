@@ -425,8 +425,8 @@ export class MarketplaceService {
     await this.redis.delPattern('marketplace:flash-deals:*');
 
     const stale = [
-      ...(await this.redis.keys('products:*')),
-      ...(await this.redis.keys('search:*')).filter((k) => !k.startsWith('search:index:')),
+      ...(await this.redis.scanKeys('products:*')),
+      ...(await this.redis.scanKeys('search:*')).filter((k) => !k.startsWith('search:index:')),
     ];
     await Promise.all(stale.map((k) => this.redis.del(k)));
     if (stale.length) {

@@ -15,7 +15,7 @@ describe('DeliveryService', () => {
       del: jest.fn().mockResolvedValue(1),
       set: jest.fn().mockResolvedValue('OK'),
       get: jest.fn().mockResolvedValue(null),
-      keys: jest.fn().mockResolvedValue([]),
+      scanKeys: jest.fn().mockResolvedValue([]),
       georadius: jest.fn().mockResolvedValue([]),
       geoadd: jest.fn().mockResolvedValue(1),
       geodel: jest.fn().mockResolvedValue(undefined),
@@ -89,7 +89,11 @@ describe('DeliveryService', () => {
         statusHistory: [],
       });
 
-      const result = await service.updateDeliveryStatus('ORD-001', DeliveryStatus.DELIVERED, 'DP-100');
+      const result = await service.updateDeliveryStatus(
+        'ORD-001',
+        DeliveryStatus.DELIVERED,
+        'DP-100',
+      );
       expect(result.success).toBe(false);
       expect(result.reason).toContain('Cannot transition');
     });
@@ -102,14 +106,22 @@ describe('DeliveryService', () => {
         statusHistory: [{ status: DeliveryStatus.ASSIGNED, timestamp: new Date().toISOString() }],
       });
 
-      const result = await service.updateDeliveryStatus('ORD-001', DeliveryStatus.PICKED_UP, 'DP-100');
+      const result = await service.updateDeliveryStatus(
+        'ORD-001',
+        DeliveryStatus.PICKED_UP,
+        'DP-100',
+      );
       expect(result.success).toBe(true);
       expect(kafka.publish).toHaveBeenCalledWith('delivery.status.updated', expect.any(Object));
     });
 
     it('should return error when assignment not found', async () => {
       redis.getJson.mockResolvedValue(null);
-      const result = await service.updateDeliveryStatus('ORD-999', DeliveryStatus.PICKED_UP, 'DP-100');
+      const result = await service.updateDeliveryStatus(
+        'ORD-999',
+        DeliveryStatus.PICKED_UP,
+        'DP-100',
+      );
       expect(result.success).toBe(false);
     });
   });
@@ -136,7 +148,7 @@ describe('DeliveryService', () => {
 
   describe('getPartnerActiveDeliveries', () => {
     it('should return empty list when no active deliveries', async () => {
-      redis.keys.mockResolvedValue([]);
+      redis.scanKeys.mockResolvedValue([]);
       const result = await service.getPartnerActiveDeliveries('DP-100');
       expect(result.activeCount).toBe(0);
       expect(result.deliveries).toEqual([]);
@@ -148,7 +160,10 @@ describe('DeliveryService', () => {
       const result = await service.setPartnerStatus('DP-100', PartnerStatus.IDLE);
       expect(result.success).toBe(true);
       expect(redis.set).toHaveBeenCalled();
-      expect(kafka.publish).toHaveBeenCalledWith('delivery.partner.status_changed', expect.any(Object));
+      expect(kafka.publish).toHaveBeenCalledWith(
+        'delivery.partner.status_changed',
+        expect.any(Object),
+      );
     });
 
     it('should remove from geo index when going OFFLINE', async () => {

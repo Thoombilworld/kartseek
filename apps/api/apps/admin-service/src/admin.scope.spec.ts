@@ -27,7 +27,7 @@ function makeService(
   const store = new Map<string, any>(Object.entries(overrides.kyc ?? {}));
   if (overrides.index) store.set('admin:users:index', overrides.index);
   const redis = {
-    keys: vi.fn(async (pattern: string) =>
+    scanKeys: vi.fn(async (pattern: string) =>
       [...store.keys()].filter((k) => k.startsWith(pattern.replace('*', ''))),
     ),
     getJson: vi.fn(async (k: string) => store.get(k) ?? null),
@@ -138,7 +138,7 @@ describe('AdminService market scope', () => {
   it('adds a market predicate to the dashboard aggregate and keys the cache by scope', async () => {
     const query = vi.fn(async () => [{}]);
     const redis = {
-      keys: vi.fn(async () => []),
+      scanKeys: vi.fn(async () => []),
       getJson: vi.fn(async () => null),
       setJson: vi.fn(async () => undefined),
       get: vi.fn(async () => '0'),
@@ -214,7 +214,7 @@ describe('AdminService market scope', () => {
     // isDbActive() is false with em: null, so getUsersList never reaches the
     // query builder and must filter admin:users:index itself.
     const redis = {
-      keys: vi.fn(async () => []),
+      scanKeys: vi.fn(async () => []),
       getJson: vi.fn(async (k: string) =>
         k === 'admin:users:index'
           ? [

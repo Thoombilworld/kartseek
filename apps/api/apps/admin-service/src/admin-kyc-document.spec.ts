@@ -22,7 +22,7 @@ function makeService() {
   const store = new Map<string, any>();
   const counters = new Map<string, string>();
   const redis = {
-    keys: vi.fn(async (pattern: string) =>
+    scanKeys: vi.fn(async (pattern: string) =>
       [...store.keys()].filter((k) => k.startsWith(pattern.replace('*', ''))),
     ),
     getJson: vi.fn(async (k: string) => store.get(k) ?? null),

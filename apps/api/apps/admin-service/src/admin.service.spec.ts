@@ -19,7 +19,7 @@ describe('AdminService', () => {
       del: jest.fn().mockResolvedValue(1),
       set: jest.fn().mockResolvedValue('OK'),
       get: jest.fn().mockResolvedValue('0'),
-      keys: jest.fn().mockResolvedValue([]),
+      scanKeys: jest.fn().mockResolvedValue([]),
     };
     const kafkaMock: Partial<jest.Mocked<KafkaProducerService>> = {
       publish: jest.fn().mockResolvedValue(undefined),
@@ -117,7 +117,7 @@ describe('AdminService', () => {
                 del: jest.fn().mockResolvedValue(1),
                 set: jest.fn().mockResolvedValue('OK'),
                 get: jest.fn().mockResolvedValue('0'),
-                keys: jest.fn().mockResolvedValue([]),
+                scanKeys: jest.fn().mockResolvedValue([]),
               },
             },
             {

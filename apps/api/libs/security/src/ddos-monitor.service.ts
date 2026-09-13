@@ -27,10 +27,10 @@ export class DdosMonitorService {
   private readonly logger = new Logger('DDoS-Monitor');
 
   // Thresholds for attack mode escalation
-  private readonly HTTP_BANS_ELEVATED_THRESHOLD  = 25;
-  private readonly HTTP_BANS_CRITICAL_THRESHOLD  = 100;
-  private readonly WS_BANS_ELEVATED_THRESHOLD    = 10;
-  private readonly WS_BANS_CRITICAL_THRESHOLD    = 50;
+  private readonly HTTP_BANS_ELEVATED_THRESHOLD = 25;
+  private readonly HTTP_BANS_CRITICAL_THRESHOLD = 100;
+  private readonly WS_BANS_ELEVATED_THRESHOLD = 10;
+  private readonly WS_BANS_CRITICAL_THRESHOLD = 50;
 
   constructor(private readonly redis: RedisService) {}
 
@@ -40,22 +40,26 @@ export class DdosMonitorService {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async checkAttackPatterns(): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
-    const httpBans = +(await this.redis.get(`stats:bans:${today}`) || 0);
-    const wsBans   = +(await this.redis.get(`stats:ws:bans:${today}`) || 0);
+    const httpBans = +((await this.redis.get(`stats:bans:${today}`)) || 0);
+    const wsBans = +((await this.redis.get(`stats:ws:bans:${today}`)) || 0);
 
     // Determine threat level
     const httpCritical = httpBans >= this.HTTP_BANS_CRITICAL_THRESHOLD;
     const httpElevated = httpBans >= this.HTTP_BANS_ELEVATED_THRESHOLD;
-    const wsCritical   = wsBans  >= this.WS_BANS_CRITICAL_THRESHOLD;
-    const wsElevated   = wsBans  >= this.WS_BANS_ELEVATED_THRESHOLD;
+    const wsCritical = wsBans >= this.WS_BANS_CRITICAL_THRESHOLD;
+    const wsElevated = wsBans >= this.WS_BANS_ELEVATED_THRESHOLD;
 
     // HTTP attack mode
     if (httpCritical) {
       await this.redis.set('ddos:attack_mode', 'elevated', 600); // 10min
-      this.logger.error(`🚨 CRITICAL HTTP ATTACK: ${httpBans} bans today — attack mode ACTIVE (600s)`);
+      this.logger.error(
+        `🚨 CRITICAL HTTP ATTACK: ${httpBans} bans today — attack mode ACTIVE (600s)`,
+      );
     } else if (httpElevated) {
       await this.redis.set('ddos:attack_mode', 'elevated', 300); // 5min
-      this.logger.warn(`⚠️ ELEVATED HTTP THREAT: ${httpBans} bans today — attack mode active (300s)`);
+      this.logger.warn(
+        `⚠️ ELEVATED HTTP THREAT: ${httpBans} bans today — attack mode active (300s)`,
+      );
     }
 
     // WebSocket attack mode
@@ -72,7 +76,7 @@ export class DdosMonitorService {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async purgeStaleCounters(): Promise<void> {
     try {
-      const connKeys = await this.redis.keys('ws:connections:*');
+      const connKeys = await this.redis.scanKeys('ws:connections:*');
       let purged = 0;
       for (const key of connKeys) {
         const val = await this.redis.get(key);
@@ -93,27 +97,29 @@ export class DdosMonitorService {
   @Cron(CronExpression.EVERY_HOUR)
   async logHourlySummary(): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
-    const hour  = new Date().toISOString().slice(0, 13);
+    const hour = new Date().toISOString().slice(0, 13);
 
     const [httpBans, wsBans] = await Promise.all([
       this.redis.get(`stats:bans:${today}`),
       this.redis.get(`stats:ws:bans:${today}`),
     ]);
 
-    const bannedKeys   = await this.redis.keys('ddos:banned:*');
-    const wsBannedKeys = await this.redis.keys('ws:banned:*');
-    const attackMode   = await this.redis.get('ddos:attack_mode');
+    const bannedKeys = await this.redis.scanKeys('ddos:banned:*');
+    const wsBannedKeys = await this.redis.scanKeys('ws:banned:*');
+    const attackMode = await this.redis.get('ddos:attack_mode');
     const wsAttackMode = await this.redis.get('ddos:ws_attack_mode');
 
-    this.logger.log([
-      `📊 DDoS Hourly Summary [${hour}]`,
-      `   HTTP Bans Today  : ${httpBans || 0}`,
-      `   WS Bans Today    : ${wsBans || 0}`,
-      `   Active HTTP Bans : ${bannedKeys.length}`,
-      `   Active WS Bans   : ${wsBannedKeys.length}`,
-      `   HTTP Attack Mode : ${attackMode || 'OFF'}`,
-      `   WS Attack Mode   : ${wsAttackMode || 'OFF'}`,
-    ].join('\n'));
+    this.logger.log(
+      [
+        `📊 DDoS Hourly Summary [${hour}]`,
+        `   HTTP Bans Today  : ${httpBans || 0}`,
+        `   WS Bans Today    : ${wsBans || 0}`,
+        `   Active HTTP Bans : ${bannedKeys.length}`,
+        `   Active WS Bans   : ${wsBannedKeys.length}`,
+        `   HTTP Attack Mode : ${attackMode || 'OFF'}`,
+        `   WS Attack Mode   : ${wsAttackMode || 'OFF'}`,
+      ].join('\n'),
+    );
   }
 
   // ── Admin API Data Methods ────────────────────────────────────────────────
@@ -137,18 +143,24 @@ export class DdosMonitorService {
     ]);
 
     const httpBans = +(httpBansRaw || 0);
-    const wsBans   = +(wsBansRaw || 0);
+    const wsBans = +(wsBansRaw || 0);
 
     const [httpBannedKeys, wsBannedKeys] = await Promise.all([
-      this.redis.keys('ddos:banned:*'),
-      this.redis.keys('ws:banned:*'),
+      this.redis.scanKeys('ddos:banned:*'),
+      this.redis.scanKeys('ws:banned:*'),
     ]);
     const activeBans = httpBannedKeys.length + wsBannedKeys.length;
 
     let level: 'normal' | 'elevated' | 'critical' = 'normal';
-    if (httpBans >= this.HTTP_BANS_CRITICAL_THRESHOLD || wsBans >= this.WS_BANS_CRITICAL_THRESHOLD) {
+    if (
+      httpBans >= this.HTTP_BANS_CRITICAL_THRESHOLD ||
+      wsBans >= this.WS_BANS_CRITICAL_THRESHOLD
+    ) {
       level = 'critical';
-    } else if (httpBans >= this.HTTP_BANS_ELEVATED_THRESHOLD || wsBans >= this.WS_BANS_ELEVATED_THRESHOLD) {
+    } else if (
+      httpBans >= this.HTTP_BANS_ELEVATED_THRESHOLD ||
+      wsBans >= this.WS_BANS_ELEVATED_THRESHOLD
+    ) {
       level = 'elevated';
     }
 
@@ -164,23 +176,35 @@ export class DdosMonitorService {
   }
 
   /** Get full list of currently banned IPs with remaining TTL and ban details. */
-  async getBannedIps(): Promise<Array<{
-    ip: string;
-    type: 'http' | 'ws';
-    details: Record<string, any>;
-    remainingSeconds: number;
-  }>> {
+  async getBannedIps(): Promise<
+    Array<{
+      ip: string;
+      type: 'http' | 'ws';
+      details: Record<string, any>;
+      remainingSeconds: number;
+    }>
+  > {
     const [httpKeys, wsKeys] = await Promise.all([
-      this.redis.keys('ddos:banned:*'),
-      this.redis.keys('ws:banned:*'),
+      this.redis.scanKeys('ddos:banned:*'),
+      this.redis.scanKeys('ws:banned:*'),
     ]);
 
-    const results: Array<{ ip: string; type: 'http' | 'ws'; details: Record<string, any>; remainingSeconds: number }> = [];
+    const results: Array<{
+      ip: string;
+      type: 'http' | 'ws';
+      details: Record<string, any>;
+      remainingSeconds: number;
+    }> = [];
 
     for (const key of httpKeys) {
       const ip = key.replace('ddos:banned:', '');
       const [raw, ttl] = await Promise.all([this.redis.get(key), this.redis.ttl(key)]);
-      results.push({ ip, type: 'http', details: raw ? JSON.parse(raw) : {}, remainingSeconds: ttl });
+      results.push({
+        ip,
+        type: 'http',
+        details: raw ? JSON.parse(raw) : {},
+        remainingSeconds: ttl,
+      });
     }
 
     for (const key of wsKeys) {
@@ -194,7 +218,7 @@ export class DdosMonitorService {
 
   /** Get IPs with the highest strike counts (top offenders, not yet banned). */
   async getTopOffenders(limit = 20): Promise<Array<{ ip: string; strikes: number }>> {
-    const strikeKeys = await this.redis.keys('ddos:strikes:*');
+    const strikeKeys = await this.redis.scanKeys('ddos:strikes:*');
     const results: Array<{ ip: string; strikes: number }> = [];
 
     for (const key of strikeKeys) {
@@ -209,10 +233,11 @@ export class DdosMonitorService {
   /** Get hourly request counts for the top endpoints over the last 24 hours. */
   async getEndpointStats(): Promise<Record<string, number>> {
     const prefix = 'stats:ep:';
-    const keys = await this.redis.keys(`${prefix}*`);
+    const keys = await this.redis.scanKeys(`${prefix}*`);
     const stats: Record<string, number> = {};
 
-    for (const key of keys.slice(0, 200)) { // cap at 200 keys
+    for (const key of keys.slice(0, 200)) {
+      // cap at 200 keys
       const raw = await this.redis.get(key);
       const shortKey = key.replace(prefix, '');
       stats[shortKey] = parseInt(raw || '0', 10);
@@ -234,10 +259,12 @@ export class DdosMonitorService {
 
     await Promise.all([
       this.redis.set(`ddos:banned:${ip}`, banData, durationSeconds),
-      this.redis.set(`ws:banned:${ip}`,   banData, durationSeconds),
+      this.redis.set(`ws:banned:${ip}`, banData, durationSeconds),
     ]);
 
-    this.logger.warn(`🔒 Manual IP ban: ${ip} for ${Math.round(durationSeconds / 60)}min (reason: ${reason})`);
+    this.logger.warn(
+      `🔒 Manual IP ban: ${ip} for ${Math.round(durationSeconds / 60)}min (reason: ${reason})`,
+    );
   }
 
   /** Unban an IP — clears HTTP ban, WS ban, and all strike records. */
@@ -272,10 +299,7 @@ export class DdosMonitorService {
 
   /** Manually clear attack mode (e.g., after false-positive alert). */
   async resetAttackMode(): Promise<void> {
-    await Promise.all([
-      this.redis.del('ddos:attack_mode'),
-      this.redis.del('ddos:ws_attack_mode'),
-    ]);
+    await Promise.all([this.redis.del('ddos:attack_mode'), this.redis.del('ddos:ws_attack_mode')]);
     this.logger.log('✅ Attack mode manually cleared by admin');
   }
 

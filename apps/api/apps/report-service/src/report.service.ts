@@ -222,7 +222,7 @@ export class ReportService {
     }
 
     // Get refund count for this seller
-    const refundKeys = await this.redis.keys(`refund:RFD-*`);
+    const refundKeys = await this.redis.scanKeys(`refund:RFD-*`);
     let refundCount = 0;
     let refundAmount = 0;
     for (const key of refundKeys.slice(0, 100)) {
@@ -269,7 +269,7 @@ export class ReportService {
 
     // Gather driver metrics from Redis
     const driverStats = (await this.redis.getJson<any>(`taxi:driver:stats:${driverId}`)) ?? {};
-    const deliveryKeys = await this.redis.keys(`delivery:assignment:*`);
+    const deliveryKeys = await this.redis.scanKeys(`delivery:assignment:*`);
 
     let totalTrips = 0;
     let totalEarnings = 0;

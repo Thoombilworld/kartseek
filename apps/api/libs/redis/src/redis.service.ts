@@ -252,6 +252,42 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return removed;
   }
 
+  /**
+   * Every key matching a glob, by SCAN — the answer `keys()` gives, without
+   * blocking the server to give it.
+   *
+   * `KEYS` is O(N) over the whole keyspace and single-threaded: for the
+   * duration of the scan Redis serves nobody. 297 keys in a development
+   * database hides that completely, which is why thirteen request-handling
+   * paths were calling it (AUD2-076) — an admin opening the KYC queue, a
+   * courier list, a refund report. At production scale each of those stalls
+   * every other process on the platform for as long as the scan takes.
+   *
+   * The cursor loop reads the same keyspace in bounded slices, so a concurrent
+   * write is neither blocked nor lost. SCAN's guarantee is weaker than KEYS' —
+   * a key present for the whole scan is returned, one added or removed during
+   * it may or may not be — and that is the right trade for every caller here:
+   * they are all listing things that are changing anyway.
+   *
+   * Deduplicated because SCAN may return the same key twice when the keyspace
+   * is resized mid-scan, and callers here count what they get back.
+   */
+  async scanKeys(pattern: string, count = 500): Promise<string[]> {
+    const found = new Set<string>();
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.scan(cursor, 'MATCH', pattern, 'COUNT', String(count));
+      cursor = next;
+      for (const key of keys) found.add(key);
+    } while (cursor !== '0');
+    return Array.from(found);
+  }
+
+  /**
+   * The blocking one. Prefer `scanKeys()`: on any request path this stalls the
+   * whole server, and `redis-keys.spec.ts` fails the build if a new call site
+   * appears without a comment saying why it may block.
+   */
   async keys(pattern: string): Promise<string[]> {
     if (this.useMemory()) {
       const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');

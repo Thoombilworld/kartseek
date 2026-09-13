@@ -36,7 +36,12 @@ export class DeliveryService {
   }
 
   // ── Partner Matching — Redis Geospatial Search ──────────────────────────────
-  async assignDeliveryPartner(orderId: string, serviceType: string, pickupLat?: number, pickupLng?: number) {
+  async assignDeliveryPartner(
+    orderId: string,
+    serviceType: string,
+    pickupLat?: number,
+    pickupLng?: number,
+  ) {
     const radius = 10; // km
     let partnerId: string | null = null;
     let partnerDistance: number | null = null;
@@ -69,7 +74,9 @@ export class DeliveryService {
     // 2. Fallback: generate a partner ID if geo-match unavailable
     if (!partnerId) {
       partnerId = `DP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      this.logger.warn(`No nearby partner found for order ${orderId}, assigned fallback: ${partnerId}`);
+      this.logger.warn(
+        `No nearby partner found for order ${orderId}, assigned fallback: ${partnerId}`,
+      );
     }
 
     // 3. Build assignment record
@@ -83,9 +90,7 @@ export class DeliveryService {
       pickupLng: pickupLng ?? null,
       distanceKm: partnerDistance,
       estimatedPickupMin: partnerDistance ? Math.ceil(partnerDistance * 2 + 3) : null,
-      statusHistory: [
-        { status: DeliveryStatus.ASSIGNED, timestamp: new Date().toISOString() },
-      ],
+      statusHistory: [{ status: DeliveryStatus.ASSIGNED, timestamp: new Date().toISOString() }],
     };
 
     // 4. Persist in Redis with 24h TTL
@@ -93,7 +98,11 @@ export class DeliveryService {
 
     // 5. Add to partner's active deliveries set
     await this.redis.setJson(`delivery:partner:active:${partnerId}:${orderId}`, assignment, 86400);
-    await this.redis.set(`delivery:partner:status:${partnerId}`, PartnerStatus.EN_ROUTE_PICKUP, 86400);
+    await this.redis.set(
+      `delivery:partner:status:${partnerId}`,
+      PartnerStatus.EN_ROUTE_PICKUP,
+      86400,
+    );
 
     // 6. Publish Kafka event
     await this.kafka.publish('delivery.partner.assigned', {
@@ -103,7 +112,9 @@ export class DeliveryService {
       distanceKm: partnerDistance,
     });
 
-    this.logger.log(`Partner ${partnerId} assigned to order ${orderId} (${partnerDistance?.toFixed(1) ?? '?'} km)`);
+    this.logger.log(
+      `Partner ${partnerId} assigned to order ${orderId} (${partnerDistance?.toFixed(1) ?? '?'} km)`,
+    );
     return { success: true, assignment };
   }
 
@@ -116,7 +127,12 @@ export class DeliveryService {
     return { success: true, ...assignment };
   }
 
-  async updateDeliveryStatus(orderId: string, status: string, partnerId: string, location?: { lat: number; lng: number }) {
+  async updateDeliveryStatus(
+    orderId: string,
+    status: string,
+    partnerId: string,
+    location?: { lat: number; lng: number },
+  ) {
     const assignment = await this.redis.getJson<any>(`delivery:assignment:${orderId}`);
     if (!assignment) {
       return { success: false, reason: 'Delivery assignment not found' };
@@ -166,7 +182,11 @@ export class DeliveryService {
     }
 
     // Clean up active delivery on terminal states
-    if ([DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.CANCELLED].includes(status as DeliveryStatus)) {
+    if (
+      [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.CANCELLED].includes(
+        status as DeliveryStatus,
+      )
+    ) {
       await this.redis.del(`delivery:partner:active:${partnerId}:${orderId}`);
     }
 
@@ -177,24 +197,30 @@ export class DeliveryService {
 
   // ── Partner Active Deliveries ────────────────────────────────────────────────
   async getPartnerActiveDeliveries(partnerId: string) {
-    const keys = await this.redis.keys(`delivery:partner:active:${partnerId}:*`);
+    const keys = await this.redis.scanKeys(`delivery:partner:active:${partnerId}:*`);
     const deliveries: any[] = [];
 
     for (const key of keys) {
       const data = await this.redis.getJson<any>(key);
-      if (data && ![DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.CANCELLED].includes(data.status)) {
+      if (
+        data &&
+        ![DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.CANCELLED].includes(
+          data.status,
+        )
+      ) {
         deliveries.push(data);
       }
     }
 
-    const status = await this.redis.get(`delivery:partner:status:${partnerId}`) || PartnerStatus.OFFLINE;
+    const status =
+      (await this.redis.get(`delivery:partner:status:${partnerId}`)) || PartnerStatus.OFFLINE;
     return { partnerId, status, activeCount: deliveries.length, deliveries };
   }
 
   // ── Partner Delivery History ─────────────────────────────────────────────────
   async getPartnerDeliveryHistory(partnerId: string, page = 1, limit = 20) {
     // Scan all completed deliveries for this partner from Redis
-    const keys = await this.redis.keys(`delivery:partner:active:${partnerId}:*`);
+    const keys = await this.redis.scanKeys(`delivery:partner:active:${partnerId}:*`);
     const allDeliveries: any[] = [];
 
     for (const key of keys) {
@@ -203,16 +229,22 @@ export class DeliveryService {
     }
 
     // Also check the main assignment keys
-    const assignmentKeys = await this.redis.keys('delivery:assignment:*');
+    const assignmentKeys = await this.redis.scanKeys('delivery:assignment:*');
     for (const key of assignmentKeys) {
       const data = await this.redis.getJson<any>(key);
-      if (data && data.partnerId === partnerId && !allDeliveries.some(d => d.orderId === data.orderId)) {
+      if (
+        data &&
+        data.partnerId === partnerId &&
+        !allDeliveries.some((d) => d.orderId === data.orderId)
+      ) {
         allDeliveries.push(data);
       }
     }
 
     // Sort by most recent first
-    allDeliveries.sort((a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime());
+    allDeliveries.sort(
+      (a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime(),
+    );
 
     const start = (page - 1) * limit;
     return {
@@ -228,7 +260,10 @@ export class DeliveryService {
   // ── Delivery Fee Estimation ──────────────────────────────────────────────────
   async estimateDeliveryFee(distanceKm: number, weight?: number, serviceType?: string) {
     // Service-specific base fees and per-km rates
-    const rateConfig: Record<string, { baseFee: number; perKm: number; freeDeliveryThreshold?: number }> = {
+    const rateConfig: Record<
+      string,
+      { baseFee: number; perKm: number; freeDeliveryThreshold?: number }
+    > = {
       marketplace: { baseFee: 60, perKm: 12, freeDeliveryThreshold: 2000 },
       grocery: { baseFee: 40, perKm: 10, freeDeliveryThreshold: 1500 },
       restaurant: { baseFee: 30, perKm: 15 },
@@ -257,9 +292,15 @@ export class DeliveryService {
   // ── Partner Location Update ──────────────────────────────────────────────────
   async updatePartnerLocation(partnerId: string, lat: number, lng: number) {
     await this.redis.geoadd('delivery:partners:locations', lng, lat, partnerId);
-    await this.redis.setJson(`delivery:partner:lastpos:${partnerId}`, {
-      lat, lng, updatedAt: new Date().toISOString(),
-    }, 3600);
+    await this.redis.setJson(
+      `delivery:partner:lastpos:${partnerId}`,
+      {
+        lat,
+        lng,
+        updatedAt: new Date().toISOString(),
+      },
+      3600,
+    );
     return { success: true, partnerId, lat, lng };
   }
 
@@ -277,7 +318,7 @@ export class DeliveryService {
 
   // ── Delivery Metrics (Admin Dashboard) ──────────────────────────────────────
   async getDeliveryMetrics() {
-    const allKeys = await this.redis.keys('delivery:assignment:*');
+    const allKeys = await this.redis.scanKeys('delivery:assignment:*');
     let total = 0;
     let delivered = 0;
     let inProgress = 0;
@@ -292,7 +333,7 @@ export class DeliveryService {
       else if (![DeliveryStatus.CANCELLED].includes(data.status)) inProgress++;
     }
 
-    const onlinePartners = await this.redis.keys('delivery:partner:status:*');
+    const onlinePartners = await this.redis.scanKeys('delivery:partner:status:*');
     let onlineCount = 0;
     for (const key of onlinePartners) {
       const status = await this.redis.get(key);

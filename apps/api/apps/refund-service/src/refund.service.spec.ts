@@ -13,7 +13,7 @@ describe('RefundService', () => {
       setJson: jest.fn().mockResolvedValue('OK'),
       getJson: jest.fn().mockResolvedValue(null),
       del: jest.fn().mockResolvedValue(1),
-      keys: jest.fn().mockResolvedValue([]),
+      scanKeys: jest.fn().mockResolvedValue([]),
     };
     const kafkaMock: Partial<jest.Mocked<KafkaProducerService>> = {
       publish: jest.fn().mockResolvedValue(undefined),
@@ -36,7 +36,10 @@ describe('RefundService', () => {
     it('should create a full refund request', async () => {
       redis.getJson.mockResolvedValue(null); // no existing refunds
       const result = await service.requestRefund({
-        orderId: 'ORD-001', userId: 'USER-001', amount: 500, reason: RefundReason.DAMAGED,
+        orderId: 'ORD-001',
+        userId: 'USER-001',
+        amount: 500,
+        reason: RefundReason.DAMAGED,
       });
       expect(result.success).toBe(true);
       expect(result.refund).toBeDefined();
@@ -49,9 +52,14 @@ describe('RefundService', () => {
     it('should create a partial refund for specific items', async () => {
       redis.getJson.mockResolvedValue(null);
       const result = await service.requestRefund({
-        orderId: 'ORD-002', userId: 'USER-001', amount: 300,
+        orderId: 'ORD-002',
+        userId: 'USER-001',
+        amount: 300,
         reason: RefundReason.MISSING_ITEMS,
-        items: [{ itemId: 'ITEM-1', quantity: 1, amount: 200 }, { itemId: 'ITEM-2', quantity: 1, amount: 100 }],
+        items: [
+          { itemId: 'ITEM-1', quantity: 1, amount: 200 },
+          { itemId: 'ITEM-2', quantity: 1, amount: 100 },
+        ],
       });
       expect(result.success).toBe(true);
       expect(result.refund).toBeDefined();
@@ -63,7 +71,10 @@ describe('RefundService', () => {
       redis.getJson.mockResolvedValue([]); // order refund index empty initially
       // First refund
       await service.requestRefund({
-        orderId: 'ORD-003', userId: 'USER-001', amount: 100, reason: RefundReason.OTHER,
+        orderId: 'ORD-003',
+        userId: 'USER-001',
+        amount: 100,
+        reason: RefundReason.OTHER,
       });
 
       // Mock existing pending refund for second call
@@ -78,7 +89,10 @@ describe('RefundService', () => {
       });
 
       const result = await service.requestRefund({
-        orderId: 'ORD-003', userId: 'USER-001', amount: 100, reason: RefundReason.OTHER,
+        orderId: 'ORD-003',
+        userId: 'USER-001',
+        amount: 100,
+        reason: RefundReason.OTHER,
       });
       expect(result.success).toBe(false);
       expect(result.reason).toContain('pending refund');
@@ -88,7 +102,10 @@ describe('RefundService', () => {
   describe('processRefund', () => {
     it('should approve a pending refund', async () => {
       redis.getJson.mockResolvedValue({
-        id: 'RFD-001', orderId: 'ORD-001', userId: 'USER-001', amount: 500,
+        id: 'RFD-001',
+        orderId: 'ORD-001',
+        userId: 'USER-001',
+        amount: 500,
         status: RefundStatus.PENDING,
         expiresAt: new Date(Date.now() + 86400000).toISOString(),
         statusHistory: [],
@@ -97,12 +114,17 @@ describe('RefundService', () => {
       const result = await service.processRefund('RFD-001', 'ADMIN-001', 'APPROVED', 'Verified');
       expect(result.success).toBe(true);
       expect(result.status).toBe('APPROVED');
-      expect(kafka.publish).toHaveBeenCalledWith('refund.approved', expect.objectContaining({ amount: 500 }));
+      expect(kafka.publish).toHaveBeenCalledWith(
+        'refund.approved',
+        expect.objectContaining({ amount: 500 }),
+      );
     });
 
     it('should reject processing of already processed refund', async () => {
       redis.getJson.mockResolvedValue({
-        id: 'RFD-002', status: RefundStatus.APPROVED, statusHistory: [],
+        id: 'RFD-002',
+        status: RefundStatus.APPROVED,
+        statusHistory: [],
         expiresAt: new Date(Date.now() + 86400000).toISOString(),
       });
 
@@ -113,7 +135,8 @@ describe('RefundService', () => {
 
     it('should handle expired refunds', async () => {
       redis.getJson.mockResolvedValue({
-        id: 'RFD-003', status: RefundStatus.PENDING,
+        id: 'RFD-003',
+        status: RefundStatus.PENDING,
         expiresAt: new Date(Date.now() - 86400000).toISOString(), // already expired
         statusHistory: [],
       });
@@ -155,7 +178,7 @@ describe('RefundService', () => {
 
   describe('getRefundStats', () => {
     it('should aggregate refund statistics', async () => {
-      redis.keys.mockResolvedValue(['refund:RFD-1', 'refund:RFD-2', 'refund:RFD-3']);
+      redis.scanKeys.mockResolvedValue(['refund:RFD-1', 'refund:RFD-2', 'refund:RFD-3']);
       redis.getJson
         .mockResolvedValueOnce({ id: 'RFD-1', status: RefundStatus.PENDING, amount: 100 })
         .mockResolvedValueOnce({ id: 'RFD-2', status: RefundStatus.APPROVED, amount: 200 })

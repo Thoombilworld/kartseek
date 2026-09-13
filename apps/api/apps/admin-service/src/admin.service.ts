@@ -485,7 +485,7 @@ export class AdminService {
   // ── KYC Management ─────────────────────────────────────────────────────────
   async getPendingKyc(page = 1, limit = 20, scope?: string) {
     // Scan Redis for pending KYC records
-    const keys = await this.redis.keys('admin:kyc:pending:*');
+    const keys = await this.redis.scanKeys('admin:kyc:pending:*');
     const pendingRecords: any[] = [];
 
     for (const key of keys) {

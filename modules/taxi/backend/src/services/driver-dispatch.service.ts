@@ -383,7 +383,7 @@ export class DriverDispatchService {
    * Get online driver count for admin dashboard.
    */
   async getOnlineDriverCount(): Promise<number> {
-    const keys = await this.redis.keys('driver:status:*');
+    const keys = await this.redis.scanKeys('driver:status:*');
     let count = 0;
     for (const key of keys) {
       const raw = await this.redis.get(key);

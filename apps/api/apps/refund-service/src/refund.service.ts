@@ -67,8 +67,8 @@ export class RefundService {
   }) {
     // Check for duplicate refund request
     const existingRefunds = await this.getRefundsByOrder(dto.orderId);
-    const pendingDuplicate = existingRefunds.refunds.find(
-      (r) => [RefundStatus.PENDING, RefundStatus.UNDER_REVIEW].includes(r.status as RefundStatus),
+    const pendingDuplicate = existingRefunds.refunds.find((r) =>
+      [RefundStatus.PENDING, RefundStatus.UNDER_REVIEW].includes(r.status as RefundStatus),
     );
     if (pendingDuplicate) {
       return {
@@ -96,9 +96,7 @@ export class RefundService {
       isPartial,
       requestedAt: new Date().toISOString(),
       expiresAt,
-      statusHistory: [
-        { status: RefundStatus.PENDING, timestamp: new Date().toISOString() },
-      ],
+      statusHistory: [{ status: RefundStatus.PENDING, timestamp: new Date().toISOString() }],
     };
 
     // Store refund record
@@ -119,12 +117,19 @@ export class RefundService {
       isPartial,
     });
 
-    this.logger.log(`Refund requested: ${refundId} for order ${dto.orderId} — ${refund.amount} (${isPartial ? 'partial' : 'full'})`);
+    this.logger.log(
+      `Refund requested: ${refundId} for order ${dto.orderId} — ${refund.amount} (${isPartial ? 'partial' : 'full'})`,
+    );
     return { success: true, refund };
   }
 
   // ── Process Refund (Admin) ─────────────────────────────────────────────────
-  async processRefund(refundId: string, adminId: string, decision: 'APPROVED' | 'REJECTED', remarks?: string) {
+  async processRefund(
+    refundId: string,
+    adminId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    remarks?: string,
+  ) {
     const refund = await this.redis.getJson<RefundRequest>(`refund:${refundId}`);
     if (!refund) {
       return { success: false, reason: 'Refund not found' };
@@ -163,7 +168,9 @@ export class RefundService {
         userId: refund.userId,
         amount: refund.amount,
       });
-      this.logger.log(`Refund APPROVED: ${refundId} — ${refund.amount} credited to user ${refund.userId}`);
+      this.logger.log(
+        `Refund APPROVED: ${refundId} — ${refund.amount} credited to user ${refund.userId}`,
+      );
     } else {
       await this.kafka.publish('refund.rejected', {
         id: refundId,
@@ -240,12 +247,15 @@ export class RefundService {
 
   // ── Get Pending Refunds (Admin) ────────────────────────────────────────────
   async getPendingRefunds(page = 1, limit = 20) {
-    const allKeys = await this.redis.keys('refund:RFD-*');
+    const allKeys = await this.redis.scanKeys('refund:RFD-*');
     const pending: RefundRequest[] = [];
 
     for (const key of allKeys) {
       const refund = await this.redis.getJson<RefundRequest>(key);
-      if (refund && (refund.status === RefundStatus.PENDING || refund.status === RefundStatus.UNDER_REVIEW)) {
+      if (
+        refund &&
+        (refund.status === RefundStatus.PENDING || refund.status === RefundStatus.UNDER_REVIEW)
+      ) {
         // Auto-expire if past due
         if (new Date(refund.expiresAt) < new Date()) {
           await this.expireRefund(refund.id);
@@ -268,16 +278,22 @@ export class RefundService {
 
   // ── Refund Statistics (Admin Dashboard) ────────────────────────────────────
   async getRefundStats() {
-    const allKeys = await this.redis.keys('refund:RFD-*');
-    let total = 0, pending = 0, approved = 0, rejected = 0, expired = 0;
-    let totalAmount = 0, approvedAmount = 0;
+    const allKeys = await this.redis.scanKeys('refund:RFD-*');
+    let total = 0,
+      pending = 0,
+      approved = 0,
+      rejected = 0,
+      expired = 0;
+    let totalAmount = 0,
+      approvedAmount = 0;
 
     for (const key of allKeys) {
       const refund = await this.redis.getJson<RefundRequest>(key);
       if (!refund) continue;
       total++;
       totalAmount += refund.amount;
-      if (refund.status === RefundStatus.PENDING || refund.status === RefundStatus.UNDER_REVIEW) pending++;
+      if (refund.status === RefundStatus.PENDING || refund.status === RefundStatus.UNDER_REVIEW)
+        pending++;
       if (refund.status === RefundStatus.APPROVED || refund.status === RefundStatus.PROCESSED) {
         approved++;
         approvedAmount += refund.amount;
