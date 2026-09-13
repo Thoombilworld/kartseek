@@ -6,8 +6,7 @@ partner console — built as one Nest monorepo behind a single API gateway,
 fronted by a Next.js web shell split into per-vertical zones, and by three
 independent Flutter mobile apps. This document is for anyone who has not seen
 the system before and needs to know what is actually deployed and how a
-request actually travels through it, on the `chore/platform-reorg` branch
-that is carrying out the reorganization described in
+request actually travels through it, after the reorganization described in
 [`docs/superpowers/specs/2026-09-05-platform-reorganization-design.md`](docs/superpowers/specs/2026-09-05-platform-reorganization-design.md).
 Every number below is transcribed from [`services.yaml`](services.yaml) or
 from a counting command recorded next to it — re-run the command rather than
@@ -351,6 +350,6 @@ work.
 Section 13 of
 [`docs/superpowers/specs/2026-09-05-platform-reorganization-design.md`](docs/superpowers/specs/2026-09-05-platform-reorganization-design.md)
 ("Out of scope, recorded as follow-ups") is explicit that the platform
-reorganization this branch carries out does not change any of that runtime
+reorganization does not change any of that runtime
 behaviour — it adds health, metrics, logging, and database wiring, and
 leaves the audited gaps for separate work.

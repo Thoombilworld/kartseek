@@ -63,10 +63,11 @@ machine and per build, and nothing in the repository contains it.
 
 ### Rotate the old key first
 
-The key beginning `AIzaSyB29-Nj3z` (full value in commit `684e3a1`) was committed and must be
-treated as compromised even though this repository has no remote and has never
-been pushed. Removing it from the working tree does **not** remove it from git
-history.
+The key beginning `AIzaSyB29-Nj3z` (full value in commits `684e3a1` and
+`9aef894`) was committed and must be treated as compromised: this repository,
+history included, has been public at https://github.com/Thoombilworld/kartseek
+since 2026-09-13. Removing it from the working tree does **not** remove it from
+git history.
 
 In the Google Cloud Console, for the project that owns it:
 
