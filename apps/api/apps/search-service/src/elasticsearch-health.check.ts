@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { DependencyStatus, HealthCheck } from '@app/common';
+import { resolveElasticsearchEndpoint } from './elasticsearch-endpoint';
 
 /**
  * Readiness for the one service whose store is neither Postgres nor Mongo.
@@ -16,10 +17,15 @@ export class ElasticsearchHealthCheck implements HealthCheck {
   readonly name = 'elasticsearch';
 
   async run(): Promise<DependencyStatus> {
-    const node = process.env.ELASTICSEARCH_NODE ?? 'http://localhost:9200';
+    // Elasticsearch requires authentication now. The credentials arrive as
+    // userinfo in ELASTICSEARCH_NODE, which `fetch` refuses to accept in a URL,
+    // so they are split into a Basic header — and `node`, which is reported in
+    // the error text below, is the credential-free form.
+    const { origin: node, authHeaders } = resolveElasticsearchEndpoint();
     const prefix = process.env.ELASTICSEARCH_INDEX_PREFIX ?? 'kartseek_';
     const t0 = Date.now();
     const res = await fetch(`${node}/${prefix}marketplace/_count`, {
+      headers: { ...authHeaders },
       signal: AbortSignal.timeout(2000),
     });
     if (!res.ok)

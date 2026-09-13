@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@app/redis';
 import { KafkaProducerService } from '@app/kafka';
 import { ConfigService } from '@nestjs/config';
+import { resolveElasticsearchEndpoint } from './elasticsearch-endpoint';
 
 // ─── Search Index Types ──────────────────────────────────────────────────────
 export enum SearchableModule {
@@ -45,6 +46,8 @@ interface SearchResult {
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
   private readonly esNode: string;
+  /** Basic auth built from ELASTICSEARCH_NODE's userinfo — see elasticsearch-endpoint.ts. */
+  private readonly esAuth: Readonly<Record<string, string>>;
   private readonly indexPrefix: string;
   private esAvailable = false;
 
@@ -52,7 +55,12 @@ export class SearchService {
     private readonly redis: RedisService,
     private readonly kafka: KafkaProducerService,
   ) {
-    this.esNode = process.env.ELASTICSEARCH_NODE || 'http://localhost:9200';
+    // Credentials are split out of the URL here rather than left in it: `fetch`
+    // throws on a URL that carries them, and `esNode` is logged on every boot
+    // and returned by healthCheck().
+    const endpoint = resolveElasticsearchEndpoint();
+    this.esNode = endpoint.origin;
+    this.esAuth = endpoint.authHeaders;
     this.indexPrefix = process.env.ELASTICSEARCH_INDEX_PREFIX || 'kartseek_';
 
     // Check ES availability on startup
@@ -303,7 +311,7 @@ export class SearchService {
 
     const response = await fetch(`${this.esNode}/${index}/_search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.esAuth },
       body: JSON.stringify({
         query: { bool: { must, filter } },
         sort,
@@ -473,14 +481,17 @@ export class SearchService {
     const index = `${this.indexPrefix}${module}`;
     await fetch(`${this.esNode}/${index}/_doc/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.esAuth },
       body: JSON.stringify(doc),
     });
   }
 
   private async esRemoveDocument(module: SearchableModule, id: string) {
     const index = `${this.indexPrefix}${module}`;
-    await fetch(`${this.esNode}/${index}/_doc/${id}`, { method: 'DELETE' });
+    await fetch(`${this.esNode}/${index}/_doc/${id}`, {
+      method: 'DELETE',
+      headers: { ...this.esAuth },
+    });
   }
 
   // ── Private: Check Elasticsearch Connection ────────────────────────────────
@@ -503,7 +514,7 @@ export class SearchService {
         : process.env.NODE_ENV === 'production'
           ? 1
           : 0;
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = { 'Content-Type': 'application/json', ...this.esAuth };
     const template = {
       index_patterns: [`${this.indexPrefix}*`],
       priority: 10,
@@ -531,6 +542,7 @@ export class SearchService {
   private async checkElasticsearchConnection() {
     try {
       const response = await fetch(`${this.esNode}/_cluster/health`, {
+        headers: { ...this.esAuth },
         signal: AbortSignal.timeout(5000),
       });
       this.esAvailable = response.ok;
